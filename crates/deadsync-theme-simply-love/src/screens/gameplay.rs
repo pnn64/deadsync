@@ -46,8 +46,9 @@ use deadsync_gameplay::{
     CourseDisplayTotals, CourseLifeConfig, CrossoverRow, ExitTransitionKind,
     FantasticWindowOptions, GameplayAction, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplaySession, GameplayTween, GameplayViewport, HoldToExitKey,
-    LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    GameplayReceptorStepBehavior, GameplaySession, GameplayTween, GameplayViewport,
+    HoldFlashEmitterTiming, HoldToExitKey, LeadInTiming, MAX_HOLD_FLASH_SPRITES,
+    MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     TAP_EXPLOSION_WINDOWS, autosync_mode_status_line, blue_fantastic_window_ms,
     build_crossover_rows, exit_transition_alpha, handle_core_input, scroll_receptor_y,
@@ -482,7 +483,14 @@ fn noteskin_effects_from_assets(
                 .or_else(|| assets.noteskin[player].as_deref())
         };
         if let Some(ns) = tap_ns {
+            effects.set_mine_hit_ends_tap_explosion(player, ns.mine_hit_ends_tap_explosion);
             for col in 0..cols {
+                effects.set_hold_flash_emitter(
+                    player,
+                    col,
+                    ns.hold_flash_emitter_for_col(col)
+                        .and_then(gameplay_hold_flash_emitter),
+                );
                 for window in TAP_EXPLOSION_WINDOWS {
                     for bright in [false, true] {
                         effects.set_tap_explosion_duration(
@@ -509,6 +517,20 @@ fn noteskin_effects_from_assets(
         effects.set_mine_explosion_duration(player, mine_duration);
     }
     effects
+}
+
+fn gameplay_hold_flash_emitter<T>(
+    emitter: &deadsync_noteskin::HoldFlashEmitter<T>,
+) -> Option<HoldFlashEmitterTiming> {
+    Some(HoldFlashEmitterTiming {
+        period: emitter.period,
+        sprites: u8::try_from(emitter.sprites)
+            .ok()
+            .filter(|sprites| usize::from(*sprites) <= MAX_HOLD_FLASH_SPRITES)?,
+        flash_duration: emitter.flash.animation.duration(),
+        hold: emitter.hold,
+        roll: emitter.roll,
+    })
 }
 
 #[inline(always)]
@@ -546,6 +568,7 @@ const fn gameplay_receptor_step_behavior(
     behavior: ReceptorStepBehavior,
 ) -> GameplayReceptorStepBehavior {
     GameplayReceptorStepBehavior {
+        delay: behavior.delay,
         duration: behavior.duration,
         zoom_start: behavior.zoom_start,
         zoom_end: behavior.zoom_end,
@@ -1442,46 +1465,95 @@ pub fn notefield_model_cache_from_assets(
     cache
 }
 
+/// Each player's noteskin the chart asked for, if any, loaded the way their
+/// notefield uses it.
+pub type ChartNoteskins = [Option<Result<noteskin::ChartNoteskin, String>>; MAX_PLAYERS];
+
+/// Loads the noteskins the chart asked for exactly as
+/// [`gameplay_noteskin_assets`] does, so a caller that holds the result until
+/// then turns those loads into runtime-cache hits. Loads nothing for players
+/// the chart asked nothing of.
+pub fn load_chart_noteskins(
+    session: &GameplaySession,
+    runtime_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    chart_noteskins: &[Option<String>; MAX_PLAYERS],
+    song_dir: Option<&Path>,
+) -> ChartNoteskins {
+    let style = Style {
+        num_cols: session.play_style.cols_per_player(),
+        num_players: 1,
+    };
+    std::array::from_fn(|player| {
+        let requested = chart_noteskins[player]
+            .as_deref()
+            .filter(|_| player < session.play_style.player_count())?;
+        Some(noteskin::load_song_itg_skin_cached(
+            &style,
+            requested,
+            song_dir?,
+            runtime_profiles[player].reverse_scroll,
+        ))
+    })
+}
+
 pub fn gameplay_noteskin_assets(
-    cols_per_player: usize,
-    num_players: usize,
+    session: &GameplaySession,
     runtime_profiles: &[profile_data::Profile; MAX_PLAYERS],
     chart_noteskins: &[Option<String>; MAX_PLAYERS],
     song_dir: Option<&Path>,
 ) -> GameplayNoteskinAssets {
     use deadsync_noteskin::runtime::SkinPart;
+    let num_players = session.play_style.player_count();
     let style = Style {
-        num_cols: cols_per_player,
+        num_cols: session.play_style.cols_per_player(),
         num_players: 1,
     };
-    // Compose once on the song-load worker. The selected slots then share the
-    // existing prewarm, upload and song-lifetime ownership paths.
+    let mut chart_skins =
+        load_chart_noteskins(session, runtime_profiles, chart_noteskins, song_dir);
+    // Compose once per play. The selected slots then share the existing
+    // prewarm, upload and song-lifetime ownership paths.
     let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
         }
+        let profile = &runtime_profiles[player];
+        let reverse = profile.reverse_scroll;
+        let side = session.runtime_player_side(player);
+        let requested = chart_noteskins[player].as_deref().unwrap_or_default();
         // A skin the chart asked for replaces the whole look, including the
         // player's per-part choices, for this play only.
-        if let (Some(requested), Some(song_dir)) = (chart_noteskins[player].as_deref(), song_dir)
-        {
-            match noteskin::load_song_itg_skin_cached(&style, requested, song_dir) {
-                Ok(skin) => {
-                    log::info!("Using the chart's noteskin '{requested}' for player {}", player + 1);
-                    return Some(skin);
+        match chart_skins[player].take() {
+            Some(Ok(chart)) => {
+                match (&chart.dir, &chart.copy_error) {
+                    (Some(dir), _) => log::info!(
+                        "Using the chart's noteskin '{requested}' from '{}' for {side:?}",
+                        dir.display()
+                    ),
+                    (None, None) => log::info!(
+                        "Using the chart's noteskin '{requested}' (installed) for {side:?}"
+                    ),
+                    (None, Some(error)) => log::warn!(
+                        "{error}; using the installed noteskin '{requested}' for {side:?}"
+                    ),
                 }
-                Err(error) => log::warn!(
-                    "Cannot load the chart's noteskin '{requested}': {error}; using the player's noteskin"
-                ),
+                return Some(chart.noteskin);
             }
+            Some(Err(error)) => log::warn!(
+                "Cannot load the chart's noteskin '{requested}' for {side:?}: {error}; using {side:?}'s own noteskin"
+            ),
+            None => {}
         }
-        let profile = &runtime_profiles[player];
         let mut options = profile.current_player_options();
         profile_data::migrate_noteskin_parts(&mut options);
         let skin = options.noteskin.as_str();
-        let mut result = noteskin::load_itg_skin_cached(&style, skin)
+        let mut result = noteskin::load_player_itg_skin_cached(&style, skin, reverse)
             .or_else(|error| {
                 log::warn!("Cannot load noteskin '{skin}': {error}; using the bundled default");
-                noteskin::load_itg_skin_cached(&style, profile_data::NoteSkin::DEFAULT_NAME)
+                noteskin::load_player_itg_skin_cached(
+                    &style,
+                    profile_data::NoteSkin::DEFAULT_NAME,
+                    reverse,
+                )
             })
             .ok()?;
         for (part, selection) in [
@@ -1500,7 +1572,7 @@ pub fn gameplay_noteskin_assets(
             if selection.is_none_choice() {
                 continue;
             }
-            match noteskin::load_itg_skin_cached(&style, selection.as_str()) {
+            match noteskin::load_player_itg_skin_cached(&style, selection.as_str(), reverse) {
                 Ok(source) => Arc::make_mut(&mut result).apply_part(&source, part),
                 Err(error) => log::warn!(
                     "Cannot load {part:?} from '{selection}': {error}; using the base component"
@@ -1564,8 +1636,7 @@ pub fn init(
     let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
     let chart_noteskins = song_lua_requested_noteskins(&song_lua_data);
     let noteskin_assets = gameplay_noteskin_assets(
-        cols_per_player,
-        num_players,
+        &session,
         &runtime_profile_data,
         &chart_noteskins,
         song.simfile_path.parent(),
@@ -6665,5 +6736,218 @@ mod tests {
             banner_visibility(profile_data::PlayStyle::Double, 8, true, true, both, empty),
             (false, false)
         );
+    }
+
+    /// A song-folder skin that gives Reverse players the Down hold body in
+    /// the Up column.
+    fn write_reverse_swap_skin(skin_dir: &Path) {
+        std::fs::create_dir_all(skin_dir).unwrap();
+        std::fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    local options = GAMESTATE:GetPlayerState(Var "Player"):GetPlayerOptionsString("ModsLevel_Preferred")
+    if not string.find(element, "Hold Body") then
+        button = "Down"
+    elseif string.find(options:lower(), "reverse") and button == "Up" then
+        button = "Down"
+    end
+    return Def.Sprite { Texture = NOTESKIN:GetPath(button, element) }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        for file in [
+            "Down Tap Note.png",
+            "Down Receptor.png",
+            "Down Hold Body Inactive.png",
+            "Up Hold Body Inactive.png",
+        ] {
+            image::RgbaImage::from_pixel(64, 64, image::Rgba([255, 255, 255, 255]))
+                .save(skin_dir.join(file))
+                .unwrap();
+        }
+    }
+
+    fn versus_session() -> GameplaySession {
+        GameplaySession {
+            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+            joined_sides: [true, true],
+            ..GameplaySession::default()
+        }
+    }
+
+    fn reverse_p2_profiles() -> [profile_data::Profile; MAX_PLAYERS] {
+        let mut profiles: [profile_data::Profile; MAX_PLAYERS] =
+            std::array::from_fn(|_| profile_data::Profile::default());
+        profiles[1].set_scroll_option(profile_data::ScrollOption::Reverse);
+        profiles
+    }
+
+    #[test]
+    fn chart_noteskin_follows_each_players_own_reverse() {
+        crate::tests::init_paths();
+        let song_dir = chart_skin_song_dir("reverse-skin");
+        write_reverse_swap_skin(&song_dir.join("Reverse-Swap"));
+        let requested = Some("reverse-swap".to_owned());
+
+        let assets = gameplay_noteskin_assets(
+            &versus_session(),
+            &reverse_p2_profiles(),
+            &[requested.clone(), requested],
+            Some(&song_dir),
+        );
+        let up_hold_body = |player: usize| {
+            assets.noteskin[player]
+                .as_ref()
+                .expect("chart noteskin")
+                .hold_visuals_for_col(2, false)
+                .body_inactive
+                .as_ref()
+                .expect("hold body")
+                .texture_key()
+                .to_ascii_lowercase()
+        };
+
+        assert!(up_hold_body(0).contains("up hold body inactive"));
+        assert!(up_hold_body(1).contains("down hold body inactive"));
+
+        let _ = std::fs::remove_dir_all(song_dir);
+    }
+
+    #[test]
+    fn held_chart_noteskins_are_the_ones_gameplay_uses() {
+        crate::tests::init_paths();
+        let song_dir = chart_skin_song_dir("held-chart-skin");
+        write_reverse_swap_skin(&song_dir.join("Reverse-Swap"));
+        let requested = Some("reverse-swap".to_owned());
+        let requested = [requested.clone(), requested];
+        let (session, profiles) = (versus_session(), reverse_p2_profiles());
+
+        let held = load_chart_noteskins(&session, &profiles, &requested, Some(&song_dir));
+        let assets = gameplay_noteskin_assets(&session, &profiles, &requested, Some(&song_dir));
+
+        for player in 0..MAX_PLAYERS {
+            let held = held[player]
+                .as_ref()
+                .expect("requested")
+                .as_ref()
+                .expect("loaded");
+            let used = assets.noteskin[player].as_ref().expect("chart noteskin");
+            assert!(Arc::ptr_eq(&held.noteskin, used), "player {player}");
+        }
+        assert!(
+            load_chart_noteskins(&session, &profiles, &[None, None], Some(&song_dir))
+                .iter()
+                .all(Option::is_none)
+        );
+
+        let _ = std::fs::remove_dir_all(song_dir);
+    }
+
+    fn chart_skin_song_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-gameplay-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn installed_noteskin(skin: &str) -> Arc<Noteskin> {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        noteskin::load_player_itg_skin_cached(&style, skin, false).expect("installed noteskin")
+    }
+
+    fn cel_player_profiles() -> [profile_data::Profile; MAX_PLAYERS] {
+        let profiles: [profile_data::Profile; MAX_PLAYERS] =
+            std::array::from_fn(|_| profile_data::Profile::default());
+        assert_eq!(
+            profiles[0].noteskin.as_str(),
+            profile_data::NoteSkin::CEL_NAME
+        );
+        profiles
+    }
+
+    #[test]
+    fn unknown_or_broken_chart_noteskin_leaves_the_players_own_skin() {
+        crate::tests::init_paths();
+        let song_dir = chart_skin_song_dir("broken-chart-skin");
+        let broken = song_dir.join("Broken");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=no-such-fallback\n",
+        )
+        .unwrap();
+        let profiles = cel_player_profiles();
+        let players_own = installed_noteskin(profile_data::NoteSkin::CEL_NAME);
+
+        for requested in ["no-such-skin", "broken"] {
+            let assets = gameplay_noteskin_assets(
+                &GameplaySession::default(),
+                &profiles,
+                &[Some(requested.to_owned()), None],
+                Some(&song_dir),
+            );
+            let skin = assets.noteskin[0].as_ref().expect("player's noteskin");
+            assert!(Arc::ptr_eq(skin, &players_own), "{requested}");
+        }
+
+        let _ = std::fs::remove_dir_all(song_dir);
+    }
+
+    #[test]
+    fn chart_noteskin_ignores_the_players_per_part_choices() {
+        crate::tests::init_paths();
+        let song_dir = chart_skin_song_dir("per-part-chart-skin");
+        let mut profiles = cel_player_profiles();
+        profiles[0].arrow_noteskin = Some(profile_data::NoteSkin::new("default"));
+        let session = GameplaySession::default();
+
+        let charted = gameplay_noteskin_assets(
+            &session,
+            &profiles,
+            &[Some("metal".to_owned()), None],
+            Some(&song_dir),
+        );
+        let own = gameplay_noteskin_assets(&session, &profiles, &[None, None], Some(&song_dir));
+
+        let charted = charted.noteskin[0].as_ref().expect("chart noteskin");
+        assert!(Arc::ptr_eq(charted, &installed_noteskin("metal")));
+        // The same choice does reshape the player's own skin.
+        let own = own.noteskin[0].as_ref().expect("player's noteskin");
+        assert!(!Arc::ptr_eq(
+            own,
+            &installed_noteskin(profile_data::NoteSkin::CEL_NAME)
+        ));
+
+        let _ = std::fs::remove_dir_all(song_dir);
+    }
+
+    #[test]
+    fn chart_noteskin_keeps_the_players_tap_explosions_hidden() {
+        crate::tests::init_paths();
+        let song_dir = chart_skin_song_dir("hidden-explosions-chart-skin");
+        let mut profiles = cel_player_profiles();
+        profiles[0].tap_explosion_noteskin = Some(profile_data::NoteSkin::none_choice());
+
+        let assets = gameplay_noteskin_assets(
+            &GameplaySession::default(),
+            &profiles,
+            &[Some("metal".to_owned()), None],
+            Some(&song_dir),
+        );
+
+        let charted = assets.noteskin[0].as_ref().expect("chart noteskin");
+        assert!(Arc::ptr_eq(charted, &installed_noteskin("metal")));
+        assert!(assets.tap_explosion_noteskin[0].is_none());
+
+        let _ = std::fs::remove_dir_all(song_dir);
     }
 }

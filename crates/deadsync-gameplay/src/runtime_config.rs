@@ -706,6 +706,8 @@ pub struct GameplayClockRuntimeState {
 pub struct GameplayTimingRuntimeState {
     pub timing: Arc<TimingData>,
     pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
+    /// ITGmania `Song::GetFirstBeat`, which no offset moves.
+    pub song_first_beat: f32,
     pub time_to_beat_caches: GameplayTimeToBeatCaches,
     pub timing_profile: TimingProfile,
     // Rate-scaled once at song load and whenever the music rate changes.

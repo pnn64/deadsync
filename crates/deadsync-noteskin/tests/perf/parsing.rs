@@ -117,7 +117,7 @@ fn scoped_commands_match_legacy_aliases_colors_quotes_and_invalid_calls() {
         "self:queuecommand('東京'):x(12); self:x(0.25):unknown(variable)",
     ] {
         assert_eq!(
-            parse_self_chain_commands_scoped(body, &context, &scope),
+            parse_self_chain_commands_scoped(body, "self", &context, &scope),
             legacy_parse_self_chain_commands_scoped(body, &context, &scope),
             "{body}"
         );
@@ -125,7 +125,7 @@ fn scoped_commands_match_legacy_aliases_colors_quotes_and_invalid_calls() {
     for count in [1, 16, 128] {
         let body = chain_fixture(count);
         assert_eq!(
-            parse_self_chain_commands_scoped(&body, &context, &scope),
+            parse_self_chain_commands_scoped(&body, "self", &context, &scope),
             legacy_parse_self_chain_commands_scoped(&body, &context, &scope)
         );
     }
@@ -166,10 +166,14 @@ fn scoped_command_output_uses_one_allocation_without_growth() {
     let (context, scope) = command_fixture();
     let input = chain_fixture(128);
     crate::perf::assert_churn_budget(1, input.len(), || {
-        black_box(parse_self_chain_commands_scoped(&input, &context, &scope));
+        black_box(parse_self_chain_commands_scoped(
+            &input, "self", &context, &scope,
+        ));
     });
     crate::perf::assert_no_churn(|| {
-        assert!(parse_self_chain_commands_scoped("no commands", &context, &scope).is_none());
+        assert!(
+            parse_self_chain_commands_scoped("no commands", "self", &context, &scope).is_none()
+        );
     });
 }
 
@@ -226,7 +230,7 @@ fn noteskin_parsing_bench() {
                     if old {
                         legacy_parse_self_chain_commands_scoped(black_box(&body), &context, &scope)
                     } else {
-                        parse_self_chain_commands_scoped(black_box(&body), &context, &scope)
+                        parse_self_chain_commands_scoped(black_box(&body), "self", &context, &scope)
                     }
                 },
             );

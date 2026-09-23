@@ -6,6 +6,7 @@ use crate::{
         parse_script_effect_mod, parse_script_number, parse_script_vertalign, split_script_token,
     },
 };
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
@@ -120,8 +121,39 @@ impl ReceptorIdleGlow {
     }
 }
 
+/// Sheet frames an ITG receptor update function switches between each frame:
+/// lit within a tenth of a beat of every beat, dark otherwise, and a separate
+/// frame until eight beats before the song's first step.
+#[derive(Debug, Clone)]
+pub struct ReceptorBeatFrames<T> {
+    pub on_beat: T,
+    pub off_beat: T,
+    pub before_start: T,
+}
+
+impl<T> ReceptorBeatFrames<T> {
+    /// `beat` is the player's song beat without visual delay.
+    #[inline(always)]
+    #[must_use]
+    pub fn at(&self, beat: f32, song_first_beat: f32) -> &T {
+        let beat = f64::from(beat);
+        let start = f64::from(song_first_beat) - 8.0;
+        if beat.partial_cmp(&start).is_none_or(Ordering::is_lt) {
+            return &self.before_start;
+        }
+        let range = (beat * 10.0).rem_euclid(10.0);
+        if (1.0..9.0).contains(&range) {
+            &self.off_beat
+        } else {
+            &self.on_beat
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ReceptorStepBehavior {
+    /// Time the receptor holds `zoom_start` before the tween begins.
+    pub delay: f32,
     pub duration: f32,
     pub zoom_start: f32,
     pub zoom_end: f32,
@@ -133,6 +165,7 @@ impl ReceptorStepBehavior {
     #[must_use]
     pub const fn identity() -> Self {
         Self {
+            delay: 0.0,
             duration: 0.0,
             zoom_start: 1.0,
             zoom_end: 1.0,
@@ -142,13 +175,19 @@ impl ReceptorStepBehavior {
     }
 
     #[must_use]
+    pub fn total_duration(self) -> f32 {
+        self.delay.max(0.0) + self.duration.max(0.0)
+    }
+
+    #[must_use]
     pub fn sample_zoom(self, timer_remaining: f32) -> f32 {
         let duration = self.duration.max(0.0);
         if duration <= f32::EPSILON {
             return self.zoom_end.max(0.0);
         }
-        let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
-        let progress = elapsed / duration;
+        let total = self.total_duration();
+        let elapsed = total - timer_remaining.clamp(0.0, total) - self.delay.max(0.0);
+        let progress = elapsed.clamp(0.0, duration) / duration;
         let eased = self.tween.ease(progress);
         (self.zoom_end - self.zoom_start)
             .mul_add(eased, self.zoom_start)
@@ -159,6 +198,7 @@ impl ReceptorStepBehavior {
 impl Default for ReceptorStepBehavior {
     fn default() -> Self {
         Self {
+            delay: 0.0,
             duration: 0.11,
             zoom_start: 0.75,
             zoom_end: 1.0,
@@ -623,6 +663,7 @@ pub fn receptor_step_behavior_for_command(
     };
 
     ReceptorStepBehavior {
+        delay: none.zoom_delay.max(0.0),
         duration: none.duration.max(0.0),
         zoom_start: (zoom_start / base_zoom).max(0.0),
         zoom_end: (zoom_end / base_zoom).max(0.0),
@@ -641,6 +682,17 @@ pub fn receptor_step_behaviors(
     commands: Option<&HashMap<String, String>>,
     base_zoom: f32,
 ) -> ReceptorStepBehaviors {
+    // ITGmania plays the receptor's PressCommand after the step's judgment
+    // command on every press. One that starts by ending the running tweens
+    // replaces the judgment command's zoom.
+    if let Some(press) = commands
+        .and_then(|commands| commands.get("presscommand"))
+        .filter(|command| script_starts_by_ending_tweens(command))
+        .map(|command| receptor_step_behavior_for_command(Some(command.clone()), base_zoom))
+        .filter(|press| (press.zoom_end - press.zoom_start).abs() > f32::EPSILON)
+    {
+        return ReceptorStepBehaviors::new(press, press, [press; 5]);
+    }
     let behavior = |actor_key, metric_key| {
         receptor_step_behavior_for_command(
             receptor_arrow_command(metrics, commands, actor_key, metric_key),
@@ -658,6 +710,20 @@ pub fn receptor_step_behaviors(
             behavior("w5command", "W5Command"),
         ],
     )
+}
+
+fn script_starts_by_ending_tweens(script: &str) -> bool {
+    normalized_script_command(script)
+        .split(';')
+        .map(str::trim)
+        .find(|token| !token.is_empty())
+        .and_then(split_script_token)
+        .is_some_and(|token| {
+            matches!(
+                token.command(),
+                ScriptCommand::StopTweening | ScriptCommand::FinishTweening
+            )
+        })
 }
 
 #[must_use]
@@ -721,6 +787,34 @@ mod tests {
         assert_eq!(glow.alpha(0.75, false), 0.0);
         assert_eq!(glow.alpha(1.0, false), 1.0);
         assert_eq!(glow.alpha(1.0, true), 0.0);
+    }
+
+    #[test]
+    fn beat_frames_light_near_each_beat_after_the_lead_in() {
+        let frames = ReceptorBeatFrames {
+            on_beat: "on",
+            off_beat: "off",
+            before_start: "before",
+        };
+
+        for (beat, expected) in [
+            (-20.0, "before"),
+            (3.99, "before"),
+            (f32::NAN, "before"),
+            (4.0, "on"),
+            (4.05, "on"),
+            (4.15, "off"),
+            (4.5, "off"),
+            (4.85, "off"),
+            (4.95, "on"),
+            (5.0, "on"),
+            (100.02, "on"),
+            (100.5, "off"),
+        ] {
+            assert_eq!(*frames.at(beat, 12.0), expected, "beat {beat}");
+        }
+        assert_eq!(*frames.at(-3.5, f32::NEG_INFINITY), "off");
+        assert_eq!(*frames.at(-3.95, f32::NEG_INFINITY), "on");
     }
 
     #[test]
@@ -847,6 +941,60 @@ mod tests {
         assert!((behavior.zoom_start - 1.0).abs() <= f32::EPSILON);
         assert!((behavior.zoom_end - 2.0).abs() <= f32::EPSILON);
         assert!((behavior.sample_zoom(0.125) - 1.5).abs() <= f32::EPSILON);
+    }
+
+    fn receptor_arrow_metrics(commands: &[(&str, &str)]) -> IniData {
+        let mut metrics = IniData::default();
+        for (key, command) in commands {
+            metrics.set("ReceptorArrow", key, command);
+        }
+        metrics
+    }
+
+    #[test]
+    fn press_command_that_ends_tweens_replaces_every_step_zoom() {
+        let metrics = receptor_arrow_metrics(&[
+            ("NoneCommand", "stoptweening;zoom,0.75;linear,0.06;zoom,1"),
+            ("W1Command", "stoptweening;zoom,1.2;linear,0.1;zoom,1"),
+        ]);
+        let commands = HashMap::from([(
+            "presscommand".to_string(),
+            "finishtweening;zoom,0.9;sleep,1/60;linear,4/60;zoom,1.0".to_string(),
+        )]);
+
+        let behaviors = receptor_step_behaviors(&metrics, Some(&commands), 1.0);
+
+        for window in [None, Some("W1"), Some("W3"), Some("W5"), Some("Miss")] {
+            let press = behaviors.for_window(window);
+            assert!(press.interrupts, "{window:?}");
+            assert!((press.delay - 1.0 / 60.0).abs() <= 1e-6, "{window:?}");
+            assert!((press.duration - 4.0 / 60.0).abs() <= 1e-6, "{window:?}");
+            let total = press.total_duration();
+            assert!((press.sample_zoom(total) - 0.9).abs() <= 1e-6);
+            assert!((press.sample_zoom(total - 1.0 / 60.0) - 0.9).abs() <= 1e-6);
+            assert!((press.sample_zoom(total - 3.0 / 60.0) - 0.95).abs() <= 1e-5);
+            assert!((press.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
+        }
+    }
+
+    #[test]
+    fn press_command_keeps_step_zoom_unless_it_ends_tweens_and_zooms() {
+        let metrics =
+            receptor_arrow_metrics(&[("NoneCommand", "stoptweening;zoom,0.75;linear,0.06;zoom,1")]);
+        for press in [
+            "zoom,0.9;linear,0.1;zoom,1",
+            "finishtweening;linear,0.05;zoom,0.9;linear,0.1;zoom,1",
+            "stoptweening;diffusealpha,0.2",
+            "",
+        ] {
+            let commands = HashMap::from([("presscommand".to_string(), press.to_string())]);
+
+            let none = receptor_step_behaviors(&metrics, Some(&commands), 1.0).for_window(None);
+
+            assert!((none.zoom_start - 0.75).abs() <= 1e-6, "{press}");
+            assert!((none.duration - 0.06).abs() <= 1e-6, "{press}");
+            assert_eq!(none.delay, 0.0, "{press}");
+        }
     }
 
     #[test]

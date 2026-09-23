@@ -12,7 +12,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
-    hold_explosion_active,
+    HoldFlashEmitterState, hold_explosion_active,
 };
 use deadsync_noteskin::NoteskinSlot;
 #[cfg(test)]
@@ -64,6 +64,8 @@ pub struct NotefieldFeedbackFrameView<'a> {
     pub tap_explosions: Option<&'a [Option<ActiveTapExplosion>]>,
     /// Mine explosions are ordered by local lane, or absent when no asset can render them.
     pub mine_explosions: Option<&'a [Option<ActiveMineExplosion>]>,
+    /// Hold flash emitters are ordered by local lane, or absent when no asset can render them.
+    pub hold_flashes: Option<&'a [HoldFlashEmitterState]>,
     /// Lane feedback is ordered by local lane within the prepared player span.
     pub lanes: [NotefieldLaneFeedback<'a>; MAX_COLS],
     pub countdown_font: &'static str,
@@ -156,6 +158,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         &frame.lanes,
         frame.tap_explosions.unwrap_or_default(),
         frame.mine_explosions.unwrap_or_default(),
+        frame.hold_flashes.unwrap_or_default(),
     );
     if lane_work_mask == 0 {
         return;
@@ -232,7 +235,15 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             })
         };
         let targets_visible = !hidden && targets_enabled;
-        let target_slot = targets_visible.then(|| &receptor.receptor_off[local_col]);
+        let target_slot = targets_visible.then(|| {
+            receptor
+                .receptor_beat_frames
+                .get(local_col)
+                .and_then(Option::as_ref)
+                .map_or(&receptor.receptor_off[local_col], |frames| {
+                    frames.at(request.chart.search_beat, request.chart.song_first_beat)
+                })
+        });
         let target_reverse = targets_visible
             .then(|| receptor.receptor_off_reverse.get(local_col).copied())
             .flatten();
@@ -305,6 +316,46 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         }
     }
 
+    if options.hold_explosion_enabled
+        && let (Some(noteskin), Some(hold_flashes)) = (tap_explosion, frame.hold_flashes)
+    {
+        for draw_index in 0..num_cols {
+            let local_col = column_draw_col(num_cols, draw_index);
+            let Some(state) = hold_flashes.get(local_col) else {
+                continue;
+            };
+            if lane_zooms[local_col].abs() <= f32::EPSILON {
+                continue;
+            }
+            let Some(emitter) = noteskin.hold_flash_emitter_for_col(local_col) else {
+                continue;
+            };
+            for age in state.flash_ages() {
+                compose_explosion_layers(
+                    draws,
+                    ExplosionComposeRequest {
+                        layers: std::slice::from_ref(&emitter.flash),
+                        elapsed_s: age,
+                        frame_elapsed_s: age,
+                        effect_elapsed_s: age,
+                        current_frame_beat: request.visual.current_display_beat,
+                        relative_frame_beat: None,
+                        uv_elapsed_s: elapsed_screen,
+                        center: lane_centers[local_col],
+                        field_zoom,
+                        effect_zoom: lane_zooms[local_col],
+                        rotation: ExplosionRotation::Tap {
+                            rotation_y_deg: 0.0,
+                            extra_z_deg: lane_rotations[local_col],
+                        },
+                        z: crate::style::HOLD_EXPLOSION_Z,
+                    },
+                    sprite_source,
+                );
+            }
+        }
+    }
+
     // Tap explosions are independent of the concrete "Hide Combo
     // Explosions" option, which applies only to combo milestone art.
     if let (Some(tap_explosion), Some(tap_explosions)) = (tap_explosion, frame.tap_explosions) {
@@ -333,6 +384,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
                     effect_elapsed_s: (elapsed_screen - active.effect_started_at_screen_s).max(0.0),
+                    frame_elapsed_s: active.elapsed,
                     current_frame_beat: request.visual.current_display_beat,
                     relative_frame_beat: Some(
                         (request.visual.current_display_beat - active.start_beat).max(0.0),
@@ -370,6 +422,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
                     effect_elapsed_s: active.elapsed,
+                    // ITG's GhostArrowRow keeps its HitMine sprite animating
+                    // between hits, so a hit never restarts the frames.
+                    frame_elapsed_s: elapsed_screen,
                     current_frame_beat: current_beat,
                     relative_frame_beat: None,
                     uv_elapsed_s: elapsed_screen,
@@ -395,6 +450,7 @@ fn feedback_lane_work_mask(
     lanes: &[NotefieldLaneFeedback<'_>; MAX_COLS],
     tap_explosions: &[Option<ActiveTapExplosion>],
     mine_explosions: &[Option<ActiveMineExplosion>],
+    hold_flashes: &[HoldFlashEmitterState],
 ) -> u16 {
     let num_cols = num_cols.min(MAX_COLS);
     if targets_enabled {
@@ -402,7 +458,11 @@ fn feedback_lane_work_mask(
     }
     let mut mask = 0;
     for local_col in 0..num_cols {
-        let hold_active = hold_explosions_enabled && lanes[local_col].active_hold.is_some();
+        let hold_active = hold_explosions_enabled
+            && (lanes[local_col].active_hold.is_some()
+                || hold_flashes
+                    .get(local_col)
+                    .is_some_and(HoldFlashEmitterState::has_flashes));
         let tap_active =
             tap_explosions_available && tap_explosions.get(local_col).is_some_and(Option::is_some);
         let mine_active = mine_explosions_available
@@ -430,13 +490,13 @@ mod tests {
     };
     use deadsync_noteskin::{
         ExplosionAnimation, HoldVisuals, ModelDrawState, ModelMesh, NoteDisplayMetrics,
-        NoteskinRuntime, ReceptorGlowBehavior, ReceptorPulse, SpriteDefinition, TapExplosion,
-        TapExplosionMap,
+        NoteskinRuntime, ReceptorBeatFrames, ReceptorGlowBehavior, ReceptorPulse, SpriteDefinition,
+        TapExplosion, TapExplosionMap,
     };
     use deadsync_rules::judgment::JudgeGrade;
     use deadsync_rules::note::Note;
     use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_rules::timing::TimingData;
+    use deadsync_rules::timing::{TimingData, TimingSegments};
     use deadsync_theme::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
@@ -481,6 +541,7 @@ mod tests {
     struct TestSlot {
         def: SpriteDefinition,
         key: Arc<str>,
+        frames_per_second: f32,
     }
 
     impl TestSlot {
@@ -491,6 +552,7 @@ mod tests {
                     ..SpriteDefinition::default()
                 },
                 key: key.into(),
+                frames_per_second: 0.0,
             }
         }
     }
@@ -516,16 +578,17 @@ mod tests {
             [0.0, 1.0]
         }
 
-        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
-            0
+        fn frame_index(&self, time: f32, _beat: f32) -> usize {
+            (time * self.frames_per_second) as usize
         }
 
         fn frame_index_from_phase(&self, _phase: f32) -> usize {
             0
         }
 
-        fn uv_for_frame_at(&self, _frame_index: usize, _elapsed: f32) -> [f32; 4] {
-            [0.0, 0.0, 1.0, 1.0]
+        fn uv_for_frame_at(&self, frame_index: usize, _elapsed: f32) -> [f32; 4] {
+            let u = frame_index as f32;
+            [u, 0.0, u + 1.0, 1.0]
         }
 
         fn model_draw_at(&self, _time: f32, _beat: f32) -> ModelDrawState {
@@ -574,6 +637,7 @@ mod tests {
             note_layers: Vec::new(),
             lift_note_layers: Vec::new(),
             receptor_off: vec![TestSlot::new("target0"), TestSlot::new("target1")],
+            receptor_beat_frames: vec![None; 2],
             receptor_glow: vec![Some(TestSlot::new("press0")), Some(TestSlot::new("press1"))],
             receptor_idle_glow_layers: vec![None; 2],
             receptor_off_reverse: vec![ReceptorReverseBehavior::default(); 2],
@@ -586,6 +650,7 @@ mod tests {
             column_xs: vec![-32, 32],
             tap_explosions: TapExplosionMap::new(),
             tap_explosions_by_col,
+            mine_hit_ends_tap_explosion: false,
             mine_hit_explosion: Some(explosion("mine")),
             receptor_glow_behavior: ReceptorGlowBehavior::default(),
             receptor_idle_glow: ReceptorIdleGlow::default(),
@@ -604,6 +669,7 @@ mod tests {
             roll_columns: Vec::new(),
             hold: HoldVisuals::default(),
             roll: HoldVisuals::default(),
+            hold_flash_emitters: Vec::new(),
             part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
             note_display_metrics: NoteDisplayMetrics::default(),
         }
@@ -936,6 +1002,7 @@ mod tests {
                 visible_beat: 1.0,
                 is_in_delay: false,
                 search_beat: 1.0,
+                song_first_beat: 0.0,
                 scroll_reference_bpm: 120.0,
                 music_rate: 1.0,
                 note_count_stats: &[],
@@ -1097,6 +1164,7 @@ mod tests {
             column_flashes: Some(&flashes),
             tap_explosions: Some(&taps),
             mine_explosions: Some(&mines),
+            hold_flashes: None,
             lanes: std::array::from_fn(|lane| match lane {
                 0 => NotefieldLaneFeedback {
                     active_hold: Some(&hold),
@@ -1281,6 +1349,63 @@ mod tests {
     }
 
     #[test]
+    fn beat_state_receptor_frame_follows_undelayed_song_beat() {
+        let mut ns = noteskin();
+        ns.receptor_glow = vec![None; 2];
+        ns.receptor_beat_frames = (0..2)
+            .map(|lane| {
+                Some(ReceptorBeatFrames {
+                    on_beat: TestSlot::new(format!("on{lane}")),
+                    off_beat: TestSlot::new(format!("off{lane}")),
+                    before_start: TestSlot::new(format!("before{lane}")),
+                })
+            })
+            .collect();
+        // The player's timing carries a 0.1 s offset (0.2 beat at 120 BPM),
+        // which must not move the pulse start eight beats before beat 12.
+        let timing = TimingData::from_segments(
+            0.0,
+            0.1,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let hides = SongLuaNoteHideWindows::default();
+        let frame = spline_feedback(&[]);
+        for (search_beat, expected) in [
+            (3.9, "before"),
+            (4.0, "on"),
+            (4.5, "off"),
+            (12.95, "on"),
+            (13.2, "off"),
+        ] {
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.song_first_beat = 12.0;
+            request.chart.search_beat = search_beat;
+            request.chart.visible_beat = search_beat - 0.5;
+            let prepared = prepare_notefield(&request).unwrap();
+            let mut draws = Vec::new();
+            compose_notefield_feedback(
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+
+            assert_eq!(
+                sprite_keys(&draws),
+                [format!("{expected}0"), format!("{expected}1")],
+                "search beat {search_beat}"
+            );
+        }
+    }
+
+    #[test]
     fn riddle_note_and_feedback_rotation_match_native_vertices() {
         use deadlib_present::compose::{ActorSegment, ComposeScratch};
         struct Textures;
@@ -1457,6 +1582,7 @@ mod tests {
             column_flashes: None,
             tap_explosions: Some(&inactive_taps),
             mine_explosions: Some(&inactive_mines),
+            hold_flashes: None,
             lanes: [NotefieldLaneFeedback::default(); MAX_COLS],
             countdown_font: "test",
             countdown_text_slot: 17,
@@ -1474,6 +1600,105 @@ mod tests {
         );
 
         assert!(actors.is_empty());
+    }
+
+    #[test]
+    fn hold_flash_emitter_draws_each_flash_in_flight() {
+        let mut noteskin = noteskin();
+        let flash = deadsync_noteskin::parse_explosion_animation(
+            "blend,Blend.Add;diffuse,1,0.94,0.39,0.9;zoom,1;linear,0.15;diffuse,0,0,0,1;zoom,1.25",
+        );
+        noteskin.hold_flash_emitters = vec![
+            None,
+            Some(deadsync_noteskin::HoldFlashEmitter {
+                flash: deadsync_noteskin::TapExplosionLayer {
+                    slot: TestSlot::new("holdflash1"),
+                    animation: flash.clone(),
+                },
+                period: 4.0 / 60.0,
+                sprites: 3,
+                hold: true,
+                roll: true,
+            }),
+        ];
+        let emitter_timing = deadsync_gameplay::HoldFlashEmitterTiming {
+            period: 4.0 / 60.0,
+            sprites: 3,
+            flash_duration: flash.duration(),
+            hold: true,
+            roll: true,
+        };
+        let mut emitter = HoldFlashEmitterState::default();
+        emitter.advance(emitter_timing, Some(false), 0.0);
+        emitter.advance(emitter_timing, Some(false), 0.1);
+        emitter.advance(emitter_timing, None, 0.0);
+        let hold_flashes = [HoldFlashEmitterState::default(), emitter];
+        let frame = NotefieldFeedbackFrameView {
+            column_cues: None,
+            column_cue_cursor: None,
+            crossover_cues: None,
+            crossover_cue_entries: None,
+            crossover_cue_cursor: None,
+            column_flashes: None,
+            tap_explosions: None,
+            mine_explosions: None,
+            hold_flashes: Some(&hold_flashes),
+            lanes: [NotefieldLaneFeedback::default(); MAX_COLS],
+            countdown_font: "test",
+            countdown_text_slot: 17,
+        };
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let note_hides = SongLuaNoteHideWindows::default();
+        let compose = |hold_explosion_enabled: bool| {
+            let mut request = request(
+                &noteskin,
+                &timing,
+                &notes,
+                &note_hides,
+                FieldPlacement::P1,
+                0,
+                1,
+                2,
+                2,
+            );
+            request.options.hide_targets = true;
+            request.options.hold_explosion_enabled = hold_explosion_enabled;
+            let prepared = prepare_notefield(&request).expect("test notefield should prepare");
+            let mut actors = Vec::new();
+            compose_notefield_feedback(
+                &mut actors,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            actors
+        };
+
+        let actors = compose(true);
+        assert_eq!(sprite_keys(&actors), ["holdflash1", "holdflash1"]);
+        let tints = actors
+            .iter()
+            .map(|draw| {
+                let FlatDraw::Sprite(sprite) = draw else {
+                    panic!("hold flashes draw as sprites");
+                };
+                assert_eq!(sprite.z, crate::style::HOLD_EXPLOSION_Z);
+                assert_eq!(sprite.blend, deadlib_render_core::BlendMode::Add);
+                sprite.tint
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            tints,
+            emitter
+                .flash_ages()
+                .map(|age| flash.state_at(age).diffuse)
+                .collect::<Vec<_>>()
+        );
+        assert!(compose(false).is_empty());
     }
 
     #[test]
@@ -1503,6 +1728,7 @@ mod tests {
             column_flashes: None,
             tap_explosions: None,
             mine_explosions: None,
+            hold_flashes: None,
             lanes: std::array::from_fn(|lane| {
                 (lane < 2)
                     .then_some(NotefieldLaneFeedback {
@@ -1562,6 +1788,7 @@ mod tests {
             column_flashes: None,
             tap_explosions: None,
             mine_explosions: None,
+            hold_flashes: None,
             lanes: std::array::from_fn(|lane| NotefieldLaneFeedback {
                 receptor_bop_zoom: if lane < 5 { 1.0 } else { 0.0 },
                 ..NotefieldLaneFeedback::default()
@@ -1631,6 +1858,7 @@ mod tests {
             column_flashes: None,
             tap_explosions: Some(&taps),
             mine_explosions: Some(&mines),
+            hold_flashes: None,
             lanes: std::array::from_fn(|lane| {
                 if lane < 2 {
                     NotefieldLaneFeedback {
@@ -1673,6 +1901,73 @@ mod tests {
         );
     }
 
+    #[test]
+    fn mine_explosion_frames_keep_running_between_hits() {
+        let mut noteskin = noteskin();
+        noteskin.mine_hit_explosion = Some(TapExplosion::from_single(
+            TestSlot {
+                frames_per_second: 20.0,
+                ..TestSlot::new("mine")
+            },
+            ExplosionAnimation::default(),
+        ));
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let note_hides = SongLuaNoteHideWindows::default();
+        let hit = |elapsed| {
+            Some(ActiveMineExplosion {
+                elapsed,
+                duration: 1.0,
+                started_at_screen_s: 0.0,
+            })
+        };
+        let mine_frames = |elapsed_screen_s: f32, mines: [Option<ActiveMineExplosion>; 2]| {
+            let mut request = request(
+                &noteskin,
+                &timing,
+                &notes,
+                &note_hides,
+                FieldPlacement::P1,
+                0,
+                1,
+                2,
+                2,
+            );
+            request.visual.elapsed_screen_s = elapsed_screen_s;
+            let prepared = prepare_notefield(&request).expect("test notefield should prepare");
+            let frame = NotefieldFeedbackFrameView {
+                mine_explosions: Some(&mines),
+                ..spline_feedback(&[])
+            };
+            let mut actors = Vec::new();
+            compose_notefield_feedback(
+                &mut actors,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            actors
+                .iter()
+                .filter_map(|draw| match draw {
+                    FlatDraw::Sprite(FlatSprite {
+                        source: SpriteSource::TextureHandle { key, .. },
+                        uv_rect,
+                        ..
+                    }) if key.as_ref() == "mine" => Some(uv_rect[0]),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        // Hits of different ages show the frame the screen clock is on, and a
+        // later hit starts wherever that clock has got to.
+        assert_eq!(mine_frames(0.3, [hit(0.0), hit(0.2)]), [6.0, 6.0]);
+        assert_eq!(mine_frames(0.5, [hit(0.0), None]), [10.0]);
+    }
+
     fn spline_feedback(taps: &[Option<ActiveTapExplosion>]) -> NotefieldFeedbackFrameView<'_> {
         NotefieldFeedbackFrameView {
             column_cues: None,
@@ -1683,6 +1978,7 @@ mod tests {
             column_flashes: None,
             tap_explosions: Some(taps),
             mine_explosions: None,
+            hold_flashes: None,
             lanes: [NotefieldLaneFeedback {
                 receptor_bop_zoom: 1.0,
                 ..NotefieldLaneFeedback::default()

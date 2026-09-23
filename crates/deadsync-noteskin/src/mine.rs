@@ -7,6 +7,8 @@ pub const MINE_GRADIENT_SAMPLES: usize = 64;
 pub const MINE_GRADIENT_FRAME_SIZE: u32 = 64;
 
 const MINE_FILL_LAYERS: usize = 32;
+// Largest per-channel spread allowed down one column of a colour strip.
+const MINE_STRIP_COLUMN_TOLERANCE: u8 = 16;
 const MINE_GRADIENT_KEY_PREFIX: &str = "generated/noteskins/mine_fill";
 const MINE_GRADIENT_PIXEL_COUNT: usize =
     MINE_GRADIENT_FRAME_SIZE as usize * MINE_GRADIENT_FRAME_SIZE as usize;
@@ -318,7 +320,36 @@ pub fn mine_gradient_samples_from_slot(
             }
         };
 
+    if !mine_gradient_region_is_strip(image, region) {
+        return None;
+    }
     mine_gradient_samples(image, region.src, region.size, sample_count)
+}
+
+/// Whether every column of `region` shows one colour over its visible pixels,
+/// so the fill is a colour strip the generated gradient can stand in for.
+/// Anything else is real art, which ITGmania draws as authored.
+#[must_use]
+pub fn mine_gradient_region_is_strip(image: &RgbaImage, region: MineGradientSampleRegion) -> bool {
+    let [src_x, src_y] = region.src;
+    let [width, height] = region.size;
+    (src_x..src_x + width).all(|x| {
+        let mut low = [u8::MAX; 3];
+        let mut high = [u8::MIN; 3];
+        for y in src_y..src_y + height {
+            let pixel = image.get_pixel(x, y);
+            if pixel[3] == 0 {
+                continue;
+            }
+            for channel in 0..3 {
+                low[channel] = low[channel].min(pixel[channel]);
+                high[channel] = high[channel].max(pixel[channel]);
+            }
+        }
+        (0..3).all(|channel| {
+            high[channel].saturating_sub(low[channel]) <= MINE_STRIP_COLUMN_TOLERANCE
+        })
+    })
 }
 
 #[must_use]
@@ -475,6 +506,30 @@ mod tests {
 
         assert!(warnings.is_empty());
         assert_eq!(samples, vec![[1.0, 0.0, 0.0, 1.0]; 3]);
+    }
+
+    #[test]
+    fn mine_gradient_samples_from_slot_only_accepts_colour_strips() {
+        let mut strip = RgbaImage::new(4, 4);
+        for x in 0..4 {
+            for y in 1..3 {
+                strip.put_pixel(x, y, Rgba([60 * x as u8, 0, 255, 255]));
+            }
+            strip.put_pixel(x, 3, Rgba([60 * x as u8 + 8, 4, 250, 40]));
+        }
+        let mut art = strip.clone();
+        art.put_pixel(2, 0, Rgba([255, 255, 255, 255]));
+        let mut warnings = Vec::new();
+        let mut samples = |image: &RgbaImage| {
+            mine_gradient_samples_from_slot(image, "mine.png", [0, 0], [4, 4], None, 4, |warning| {
+                warnings.push(warning)
+            })
+        };
+
+        let colors = samples(&strip).expect("a colour strip becomes a gradient");
+        assert_eq!(colors.len(), 4);
+        assert!(samples(&art).is_none());
+        assert!(warnings.is_empty());
     }
 
     #[test]

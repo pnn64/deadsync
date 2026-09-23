@@ -274,6 +274,14 @@ impl ExplosionAnimation {
         }
     }
 
+    #[must_use]
+    pub(crate) fn ends_invisible(&self) -> bool {
+        let state = self.state_at(f32::INFINITY);
+        !state.visible
+            || state.diffuse[3] <= 0.0
+            || (self.blend_add && state.diffuse[..3].iter().all(|channel| *channel <= 0.0))
+    }
+
     fn canonical_fade_state_at(&self, time: f32) -> Option<ExplosionVisualState> {
         let [segment] = self.segments.as_slice() else {
             return None;
@@ -353,6 +361,14 @@ impl PendingSegment {
         end_state
     }
 
+    const fn is_noop(&self) -> bool {
+        self.duration <= 0.0
+            && self.target_zoom.is_none()
+            && self.target_color.is_none()
+            && self.target_rotation_z.is_none()
+            && self.target_visible.is_none()
+    }
+
     const fn into_segment(self) -> ExplosionSegment {
         ExplosionSegment {
             duration: self.duration.max(0.0),
@@ -418,7 +434,7 @@ fn parse_explosion_animation_parts<'a>(
                           emit_segment: bool| {
         if let Some(segment) = pending.take() {
             let end_state = segment.end_state();
-            if emit_segment {
+            if emit_segment && !segment.is_noop() {
                 animation.segments.push(segment.into_segment());
             }
             *current_state = end_state;
@@ -458,29 +474,51 @@ fn parse_explosion_animation_parts<'a>(
         if let Some(duration) = parse_script_sleep(command, args) {
             recognized_command = true;
             finish_pending(&mut pending, &mut animation, &mut current_state, true);
+            if !initial_locked {
+                animation.initial = current_state;
+                initial_locked = true;
+            }
+            // Actor::Sleep queues an idle tween and then a zero-length one,
+            // so the mods after a sleep land at its end instead of fading.
+            let duration = duration.max(0.0);
+            if duration > 0.0 {
+                animation.segments.push(ExplosionSegment {
+                    duration,
+                    tween: TweenType::Linear,
+                    start: current_state,
+                    end_zoom: None,
+                    end_color: None,
+                    end_rotation_z: None,
+                    end_visible: None,
+                });
+            }
             pending = Some(PendingSegment {
                 tween: TweenType::Linear,
-                duration: duration.max(0.0),
+                duration: 0.0,
                 start: current_state,
                 target_zoom: None,
                 target_color: None,
                 target_rotation_z: None,
                 target_visible: None,
             });
-            if !initial_locked {
-                animation.initial = current_state;
-                initial_locked = true;
-            }
             continue;
         }
         if let Some(control) = parse_script_control(command) {
             recognized_command = true;
             match control {
+                // Both drop every queued tween, not only the newest one.
                 ScriptControl::FinishTweening => {
                     finish_pending(&mut pending, &mut animation, &mut current_state, false);
+                    animation.segments.clear();
+                    initial_locked = false;
                 }
                 ScriptControl::StopTweening => {
                     pending = None;
+                    if initial_locked {
+                        current_state = animation.initial;
+                    }
+                    animation.segments.clear();
+                    initial_locked = false;
                 }
                 ScriptControl::SetAllStateDelays => {}
                 _ => finish_pending(&mut pending, &mut animation, &mut current_state, true),
@@ -1060,6 +1098,15 @@ pub fn itg_tap_explosion_mode_from_commands(
     }
 }
 
+pub(crate) fn itg_script_finishes_tweening(script: &str) -> bool {
+    let script = normalized_script_command(script);
+    script.split(';').any(|token| {
+        split_script_token(token).is_some_and(|token| {
+            parse_script_control(token.command()) == Some(ScriptControl::FinishTweening)
+        })
+    })
+}
+
 fn itg_script_visible_command(script: &str) -> Option<bool> {
     let script = normalized_script_command(script);
     script.split(';').find_map(|token| {
@@ -1244,6 +1291,35 @@ mod tests {
             parse_explosion_animation("diffusealpha,1;linear,0.2;diffusealpha,0;finishtweening");
         assert_eq!(canceled.duration(), 0.0);
         assert_eq!(canceled.state_at(0.0).diffuse[3], 0.0);
+    }
+
+    #[test]
+    fn parse_explosion_animation_applies_mods_after_sleep_at_its_end() {
+        let anim = parse_explosion_animation(
+            "diffuse,1,1,1,1;zoom,0.54;linear,0.05;zoom,0.7;sleep,0.05;diffuse,0,0,0,1",
+        );
+
+        assert!((anim.duration() - 0.1).abs() <= 1e-6);
+        let sleeping = anim.state_at(0.09);
+        assert_eq!(sleeping.diffuse, [1.0; 4]);
+        assert!((sleeping.zoom - 0.7).abs() <= 1e-6);
+        assert_eq!(anim.state_at(0.1001).diffuse, [0.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn parse_explosion_animation_tweening_controls_drop_every_queued_tween() {
+        let finished = parse_explosion_animation(
+            "zoom,1;linear,0.1;zoom,2;sleep,0.2;zoom,3;finishtweening;diffusealpha,0.5",
+        );
+        assert_eq!(finished.duration(), 0.0);
+        let state = finished.state_at(0.0);
+        assert_eq!(state.zoom, 3.0);
+        assert_eq!(state.diffuse[3], 0.5);
+
+        let stopped =
+            parse_explosion_animation("zoom,1;linear,0.1;zoom,2;sleep,0.2;zoom,3;stoptweening");
+        assert_eq!(stopped.duration(), 0.0);
+        assert_eq!(stopped.state_at(0.0).zoom, 1.0);
     }
 
     #[test]

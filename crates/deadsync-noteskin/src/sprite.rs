@@ -517,7 +517,7 @@ pub fn itg_sprite_animation_slot_plan(
             &mut source_frame_dims,
         ),
         SpriteAnimationCommandPlan::AllStateDelays(delay) => {
-            itg_all_state_delays_slot_plan(slot, delay, beat_based)
+            itg_all_state_delays_slot_plan(slot, delay, beat_based, &mut sprite_sheet_dims)
         }
     }
 }
@@ -577,6 +577,7 @@ fn itg_all_state_delays_slot_plan(
     slot: SpriteSlotPlan,
     delay: f32,
     beat_based: bool,
+    sprite_sheet_dims: &mut impl FnMut(&str) -> (u32, u32),
 ) -> Option<SpriteSlotPlan> {
     let SpriteSlotPlan {
         def,
@@ -584,17 +585,60 @@ fn itg_all_state_delays_slot_plan(
         source,
         note_color_translate,
     } = slot;
-    let SpriteSourcePlan::Animated {
-        texture_key,
-        tex_dims,
-        frame_size,
-        grid,
-        frame_count,
-        frame_indices,
-        ..
-    } = source
-    else {
-        return None;
+    let (texture_key, tex_dims, frame_size, grid, frame_count, frame_indices) = match source {
+        SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices,
+            ..
+        } => (
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices,
+        ),
+        // A sprite whose states came from its sheet keeps one state per sheet
+        // frame even while showing a single frame, so the new delays animate
+        // the whole sheet from the frame it shows.
+        SpriteSourcePlan::Atlas {
+            texture_key,
+            tex_dims,
+        } => {
+            let (cols, rows) = sprite_sheet_dims(&texture_key);
+            let grid = (cols.max(1) as usize, rows.max(1) as usize);
+            let frame_count = grid.0.saturating_mul(grid.1);
+            if frame_count <= 1 {
+                return None;
+            }
+            let frame_size = [
+                (tex_dims.0 / grid.0 as u32).max(1) as i32,
+                (tex_dims.1 / grid.1 as u32).max(1) as i32,
+            ];
+            let col = (def.src[0].max(0) / frame_size[0]) as usize;
+            let row = (def.src[1].max(0) / frame_size[1]) as usize;
+            let shown = (row * grid.0 + col).min(frame_count - 1);
+            let sheet = SpriteSlotPlan {
+                def,
+                source_size,
+                source: all_state_delays_source_plan(
+                    texture_key,
+                    tex_dims,
+                    frame_size,
+                    grid,
+                    frame_count,
+                    Some((0..frame_count).collect()),
+                    delay,
+                    beat_based,
+                ),
+                note_color_translate,
+            };
+            return Some(itg_animation_slot_plan_from_state(sheet, shown));
+        }
     };
     Some(SpriteSlotPlan {
         def,
@@ -611,6 +655,79 @@ fn itg_all_state_delays_slot_plan(
         ),
         note_color_translate,
     })
+}
+
+/// Restarts a running animation at `state`, as ITG's `Sprite::SetState` does:
+/// the sprite shows that state first and then keeps cycling in state order. A
+/// state past the last one is clamped to the last one.
+#[must_use]
+pub fn itg_animation_slot_plan_from_state(slot: SpriteSlotPlan, state: usize) -> SpriteSlotPlan {
+    let SpriteSlotPlan {
+        mut def,
+        source_size,
+        source,
+        note_color_translate,
+    } = slot;
+    let SpriteSourcePlan::Animated {
+        texture_key,
+        tex_dims,
+        frame_size,
+        grid,
+        frame_count,
+        frame_indices,
+        rate,
+        mut frame_durations,
+    } = source
+    else {
+        return SpriteSlotPlan {
+            def,
+            source_size,
+            source,
+            note_color_translate,
+        };
+    };
+    let count = frame_count.max(1);
+    let start = state.min(count - 1);
+    // Unindexed animations step through the sheet from the frame they show.
+    let first = if frame_indices.is_some() {
+        0
+    } else {
+        let col = def.src[0].max(0) / frame_size[0].max(1);
+        let row = def.src[1].max(0) / frame_size[1].max(1);
+        row as usize * grid.0.max(1) + col as usize
+    };
+    let states: Vec<usize> = (0..count)
+        .map(|offset| {
+            let state = (start + offset) % count;
+            frame_indices.as_ref().map_or(first + state, |indices| {
+                indices.get(state).copied().unwrap_or(first)
+            })
+        })
+        .collect();
+    if let Some(durations) = frame_durations
+        .as_mut()
+        .filter(|durations| durations.len() == count)
+    {
+        durations.rotate_left(start);
+    }
+    let shown = sprite_sheet_frame([tex_dims.0, tex_dims.1], [grid.0, grid.1], states[0]);
+    def.src = shown.def.src;
+    def.size = shown.def.size;
+    SpriteSlotPlan {
+        def,
+        source_size,
+        source: SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices: Some(states),
+            rate,
+            frame_durations,
+        },
+        note_color_translate,
+    }
 }
 
 #[must_use]
@@ -1258,13 +1375,13 @@ mod tests {
 
     use super::{
         AnimationRate, SpriteAnimatedUvCache, SpriteAnimationPlan, SpriteAtlasUvCache,
-        SpriteDefinition, SpriteSourcePlan, SpriteStatePropertiesAnimation,
+        SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan, SpriteStatePropertiesAnimation,
         all_frames_sprite_slot_plan, atlas_sprite_slot_plan, duration_frame_index,
         frame_duration_total, frame_sprite_slot_plan, generated_animation_sprite_slot_plan,
-        itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
-        itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
-        itg_sprite_slot_plan_from_path, model_vertex_for_sprite, neg_rot_sin_cos,
-        sprite_all_frames_animation_plan, sprite_animation_plan, sprite_atlas_uv,
+        itg_all_frames_sprite_slot_plan_from_path, itg_animation_slot_plan_from_state,
+        itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
+        itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
+        neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animation_plan, sprite_atlas_uv,
         sprite_atlas_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
         sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation,
     };
@@ -1443,6 +1560,166 @@ mod tests {
                 frame_durations: Some(vec![0.5, 0.5]),
             }
         );
+    }
+
+    #[test]
+    fn itg_animation_slot_plan_applies_all_state_delays_to_sheet_atlases() {
+        let slot =
+            frame_sprite_slot_plan("hit.png".to_string(), (256, 32), (16, 1), 0, (8, 16), true);
+        let plan = itg_sprite_animation_slot_plan(
+            slot,
+            SpriteAnimationCommandPlan::AllStateDelays(0.05),
+            false,
+            |_| (16, 1),
+            |_, _, _| (8, 16),
+        )
+        .expect("all state delays should animate every frame of a sheet");
+
+        assert_eq!(plan.def.src, [0, 0]);
+        assert_eq!(plan.def.size, [16, 32]);
+        assert_eq!(plan.source_size, [8, 16]);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Animated {
+                texture_key: "hit.png".to_string(),
+                tex_dims: (256, 32),
+                frame_size: [16, 32],
+                grid: (16, 1),
+                frame_count: 16,
+                frame_indices: Some((0..16).collect()),
+                rate: AnimationRate::FramesPerSecond(20.0),
+                frame_durations: Some(vec![0.05; 16]),
+            }
+        );
+
+        // A sheet sprite showing frame 2 carries on from there and wraps back
+        // to frame 0 instead of stepping past the sheet's last frame.
+        let shown = frame_sprite_slot_plan(
+            "x 4x1.png".to_string(),
+            (256, 64),
+            (4, 1),
+            2,
+            (64, 64),
+            true,
+        );
+        let plan = itg_sprite_animation_slot_plan(
+            shown,
+            SpriteAnimationCommandPlan::AllStateDelays(0.1),
+            false,
+            |_| (4, 1),
+            |_, _, _| (64, 64),
+        )
+        .expect("all state delays should animate every frame of a sheet");
+        assert_eq!(plan.def.src, [128, 0]);
+        let SpriteSourcePlan::Animated {
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices,
+            ..
+        } = &plan.source
+        else {
+            panic!("all state delays should animate the sheet");
+        };
+        assert_eq!(frame_indices.as_deref(), Some(&[2, 3, 0, 1][..]));
+        let uvs = SpriteAnimatedUvCache::new(
+            [1.0 / 256.0, 1.0 / 64.0],
+            &plan.def,
+            *frame_size,
+            [grid.0, grid.1],
+            *frame_count,
+            true,
+        );
+        for frame in 0..*frame_count {
+            let uv = uvs.get(frame_indices.as_deref(), frame, false);
+            assert!(
+                uv.iter().all(|coord| (0.0..=1.0).contains(coord)),
+                "frame {frame} samples {uv:?}"
+            );
+        }
+
+        let single = atlas_sprite_slot_plan("tap.png".to_string(), (64, 64), (64, 64), true);
+        assert!(
+            itg_sprite_animation_slot_plan(
+                single,
+                SpriteAnimationCommandPlan::AllStateDelays(0.05),
+                false,
+                |_| (1, 1),
+                |_, _, _| (64, 64),
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn itg_animation_restarts_at_set_state_in_state_order() {
+        let slot = all_frames_sprite_slot_plan(
+            "spark.png".to_string(),
+            (256, 256),
+            (4, 4),
+            Some(0.05),
+            false,
+            (32, 32),
+            true,
+        )
+        .expect("animated slot");
+        let plan = itg_animation_slot_plan_from_state(slot.clone(), 13);
+
+        assert_eq!(plan.def.src, [64, 192]);
+        let SpriteSourcePlan::Animated { frame_indices, .. } = &plan.source else {
+            panic!("restarting keeps the animation running");
+        };
+        let expected: Vec<usize> = (13..16).chain(0..13).collect();
+        assert_eq!(frame_indices.as_ref(), Some(&expected));
+
+        // ITG clamps a state past the last one instead of wrapping it.
+        let plan = itg_animation_slot_plan_from_state(slot.clone(), 16);
+        assert_eq!(plan.def.src, [192, 192]);
+        let SpriteSourcePlan::Animated { frame_indices, .. } = &plan.source else {
+            unreachable!();
+        };
+        let expected: Vec<usize> = std::iter::once(15).chain(0..15).collect();
+        assert_eq!(frame_indices.as_ref(), Some(&expected));
+
+        let SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            rate,
+            ..
+        } = slot.source
+        else {
+            unreachable!();
+        };
+        let indexed = SpriteSlotPlan {
+            source: SpriteSourcePlan::Animated {
+                texture_key,
+                tex_dims,
+                frame_size,
+                grid,
+                frame_count: 3,
+                frame_indices: Some(vec![6, 2, 4]),
+                rate,
+                frame_durations: Some(vec![0.1, 0.2, 0.3]),
+            },
+            ..slot
+        };
+        let plan = itg_animation_slot_plan_from_state(indexed, 1);
+        assert_eq!(plan.def.src, [128, 0]);
+        let SpriteSourcePlan::Animated {
+            frame_indices,
+            frame_durations,
+            ..
+        } = plan.source
+        else {
+            unreachable!();
+        };
+        assert_eq!(frame_indices, Some(vec![2, 4, 6]));
+        assert_eq!(frame_durations, Some(vec![0.2, 0.3, 0.1]));
+
+        let atlas = atlas_sprite_slot_plan("tap.png".to_string(), (64, 64), (64, 64), true);
+        assert_eq!(itg_animation_slot_plan_from_state(atlas.clone(), 3), atlas);
     }
 
     #[test]

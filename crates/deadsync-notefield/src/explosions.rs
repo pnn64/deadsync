@@ -17,6 +17,8 @@ pub(crate) struct ExplosionComposeRequest<'a, S> {
     pub layers: &'a [TapExplosionLayer<S>],
     pub elapsed_s: f32,
     pub effect_elapsed_s: f32,
+    /// Clock that time-based sprite layers pick their frame from.
+    pub frame_elapsed_s: f32,
     pub current_frame_beat: f32,
     pub relative_frame_beat: Option<f32>,
     pub uv_elapsed_s: f32,
@@ -50,7 +52,7 @@ pub(crate) fn compose_explosion_layers<S, F>(
             .relative_frame_beat
             .filter(|_| slot.animation_is_beat_based())
             .unwrap_or(request.current_frame_beat);
-        let frame = slot.frame_index(request.elapsed_s, frame_beat);
+        let frame = slot.frame_index(request.frame_elapsed_s, frame_beat);
         let uv = slot.uv_for_frame_at(frame, request.uv_elapsed_s);
         let size = scale_effect_size(
             slot.logical_size(),
@@ -242,6 +244,7 @@ mod tests {
                 layers: &layers,
                 elapsed_s: 0.0,
                 effect_elapsed_s: 0.0,
+                frame_elapsed_s: 0.0,
                 current_frame_beat: 9.0,
                 relative_frame_beat: Some(2.0),
                 uv_elapsed_s: 3.0,
@@ -302,6 +305,7 @@ mod tests {
                 layers: &layers,
                 elapsed_s: 0.0,
                 effect_elapsed_s: 0.0,
+                frame_elapsed_s: 0.0,
                 current_frame_beat: 0.0,
                 relative_frame_beat: None,
                 uv_elapsed_s: 0.0,
@@ -343,6 +347,7 @@ mod tests {
                 layers: &layers,
                 elapsed_s: 0.0,
                 effect_elapsed_s: 0.0,
+                frame_elapsed_s: 0.0,
                 current_frame_beat: 7.0,
                 relative_frame_beat: Some(2.0),
                 uv_elapsed_s: 0.0,

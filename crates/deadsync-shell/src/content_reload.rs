@@ -103,6 +103,7 @@ impl Service {
         audio_available: bool,
     ) {
         self.start(move |tx| {
+            deadsync_assets::noteskin::forget_song_skins();
             scan_library(&tx, &songs_root, &courses_root, SongScanMode::Reload);
             analyze_replaygain(&tx, None, audio_available);
             send_finished(&tx);
@@ -116,6 +117,7 @@ impl Service {
         audio_available: bool,
     ) {
         self.start(move |tx| {
+            deadsync_assets::noteskin::forget_song_skins();
             let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
                 SimplyLoveContentReloadPhase::Songs,
             ));
@@ -595,6 +597,7 @@ fn finished_event() -> SimplyLoveContentReloadEvent {
 }
 
 pub(crate) fn reload_song(path: &Path) -> Result<Vec<deadsync_chart::SongPack>, String> {
+    deadsync_assets::noteskin::forget_song_skins();
     deadsync_simfile::app_runtime::reload_song_in_cache(path)?;
     Ok(deadsync_simfile::runtime_cache::get_song_cache().clone())
 }

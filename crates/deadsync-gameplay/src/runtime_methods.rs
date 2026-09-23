@@ -1241,6 +1241,13 @@ where
     #[inline(always)]
     pub fn trigger_mine_explosion(&mut self, column: usize) {
         let player = self.player_for_col(column);
+        if self
+            .display
+            .noteskin_effects
+            .mine_hit_ends_tap_explosion(player)
+        {
+            self.display.visual_feedback.set_tap_explosion(column, None);
+        }
         let duration = self
             .display
             .noteskin_effects
@@ -1374,7 +1381,39 @@ where
         }
         let now = self.boundary.total_elapsed_in_screen;
         self.display.visual_feedback.tick(delta_time, now);
+        self.advance_hold_flash_emitters(delta_time);
         self.display.hold_feedback.tick(now);
+    }
+
+    fn advance_hold_flash_emitters(&mut self, delta_time: f32) {
+        for column in 0..self.setup.num_cols.min(MAX_COLS) {
+            let player = self.player_for_col(column);
+            let local_col = local_column_for_field(self.setup.cols_per_player, column);
+            let Some(timing) = self
+                .display
+                .noteskin_effects
+                .hold_flash_emitter(player, local_col)
+            else {
+                continue;
+            };
+            let visible_beat = self.visible_beat(player);
+            let showing = self
+                .active_hold(column)
+                .filter(|active| {
+                    hold_explosion_active(
+                        Some(active),
+                        visible_beat,
+                        self.chart_runtime.notes[active.note_index].beat,
+                    )
+                })
+                .map(|active| matches!(active.note_type, NoteType::Roll));
+            self.display.visual_feedback.advance_hold_flash_emitter(
+                column,
+                timing,
+                showing,
+                delta_time,
+            );
+        }
     }
 
     pub fn finalize_completed_mines(&mut self) {
@@ -1806,7 +1845,7 @@ where
                     self.mark_autoplay_used();
                     match event.action {
                         AutoplayNoteAction::Lift => {
-                            let _ = self.judge_a_lift(event.column, update.row_time_ns);
+                            let _ = self.judge_a_lift(event.column, update.row_time_ns, true);
                         }
                         AutoplayNoteAction::Tap => {
                             let _ = self.judge_a_tap(event.column, update.row_time_ns);
@@ -2503,7 +2542,16 @@ where
 
     /// Judge lift notes on button release. Mirrors tap judging's per-note path but
     /// only matches `NoteType::Lift`.
-    pub fn judge_a_lift(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
+    ///
+    /// ITGmania's `Player::Step` never steps the receptor for a release, but
+    /// autoplay judges lifts through a press step, so only autoplay passes
+    /// `step_receptor`.
+    pub fn judge_a_lift(
+        &mut self,
+        column: usize,
+        current_time_ns: SongTimeNs,
+        step_receptor: bool,
+    ) -> bool {
         let rate = normalized_song_rate(self.music_rate());
         let timing_hit_log = timing_hit_log_enabled();
         let player = self.player_for_col(column);
@@ -2637,7 +2685,7 @@ where
         );
 
         self.trigger_completed_row_tap_explosions(player, note_index);
-        if let Some(window_key) = hit_plan.receptor_window {
+        if step_receptor && let Some(window_key) = hit_plan.receptor_window {
             self.trigger_receptor_score_pulse(note_col, window_key);
         }
         true

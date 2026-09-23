@@ -322,8 +322,12 @@ mod note_metadata_cache_tests {
 
 struct MineSlotPass<'a, S> {
     slot: &'a S,
-    alpha_scale: f32,
     z: i16,
+    // ITGmania's SetSecondsIntoAnimation does nothing on an ActorFrame, so the
+    // sprites of a mine with a frame layer (always an ActorFrame) animate on
+    // their own clocks. A lone sprite wrapped in an ActorFrame is not told
+    // apart from a Sprite root and still follows the TapMine phase.
+    own_clock: bool,
 }
 
 #[inline(always)]
@@ -442,8 +446,8 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             model_cache,
             MineSlotPass {
                 slot,
-                alpha_scale: 0.9,
                 z: request.note_z.saturating_sub(1),
+                own_clock: frame.is_some(),
             },
             &request,
             size_for_slot,
@@ -456,8 +460,8 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             model_cache,
             MineSlotPass {
                 slot,
-                alpha_scale: 1.0,
                 z: request.note_z,
+                own_clock: true,
             },
             &request,
             &|_| size,
@@ -526,7 +530,11 @@ fn compose_flat_mine_slot<S, F, Z>(
     if !draw.visible {
         return;
     }
-    let frame = slot.frame_index_from_phase(request.mine_uv_phase);
+    let frame = if pass.own_clock && slot.model().is_none() {
+        slot.frame_index(request.display_time_s, request.current_beat)
+    } else {
+        slot.frame_index_from_phase(request.mine_uv_phase)
+    };
     let uv_elapsed = if slot.model().is_some() {
         request.mine_uv_phase
     } else {
@@ -536,7 +544,19 @@ fn compose_flat_mine_slot<S, F, Z>(
         slot.uv_for_frame_at(frame, uv_elapsed),
         request.uv_translation,
     );
+    let size = size_for_slot(slot);
+    let size = if slot.model().is_some() {
+        size
+    } else {
+        [
+            size[0] * draw.zoom[0].max(0.0),
+            size[1] * draw.zoom[1].max(0.0),
+        ]
+    };
     let base_rotation = -slot.sprite_def().rotation_deg as f32;
+    // ITG adds an actor's rotationz to its BaseRotationZ in y-down screen
+    // space; flat sprites rotate in y-up world space, so the sum is negated.
+    let sprite_rotation = base_rotation - draw.rot[2];
     compose_flat_note_layer(
         draws,
         model_cache,
@@ -545,12 +565,12 @@ fn compose_flat_mine_slot<S, F, Z>(
             draw,
             model_center: request.center,
             sprite_center: request.center,
-            size: size_for_slot(slot),
+            size,
             uv,
             rotation_y_deg: request.rotation_y_deg,
             model_rotation_z_deg: base_rotation + request.note_rotation_z_deg,
-            sprite_rotation_z_deg: base_rotation + draw.rot[2] + request.note_rotation_z_deg,
-            tint: [1.0, 1.0, 1.0, pass.alpha_scale * request.alpha],
+            sprite_rotation_z_deg: sprite_rotation + request.note_rotation_z_deg,
+            tint: [1.0, 1.0, 1.0, request.alpha],
             glow_alpha: request.glow_alpha,
             blend: BlendMode::Alpha,
             z: pass.z,
@@ -1278,6 +1298,7 @@ mod tests {
         texture: Arc<str>,
         draw: ModelDrawState,
         frame_count: usize,
+        frames_per_second: f32,
     }
 
     impl GlowSlot {
@@ -1291,6 +1312,7 @@ mod tests {
                 texture: Arc::from("glow-slot"),
                 draw: ModelDrawState::default(),
                 frame_count: 1,
+                frames_per_second: 0.0,
             }
         }
 
@@ -1330,20 +1352,21 @@ mod tests {
             [0.0, 1.0]
         }
 
-        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
-            0
+        fn frame_index(&self, time: f32, _beat: f32) -> usize {
+            (time * self.frames_per_second) as usize % self.frame_count
         }
 
         fn frame_count(&self) -> usize {
             self.frame_count
         }
 
-        fn frame_index_from_phase(&self, _phase: f32) -> usize {
-            0
+        fn frame_index_from_phase(&self, phase: f32) -> usize {
+            (phase * self.frame_count as f32) as usize
         }
 
-        fn uv_for_frame_at(&self, _frame_index: usize, _elapsed: f32) -> [f32; 4] {
-            [0.0, 0.0, 1.0, 1.0]
+        fn uv_for_frame_at(&self, frame_index: usize, _elapsed: f32) -> [f32; 4] {
+            let u = frame_index as f32 / self.frame_count as f32;
+            [u, 0.0, u + 1.0 / self.frame_count as f32, 1.0]
         }
 
         fn model_draw_at(&self, _time: f32, _beat: f32) -> ModelDrawState {
@@ -1658,7 +1681,7 @@ mod tests {
         assert_eq!(*z, 140);
         assert_eq!(*world_z, 9.0);
         assert_eq!(*rot_y_deg, 12.0);
-        assert_eq!(*rot_z_deg, -2.0);
+        assert_eq!(*rot_z_deg, -8.0);
         let FlatDraw::Sprite(sprite) = &draws[3] else {
             unreachable!();
         };
@@ -1766,7 +1789,7 @@ mod tests {
                         let key = sprite.source.texture_key().unwrap();
                         let (size, z, alpha) = match key {
                             "gradient" => (gradient_size, 138, 0.8),
-                            "fill" => ([61.3, 65.7], 139, 0.9 * 0.8),
+                            "fill" => ([61.3, 65.7], 139, 0.8),
                             "frame" => (frame_size, 140, 0.8),
                             _ => unreachable!(),
                         };
@@ -1786,6 +1809,97 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn framed_mine_sprites_animate_on_their_own_clock() {
+        let fill = named_slot(GlowSlot::sprite(), "fill");
+        let mut spark = named_slot(GlowSlot::sprite(), "spark");
+        spark.frame_count = 16;
+        spark.frames_per_second = 20.0;
+        let spark_u = |fill_slot, frame_slot| {
+            let mut request = mine_request(fill_slot, None, frame_slot);
+            request.uv_translation = [0.0, 0.0];
+            let mut draws = Vec::new();
+            compose_flat_mine_layers(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                &|_| [64.0, 64.0],
+                &|slot| SpriteSource::Texture(slot.texture.clone()),
+            );
+            draws
+                .iter()
+                .find_map(|draw| match draw {
+                    FlatDraw::Sprite(sprite) if sprite.source.texture_key() == Some("spark") => {
+                        Some(sprite.uv_rect[0])
+                    }
+                    _ => None,
+                })
+                .expect("spark layer should draw")
+        };
+
+        // 3 s of noteskin time at 20 frames per second, not a quarter of the
+        // TapMine animation length.
+        assert_eq!(spark_u(Some(&fill), Some(&spark)), 12.0 / 16.0);
+        assert_eq!(spark_u(Some(&spark), None), 4.0 / 16.0);
+    }
+
+    #[test]
+    fn mine_sprites_scale_by_their_actor_zoom() {
+        let fill = named_slot(GlowSlot::sprite(), "fill");
+        let mut spark = named_slot(GlowSlot::sprite(), "spark");
+        spark.draw.zoom = [1.2, 1.2, 1.2];
+        let mut draws = Vec::new();
+        compose_flat_mine_layers(
+            &mut draws,
+            &mut ModelMeshCache::default(),
+            mine_request(Some(&fill), None, Some(&spark)),
+            &|_| [80.0, 64.0],
+            &|slot| SpriteSource::Texture(slot.texture.clone()),
+        );
+
+        let sizes: Vec<_> = draws
+            .iter()
+            .step_by(2)
+            .map(|draw| match draw {
+                FlatDraw::Sprite(sprite) => sprite.size,
+                draw => panic!("mine sprite path emitted {draw:?}"),
+            })
+            .collect();
+        assert_eq!(sizes, [[80.0, 64.0], [80.0 * 1.2, 64.0 * 1.2]]);
+    }
+
+    #[test]
+    fn mine_sprite_rotation_adds_actor_rotation_to_base_rotation() {
+        // (BaseRotationZ, rotationz, ITG screen rotation) per dance column.
+        for (base, actor, itg_total) in [
+            (90, 90.0, 180.0),
+            (0, 0.0, 0.0),
+            (180, 180.0, 360.0),
+            (-90, 90.0, 0.0),
+        ] {
+            let mut spark = named_slot(GlowSlot::sprite(), "spark");
+            spark.def.rotation_deg = base;
+            spark.draw.rot[2] = actor;
+            let mut request = mine_request(None, None, Some(&spark));
+            request.note_rotation_z_deg = 0.0;
+            let mut draws = Vec::new();
+            compose_flat_mine_layers(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                &|_| [64.0, 64.0],
+                &|slot| SpriteSource::Texture(slot.texture.clone()),
+            );
+            let FlatDraw::Sprite(sprite) = &draws[0] else {
+                panic!("spark should draw as a sprite");
+            };
+            assert_eq!(
+                sprite.rot_z_deg, -itg_total,
+                "base {base}, rotationz {actor}"
+            );
         }
     }
 
@@ -1824,7 +1938,7 @@ mod tests {
             panic!("model-backed mine fill should emit a textured mesh");
         };
         assert_eq!(mesh.tint[..3], [1.0, 1.0, 1.0]);
-        assert_near(mesh.tint[3], 0.72);
+        assert_near(mesh.tint[3], 0.8);
         assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(mesh.z, 139);
         assert_eq!(mesh.world_z, 9.0);

@@ -518,12 +518,13 @@ fn log_song_lua_runtime_debug<S: Clone + std::fmt::Debug>(
     unsupported_targets: usize,
 ) {
     log::debug!(
-        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} constants={} eases={} column_offsets={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
+        "Song lua runtime detail for '{}': entry='{}' screen_space={:.1}x{:.1} hidden_players={:?} requested_noteskins={:?} constants={} eases={} column_offsets={} overlay_eases={} overlays={} messages={} sound_assets={} unsupported_targets={} unsupported_function_eases={} unsupported_function_actions={} unsupported_perframes={} skipped_message_commands={}",
         song_title,
         compiled.entry_path.display(),
         compiled.screen_width,
         compiled.screen_height,
         hidden_players,
+        compiled.requested_noteskins,
         total_constant,
         total_eases,
         total_column_offsets,
@@ -1119,6 +1120,50 @@ mod tests {
 
         assert_eq!(visited, [PathBuf::from("one.ogg")]);
         assert_eq!(next_event_ix, 1);
+    }
+
+    fn requesting(noteskins: [Option<&str>; MAX_PLAYERS]) -> CompiledSongLua<()> {
+        CompiledSongLua {
+            requested_noteskins: noteskins.map(|name| name.map(str::to_owned)),
+            ..CompiledSongLua::default()
+        }
+    }
+
+    fn layer(noteskins: [Option<&str>; MAX_PLAYERS]) -> GameplaySongLuaLayer<()> {
+        GameplaySongLuaLayer {
+            start_beat: 0.0,
+            compiled: requesting(noteskins),
+        }
+    }
+
+    #[test]
+    fn requested_noteskins_take_each_players_first_request_across_layers() {
+        assert_eq!(
+            song_lua_requested_noteskins(&PreparedGameplaySongLua::<()>::default()),
+            [None, None]
+        );
+
+        let layers = PreparedGameplaySongLua {
+            primary: None,
+            background_layers: vec![layer([None, None]), layer([None, Some("bg-p2")])],
+            foreground_layers: vec![layer([Some("fg-p1"), Some("fg-p2")])],
+        };
+        assert_eq!(
+            song_lua_requested_noteskins(&layers),
+            [Some("fg-p1".to_owned()), Some("bg-p2".to_owned())]
+        );
+
+        let with_primary = PreparedGameplaySongLua {
+            primary: Some(GameplayCompiledSongLua {
+                compiled: requesting([Some("primary-p1"), None]),
+                compile_ms: 0.0,
+            }),
+            ..layers
+        };
+        assert_eq!(
+            song_lua_requested_noteskins(&with_primary),
+            [Some("primary-p1".to_owned()), Some("bg-p2".to_owned())]
+        );
     }
 
     fn intro(hides_screen_in: bool, seconds: Option<f32>) -> CompiledSongLua<()> {

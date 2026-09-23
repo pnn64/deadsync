@@ -1941,6 +1941,54 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn engaged_hold_drives_the_noteskin_hold_flash_emitter() {
+        let mut state = regression_state();
+        let column = 0usize;
+        state.chart_runtime.notes[0] = test_hold(column, 0, ROWS_PER_BEAT as usize);
+        state.display.noteskin_effects.set_hold_flash_emitter(
+            0,
+            column,
+            Some(HoldFlashEmitterTiming {
+                period: 4.0 / 60.0,
+                sprites: 3,
+                flash_duration: 9.0 / 60.0,
+                hold: true,
+                roll: true,
+            }),
+        );
+        state.set_active_hold(
+            column,
+            Some(ActiveHold {
+                note_index: 0,
+                start_time_ns: 0,
+                end_time_ns: song_time_ns_from_seconds(1.0),
+                note_type: NoteType::Hold,
+                let_go: false,
+                is_pressed: true,
+                life: MAX_HOLD_LIFE,
+                last_update_time_ns: 0,
+            }),
+        );
+        state.clock.visible_timing.current_beat[0] = 0.5;
+        let emitter = |state: &State| state.hold_flash_emitters_for_columns(0, 4)[column];
+
+        state.tick_visual_effects(0.02);
+        assert_eq!(emitter(&state).flash_ages().count(), 1);
+        for _ in 0..7 {
+            state.tick_visual_effects(0.02);
+        }
+        assert_eq!(emitter(&state).flash_ages().count(), 3);
+
+        state.set_active_hold(column, None);
+        state.tick_visual_effects(0.02);
+        assert!(emitter(&state).has_flashes());
+        for _ in 0..15 {
+            state.tick_visual_effects(0.02);
+        }
+        assert!(!emitter(&state).has_flashes());
+    }
+
+    #[test]
     fn mine_hit_side_effects_wait_until_after_active_holds() {
         let mut state = regression_state();
         let hold_end_ns = song_time_ns_from_seconds(1.0);
@@ -4035,6 +4083,38 @@ mod runtime_regression_tests {
         assert_eq!(second.started_at_screen_s, 1.5);
     }
 
+    #[test]
+    fn mine_hit_ends_the_column_tap_flash_when_the_noteskin_does() {
+        let column = 1usize;
+        let profile = TestProfile {
+            tap_explosion_options: all_tap_explosion_options(),
+            ..TestProfile::default()
+        };
+        let hit_mine = |ends_flash: bool| {
+            let mut state =
+                regression_state_with_profiles(std::array::from_fn(|_| profile.clone()));
+            state.setup.config.mine_hit_sound = false;
+            enable_tap_explosion_durations(&mut state);
+            state
+                .display
+                .noteskin_effects
+                .set_mine_hit_ends_tap_explosion(0, ends_flash);
+            for col in [column, column + 1] {
+                state.spawn_tap_explosion_for_grade(col, JudgeGrade::Great, false);
+            }
+            state.trigger_mine_explosion(column);
+            state
+        };
+
+        let ended = hit_mine(true);
+        let feedback = &ended.display.visual_feedback;
+        assert!(feedback.tap_explosions[column].is_none());
+        assert!(feedback.tap_explosions[column + 1].is_some());
+        assert!(feedback.mine_explosions[column].is_some());
+        let kept = hit_mine(false);
+        assert!(kept.display.visual_feedback.tap_explosions[column].is_some());
+    }
+
     fn fantastic_row_state(
         options: ColumnFlashOptions,
         time_error_ms: f32,
@@ -4389,6 +4469,141 @@ mod runtime_regression_tests {
             state.display.receptor_feedback.bop_behaviors[column].duration,
             0.0
         );
+    }
+
+    fn single_lift_state(column: usize, note_time: SongTimeNs) -> State {
+        let mut state = regression_state();
+        let row_index = 48usize;
+        state.chart_runtime.notes = vec![test_note(column, row_index, NoteType::Lift)];
+        state.chart_runtime.note_time_cache_ns = vec![note_time];
+        state.chart_runtime.hold_end_time_cache_ns = vec![note_time];
+        for col in 0..MAX_COLS {
+            state.chart_runtime.lane_indices.note_indices[col].clear();
+            state.chart_runtime.lane_indices.hold_indices[col].clear();
+        }
+        state.chart_runtime.lane_indices.note_indices[column]
+            .push(ChartNoteIndex::from_validated(0));
+        state.chart_runtime.row_indices.note_row_entry_indices = vec![0];
+        state.chart_runtime.row_entries = vec![test_row_entry_with_times(
+            &state.chart_runtime.notes,
+            &state.chart_runtime.note_time_cache_ns,
+            row_index,
+            vec![0],
+        )];
+        state.chart_runtime.row_indices.row_entry_ranges = [(0, 1), (0, 0)];
+        state.display.noteskin_effects.set_receptor_step_behavior(
+            0,
+            column,
+            Some("W1"),
+            GameplayReceptorStepBehavior::default(),
+        );
+        state
+    }
+
+    #[test]
+    fn lift_release_leaves_receptor_but_autoplay_lift_steps_it() {
+        let column = 0usize;
+        let note_time = song_time_ns_from_seconds(1.0);
+        let mut state = single_lift_state(column, note_time);
+        for (pressed, time) in [
+            (true, note_time - song_time_ns_from_seconds(0.05)),
+            (false, note_time),
+        ] {
+            state
+                .pending_input
+                .edges
+                .push(test_input_edge_at(Lane::Left, pressed, time));
+            let clock = SongClockSnapshot {
+                song_time_ns: time,
+                seconds_per_second: 1.0,
+                mapped_audio: true,
+                valid_at: Instant::now(),
+                valid_at_host_nanos: 0,
+                timing_diag_enabled: false,
+                timing_diag_callback_gap_ns: 0,
+            };
+            process_input_edges(
+                &mut state,
+                false,
+                &mut GameplayUpdatePhaseTimings::default(),
+                clock,
+            );
+            if pressed {
+                assert!(state.display.receptor_feedback.bop_timers[column] > 0.0);
+                state.display.receptor_feedback.clear_timers_for_test();
+            }
+        }
+
+        assert!(state.chart_runtime.notes[0].result.is_some());
+        assert_eq!(state.display.receptor_feedback.bop_timers[column], 0.0);
+        assert_eq!(
+            state.display.receptor_feedback.glow_press_timers[column],
+            0.0
+        );
+
+        let mut autoplay = single_lift_state(column, note_time);
+        assert!(autoplay.judge_a_lift(column, note_time, true));
+        assert!(autoplay.display.receptor_feedback.bop_timers[column] > 0.0);
+    }
+
+    #[test]
+    fn song_first_beat_ignores_pack_sync_offset() {
+        let global_offset = 0.05;
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 240.0)],
+            ..TimingSegments::default()
+        };
+        let mut song = regression_song();
+        // Beat 12 at 240 BPM is 3 s; the scanned first second carries the
+        // global offset just as the loaded chart timing does.
+        song.first_second = 3.0 - global_offset;
+        let chart = Arc::new(song.charts[0].clone());
+        let mut gameplay_chart = regression_payload_with_segments(timing_segments.clone(), 96);
+        gameplay_chart.timing = TimingData::from_segments(
+            0.0,
+            global_offset,
+            &timing_segments,
+            &gameplay_chart.row_to_beat,
+        );
+        let gameplay_chart = Arc::new(gameplay_chart);
+        let state: State = init_gameplay_runtime(
+            Arc::new(song),
+            [chart.clone(), chart],
+            [gameplay_chart.clone(), gameplay_chart],
+            GameplayViewport::default(),
+            GameplaySession::default(),
+            GameplayConfig {
+                global_offset_seconds: global_offset,
+                machine_pack_ini_offsets: true,
+                ..GameplayConfig::default()
+            },
+            SyncPref::Itg,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        );
+
+        assert!((state.song_first_beat() - 12.0).abs() < 1e-3);
+        let player_beat = state
+            .timing_for_player(0)
+            .expect("player timing")
+            .get_beat_for_time(state.song().precise_first_second());
+        assert!((player_beat - 12.0).abs() > 0.03, "{player_beat}");
     }
 
     #[test]

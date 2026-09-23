@@ -203,7 +203,13 @@ fn empty_tap_sources_do_not_allocate() {
 #[test]
 fn rejected_actor_commands_borrow_metadata_without_churn() {
     for count in [1, 4] {
-        let input = layers(count, 2);
+        // GhostArrowRow plays Bright/Dim on every judgment, so only actors
+        // without them have nothing to play for a blank window command.
+        let mut input = layers(count, 2);
+        for sprite in &mut input {
+            sprite.commands.remove("dimcommand");
+            sprite.commands.remove("brightcommand");
+        }
         assert_no_churn(|| {
             let map = itg_tap_explosion_map_from_resolved_layers(
                 &input,
@@ -247,6 +253,7 @@ fn columns(num_cols: usize) -> ItgRuntimeColumns<u32> {
         note_layers: Vec::new(),
         lift_note_layers: Vec::new(),
         receptor_off: Vec::new(),
+        receptor_beat_frames: Vec::new(),
         receptor_glow: Vec::new(),
         receptor_idle_glow_layers: Vec::new(),
         receptor_off_reverse: Vec::new(),

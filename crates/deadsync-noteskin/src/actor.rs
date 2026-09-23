@@ -13,21 +13,35 @@ use crate::script::parse_linear_frames_expr;
 pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
+pub const ITG_BEAT_STATE_UPDATE: &str = "beat_state";
+pub const ITG_HOLD_FLASH_EMITTER_COMMAND: &str = "__deadsync_hold_flash_emitter";
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
 type Arg0Aliases<'a> = SmallVec<[&'a str; 4]>;
 const BEAT_UPDATE_MARKER: &[u8] = b"setupdatefunction,";
-const BEAT_FADE_GLOW_SIGNATURES: [&[u8]; 4] = [
+const BEAT_FADE_GLOW_SIGNATURES: &[&[u8]] = &[
     b"part=beat%1",
     b"part=clamp(part,0,0.5)",
     b"eff=scale(part,0,0.5,1,0)",
     b".glow:diffusealpha(eff)",
 ];
+const BEAT_STATE_SIGNATURES: &[&[u8]] = &[
+    b"start=song:getfirstbeat()-8",
+    b"receptor=self:getchild(\"receptor\")",
+    b"range=(beat*10)%10",
+    b"ifbeat>=startthenifrange>=1andrange<9thenreceptor:setstate(1)",
+    b"elsereceptor:setstate(0)",
+    b"elsereceptor:setstate(2)",
+];
+const BEAT_STATE_SONG_BEAT: &[u8] =
+    b"getbeatfromelapsedtime(gamestate:getsongposition():getmusicseconds())";
 
 #[derive(Debug, Default)]
 struct CommandContext {
     colors: HashMap<String, String>,
     functions: HashMap<String, LocalFunction>,
+    button_aliases: Vec<String>,
+    button: Option<String>,
 }
 
 #[derive(Debug)]
@@ -36,7 +50,7 @@ struct LocalFunction {
     body: String,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct ItgLuaSpriteDecl {
     pub texture_expr: String,
     pub frame0: usize,
@@ -46,7 +60,7 @@ pub struct ItgLuaSpriteDecl {
     pub commands: HashMap<String, String>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct ItgLuaModelDecl {
     pub meshes_expr: Option<String>,
     pub materials_expr: Option<String>,
@@ -55,7 +69,7 @@ pub struct ItgLuaModelDecl {
     pub commands: HashMap<String, String>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct ItgLuaRefDecl {
     pub button_override: Option<String>,
     pub element: String,
@@ -65,7 +79,7 @@ pub struct ItgLuaRefDecl {
     pub commands: HashMap<String, String>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct ItgLuaPathRefDecl {
     pub path_expr: String,
     pub arg_expr: Option<String>,
@@ -73,7 +87,46 @@ pub struct ItgLuaPathRefDecl {
     pub commands: HashMap<String, String>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize, Encode, Decode)]
+/// An explosion ActorFrame that, while a hold or roll is engaged, plays
+/// `flash_command` on the next of `sprites` identical children every `period`
+/// seconds and lets the flashes in flight finish when the hold ends. Parsing
+/// marks the repeated child's ref with it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ItgHoldFlashEmitter {
+    pub flash_command: String,
+    pub period: f32,
+    pub sprites: usize,
+    pub hold: bool,
+    pub roll: bool,
+}
+
+impl ItgHoldFlashEmitter {
+    fn marker(&self) -> String {
+        format!(
+            "{},{},{},{},{}",
+            self.flash_command,
+            self.period,
+            self.sprites,
+            u8::from(self.hold),
+            u8::from(self.roll)
+        )
+    }
+
+    #[must_use]
+    pub fn from_commands(commands: &HashMap<String, String>) -> Option<Self> {
+        let mut fields = commands.get(ITG_HOLD_FLASH_EMITTER_COMMAND)?.split(',');
+        let emitter = Self {
+            flash_command: fields.next()?.to_string(),
+            period: fields.next()?.parse().ok()?,
+            sprites: fields.next()?.parse().ok()?,
+            hold: fields.next()? == "1",
+            roll: fields.next()? == "1",
+        };
+        fields.next().is_none().then_some(emitter)
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct ItgLuaActorDecl {
     pub sprites: Vec<ItgLuaSpriteDecl>,
     pub models: Vec<ItgLuaModelDecl>,
@@ -83,11 +136,24 @@ pub struct ItgLuaActorDecl {
 
 #[must_use]
 pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLuaActorDecl {
+    parse_actor_decl_for_button(content, metrics, None)
+}
+
+/// Parses an actor file as loaded for `button` (its `Var "Button"`), taking
+/// only the branch that button selects in `if` chains comparing it. Without a
+/// button, every branch's commands are kept.
+#[must_use]
+pub fn parse_actor_decl_for_button(
+    content: &str,
+    metrics: &noteskin_itg::IniData,
+    button: Option<&str>,
+) -> ItgLuaActorDecl {
     let content = strip_lua_comments(content);
     let content = content.as_ref();
     let mut decl = ItgLuaActorDecl::default();
     let arg0_aliases = parse_arg0_aliases(content);
-    let command_context = command_context(content);
+    let mut command_context = command_context(content);
+    command_context.button = button.map(str::to_owned);
 
     let mut cursor = 0usize;
     while let Some(rel) = content[cursor..].find("Def.Sprite") {
@@ -154,6 +220,7 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         cursor = next_cursor;
     }
 
+    let hold_flash_emitter = parse_hold_flash_emitter_frame(content);
     cursor = 0usize;
     while let Some(rel) = content[cursor..].find("NOTESKIN:LoadActor(") {
         let call_start = cursor + rel;
@@ -188,6 +255,17 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
                 condition_expr = find_post_call_property(content, outer_close, "Condition");
             }
         }
+        if let Some(frame) = &hold_flash_emitter
+            && commands.contains_key(&frame.emitter.flash_command)
+            && find_post_call_property(content, close, "Name")
+                .and_then(|name| parse_lua_quoted(&name))
+                .is_some_and(|name| name == frame.child)
+        {
+            commands.insert(
+                ITG_HOLD_FLASH_EMITTER_COMMAND.to_string(),
+                frame.emitter.marker(),
+            );
+        }
         decl.refs.push(ItgLuaRefDecl {
             button_override,
             element,
@@ -199,12 +277,9 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         cursor = next_cursor;
     }
 
-    if has_beat_fade_glow_update(content, &command_context) {
+    if let Some(update) = recognized_actor_update(content, &command_context) {
         let mark = |commands: &mut HashMap<String, String>| {
-            commands.insert(
-                ITG_ACTOR_UPDATE_COMMAND.to_string(),
-                ITG_BEAT_FADE_GLOW_UPDATE.to_string(),
-            );
+            commands.insert(ITG_ACTOR_UPDATE_COMMAND.to_string(), update.to_string());
         };
         decl.sprites
             .iter_mut()
@@ -223,18 +298,20 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
     decl
 }
 
-fn has_beat_fade_glow_update(content: &str, context: &CommandContext) -> bool {
-    let Some(update_start) = find_compact_ascii_case_insensitive(content, BEAT_UPDATE_MARKER)
-    else {
-        return false;
-    };
-    let Some(function) =
+fn recognized_actor_update(content: &str, context: &CommandContext) -> Option<&'static str> {
+    let update_start = find_compact_ascii_case_insensitive(content, BEAT_UPDATE_MARKER)?;
+    let function =
         with_compact_ascii_identifier(&content[update_start..], |name| context.functions.get(name))
-            .flatten()
-    else {
-        return false;
-    };
-    has_beat_fade_glow_signature(&function.body)
+            .flatten()?;
+    if has_compact_signatures(&function.body, BEAT_FADE_GLOW_SIGNATURES) {
+        Some(ITG_BEAT_FADE_GLOW_UPDATE)
+    } else if has_compact_signatures(&function.body, BEAT_STATE_SIGNATURES)
+        && find_compact_ascii_case_insensitive(content, BEAT_STATE_SONG_BEAT).is_some()
+    {
+        Some(ITG_BEAT_STATE_UPDATE)
+    } else {
+        None
+    }
 }
 
 fn find_compact_ascii_case_insensitive(content: &str, needle: &[u8]) -> Option<usize> {
@@ -305,10 +382,164 @@ fn with_compact_ascii_identifier<T>(content: &str, use_key: impl FnOnce(&str) ->
     Some(use_key(key))
 }
 
-fn has_beat_fade_glow_signature(body: &str) -> bool {
-    BEAT_FADE_GLOW_SIGNATURES
+fn has_compact_signatures(body: &str, signatures: &[&[u8]]) -> bool {
+    signatures
         .iter()
         .all(|signature| find_compact_ascii_case_insensitive(body, signature).is_some())
+}
+
+struct HoldFlashEmitterFrame {
+    child: String,
+    emitter: ItgHoldFlashEmitter,
+}
+
+fn parse_hold_flash_emitter_frame(content: &str) -> Option<HoldFlashEmitterFrame> {
+    let mut cursor = 0usize;
+    while let Some(rel) = content[cursor..].find("Def.ActorFrame") {
+        cursor += rel + "Def.ActorFrame".len();
+        let open = skip_ws(content, cursor);
+        if content.as_bytes().get(open) != Some(&b'{') {
+            continue;
+        }
+        let Some(close) = find_matching(content, open, '{', '}') else {
+            continue;
+        };
+        let block = &content[open + 1..close];
+        if !block.contains("Def.ActorFrame")
+            && let Some(frame) = hold_flash_emitter_from_block(block)
+        {
+            return Some(frame);
+        }
+    }
+    None
+}
+
+/// Matches the frame shape of SCH's "Hold Held Emitter":
+///
+/// ```lua
+/// InitCommand=function(self) self.emissions = self:GetChild("holdflash") ... end,
+/// HoldingOnCommand=function(self) self.emitting = true; self:finishtweening():playcommand("Emit") end,
+/// HoldingOffCommand=function(self) self.emitting = false end,
+/// EmitCommand=function(self)
+///     self.emissions[self.emitnumber]:finishtweening():playcommand("Flash")
+///     if self.emitnumber == 3 then self.emitnumber = 1 else self.emitnumber = self.emitnumber+1 end
+///     if self.emitting then self:sleep(4/60):queuecommand("Emit") end
+/// end,
+/// ```
+///
+/// with the same pair for rolls, where field names, the child count and the
+/// period may differ.
+fn hold_flash_emitter_from_block(block: &str) -> Option<HoldFlashEmitterFrame> {
+    let body = |key: &str| lua_function_command_body(block, key).map(compact_lua);
+    let init = body("InitCommand")?;
+    let emit = body("EmitCommand")?;
+    let emit_lower = emit.to_ascii_lowercase();
+
+    let (child, _) = quoted_call_arg(&init, &init.to_ascii_lowercase(), ":getchild(")?;
+    let (flash, after_flash) =
+        quoted_call_arg(&emit, &emit_lower, "]:finishtweening():playcommand(")?;
+
+    let wrap = &emit_lower[after_flash..];
+    let (index, wrap) = wrap.strip_prefix("if")?.split_once("==")?;
+    let digits = wrap.bytes().take_while(u8::is_ascii_digit).count();
+    let sprites = wrap[..digits]
+        .parse::<usize>()
+        .ok()
+        .filter(|count| *count > 0)?;
+    let wrap = wrap[digits..].strip_prefix("then")?.strip_prefix(index)?;
+    let requeue = wrap.strip_prefix(&format!("=1else{index}={index}+1end"))?;
+
+    let (flag, requeue) = requeue.strip_prefix("if")?.split_once("thenself:sleep(")?;
+    let (period, requeue) = requeue.split_once(')')?;
+    let period = parse_lua_float_expr(period).filter(|period| *period > 0.0)?;
+    if !is_lua_field_path(index)
+        || !is_lua_field_path(flag)
+        || !matches!(
+            requeue,
+            ":queuecommand(\"emit\")end" | ":queuecommand('emit')end"
+        )
+    {
+        return None;
+    }
+
+    let starts = |key: &str| {
+        body(key).is_some_and(|on| {
+            let lower = on.to_ascii_lowercase();
+            lower.starts_with(&format!("{flag}=true"))
+                && quoted_call_arg(&on, &lower, "self:finishtweening():playcommand(")
+                    .is_some_and(|(name, _)| name.eq_ignore_ascii_case("emit"))
+        })
+    };
+    let stops = |key: &str| {
+        body(key).is_some_and(|off| {
+            off.to_ascii_lowercase()
+                .trim_end_matches(';')
+                .eq(&format!("{flag}=false"))
+        })
+    };
+    let hold = starts("HoldingOnCommand") && stops("HoldingOffCommand");
+    let roll = starts("RollOnCommand") && stops("RollOffCommand");
+    (hold || roll).then(|| HoldFlashEmitterFrame {
+        child: child.to_string(),
+        emitter: ItgHoldFlashEmitter {
+            flash_command: format!("{}command", flash.to_ascii_lowercase()),
+            period,
+            sprites,
+            hold,
+            roll,
+        },
+    })
+}
+
+fn lua_function_command_body<'a>(block: &'a str, key: &str) -> Option<&'a str> {
+    let bytes = block.as_bytes();
+    let mut cursor = 0usize;
+    while let Some(rel) = bytes[cursor..]
+        .windows(key.len())
+        .position(|window| window.eq_ignore_ascii_case(key.as_bytes()))
+    {
+        let start = cursor + rel;
+        cursor = start + key.len();
+        if !token_boundary(bytes, start, key.len()) {
+            continue;
+        }
+        let eq = skip_ws(block, cursor);
+        if bytes.get(eq) != Some(&b'=') {
+            continue;
+        }
+        let function = skip_ws(block, eq + 1);
+        if !block[function..].starts_with("function") {
+            continue;
+        }
+        let open = skip_ws(block, function + "function".len());
+        if bytes.get(open) != Some(&b'(') {
+            continue;
+        }
+        let close = find_matching(block, open, '(', ')')?;
+        let end = find_function_end(block, close + 1)?;
+        return Some(&block[close + 1..end]);
+    }
+    None
+}
+
+fn compact_lua(source: &str) -> String {
+    source.chars().filter(|ch| !ch.is_whitespace()).collect()
+}
+
+/// The quoted argument of the first `prefix"..."` call in compacted Lua and
+/// the offset just past its closing parenthesis.
+fn quoted_call_arg<'a>(compact: &'a str, lower: &str, prefix: &str) -> Option<(&'a str, usize)> {
+    let start = lower.find(prefix)? + prefix.len();
+    let quote = *compact.as_bytes().get(start)?;
+    if quote != b'"' && quote != b'\'' {
+        return None;
+    }
+    let end = start + 1 + compact[start + 1..].find(char::from(quote))?;
+    (compact.as_bytes().get(end + 1) == Some(&b')')).then(|| (&compact[start + 1..end], end + 2))
+}
+
+fn is_lua_field_path(path: &str) -> bool {
+    !path.is_empty() && path.bytes().all(|b| is_lua_ident(b) || b == b'.')
 }
 
 fn strip_lua_comments(content: &str) -> Cow<'_, str> {
@@ -487,10 +718,13 @@ fn command_context(content: &str) -> CommandContext {
         if let Some((prefix, _)) = line.split_once("--") {
             line = prefix.trim();
         }
-        if let Some((name, value)) = parse_local_assignment(line)
-            && let Some(color) = parse_lua_color_expr(value)
-        {
+        let Some((name, value)) = parse_local_assignment(line) else {
+            continue;
+        };
+        if let Some(color) = parse_lua_color_expr(value) {
             context.colors.insert(name.to_ascii_lowercase(), color);
+        } else if is_button_var_expr(value) {
+            context.button_aliases.push(name.to_string());
         }
     }
     context.functions = parse_local_functions(content);
@@ -1095,9 +1329,13 @@ fn parse_function_commands(
             cursor = eq + 1;
             continue;
         };
-        if let Some(cmd) =
-            parse_self_chain_commands_scoped(&block[body_start..end_idx], command_context, &scope)
-        {
+        let body = command_context.resolve_button_conditionals(&block[body_start..end_idx]);
+        if let Some(cmd) = parse_self_chain_commands_scoped(
+            &body,
+            lua_function_receiver(&block[param_open + 1..param_close]),
+            command_context,
+            &scope,
+        ) {
             commands.insert(key.to_ascii_lowercase(), cmd);
         }
         cursor = end_idx + 3;
@@ -1213,8 +1451,14 @@ fn resolve_lua_function_command(value: &str, context: &CommandContext) -> Option
     let param_close = find_matching(value, rhs, '(', ')')?;
     let body_start = param_close + 1;
     let end_idx = find_function_end(value, body_start)?;
-    parse_self_chain_commands_scoped(&value[body_start..end_idx], context, &HashMap::new())
-        .or_else(|| Some(String::new()))
+    let body = context.resolve_button_conditionals(&value[body_start..end_idx]);
+    parse_self_chain_commands_scoped(
+        &body,
+        lua_function_receiver(&value[rhs + 1..param_close]),
+        context,
+        &HashMap::new(),
+    )
+    .or_else(|| Some(String::new()))
 }
 
 fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<String> {
@@ -1231,11 +1475,11 @@ fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<Strin
             )
         })
         .collect::<HashMap<_, _>>();
-    let Some(body) = return_function_body(&function.body) else {
+    let Some((receiver, body)) = return_function_body(&function.body) else {
         return Some(String::new());
     };
     let body = resolve_lua_conditionals(body, &scope);
-    Some(parse_self_chain_commands_scoped(&body, context, &scope).unwrap_or_default())
+    Some(parse_self_chain_commands_scoped(&body, receiver, context, &scope).unwrap_or_default())
 }
 
 impl CommandContext {
@@ -1250,6 +1494,158 @@ impl CommandContext {
             .or_else(|| parse_lua_color_expr(raw).map(Cow::Owned))
             .unwrap_or_else(|| Cow::Borrowed(raw.trim()))
     }
+
+    /// Replaces each `if` chain whose conditions all compare the button with
+    /// the branch this parse's button takes. Other chains are left as written.
+    fn resolve_button_conditionals<'a>(&self, body: &'a str) -> Cow<'a, str> {
+        let Some(button) = self.button.as_deref() else {
+            return Cow::Borrowed(body);
+        };
+        let mut out = String::new();
+        let mut copied = 0usize;
+        let mut cursor = 0usize;
+        while let Some(if_idx) = find_lua_keyword(body, cursor, "if") {
+            let Some(chain) = lua_if_chain(body, if_idx) else {
+                break;
+            };
+            let taken = chain
+                .branches
+                .iter()
+                .try_fold(None, |taken, &(condition, branch)| {
+                    if taken.is_some() {
+                        return Some(taken);
+                    }
+                    let Some(condition) = condition else {
+                        return Some(Some(branch));
+                    };
+                    button_condition(condition, &self.button_aliases, button)
+                        .map(|matches| matches.then_some(branch))
+                });
+            let Some(taken) = taken else {
+                cursor = if_idx + "if".len();
+                continue;
+            };
+            out.push_str(&body[copied..if_idx]);
+            out.push_str(&self.resolve_button_conditionals(taken.unwrap_or_default()));
+            copied = chain.end;
+            cursor = chain.end;
+        }
+        if copied == 0 {
+            return Cow::Borrowed(body);
+        }
+        out.push_str(&body[copied..]);
+        Cow::Owned(out)
+    }
+}
+
+struct LuaIfChain<'a> {
+    branches: SmallVec<[(Option<&'a str>, &'a str); 4]>,
+    end: usize,
+}
+
+/// Splits the `if` statement at `if_idx` into its (condition, body) branches,
+/// `else` having no condition. `end` is the byte just past its closing `end`.
+fn lua_if_chain(content: &str, if_idx: usize) -> Option<LuaIfChain<'_>> {
+    let bytes = content.as_bytes();
+    let keyword_at = |cursor: usize, keyword: &str| {
+        bytes[cursor..].starts_with(keyword.as_bytes())
+            && token_boundary(bytes, cursor, keyword.len())
+    };
+    let mut branches = SmallVec::new();
+    let mut condition_start = if_idx + "if".len();
+    let mut then_idx = find_lua_keyword(content, condition_start, "then")?;
+    let mut condition = Some(&content[condition_start..then_idx]);
+    let mut body_start = then_idx + "then".len();
+    let mut cursor = body_start;
+    let mut depth = 1usize;
+    let mut quote = 0u8;
+    while cursor < bytes.len() {
+        let b = bytes[cursor];
+        if quote != 0 {
+            if b == quote {
+                quote = 0;
+            }
+            cursor += 1;
+            continue;
+        }
+        if b == b'"' || b == b'\'' {
+            quote = b;
+            cursor += 1;
+            continue;
+        }
+        if ["if", "function", "do"]
+            .into_iter()
+            .any(|opener| keyword_at(cursor, opener))
+        {
+            depth += 1;
+        } else if keyword_at(cursor, "end") {
+            depth -= 1;
+            if depth == 0 {
+                branches.push((condition, &content[body_start..cursor]));
+                return Some(LuaIfChain {
+                    branches,
+                    end: cursor + "end".len(),
+                });
+            }
+        } else if depth == 1 && keyword_at(cursor, "elseif") {
+            branches.push((condition, &content[body_start..cursor]));
+            condition_start = cursor + "elseif".len();
+            then_idx = find_lua_keyword(content, condition_start, "then")?;
+            condition = Some(&content[condition_start..then_idx]);
+            body_start = then_idx + "then".len();
+            cursor = body_start;
+            continue;
+        } else if depth == 1 && keyword_at(cursor, "else") {
+            branches.push((condition, &content[body_start..cursor]));
+            condition = None;
+            body_start = cursor + "else".len();
+            cursor = body_start;
+            continue;
+        }
+        cursor += 1;
+    }
+    None
+}
+
+/// Evaluates `<button> == "Name"` (or `~=`) for the parse's button, where the
+/// button is `Var "Button"` or a local bound to it. Anything else is `None`.
+fn button_condition(condition: &str, aliases: &[String], button: &str) -> Option<bool> {
+    let condition = strip_wrapped_parens(condition);
+    if ["and", "or", "not"]
+        .into_iter()
+        .any(|keyword| find_lua_keyword(condition, 0, keyword).is_some())
+    {
+        return None;
+    }
+    let (lhs, rhs, equal) = if let Some((lhs, rhs)) = condition.split_once("~=") {
+        (lhs, rhs, false)
+    } else {
+        let (lhs, rhs) = condition.split_once("==")?;
+        (lhs, rhs, true)
+    };
+    let is_button = |side: &str| {
+        let side = strip_wrapped_parens(side);
+        is_button_var_expr(side) || aliases.iter().any(|alias| alias == side)
+    };
+    let name = if is_button(lhs) {
+        parse_lua_quoted(strip_wrapped_parens(rhs))?
+    } else if is_button(rhs) {
+        parse_lua_quoted(strip_wrapped_parens(lhs))?
+    } else {
+        return None;
+    };
+    if name.contains(['"', '\'']) {
+        return None;
+    }
+    Some((name == button) == equal)
+}
+
+fn is_button_var_expr(raw: &str) -> bool {
+    raw.trim()
+        .strip_prefix("Var")
+        .map(strip_wrapped_parens)
+        .and_then(parse_lua_quoted)
+        .is_some_and(|name| name == "Button")
 }
 
 fn get_ascii_lowercase<'a, V>(map: &'a HashMap<String, V>, key: &str) -> Option<&'a V> {
@@ -1300,7 +1696,7 @@ fn has_command_suffix(key: &str) -> bool {
         .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b"command"))
 }
 
-fn return_function_body(body: &str) -> Option<&str> {
+fn return_function_body(body: &str) -> Option<(&str, &str)> {
     let return_idx = body.find("return")?;
     let mut cursor = return_idx + "return".len();
     cursor = skip_ws(body, cursor);
@@ -1317,18 +1713,37 @@ fn return_function_body(body: &str) -> Option<&str> {
     let params_close = find_matching(body, cursor, '(', ')')?;
     let body_start = params_close + 1;
     let body_end = find_function_end(body, body_start)?;
-    Some(&body[body_start..body_end])
+    Some((
+        lua_function_receiver(&body[cursor + 1..params_close]),
+        &body[body_start..body_end],
+    ))
+}
+
+fn lua_function_receiver(params: &str) -> &str {
+    itg_call_args(params)
+        .next()
+        .filter(|param| !param.is_empty() && param.bytes().all(is_lua_ident))
+        .unwrap_or("self")
 }
 
 fn parse_self_chain_commands_scoped(
     body: &str,
+    receiver: &str,
     context: &CommandContext,
     scope: &HashMap<String, String>,
 ) -> Option<String> {
     let mut out = String::new();
     let mut cursor = 0usize;
-    while let Some(rel) = body[cursor..].find("self:") {
-        let mut name_start = cursor + rel + 5;
+    while let Some(rel) = body[cursor..].find(receiver) {
+        let start = cursor + rel;
+        let colon = start + receiver.len();
+        if body.as_bytes().get(colon) != Some(&b':')
+            || start > 0 && is_lua_ident(body.as_bytes()[start - 1])
+        {
+            cursor = colon;
+            continue;
+        }
+        let mut name_start = colon + 1;
         loop {
             let Some((name, args, next)) = parse_lua_method_call(body, name_start) else {
                 cursor = name_start;
@@ -1598,6 +2013,76 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn button_conditionals_follow_the_parsed_button() {
+        let content = r#"
+local button = Var "Button"
+return Def.ActorFrame {
+    Def.Sprite {
+        Texture="_Mine Spark";
+        InitCommand=function(self)
+            self:zoom(1.2):effectclock("timer")
+            if     button == "Left" then
+                self:setstate(0):rotationz(90)
+            elseif button == "Down" then
+                self:setstate(5):rotationz(0)
+            elseif (Var "Button" == "Up") then
+                self:setstate(8):rotationz(180)
+            else
+                Warn("Unsupported Button "..button)
+            end
+        end;
+        PressCommand=function(self)
+            if self.pressed then self:zoom(0.9) end
+            if button ~= "Right" then self:diffusealpha(0.5) end
+        end;
+        LiftCommand=function(self)
+            if button == "Left" or button == "Down" then self:zoom(1) end
+        end;
+    };
+};
+"#;
+        let metrics = noteskin_itg::IniData::default();
+        let command = |button, key| {
+            parse_actor_decl_for_button(content, &metrics, button).sprites[0]
+                .commands
+                .get(key)
+                .cloned()
+                .unwrap_or_default()
+        };
+
+        assert_eq!(
+            command(Some("Left"), "initcommand"),
+            r#"zoom,1.2;effectclock,"timer";setstate,0;rotationz,90"#
+        );
+        assert_eq!(
+            command(Some("Down"), "initcommand"),
+            r#"zoom,1.2;effectclock,"timer";setstate,5;rotationz,0"#
+        );
+        assert_eq!(
+            command(Some("Up"), "initcommand"),
+            r#"zoom,1.2;effectclock,"timer";setstate,8;rotationz,180"#
+        );
+        assert_eq!(
+            command(Some("Right"), "initcommand"),
+            r#"zoom,1.2;effectclock,"timer""#
+        );
+        assert_eq!(
+            command(None, "initcommand"),
+            r#"zoom,1.2;effectclock,"timer";setstate,0;rotationz,90;setstate,5;rotationz,0;setstate,8;rotationz,180"#
+        );
+        assert_eq!(
+            command(Some("Left"), "presscommand"),
+            "zoom,0.9;diffusealpha,0.5"
+        );
+        assert_eq!(command(Some("Right"), "presscommand"), "zoom,0.9");
+        assert_eq!(command(Some("Up"), "liftcommand"), "zoom,1");
+        assert_eq!(
+            parse_actor_decl(content, &metrics),
+            parse_actor_decl_for_button(content, &metrics, None)
+        );
+    }
+
+    #[test]
     fn actor_parser_ignores_commented_receptor_layers() {
         let content = r#"
 return Def.ActorFrame {
@@ -1634,10 +2119,69 @@ return Def.ActorFrame {
     fn self_chain_commands_append_in_call_order() {
         let commands = parse_self_chain_commands_scoped(
             "self:zoom(1):xy(2,3):stoptweening()",
+            "self",
             &CommandContext::default(),
             &HashMap::new(),
         );
         assert_eq!(commands.as_deref(), Some("zoom,1;xy,2,3;stoptweening"));
+    }
+
+    #[test]
+    fn command_functions_chain_on_their_receiver_name() {
+        let content = r#"
+local function bump(scale)
+    return function(actor) actor:finishtweening():zoom(scale) end
+end
+
+return Def.Sprite {
+    Texture = "arrow.png",
+    OnCommand=function(s) s:animate(false):setstate(2) end,
+    InitCommand=function(a)
+        receptors:zoom(3)
+        a:x(1)
+    end,
+    PressCommand=bump(0.9),
+}
+"#;
+
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+
+        let commands = &decl.sprites[0].commands;
+        assert_eq!(
+            commands.get("oncommand").map(String::as_str),
+            Some("animate,false;setstate,2")
+        );
+        assert_eq!(commands.get("initcommand").map(String::as_str), Some("x,1"));
+        assert_eq!(
+            commands.get("presscommand").map(String::as_str),
+            Some("finishtweening;zoom,0.9")
+        );
+    }
+
+    #[test]
+    fn command_functions_without_a_named_receiver_chain_on_self() {
+        for (params, receiver) in [("", "self"), ("...", "self"), (" s ", "s"), ("a, b", "a")] {
+            assert_eq!(lua_function_receiver(params), receiver, "{params:?}");
+        }
+        let content = r#"
+return Def.Sprite {
+    Texture = "arrow.png",
+    OnCommand=function() self:zoom(2) end,
+    PressCommand=function(...) self:zoom(0.5) end,
+}
+"#;
+
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+
+        let commands = &decl.sprites[0].commands;
+        assert_eq!(
+            commands.get("oncommand").map(String::as_str),
+            Some("zoom,2")
+        );
+        assert_eq!(
+            commands.get("presscommand").map(String::as_str),
+            Some("zoom,0.5")
+        );
     }
 
     #[test]
@@ -1755,11 +2299,183 @@ return Def.ActorFrame .. {
         assert!(parse_wrapper_commands("return Def.ActorFrame {}", &metrics).is_none());
     }
 
+    const BEAT_STATE_RECEPTOR: &str = r#"
+local player = Var "Player";
+
+local function GetPlayerSongBeat(player)
+    local steps = GAMESTATE:GetCurrentSteps(player);
+    local timing = steps:GetTimingData();
+    return timing:GetBeatFromElapsedTime(GAMESTATE:GetSongPosition():GetMusicSeconds());
+end;
+
+local t = Def.ActorFrame {
+    LoadActor(NOTESKIN:GetPath( '_down', 'Go Receptor' ))..{
+        Name="Receptor";
+        InitCommand=cmd(effectclock,"beat");
+    };
+};
+
+local function update(self)
+    local song = GAMESTATE:GetCurrentSong();
+    local start;
+    if song then
+        start = song:GetFirstBeat()-8
+    end
+    local receptor = self:GetChild("Receptor");
+    local beat = GetPlayerSongBeat(player);
+    local range = (beat*10)%10;
+    if beat >= start then
+        if range >= 1 and range < 9 then
+            receptor:setstate(1);
+        else
+            receptor:setstate(0);
+        end;
+    else
+        receptor:setstate(2);
+    end;
+end;
+
+t.InitCommand=cmd(SetUpdateFunction,update;);
+
+return t;
+"#;
+
+    #[test]
+    fn beat_state_receptor_update_marks_its_sheet_actor() {
+        let decl = parse_actor_decl(BEAT_STATE_RECEPTOR, &noteskin_itg::IniData::default());
+
+        assert_eq!(decl.path_refs.len(), 1);
+        assert_eq!(
+            decl.path_refs[0]
+                .commands
+                .get(ITG_ACTOR_UPDATE_COMMAND)
+                .map(String::as_str),
+            Some(ITG_BEAT_STATE_UPDATE)
+        );
+    }
+
+    #[test]
+    fn beat_state_marker_requires_the_exact_update_shape() {
+        for (from, to) in [
+            ("range >= 1 and range < 9", "range >= 2 and range < 8"),
+            ("song:GetFirstBeat()-8", "song:GetFirstBeat()-4"),
+            ("receptor:setstate(2)", "receptor:setstate(0)"),
+            (
+                "GAMESTATE:GetSongPosition():GetMusicSeconds()",
+                "GAMESTATE:GetSongPosition():GetMusicSecondsVisible()",
+            ),
+        ] {
+            let content = BEAT_STATE_RECEPTOR.replace(from, to);
+            let decl = parse_actor_decl(&content, &noteskin_itg::IniData::default());
+
+            assert!(
+                !decl.path_refs[0]
+                    .commands
+                    .contains_key(ITG_ACTOR_UPDATE_COMMAND),
+                "{to} must not be read as the beat-state update"
+            );
+        }
+    }
+
     #[test]
     fn lua_path_detection_is_case_insensitive() {
         assert!(is_lua_path(Path::new("Down Receptor.LUA")));
         assert!(!is_lua_path(Path::new("Down Receptor.png")));
         assert!(!is_lua_path(Path::new("Down Receptor")));
+    }
+
+    const HOLD_FLASH_EMITTER_EXPLOSION: &str = r##"
+local function dimflash(thecolour)
+	return function(self) self:finishtweening()
+		self:diffuse(thecolour):diffusealpha(0.9):zoom(1)
+		:linear(9/60):diffuse(0,0,0,1):zoom(1.25)
+	end
+end
+
+local holdflash = NOTESKIN:LoadActor(Var "Button", "Flash Dim")..{ Name="holdflash",
+	InitCommand=function(self) self:blend(Blend.Add):diffuse(0,0,0,0) end,
+	FlashCommand=dimflash(color("#fff064"))
+}
+
+return Def.ActorFrame {
+	NOTESKIN:LoadActor(Var "Button", "Flash Dim")..{
+		JudgmentCommand=function(self) self:finishtweening() end,
+		W2Command=dimflash(color("#fff064")),
+	},
+	Def.ActorFrame {
+		InitCommand=function(self)
+			self.emitting = false
+			self.emitnumber = 1
+			self.emissions = self:GetChild("holdflash")
+		end,
+		HoldingOnCommand=function(self)
+			self.emitting = true;
+			self:finishtweening():playcommand("Emit")
+		end,
+		HoldingOffCommand=function(self) self.emitting = false end,
+		RollOnCommand=function(self)
+			self.emitting = true;
+			self:finishtweening():playcommand("Emit")
+		end,
+		RollOffCommand=function(self) self.emitting = false end,
+		EmitCommand=function(self)
+			self.emissions[self.emitnumber]:finishtweening():playcommand("Flash")
+			if self.emitnumber == 3 then self.emitnumber = 1 else self.emitnumber = self.emitnumber+1 end
+			if self.emitting then
+				self:sleep(4/60):queuecommand("Emit")
+			end
+		end,
+		holdflash, holdflash, holdflash,
+	},
+}
+"##;
+
+    #[test]
+    fn hold_flash_emitter_marks_the_repeated_child() {
+        let decl = parse_actor_decl(
+            HOLD_FLASH_EMITTER_EXPLOSION,
+            &noteskin_itg::IniData::default(),
+        );
+
+        let emitters = decl
+            .refs
+            .iter()
+            .map(|reference| ItgHoldFlashEmitter::from_commands(&reference.commands))
+            .collect::<Vec<_>>();
+        assert_eq!(emitters.len(), 2);
+        assert_eq!(emitters[1], None);
+        let emitter = emitters[0]
+            .as_ref()
+            .expect("holdflash is the emitter child");
+        assert_eq!(emitter.flash_command, "flashcommand");
+        assert!((emitter.period - 4.0 / 60.0).abs() <= f32::EPSILON);
+        assert_eq!(emitter.sprites, 3);
+        assert!(emitter.hold && emitter.roll);
+        assert!(decl.refs[0].commands.contains_key("flashcommand"));
+    }
+
+    #[test]
+    fn hold_flash_emitter_needs_its_off_command_and_conditional_requeue() {
+        let rolls_only = HOLD_FLASH_EMITTER_EXPLOSION.replace(
+            "HoldingOffCommand=function(self) self.emitting = false end,",
+            "",
+        );
+        let decl = parse_actor_decl(&rolls_only, &noteskin_itg::IniData::default());
+        let emitter = ItgHoldFlashEmitter::from_commands(&decl.refs[0].commands)
+            .expect("rolls still start and stop the emitter");
+        assert!(!emitter.hold && emitter.roll);
+
+        let endless = HOLD_FLASH_EMITTER_EXPLOSION.replace(
+            "if self.emitting then\n\t\t\t\tself:sleep(4/60):queuecommand(\"Emit\")\n\t\t\tend",
+            "self:sleep(4/60):queuecommand(\"Emit\")",
+        );
+        assert_ne!(endless, HOLD_FLASH_EMITTER_EXPLOSION);
+        let decl = parse_actor_decl(&endless, &noteskin_itg::IniData::default());
+        assert!(decl.refs.iter().all(|reference| {
+            !reference
+                .commands
+                .contains_key(ITG_HOLD_FLASH_EMITTER_COMMAND)
+        }));
     }
 }
 

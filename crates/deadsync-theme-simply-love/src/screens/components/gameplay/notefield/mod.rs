@@ -829,6 +829,7 @@ pub(crate) fn compose_frame(
             visible_beat: state.visible_beat(player_idx),
             is_in_delay: state.is_in_delay(),
             search_beat: state.notefield_search_beat(player_idx),
+            song_first_beat: state.song_first_beat(),
             scroll_reference_bpm: state.scroll_reference_bpm(),
             music_rate: state.music_rate(),
             note_count_stats: state.note_count_stats(player_idx),
@@ -912,6 +913,9 @@ pub(crate) fn compose_frame(
             .or(base_noteskin)
             .is_some_and(|noteskin| noteskin.mine_hit_explosion.is_some())
             .then(|| state.mine_explosions_for_columns(col_start, num_cols)),
+        hold_flashes: tap_explosion_noteskin
+            .is_some()
+            .then(|| state.hold_flash_emitters_for_columns(col_start, num_cols)),
         lanes: from_fn(|local_col| {
             if local_col >= num_cols {
                 return NotefieldLaneFeedback::default();

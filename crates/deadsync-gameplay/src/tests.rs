@@ -8448,6 +8448,7 @@ mod tests {
             0,
             Some("W3"),
             GameplayReceptorStepBehavior {
+                delay: 0.0,
                 duration: 0.4,
                 zoom_start: 0.5,
                 zoom_end: 1.5,
@@ -8480,6 +8481,7 @@ mod tests {
     #[test]
     fn receptor_behaviors_sample_zoom_and_glow() {
         let step = GameplayReceptorStepBehavior {
+            delay: 0.0,
             duration: 1.0,
             zoom_start: 0.5,
             zoom_end: 1.5,
@@ -8783,6 +8785,31 @@ mod tests {
     }
 
     #[test]
+    fn receptor_bop_holds_its_start_zoom_through_the_delay() {
+        let press = GameplayReceptorStepBehavior {
+            delay: 1.0 / 60.0,
+            duration: 4.0 / 60.0,
+            zoom_start: 0.9,
+            zoom_end: 1.0,
+            tween: GameplayTween::Linear,
+            interrupts: true,
+        };
+        let mut state = GameplayReceptorFeedbackState::default();
+        let effects = GameplayNoteskinEffects::default();
+        let lane_counts = [0; MAX_COLS];
+
+        state.start_bop(0, press);
+        assert_near(state.bop_timers[0], 5.0 / 60.0);
+        assert_near(state.bop_zoom(0), 0.9);
+        state.tick(&effects, 1, 1, 4, &lane_counts, 1.0 / 60.0);
+        assert_near(state.bop_zoom(0), 0.9);
+        state.tick(&effects, 1, 1, 4, &lane_counts, 2.0 / 60.0);
+        assert_near(state.bop_zoom(0), 0.95);
+        state.tick(&effects, 1, 1, 4, &lane_counts, 2.0 / 60.0);
+        assert_near(state.bop_zoom(0), 1.0);
+    }
+
+    #[test]
     fn receptor_feedback_state_resets_ticks_and_samples_bop() {
         let mut state = GameplayReceptorFeedbackState::default();
         assert_near(state.glow_lift_start_zoom[0], 1.0);
@@ -8799,6 +8826,7 @@ mod tests {
         state.start_bop(
             0,
             GameplayReceptorStepBehavior {
+                delay: 0.0,
                 duration: 0.5,
                 zoom_start: 1.0,
                 zoom_end: 1.5,
@@ -11146,6 +11174,123 @@ mod tests {
         assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
         assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
         assert!(!hold_explosion_active(None, 100.0, 100.0));
+    }
+
+    const HOLD_FLASH_TIMING: HoldFlashEmitterTiming = HoldFlashEmitterTiming {
+        period: 4.0 / 60.0,
+        sprites: 3,
+        flash_duration: 9.0 / 60.0,
+        hold: true,
+        roll: true,
+    };
+
+    fn sorted_flash_ages(state: &HoldFlashEmitterState) -> Vec<f32> {
+        let mut ages = state.flash_ages().collect::<Vec<_>>();
+        ages.sort_by(f32::total_cmp);
+        ages
+    }
+
+    // Flash k starts k periods after HoldingOn and lasts flash_duration.
+    fn expected_flash_ages(time: f32, last_flash: usize) -> Vec<f32> {
+        let mut ages = (0..=last_flash)
+            .map(|k| time - k as f32 * HOLD_FLASH_TIMING.period)
+            .filter(|age| (0.0..HOLD_FLASH_TIMING.flash_duration).contains(age))
+            .collect::<Vec<_>>();
+        ages.sort_by(f32::total_cmp);
+        ages
+    }
+
+    fn assert_flash_ages(actual: &[f32], expected: &[f32]) {
+        assert_eq!(actual.len(), expected.len(), "{actual:?} vs {expected:?}");
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert!((actual - expected).abs() <= 1e-4, "{actual} vs {expected}");
+        }
+    }
+
+    #[test]
+    fn hold_flash_emitter_restarts_a_flash_every_period_while_held() {
+        let mut state = HoldFlashEmitterState::default();
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.0);
+        assert_eq!(sorted_flash_ages(&state), [0.0]);
+
+        let step = 0.045;
+        for frame in 1..=12 {
+            state.advance(HOLD_FLASH_TIMING, Some(false), step);
+            let time = frame as f32 * step;
+            assert_flash_ages(&sorted_flash_ages(&state), &expected_flash_ages(time, 99));
+        }
+        assert_eq!(sorted_flash_ages(&state).len(), 3);
+    }
+
+    #[test]
+    fn hold_flash_emitter_lets_the_queued_flash_play_after_the_hold_ends() {
+        let mut state = HoldFlashEmitterState::default();
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.0);
+        let step = 0.045;
+        for _ in 0..4 {
+            state.advance(HOLD_FLASH_TIMING, Some(false), step);
+        }
+        // HoldingOff at 0.225 s: the Emit queued for 0.2667 s still fires.
+        let mut time = 5.0 * step;
+        state.advance(HOLD_FLASH_TIMING, None, step);
+        assert_flash_ages(&sorted_flash_ages(&state), &expected_flash_ages(time, 4));
+        for _ in 0..5 {
+            state.advance(HOLD_FLASH_TIMING, None, step);
+            time += step;
+            assert_flash_ages(&sorted_flash_ages(&state), &expected_flash_ages(time, 4));
+        }
+        assert!(!state.has_flashes());
+    }
+
+    #[test]
+    fn hold_flash_emitter_restarts_at_once_when_a_hold_engages_again() {
+        let mut state = HoldFlashEmitterState::default();
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.0);
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.05);
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.05);
+        state.advance(HOLD_FLASH_TIMING, None, 0.01);
+        // A roll engaging at 0.12 s ends both flashes in flight and drops the
+        // Emit queued for 0.1333 s.
+        state.advance(HOLD_FLASH_TIMING, Some(true), 0.01);
+        assert_flash_ages(&sorted_flash_ages(&state), &[0.0]);
+        state.advance(HOLD_FLASH_TIMING, Some(true), 0.02);
+        assert_flash_ages(&sorted_flash_ages(&state), &[0.02]);
+        state.advance(HOLD_FLASH_TIMING, Some(true), 0.05);
+        assert_flash_ages(&sorted_flash_ages(&state), &[0.07 - 4.0 / 60.0, 0.07]);
+
+        // A hold turning straight into a roll ends its flashes the same way.
+        let mut state = HoldFlashEmitterState::default();
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.0);
+        state.advance(HOLD_FLASH_TIMING, Some(false), 0.1);
+        assert_eq!(sorted_flash_ages(&state).len(), 2);
+        state.advance(HOLD_FLASH_TIMING, Some(true), 0.01);
+        assert_flash_ages(&sorted_flash_ages(&state), &[0.0]);
+    }
+
+    #[test]
+    fn hold_flash_emitter_reuses_sprites_and_skips_unwired_hold_kinds() {
+        let two_sprites = HoldFlashEmitterTiming {
+            sprites: 2,
+            ..HOLD_FLASH_TIMING
+        };
+        let mut state = HoldFlashEmitterState::default();
+        state.advance(two_sprites, Some(false), 0.0);
+        state.advance(two_sprites, Some(false), 0.14);
+        // The third flash reuses the first sprite, whose finishtweening ends
+        // that flash early.
+        assert_flash_ages(
+            &sorted_flash_ages(&state),
+            &[0.14 - 8.0 / 60.0, 0.14 - 4.0 / 60.0],
+        );
+
+        let holds_only = HoldFlashEmitterTiming {
+            roll: false,
+            ..HOLD_FLASH_TIMING
+        };
+        let mut state = HoldFlashEmitterState::default();
+        state.advance(holds_only, Some(true), 0.0);
+        state.advance(holds_only, Some(true), 0.1);
+        assert!(!state.has_flashes());
     }
 
     #[test]

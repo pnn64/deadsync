@@ -609,6 +609,30 @@ pub fn apply_sprite_animation_command_plans<T>(
     }
 }
 
+/// Removes every `SetAllStateDelays` from `commands`. ITG only retimes the
+/// states a sprite already has, so the call does nothing to a sprite with a
+/// single explicit state.
+pub fn strip_all_state_delays(commands: &mut HashMap<String, String>) {
+    fn is_all_state_delays(token: &str) -> bool {
+        split_script_token(token)
+            .is_some_and(|token| token.command() == ScriptCommand::SetAllStateDelays)
+    }
+    for script in commands.values_mut() {
+        let kept = {
+            let script = normalized_script_command(script);
+            if !script.split(';').any(is_all_state_delays) {
+                continue;
+            }
+            script
+                .split(';')
+                .filter(|token| !is_all_state_delays(token))
+                .collect::<Vec<_>>()
+                .join(";")
+        };
+        *script = kept;
+    }
+}
+
 pub fn apply_sprite_animation_script_plans<T>(
     slot: &mut T,
     script: &str,
@@ -1031,6 +1055,8 @@ pub struct ItgCommandEffect {
     pub target_alpha: Option<f32>,
     pub start_zoom: Option<f32>,
     pub target_zoom: Option<f32>,
+    /// Time queued before the tween that reaches `target_zoom`.
+    pub zoom_delay: f32,
     pub duration: f32,
     pub tween: TweenType,
     pub blend_add: Option<bool>,
@@ -1044,6 +1070,7 @@ impl Default for ItgCommandEffect {
             target_alpha: None,
             start_zoom: None,
             target_zoom: None,
+            zoom_delay: 0.0,
             duration: 0.0,
             tween: TweenType::Linear,
             blend_add: None,
@@ -1057,6 +1084,9 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
     let mut out = ItgCommandEffect::default();
     let mut pending_duration = 0.0f32;
     let mut pending_tween = TweenType::Linear;
+    let mut pending_start = 0.0f32;
+    let mut queued = 0.0f32;
+    let mut zoom_tweened = 0.0f32;
     let script = normalized_script_command(script);
     for raw in script.split(';') {
         let token = raw.trim();
@@ -1071,11 +1101,15 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
         if let Some((tween, duration)) = parse_script_tween(command, args) {
             pending_duration = duration.max(0.0);
             pending_tween = tween_type_from_script_tween(tween);
+            pending_start = queued;
+            queued += pending_duration;
             continue;
         }
         if let Some(duration) = parse_script_sleep(command, args) {
             pending_duration = duration.max(0.0);
             pending_tween = TweenType::Linear;
+            pending_start = queued;
+            queued += pending_duration;
             continue;
         }
         if matches!(
@@ -1083,6 +1117,8 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
             ScriptCommand::StopTweening | ScriptCommand::FinishTweening
         ) {
             out.interrupts = true;
+            queued = 0.0;
+            zoom_tweened = 0.0;
             continue;
         }
         if let Some(mod_cmd) = parse_script_actor_mod(command, args) {
@@ -1101,6 +1137,10 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
                 ScriptActorMod::Zoom(zoom) => {
                     if pending_duration > f32::EPSILON {
                         out.target_zoom = Some(zoom);
+                        // Earlier zoom tweens fold into this one segment; only
+                        // time spent away from zoom holds its start.
+                        out.zoom_delay = pending_start - zoom_tweened;
+                        zoom_tweened += pending_duration;
                         out.duration = pending_duration;
                         out.tween = pending_tween;
                         pending_duration = 0.0;
@@ -1789,6 +1829,42 @@ mod tests {
         assert!((effect.duration - 0.11).abs() <= 1e-6);
         assert!((effect.start_zoom.unwrap_or_default() - 0.75).abs() <= 1e-6);
         assert!((effect.target_zoom.unwrap_or_default() - 1.0).abs() <= 1e-6);
+        assert_eq!(effect.zoom_delay, 0.0);
+    }
+
+    #[test]
+    fn itg_parse_command_effect_delays_zoom_by_queued_sleeps_and_tweens() {
+        let press =
+            itg_parse_command_effect("finishtweening;zoom,0.9;sleep,1/60;linear,4/60;zoom,1.0");
+
+        assert_eq!(press.start_zoom, Some(0.9));
+        assert_eq!(press.target_zoom, Some(1.0));
+        assert!((press.zoom_delay - 1.0 / 60.0).abs() <= 1e-6);
+        assert!((press.duration - 4.0 / 60.0).abs() <= 1e-6);
+
+        let queued = itg_parse_command_effect(
+            "linear,0.2;diffusealpha,0;sleep,0.1;stoptweening;sleep,0.05;accelerate,0.3;zoom,2",
+        );
+
+        assert!((queued.zoom_delay - 0.05).abs() <= 1e-6);
+        assert!((queued.duration - 0.3).abs() <= 1e-6);
+        assert!(matches!(queued.tween, TweenType::Accelerate));
+    }
+
+    #[test]
+    fn itg_parse_command_effect_keeps_earlier_zoom_tweens_out_of_the_delay() {
+        let segments = itg_parse_command_effect("zoom,0.5;linear,0.1;zoom,1;linear,0.2;zoom,1.5");
+
+        assert_eq!(segments.start_zoom, Some(0.5));
+        assert_eq!(segments.target_zoom, Some(1.5));
+        assert_eq!(segments.zoom_delay, 0.0);
+        assert!((segments.duration - 0.2).abs() <= 1e-6);
+
+        let held =
+            itg_parse_command_effect("zoom,0.9;sleep,0.1;linear,0.1;zoom,1;linear,0.2;zoom,1.5");
+
+        assert!((held.zoom_delay - 0.1).abs() <= 1e-6);
+        assert!((held.duration - 0.2).abs() <= 1e-6);
     }
 
     #[test]
@@ -1863,6 +1939,30 @@ mod tests {
             parse_script_control("setallstatedelays"),
             Some(ScriptControl::SetAllStateDelays)
         );
+    }
+
+    #[test]
+    fn strip_all_state_delays_keeps_every_other_call() {
+        let mut commands = HashMap::from([
+            (
+                "initcommand".to_string(),
+                "zoom,1.5;SetAllStateDelays,0.05;diffusealpha,0".to_string(),
+            ),
+            (
+                "oncommand".to_string(),
+                "function(self) self:setallstatedelays(0.1):setstate(2) end".to_string(),
+            ),
+            ("offcommand".to_string(), "linear,0.2;zoom,0".to_string()),
+        ]);
+        strip_all_state_delays(&mut commands);
+
+        assert_eq!(commands["initcommand"], "zoom,1.5;diffusealpha,0");
+        assert!(sprite_animation_command_plans(&commands["oncommand"]).is_empty());
+        assert!(
+            split_script_token(&commands["oncommand"])
+                .is_some_and(|token| token.command() == ScriptCommand::SetState)
+        );
+        assert_eq!(commands["offcommand"], "linear,0.2;zoom,0");
     }
 
     #[test]

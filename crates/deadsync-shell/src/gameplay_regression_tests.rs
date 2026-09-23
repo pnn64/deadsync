@@ -342,6 +342,7 @@ mod tests {
         behavior: ReceptorStepBehavior,
     ) -> super::GameplayReceptorStepBehavior {
         super::GameplayReceptorStepBehavior {
+            delay: behavior.delay,
             duration: behavior.duration,
             zoom_start: behavior.zoom_start,
             zoom_end: behavior.zoom_end,
@@ -4616,8 +4617,7 @@ return Def.ActorFrame{}
                                 &session,
                             );
                         let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
-                            session.play_style.cols_per_player(),
-                            session.play_style.player_count(),
+                            &session,
                             &runtime_profiles,
                             &[None, None],
                             None,

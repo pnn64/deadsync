@@ -682,7 +682,7 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
                 state.trigger_receptor_step_pulse(lane_idx);
             }
         } else if edge_judges_lift {
-            let hit_lift = state.judge_a_lift(lane_idx, edge.event_music_time_ns);
+            let hit_lift = state.judge_a_lift(lane_idx, edge.event_music_time_ns, false);
             if hit_lift && state.tick_mode() == GameplayTimingTickMode::Hit {
                 state.push_audio_command(GameplayAudioCommand::PlayPreloadedAssistTick(
                     ASSIST_TICK_SFX_PATH,

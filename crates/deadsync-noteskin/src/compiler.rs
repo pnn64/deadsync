@@ -15,8 +15,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 14;
-static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
+const COMPILER_VERSION: u32 = 17;
+const REVERSE_PLAYER_OPTIONS: &str = "Reverse";
+static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<(String, &'static str), String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
 const DANCE_BUTTONS: [&str; 4] = ["Left", "Down", "Up", "Right"];
@@ -81,19 +82,28 @@ pub fn ensure_compiled(
     game: &str,
     data: &noteskin_itg::NoteskinData,
 ) -> Result<CompileOutcome, String> {
-    if let Some(path) = cached_bundle_path(cache_dir, game, &data.name)
+    ensure_compiled_with_player_options(cache_dir, game, data, "")
+}
+
+fn ensure_compiled_with_player_options(
+    cache_dir: &Path,
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+    player_options: &'static str,
+) -> Result<CompileOutcome, String> {
+    if let Some(path) = cached_bundle_path(cache_dir, game, &data.name, player_options)
         && noteskin_compiled::load_compiled_bundle(&path).is_some()
     {
         return Ok(CompileOutcome::Reused);
     }
-    let source_hash = source_hash(game, data)?;
-    remember_source_hash(game, &data.name, &source_hash);
+    let source_hash = source_hash(game, data, player_options)?;
+    remember_source_hash(game, &data.name, player_options, &source_hash);
     let path = compiled_bundle_path(cache_dir, game, &data.name, &source_hash);
     if noteskin_compiled::load_compiled_bundle(&path).is_some() {
         return Ok(CompileOutcome::Reused);
     }
     info!("compiling noteskin cache for '{game}/{}'", data.name);
-    let bundle = compile_data(game, data, &source_hash)?;
+    let bundle = compile_data(game, data, &source_hash, player_options)?;
     noteskin_compiled::save_compiled_bundle(&path, &bundle)?;
     Ok(CompileOutcome::Built)
 }
@@ -104,7 +114,16 @@ pub fn load_compiled(
     game: &str,
     data: &noteskin_itg::NoteskinData,
 ) -> Option<CompiledNoteskinBundle> {
-    let path = cached_bundle_path(cache_dir, game, &data.name)?;
+    load_compiled_with_player_options(cache_dir, game, data, "")
+}
+
+fn load_compiled_with_player_options(
+    cache_dir: &Path,
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+    player_options: &'static str,
+) -> Option<CompiledNoteskinBundle> {
+    let path = cached_bundle_path(cache_dir, game, &data.name, player_options)?;
     noteskin_compiled::load_compiled_bundle(&path)
 }
 
@@ -113,16 +132,47 @@ pub fn load_or_compile(
     game: &str,
     data: &noteskin_itg::NoteskinData,
 ) -> Result<CompiledNoteskinBundle, String> {
-    if let Some(bundle) = load_compiled(cache_dir, game, data) {
+    load_or_compile_with_player_options(cache_dir, game, data, "")
+}
+
+/// [`load_or_compile`] for a player who plays with Reverse: the skin's
+/// NoteSkin.lua sees Reverse in their options. The loader is cached apart
+/// from the one every other player shares.
+pub fn load_or_compile_reverse(
+    cache_dir: &Path,
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+) -> Result<CompiledNoteskinBundle, String> {
+    load_or_compile_with_player_options(cache_dir, game, data, REVERSE_PLAYER_OPTIONS)
+}
+
+/// Whether the skin's NoteSkin.lua reads the player's options, as ITG skins do
+/// to pick other art for players who play with Reverse. Only such a skin needs
+/// a loader of its own for them.
+#[must_use]
+pub fn reads_player_options(data: &noteskin_itg::NoteskinData) -> bool {
+    noteskin_paths(data).iter().any(|path| {
+        fs::read(path)
+            .is_ok_and(|source| String::from_utf8_lossy(&source).contains("GetPlayerOptions"))
+    })
+}
+
+fn load_or_compile_with_player_options(
+    cache_dir: &Path,
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+    player_options: &'static str,
+) -> Result<CompiledNoteskinBundle, String> {
+    if let Some(bundle) = load_compiled_with_player_options(cache_dir, game, data, player_options) {
         return Ok(bundle);
     }
-    ensure_compiled(cache_dir, game, data).map_err(|err| {
+    ensure_compiled_with_player_options(cache_dir, game, data, player_options).map_err(|err| {
         format!(
             "failed to compile noteskin cache for '{game}/{}': {err}",
             data.name
         )
     })?;
-    load_compiled(cache_dir, game, data).ok_or_else(|| {
+    load_compiled_with_player_options(cache_dir, game, data, player_options).ok_or_else(|| {
         format!(
             "compiled noteskin cache missing for '{game}/{}' after successful compilation",
             data.name
@@ -186,8 +236,13 @@ fn load_data_from_roots(
     Err(last_load_err.unwrap_or_else(|| format!("noteskin '{game}/{skin}' not found in any root")))
 }
 
-fn cached_bundle_path(cache_dir: &Path, game: &str, skin: &str) -> Option<PathBuf> {
-    let key = compiled_hash_cache_key(game, skin);
+fn cached_bundle_path(
+    cache_dir: &Path,
+    game: &str,
+    skin: &str,
+    player_options: &'static str,
+) -> Option<PathBuf> {
+    let key = (compiled_hash_cache_key(game, skin), player_options);
     let hash = COMPILED_HASH_CACHE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -200,12 +255,21 @@ fn compiled_bundle_path(cache_dir: &Path, game: &str, skin: &str, source_hash: &
     noteskin_compiled::compiled_bundle_path(cache_dir, game, skin, source_hash)
 }
 
-fn remember_source_hash(game: &str, skin: &str, source_hash: &str) {
-    let key = compiled_hash_cache_key(game, skin);
+fn remember_source_hash(game: &str, skin: &str, player_options: &'static str, source_hash: &str) {
+    let key = (compiled_hash_cache_key(game, skin), player_options);
     COMPILED_HASH_CACHE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(key, source_hash.to_string());
+}
+
+/// Forget the source hashes of the skins `forget` names, so their next load
+/// hashes their sources again and recompiles them if they changed.
+pub fn forget_source_hashes(forget: impl Fn(&str) -> bool) {
+    COMPILED_HASH_CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .retain(|(key, _), _| !key.split_once('/').is_some_and(|(_, skin)| forget(skin)));
 }
 
 fn compiled_hash_cache_key(game: &str, skin: &str) -> String {
@@ -219,13 +283,18 @@ fn compiled_hash_cache_key(game: &str, skin: &str) -> String {
     key
 }
 
-fn source_hash(game: &str, data: &noteskin_itg::NoteskinData) -> Result<String, String> {
+fn source_hash(
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+    player_options: &str,
+) -> Result<String, String> {
     let sources = labeled_source_paths(data, source_paths(data));
     let mut hasher = XxHash64::default();
     hasher.write_u32(noteskin_compiled::CACHE_SCHEMA_VERSION);
     hasher.write_u32(COMPILER_VERSION);
     hasher.write(game.as_bytes());
     hasher.write(data.name.as_bytes());
+    hasher.write(player_options.as_bytes());
     for (label, path) in sources {
         hasher.write(label.as_bytes());
         let bytes = fs::read(&path)
@@ -321,11 +390,12 @@ fn compile_data(
     game: &str,
     data: &noteskin_itg::NoteskinData,
     source_hash: &str,
+    player_options: &'static str,
 ) -> Result<CompiledNoteskinBundle, String> {
     let scripts = noteskin_paths(data);
     let lua = Lua::new();
     install_host(&lua, data).map_err(|err| err.to_string())?;
-    install_game_state(&lua, game).map_err(|err| err.to_string())?;
+    install_game_state(&lua, game, player_options).map_err(|err| err.to_string())?;
     let noteskin = load_noteskin_table(&lua, &scripts)?;
     Ok(CompiledNoteskinBundle {
         version: noteskin_compiled::CACHE_SCHEMA_VERSION,
@@ -340,7 +410,7 @@ fn compile_data(
         },
         actors: CompiledActors {
             version: COMPILER_VERSION,
-            files: compile_actor_files(data)?,
+            files: compile_actor_files(game, data)?,
         },
     })
 }
@@ -357,6 +427,7 @@ fn noteskin_paths(data: &noteskin_itg::NoteskinData) -> Vec<PathBuf> {
 }
 
 fn compile_actor_files(
+    game: &str,
     data: &noteskin_itg::NoteskinData,
 ) -> Result<Vec<CompiledActorFile>, String> {
     let mut out = Vec::new();
@@ -379,10 +450,21 @@ fn compile_actor_files(
             let Some(key) = noteskin_compiled::actor_manifest_key_for_dir(dir, &path) else {
                 continue;
             };
-            out.push(CompiledActorFile {
-                key,
-                decl: noteskin_actor::parse_actor_decl(&content, &data.metrics),
-            });
+            let decl = noteskin_actor::parse_actor_decl(&content, &data.metrics);
+            for button in game_buttons(game) {
+                let variant = noteskin_actor::parse_actor_decl_for_button(
+                    &content,
+                    &data.metrics,
+                    Some(button),
+                );
+                if variant != decl {
+                    out.push(CompiledActorFile {
+                        key: noteskin_compiled::button_actor_key(&key, button),
+                        decl: variant,
+                    });
+                }
+            }
+            out.push(CompiledActorFile { key, decl });
         }
     }
     out.sort_by(|left, right| left.key.cmp(&right.key));
@@ -533,8 +615,9 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
 
 /// ITG NoteSkin.lua files may consult GAMESTATE, most often to check a
 /// player's mods for Reverse. A compiled loader is shared by every player
-/// and play, so it answers as a single player with no mods.
-fn install_game_state(lua: &Lua, game: &str) -> mlua::Result<()> {
+/// and play it is compiled for, so it answers as a single player whose
+/// options are `player_options`.
+fn install_game_state(lua: &Lua, game: &str, player_options: &'static str) -> mlua::Result<()> {
     let game = game.trim().to_ascii_lowercase();
     let steps_type = if game == "pump" {
         "StepsType_Pump_Single"
@@ -544,7 +627,7 @@ fn install_game_state(lua: &Lua, game: &str) -> mlua::Result<()> {
     let player_state = lua.create_table()?;
     player_state.set(
         "GetPlayerOptionsString",
-        lua.create_function(|_, _args: MultiValue| Ok(""))?,
+        lua.create_function(move |_, _args: MultiValue| Ok(player_options))?,
     )?;
     let style = lua.create_table()?;
     style.set(
@@ -1077,12 +1160,183 @@ return skin
             metrics: noteskin_itg::IniData::default(),
             search_dirs: vec![skin_dir],
         };
-        let bundle = super::compile_data("dance", &data, "testhash").expect("compile data");
+        let bundle = super::compile_data("dance", &data, "testhash", "").expect("compile data");
 
         assert_eq!(
-            bundle.loader.load_request("Up", "Hold Body Active").load_button,
+            bundle
+                .loader
+                .load_request("Up", "Hold Body Active")
+                .load_button,
             "Up"
         );
+    }
+
+    fn write_reverse_swapping_skin(skin_dir: &Path) {
+        fs::create_dir_all(skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    local reverse = string.find(GAMESTATE:GetPlayerState(Var "Player"):GetPlayerOptionsString("ModsLevel_Preferred"):lower(), "reverse")
+    if string.find(element, "Body") then
+        if reverse and button == "Up" then button = "Down"
+        elseif reverse and button == "Down" then button = "Up" end
+    else
+        button = "Down"
+    end
+    return Def.Sprite { Texture = NOTESKIN:GetPath(button, element) }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        for file in [
+            "Down Hold Body Active.png",
+            "Up Hold Body Active.png",
+            "Down Tap Note.png",
+        ] {
+            fs::write(skin_dir.join(file), []).unwrap();
+        }
+    }
+
+    #[test]
+    fn reverse_loader_is_compiled_and_cached_apart_from_the_shared_one() {
+        let root = temp_noteskin_dir("reverse-variant");
+        let skin_dir = root.join("dance/reverse-variant-skin");
+        write_reverse_swapping_skin(&skin_dir);
+        let cache_dir = root.join("cache");
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "reverse-variant-skin".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![skin_dir],
+        };
+
+        let reverse = super::load_or_compile_reverse(&cache_dir, "dance", &data).unwrap();
+        let shared = super::load_or_compile(&cache_dir, "dance", &data).unwrap();
+
+        assert_eq!(shared.skin, "reverse-variant-skin");
+        assert_eq!(reverse.skin, shared.skin);
+        assert_ne!(reverse.source_hash, shared.source_hash);
+        for (bundle, up, down) in [(&shared, "Up", "Down"), (&reverse, "Down", "Up")] {
+            let body = |button| {
+                bundle
+                    .loader
+                    .load_request(button, "Hold Body Active")
+                    .load_button
+            };
+            assert_eq!(body("Up"), up);
+            assert_eq!(body("Down"), down);
+            assert_eq!(body("Left"), "Left");
+            assert_eq!(
+                bundle.loader.load_request("Up", "Tap Note").load_button,
+                "Down"
+            );
+        }
+        for hash in [&shared.source_hash, &reverse.source_hash] {
+            assert!(compiled_bundle_path(&cache_dir, "dance", &data.name, hash).is_file());
+        }
+        assert_eq!(
+            super::load_or_compile_reverse(&cache_dir, "dance", &data)
+                .unwrap()
+                .loader,
+            reverse.loader
+        );
+        assert_eq!(
+            super::load_or_compile(&cache_dir, "dance", &data)
+                .unwrap()
+                .loader,
+            shared.loader
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn only_skins_whose_noteskin_lua_reads_player_options_need_a_reverse_loader() {
+        let root = temp_noteskin_dir("reads-player-options");
+        let reading = root.join("dance/reading");
+        write_reverse_swapping_skin(&reading);
+        let plain = root.join("dance/plain");
+        fs::create_dir_all(&plain).unwrap();
+        fs::write(
+            plain.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    return Def.Sprite { Texture = NOTESKIN:GetPath(Var "Button", Var "Element") }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        let without_lua = root.join("dance/metrics-only");
+        fs::create_dir_all(&without_lua).unwrap();
+        let data = |search_dirs: Vec<PathBuf>| noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "test".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs,
+        };
+
+        assert!(super::reads_player_options(&data(vec![reading.clone()])));
+        assert!(!super::reads_player_options(&data(vec![plain.clone()])));
+        assert!(!super::reads_player_options(&data(vec![without_lua])));
+        assert!(super::reads_player_options(&data(vec![plain, reading])));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn reverse_loader_never_stands_in_for_another_skin() {
+        let root = temp_noteskin_dir("reverse-variant-name");
+        let skin_dir = root.join("dance/swap");
+        write_reverse_swapping_skin(&skin_dir);
+        // Any name a skin folder can have is a possible skin name, including
+        // one that spells the Reverse variant of another skin.
+        let other_dir = root.join("dance/swap+reverse");
+        fs::create_dir_all(&other_dir).unwrap();
+        fs::write(
+            other_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    return Def.Sprite { Texture = NOTESKIN:GetPath("Left", Var "Element") }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(other_dir.join("Left Hold Body Active.png"), []).unwrap();
+        let cache_dir = root.join("cache");
+        let data = |name: &str, dir: &Path| noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: name.to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![dir.to_path_buf()],
+        };
+        let swap = data("swap", &skin_dir);
+        let other = data("swap+reverse", &other_dir);
+        let body = |bundle: &super::CompiledNoteskinBundle| {
+            bundle
+                .loader
+                .load_request("Up", "Hold Body Active")
+                .load_button
+        };
+
+        let reverse = super::load_or_compile_reverse(&cache_dir, "dance", &swap).unwrap();
+        let other_bundle = super::load_or_compile(&cache_dir, "dance", &other).unwrap();
+        let other_reverse = super::load_or_compile_reverse(&cache_dir, "dance", &other).unwrap();
+
+        assert_eq!(body(&reverse), "Down");
+        assert_eq!(body(&other_bundle), "Left");
+        assert_eq!(body(&other_reverse), "Left");
+        assert_eq!(
+            body(&super::load_or_compile_reverse(&cache_dir, "dance", &swap).unwrap()),
+            "Down"
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -1140,7 +1394,7 @@ return skin
             metrics: noteskin_itg::IniData::default(),
             search_dirs: vec![skin_dir],
         };
-        let bundle = super::compile_data("dance", &data, "testhash").expect("compile data");
+        let bundle = super::compile_data("dance", &data, "testhash", "").expect("compile data");
         let receptor = bundle.loader.load_request("Left", "Receptor");
         let hold_body = bundle.loader.load_request("Left", "Hold Body Active");
         let explosion = bundle.loader.load_request("Left", "Explosion");
@@ -1155,6 +1409,84 @@ return skin
         assert_eq!(hold_body.rotation_z, Some(90));
         assert_eq!(explosion.load_button, "Down");
         assert_eq!(explosion.load_element, "Explosion");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn actor_files_keep_a_variant_per_button_that_changes_them() {
+        let root = temp_noteskin_dir("button-variants");
+        let skin_dir = root.join("dance/spark");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    return Def.Sprite { Texture = NOTESKIN:GetPath("Down", Var "Element") }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Tap Mine.lua"),
+            r#"local button = Var "Button"
+return Def.ActorFrame {
+    Def.Sprite {
+        Texture="_spark";
+        InitCommand=function(self)
+            if button == "Left" then self:rotationz(90) elseif button == "Up" then self:rotationz(180) end
+        end;
+    };
+};
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Receptor.lua"),
+            r#"return Def.Sprite { Texture="_receptor"; InitCommand=cmd(zoom,2) }"#,
+        )
+        .unwrap();
+
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "spark".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![skin_dir.clone()],
+        };
+        let bundle = super::compile_data("dance", &data, "testhash", "").expect("compile data");
+        let keys: Vec<_> = bundle
+            .actors
+            .files
+            .iter()
+            .map(|file| file.key.as_str())
+            .collect();
+        assert_eq!(
+            keys,
+            [
+                "dance/spark/down receptor.lua",
+                "dance/spark/down tap mine.lua",
+                "dance/spark/down tap mine.lua#down",
+                "dance/spark/down tap mine.lua#left",
+                "dance/spark/down tap mine.lua#right",
+                "dance/spark/down tap mine.lua#up",
+            ]
+        );
+        let init = |button| {
+            let decl = bundle
+                .actors
+                .decl_for_button_path(
+                    &data.search_dirs,
+                    &skin_dir.join("Down Tap Mine.lua"),
+                    button,
+                )
+                .expect("mine actor");
+            decl.sprites[0].commands["initcommand"].clone()
+        };
+        assert_eq!(init("Left"), "rotationz,90");
+        assert_eq!(init("Up"), "rotationz,180");
+        assert_eq!(init("Down"), "");
+        assert_eq!(init("UpLeft"), "rotationz,90;rotationz,180");
 
         let _ = fs::remove_dir_all(root);
     }

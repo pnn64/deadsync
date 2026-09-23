@@ -28,7 +28,7 @@ use deadsync_noteskin::{
 use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
 
 // Session catalog snapshots, capped at 16 installed skins. Startup discovers
 // metadata; a Downloads worker may replace it after validating an installation.
@@ -80,12 +80,36 @@ pub type HoldVisuals = deadsync_noteskin::HoldVisuals<SpriteSlot>;
 pub type Noteskin = deadsync_noteskin::NoteskinRuntime<SpriteSlot>;
 
 static ITG_SKIN_CACHE: OnceLock<noteskin_itg::ItgSkinRuntimeCache<Noteskin>> = OnceLock::new();
+/// Reverse players' runtimes of skins whose NoteSkin.lua reads the player's
+/// options, under the keys of the runtimes every other player shares.
+static ITG_REVERSE_SKIN_CACHE: OnceLock<noteskin_itg::ItgSkinRuntimeCache<Noteskin>> =
+    OnceLock::new();
 
 pub fn clear_itg_runtime_caches() {
-    if let Some(cache) = ITG_SKIN_CACHE.get() {
-        cache.clear();
+    for cache in [&ITG_SKIN_CACHE, &ITG_REVERSE_SKIN_CACHE] {
+        if let Some(cache) = cache.get() {
+            cache.clear();
+        }
     }
     noteskin_itg::clear_data_cache();
+    noteskin_itg::clear_lookup_caches();
+    texture::clear_source_caches();
+}
+
+/// Forget what loading noteskins from song folders learned (their folders,
+/// files, compiled sources, runtimes and failures), so the next load after a
+/// song reload sees skins added, edited or fixed there since.
+pub fn forget_song_skins() {
+    FAILED_SONG_SKINS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clear();
+    for cache in [&ITG_SKIN_CACHE, &ITG_REVERSE_SKIN_CACHE] {
+        if let Some(cache) = cache.get() {
+            cache.forget(noteskin_itg::is_song_noteskin_key);
+        }
+    }
+    noteskin_compiler::forget_source_hashes(noteskin_itg::is_song_noteskin_key);
     noteskin_itg::clear_lookup_caches();
     texture::clear_source_caches();
 }
@@ -154,56 +178,209 @@ pub fn song_lua_noteskin_names() -> Vec<String> {
 }
 
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
+    load_player_itg_skin_cached(style, skin, false)
+}
+
+/// [`load_itg_skin_cached`] for the notefield of a player who plays with
+/// Reverse when `reverse` is set. An ITG NoteSkin.lua that reads the player's
+/// options may pick other art for them, so such a skin gets a runtime of its
+/// own for them; every other skin is the one all players share.
+pub fn load_player_itg_skin_cached(
+    style: &Style,
+    skin: &str,
+    reverse: bool,
+) -> Result<Arc<Noteskin>, String> {
+    let cache = ITG_SKIN_CACHE.get_or_init(noteskin_itg::ItgSkinRuntimeCache::default);
     if let Some(pack) = pack_catalog().iter().find(|pack| pack.skin(skin).is_some()) {
         let selection = Selection::parse(skin).map_err(|e| e.to_string())?;
         let key = pack.runtime_key(&selection);
-        return ITG_SKIN_CACHE
-            .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
-            .get_or_load(style, &key, || load_pack_skin(pack, &selection, style));
+        let shared = || cache.get_or_load(style, &key, || load_pack_skin(pack, &selection, style));
+        if reverse
+            && pack
+                .resolve(&selection, &noteskin_roots())
+                .is_ok_and(|data| noteskin_compiler::reads_player_options(&data))
+        {
+            return reverse_runtime_or_shared(
+                style,
+                &key,
+                || load_pack_skin_parts(pack, &selection, style, None, true),
+                shared,
+            );
+        }
+        return shared();
     }
-    ITG_SKIN_CACHE
-        .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
-        .get_or_load(style, skin, || load_itg_skin(style, skin))
+    let game = style.game_name();
+    let shared = || cache.get_or_load(style, skin, || load_itg_skin(style, skin));
+    if reverse
+        && let Some(data) =
+            noteskin_itg::load_noteskin_data_cached_from_roots(&noteskin_roots(), game, skin)
+        && noteskin_compiler::reads_player_options(&data)
+    {
+        return reverse_runtime_or_shared(
+            style,
+            skin,
+            || load_itg_data_parts(game, &data, style, None, true),
+            shared,
+        );
+    }
+    shared()
 }
 
-/// A noteskin a chart asked for, for one play. A copy the chart ships in its
-/// song folder (`<song_dir>/<skin>/`) is used over an installed skin of the
-/// same name. Unlike [`load_itg_skin_cached`], a name that is neither shipped
+/// A Reverse player's runtime of the skin cached as `key`, whose NoteSkin.lua
+/// reads the player's options. If the Reverse loader fails, as on a GAMESTATE
+/// call only its Reverse branch makes and the compile-time stub lacks, the
+/// player keeps the skin with the art every other player gets.
+fn reverse_runtime_or_shared(
+    style: &Style,
+    key: &str,
+    load: impl FnOnce() -> Result<Noteskin, String>,
+    shared: impl FnOnce() -> Result<Arc<Noteskin>, String>,
+) -> Result<Arc<Noteskin>, String> {
+    ITG_REVERSE_SKIN_CACHE
+        .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
+        .get_or_load(style, key, load)
+        .or_else(|err| {
+            warn!("Reverse runtime of noteskin '{key}' unavailable; using the shared one: {err}");
+            shared()
+        })
+}
+
+/// A noteskin a chart asked for, loaded for one play.
+#[derive(Debug, Clone)]
+pub struct ChartNoteskin {
+    pub noteskin: Arc<Noteskin>,
+    /// The song folder's copy it was loaded from; `None` for the installed
+    /// skin of that name.
+    pub dir: Option<PathBuf>,
+    /// Why the song folder's copy was passed over for the installed skin.
+    pub copy_error: Option<String>,
+}
+
+/// Song-folder noteskins that failed to load, by cache key and column count,
+/// so a gameplay start after the Select Music preload fails fast instead of
+/// compiling them again.
+static FAILED_SONG_SKINS: LazyLock<Mutex<HashMap<(String, usize), String>>> =
+    LazyLock::new(Mutex::default);
+
+/// A noteskin a chart asked for, for one play, for a player who plays with
+/// Reverse when `reverse` is set (see [`load_player_itg_skin_cached`]). A copy
+/// the chart ships in its song folder (`<song_dir>/<skin>/`) is used over an
+/// installed skin of the same name, which is still tried if that copy fails
+/// to load. Unlike [`load_itg_skin_cached`], a name that is neither shipped
 /// nor installed is an error rather than the default skin.
 pub fn load_song_itg_skin_cached(
     style: &Style,
     skin: &str,
     song_dir: &Path,
-) -> Result<Arc<Noteskin>, String> {
-    let Some(dir) = noteskin_itg::find_song_noteskin_dir(song_dir, skin) else {
-        let installed = is_pack_skin(skin)
+    reverse: bool,
+) -> Result<ChartNoteskin, String> {
+    let installed = || {
+        is_pack_skin(skin)
             || noteskin_itg::load_noteskin_data_cached_from_roots(
                 &noteskin_roots(),
                 style.game_name(),
                 skin,
             )
-            .is_some();
-        if !installed {
+            .is_some()
+    };
+    let load_installed = |copy_error| {
+        load_player_itg_skin_cached(style, skin, reverse).map(|noteskin| ChartNoteskin {
+            noteskin,
+            dir: None,
+            copy_error,
+        })
+    };
+    let Some(dir) = noteskin_itg::find_song_noteskin_dir(song_dir, skin) else {
+        if !installed() {
             return Err(format!(
                 "noteskin '{skin}' is neither installed nor in '{}'",
                 song_dir.display()
             ));
         }
-        return load_itg_skin_cached(style, skin);
+        return load_installed(None);
     };
-    let key = noteskin_itg::song_noteskin_key(&dir);
-    ITG_SKIN_CACHE
-        .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
-        .get_or_load(style, &key, || load_song_itg_skin(style, &dir, &key))
+    let error = match load_song_folder_skin(style, &dir, reverse) {
+        Ok(noteskin) => {
+            return Ok(ChartNoteskin {
+                noteskin,
+                dir: Some(dir),
+                copy_error: None,
+            });
+        }
+        Err(error) => error,
+    };
+    if !installed() {
+        return Err(error);
+    }
+    load_installed(Some(error.clone())).map_err(|installed_error| {
+        format!("{error}; the installed noteskin '{skin}' failed too: {installed_error}")
+    })
 }
 
-fn load_song_itg_skin(style: &Style, dir: &Path, key: &str) -> Result<Noteskin, String> {
+/// The noteskin in `dir`, a song folder's copy of a skin.
+fn load_song_folder_skin(
+    style: &Style,
+    dir: &Path,
+    reverse: bool,
+) -> Result<Arc<Noteskin>, String> {
     let game = style.game_name();
-    let data =
-        noteskin_itg::load_external_noteskin_data(dir, &noteskin_roots(), game, key.to_owned())?;
-    let bundle = noteskin_compiler::load_or_compile(&crate::paths().noteskin_cache, game, &data)?;
-    load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, None)
-        .map_err(|err| format!("failed to load noteskin '{}': {err}", dir.display()))
+    let key = noteskin_itg::song_noteskin_key(dir);
+    let failure = (key.clone(), style.num_cols);
+    if let Some(error) = FAILED_SONG_SKINS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&failure)
+    {
+        return Err(error.clone());
+    }
+    // A resident Reverse runtime needs no reading of the skin to find.
+    if reverse
+        && let Some(resident) = ITG_REVERSE_SKIN_CACHE
+            .get()
+            .and_then(|cache| cache.get(style, &key))
+    {
+        return Ok(resident);
+    }
+    let load_data =
+        || noteskin_itg::load_external_noteskin_data(dir, &noteskin_roots(), game, key.clone());
+    let load = |data: &noteskin_itg::NoteskinData, reverse| {
+        let bundle = compiled_bundle(game, data, reverse)?;
+        load_itg_sprite_noteskin_parts_compiled(data, style, &bundle.loader, &bundle.actors, None)
+    };
+    let shared = || {
+        ITG_SKIN_CACHE
+            .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
+            .get_or_load(style, &key, || load(&load_data()?, false))
+    };
+    let loaded = if reverse
+        && let Ok(data) = load_data()
+        && noteskin_compiler::reads_player_options(&data)
+    {
+        reverse_runtime_or_shared(style, &key, || load(&data, true), shared)
+    } else {
+        shared()
+    };
+    loaded.map_err(|err| {
+        let error = format!("failed to load noteskin '{}': {err}", dir.display());
+        FAILED_SONG_SKINS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(failure, error.clone());
+        error
+    })
+}
+
+fn compiled_bundle(
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+    reverse: bool,
+) -> Result<noteskin_compiled::CompiledNoteskinBundle, String> {
+    let cache_dir = &crate::paths().noteskin_cache;
+    if reverse {
+        noteskin_compiler::load_or_compile_reverse(cache_dir, game, data)
+    } else {
+        noteskin_compiler::load_or_compile(cache_dir, game, data)
+    }
 }
 
 /// Load native preview components, reusing a full gameplay runtime when resident.
@@ -272,7 +449,7 @@ fn load_itg_skin_parts(
 ) -> Result<Noteskin, String> {
     if let Some(pack) = pack_catalog().iter().find(|pack| pack.skin(skin).is_some()) {
         let selection = Selection::parse(skin).map_err(|e| e.to_string())?;
-        return load_pack_skin_parts(pack, &selection, style, parts);
+        return load_pack_skin_parts(pack, &selection, style, parts, false);
     }
     let roots = noteskin_roots();
     let game = style.game_name();
@@ -303,7 +480,7 @@ fn load_pack_skin(
     selection: &Selection,
     style: &Style,
 ) -> Result<Noteskin, String> {
-    load_pack_skin_parts(pack, selection, style, None)
+    load_pack_skin_parts(pack, selection, style, None, false)
 }
 
 fn load_pack_skin_parts(
@@ -311,6 +488,7 @@ fn load_pack_skin_parts(
     selection: &Selection,
     style: &Style,
     parts: Option<SkinParts>,
+    reverse: bool,
 ) -> Result<Noteskin, String> {
     if style.game_name() != "dance" {
         return Err("this noteskin pack only supports dance".into());
@@ -319,8 +497,7 @@ fn load_pack_skin_parts(
         .resolve(selection, &noteskin_roots())
         .map_err(|e| e.to_string())?;
     let runtime_name = std::mem::replace(&mut data.name, pack.compiler_key(selection));
-    let bundle =
-        noteskin_compiler::load_or_compile(&crate::paths().noteskin_cache, "dance", &data)?;
+    let bundle = compiled_bundle("dance", &data, reverse)?;
     data.name = runtime_name;
     load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, parts)
 }
@@ -337,9 +514,18 @@ fn load_itg_parts(
     parts: Option<SkinParts>,
 ) -> Result<Noteskin, String> {
     let data = noteskin_itg::load_noteskin_data_cached(root, game, skin)?;
-    let cache_dir = &crate::paths().noteskin_cache;
-    let bundle = noteskin_compiler::load_or_compile(cache_dir, game, &data)?;
-    load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, parts)
+    load_itg_data_parts(game, &data, style, parts, false)
+}
+
+fn load_itg_data_parts(
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+    style: &Style,
+    parts: Option<SkinParts>,
+    reverse: bool,
+) -> Result<Noteskin, String> {
+    let bundle = compiled_bundle(game, data, reverse)?;
+    load_itg_sprite_noteskin_parts_compiled(data, style, &bundle.loader, &bundle.actors, parts)
         .map_err(|err| {
             format!(
                 "failed to load compiled noteskin '{}/{}': {}",
@@ -703,11 +889,27 @@ mod tests {
         fs::remove_dir(&root).unwrap();
     }
 
-    fn load_fixture_itg_skin(
-        style: &Style,
-        skin: &str,
-        textures: &[&str],
-    ) -> (super::Noteskin, PathBuf) {
+    #[test]
+    fn mine_fill_slots_leave_authored_mine_art_alone() {
+        init_asset_paths();
+        let root = temp_noteskin_root("mine-art");
+        let path = root.join("_down tap mine.png");
+        image::RgbaImage::from_fn(4, 4, |x, y| {
+            image::Rgba(if x == y {
+                [255, 255, 255, 255]
+            } else {
+                [40, 200, 220, 255]
+            })
+        })
+        .save(&path)
+        .unwrap();
+        let mine = super::texture::itg_slot_from_path(&path).unwrap();
+        let fills = super::texture::mine_fill_slots(&[Some(mine)], &Default::default());
+        assert!(fills[0].is_none());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    fn copy_fixture_itg_skin(skin: &str, textures: &[&str]) -> (PathBuf, PathBuf) {
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/noteskins/dance")
             .join(skin);
@@ -722,9 +924,363 @@ mod tests {
         for texture in textures {
             write_noteskin_png(&target.join(texture));
         }
+        (root, target)
+    }
+
+    fn load_fixture_itg_skin(
+        style: &Style,
+        skin: &str,
+        textures: &[&str],
+    ) -> (super::Noteskin, PathBuf) {
+        let (root, _) = copy_fixture_itg_skin(skin, textures);
         let noteskin = load_itg(&root, "dance", skin, style)
             .unwrap_or_else(|err| panic!("fixture dance/{skin} should load: {err}"));
         (noteskin, root)
+    }
+
+    /// A skin that, like SCH-CLASSIC-RAINBOW, swaps the Up and Down hold
+    /// bodies for players who play with Reverse.
+    fn write_reverse_swapping_skin(skin_dir: &Path) {
+        fs::create_dir_all(skin_dir).unwrap();
+        let name = skin_dir.file_name().unwrap().to_string_lossy();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            format!("[Global]\nFallbackNoteSkin={name}\n"),
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    local options = GAMESTATE:GetPlayerState(Var "Player"):GetPlayerOptionsString("ModsLevel_Preferred")
+    local reverse = string.find(options:lower(), "reverse")
+    if not string.find(element, "Hold Body") then
+        button = "Down"
+    elseif reverse and button == "Up" then
+        button = "Down"
+    elseif reverse and button == "Down" then
+        button = "Up"
+    end
+    return Def.Sprite { Texture = NOTESKIN:GetPath(button, element) }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+        for button in ["Left", "Down", "Up", "Right"] {
+            for state in ["Active", "Inactive"] {
+                write_noteskin_png(&skin_dir.join(format!("{button} Hold Body {state}.png")));
+            }
+        }
+    }
+
+    fn hold_body_texture(noteskin: &super::Noteskin, col: usize) -> String {
+        noteskin
+            .hold_visuals_for_col(col, false)
+            .body_inactive
+            .as_ref()
+            .expect("hold body")
+            .texture_key()
+            .to_ascii_lowercase()
+    }
+
+    fn compiled_loader_count(name: &str) -> usize {
+        fs::read_dir(crate::paths().noteskin_cache.join("dance").join(name)).map_or(0, |entries| {
+            entries
+                .flatten()
+                .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "bin"))
+                .count()
+        })
+    }
+
+    fn assert_reverse_swaps_up_and_down_hold_bodies(
+        shared: &super::Noteskin,
+        reverse: &super::Noteskin,
+    ) {
+        for (col, shared_button, reverse_button) in [
+            (0, "left", "left"),
+            (1, "down", "up"),
+            (2, "up", "down"),
+            (3, "right", "right"),
+        ] {
+            let expected = |button| format!("{button} hold body inactive");
+            assert!(
+                hold_body_texture(shared, col).contains(&expected(shared_button)),
+                "column {col}: {}",
+                hold_body_texture(shared, col)
+            );
+            assert!(
+                hold_body_texture(reverse, col).contains(&expected(reverse_button)),
+                "column {col}: {}",
+                hold_body_texture(reverse, col)
+            );
+        }
+    }
+
+    #[test]
+    fn reverse_player_gets_the_hold_art_a_chart_skin_picks_for_reverse() {
+        init_asset_paths();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let song_dir = temp_noteskin_root("reverse-song-skin");
+        let skin_dir = song_dir.join("Reverse-Swap");
+        write_reverse_swapping_skin(&skin_dir);
+
+        let shared = super::load_song_itg_skin_cached(&style, "reverse-swap", &song_dir, false)
+            .expect("shared runtime");
+        let reverse = super::load_song_itg_skin_cached(&style, "reverse-swap", &song_dir, true)
+            .expect("reverse runtime");
+
+        assert_eq!(shared.dir.as_deref(), Some(skin_dir.as_path()));
+        assert_reverse_swaps_up_and_down_hold_bodies(&shared.noteskin, &reverse.noteskin);
+        assert_eq!(
+            compiled_loader_count(&noteskin_itg::song_noteskin_key(&skin_dir)),
+            2
+        );
+
+        let _ = fs::remove_dir_all(song_dir);
+    }
+
+    #[test]
+    fn reverse_player_gets_the_hold_art_an_installed_skin_picks_for_reverse() {
+        init_asset_paths();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let skin = "reverse-swap-installed";
+        let skin_dir = crate::paths().noteskin_roots[0].join("dance").join(skin);
+        write_reverse_swapping_skin(&skin_dir);
+        noteskin_itg::clear_lookup_caches();
+
+        let shared = super::load_player_itg_skin_cached(&style, skin, false).expect("shared");
+        let reverse = super::load_player_itg_skin_cached(&style, skin, true).expect("reverse");
+
+        assert_reverse_swaps_up_and_down_hold_bodies(&shared, &reverse);
+        assert_eq!(compiled_loader_count(skin), 2);
+
+        let _ = fs::remove_dir_all(skin_dir);
+    }
+
+    #[test]
+    fn reverse_player_keeps_a_skin_whose_reverse_loader_fails() {
+        init_asset_paths();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        // The Reverse branch makes a GAMESTATE call the compile-time stub
+        // lacks, so only the Reverse loader fails to compile.
+        let write_skin = |skin_dir: &Path| {
+            write_reverse_swapping_skin(skin_dir);
+            fs::write(
+                skin_dir.join("NoteSkin.lua"),
+                r#"local skin = {}
+function skin.Load()
+    local options = GAMESTATE:GetPlayerState(Var "Player"):GetPlayerOptionsString("ModsLevel_Preferred")
+    if string.find(options:lower(), "reverse") then
+        GAMESTATE:GetCurrentSteps(Var "Player")
+    end
+    local button = string.find(Var "Element", "Hold Body") and Var "Button" or "Down"
+    return Def.Sprite { Texture = NOTESKIN:GetPath(button, Var "Element") }
+end
+return skin
+"#,
+            )
+            .unwrap();
+        };
+        let song_dir = temp_noteskin_root("reverse-failing-song-skin");
+        write_skin(&song_dir.join("Reverse-Fails"));
+        let installed = "reverse-fails-installed";
+        let installed_dir = crate::paths().noteskin_roots[0]
+            .join("dance")
+            .join(installed);
+        write_skin(&installed_dir);
+        noteskin_itg::clear_lookup_caches();
+
+        let song_shared =
+            super::load_song_itg_skin_cached(&style, "reverse-fails", &song_dir, false)
+                .expect("shared chart skin")
+                .noteskin;
+        let song_reverse =
+            super::load_song_itg_skin_cached(&style, "reverse-fails", &song_dir, true)
+                .expect("chart skin for Reverse")
+                .noteskin;
+        let shared = super::load_player_itg_skin_cached(&style, installed, false).expect("shared");
+        let reverse =
+            super::load_player_itg_skin_cached(&style, installed, true).expect("skin for Reverse");
+
+        // Other tests clear the runtime cache concurrently, so compare the
+        // art the Reverse player got rather than the runtime's identity.
+        for col in 0..4 {
+            assert_eq!(
+                hold_body_texture(&song_reverse, col),
+                hold_body_texture(&song_shared, col)
+            );
+            assert_eq!(hold_body_texture(&reverse, col), hold_body_texture(&shared, col));
+        }
+
+        let _ = fs::remove_dir_all(song_dir);
+        let _ = fs::remove_dir_all(installed_dir);
+    }
+
+    #[test]
+    fn reverse_player_shares_a_skin_that_ignores_player_options() {
+        init_asset_paths();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let shared = super::load_player_itg_skin_cached(&style, "default", false).unwrap();
+        let reverse = super::load_player_itg_skin_cached(&style, "default", true).unwrap();
+
+        for col in 0..4 {
+            assert_eq!(hold_body_texture(&reverse, col), hold_body_texture(&shared, col));
+        }
+    }
+
+    #[test]
+    fn framed_mine_takes_each_buttons_branch_and_keeps_its_art() {
+        init_asset_paths();
+        clear_itg_runtime_caches();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let (root, skin_dir) = copy_fixture_itg_skin(
+            "spark-mine",
+            &[
+                "Down Tap Note.png",
+                "Down Receptor.png",
+                "_Mine Spark 4x4.png",
+            ],
+        );
+        let fill_path = skin_dir.join("_down tap mine.png");
+        image::RgbaImage::from_fn(8, 8, |x, y| {
+            image::Rgba(if x == y {
+                [255, 255, 255, 255]
+            } else {
+                [120, 200, 220, 255]
+            })
+        })
+        .save(&fill_path)
+        .unwrap();
+        itg_register_texture_dims_for_path(&fill_path);
+        let ns = load_itg(&root, "dance", "spark-mine", &style)
+            .unwrap_or_else(|err| panic!("fixture dance/spark-mine should load: {err}"));
+
+        let fills: Vec<_> = ns.mines.iter().map(|slot| slot.as_ref().unwrap()).collect();
+        assert!(
+            fills
+                .iter()
+                .all(|fill| fill.texture_key().ends_with("_down tap mine.png"))
+        );
+        assert_eq!(
+            fills
+                .iter()
+                .map(|fill| fill.def.rotation_deg)
+                .collect::<Vec<_>>(),
+            [90, 0, 180, -90]
+        );
+        assert!(ns.mine_fill_slots.iter().all(Option::is_none));
+
+        let sparks: Vec<_> = ns
+            .mine_frames
+            .iter()
+            .map(|slot| slot.as_ref().expect("spark layer"))
+            .collect();
+        assert_eq!(
+            sparks
+                .iter()
+                .map(|spark| spark.model_draw.rot[2])
+                .collect::<Vec<_>>(),
+            [90.0, 0.0, 180.0, 90.0]
+        );
+        let first_frames: Vec<_> = sparks
+            .iter()
+            .map(|spark| {
+                assert_eq!(spark.model_draw.zoom[0], 1.2);
+                let uv = spark.uv_for_frame_at(spark.frame_index(0.0, 0.0), 0.0);
+                (uv[1] * 4.0) as usize * 4 + (uv[0] * 4.0) as usize
+            })
+            .collect();
+        assert_eq!(first_frames, [0, 5, 8, 13]);
+        assert_eq!(sparks[3].frame_index(0.151, 0.0), 3);
+
+        clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn setallstatedelays_only_animates_sprites_holding_every_sheet_frame() {
+        init_asset_paths();
+        clear_itg_runtime_caches();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let (root, fixture_dir) = copy_fixture_itg_skin(
+            "spark-mine",
+            &[
+                "Down Tap Note.png",
+                "Down Receptor.png",
+                "_Mine Spark 4x4.png",
+            ],
+        );
+        // Compiled bundles are cached by skin name, so this variant needs its own.
+        let skin_dir = root.join("dance").join("state-delays");
+        fs::rename(&fixture_dir, &skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=state-delays\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Tap Mine.lua"),
+            r#"return Def.ActorFrame {
+	Def.Sprite {
+		Texture="_Mine Spark 4x4.png";
+		Frame0000=6;
+		Delay0000=1;
+		InitCommand=cmd(SetAllStateDelays,0.05);
+	};
+	Def.Sprite {
+		Texture="_Mine Spark 4x4.png";
+		InitCommand=cmd(SetAllStateDelays,0.05);
+	};
+};
+"#,
+        )
+        .unwrap();
+        let ns = load_itg(&root, "dance", "state-delays", &style)
+            .unwrap_or_else(|err| panic!("fixture dance/state-delays should load: {err}"));
+
+        // One explicit state: ITGmania retimes it and keeps showing frame 6.
+        let single = ns.mines[0].as_ref().expect("explicit single-state layer");
+        assert!(matches!(single.source.as_ref(), SpriteSource::Atlas { .. }));
+        assert_eq!(single.def.src, [32, 16]);
+
+        // States from the sheet: the delays run through all 16 frames.
+        let sheet = ns.mine_frames[0].as_ref().expect("whole-sheet layer");
+        assert_eq!(sheet.source.frame_count(), 16);
+        let frames: Vec<_> = (0..16)
+            .map(|step| {
+                let uv =
+                    sheet.uv_for_frame_at(sheet.frame_index(step as f32 * 0.05 + 0.001, 0.0), 0.0);
+                assert!(uv.iter().all(|v| (0.0..=1.0).contains(v)), "{uv:?}");
+                (uv[1] * 4.0) as usize * 4 + (uv[0] * 4.0) as usize
+            })
+            .collect();
+        assert_eq!(frames, (0..16).collect::<Vec<_>>());
+
+        clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -1195,6 +1751,86 @@ mod tests {
         assert!((behavior.duration - 0.11).abs() <= 1e-6);
         assert!((behavior.sample_zoom(behavior.duration) - 0.75).abs() <= 1e-6);
         assert!((behavior.sample_zoom(0.0) - 1.0).abs() <= 1e-6);
+
+        clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn load_beat_state_fixture() -> (super::Noteskin, PathBuf) {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let skin = "beat-state";
+        let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/noteskins/dance")
+            .join(skin);
+        let root = temp_noteskin_root(skin);
+        let target = root.join("dance").join(skin);
+        fs::create_dir_all(&target).unwrap();
+        for entry in fs::read_dir(&source).unwrap() {
+            let entry = entry.unwrap();
+            fs::copy(entry.path(), target.join(entry.file_name())).unwrap();
+        }
+        write_noteskin_png(&target.join("Down Tap Note.png"));
+        let sheet = target.join("_down Go Receptor 3x1.png");
+        image::RgbaImage::from_pixel(192, 64, image::Rgba([255, 255, 255, 255]))
+            .save(&sheet)
+            .unwrap();
+        itg_register_texture_dims_for_path(&sheet);
+        let noteskin = load_itg(&root, "dance", skin, &style)
+            .unwrap_or_else(|err| panic!("fixture dance/{skin} should load: {err}"));
+        (noteskin, root)
+    }
+
+    #[test]
+    fn beat_state_receptor_update_loads_each_sheet_frame() {
+        init_asset_paths();
+        clear_itg_runtime_caches();
+        let (ns, root) = load_beat_state_fixture();
+
+        assert_eq!(ns.receptor_beat_frames.len(), 4);
+        for (col, rotation) in [90, 0, 180, -90].into_iter().enumerate() {
+            let frames = ns.receptor_beat_frames[col]
+                .as_ref()
+                .expect("every column follows the beat-state update");
+            for (slot, src_x) in [
+                (&frames.on_beat, 0),
+                (&frames.off_beat, 64),
+                (&frames.before_start, 128),
+            ] {
+                assert_eq!(slot.def.src, [src_x, 0], "column {col}");
+                assert_eq!(slot.def.size, [64, 64], "column {col}");
+                assert_eq!(slot.def.rotation_deg, rotation, "column {col}");
+                assert_eq!(slot.logical_size(), [64.0, 64.0]);
+            }
+            assert_eq!(
+                ns.receptor_off[col].def.src,
+                [128, 0],
+                "OnCommand=function(s) s:animate(false):setstate(2) end"
+            );
+        }
+
+        clear_itg_runtime_caches();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn helper_press_command_bumps_the_receptor_on_every_step() {
+        init_asset_paths();
+        clear_itg_runtime_caches();
+        let (ns, root) = load_beat_state_fixture();
+
+        for col in 0..4 {
+            for window in [None, Some("W1"), Some("W4"), Some("Miss")] {
+                let bump = ns.receptor_step_behavior_for_col(col, window);
+                assert!(bump.interrupts, "{window:?}");
+                assert!((bump.delay - 1.0 / 60.0).abs() <= 1e-6, "{window:?}");
+                assert!((bump.duration - 4.0 / 60.0).abs() <= 1e-6, "{window:?}");
+                assert!((bump.zoom_start - 0.9).abs() <= 1e-6, "{window:?}");
+                assert!((bump.zoom_end - 1.0).abs() <= 1e-6, "{window:?}");
+            }
+        }
 
         clear_itg_runtime_caches();
         let _ = fs::remove_dir_all(root);
@@ -2346,6 +2982,20 @@ Materials: 2
     }
 
     #[test]
+    fn default_mine_hit_ends_tap_explosion_through_judgment_command() {
+        init_asset_paths();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        // common's Fallback Explosion gives both tap actors
+        // JudgmentCommand=finishtweening over an alpha 0 InitCommand.
+        assert!(ns.mine_hit_ends_tap_explosion);
+    }
+
+    #[test]
     fn blank_tap_explosions_do_not_fall_back_to_common() {
         init_asset_paths();
         clear_itg_runtime_caches();
@@ -2734,6 +3384,68 @@ return skin
         }
         assert_eq!(slot.frame_index(0.0, 0.0), 0);
         assert_eq!(slot.frame_index(0.051, 0.0), 1);
+    }
+
+    #[test]
+    fn setallstatedelays_animates_a_sheet_loaded_as_one_frame() {
+        init_asset_paths();
+        let root = temp_noteskin_root("all-state-delays-sheet");
+        let path = root.join("Down HitMine Explosion 16x1 (doubleres).png");
+        image::RgbaImage::new(256, 32).save(&path).unwrap();
+        itg_register_texture_dims_for_path(&path);
+        let mut slot = super::texture::itg_slot_from_path_with_frame(&path, 0).unwrap();
+        assert!(matches!(slot.source.as_ref(), SpriteSource::Atlas { .. }));
+
+        let commands = std::collections::HashMap::from([(
+            "initcommand".to_string(),
+            "diffusealpha,0;zoom,1.5;SetAllStateDelays,0.05;".to_string(),
+        )]);
+        super::texture::itg_apply_state_properties_from_commands(&mut slot, &commands);
+
+        let SpriteSource::Animated {
+            frame_count, rate, ..
+        } = slot.source.as_ref()
+        else {
+            panic!("SetAllStateDelays should animate every frame of the sheet");
+        };
+        assert_eq!(*frame_count, 16);
+        assert_eq!(*rate, AnimationRate::FramesPerSecond(20.0));
+        assert_eq!(slot.logical_size(), [8.0, 16.0]);
+        let frames = [0.0, 0.051, 0.751, 0.801].map(|time| slot.frame_index(time, 0.0));
+        assert_eq!(frames, [0, 1, 15, 0]);
+        let u0 = |frame| slot.uv_for_frame_at(frame, 0.0)[0];
+        assert!((u0(15) - u0(0) - 15.0 / 16.0).abs() < 1e-6);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn setstate_starts_a_running_sheet_animation_at_that_state() {
+        init_asset_paths();
+        let root = temp_noteskin_root("setstate-running-sheet");
+        let path = root.join("_Mine Spark 4x4.png");
+        image::RgbaImage::new(64, 64).save(&path).unwrap();
+        itg_register_texture_dims_for_path(&path);
+        let mut slot =
+            super::texture::itg_slot_from_path_animated(&path, 0, 16, None, None, false).unwrap();
+        let commands = std::collections::HashMap::from([(
+            "initcommand".to_string(),
+            "zoom,1.2;effectclock,timer;SetAllStateDelays,0.05;setstate,13;rotationz,90"
+                .to_string(),
+        )]);
+        super::texture::itg_apply_state_properties_from_commands(&mut slot, &commands);
+
+        assert_eq!(slot.source.frame_count(), 16);
+        let frame_uv = |time| slot.uv_for_frame_at(slot.frame_index(time, 0.0), 0.0);
+        let origin = |uv: [f32; 4]| [(uv[0] * 4.0) as usize, (uv[1] * 4.0) as usize];
+        assert_eq!(origin(frame_uv(0.0)), [1, 3]);
+        assert_eq!(origin(frame_uv(0.101)), [3, 3]);
+        assert_eq!(origin(frame_uv(0.151)), [0, 0]);
+        assert_eq!(origin(frame_uv(0.751)), [0, 3]);
+        for step in 0..16 {
+            let uv = frame_uv(step as f32 * 0.05 + 0.001);
+            assert!(uv.iter().all(|v| (0.0..=1.0).contains(v)), "{uv:?}");
+        }
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

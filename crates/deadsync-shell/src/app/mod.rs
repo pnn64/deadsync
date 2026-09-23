@@ -652,6 +652,9 @@ struct GameplayPreload {
     requested_chart_ixs: Vec<usize>,
     gameplay_song: Vec<GameplayChartData>,
     song_lua: crate::gameplay_entry::PreparedGameplaySongLua,
+    /// Held until gameplay::init, which then finds them resident instead of
+    /// loading them on the main thread.
+    chart_noteskins: gameplay::ChartNoteskins,
     payload_ms: f64,
     elapsed_ms: f64,
 }
@@ -2164,11 +2167,21 @@ impl App {
                         &gameplay_config,
                         video_renderer,
                     );
+                    let chart_noteskins = gameplay::load_chart_noteskins(
+                        &gameplay_session,
+                        &deadsync_profile_gameplay::gameplay_runtime_profile_data(
+                            &player_profiles,
+                            &gameplay_session,
+                        ),
+                        &deadsync_song_lua::playback::song_lua_requested_noteskins(&song_lua),
+                        song.simfile_path.parent(),
+                    );
                     GameplayPreload {
                         song_path,
                         requested_chart_ixs,
                         gameplay_song,
                         song_lua,
+                        chart_noteskins,
                         payload_ms,
                         elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
                     }
@@ -9009,6 +9022,7 @@ impl App {
                 let payload_started = Instant::now();
                 let mut preloaded_payload_ms = None;
                 let mut prepared_song_lua = None;
+                let mut preloaded_chart_noteskins = None;
                 let gameplay_charts = if let Some(gameplay_charts) = reused_gameplay_charts {
                     debug!(
                         "Reusing gameplay payload for quick restart '{}'",
@@ -9050,6 +9064,7 @@ impl App {
                     let gameplay_song = if let Some(preload) = preload.flatten() {
                         preloaded_payload_ms = Some(preload.payload_ms);
                         prepared_song_lua = Some(preload.song_lua);
+                        preloaded_chart_noteskins = Some(preload.chart_noteskins);
                         preload.gameplay_song
                     } else {
                         match song_loading::load_gameplay_charts(
@@ -9224,6 +9239,8 @@ impl App {
                 let metrics = self.state.shell.metrics;
                 let (pixel_width, pixel_height) = space::current_window_px();
                 let init = move || {
+                    // Resident until gameplay::init below has loaded them.
+                    let _chart_noteskins = preloaded_chart_noteskins;
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(pixel_width, pixel_height);
                     let prepared_song_lua = prepared_song_lua.unwrap_or_else(|| {

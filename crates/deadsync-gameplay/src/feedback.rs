@@ -699,7 +699,7 @@ impl GameplayReceptorFeedbackState {
     pub fn start_bop(&mut self, col: usize, behavior: GameplayReceptorStepBehavior) {
         if col < MAX_COLS && (behavior.duration > f32::EPSILON || behavior.interrupts) {
             self.bop_behaviors[col] = behavior;
-            self.bop_timers[col] = behavior.duration.max(0.0);
+            self.bop_timers[col] = behavior.total_duration();
             set_feedback_bit(&mut self.bop_active, col, self.bop_timers[col] > 0.0);
             self.enter_dense_mode();
         }
@@ -1059,6 +1059,8 @@ fn tick_full_receptor_glow_columns(
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GameplayReceptorStepBehavior {
+    /// Time the receptor holds `zoom_start` before the tween begins.
+    pub delay: f32,
     pub duration: f32,
     pub zoom_start: f32,
     pub zoom_end: f32,
@@ -1070,6 +1072,7 @@ impl GameplayReceptorStepBehavior {
     #[must_use]
     pub const fn identity() -> Self {
         Self {
+            delay: 0.0,
             duration: 0.0,
             zoom_start: 1.0,
             zoom_end: 1.0,
@@ -1080,13 +1083,20 @@ impl GameplayReceptorStepBehavior {
 
     #[inline(always)]
     #[must_use]
+    pub fn total_duration(self) -> f32 {
+        self.delay.max(0.0) + self.duration.max(0.0)
+    }
+
+    #[inline(always)]
+    #[must_use]
     pub fn sample_zoom(self, timer_remaining: f32) -> f32 {
         let duration = self.duration.max(0.0);
         if duration <= f32::EPSILON {
             return self.zoom_end.max(0.0);
         }
-        let elapsed = duration - timer_remaining.clamp(0.0, duration);
-        let progress = elapsed / duration;
+        let total = self.total_duration();
+        let elapsed = total - timer_remaining.clamp(0.0, total) - self.delay.max(0.0);
+        let progress = elapsed.clamp(0.0, duration) / duration;
         let eased = self.tween.ease(progress);
         (self.zoom_end - self.zoom_start)
             .mul_add(eased, self.zoom_start)
@@ -1097,6 +1107,7 @@ impl GameplayReceptorStepBehavior {
 impl Default for GameplayReceptorStepBehavior {
     fn default() -> Self {
         Self {
+            delay: 0.0,
             duration: 0.11,
             zoom_start: 0.75,
             zoom_end: 1.0,
@@ -1186,6 +1197,94 @@ pub const fn hold_explosion_enabled_for_options(options: TapExplosionOptions) ->
     options.holding
 }
 
+pub const MAX_HOLD_FLASH_SPRITES: usize = 8;
+
+/// A noteskin explosion that restarts a flash on the next of `sprites`
+/// children every `period` seconds while a hold (or roll) is engaged.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HoldFlashEmitterTiming {
+    pub period: f32,
+    pub sprites: u8,
+    pub flash_duration: f32,
+    pub hold: bool,
+    pub roll: bool,
+}
+
+/// One column's flash emitter, advanced like its ITG ActorFrame: an Emit
+/// already queued fires during the update, before GhostArrowRow plays
+/// HoldingOff/HoldingOn. HoldingOn's finishtweening reaches the children too,
+/// so it ends every flash in flight and drops a queued Emit, then emits at
+/// once. A flash in flight finishes after the hold ends.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HoldFlashEmitterState {
+    showing: Option<bool>,
+    emitting: bool,
+    next_emit_in: Option<f32>,
+    next_sprite: u8,
+    flash_ages: [Option<f32>; MAX_HOLD_FLASH_SPRITES],
+}
+
+impl HoldFlashEmitterState {
+    /// Seconds since each flash in flight started.
+    pub fn flash_ages(&self) -> impl Iterator<Item = f32> + '_ {
+        self.flash_ages.iter().flatten().copied()
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn has_flashes(&self) -> bool {
+        self.flash_ages.iter().any(Option::is_some)
+    }
+
+    /// `showing` is the kind of hold engaged this frame, `Some(true)` for a roll.
+    pub fn advance(
+        &mut self,
+        timing: HoldFlashEmitterTiming,
+        showing: Option<bool>,
+        delta_time: f32,
+    ) {
+        let sprites = usize::from(timing.sprites).clamp(1, MAX_HOLD_FLASH_SPRITES);
+        let requeue = (timing.period > 0.0).then_some(timing.period);
+        for age in self.flash_ages.iter_mut().flatten() {
+            *age += delta_time;
+        }
+        let mut remaining = delta_time;
+        while let Some(wait) = self.next_emit_in {
+            if wait > remaining {
+                self.next_emit_in = Some(wait - remaining);
+                break;
+            }
+            remaining -= wait;
+            self.emit(sprites, remaining);
+            self.next_emit_in = requeue.filter(|_| self.emitting);
+        }
+        for age in &mut self.flash_ages {
+            if age.is_some_and(|age| age >= timing.flash_duration) {
+                *age = None;
+            }
+        }
+        if showing == self.showing {
+            return;
+        }
+        if self.showing.is_some() {
+            self.emitting = false;
+        }
+        if showing.is_some_and(|roll| if roll { timing.roll } else { timing.hold }) {
+            self.emitting = true;
+            self.flash_ages = [None; MAX_HOLD_FLASH_SPRITES];
+            self.emit(sprites, 0.0);
+            self.next_emit_in = requeue;
+        }
+        self.showing = showing;
+    }
+
+    fn emit(&mut self, sprites: usize, age: f32) {
+        let sprite = usize::from(self.next_sprite) % sprites;
+        self.flash_ages[sprite] = Some(age);
+        self.next_sprite = ((sprite + 1) % sprites) as u8;
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GameplayNoteskinEffects {
     receptor_glow_behavior: [GameplayReceptorGlowBehavior; MAX_PLAYERS],
@@ -1193,7 +1292,9 @@ pub struct GameplayNoteskinEffects {
         [[[GameplayReceptorStepBehavior; RECEPTOR_STEP_WINDOW_COUNT]; MAX_COLS]; MAX_PLAYERS],
     tap_explosion_durations:
         [[[[Option<f32>; 2]; TAP_EXPLOSION_WINDOW_COUNT]; MAX_COLS]; MAX_PLAYERS],
+    mine_hit_ends_tap_explosion: [bool; MAX_PLAYERS],
     mine_explosion_duration: [f32; MAX_PLAYERS],
+    hold_flash_emitters: [[Option<HoldFlashEmitterTiming>; MAX_COLS]; MAX_PLAYERS],
 }
 
 impl GameplayNoteskinEffects {
@@ -1241,9 +1342,28 @@ impl GameplayNoteskinEffects {
     }
 
     #[inline(always)]
+    pub const fn set_mine_hit_ends_tap_explosion(&mut self, player: usize, ends: bool) {
+        if player < MAX_PLAYERS {
+            self.mine_hit_ends_tap_explosion[player] = ends;
+        }
+    }
+
+    #[inline(always)]
     pub const fn set_mine_explosion_duration(&mut self, player: usize, duration: f32) {
         if player < MAX_PLAYERS {
             self.mine_explosion_duration[player] = duration;
+        }
+    }
+
+    #[inline(always)]
+    pub const fn set_hold_flash_emitter(
+        &mut self,
+        player: usize,
+        local_col: usize,
+        timing: Option<HoldFlashEmitterTiming>,
+    ) {
+        if player < MAX_PLAYERS && local_col < MAX_COLS {
+            self.hold_flash_emitters[player][local_col] = timing;
         }
     }
 
@@ -1282,8 +1402,24 @@ impl GameplayNoteskinEffects {
 
     #[inline(always)]
     #[must_use]
+    pub fn mine_hit_ends_tap_explosion(&self, player: usize) -> bool {
+        self.mine_hit_ends_tap_explosion[player.min(MAX_PLAYERS - 1)]
+    }
+
+    #[inline(always)]
+    #[must_use]
     pub fn mine_explosion_duration(&self, player: usize) -> f32 {
         self.mine_explosion_duration[player.min(MAX_PLAYERS - 1)]
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn hold_flash_emitter(
+        &self,
+        player: usize,
+        local_col: usize,
+    ) -> Option<HoldFlashEmitterTiming> {
+        self.hold_flash_emitters[player.min(MAX_PLAYERS - 1)][local_col.min(MAX_COLS - 1)]
     }
 }
 
@@ -1304,7 +1440,9 @@ impl Default for GameplayNoteskinEffects {
             tap_explosion_durations: std::array::from_fn(|_| {
                 std::array::from_fn(|_| std::array::from_fn(|_| [None, None]))
             }),
+            mine_hit_ends_tap_explosion: [false; MAX_PLAYERS],
             mine_explosion_duration: [MINE_EXPLOSION_DURATION; MAX_PLAYERS],
+            hold_flash_emitters: [[None; MAX_COLS]; MAX_PLAYERS],
         }
     }
 }

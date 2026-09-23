@@ -19,12 +19,12 @@ use deadsync_noteskin::{
     ModelTweenSegment, NotePartAnimation, NotePartTextureTranslate, NoteskinSlot,
     SpriteAnimatedUvCache, SpriteAtlasUvCache, SpriteDefinition, SpriteFrameTiming, SpriteSlotPlan,
     SpriteSourcePlan, generated_animation_sprite_slot_plan,
-    itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
-    itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
-    itg_sprite_slot_plan_from_path, model_draw_at, model_draw_at_cursor, model_glow_at,
-    model_glow_with_draw, model_vertex_for_sprite, neg_rot_sin_cos,
-    sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing, sprite_scrolled_uv,
-    sprite_sheet_frame,
+    itg_all_frames_sprite_slot_plan_from_path, itg_animation_slot_plan_from_state,
+    itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
+    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_draw_at,
+    model_draw_at_cursor, model_glow_at, model_glow_with_draw, model_vertex_for_sprite,
+    neg_rot_sin_cos, sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing,
+    sprite_scrolled_uv, sprite_sheet_frame,
 };
 use image::image_dimensions;
 use log::warn;
@@ -1005,8 +1005,15 @@ fn itg_apply_initial_sprite_state(
             }
         }
     }
-    if let Some(frame) = frame {
-        itg_apply_frame_override(slot, frame);
+    match frame {
+        Some(state) if !paused && matches!(slot.source.as_ref(), SpriteSource::Animated { .. }) => {
+            apply_slot_plan(
+                slot,
+                itg_animation_slot_plan_from_state(plan_from_slot(slot), state),
+            );
+        }
+        Some(frame) => itg_apply_frame_override(slot, frame),
+        None => {}
     }
     if paused {
         freeze_sprite_animation(slot);

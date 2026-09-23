@@ -155,6 +155,15 @@ impl<T> ItgSkinRuntimeCache<T> {
             .clear();
     }
 
+    /// Drop the entries of the skins `forget` names, so their next load
+    /// builds them again; runtimes still in use stay with their owners.
+    pub fn forget(&self, forget: impl Fn(&str) -> bool) {
+        self.entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|key, _| !forget(&key.skin));
+    }
+
     pub fn get_or_load<F>(&self, style: &Style, skin: &str, load: F) -> Result<Arc<T>, String>
     where
         F: FnOnce() -> Result<T, String>,
@@ -884,6 +893,14 @@ pub fn song_noteskin_key(dir: &Path) -> String {
     format!("song-{skin}-{:016x}", hasher.finish())
 }
 
+/// Whether `name` is a [`song_noteskin_key`].
+#[must_use]
+pub fn is_song_noteskin_key(name: &str) -> bool {
+    name.strip_prefix("song-")
+        .and_then(|rest| rest.rsplit_once('-'))
+        .is_some_and(|(_, hash)| hash.len() == 16 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 /// Noteskin data for a skin in `dir` outside the noteskin roots, named
 /// `name`; its FallbackNoteSkin chain resolves from `roots`.
 pub fn load_external_noteskin_data(
@@ -1294,14 +1311,14 @@ mod tests {
         BorrowMap, IniData, IniKey, ItgSkinRuntimeCache, NoteskinData, animation_is_beat_based,
         button_for_col, clear_data_cache, clear_lookup_caches, default_skin_candidates,
         default_skin_name, down_col, find_file_with_prefix, find_song_noteskin_dir,
-        find_texture_with_prefix, load_external_noteskin_data, load_itg_skin_from_roots,
-        load_noteskin_data_cached, load_noteskin_data_cached_from_roots, song_noteskin_key,
+        find_texture_with_prefix, is_song_noteskin_key, load_external_noteskin_data,
+        load_itg_skin_from_roots, load_noteskin_data_cached, load_noteskin_data_cached_from_roots,
         normalized_game_name, normalized_skin_name, note_display_metrics, parse_ini_float,
         resolve_skin_dir, resolve_texture_expr, skin_name_is_default,
         song_lua_noteskin_exists_from_roots, song_lua_noteskin_metric_b_from_roots,
         song_lua_noteskin_metric_f_from_roots, song_lua_noteskin_metric_from_roots,
         song_lua_noteskin_names_from_roots, song_lua_noteskin_resolve_path_from_roots,
-        texture_key_for_path,
+        song_noteskin_key, texture_key_for_path,
     };
     use crate::{NoteAnimPart, NoteColorType, Style};
     use std::fs;
@@ -1610,6 +1627,9 @@ mod tests {
         let key = song_noteskin_key(&dir);
         assert!(key.starts_with("song-sch-test-"), "{key}");
         assert_ne!(key, song_noteskin_key(&root.join("dance").join("SCH-Test")));
+        assert!(is_song_noteskin_key(&key));
+        assert!(!is_song_noteskin_key("sch-test"));
+        assert!(!is_song_noteskin_key("song-of-the-sky"));
 
         let data = load_external_noteskin_data(&dir, &[root.clone()], "dance", key.clone())
             .expect("song skin data");

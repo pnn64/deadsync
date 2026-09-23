@@ -739,6 +739,7 @@ pub struct GameplayVisualFeedbackState {
     column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
     mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
+    hold_flash_emitters: [HoldFlashEmitterState; MAX_COLS],
     tap_mask: LaneMask,
     flash_mask: LaneMask,
     mine_mask: LaneMask,
@@ -786,6 +787,30 @@ impl GameplayVisualFeedbackState {
     ) -> &[Option<ActiveMineExplosion>] {
         let end = col_start.saturating_add(num_cols).min(MAX_COLS);
         self.mine_explosions.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn hold_flash_emitters(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[HoldFlashEmitterState] {
+        let end = col_start.saturating_add(num_cols).min(MAX_COLS);
+        self.hold_flash_emitters.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    pub(crate) fn advance_hold_flash_emitter(
+        &mut self,
+        col: usize,
+        timing: HoldFlashEmitterTiming,
+        showing: Option<bool>,
+        delta_time: f32,
+    ) {
+        if let Some(emitter) = self.hold_flash_emitters.get_mut(col) {
+            emitter.advance(timing, showing, delta_time);
+        }
     }
 
     #[inline(always)]
@@ -884,6 +909,8 @@ impl GameplayVisualFeedbackState {
             .fill([[None; 2]; TAP_EXPLOSION_WINDOW_COUNT]);
         self.column_flashes.fill(None);
         self.mine_explosions.fill(None);
+        self.hold_flash_emitters
+            .fill(HoldFlashEmitterState::default());
         self.tap_mask = 0;
         self.flash_mask = 0;
         self.mine_mask = 0;

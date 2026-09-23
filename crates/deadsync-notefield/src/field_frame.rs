@@ -1974,6 +1974,158 @@ mod note_layer_tests {
 }
 
 #[cfg(test)]
+mod note_rotation_tests {
+    use super::*;
+    use deadsync_noteskin::{ModelDrawState, ModelMesh, SpriteDefinition};
+
+    struct RotatedSlot {
+        def: SpriteDefinition,
+        draw: ModelDrawState,
+    }
+
+    impl RotatedSlot {
+        fn new(base_rotation_z: i32, rotation_z: f32) -> Self {
+            Self {
+                def: SpriteDefinition {
+                    size: [64, 64],
+                    rotation_deg: base_rotation_z,
+                    ..SpriteDefinition::default()
+                },
+                draw: ModelDrawState {
+                    rot: [0.0, 0.0, rotation_z],
+                    ..ModelDrawState::default()
+                },
+            }
+        }
+    }
+
+    impl NoteskinSlot for RotatedSlot {
+        fn sprite_def(&self) -> &SpriteDefinition {
+            &self.def
+        }
+        fn source_size(&self) -> [i32; 2] {
+            [64, 64]
+        }
+        fn texture_key_shared(&self) -> Arc<str> {
+            Arc::from("layer")
+        }
+        fn model(&self) -> Option<&ModelMesh> {
+            None
+        }
+        fn base_rot_sin_cos(&self) -> [f32; 2] {
+            deadsync_noteskin::neg_rot_sin_cos(self.def.rotation_deg)
+        }
+        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
+            0
+        }
+        fn frame_index_from_phase(&self, _phase: f32) -> usize {
+            0
+        }
+        fn uv_for_frame_at(&self, _frame: usize, _elapsed: f32) -> [f32; 4] {
+            [0.0, 0.0, 1.0, 1.0]
+        }
+        fn model_draw_at(&self, _time: f32, _beat: f32) -> ModelDrawState {
+            self.draw
+        }
+        fn model_glow_with_draw(
+            &self,
+            _draw: ModelDrawState,
+            _time: f32,
+            _beat: f32,
+            _alpha: f32,
+        ) -> Option<[f32; 4]> {
+            None
+        }
+        fn model_uv_params(&self, uv: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+            ([uv[2] - uv[0], uv[3] - uv[1]], [uv[0], uv[1]], [0.0; 2])
+        }
+    }
+
+    fn screen_turns(draws: &[FlatDraw]) -> Vec<f32> {
+        // DeadSync's world is y-up, so ITG's clockwise degrees are negated.
+        draws
+            .iter()
+            .map(|draw| match draw {
+                FlatDraw::Sprite(sprite) => (-sprite.rot_z_deg).rem_euclid(360.0),
+                draw => panic!("expected a sprite, got {draw:?}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn framed_mines_turn_like_itgmania_and_the_taps_in_their_column() {
+        let source = |slot: &RotatedSlot| SpriteSource::Texture(slot.texture_key_shared());
+        // SCH-CLASSIC-RAINBOW rotates Tap Note and Tap Mine by L90/D0/U180/R-90;
+        // its mine's spark adds rotationz L90/D0/U180/R90 inside the frame.
+        for (base, spark_rotation_z, itg_body, itg_spark) in [
+            (90, 90.0, 90.0, 180.0),
+            (0, 0.0, 0.0, 0.0),
+            (180, 180.0, 180.0, 0.0),
+            (-90, 90.0, 270.0, 0.0),
+        ] {
+            let tap = RotatedSlot::new(base, 0.0);
+            let mut tap_draws = Vec::new();
+            compose_flat_noteskin_layer(
+                &mut tap_draws,
+                &mut ModelMeshCache::default(),
+                &tap,
+                [0.0, 0.0],
+                1.0,
+                0.0,
+                [0.0, 0.0],
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                [1.0; 4],
+                0.0,
+                0,
+                0.0,
+                false,
+                &source,
+            );
+            let fill = RotatedSlot::new(base, 0.0);
+            let spark = RotatedSlot::new(base, spark_rotation_z);
+            let mut mine_draws = Vec::new();
+            compose_flat_mine_layers(
+                &mut mine_draws,
+                &mut ModelMeshCache::default(),
+                MineLayerRequest {
+                    fill_slot: Some(&fill),
+                    gradient_slot: None,
+                    frame_slot: Some(&spark),
+                    gradient_size_ratio: 0.0,
+                    center: [0.0, 0.0],
+                    mine_uv_phase: 0.0,
+                    mine_fill_phase: 0.0,
+                    elapsed_s: 0.0,
+                    display_time_s: 0.0,
+                    current_beat: 0.0,
+                    uv_translation: [0.0, 0.0],
+                    rotation_y_deg: 0.0,
+                    note_rotation_z_deg: 0.0,
+                    alpha: 1.0,
+                    glow_alpha: 0.0,
+                    note_z: 0,
+                    world_z: 0.0,
+                    prefer_sprite: false,
+                },
+                &|_| [64.0, 64.0],
+                &source,
+            );
+
+            assert_eq!(screen_turns(&tap_draws), [itg_body], "tap, base {base}");
+            assert_eq!(
+                screen_turns(&mine_draws),
+                [itg_body, itg_spark],
+                "mine body and spark, base {base}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod camera_wrap_tests {
     use super::{actor_from_flat_draw, finish_field_camera, measure_cue_range_search_enabled};
     use deadlib_present::actors::{

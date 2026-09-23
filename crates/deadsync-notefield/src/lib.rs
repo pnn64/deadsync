@@ -119,9 +119,8 @@ use holds::{
     TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
     hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
     hold_head_part_for_roll, hold_segment_bounds, hold_strip_draw, hold_strip_glow_draw,
-    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds,
-    maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
-    top_cap_rotation_deg,
+    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, scale_cap_to_arrow,
+    song_time_ns_delta_seconds,
 };
 pub use measure_actors::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER;
 #[cfg(test)]
@@ -227,21 +226,19 @@ mod tests {
         hold_parts_for_note_type, hold_segment_bounds, hold_strip_draw, hold_strip_glow_draw,
         hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, lane_note_transform_cache,
-        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
-        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_x_extra, note_x_offset,
-        notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
+        judgment_tilt_rotation_deg, lane_note_transform_cache, mine_hides_after_resolution,
+        mine_part, mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_x_extra,
+        note_x_offset, notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
         quantize_centi_i32, quantize_centi_u32, quantize_step, receptor_row_center, rgba8,
         scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, share_actor_range,
         signed_effect_active, sm_scale, smoothstep01, song_time_ns_delta_seconds,
         song_time_ns_to_seconds, tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
-        timing_window_from_num, tiny_spacing_scale, tipsy_y_extra, top_cap_rotation_deg,
-        tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
-        visual_confusion_rotation_deg, visual_effect_params_for_col,
-        visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-        visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
-        visual_use_legacy_hold_sprites, zmod_broken_run_counter_text, zmod_broken_run_end,
-        zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
+        timing_window_from_num, tiny_spacing_scale, tipsy_y_extra, tornado_x_extra,
+        translated_uv_rect, visual_arrow_effect_zoom, visual_confusion_rotation_deg,
+        visual_effect_params_for_col, visual_hold_body_needs_z_buffer,
+        visual_hold_head_rotation_z_cached, visual_pulse_inner_zoom, visual_pulse_zoom_for_y,
+        visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_counter_text,
+        zmod_broken_run_end, zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
         zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
         zmod_indicator_detailed_color, zmod_layout_ys, zmod_measure_counter_text,
         zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_pacemaker_color,
@@ -780,30 +777,6 @@ mod tests {
             translated_uv_rect([0.1, 0.2, 0.3, 0.4], [0.5, -0.1]),
             [0.6, 0.1, 0.8, 0.3]
         );
-    }
-
-    #[test]
-    fn reverse_flipped_cap_uv_only_mirrors_when_both_flags_are_enabled() {
-        let uv = [0.125, 0.25, 0.75, 0.875];
-        assert_eq!(
-            maybe_mirror_uv_horiz_for_reverse_flipped(uv, true, true),
-            [0.75, 0.25, 0.125, 0.875]
-        );
-        assert_eq!(
-            maybe_mirror_uv_horiz_for_reverse_flipped(uv, true, false),
-            uv
-        );
-        assert_eq!(
-            maybe_mirror_uv_horiz_for_reverse_flipped(uv, false, true),
-            uv
-        );
-    }
-
-    #[test]
-    fn reverse_flipped_top_cap_rotation_matches_itg_parity_path() {
-        assert!((top_cap_rotation_deg(true, true) - 180.0).abs() <= f32::EPSILON);
-        assert!((top_cap_rotation_deg(true, false) - 0.0).abs() <= f32::EPSILON);
-        assert!((top_cap_rotation_deg(false, true) - 0.0).abs() <= f32::EPSILON);
     }
 
     #[test]

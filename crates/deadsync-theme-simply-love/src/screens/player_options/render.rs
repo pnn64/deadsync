@@ -1891,12 +1891,16 @@ fn draw_receptor_note(
     let beat = state.preview_beat;
     let pulse = skin.receptor_pulse.color_for_beat(beat);
     let idle = skin.receptor_idle_glow.alpha(beat, false);
+    // ITGmania's options screen keeps the song's sample music playing, which
+    // is past the song's lead-in, so a beat-state receptor only pulses there.
+    let target = skin
+        .receptor_beat_frames
+        .get(col)
+        .and_then(Option::as_ref)
+        .map(|frames| frames.at(beat, f32::NEG_INFINITY))
+        .or_else(|| skin.receptor_off.get(col));
     for (index, slot, color) in [
-        (
-            0,
-            skin.receptor_off.get(col),
-            [pulse[0], pulse[1], pulse[2], pulse[3] * alpha],
-        ),
+        (0, target, [pulse[0], pulse[1], pulse[2], pulse[3] * alpha]),
         (
             1,
             skin.receptor_idle_glow_layers

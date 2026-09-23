@@ -44,6 +44,10 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
             for slot in &skin.receptor_off {
                 add(slot);
             }
+            for frames in skin.receptor_beat_frames.iter().flatten() {
+                add(&frames.on_beat);
+                add(&frames.off_beat);
+            }
             for slot in skin
                 .receptor_glow
                 .iter()

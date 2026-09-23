@@ -196,6 +196,29 @@ impl CompiledActors {
         let key = actor_manifest_key(search_dirs, path)?;
         self.find(&key).map(|file| &file.decl)
     }
+
+    /// The file as loaded for `button`, when its commands depend on the button.
+    #[must_use]
+    pub fn decl_for_button_path(
+        &self,
+        search_dirs: &[PathBuf],
+        path: &Path,
+        button: &str,
+    ) -> Option<noteskin_actor::ItgLuaActorDecl> {
+        let key = actor_manifest_key(search_dirs, path)?;
+        self.find(&button_actor_key(&key, button))
+            .or_else(|| self.find(&key))
+            .map(|file| file.decl.clone())
+    }
+}
+
+/// Key of an actor file's variant for one button, stored beside the file's
+/// own key when the button changes its commands.
+#[must_use]
+pub fn button_actor_key(key: &str, button: &str) -> String {
+    let mut key = format!("{key}#{button}");
+    key.make_ascii_lowercase();
+    key
 }
 
 #[must_use]

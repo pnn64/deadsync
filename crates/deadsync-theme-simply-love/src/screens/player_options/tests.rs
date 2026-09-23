@@ -2179,6 +2179,73 @@ pub(super) mod tests {
         }
     }
 
+    #[test]
+    fn beat_state_receptor_preview_pulses_without_its_pre_start_frame() {
+        use deadsync_noteskin::ReceptorBeatFrames;
+        ensure_i18n();
+        let (mut state, _) = setup_versus_state();
+        let base = deadsync_assets::noteskin::load_itg_skin_cached(
+            &deadsync_noteskin::Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            "cel",
+        )
+        .unwrap();
+        let frame = |shift: f32| {
+            let mut slot = base.receptor_off[0].clone();
+            slot.uv_offset[0] += shift;
+            slot
+        };
+        let (on_beat, off_beat, before_start) = (frame(0.25), frame(0.5), frame(0.75));
+        let mut beat_state = (*base).clone();
+        beat_state.receptor_off[0] = before_start.clone();
+        beat_state.receptor_beat_frames[0] = Some(ReceptorBeatFrames {
+            on_beat: on_beat.clone(),
+            off_beat: off_beat.clone(),
+            before_start,
+        });
+        state
+            .noteskin
+            .cache
+            .insert("beat-state".to_string(), Arc::new(beat_state));
+        let draw = |state: &super::State, name: &str| {
+            let mut actors = Vec::new();
+            super::super::render::draw_live_preview(
+                &mut actors,
+                state,
+                name,
+                1,
+                [100.0, 100.0],
+                32.0,
+                1.0,
+                102,
+            );
+            format!("{actors:?}")
+        };
+
+        let mut drawn = Vec::new();
+        for (beat, expected) in [
+            (0.0, &on_beat),
+            (0.05, &on_beat),
+            (0.5, &off_beat),
+            (0.95, &on_beat),
+            (1.3, &off_beat),
+        ] {
+            state.preview_beat = beat;
+            let mut single = (*base).clone();
+            single.receptor_off[0] = expected.clone();
+            state
+                .noteskin
+                .cache
+                .insert("single".to_string(), Arc::new(single));
+            let actual = draw(&state, "beat-state");
+            assert_eq!(actual, draw(&state, "single"), "preview beat {beat}");
+            drawn.push(actual);
+        }
+        assert_ne!(drawn[0], drawn[2], "lit and dark frames differ");
+    }
+
     fn check_mine_preview(state: &mut super::State, name: &str) {
         let mut first_frame = None;
         let mut animated = false;

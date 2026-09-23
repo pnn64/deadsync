@@ -260,6 +260,11 @@ where
             .clamp(-100, 100) as f32
             / 1000.0
     });
+    // The song's first second, like the loaded chart timing, carries only the
+    // global offset: map it back before the pack and per-player shifts.
+    let song_first_beat = gameplay_charts[0]
+        .timing
+        .get_beat_for_time(song.precise_first_second());
     let mut timing_base = gameplay_charts[0].timing.clone();
     timing_base.shift_song_offset_seconds(pack_sync_offset_seconds);
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
@@ -1066,6 +1071,7 @@ where
         timing_runtime: GameplayTimingRuntimeState {
             timing,
             timing_players,
+            song_first_beat,
             time_to_beat_caches,
             timing_profile,
             step_resolution_distance_ns,

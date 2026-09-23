@@ -85,6 +85,9 @@ pub struct NotefieldChartView<'a> {
     pub visible_beat: f32,
     pub is_in_delay: bool,
     pub search_beat: f32,
+    /// ITGmania `Song::GetFirstBeat`: the earliest step across the song's
+    /// charts, in beats that no offset moves.
+    pub song_first_beat: f32,
     pub scroll_reference_bpm: f32,
     pub music_rate: f32,
     pub note_count_stats: &'a [NoteCountStat],
@@ -588,6 +591,7 @@ mod tests {
             visible_beat: 0.0,
             is_in_delay: false,
             search_beat: 0.0,
+            song_first_beat: 0.0,
             scroll_reference_bpm: 120.0,
             music_rate: 1.0,
             note_count_stats: &[],

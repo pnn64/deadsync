@@ -1,6 +1,7 @@
-// Frozen from 66b76b17c (0.5.1205). Only imports/visibility adapted.
+// Frozen from 66b76b17c (0.5.1205). Only imports/visibility adapted, and tap
+// explosion actors follow GhostArrowRow (own commands only, no metrics).
 use super::super::*;
-use crate::explosion::parse_itg_tap_explosion_animation;
+use crate::explosion::{itg_script_finishes_tweening, parse_itg_tap_explosion_animation};
 
 pub fn itg_hold_visuals_from_parts<T: Clone>(parts: HoldVisualParts<T>) -> HoldVisuals<T> {
     let head_active_layers = if parts.head_active.is_some() {
@@ -129,6 +130,15 @@ fn itg_tap_explosion_matches<'a, T>(
 pub(super) fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
     dim_sprites: Vec<ItgTapExplosionSource<T>>,
     bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+) -> TapExplosionMap<T> {
+    tap_explosion_map_from_partitioned_sources(dim_sprites, bright_sprites, false, metric_command)
+}
+
+fn tap_explosion_map_from_partitioned_sources<T: Clone>(
+    dim_sprites: Vec<ItgTapExplosionSource<T>>,
+    bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    actor_sources: bool,
     mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
     if dim_sprites.is_empty() && bright_sprites.is_empty() {
@@ -163,16 +173,25 @@ pub(super) fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
             let mut layers = SmallVec::new();
             let mut add_source = |matched: &ItgTapExplosionMatch<'_, T>| {
                 let fallback;
-                let command = if let Some(command) = matched.direct_command {
-                    command
-                } else {
-                    let Some(command) = metric_command(matched.source.mode, metric_key) else {
-                        return;
-                    };
-                    fallback = command;
-                    fallback.as_str()
+                let command = match matched.direct_command {
+                    Some(command) => command,
+                    None if actor_sources => "",
+                    None => {
+                        let Some(command) = metric_command(matched.source.mode, metric_key) else {
+                            return;
+                        };
+                        fallback = command;
+                        fallback.as_str()
+                    }
                 };
-                if command.trim().is_empty() {
+                let plays_mode_command = actor_sources
+                    && window != "Miss"
+                    && matched
+                        .source
+                        .commands
+                        .get(mode.command_key())
+                        .is_some_and(|command| !command.trim().is_empty());
+                if command.trim().is_empty() && !plays_mode_command {
                     return;
                 }
                 layers.push(TapExplosionLayer {
@@ -195,6 +214,24 @@ pub(super) fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
             } else {
                 for matched in &fallback_matches {
                     add_source(matched);
+                }
+            }
+            if layers.is_empty() && actor_sources && window != "Miss" {
+                for source in preferred.iter().chain(fallback_sprites.iter()) {
+                    if !source
+                        .commands
+                        .get("judgmentcommand")
+                        .is_some_and(|command| itg_script_finishes_tweening(command))
+                    {
+                        continue;
+                    }
+                    let animation = parse_itg_tap_explosion_animation(source, mode, "");
+                    if animation.ends_invisible() {
+                        layers.push(TapExplosionLayer {
+                            slot: source.payload.clone(),
+                            animation,
+                        });
+                    }
                 }
             }
             if let Some(explosion) = TapExplosion::from_inline_layers(layers) {
@@ -222,7 +259,11 @@ fn itg_partition_tap_explosion_layers<L, T>(
     mut layer_has_tap_command: impl FnMut(&L) -> bool,
     mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
-) -> (Vec<ItgTapExplosionSource<T>>, Vec<ItgTapExplosionSource<T>>) {
+) -> (
+    Vec<ItgTapExplosionSource<T>>,
+    Vec<ItgTapExplosionSource<T>>,
+    bool,
+) {
     let mut dim_sources = Vec::new();
     let mut bright_sources = Vec::new();
     let mut has_actor_sources = false;
@@ -248,7 +289,7 @@ fn itg_partition_tap_explosion_layers<L, T>(
             }
         }
     }
-    (dim_sources, bright_sources)
+    (dim_sources, bright_sources, has_actor_sources)
 }
 
 pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
@@ -258,12 +299,20 @@ pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
-    let (dim_sources, bright_sources) = itg_partition_tap_explosion_layers(
+    let (dim_sources, bright_sources, actor_sources) = itg_partition_tap_explosion_layers(
         explosion_layers,
         &mut layer_has_tap_command,
         &mut direct_layers,
         &mut source_from_layer,
     );
+    if actor_sources {
+        return tap_explosion_map_from_partitioned_sources(
+            dim_sources,
+            bright_sources,
+            true,
+            |_, _| None,
+        );
+    }
     itg_tap_explosion_map_from_partitioned_sources(dim_sources, bright_sources, metric_command)
 }
 
@@ -360,6 +409,7 @@ pub(super) fn itg_noteskin_runtime_selected<T: Clone>(
         note_layers,
         lift_note_layers,
         receptor_off,
+        receptor_beat_frames,
         receptor_glow,
         receptor_idle_glow_layers,
         receptor_off_reverse,
@@ -519,6 +569,7 @@ pub(super) fn itg_noteskin_runtime_selected<T: Clone>(
         note_layers,
         lift_note_layers,
         receptor_off,
+        receptor_beat_frames,
         receptor_glow,
         receptor_idle_glow_layers,
         receptor_off_reverse,
@@ -527,9 +578,11 @@ pub(super) fn itg_noteskin_runtime_selected<T: Clone>(
         receptor_step_behaviors,
         tap_explosions,
         tap_explosions_by_col,
+        mine_hit_ends_tap_explosion: false,
         mine_hit_explosion,
         hold,
         roll,
+        hold_flash_emitters: Vec::new(),
         mine_fill_slots,
         mines,
         mine_frames,

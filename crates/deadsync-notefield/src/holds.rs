@@ -517,6 +517,7 @@ fn compose_hold_sprite<S, F>(
     if !diffuse_visible && !glow_visible {
         return;
     }
+    let [u0, v0, u1, v1] = pass.uv;
     let mut sprite = FlatSprite {
         center: pass.center,
         world_z: pass.world_z,
@@ -529,9 +530,11 @@ fn compose_hold_sprite<S, F>(
             pass.diffuse[3] * pass.alpha,
         ],
         glow: [1.0, 1.0, 1.0, 0.0],
-        uv_rect: pass.uv,
-        flip_x: false,
-        flip_y: false,
+        // A flat sprite samples only the extent of its UV rect, so a reversed
+        // range, such as a part flipped for Reverse, must become a flip.
+        uv_rect: [u0.min(u1), v0.min(v1), u0.max(u1), v0.max(v1)],
+        flip_x: u0 > u1,
+        flip_y: v0 > v1,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
         rot_y_deg: pass.rotation_y_deg,
@@ -1263,15 +1266,11 @@ fn compose_top_cap<S, F, P>(
     } else {
         request.elapsed_s
     };
-    let uv = maybe_mirror_uv_horiz_for_reverse_flipped(
-        maybe_flip_uv_vert(
-            translated_uv_rect(
-                slot.uv_for_frame_at(frame, uv_elapsed),
-                request.top_cap_uv_translation,
-            ),
-            request.body_flipped,
+    let uv = maybe_flip_uv_vert(
+        translated_uv_rect(
+            slot.uv_for_frame_at(frame, uv_elapsed),
+            request.top_cap_uv_translation,
         ),
-        request.lane_reverse,
         request.body_flipped,
     );
     let [u0, v0, u1, mut v1] = uv;
@@ -1359,7 +1358,7 @@ fn compose_top_cap<S, F, P>(
                 size: [cap_width, draw_height],
                 uv: [u0, v0, u1, v1],
                 rotation_y_deg: request.rotation_y_deg,
-                rotation_z_deg: top_cap_rotation_deg(request.lane_reverse, request.body_flipped),
+                rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
                 glow,
@@ -1518,15 +1517,11 @@ fn compose_bottom_cap<S, F, P>(
     } else {
         request.elapsed_s
     };
-    let uv = maybe_mirror_uv_horiz_for_reverse_flipped(
-        maybe_flip_uv_vert(
-            translated_uv_rect(
-                slot.uv_for_frame_at(frame, uv_elapsed),
-                request.bottom_cap_uv_translation,
-            ),
-            request.body_flipped,
+    let uv = maybe_flip_uv_vert(
+        translated_uv_rect(
+            slot.uv_for_frame_at(frame, uv_elapsed),
+            request.bottom_cap_uv_translation,
         ),
-        request.lane_reverse,
         request.body_flipped,
     );
     let [u0, base_v0, u1, base_v1] = uv;
@@ -1655,27 +1650,6 @@ pub(crate) const fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4]
         uv.swap(1, 3);
     }
     uv
-}
-
-pub(crate) const fn maybe_mirror_uv_horiz_for_reverse_flipped(
-    mut uv: [f32; 4],
-    lane_reverse: bool,
-    body_flipped: bool,
-) -> [f32; 4] {
-    if lane_reverse && body_flipped {
-        let tmp = uv[0];
-        uv[0] = uv[2];
-        uv[2] = tmp;
-    }
-    uv
-}
-
-pub(crate) const fn top_cap_rotation_deg(lane_reverse: bool, body_flipped: bool) -> f32 {
-    if lane_reverse && body_flipped {
-        180.0
-    } else {
-        0.0
-    }
 }
 
 pub(crate) fn scale_effect_size(
@@ -2731,7 +2705,9 @@ mod tests {
     }
 
     #[test]
-    fn reverse_flipped_caps_preserve_uv_mirror_and_top_rotation() {
+    fn reverse_flipped_caps_flip_vertically_like_itg() {
+        // NoteDisplay::DrawHoldPart only swaps the texture rect's top and
+        // bottom: no horizontal mirror and no rotation, for asymmetric art too.
         let top = TestSlot::sprite("top");
         let bottom = TestSlot::sprite("bottom");
         let mut request = body_cap_request(None, Some(&top), Some(&bottom));
@@ -2753,29 +2729,112 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 4);
-        let FlatDraw::Sprite(FlatSprite {
-            uv_rect: top_uv,
-            rot_z_deg: top_rotation,
-            ..
-        }) = &actors[0]
-        else {
-            panic!("top cap should use reverse-safe sprite fallback");
-        };
-        let FlatDraw::Sprite(FlatSprite {
-            uv_rect: bottom_uv,
-            rot_z_deg: bottom_rotation,
-            ..
-        }) = &actors[2]
-        else {
-            panic!("bottom cap should use reverse-safe sprite fallback");
-        };
-        for actual in [*top_uv, *bottom_uv] {
-            for (actual, expected) in actual.into_iter().zip([0.91, 0.82, 0.11, 0.22]) {
-                assert!((actual - expected).abs() <= 1e-6);
+        for index in [0, 2] {
+            let FlatDraw::Sprite(sprite) = &actors[index] else {
+                panic!("reverse cap should be a sprite");
+            };
+            for (actual, expected) in sprite.uv_rect.into_iter().zip([0.11, 0.22, 0.91, 0.82]) {
+                assert!((actual - expected).abs() <= 1e-6, "{:?}", sprite.uv_rect);
+            }
+            assert_eq!((sprite.flip_x, sprite.flip_y), (false, true));
+            assert_eq!(sprite.rot_z_deg, 0.0);
+        }
+
+        let mut request = body_cap_request(None, Some(&top), None);
+        request.body_flipped = true;
+        request.lane_reverse = true;
+        request.use_legacy_sprites = false;
+        let mut draws = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
+        compose_hold_body_caps(
+            &mut draws,
+            &mut mesh_scratch,
+            request,
+            &straight_path,
+            &test_source,
+        );
+        let vertices = reusable_vertices(&draws[0]);
+        let top_y = vertices
+            .iter()
+            .map(|vertex| vertex.pos[1])
+            .fold(f32::INFINITY, f32::min);
+        let top_left = vertices
+            .iter()
+            .filter(|vertex| vertex.pos[1] == top_y)
+            .min_by(|a, b| a.pos[0].total_cmp(&b.pos[0]))
+            .unwrap();
+        assert_eq!(top_left.uv, [0.1, 0.8]);
+    }
+
+    #[test]
+    fn hold_sprite_turns_a_reversed_uv_range_into_a_flip() {
+        let slot = TestSlot::sprite("flipped");
+        for (uv, flips) in [
+            ([0.1, 0.8, 0.9, 0.2], (false, true)),
+            ([0.9, 0.2, 0.1, 0.8], (true, false)),
+            ([0.9, 0.8, 0.1, 0.2], (true, true)),
+        ] {
+            let mut draws = Vec::new();
+            compose_hold_sprite(
+                &mut draws,
+                HoldSpritePass {
+                    slot: &slot,
+                    center: [0.0, 0.0],
+                    size: [64.0, 64.0],
+                    uv,
+                    rotation_y_deg: 0.0,
+                    rotation_z_deg: 0.0,
+                    diffuse: [1.0; 4],
+                    alpha: 1.0,
+                    glow: 0.0,
+                    diffuse_z: 110,
+                    glow_z: 111,
+                    world_z: 0.0,
+                },
+                &test_source,
+            );
+            let [FlatDraw::Sprite(sprite)] = draws.as_slice() else {
+                panic!("expected one hold sprite");
+            };
+            assert_eq!(sprite.uv_rect, [0.1, 0.2, 0.9, 0.8]);
+            assert_eq!((sprite.flip_x, sprite.flip_y), flips);
+        }
+    }
+
+    #[test]
+    fn reverse_flipped_legacy_body_flips_vertically_like_the_mesh_body() {
+        let body = TestSlot::sprite("body");
+        for flipped in [false, true] {
+            let mut request = body_cap_request(Some(&body), None, None);
+            request.y_tail = 292.0;
+            request.draw_span = Some((100.0, 292.0));
+            request.body_flipped = flipped;
+            request.lane_reverse = flipped;
+            request.top_anchor_reverse = true;
+            let mut draws = Vec::new();
+            compose_hold_body_caps(
+                &mut draws,
+                &mut HoldMeshScratch::default(),
+                request,
+                &straight_path,
+                &test_source,
+            );
+            let sprites: Vec<_> = draws
+                .iter()
+                .map(|draw| {
+                    let FlatDraw::Sprite(sprite) = draw else {
+                        panic!("legacy body should be sprites");
+                    };
+                    sprite
+                })
+                .collect();
+            assert_eq!(sprites.len(), 6, "three segments with diffuse and glow");
+            for sprite in sprites {
+                assert!(sprite.uv_rect[1] <= sprite.uv_rect[3]);
+                assert_eq!((sprite.flip_x, sprite.flip_y), (false, flipped));
             }
         }
-        assert_eq!(*top_rotation, 180.0);
-        assert_eq!(*bottom_rotation, 0.0);
     }
 
     #[test]
@@ -2865,7 +2924,7 @@ mod tests {
                     &test_source,
                 );
                 assert_eq!(draws.len(), 4);
-                let [mut u0, mut v0, mut u1, mut v1] = [
+                let [u0, mut v0, u1, mut v1] = [
                     0.1_f32 + 0.01,
                     0.2_f32 + 0.02,
                     0.9_f32 + 0.01,
@@ -2874,15 +2933,13 @@ mod tests {
                 if flipped {
                     std::mem::swap(&mut v0, &mut v1);
                 }
-                if reverse && flipped {
-                    std::mem::swap(&mut u0, &mut u1);
-                }
                 let top_uv = [u0, v0, u1, (v1 - v0).mul_add(-(20.0 / 64.0), v1)];
                 let bottom_uv = if reverse {
                     [u0, v0, u1, (v1 - v0).mul_add(45.0 / 64.0, v0)]
                 } else {
                     [u0, (v1 - v0).mul_add(-(45.0 / 64.0), v1), u1, v1]
                 };
+                let as_drawn = |[u0, v0, u1, v1]: [f32; 4]| [u0, v0.min(v1), u1, v0.max(v1)];
                 for (index, draw) in draws.iter().enumerate() {
                     let FlatDraw::Sprite(sprite) = draw else {
                         panic!("cap sprite")
@@ -2895,7 +2952,11 @@ mod tests {
                     assert_eq!(sprite.source.texture_key(), Some(key));
                     assert_eq!(sprite.size, size);
                     assert_eq!(sprite.center, center);
-                    assert_eq!(sprite.uv_rect.map(f32::to_bits), uv.map(f32::to_bits));
+                    assert_eq!(
+                        sprite.uv_rect.map(f32::to_bits),
+                        as_drawn(uv).map(f32::to_bits)
+                    );
+                    assert_eq!((sprite.flip_x, sprite.flip_y), (false, flipped));
                     assert_eq!(sprite.z, if index % 2 == 0 { 110 } else { 111 });
                     assert_eq!(sprite.blend, BlendMode::Alpha);
                     assert_eq!(

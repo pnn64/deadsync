@@ -655,6 +655,11 @@ where
     }
 
     #[inline(always)]
+    pub const fn song_first_beat(&self) -> f32 {
+        self.timing_runtime.song_first_beat
+    }
+
+    #[inline(always)]
     pub fn music_time_for_beat(&self, beat: f32) -> f32 {
         self.timing_runtime.timing.get_time_for_beat(beat)
     }
@@ -1452,6 +1457,17 @@ where
         self.display
             .visual_feedback
             .mine_explosions(col_start, num_cols)
+    }
+
+    #[inline(always)]
+    pub fn hold_flash_emitters_for_columns(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[HoldFlashEmitterState] {
+        self.display
+            .visual_feedback
+            .hold_flash_emitters(col_start, num_cols)
     }
 
     #[inline(always)]
