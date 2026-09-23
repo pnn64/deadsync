@@ -1224,12 +1224,7 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
 }
 
 fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: TextureHandle) {
-    let current = if texture.1.load(Ordering::Relaxed) {
-        SamplerFilter::Nearest
-    } else {
-        SamplerFilter::Linear
-    };
-    let Some(filter) = changed_render_target_filter(current, handle) else {
+    let Some(filter) = changed_render_target_filter(&texture.1, handle) else {
         return;
     };
     let gl_filter = match filter {
@@ -1249,12 +1244,17 @@ fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: Tex
 
 #[inline(always)]
 fn changed_render_target_filter(
-    current: SamplerFilter,
+    nearest: &AtomicBool,
     handle: TextureHandle,
 ) -> Option<SamplerFilter> {
     if !is_render_target_texture(handle) {
         return None;
     }
+    let current = if nearest.load(Ordering::Relaxed) {
+        SamplerFilter::Nearest
+    } else {
+        SamplerFilter::Linear
+    };
     let wanted = if render_target_uses_nearest(handle) {
         SamplerFilter::Nearest
     } else {
@@ -3522,6 +3522,7 @@ mod tests {
         surface_extent,
     };
     use deadlib_render_core::{render_target_sample_handle, render_target_texture_handle};
+    use std::sync::atomic::AtomicBool;
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
@@ -3537,23 +3538,27 @@ mod tests {
         let nearest = render_target_sample_handle(target, true);
 
         assert_eq!(
-            changed_render_target_filter(SamplerFilter::Linear, target),
+            changed_render_target_filter(&AtomicBool::new(false), target),
             None
         );
         assert_eq!(
-            changed_render_target_filter(SamplerFilter::Linear, nearest),
+            changed_render_target_filter(&AtomicBool::new(false), nearest),
             Some(SamplerFilter::Nearest)
         );
         assert_eq!(
-            changed_render_target_filter(SamplerFilter::Nearest, nearest),
+            changed_render_target_filter(&AtomicBool::new(true), nearest),
             None
         );
         assert_eq!(
-            changed_render_target_filter(SamplerFilter::Nearest, target),
+            changed_render_target_filter(&AtomicBool::new(true), target),
             Some(SamplerFilter::Linear)
         );
         assert_eq!(
-            changed_render_target_filter(SamplerFilter::Linear, 42),
+            changed_render_target_filter(&AtomicBool::new(false), 42),
+            None
+        );
+        assert_eq!(
+            changed_render_target_filter(&AtomicBool::new(true), 42),
             None
         );
     }
