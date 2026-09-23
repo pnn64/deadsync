@@ -537,7 +537,6 @@ fn compose_field_contents<S, F>(
             tail_adjusted_travel,
         );
         let hold_parts = hold_plan.parts;
-        let hold_part_phase = hold_plan.head_phase;
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
@@ -661,10 +660,20 @@ fn compose_field_contents<S, F>(
         let head_center = [head_center_x, head_draw_y];
         let head_world_z = world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
         let elapsed = elapsed_screen;
+        let head_part = if head_slot.is_none() && head_layers.is_none() {
+            ns.head_fallback_part(matches!(note.note_type, NoteType::Roll), use_active)
+        } else {
+            hold_parts.head
+        };
+        let hold_part_phase = if head_part == hold_parts.head {
+            hold_plan.head_phase
+        } else {
+            note_part_phase_cached(note.beat, note_inputs.part_phase_caches[head_part as usize])
+        };
         let hold_head_translation = note_part_uv_translation_for_quantization(
             note.beat,
             note.quantization_idx,
-            ns.note_display_metrics.part_texture_translate[hold_parts.head as usize],
+            ns.note_display_metrics.part_texture_translate[head_part as usize],
             false,
         );
         let head_slot = head_slot.and_then(|slot| {

@@ -540,6 +540,7 @@ pub(super) fn itg_noteskin_runtime_selected<T: Clone>(
         receptor_pulse,
         column_xs,
         note_display_metrics,
+        custom_parts: Default::default(),
         part_animation_is_beat_based: [animation_is_beat_based; crate::NOTE_ANIM_PART_COUNT],
         hold_let_go_gray_percent,
     }

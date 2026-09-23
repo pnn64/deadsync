@@ -2662,6 +2662,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
         receptor_pulse,
         column_xs,
         note_display_metrics,
+        custom_parts: SkinParts::default(),
         part_animation_is_beat_based: [animation_is_beat_based; crate::NOTE_ANIM_PART_COUNT],
         hold_let_go_gray_percent,
     }
@@ -2852,6 +2853,9 @@ pub struct NoteskinRuntime<T> {
     pub roll_columns: Vec<HoldVisuals<T>>,
     pub hold: HoldVisuals<T>,
     pub roll: HoldVisuals<T>,
+    /// Components replaced after loading. Tap-backed heads in a mixed skin must
+    /// use the selected arrows' metrics, not the hold provider's texture layout.
+    pub custom_parts: SkinParts,
     pub part_animation_is_beat_based: [bool; crate::NOTE_ANIM_PART_COUNT],
     pub note_display_metrics: NoteDisplayMetrics,
 }
@@ -2910,6 +2914,7 @@ impl<T: Clone> NoteskinRuntime<T> {
     /// Copy a compiled component, retaining the base skin's column layout.
     pub fn apply_part(&mut self, source: &Self, part: SkinPart) {
         use SkinPart::*;
+        self.custom_parts = self.custom_parts.with(part);
         match part {
             Arrows => {
                 self.notes.clone_from(&source.notes);
@@ -3199,6 +3204,25 @@ impl<T> NoteskinRuntime<T> {
         self.part_uv_phase(NoteAnimPart::Tap, song_seconds, song_beat, note_beat)
     }
 
+    /// Metrics for a head that falls back to the tap graphics. Unmixed skins
+    /// retain ITG's separate head metrics, even when the graphics are shared.
+    #[must_use]
+    pub const fn head_fallback_part(&self, is_roll: bool, active: bool) -> NoteAnimPart {
+        let part = match (is_roll, active) {
+            (false, false) => SkinPart::HoldInactive,
+            (false, true) => SkinPart::HoldActive,
+            (true, false) => SkinPart::RollInactive,
+            (true, true) => SkinPart::RollActive,
+        };
+        if self.custom_parts.contains(SkinPart::Arrows) || self.custom_parts.contains(part) {
+            NoteAnimPart::Tap
+        } else if is_roll {
+            NoteAnimPart::RollHead
+        } else {
+            NoteAnimPart::HoldHead
+        }
+    }
+
     #[inline(always)]
     pub fn tap_mine_uv_phase(&self, song_seconds: f32, song_beat: f32, note_beat: f32) -> f32 {
         self.part_uv_phase(NoteAnimPart::Mine, song_seconds, song_beat, note_beat)
@@ -3366,8 +3390,8 @@ fn beat_to_note_type_index(beat: f32) -> i32 {
 mod tests {
     use super::{
         HoldVisualParts, HoldVisuals, ItgCompiledSpriteOps, ItgHoldKind, ItgResolvedSprite,
-        ItgRuntimeColumns, NoteskinRuntime, TapExplosion, TapExplosionLayer, TapExplosionMap,
-        bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
+        ItgRuntimeColumns, NoteskinRuntime, SkinParts, TapExplosion, TapExplosionLayer,
+        TapExplosionMap, bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
         itg_apply_child_actor_commands, itg_apply_hold_explosions_by_col, itg_apply_loader_command,
         itg_direct_tap_explosion_resolved_layers, itg_first_actor_sprite_slot,
         itg_first_resolved_slot_or_fallback, itg_hit_mine_explosion_from_layers,
@@ -5807,8 +5831,46 @@ mod tests {
             roll_columns: Vec::new(),
             hold: HoldVisuals::default(),
             roll: HoldVisuals::default(),
+            custom_parts: SkinParts::default(),
             part_animation_is_beat_based: [false; crate::NOTE_ANIM_PART_COUNT],
             note_display_metrics: NoteDisplayMetrics::default(),
+        }
+    }
+
+    #[test]
+    fn mixed_head_fallback_uses_arrow_metrics_per_state() {
+        use super::SkinPart;
+        let mut source = empty_runtime();
+        let tap = NoteAnimPart::Tap as usize;
+        source.note_display_metrics.part_animation[tap].length = 4.0;
+        source.part_animation_is_beat_based[tap] = true;
+        source.note_display_metrics.part_texture_translate[tap].note_color_spacing = [0.0, 0.125];
+        for changed in [
+            SkinPart::Arrows,
+            SkinPart::HoldActive,
+            SkinPart::HoldInactive,
+            SkinPart::RollActive,
+            SkinPart::RollInactive,
+            SkinPart::Receptors,
+        ] {
+            let mut mixed = source.clone();
+            mixed.apply_part(&source, changed);
+            for (is_roll, active, state, original) in [
+                (false, false, SkinPart::HoldInactive, NoteAnimPart::HoldHead),
+                (false, true, SkinPart::HoldActive, NoteAnimPart::HoldHead),
+                (true, false, SkinPart::RollInactive, NoteAnimPart::RollHead),
+                (true, true, SkinPart::RollActive, NoteAnimPart::RollHead),
+            ] {
+                assert_eq!(source.head_fallback_part(is_roll, active), original);
+                let part = mixed.head_fallback_part(is_roll, active);
+                if changed == SkinPart::Arrows || changed == state {
+                    assert_eq!(part, NoteAnimPart::Tap);
+                    assert_eq!(mixed.part_uv_phase(part, 0.5, 1.0, 8.5), 0.25);
+                    assert_eq!(mixed.part_uv_translation(part, 8.5, false), [0.0, 0.125]);
+                } else {
+                    assert_eq!(part, original);
+                }
+            }
         }
     }
 

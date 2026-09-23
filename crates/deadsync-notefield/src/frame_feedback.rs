@@ -604,6 +604,7 @@ mod tests {
             roll_columns: Vec::new(),
             hold: HoldVisuals::default(),
             roll: HoldVisuals::default(),
+            custom_parts: Default::default(),
             part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
             note_display_metrics: NoteDisplayMetrics::default(),
         }
@@ -1862,6 +1863,146 @@ mod tests {
                     format!("{draws:?}")
                 };
                 assert_eq!(render(&empty), render(&distant));
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_hold_heads_sample_the_selected_arrow_layout() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteAnimPart, runtime::SkinPart};
+        use deadsync_rules::note::HoldData;
+
+        let mut base = noteskin();
+        base.notes = vec![TestSlot::new("tap-head"); 2 * NUM_QUANTIZATIONS];
+        // HURG Dev TD Dark selects colors vertically; bundled Cel/Metal heads
+        // select them horizontally. The latter splits a HURG sprite cell in half.
+        base.note_display_metrics.part_texture_translate[NoteAnimPart::Tap as usize]
+            .note_color_spacing = [0.0, 0.125];
+        for part in [NoteAnimPart::HoldHead, NoteAnimPart::RollHead] {
+            base.note_display_metrics.part_texture_translate[part as usize].note_color_spacing =
+                [0.03125, 0.0];
+        }
+        base.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+        base.hold_columns[0].body_active = Some(TestSlot::new("body"));
+        base.roll_columns = base.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).unwrap()],
+            vec![],
+        ];
+
+        for layered in [false, true] {
+            for (mixed, explicit) in [(false, false), (true, false), (true, true)] {
+                let mut ns = base.clone();
+                if layered {
+                    ns.note_layers =
+                        vec![
+                            Arc::from([TestSlot::new("tap-head"), TestSlot::new("outline")]);
+                            2 * NUM_QUANTIZATIONS
+                        ];
+                }
+                if mixed {
+                    let arrows = ns.clone();
+                    ns.apply_part(&arrows, SkinPart::Arrows);
+                    // Hold selections are applied after arrows during song load.
+                    for part in [
+                        SkinPart::HoldActive,
+                        SkinPart::HoldInactive,
+                        SkinPart::RollActive,
+                        SkinPart::RollInactive,
+                    ] {
+                        ns.apply_part(&base, part);
+                    }
+                }
+                if explicit {
+                    for visuals in [&mut ns.hold_columns[0], &mut ns.roll_columns[0]] {
+                        visuals.head_active = Some(TestSlot::new("head"));
+                        visuals.head_inactive = Some(TestSlot::new("head"));
+                        if layered {
+                            let layers =
+                                Arc::from([TestSlot::new("head"), TestSlot::new("outline")]);
+                            visuals.head_active_layers = Some(Arc::clone(&layers));
+                            visuals.head_inactive_layers = Some(layers);
+                        }
+                    }
+                }
+                for (note_type, beat) in [
+                    (NoteType::Hold, 6.0),
+                    (NoteType::Hold, 9.0),
+                    (NoteType::Roll, 6.0),
+                    (NoteType::Roll, 9.0),
+                ] {
+                    let mut hold = note(0);
+                    hold.note_type = note_type;
+                    hold.beat = 8.5;
+                    hold.row_index = 408;
+                    hold.quantization_idx = 1;
+                    hold.hold = Some(HoldData {
+                        end_row_index: 576,
+                        end_beat: 12.0,
+                        result: None,
+                        life: 1.0,
+                        let_go_started_at: None,
+                        let_go_starting_life: 1.0,
+                        last_held_row_index: 408,
+                        last_held_beat: 8.5,
+                    });
+                    let notes = [hold];
+                    let mut request =
+                        request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                    request.chart.visible_beat = beat;
+                    request.chart.search_beat = beat;
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.lane_hold_indices = &lanes;
+                    request.chart.note_itg_rows = &[408];
+                    request.visual.current_display_beat = beat;
+                    let prepared = prepare_notefield(&request).unwrap();
+                    let mut active = active_hold(0);
+                    active.note_type = note_type;
+                    let mut feedback = spline_feedback(&[]);
+                    if beat > 8.5 {
+                        feedback.lanes[0].active_hold = Some(&active);
+                    }
+                    let frame = NotefieldFieldFrameView {
+                        feedback,
+                        completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(),
+                        &mut draws,
+                        &mut Vec::new(),
+                        &mut ModelMeshCache::default(),
+                        &mut HoldMeshScratch::default(),
+                        &mut CapturedActorScratch::with_capacities(32, 0),
+                        &mut NotefieldCameraCache::default(),
+                        &request,
+                        &prepared,
+                        &frame,
+                        &source,
+                    );
+                    let heads: Vec<_> = draws.iter().filter_map(|draw| match draw {
+                        FlatDraw::Sprite(sprite) if matches!(&sprite.source, SpriteSource::TextureHandle { key, .. } if matches!(key.as_ref(), "head" | "tap-head" | "outline")) => Some(sprite),
+                        _ => None,
+                    }).collect();
+                    assert_eq!(heads.len(), if layered { 2 } else { 1 });
+                    for head in heads {
+                        assert_eq!(
+                            head.uv_rect,
+                            if mixed && !explicit {
+                                [0.0, 0.125, 1.0, 1.125]
+                            } else {
+                                [0.03125, 0.0, 1.03125, 1.0]
+                            },
+                            "{note_type:?}, beat={beat}, layered={layered}, mixed={mixed}, explicit={explicit}"
+                        );
+                    }
+                }
             }
         }
     }
