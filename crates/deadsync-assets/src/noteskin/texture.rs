@@ -168,6 +168,9 @@ pub struct SpriteSlot {
     pub uv_velocity: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_cycle_seconds: Option<f32>,
+    /// Three-state beat receptor, activated eight beats before the first note.
+    /// The transition worker replaces the initial -8 with the song's threshold.
+    pub beat_receptor_start: Option<f32>,
     pub note_color_translate: bool,
     pub model: Option<Arc<ModelMesh>>,
     pub model_draw: ModelDrawState,
@@ -188,6 +191,7 @@ impl Clone for SpriteSlot {
             uv_velocity: self.uv_velocity,
             uv_offset: self.uv_offset,
             uv_cycle_seconds: self.uv_cycle_seconds,
+            beat_receptor_start: self.beat_receptor_start,
             note_color_translate: self.note_color_translate,
             model: self.model.clone(),
             model_draw: self.model_draw,
@@ -248,6 +252,13 @@ impl SpriteSlot {
 
     #[must_use]
     pub fn frame_index(&self, time: f32, beat: f32) -> usize {
+        if let Some(start) = self.beat_receptor_start {
+            return if beat < start {
+                2
+            } else {
+                usize::from((1.0..9.0).contains(&(beat * 10.0).rem_euclid(10.0)))
+            };
+        }
         match self.source.as_ref() {
             SpriteSource::Atlas { .. } => 0,
             SpriteSource::Animated {
@@ -519,6 +530,7 @@ pub fn test_model_slot() -> SpriteSlot {
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
+        beat_receptor_start: None,
         note_color_translate: false,
         model: Some(Arc::new(ModelMesh {
             vertices: Arc::from([ModelVertex {
@@ -729,6 +741,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
+        beat_receptor_start: None,
         note_color_translate: plan.note_color_translate,
         model: None,
         model_draw: ModelDrawState::default(),
@@ -969,6 +982,16 @@ pub fn itg_apply_state_properties_from_commands(
         itg_apply_sprite_animation_plan(slot, plan, beat_based);
     });
     itg_apply_initial_sprite_state(slot, commands);
+    if commands
+        .get(deadsync_noteskin::actor::ITG_ACTOR_UPDATE_COMMAND)
+        .is_some_and(|update| update == deadsync_noteskin::actor::ITG_BEAT_RECEPTOR_UPDATE)
+        && let Some(frames) =
+            itg_slot_from_path_all_frames(Path::new(slot.texture_key()), None, true)
+    {
+        slot.def.src = frames.def.src;
+        slot.source = frames.source;
+        slot.beat_receptor_start = Some(-8.0);
+    }
 }
 
 fn itg_apply_initial_sprite_state(

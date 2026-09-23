@@ -4619,6 +4619,9 @@ return Def.ActorFrame{}
                             session.play_style.cols_per_player(),
                             session.play_style.player_count(),
                             &runtime_profiles,
+                            song.simfile_path.parent().expect("song directory"),
+                            &[None, None],
+                            0.0,
                         );
                         let context = deadsync_profile_gameplay::song_lua_compile_context(
                             song.as_ref(),

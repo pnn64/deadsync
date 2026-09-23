@@ -1631,8 +1631,18 @@ pub fn merge_compile_info(out: &mut SongLuaCompileInfo, info: SongLuaCompileInfo
     }
 }
 
+/// Requests captured after script initialization, before timeline sampling.
+/// They apply only to this play and never modify persisted player preferences.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SongLuaStartup {
+    pub noteskins: [Option<String>; LUA_PLAYERS],
+    pub min_seconds_to_music: Option<f32>,
+    pub hide_in: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct CompiledSongLua<OverlayActor> {
+    pub startup: SongLuaStartup,
     pub entry_path: PathBuf,
     pub screen_width: f32,
     pub screen_height: f32,
@@ -1657,6 +1667,7 @@ pub struct CompiledSongLua<OverlayActor> {
 impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
     fn default() -> Self {
         Self {
+            startup: SongLuaStartup::default(),
             entry_path: PathBuf::new(),
             screen_width: 0.0,
             screen_height: 0.0,
@@ -5693,6 +5704,8 @@ return Def.ActorFrame{}
     #[test]
     fn compile_song_lua_exposes_player_noteskin_name() {
         let song_dir = test_dir("player-noteskin");
+        fs::create_dir_all(song_dir.join("lambda")).unwrap();
+        fs::write(song_dir.join("lambda/metrics.ini"), "[Global]\n").unwrap();
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
@@ -5701,7 +5714,11 @@ local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
 if string.lower(po:NoteSkin()) ~= "cyber" then
     error("unexpected NoteSkin getter: " .. tostring(po:NoteSkin()))
 end
-po:NoteSkin("lambda")
+local was, accepted = po:NoteSkin("lambda")
+assert(was == "cyber" and accepted == true)
+local before, rejected = po:NoteSkin("missing-skin")
+assert(before == "lambda" and rejected == nil)
+assert(po:NoteSkin("lambda", true) == po)
 if po:NoteSkin() ~= "lambda" then
     error("unexpected NoteSkin setter: " .. tostring(po:NoteSkin()))
 end
@@ -5729,6 +5746,45 @@ return Def.ActorFrame{}
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "lambda");
+        assert_eq!(
+            compiled.startup.noteskins,
+            [Some("lambda".to_string()), None]
+        );
+    }
+
+    #[test]
+    fn song_startup_ignores_late_noteskin_and_lead_in_changes() {
+        let song_dir = test_dir("startup-skin");
+        for skin in ["cel", "metal"] {
+            fs::create_dir_all(song_dir.join(skin)).unwrap();
+            fs::write(song_dir.join(skin).join("metrics.ini"), "[Global]\n").unwrap();
+        }
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Preferred")
+local top = SCREENMAN:GetTopScreen()
+top:SetMinSecondsToMusic(6.01)
+top:GetChild("In"):visible(false)
+return Def.ActorFrame {
+    OnCommand = function(self)
+        po:NoteSkin("cel")
+        self:SetUpdateFunction(function()
+            po:NoteSkin("metal")
+            top:SetMinSecondsToMusic(20)
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let context = SongLuaCompileContext::new(&song_dir, "Startup");
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.startup.noteskins[0].as_deref(), Some("cel"));
+        assert_eq!(compiled.startup.noteskins[1], None);
+        assert_eq!(compiled.startup.min_seconds_to_music, Some(6.01));
+        assert!(compiled.startup.hide_in);
     }
 
     #[test]
@@ -10286,6 +10342,7 @@ return Def.ActorFrame{
             panic!("expected sound overlay");
         };
         assert_eq!(sound_path, &song_dir.join("hit.ogg"));
+        assert_eq!(compiled.sound_paths, vec![song_dir.join("hit.ogg")]);
         assert!(
             compiled
                 .messages
@@ -15078,6 +15135,8 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_exposes_life_meter_and_health_state_helpers() {
         let song_dir = test_dir("life-meter-health-state");
+        fs::create_dir_all(song_dir.join("metal")).unwrap();
+        fs::write(song_dir.join("metal/metrics.ini"), "[Global]\n").unwrap();
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,

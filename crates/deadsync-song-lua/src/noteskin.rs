@@ -14,12 +14,31 @@ pub fn create_noteskin_table(
     resolver: SongLuaNoteskinResolver,
     create_actor: SongLuaActorFactory,
 ) -> mlua::Result<Table> {
-    noteskin_table_for_skin(
+    let table = noteskin_table_for_skin(
         lua,
         resolver,
         create_actor,
         song_lua_default_noteskin_name(context),
-    )
+    )?;
+    // Song-local skins are visible to this compile session only. Enumerate once
+    // at load time; NoteSkin setters in sampled callbacks perform no disk I/O.
+    let local_names: Vec<String> = std::fs::read_dir(&context.song_dir)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().join("metrics.ini").is_file())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    table.set(
+        "DoesNoteSkinExist",
+        lua.create_function(move |_, (_self, skin): (Table, String)| {
+            Ok(local_names
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&skin))
+                || resolver.exists(&skin))
+        })?,
+    )?;
+    Ok(table)
 }
 
 fn noteskin_table_for_skin(

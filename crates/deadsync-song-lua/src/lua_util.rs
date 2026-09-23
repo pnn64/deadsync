@@ -8971,6 +8971,18 @@ pub fn create_top_screen_table(
     children.set("LifeP2", life_meters[1].clone())?;
     children.set("LifeMeter", life_meters[0].clone())?;
     install_top_screen_theme_children(lua, &top_screen, create_named_child_actor)?;
+    top_screen.set(
+        "SetMinSecondsToMusic",
+        lua.create_function(|_, (screen, seconds): (Table, f32)| {
+            if !seconds.is_finite() || !(0.0..=60.0).contains(&seconds) {
+                return Err(mlua::Error::runtime(
+                    "music lead-in must be between 0 and 60 seconds",
+                ));
+            }
+            screen.raw_set("__songlua_min_seconds_to_music", seconds)?;
+            Ok(screen)
+        })?,
+    )?;
     let player_actors_for_get_child = player_actors.clone();
     let life_meters_for_get_child = life_meters.clone();
     let players_for_get_child = players.clone();

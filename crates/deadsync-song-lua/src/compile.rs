@@ -332,6 +332,9 @@ where
         )
     })?;
     compile_timer.push_stage("startup_commands");
+    // Later sampled callbacks must not retroactively change the skin/lead-in
+    // selected for the transition into gameplay.
+    let startup = read_startup(&lua, context).map_err(|err| err.to_string())?;
     run_actor_update_functions_with_delta(&lua, &root, 0.0).map_err(|err| {
         format!(
             "failed to run actor update functions for song lua session '{}': {err}",
@@ -347,6 +350,7 @@ where
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
+        startup,
         entry_path: entry_paths[primary_index].clone(),
         screen_width: context.screen_width,
         screen_height: context.screen_height,
@@ -883,6 +887,12 @@ where
 
     sort_compiled_song_lua(&mut out);
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
+    let mut seen = out
+        .sound_paths
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    crate::push_song_lua_overlay_sound_paths(&out.overlays, &mut seen, &mut out.sound_paths);
     compile_timer.push_stage("finalize");
     log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
     split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
@@ -1082,6 +1092,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
 
     let primary = &mut outputs[primary_index];
+    primary.startup = compiled.startup;
     primary.beat_mods = compiled.beat_mods;
     primary.time_mods = compiled.time_mods;
     primary.eases = compiled.eases;
@@ -1096,4 +1107,22 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         sort_compiled_song_lua(output);
     }
     Ok(outputs)
+}
+
+fn read_startup(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<crate::SongLuaStartup> {
+    let globals = lua.globals();
+    let mut startup = crate::SongLuaStartup::default();
+    for (index, key) in crate::SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
+        if context.players[index].enabled {
+            let options = globals.get::<Table>(*key)?;
+            startup.noteskins[index] = options.raw_get("__songlua_noteskin_override")?;
+        }
+    }
+    let screen = globals.get::<Table>("__songlua_top_screen")?;
+    startup.min_seconds_to_music = screen.raw_get("__songlua_min_seconds_to_music")?;
+    let children = crate::actor_children(lua, &screen)?;
+    if let Some(actor) = children.get::<Option<Table>>("In")? {
+        startup.hide_in = actor.get::<Option<bool>>("__songlua_visible")? == Some(false);
+    }
+    Ok(startup)
 }

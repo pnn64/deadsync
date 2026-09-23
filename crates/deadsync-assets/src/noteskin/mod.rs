@@ -225,6 +225,33 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
     load_itg_skin_parts(style, skin, None)
 }
 
+/// Load a chart's override on the transition worker. Song-local runtimes and
+/// compiled actors belong to that play only, so equal names in different songs
+/// never alias the session cache. Existing texture prewarming handles uploads.
+pub fn load_song_skin(
+    style: &Style,
+    song_dir: &Path,
+    skin: &str,
+    player_options: &str,
+) -> Result<Arc<Noteskin>, String> {
+    let game = style.game_name();
+    let roots = noteskin_roots();
+    if is_pack_skin(skin) {
+        return load_itg_skin_cached(style, skin);
+    }
+    let data = match noteskin_itg::load_noteskin_data_cached_from_roots(&roots, game, skin) {
+        Some(data) => data,
+        None => Arc::new(noteskin_itg::load_song_skin_data(
+            song_dir, &roots, game, skin,
+        )?),
+    };
+    // A loader can select different assets from the player's options. Keep
+    // that compiled selection per play even when the source skin is installed.
+    let bundle = noteskin_compiler::compile_data(game, &data, "", player_options)?;
+    load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, None)
+        .map(Arc::new)
+}
+
 fn load_itg_skin_parts(
     style: &Style,
     skin: &str,

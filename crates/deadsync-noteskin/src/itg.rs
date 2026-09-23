@@ -725,6 +725,45 @@ where
 }
 
 pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<NoteskinData, String> {
+    load_skin_data(skin, |name| resolve_skin_dir(root, game, name))
+}
+
+/// Resolve a skin directly inside a song, with installed skins as fallbacks.
+/// Called only during song loading; nothing is installed or added to the catalog.
+pub fn load_song_skin_data(
+    song_dir: &Path,
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+) -> Result<NoteskinData, String> {
+    let requested = normalized_skin_name(skin);
+    if skin.trim().is_empty()
+        || requested.contains(['/', '\\', ':'])
+        || matches!(requested.as_str(), "." | "..")
+    {
+        return Err("song noteskin must be a directory name".to_string());
+    }
+    let local = find_child_dir_case_insensitive(song_dir, &requested).ok_or_else(|| {
+        format!(
+            "song noteskin '{skin}' not found in '{}'",
+            song_dir.display()
+        )
+    })?;
+    load_skin_data(&requested, |name| {
+        if name == requested {
+            Some(local.clone())
+        } else {
+            roots
+                .iter()
+                .find_map(|root| resolve_skin_dir(root, game, name))
+        }
+    })
+}
+
+fn load_skin_data(
+    skin: &str,
+    resolve_dir: impl Fn(&str) -> Option<PathBuf>,
+) -> Result<NoteskinData, String> {
     let mut metrics = IniData::default();
     let mut search_dirs = Vec::new();
 
@@ -745,13 +784,9 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
             ));
         }
 
-        let Some(dir) = resolve_skin_dir(root, game, &current) else {
+        let Some(dir) = resolve_dir(&current) else {
             return Err(format!(
-                "noteskin '{}' not found under '{}/{}' or '{}/common'",
-                current,
-                root.display(),
-                game,
-                root.display()
+                "noteskin '{current}' not found while loading '{skin}'"
             ));
         };
 
@@ -1270,6 +1305,56 @@ mod tests {
         assert_eq!(down_col(8), 1);
         assert_eq!(down_col(5), 2);
         assert_eq!(down_col(10), 2);
+    }
+
+    #[test]
+    fn song_skins_keep_local_files_and_installed_fallbacks_separate() {
+        let root = temp_root("song-local");
+        let installed = root.join("noteskins");
+        let common = installed.join("common/common");
+        fs::create_dir_all(&common).unwrap();
+        fs::write(
+            common.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n[NoteDisplay]\nTapMineAnimationLength=4\n",
+        )
+        .unwrap();
+        fs::write(common.join("Fallback Tap Mine.png"), []).unwrap();
+        for (song, length) in [("one", "2"), ("two", "3")] {
+            let dir = root.join(song).join("SharedSkin");
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("metrics.ini"), format!("[Global]\nFallbackNoteSkin=common\n[NoteDisplay]\nTapNoteAnimationLength={length}\n")).unwrap();
+            fs::write(dir.join("Down Tap Note.png"), []).unwrap();
+            let data = super::load_song_skin_data(
+                &root.join(song),
+                &[installed.clone()],
+                "dance",
+                "sharedskin",
+            )
+            .unwrap();
+            assert_eq!(
+                data.metrics.get("NoteDisplay", "TapNoteAnimationLength"),
+                Some(length)
+            );
+            assert_eq!(
+                data.metrics.get("NoteDisplay", "TapMineAnimationLength"),
+                Some("4")
+            );
+            assert_eq!(
+                data.resolve_path("Down", "Tap Note"),
+                Some(dir.join("Down Tap Note.png"))
+            );
+            assert_eq!(
+                data.resolve_path("Down", "Tap Mine"),
+                Some(common.join("Fallback Tap Mine.png"))
+            );
+        }
+        assert!(!installed.join("dance/SharedSkin").exists());
+        for name in ["", "..", "../one/SharedSkin", "C:\\skin"] {
+            assert!(
+                super::load_song_skin_data(&root, &[installed.clone()], "dance", name).is_err()
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

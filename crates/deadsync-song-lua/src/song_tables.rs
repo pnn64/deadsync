@@ -342,16 +342,30 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
                 Value::Table(table) => Some(table.clone()),
                 _ => None,
             }) else {
-                return Ok(Value::Nil);
+                return Ok(MultiValue::new());
             };
-            if let Some(noteskin_name) = method_arg(&args, 0).cloned().and_then(read_string) {
-                owner.raw_set("__songlua_noteskin_name", noteskin_name)?;
-                return Ok(Value::Table(owner));
-            }
-            let noteskin_name = owner
+            let previous = owner
                 .raw_get::<Option<String>>("__songlua_noteskin_name")?
                 .unwrap_or_else(|| player.noteskin_name.clone());
-            Ok(Value::String(lua.create_string(&noteskin_name)?))
+            let mut accepted = Value::Nil;
+            if let Some(noteskin_name) = method_arg(&args, 0).cloned().and_then(read_string) {
+                let skins = lua.globals().get::<Table>("NOTESKIN")?;
+                let exists = skins
+                    .get::<Function>("DoesNoteSkinExist")?
+                    .call::<bool>((skins, noteskin_name.clone()))?;
+                if exists {
+                    owner.raw_set("__songlua_noteskin_override", noteskin_name.clone())?;
+                    owner.raw_set("__songlua_noteskin_name", noteskin_name)?;
+                    accepted = Value::Boolean(true);
+                }
+            }
+            if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
+                return Ok(MultiValue::from_vec(vec![Value::Table(owner)]));
+            }
+            Ok(MultiValue::from_vec(vec![
+                Value::String(lua.create_string(&previous)?),
+                accepted,
+            ]))
         })?,
     )?;
     let mt = lua.create_table()?;

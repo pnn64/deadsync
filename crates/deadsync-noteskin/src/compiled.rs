@@ -182,7 +182,14 @@ impl CompiledActors {
         &self,
         search_dirs: &[PathBuf],
         path: &Path,
+        button: Option<&str>,
     ) -> Option<noteskin_actor::ItgLuaActorDecl> {
+        if let Some(button) = button {
+            let key = actor_manifest_key(search_dirs, path)?;
+            if let Some(file) = self.find(&format!("{key}|{button}")) {
+                return Some(file.decl.clone());
+            }
+        }
         self.decl_for_path_ref(search_dirs, path).cloned()
     }
 
@@ -394,6 +401,6 @@ mod tests {
             }],
         };
 
-        assert!(actors.decl_for_path(&[root], &path).is_some());
+        assert!(actors.decl_for_path(&[root], &path, None).is_some());
     }
 }

@@ -13,6 +13,7 @@ use crate::script::parse_linear_frames_expr;
 pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
+pub const ITG_BEAT_RECEPTOR_UPDATE: &str = "beat_receptor";
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
 type Arg0Aliases<'a> = SmallVec<[&'a str; 4]>;
@@ -28,6 +29,7 @@ const BEAT_FADE_GLOW_SIGNATURES: [&[u8]; 4] = [
 struct CommandContext {
     colors: HashMap<String, String>,
     functions: HashMap<String, LocalFunction>,
+    scope: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -83,11 +85,31 @@ pub struct ItgLuaActorDecl {
 
 #[must_use]
 pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLuaActorDecl {
+    parse_actor_for_button(content, metrics, None)
+}
+
+pub fn parse_actor_for_button(
+    content: &str,
+    metrics: &noteskin_itg::IniData,
+    button: Option<&str>,
+) -> ItgLuaActorDecl {
     let content = strip_lua_comments(content);
     let content = content.as_ref();
     let mut decl = ItgLuaActorDecl::default();
     let arg0_aliases = parse_arg0_aliases(content);
-    let command_context = command_context(content);
+    let mut command_context = command_context(content);
+    if let Some(button) = button {
+        for line in content.lines() {
+            if let Some((name, value)) = parse_local_assignment(line.trim())
+                && value.starts_with("Var")
+                && itg_quoted_strings(value).next() == Some("Button")
+            {
+                command_context
+                    .scope
+                    .insert(name.to_ascii_lowercase(), format!("{button:?}"));
+            }
+        }
+    }
 
     let mut cursor = 0usize;
     while let Some(rel) = content[cursor..].find("Def.Sprite") {
@@ -218,6 +240,29 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         decl.path_refs
             .iter_mut()
             .for_each(|reference| mark(&mut reference.commands));
+    }
+
+    // Compile the three-state DDR receptor callback into bounded frame
+    // selection. Unknown update functions are not mistaken for this program.
+    let beat_receptor = [
+        b"start=song:GetFirstBeat()-8".as_slice(),
+        b"range=(beat*10)%10",
+        b"ifbeat>=startthen",
+        b"ifrange>=1andrange<9then",
+        b"receptor:setstate(1)",
+        b"receptor:setstate(0)",
+        b"receptor:setstate(2)",
+        b"SetUpdateFunction,update",
+    ]
+    .iter()
+    .all(|signature| find_compact_ascii_case_insensitive(content, signature).is_some());
+    if beat_receptor {
+        for reference in &mut decl.path_refs {
+            reference.commands.insert(
+                ITG_ACTOR_UPDATE_COMMAND.to_owned(),
+                ITG_BEAT_RECEPTOR_UPDATE.to_owned(),
+            );
+        }
     }
 
     decl
@@ -1227,7 +1272,9 @@ fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<Strin
         .map(|(param, arg)| {
             (
                 param.to_ascii_lowercase(),
-                context.resolve_command_arg(arg, &HashMap::new()).into_owned(),
+                context
+                    .resolve_command_arg(arg, &HashMap::new())
+                    .into_owned(),
             )
         })
         .collect::<HashMap<_, _>>();
@@ -1325,6 +1372,13 @@ fn parse_self_chain_commands_scoped(
     context: &CommandContext,
     scope: &HashMap<String, String>,
 ) -> Option<String> {
+    let resolved;
+    let body = if context.scope.is_empty() {
+        body
+    } else {
+        resolved = resolve_lua_conditionals(body, &context.scope);
+        &resolved
+    };
     let mut out = String::new();
     let mut cursor = 0usize;
     while let Some(rel) = body[cursor..].find("self:") {
@@ -1395,15 +1449,21 @@ fn resolve_lua_conditionals(body: &str, scope: &HashMap<String, String>) -> Stri
         };
         let condition = body[condition_start..then_idx].trim();
         let then_body = &body[then_idx + "then".len()..else_idx.unwrap_or(end_idx)];
-        let else_body = else_idx
-            .map(|idx| &body[idx + "else".len()..end_idx])
-            .unwrap_or("");
-        let selected = if eval_lua_condition(condition, scope) {
-            then_body
-        } else {
-            else_body
+        let Some(take_then) = eval_lua_condition(condition, scope) else {
+            out.push_str(&body[if_idx..end_idx + 3]);
+            cursor = end_idx + 3;
+            continue;
         };
-        out.push_str(&resolve_lua_conditionals(selected, scope));
+        if take_then {
+            out.push_str(&resolve_lua_conditionals(then_body, scope));
+        } else if let Some(idx) = else_idx {
+            let rest = &body[idx + 4..end_idx];
+            if rest.starts_with("if") {
+                out.push_str(&resolve_lua_conditionals(&format!("{rest} end"), scope));
+            } else {
+                out.push_str(&resolve_lua_conditionals(rest, scope));
+            }
+        }
         cursor = end_idx + "end".len();
     }
     out.push_str(&body[cursor..]);
@@ -1459,12 +1519,16 @@ fn find_lua_if_close(content: &str, mut cursor: usize) -> Option<(Option<usize>,
             cursor += "if".len();
             continue;
         }
-        if content[cursor..].starts_with("else")
+        if (content[cursor..].starts_with("elseif") && token_boundary(bytes, cursor, 6)
+            || content[cursor..].starts_with("else") && token_boundary(bytes, cursor, 4))
             && depth == 1
-            && token_boundary(bytes, cursor, "else".len())
         {
-            else_idx = Some(cursor);
-            cursor += "else".len();
+            else_idx.get_or_insert(cursor);
+            cursor += if content[cursor..].starts_with("elseif") {
+                6
+            } else {
+                4
+            };
             continue;
         }
         if content[cursor..].starts_with("end") && token_boundary(bytes, cursor, "end".len()) {
@@ -1480,14 +1544,28 @@ fn find_lua_if_close(content: &str, mut cursor: usize) -> Option<(Option<usize>,
     None
 }
 
-fn eval_lua_condition(condition: &str, scope: &HashMap<String, String>) -> bool {
+fn eval_lua_condition(condition: &str, scope: &HashMap<String, String>) -> Option<bool> {
     let condition = condition.trim();
     if let Some(rest) = condition.strip_prefix("not ") {
-        return !eval_lua_condition(rest, scope);
+        return eval_lua_condition(rest, scope).map(|value| !value);
+    }
+    for (operator, equal) in [("==", true), ("~=", false)] {
+        if let Some((left, right)) = condition.split_once(operator) {
+            let value = |term: &str| {
+                parse_lua_quoted(term.trim()).or_else(|| {
+                    get_ascii_lowercase(scope, term.trim())
+                        .and_then(|value| parse_lua_quoted(value))
+                })
+            };
+            return Some((value(left)? == value(right)?) == equal);
+        }
     }
     let key = condition.trim_matches('"').trim_matches('\'');
     get_ascii_lowercase(scope, key)
-        .map_or_else(|| parse_lua_bool(condition), |value| parse_lua_bool(value))
+        .map(|value| parse_lua_bool(value))
+        .or_else(|| {
+            matches!(condition, "true" | "false" | "nil").then(|| parse_lua_bool(condition))
+        })
 }
 
 fn split_lua_call(value: &str) -> Option<(&str, ItgCallArgs<'_>)> {
@@ -1551,6 +1629,36 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn button_commands_select_one_conditional_branch() {
+        let script = r#"
+local sButton = Var "Button"
+return Def.Sprite {
+    Texture="spark.png";
+    InitCommand=function(self)
+        self:zoom(1.2)
+        if sButton == "Left" then self:setstate(0):rotationz(90)
+        elseif sButton == "Down" then self:setstate(5):rotationz(0)
+        elseif sButton == "Up" then self:setstate(8):rotationz(180)
+        else self:setstate(13):rotationz(90) end
+    end;
+}
+"#;
+        for (button, expected) in [
+            ("Left", "0;rotationz,90"),
+            ("Down", "5;rotationz,0"),
+            ("Up", "8;rotationz,180"),
+            ("Right", "13;rotationz,90"),
+        ] {
+            let decl =
+                parse_actor_for_button(script, &noteskin_itg::IniData::default(), Some(button));
+            assert_eq!(
+                decl.sprites[0].commands["initcommand"],
+                format!("zoom,1.2;setstate,{expected}")
+            );
+        }
+    }
 
     #[test]
     fn pump_receptor_conditions_follow_button_and_steps_type() {

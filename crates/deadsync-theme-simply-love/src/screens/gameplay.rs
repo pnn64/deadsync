@@ -757,6 +757,7 @@ pub struct State {
     pub step_stats_extra_resolved: [crate::step_stats_gifs::ResolvedStepStatsExtra; MAX_PLAYERS],
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
+    pub hide_song_intro: bool,
     pub replay_status_text: Option<Arc<str>>,
     pub course_display_info: Option<CourseDisplayInfo>,
     pub(crate) gameplay_stats_text: gameplay_stats::GameplayStatsTextPlan,
@@ -1123,6 +1124,7 @@ impl State {
             step_stats_extra_resolved,
             song_full_title,
             stage_intro_text,
+            hide_song_intro: false,
             replay_status_text,
             course_display_info,
             gameplay_stats_text,
@@ -1434,6 +1436,9 @@ pub fn gameplay_noteskin_assets(
     cols_per_player: usize,
     num_players: usize,
     runtime_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    song_dir: &std::path::Path,
+    song_skins: &[Option<String>; MAX_PLAYERS],
+    first_beat: f32,
 ) -> GameplayNoteskinAssets {
     use deadsync_noteskin::runtime::SkinPart;
     let style = Style {
@@ -1442,9 +1447,22 @@ pub fn gameplay_noteskin_assets(
     };
     // Compose once on the song-load worker. The selected slots then share the
     // existing prewarm, upload and song-lifetime ownership paths.
-    let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let mut noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
+        }
+        if let Some(skin) = &song_skins[player] {
+            match noteskin::load_song_skin(
+                &style,
+                song_dir,
+                skin,
+                &runtime_profiles[player].scroll_option.to_string(),
+            ) {
+                Ok(skin) => return Some(skin),
+                Err(error) => log::warn!(
+                    "Cannot load chart noteskin '{skin}': {error}; keeping the player's skin"
+                ),
+            }
         }
         let profile = &runtime_profiles[player];
         let mut options = profile.current_player_options();
@@ -1481,6 +1499,19 @@ pub fn gameplay_noteskin_assets(
         }
         Some(result)
     });
+    for skin in noteskin.iter_mut().flatten() {
+        if skin
+            .receptor_off
+            .iter()
+            .any(|slot| slot.beat_receptor_start.is_some())
+        {
+            for slot in &mut Arc::make_mut(skin).receptor_off {
+                if slot.beat_receptor_start.is_some() {
+                    slot.beat_receptor_start = Some(first_beat - 8.0);
+                }
+            }
+        }
+    }
     let tap_explosion_noteskin = std::array::from_fn(|player| {
         if runtime_profiles[player].tap_explosion_noteskin_hidden() {
             None
@@ -1534,8 +1565,26 @@ pub fn init(
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
     let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
-    let noteskin_assets =
-        gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profile_data);
+    let startup = song_lua_data.startup();
+    let noteskin_assets = gameplay_noteskin_assets(
+        cols_per_player,
+        num_players,
+        &runtime_profile_data,
+        song.simfile_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(".")),
+        &startup.noteskins,
+        gameplay_charts[0]
+            .timing
+            .get_beat_for_time(song.first_second),
+    );
+    let lead_in_timing = startup
+        .min_seconds_to_music
+        .map_or(lead_in_timing, |seconds| {
+            let mut timing = lead_in_timing.unwrap_or_default();
+            timing.min_seconds_to_music = timing.min_seconds_to_music.max(seconds);
+            Some(timing)
+        });
     let noteskin_data =
         noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profile_data);
     let player_profiles = player_profiles.map(GameplayProfile::from);
@@ -1548,7 +1597,7 @@ pub fn init(
     let pack_group = pack_data.pack_group;
     let pack_banner_path = pack_data.pack_banner_path;
     let pack_sync_pref = pack_data.sync_pref;
-    State::from_gameplay_with_screen_data(
+    let mut state = State::from_gameplay_with_screen_data(
         deadsync_gameplay::init_gameplay_runtime(
             song,
             charts,
@@ -1590,7 +1639,9 @@ pub fn init(
         runtime,
         hud,
         judgment_palettes,
-    )
+    );
+    state.hide_song_intro = startup.hide_in;
+    state
 }
 
 #[inline(always)]
@@ -3443,6 +3494,9 @@ pub fn in_transition(
         state
             .notefield_combo_assets
             .prewarm(&visual_policy.assets.effects);
+        if state.hide_song_intro {
+            return (Vec::new(), 0.0);
+        }
     }
     if is_restart {
         if let Some(gs) = state {

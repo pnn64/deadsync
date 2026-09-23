@@ -25,6 +25,35 @@ pub struct PreparedGameplaySongLua<S> {
     pub(crate) foreground_layers: Vec<GameplaySongLuaLayer<S>>,
 }
 
+impl<S> PreparedGameplaySongLua<S> {
+    pub fn startup(&self) -> crate::SongLuaStartup {
+        let mut startup = crate::SongLuaStartup::default();
+        for compiled in self
+            .background_layers
+            .iter()
+            .map(|layer| &layer.compiled)
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.primary.iter().map(|primary| &primary.compiled))
+        {
+            for (target, skin) in startup
+                .noteskins
+                .iter_mut()
+                .zip(&compiled.startup.noteskins)
+            {
+                if skin.is_some() {
+                    target.clone_from(skin);
+                }
+            }
+            if let Some(seconds) = compiled.startup.min_seconds_to_music {
+                startup.min_seconds_to_music =
+                    Some(startup.min_seconds_to_music.unwrap_or(0.0).max(seconds));
+            }
+            startup.hide_in |= compiled.startup.hide_in;
+        }
+        startup
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SongLuaSoundEvent {
     second: f32,

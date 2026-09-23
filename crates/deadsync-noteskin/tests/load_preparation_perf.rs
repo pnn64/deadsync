@@ -176,7 +176,7 @@ fn borrowed_actor_graph_preserves_nested_metadata_and_owned_independence() {
             serde_json::to_value(borrowed).unwrap(),
             serde_json::to_value(&old).unwrap()
         );
-        let mut owned = actors.decl_for_path(&dirs, &path).unwrap();
+        let mut owned = actors.decl_for_path(&dirs, &path, None).unwrap();
         assert_eq!(
             serde_json::to_value(&owned).unwrap(),
             serde_json::to_value(&old).unwrap()

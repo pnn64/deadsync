@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 13;
+const COMPILER_VERSION: u32 = 14;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -93,7 +93,7 @@ pub fn ensure_compiled(
         return Ok(CompileOutcome::Reused);
     }
     info!("compiling noteskin cache for '{game}/{}'", data.name);
-    let bundle = compile_data(game, data, &source_hash)?;
+    let bundle = compile_data(game, data, &source_hash, "")?;
     noteskin_compiled::save_compiled_bundle(&path, &bundle)?;
     Ok(CompileOutcome::Built)
 }
@@ -317,14 +317,17 @@ fn push_normalized_path(out: &mut String, path: &str) {
     }
 }
 
-fn compile_data(
+/// Compile an isolated skin without consulting or populating the session cache.
+/// An empty source hash is suitable for a song-lifetime, in-memory bundle.
+pub fn compile_data(
     game: &str,
     data: &noteskin_itg::NoteskinData,
     source_hash: &str,
+    player_options: &str,
 ) -> Result<CompiledNoteskinBundle, String> {
     let scripts = noteskin_paths(data);
     let lua = Lua::new();
-    install_host(&lua, data).map_err(|err| err.to_string())?;
+    install_host(&lua, data, player_options).map_err(|err| err.to_string())?;
     let noteskin = load_noteskin_table(&lua, &scripts)?;
     Ok(CompiledNoteskinBundle {
         version: noteskin_compiled::CACHE_SCHEMA_VERSION,
@@ -378,6 +381,18 @@ fn compile_actor_files(
             let Some(key) = noteskin_compiled::actor_manifest_key_for_dir(dir, &path) else {
                 continue;
             };
+            if content.contains("Var") && content.contains("Button") {
+                for button in DANCE_BUTTONS.iter().chain(PUMP_BUTTONS.iter()) {
+                    out.push(CompiledActorFile {
+                        key: format!("{key}|{button}"),
+                        decl: noteskin_actor::parse_actor_for_button(
+                            &content,
+                            &data.metrics,
+                            Some(button),
+                        ),
+                    });
+                }
+            }
             out.push(CompiledActorFile {
                 key,
                 decl: noteskin_actor::parse_actor_decl(&content, &data.metrics),
@@ -388,8 +403,24 @@ fn compile_actor_files(
     Ok(out)
 }
 
-fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()> {
+fn install_host(
+    lua: &Lua,
+    data: &noteskin_itg::NoteskinData,
+    player_options: &str,
+) -> mlua::Result<()> {
     let globals = lua.globals();
+    let player = lua.create_table()?;
+    let options = player_options.to_owned();
+    player.set(
+        "GetPlayerOptionsString",
+        lua.create_function(move |_, _: MultiValue| Ok(options.clone()))?,
+    )?;
+    let state = lua.create_table()?;
+    state.set(
+        "GetPlayerState",
+        lua.create_function(move |_, _: MultiValue| Ok(player.clone()))?,
+    )?;
+    globals.set("GAMESTATE", state)?;
     let actor_mt = lua.create_table()?;
     let actor_methods = lua.create_table()?;
     for name in [
@@ -468,6 +499,7 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
             "SpriteOnly" => Ok(Value::Boolean(
                 globals.get::<bool>("__itg_sprite_only").unwrap_or(false),
             )),
+            "Player" => Ok(Value::Integer(0)),
             _ => Ok(Value::Nil),
         }
     })?;
@@ -1045,7 +1077,7 @@ return skin
             metrics: noteskin_itg::IniData::default(),
             search_dirs: vec![skin_dir],
         };
-        let bundle = super::compile_data("dance", &data, "testhash").expect("compile data");
+        let bundle = super::compile_data("dance", &data, "testhash", "").expect("compile data");
         let receptor = bundle.loader.load_request("Left", "Receptor");
         let hold_body = bundle.loader.load_request("Left", "Hold Body Active");
         let explosion = bundle.loader.load_request("Left", "Explosion");

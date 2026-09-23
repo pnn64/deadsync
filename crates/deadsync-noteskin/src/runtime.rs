@@ -1554,7 +1554,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
         return Vec::new();
     }
 
-    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path) else {
+    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path, Some(button)) else {
         log::warn!("compiled noteskin actors are missing '{}'", path.display());
         visiting.remove(&path_key);
         return Vec::new();
