@@ -53,12 +53,14 @@ const MUSIC_GAIN_RAMP_FRAMES: f32 = 4000.0;
 const MUSIC_GAIN_MAX_STEP: f32 = 1.0 / MUSIC_GAIN_RAMP_FRAMES;
 const MIX_CHUNK_FRAMES: usize = 2048;
 #[inline(always)]
-fn advance_gain(current: &mut f32, target: f32) {
+fn advance_gain(current: &mut f32, target: f32) -> bool {
     let diff = target - *current;
     if diff.abs() <= MUSIC_GAIN_MAX_STEP {
         *current = target;
+        true
     } else {
         *current = diff.signum().mul_add(MUSIC_GAIN_MAX_STEP, *current);
+        false
     }
 }
 
@@ -290,7 +292,9 @@ impl RenderState {
         }
         if self.music_gain_current != target_gain {
             for _ in frame..frames {
-                advance_gain(&mut self.music_gain_current, target_gain);
+                if advance_gain(&mut self.music_gain_current, target_gain) {
+                    break;
+                }
             }
         }
         let popped_samples = frame * channels;
