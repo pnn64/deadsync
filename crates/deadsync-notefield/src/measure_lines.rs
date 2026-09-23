@@ -131,15 +131,19 @@ fn bars_in_segment(start_row: i32, end_row: i32, sig: TimeSignatureSegment) -> i
 }
 
 fn measure_index_before(segments: &[TimeSignatureSegment], index: usize) -> i64 {
+    if index == 0 {
+        return 0;
+    }
     let mut total = 0;
+    // Adjacent segments share their boundary row and validated signature.
+    let mut sig = sig_at(segments, 0);
+    let mut start_row = beat_to_note_row(sig.beat);
     for i in 0..index {
-        let sig = sig_at(segments, i);
         let next_sig = sig_at(segments, i + 1);
-        total += bars_in_segment(
-            beat_to_note_row(sig.beat),
-            beat_to_note_row(next_sig.beat),
-            sig,
-        );
+        let end_row = beat_to_note_row(next_sig.beat);
+        total += bars_in_segment(start_row, end_row, sig);
+        sig = next_sig;
+        start_row = end_row;
     }
     total
 }
