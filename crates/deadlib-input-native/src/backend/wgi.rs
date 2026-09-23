@@ -218,9 +218,8 @@ impl ReadingClock {
             self.offset_ns = if self.offset_ns == 0 {
                 offset_sample
             } else {
-                ((i128::from(self.offset_ns) * 7 + i128::from(offset_sample)) / 8)
-                    .try_into()
-                    .ok()?
+                // A weighted average of two i64 offsets remains within i64.
+                ((i128::from(self.offset_ns) * 7 + i128::from(offset_sample)) / 8) as i64
             };
         }
         let mapped = apply_offset(reading_ns, self.offset_ns);
@@ -1042,6 +1041,39 @@ mod reading_clock_tests {
             clock.update_kind(raw, poll_host_nanos, host);
             assert_eq!(clock.kind, ReadingClockKind::Microseconds);
             assert_eq!(clock.offset_ns, 123);
+        }
+    }
+
+    #[test]
+    fn offset_average_preserves_extremes_and_truncates_toward_zero() {
+        let host = test_host();
+        for (previous, sample, expected) in [
+            (i64::MIN, i64::MIN, i64::MIN),
+            (i64::MAX, i64::MAX, i64::MAX),
+            (i64::MIN, i64::MAX, -6_917_529_027_641_081_856),
+            (i64::MAX, i64::MIN, 6_917_529_027_641_081_855),
+            (-8, 1, -6),
+            (8, -1, 6),
+            (-1, 8, 0),
+            (1, -8, 0),
+        ] {
+            let (raw, poll_host_nanos) = if sample < 0 {
+                (1 + sample.unsigned_abs(), 1)
+            } else {
+                (1, 1 + sample as u64)
+            };
+            let mut clock = ReadingClock {
+                kind: ReadingClockKind::Nanoseconds,
+                offset_ns: previous,
+                last_raw: 0,
+                last_poll_host_nanos: 0,
+            };
+            // An unseeded clock keeps the selected unit while updating its offset.
+            let _ = clock.host_nanos(raw, poll_host_nanos, host);
+            assert_eq!(
+                clock.offset_ns, expected,
+                "previous={previous}, sample={sample}"
+            );
         }
     }
 
