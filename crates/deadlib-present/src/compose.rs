@@ -7813,13 +7813,21 @@ fn fold_sprite_xy_rot(
         return (flip_x, flip_y, size_x, size_y);
     }
 
-    let cos_y = rot_y_deg.to_radians().cos();
+    let cos_y = if rot_y_deg == 0.0 {
+        1.0
+    } else {
+        rot_y_deg.to_radians().cos()
+    };
     size_x *= cos_y.abs();
     if cos_y.is_sign_negative() {
         flip_x = !flip_x;
     }
 
-    let cos_x = rot_x_deg.to_radians().cos();
+    let cos_x = if rot_x_deg == 0.0 {
+        1.0
+    } else {
+        rot_x_deg.to_radians().cos()
+    };
     size_y *= cos_x.abs();
     if cos_x.is_sign_negative() {
         flip_y = !flip_y;
