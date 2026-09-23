@@ -1286,8 +1286,10 @@ pub fn itg_load_sprite_decl_slot<T>(
     ) -> Option<T>,
 ) -> Option<T> {
     let texture_path = itg::resolve_texture_expr(data, &sprite.texture_expr, arg0_path)?;
-    let anim_is_beat =
-        crate::script::sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
+    let anim_is_beat = crate::script::sprite_animation_is_beat_based(
+        &sprite.commands,
+        default_anim_is_beat && !sprite.commands.contains_key(actor::ITG_ACTOR_FRAME_CHILD),
+    );
     if sprite.frame_count > 1 {
         load_animated(
             &texture_path,

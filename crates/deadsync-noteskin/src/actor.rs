@@ -14,6 +14,7 @@ pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 pub const ITG_BEAT_RECEPTOR_UPDATE: &str = "beat_receptor";
+pub const ITG_ACTOR_FRAME_CHILD: &str = "__deadsync_actor_frame_child";
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
 type Arg0Aliases<'a> = SmallVec<[&'a str; 4]>;
@@ -121,9 +122,22 @@ pub fn parse_actor_for_button(
         let Some(close) = find_matching(content, open, '{', '}') else {
             break;
         };
-        if let Some(sprite) =
+        if let Some(mut sprite) =
             parse_sprite_block(&content[open + 1..close], metrics, &command_context)
         {
+            if content[..start]
+                .match_indices("Def.ActorFrame")
+                .any(|(frame, _)| {
+                    content[frame..].find('{').is_some_and(|open| {
+                        find_matching(content, frame + open, '{', '}')
+                            .is_some_and(|end| end > close)
+                    })
+                })
+            {
+                sprite
+                    .commands
+                    .insert(ITG_ACTOR_FRAME_CHILD.to_owned(), String::new());
+            }
             decl.sprites.push(sprite);
         }
         cursor = close + 1;
@@ -1629,6 +1643,22 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frame_children_keep_independent_animation() {
+        let script = r#"
+local root = Def.Sprite { Texture="root.png" }
+return Def.ActorFrame {
+    Def.Sprite { Texture="child.png" },
+    Def.ActorFrame { Def.Sprite { Texture="nested.png" } },
+}
+"#;
+        let decl = parse_actor_decl(script, &noteskin_itg::IniData::default());
+        assert_eq!(decl.sprites.len(), 3);
+        assert!(!decl.sprites[0].commands.contains_key(ITG_ACTOR_FRAME_CHILD));
+        assert!(decl.sprites[1].commands.contains_key(ITG_ACTOR_FRAME_CHILD));
+        assert!(decl.sprites[2].commands.contains_key(ITG_ACTOR_FRAME_CHILD));
+    }
 
     #[test]
     fn button_commands_select_one_conditional_branch() {

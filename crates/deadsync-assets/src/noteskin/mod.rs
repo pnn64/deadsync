@@ -662,10 +662,18 @@ mod tests {
         .unwrap();
         let mut red = super::texture::itg_slot_from_path(&path).unwrap();
         red.def.size = [2, 2];
+        let samples = Default::default();
+        assert!(
+            super::texture::mine_fill_slots(&[Some(red.clone())], &samples)
+                .iter()
+                .all(Option::is_none),
+            "authored sprite artwork must not be replaced by a circular fill"
+        );
+        // The sampled approximation is reserved for unparsed model geometry.
+        red.model_fallback = true;
         let mut blue = red.clone();
         blue.def.src = [2, 0];
         let mines = [Some(red), Some(blue)];
-        let samples = Default::default();
         let fills = super::texture::mine_fill_slots(&mines, &samples);
         let keys: Vec<_> = fills
             .iter()
@@ -2517,13 +2525,16 @@ return skin
         assert_eq!(delays.len(), 8, "expected one delay per mine frame");
         assert!(
             (delays[0] - 0.125).abs() < 1e-4,
-            "expected linear frame delay 1/8 beat, got {}",
+            "expected linear frame delay 1/8 second, got {}",
             delays[0]
         );
-        assert_eq!(mine.frame_index(0.0, 0.00), 0);
-        assert_eq!(mine.frame_index(0.0, 0.12), 0);
-        assert_eq!(mine.frame_index(0.0, 0.13), 1);
-        assert_eq!(mine.frame_index(0.0, 1.01), 0);
+        // ActorFrame does not forward NoteDisplay's beat-phase seek; the
+        // child's default effect clock remains the timer.
+        assert!(mine.actor_frame_child);
+        assert_eq!(mine.frame_index(0.00, 200.0), 0);
+        assert_eq!(mine.frame_index(0.12, 200.0), 0);
+        assert_eq!(mine.frame_index(0.13, 200.0), 1);
+        assert_eq!(mine.frame_index(1.01, 200.0), 0);
     }
 
     #[test]

@@ -34,6 +34,7 @@ fn rosewood_loads_skin_and_compiles_chart() {
     assert_eq!(skin.notes.len(), 4 * noteskin::NUM_QUANTIZATIONS);
     assert!(skin.notes.iter().all(|slot| slot.model.is_some()));
     assert!(skin.notes.iter().any(|slot| slot.uv_velocity[1] == -1.0));
+    assert!(skin.mine_fill_slots.iter().all(Option::is_none));
     for slot in &skin.receptor_off {
         assert_eq!(slot.beat_receptor_start, Some(-8.0));
         assert_eq!(slot.frame_index(0.0, -9.0), 2);
@@ -48,14 +49,22 @@ fn rosewood_loads_skin_and_compiles_chart() {
         let spark = skin.mine_frames[column]
             .as_ref()
             .expect("animated mine spark");
-        assert_eq!(
-            spark.def.src,
-            [
-                (frame % 4) * spark.def.size[0],
-                (frame / 4) * spark.def.size[1]
-            ]
-        );
+        let arrow = skin.mines[column].as_ref().expect("mine arrow");
+        assert!(arrow.texture_key().contains("_down tap mine"));
+        assert!(arrow.actor_frame_child);
+        assert!(spark.actor_frame_child);
+        assert_eq!(arrow.logical_size(), [64.0, 64.0]);
+        assert_eq!(spark.logical_size(), [80.0, 64.0]);
+        assert_eq!(spark.frame_index(0.0, 0.0), frame);
+        for step in 0..32 {
+            let time = step as f32 * 0.05 + 0.001;
+            let actual = spark.frame_index(time, 200.0);
+            assert_eq!(actual, (frame + step) % 16);
+            let uv = spark.uv_for_frame_at(actual, time);
+            assert!(uv.iter().all(|value| (0.0..=1.0).contains(value)), "{uv:?}");
+        }
         assert_eq!(spark.model_draw.rot[2], rotation);
+        assert_eq!(spark.model_draw.zoom[..2], [1.2, 1.2]);
     }
     let reverse = noteskin::load_song_skin(
         &noteskin::Style {

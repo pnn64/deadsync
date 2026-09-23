@@ -219,15 +219,20 @@ fn compose_field_contents<S, F>(
     let scale_sprite =
         |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
     let scale_mine_slot = |slot: &S| -> [f32; 2] {
-        // Model-backed mines preserve native geometry scale. Sprite mines use
-        // the same arrow-normalized path as ITG NoteDisplay::DrawTap.
+        // ActorFrame children retain native logical dimensions relative to
+        // the 64-pixel field unit, including differently sized spark layers.
         if let Some(model) = slot.model() {
             let model_size = model.size();
             if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
                 return [model_size[0] * field_zoom, model_size[1] * field_zoom];
             }
         }
-        scale_sprite(slot.size())
+        if slot.actor_frame_child() {
+            slot.logical_size()
+                .map(|size| size * target_arrow_px / 64.0)
+        } else {
+            scale_sprite(slot.size())
+        }
     };
     let note_rotation_y = 0.0_f32;
     let prefer_sprite_note_path = false;

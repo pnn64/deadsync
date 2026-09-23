@@ -322,7 +322,6 @@ mod note_metadata_cache_tests {
 
 struct MineSlotPass<'a, S> {
     slot: &'a S,
-    alpha_scale: f32,
     z: i16,
 }
 
@@ -442,7 +441,6 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             model_cache,
             MineSlotPass {
                 slot,
-                alpha_scale: 0.9,
                 z: request.note_z.saturating_sub(1),
             },
             &request,
@@ -456,7 +454,6 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             model_cache,
             MineSlotPass {
                 slot,
-                alpha_scale: 1.0,
                 z: request.note_z,
             },
             &request,
@@ -526,7 +523,11 @@ fn compose_flat_mine_slot<S, F, Z>(
     if !draw.visible {
         return;
     }
-    let frame = slot.frame_index_from_phase(request.mine_uv_phase);
+    let frame = if slot.actor_frame_child() {
+        slot.frame_index(request.elapsed_s, request.current_beat)
+    } else {
+        slot.frame_index_from_phase(request.mine_uv_phase)
+    };
     let uv_elapsed = if slot.model().is_some() {
         request.mine_uv_phase
     } else {
@@ -537,6 +538,13 @@ fn compose_flat_mine_slot<S, F, Z>(
         request.uv_translation,
     );
     let base_rotation = -slot.sprite_def().rotation_deg as f32;
+    let mut size = size_for_slot(slot);
+    let mut tint = [1.0, 1.0, 1.0, request.alpha];
+    if slot.model().is_none() {
+        size[0] *= draw.zoom[0];
+        size[1] *= draw.zoom[1];
+        tint = model_tint(tint, draw);
+    }
     compose_flat_note_layer(
         draws,
         model_cache,
@@ -545,12 +553,12 @@ fn compose_flat_mine_slot<S, F, Z>(
             draw,
             model_center: request.center,
             sprite_center: request.center,
-            size: size_for_slot(slot),
+            size,
             uv,
             rotation_y_deg: request.rotation_y_deg,
             model_rotation_z_deg: base_rotation + request.note_rotation_z_deg,
             sprite_rotation_z_deg: base_rotation + draw.rot[2] + request.note_rotation_z_deg,
-            tint: [1.0, 1.0, 1.0, pass.alpha_scale * request.alpha],
+            tint,
             glow_alpha: request.glow_alpha,
             blend: BlendMode::Alpha,
             z: pass.z,
@@ -1278,6 +1286,7 @@ mod tests {
         texture: Arc<str>,
         draw: ModelDrawState,
         frame_count: usize,
+        actor_frame_child: bool,
     }
 
     impl GlowSlot {
@@ -1291,6 +1300,7 @@ mod tests {
                 texture: Arc::from("glow-slot"),
                 draw: ModelDrawState::default(),
                 frame_count: 1,
+                actor_frame_child: false,
             }
         }
 
@@ -1330,8 +1340,12 @@ mod tests {
             [0.0, 1.0]
         }
 
-        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
-            0
+        fn actor_frame_child(&self) -> bool {
+            self.actor_frame_child
+        }
+
+        fn frame_index(&self, time: f32, _beat: f32) -> usize {
+            (13 + (time * 20.0).floor() as usize) % self.frame_count
         }
 
         fn frame_count(&self) -> usize {
@@ -1342,8 +1356,13 @@ mod tests {
             0
         }
 
-        fn uv_for_frame_at(&self, _frame_index: usize, _elapsed: f32) -> [f32; 4] {
-            [0.0, 0.0, 1.0, 1.0]
+        fn uv_for_frame_at(&self, frame: usize, _elapsed: f32) -> [f32; 4] {
+            [
+                frame as f32 / self.frame_count as f32,
+                0.0,
+                (frame + 1) as f32 / self.frame_count as f32,
+                1.0,
+            ]
         }
 
         fn model_draw_at(&self, _time: f32, _beat: f32) -> ModelDrawState {
@@ -1667,6 +1686,52 @@ mod tests {
     }
 
     #[test]
+    fn mine_sprite_layers_keep_child_clock_size_and_opacity() {
+        let mut arrow = named_slot(GlowSlot::sprite(), "arrow");
+        arrow.actor_frame_child = true;
+        let mut spark = named_slot(GlowSlot::sprite(), "spark");
+        spark.actor_frame_child = true;
+        spark.frame_count = 16;
+        spark.draw.zoom = [1.2, 1.2, 1.0];
+        spark.draw.rot[2] = 90.0;
+        for (time, frame) in [(0.001, 13), (0.201, 1)] {
+            let mut request = mine_request(Some(&arrow), None, Some(&spark));
+            request.elapsed_s = time;
+            request.mine_uv_phase = 0.75;
+            request.uv_translation = [0.0, 0.0];
+            request.note_rotation_z_deg = 0.0;
+            request.glow_alpha = 0.0;
+            let mut draws = Vec::new();
+            compose_flat_mine_layers(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                &|slot| {
+                    if slot.texture.as_ref() == "spark" {
+                        [80.0, 64.0]
+                    } else {
+                        [64.0, 64.0]
+                    }
+                },
+                &|slot| SpriteSource::Texture(slot.texture.clone()),
+            );
+            let [FlatDraw::Sprite(arrow), FlatDraw::Sprite(spark)] = draws.as_slice() else {
+                panic!("expected the authored arrow and spark");
+            };
+            assert_eq!(arrow.source.texture_key(), Some("arrow"));
+            assert_eq!(arrow.size, [64.0, 64.0]);
+            assert_eq!(arrow.tint, [1.0, 1.0, 1.0, 0.8]);
+            assert_eq!(spark.source.texture_key(), Some("spark"));
+            assert_eq!(spark.size, [96.0, 76.8]);
+            assert_eq!(spark.rot_z_deg, 90.0);
+            assert_eq!(
+                spark.uv_rect,
+                [frame as f32 / 16.0, 0.0, (frame + 1) as f32 / 16.0, 1.0]
+            );
+        }
+    }
+
+    #[test]
     fn mine_sizing_preserves_gradient_selection_and_dimensions() {
         // kind: 0 = absent, 1 = sprite, 2 = animated sprite, 3 = model, 4 = hidden sprite.
         let cases: &[(u8, u8, bool, &[&str])] = &[
@@ -1766,7 +1831,7 @@ mod tests {
                         let key = sprite.source.texture_key().unwrap();
                         let (size, z, alpha) = match key {
                             "gradient" => (gradient_size, 138, 0.8),
-                            "fill" => ([61.3, 65.7], 139, 0.9 * 0.8),
+                            "fill" => ([61.3, 65.7], 139, 0.8),
                             "frame" => (frame_size, 140, 0.8),
                             _ => unreachable!(),
                         };
@@ -1824,7 +1889,7 @@ mod tests {
             panic!("model-backed mine fill should emit a textured mesh");
         };
         assert_eq!(mesh.tint[..3], [1.0, 1.0, 1.0]);
-        assert_near(mesh.tint[3], 0.72);
+        assert_near(mesh.tint[3], 0.8);
         assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(mesh.z, 139);
         assert_eq!(mesh.world_z, 9.0);

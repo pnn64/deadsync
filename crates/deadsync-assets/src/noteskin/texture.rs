@@ -165,6 +165,9 @@ pub struct SpriteSlot {
     pub(crate) base_rot_sin_cos: [f32; 2],
     pub source_size: [i32; 2],
     pub source: Arc<SpriteSource>,
+    pub animation_start_frame: usize,
+    animation_start_time: f32,
+    pub actor_frame_child: bool,
     pub uv_velocity: [f32; 2],
     pub uv_offset: [f32; 2],
     pub uv_cycle_seconds: Option<f32>,
@@ -173,6 +176,8 @@ pub struct SpriteSlot {
     pub beat_receptor_start: Option<f32>,
     pub note_color_translate: bool,
     pub model: Option<Arc<ModelMesh>>,
+    /// Only an unresolved model may use a generated mine-core approximation.
+    pub model_fallback: bool,
     pub model_draw: ModelDrawState,
     pub model_timeline: Arc<[ModelTweenSegment]>,
     pub model_effect: ModelEffectState,
@@ -188,12 +193,16 @@ impl Clone for SpriteSlot {
             base_rot_sin_cos: self.base_rot_sin_cos,
             source_size: self.source_size,
             source: self.source.clone(),
+            animation_start_frame: self.animation_start_frame,
+            animation_start_time: self.animation_start_time,
+            actor_frame_child: self.actor_frame_child,
             uv_velocity: self.uv_velocity,
             uv_offset: self.uv_offset,
             uv_cycle_seconds: self.uv_cycle_seconds,
             beat_receptor_start: self.beat_receptor_start,
             note_color_translate: self.note_color_translate,
             model: self.model.clone(),
+            model_fallback: self.model_fallback,
             model_draw: self.model_draw,
             model_timeline: self.model_timeline.clone(),
             model_effect: self.model_effect,
@@ -272,8 +281,8 @@ impl SpriteSlot {
                 *rate,
                 frame_durations.as_deref(),
                 *frame_timing,
-                time,
-                beat,
+                time + self.animation_start_time,
+                beat + self.animation_start_time,
             ),
         }
     }
@@ -432,6 +441,10 @@ impl NoteskinSlot for SpriteSlot {
         self.source.is_beat_based()
     }
 
+    fn actor_frame_child(&self) -> bool {
+        self.actor_frame_child
+    }
+
     #[inline(always)]
     fn frame_index(&self, time: f32, beat: f32) -> usize {
         Self::frame_index(self, time, beat)
@@ -515,6 +528,10 @@ pub fn test_model_slot() -> SpriteSlot {
         def: SpriteDefinition::default(),
         base_rot_sin_cos: [0.0, 1.0],
         source_size: [64, 64],
+        animation_start_frame: 0,
+        animation_start_time: 0.0,
+        actor_frame_child: false,
+        model_fallback: false,
         source: Arc::new(SpriteSource::Atlas {
             texture_key: Arc::from("test"),
             tex_dims: (64, 64),
@@ -637,6 +654,7 @@ pub fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
 }
 
 pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
+    slot.model_fallback = plan.model.is_none();
     slot.model = plan.model;
     slot.model_draw = plan.model_draw;
     slot.model_timeline = plan.model_timeline;
@@ -738,6 +756,10 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         base_rot_sin_cos: [0.0, 1.0],
         source_size: plan.source_size,
         source,
+        animation_start_frame: 0,
+        animation_start_time: 0.0,
+        actor_frame_child: false,
+        model_fallback: false,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
@@ -812,6 +834,28 @@ pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
 }
 
 pub fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
+    if let SpriteSource::Animated {
+        frame_count,
+        frame_durations,
+        rate,
+        ..
+    } = slot.source.as_ref()
+    {
+        // setstate selects an animation state, not a new atlas origin.
+        slot.animation_start_frame = frame.min(frame_count.saturating_sub(1));
+        slot.animation_start_time = frame_durations.as_ref().map_or_else(
+            || match rate {
+                AnimationRate::FramesPerSecond(rate) | AnimationRate::FramesPerBeat(rate)
+                    if *rate > 0.0 =>
+                {
+                    slot.animation_start_frame as f32 / rate
+                }
+                _ => 0.0,
+            },
+            |durations| durations.iter().take(slot.animation_start_frame).sum(),
+        );
+        return;
+    }
     let (tex_w, tex_h) = match slot.source.as_ref() {
         SpriteSource::Atlas { tex_dims, .. } | SpriteSource::Animated { tex_dims, .. } => *tex_dims,
     };
@@ -977,6 +1021,8 @@ pub fn itg_apply_state_properties_from_commands(
     slot: &mut SpriteSlot,
     commands: &std::collections::HashMap<String, String>,
 ) {
+    slot.actor_frame_child |=
+        commands.contains_key(deadsync_noteskin::actor::ITG_ACTOR_FRAME_CHILD);
     let beat_based = slot_is_beat_based(slot);
     apply_sprite_animation_command_plans(slot, commands, beat_based, |slot, plan, beat_based| {
         itg_apply_sprite_animation_plan(slot, plan, beat_based);
@@ -1040,11 +1086,26 @@ fn freeze_sprite_animation(slot: &mut SpriteSlot) {
     let SpriteSource::Animated {
         texture_key,
         tex_dims,
+        frame_size,
+        grid,
+        frame_indices,
         ..
     } = slot.source.as_ref()
     else {
         return;
     };
+    let frame = slot.animation_start_frame;
+    let (frame, origin) = frame_indices
+        .as_ref()
+        .map_or((frame, slot.def.src), |indices| {
+            (indices.get(frame).copied().unwrap_or(frame), [0, 0])
+        });
+    slot.def.src = [
+        origin[0] + (frame % grid.0.max(1)) as i32 * frame_size[0],
+        origin[1] + (frame / grid.0.max(1)) as i32 * frame_size[1],
+    ];
+    slot.animation_start_frame = 0;
+    slot.animation_start_time = 0.0;
     slot.source = source_from_plan(
         SpriteSourcePlan::Atlas {
             texture_key: texture_key.to_string(),
@@ -1098,6 +1159,9 @@ pub fn mine_fill_slots(
     samples: &MineSampleCache,
 ) -> Vec<Option<SpriteSlot>> {
     crate_mine_fill_slots(mines, |mine| {
+        if !mine.model_fallback {
+            return None;
+        }
         let key = (
             mine.texture_key_shared(),
             mine.def.src,
@@ -1264,7 +1328,7 @@ mod contract_tests {
     }
 
     #[test]
-    fn animated_frame_override_refreshes_cached_uv_origin() {
+    fn animated_setstate_wraps_without_shifting_atlas_origin() {
         let mut slot = slot_from_plan(generated_animation_sprite_slot_plan(
             "tests/override 3x1.png".to_string(),
             (192, 64),
@@ -1280,12 +1344,15 @@ mod contract_tests {
             slot.source.as_ref(),
             SpriteSource::Animated { .. }
         ));
-        assert_eq!(slot.def.src, [128, 0]);
-        assert_eq!(
-            slot.uv_for_frame_at(0, 0.0).map(f32::to_bits),
-            deadsync_noteskin::sprite_atlas_uv_scaled([1.0 / 192.0, 1.0 / 64.0], &slot.def, true,)
-                .map(f32::to_bits),
-        );
+        assert_eq!(slot.def.src, [0, 0]);
+        for (time, expected) in [(0.0, 2), (0.04, 0), (0.07, 1)] {
+            let frame = slot.frame_index(time, 0.0);
+            assert_eq!(frame, expected);
+            let uv = slot.uv_for_frame_at(frame, time);
+            assert!(uv[0] >= 0.0 && uv[2] <= 1.0);
+        }
+        // NoteDisplay seeks root sprites from the chart phase, overwriting setstate.
+        assert_eq!(slot.frame_index_from_phase(0.0), 0);
     }
 
     #[test]
