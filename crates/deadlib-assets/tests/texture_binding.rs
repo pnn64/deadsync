@@ -174,8 +174,15 @@ fn steady_uploads_preserve_bindings_and_cancelled_resizes_refresh_them() {
     assert_eq!(store.texture_handle(key), handle);
     store.queue_texture_upload(key.into(), RgbaImage::new(4, 4));
     let queued = store.revision();
+    // The pending dimensions already describe the replacement image.
+    store.set_texture_for_key(key.into(), (), 4, 4);
+    assert_eq!(store.revision(), queued);
+    assert_eq!(dims(&store, key), Some((4, 4)));
+    assert!(!store.has_pending_texture_upload(key));
+    store.queue_texture_upload(key.into(), RgbaImage::new(2, 2));
+    let queued = store.revision();
     // A failed upload leaves the previous GPU image installed.
     drop(store.pop_next_upload(budget, 0, 0).unwrap());
     assert_ne!(store.revision(), queued);
-    assert_eq!(dims(&store, key), Some((2, 2)));
+    assert_eq!(dims(&store, key), Some((4, 4)));
 }

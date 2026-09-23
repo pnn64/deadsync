@@ -249,16 +249,21 @@ impl<T> TextureStore<T> {
         height: u32,
     ) -> (TextureHandle, Option<T>) {
         let handle = self.reserve_texture_handle(key);
-        if !self.upload_dims_match(handle, width, height) {
-            self.revision.set(next_texture_revision());
-        }
-        self.uploaded_texture_dims.insert(
+        let uploaded_dims = self.uploaded_texture_dims.insert(
             handle,
             TexMeta {
                 w: width,
                 h: height,
             },
         );
+        if !self
+            .pending_texture_uploads
+            .dimensions(handle)
+            .or_else(|| uploaded_dims.map(|meta| (meta.w, meta.h)))
+            .is_some_and(|dims| dims == (width, height))
+        {
+            self.revision.set(next_texture_revision());
+        }
         self.pending_texture_uploads.remove(handle);
         let old = self.textures.insert(handle, texture);
         (handle, old)
@@ -549,7 +554,7 @@ mod tests {
 
     #[test]
     fn texture_replacement_updates_revision_only_when_uploaded_size_changes() {
-        for by_handle in [false, true] {
+        for mode in 0..3 {
             let mut textures = TextureStore::<u32>::new();
             let key = "replacement-size-test";
             let handle = textures.reserve_texture_handle(key.into());
@@ -561,10 +566,14 @@ mod tests {
                 (5, 1280, 720, Some(4), false),
             ] {
                 let revision = textures.revision.get();
-                let old = if by_handle {
-                    textures.set_texture_for_handle(handle, value, width, height)
-                } else {
-                    textures.insert_texture(key.into(), value, width, height)
+                let old = match mode {
+                    0 => textures.insert_texture(key.into(), value, width, height),
+                    1 => textures.set_texture_for_handle(handle, value, width, height),
+                    _ => {
+                        textures
+                            .set_texture_for_key(key.into(), value, width, height)
+                            .1
+                    }
                 };
                 assert_eq!(old, expected_old);
                 assert_eq!(textures.revision.get() != revision, resized);
