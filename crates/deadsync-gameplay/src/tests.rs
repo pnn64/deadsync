@@ -13561,6 +13561,36 @@ mod tests {
     }
 
     #[test]
+    fn requested_min_seconds_to_music_sets_the_real_lead_in_at_every_rate() {
+        // First judgable note of a chart whose intro needs 6.01 s of lead-in.
+        const FIRST_SECOND: f32 = 5.142;
+        let default = LeadInTiming::default();
+        let requested = default.with_min_seconds_to_music_at_least(6.01);
+        assert_eq!(requested.min_seconds_to_step, default.min_seconds_to_step);
+        assert_eq!(requested.min_seconds_to_music, 6.01);
+        assert_eq!(
+            default
+                .with_min_seconds_to_music_at_least(1.0)
+                .min_seconds_to_music,
+            default.min_seconds_to_music
+        );
+
+        for (rate, default_real_seconds) in [(1.0, 2.0), (1.5, 2.572)] {
+            let real_seconds = |timing: LeadInTiming| timing.start_delay(FIRST_SECOND, rate) / rate;
+            assert!(
+                (real_seconds(default) - default_real_seconds).abs() < 1e-3,
+                "rate {rate}: default lead-in {}",
+                real_seconds(default)
+            );
+            assert!(
+                (real_seconds(requested) - 6.01).abs() < 1e-4,
+                "rate {rate}: requested lead-in {}",
+                real_seconds(requested)
+            );
+        }
+    }
+
+    #[test]
     fn music_rate_state_normalizes_and_reports_changes() {
         let mut state = GameplayMusicRateState::new(f32::NAN);
         assert_eq!(state.rate(), 1.0);

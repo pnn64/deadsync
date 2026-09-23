@@ -158,7 +158,8 @@ pub use lua_util::{
     read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
-    read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
+    read_top_screen_hidden_layers, read_top_screen_hides_in, read_top_screen_min_seconds_to_music,
+    read_tracked_compile_actors, read_update_function_nested_tables,
     read_update_function_overlay_compile_actor_actions, read_update_function_tables,
     read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
     remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
@@ -1648,7 +1649,18 @@ pub struct CompiledSongLua<OverlayActor> {
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
+    /// Noteskin each player's options were set to with `NoteSkin()` while
+    /// the chart loaded (script files, InitCommand, OnCommand, first frame),
+    /// when it differs from the skin the player was seeded with. Applies to
+    /// this play only.
+    pub requested_noteskins: [Option<String>; LUA_PLAYERS],
+    /// Real seconds the chart asked the music to wait for with the DeadSync
+    /// top-screen method `SetMinSecondsToMusic()` while it loaded.
+    pub requested_min_seconds_to_music: Option<f32>,
     pub hidden_screen_layers: [bool; 2],
+    /// Whether the chart hid the top screen's "In" child, the theme's gameplay
+    /// intro, with `visible(false)`.
+    pub hides_screen_in: bool,
     pub note_hides: Vec<SongLuaNoteHideWindow>,
     pub column_offsets: Vec<SongLuaColumnOffsetWindow>,
     pub info: SongLuaCompileInfo,
@@ -1672,7 +1684,10 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
             hidden_players: [false; LUA_PLAYERS],
+            requested_noteskins: std::array::from_fn(|_| None),
+            requested_min_seconds_to_music: None,
             hidden_screen_layers: [false; 2],
+            hides_screen_in: false,
             note_hides: Vec::new(),
             column_offsets: Vec::new(),
             info: SongLuaCompileInfo::default(),
@@ -5729,6 +5744,98 @@ return Def.ActorFrame{}
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "lambda");
+    }
+
+    fn two_player_noteskin_context(song_dir: &Path, p2_enabled: bool) -> SongLuaCompileContext {
+        let mut context = SongLuaCompileContext::new(song_dir, "Requested Noteskin");
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                noteskin_name: "cyber".to_string(),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: p2_enabled,
+                noteskin_name: "cel".to_string(),
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+        context
+    }
+
+    #[test]
+    fn compile_song_lua_records_load_time_noteskin_requests() {
+        let song_dir = test_dir("requested-noteskin");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Preferred"):NoteSkin("SCH-X")
+return Def.ActorFrame{
+    OnCommand=function(self)
+        GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions("ModsLevel_Song"):NoteSkin("metal")
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            test_compile_song_lua(&entry, &two_player_noteskin_context(&song_dir, true)).unwrap();
+        assert_eq!(
+            compiled.requested_noteskins,
+            [Some("SCH-X".to_string()), Some("metal".to_string())]
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_ignores_mid_song_unchanged_and_disabled_noteskin_requests() {
+        let song_dir = test_dir("requested-noteskin-ignored");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+po:NoteSkin("CYBER")
+pcall(function()
+    GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions("ModsLevel_Song"):NoteSkin("metal")
+end)
+mod_actions = {
+    {4, function() po:NoteSkin("lambda") end, true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled =
+            test_compile_song_lua(&entry, &two_player_noteskin_context(&song_dir, false)).unwrap();
+        assert_eq!(compiled.requested_noteskins, [None, None]);
+    }
+
+    #[test]
+    fn compile_song_lua_layers_keep_noteskin_requests_on_the_primary_output() {
+        let song_dir = test_dir("requested-noteskin-layers");
+        let background = song_dir.join("background.lua");
+        let foreground = song_dir.join("foreground.lua");
+        fs::write(
+            &background,
+            r#"
+GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song"):NoteSkin("SCH-X")
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        fs::write(&foreground, "return Def.ActorFrame{}").unwrap();
+
+        let outputs = test_compile_song_lua_layers(
+            &[background.as_path(), foreground.as_path()],
+            1,
+            &two_player_noteskin_context(&song_dir, false),
+        )
+        .unwrap();
+        assert_eq!(outputs[1].requested_noteskins[0].as_deref(), Some("SCH-X"));
+        assert_eq!(outputs[0].requested_noteskins[0], None);
     }
 
     #[test]
@@ -10609,6 +10716,139 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.hidden_screen_layers, [true, true]);
+    }
+
+    #[test]
+    fn compile_song_lua_records_hidden_screen_in() {
+        let song_dir = test_dir("hidden-screen-in");
+        let hidden = song_dir.join("hidden.lua");
+        let shown = song_dir.join("shown.lua");
+        fs::write(
+            &hidden,
+            r#"
+SCREENMAN:GetTopScreen():GetChild("In"):visible(false)
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            &shown,
+            r#"
+local fade_in = SCREENMAN:GetTopScreen():GetChild("In")
+return Def.ActorFrame{
+    OnCommand=function(self) fade_in:visible(true) end,
+}
+"#,
+        )
+        .unwrap();
+        let context = SongLuaCompileContext::new(&song_dir, "Hidden Screen In");
+
+        let hidden = test_compile_song_lua(&hidden, &context).unwrap();
+        assert!(hidden.hides_screen_in);
+        assert_eq!(hidden.hidden_screen_layers, [false, false]);
+        let shown = test_compile_song_lua(&shown, &context).unwrap();
+        assert!(!shown.hides_screen_in);
+    }
+
+    #[test]
+    fn compile_song_lua_records_load_time_min_seconds_to_music() {
+        let song_dir = test_dir("min-seconds-to-music");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local screen = SCREENMAN:GetTopScreen()
+assert(screen:SetMinSecondsToMusic(4) == screen)
+return Def.ActorFrame{
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():SetMinSecondsToMusic(6.01)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Min Seconds To Music"),
+        )
+        .unwrap();
+        assert_eq!(compiled.requested_min_seconds_to_music, Some(6.01));
+    }
+
+    #[test]
+    fn compile_song_lua_clamps_and_ignores_mid_song_min_seconds_to_music() {
+        let song_dir = test_dir("min-seconds-to-music-ignored");
+        let clamped = song_dir.join("clamped.lua");
+        let mid_song = song_dir.join("mid-song.lua");
+        fs::write(
+            &clamped,
+            r#"
+local screen = SCREENMAN:GetTopScreen()
+screen:SetMinSecondsToMusic(99)
+screen:SetMinSecondsToMusic(0/0)
+screen:SetMinSecondsToMusic(math.huge)
+screen:SetMinSecondsToMusic("soon")
+mod_actions = {
+    {4, function() SCREENMAN:GetTopScreen():SetMinSecondsToMusic(12) end, true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            &mid_song,
+            r#"
+mod_actions = {
+    {4, function() SCREENMAN:GetTopScreen():SetMinSecondsToMusic(12) end, true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        let context = SongLuaCompileContext::new(&song_dir, "Min Seconds To Music Ignored");
+
+        assert_eq!(
+            test_compile_song_lua(&clamped, &context)
+                .unwrap()
+                .requested_min_seconds_to_music,
+            Some(30.0)
+        );
+        assert_eq!(
+            test_compile_song_lua(&mid_song, &context)
+                .unwrap()
+                .requested_min_seconds_to_music,
+            None
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_layers_keep_intro_requests_on_the_primary_output() {
+        let song_dir = test_dir("intro-request-layers");
+        let background = song_dir.join("background.lua");
+        let foreground = song_dir.join("foreground.lua");
+        fs::write(
+            &background,
+            r#"
+local screen = SCREENMAN:GetTopScreen()
+screen:GetChild("In"):visible(false)
+screen:SetMinSecondsToMusic(6.01)
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+        fs::write(&foreground, "return Def.ActorFrame{}").unwrap();
+
+        let outputs = test_compile_song_lua_layers(
+            &[background.as_path(), foreground.as_path()],
+            1,
+            &SongLuaCompileContext::new(&song_dir, "Intro Request Layers"),
+        )
+        .unwrap();
+        assert!(outputs[1].hides_screen_in);
+        assert_eq!(outputs[1].requested_min_seconds_to_music, Some(6.01));
+        assert!(!outputs[0].hides_screen_in);
+        assert_eq!(outputs[0].requested_min_seconds_to_music, None);
     }
 
     #[test]

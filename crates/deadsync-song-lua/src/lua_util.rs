@@ -869,27 +869,45 @@ pub fn read_tracked_compile_actors(
     Ok(out)
 }
 
-pub fn read_top_screen_hidden_layers(lua: &Lua) -> Result<[bool; 2], String> {
-    let top_screen = lua
-        .globals()
+const TOP_SCREEN_MIN_SECONDS_TO_MUSIC_KEY: &str = "__songlua_min_seconds_to_music";
+const MAX_REQUESTED_SECONDS_TO_MUSIC: f32 = 30.0;
+
+fn compile_top_screen(lua: &Lua) -> Result<Table, String> {
+    lua.globals()
         .get::<Table>("__songlua_top_screen")
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| err.to_string())
+}
+
+fn top_screen_child_hidden(lua: &Lua, name: &str) -> Result<bool, String> {
+    let top_screen = compile_top_screen(lua)?;
     let children = actor_children(lua, &top_screen).map_err(|err| err.to_string())?;
-    let mut hidden = [false; 2];
-    for (index, name) in ["Underlay", "Overlay"].iter().enumerate() {
-        let actor = children
-            .get::<Option<Table>>(*name)
-            .map_err(|err| err.to_string())?;
-        hidden[index] = if let Some(actor) = actor {
-            actor
-                .get::<Option<bool>>("__songlua_visible")
-                .map_err(|err| err.to_string())?
-                == Some(false)
-        } else {
-            false
-        };
-    }
-    Ok(hidden)
+    let Some(actor) = children
+        .get::<Option<Table>>(name)
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(false);
+    };
+    Ok(actor
+        .get::<Option<bool>>("__songlua_visible")
+        .map_err(|err| err.to_string())?
+        == Some(false))
+}
+
+pub fn read_top_screen_hidden_layers(lua: &Lua) -> Result<[bool; 2], String> {
+    Ok([
+        top_screen_child_hidden(lua, "Underlay")?,
+        top_screen_child_hidden(lua, "Overlay")?,
+    ])
+}
+
+pub fn read_top_screen_hides_in(lua: &Lua) -> Result<bool, String> {
+    top_screen_child_hidden(lua, "In")
+}
+
+pub fn read_top_screen_min_seconds_to_music(lua: &Lua) -> Result<Option<f32>, String> {
+    compile_top_screen(lua)?
+        .get::<Option<f32>>(TOP_SCREEN_MIN_SECONDS_TO_MUSIC_KEY)
+        .map_err(|err| err.to_string())
 }
 
 fn make_actor_ctor(
@@ -9174,6 +9192,28 @@ pub fn create_top_screen_table(
             let top_screen = top_screen.clone();
             move |lua, args: MultiValue| {
                 top_screen.set("__songlua_paused", method_arg(&args, 0).is_some_and(truthy))?;
+                note_song_lua_side_effect(lua)?;
+                Ok(top_screen.clone())
+            }
+        })?,
+    )?;
+    // DeadSync-only lead-in request. ITGmania charts hold the song with
+    // PauseGame and release it on a wall clock, which this host cannot replay.
+    top_screen.set(
+        "SetMinSecondsToMusic",
+        lua.create_function({
+            let top_screen = top_screen.clone();
+            move |lua, args: MultiValue| {
+                if let Some(seconds) = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_f32)
+                    .filter(|seconds| seconds.is_finite())
+                {
+                    top_screen.set(
+                        TOP_SCREEN_MIN_SECONDS_TO_MUSIC_KEY,
+                        seconds.clamp(0.0, MAX_REQUESTED_SECONDS_TO_MUSIC),
+                    )?;
+                }
                 note_song_lua_side_effect(lua)?;
                 Ok(top_screen.clone())
             }

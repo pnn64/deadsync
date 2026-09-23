@@ -70,7 +70,10 @@ use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
-use deadsync_song_lua::playback::{song_lua_sound_paths, song_meter_progress};
+use deadsync_song_lua::playback::{
+    song_lua_hides_screen_in, song_lua_requested_noteskins, song_lua_sound_paths,
+    song_meter_progress,
+};
 pub type GameplayCoreState = deadsync_song_lua::playback::GameplayCoreState<
     deadsync_profile_gameplay::GameplayProfile,
     deadsync_assets::noteskin::SpriteSlot,
@@ -757,6 +760,9 @@ pub struct State {
     pub step_stats_extra_resolved: [crate::step_stats_gifs::ResolvedStepStatsExtra; MAX_PLAYERS],
     pub song_full_title: Arc<str>,
     pub stage_intro_text: Arc<str>,
+    /// The chart hid the screen's "In" layer, which holds Simply Love's intro
+    /// splash and stage label, to draw its own intro instead.
+    pub(crate) hides_stage_intro: bool,
     pub replay_status_text: Option<Arc<str>>,
     pub course_display_info: Option<CourseDisplayInfo>,
     pub(crate) gameplay_stats_text: gameplay_stats::GameplayStatsTextPlan,
@@ -946,6 +952,11 @@ impl State {
         self.itl_cmod_warning
     }
 
+    #[inline(always)]
+    pub const fn hides_stage_intro(&self) -> bool {
+        self.hides_stage_intro
+    }
+
     #[must_use]
     pub fn from_gameplay(
         gameplay: GameplayCoreState,
@@ -1123,6 +1134,7 @@ impl State {
             step_stats_extra_resolved,
             song_full_title,
             stage_intro_text,
+            hides_stage_intro: false,
             replay_status_text,
             course_display_info,
             gameplay_stats_text,
@@ -1434,6 +1446,8 @@ pub fn gameplay_noteskin_assets(
     cols_per_player: usize,
     num_players: usize,
     runtime_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    chart_noteskins: &[Option<String>; MAX_PLAYERS],
+    song_dir: Option<&Path>,
 ) -> GameplayNoteskinAssets {
     use deadsync_noteskin::runtime::SkinPart;
     let style = Style {
@@ -1445,6 +1459,20 @@ pub fn gameplay_noteskin_assets(
     let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
+        }
+        // A skin the chart asked for replaces the whole look, including the
+        // player's per-part choices, for this play only.
+        if let (Some(requested), Some(song_dir)) = (chart_noteskins[player].as_deref(), song_dir)
+        {
+            match noteskin::load_song_itg_skin_cached(&style, requested, song_dir) {
+                Ok(skin) => {
+                    log::info!("Using the chart's noteskin '{requested}' for player {}", player + 1);
+                    return Some(skin);
+                }
+                Err(error) => log::warn!(
+                    "Cannot load the chart's noteskin '{requested}': {error}; using the player's noteskin"
+                ),
+            }
         }
         let profile = &runtime_profiles[player];
         let mut options = profile.current_player_options();
@@ -1534,12 +1562,19 @@ pub fn init(
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
     let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
-    let noteskin_assets =
-        gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profile_data);
+    let chart_noteskins = song_lua_requested_noteskins(&song_lua_data);
+    let noteskin_assets = gameplay_noteskin_assets(
+        cols_per_player,
+        num_players,
+        &runtime_profile_data,
+        &chart_noteskins,
+        song.simfile_path.parent(),
+    );
     let noteskin_data =
         noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profile_data);
     let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
+    let hides_stage_intro = song_lua_hides_screen_in(&song_lua_data);
     let pack_data = gameplay_pack_data(
         &song,
         course_display_info.as_ref().map(|info| &info.name),
@@ -1548,7 +1583,7 @@ pub fn init(
     let pack_group = pack_data.pack_group;
     let pack_banner_path = pack_data.pack_banner_path;
     let pack_sync_pref = pack_data.sync_pref;
-    State::from_gameplay_with_screen_data(
+    let mut state = State::from_gameplay_with_screen_data(
         deadsync_gameplay::init_gameplay_runtime(
             song,
             charts,
@@ -1590,7 +1625,9 @@ pub fn init(
         runtime,
         hud,
         judgment_palettes,
-    )
+    );
+    state.hides_stage_intro = hides_stage_intro;
+    state
 }
 
 #[inline(always)]
@@ -1743,7 +1780,9 @@ fn intro_text_target_x(
 fn push_system_stage_label(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
     let intro_text = state.stage_intro_text.as_ref();
     let is_restart_label = intro_text.starts_with("RESTART ");
-    if intro_text.is_empty()
+    // Simply Love's stage label is a child of the "In" layer the chart hid.
+    if state.hides_stage_intro
+        || intro_text.is_empty()
         || (!is_restart_label && state.total_elapsed_in_screen() < INTRO_TEXT_SETTLE_SECONDS)
     {
         return;
@@ -3439,22 +3478,39 @@ pub fn in_transition(
     is_restart: bool,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
-    if let Some(state) = state {
-        state
-            .notefield_combo_assets
-            .prewarm(&visual_policy.assets.effects);
+    let duration = if is_restart {
+        TRANSITION_IN_RESTART_DURATION
+    } else {
+        TRANSITION_IN_DURATION
+    };
+    let Some(state) = state else {
+        // Song Lua is still compiling, so whether the chart replaces the intro
+        // is unknown: hold black until the shell restarts this transition with
+        // the prepared state.
+        let cover = act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(1200)
+        );
+        return (vec![cover], duration);
+    };
+    state
+        .notefield_combo_assets
+        .prewarm(&visual_policy.assets.effects);
+    if state.hides_stage_intro {
+        // Same duration, so the shell's entry timing is unchanged.
+        return (Vec::new(), duration);
     }
     if is_restart {
-        if let Some(gs) = state {
-            let _ = intro_text_target_x(
-                gs,
-                asset_manager,
-                gs.stage_intro_text.as_ref(),
-                gs.runtime_view.play_style,
-                gs.runtime_view.player_side,
-                gs.runtime_view.policy.center_single_notefield,
-            );
-        }
+        let _ = intro_text_target_x(
+            state,
+            asset_manager,
+            state.stage_intro_text.as_ref(),
+            state.runtime_view.play_style,
+            state.runtime_view.player_side,
+            state.runtime_view.policy.center_single_notefield,
+        );
         // SL/zmod parity: on a song restart, skip the splode + stage-text
         // splash and run only a brief fade-from-black so the first gameplay
         // frame doesn't pop in. The "RESTART N" label still appears in the
@@ -3469,22 +3525,16 @@ pub fn in_transition(
         );
         return (vec![actor], TRANSITION_IN_RESTART_DURATION);
     }
-    let text = state
-        .map(|gs| gs.stage_intro_text.clone())
-        .unwrap_or_else(|| Arc::from("EVENT"));
-    let intro_color = state.map_or(color::decorative_rgba(0), |gs| {
-        color::decorative_rgba(gs.player_color_index())
-    });
-    let text_target_x = state.map_or_else(screen_center_x, |gs| {
-        intro_text_target_x(
-            gs,
-            asset_manager,
-            text.as_ref(),
-            gs.runtime_view.play_style,
-            gs.runtime_view.player_side,
-            gs.runtime_view.policy.center_single_notefield,
-        )
-    });
+    let text = state.stage_intro_text.clone();
+    let intro_color = color::decorative_rgba(state.player_color_index());
+    let text_target_x = intro_text_target_x(
+        state,
+        asset_manager,
+        text.as_ref(),
+        state.runtime_view.play_style,
+        state.runtime_view.player_side,
+        state.runtime_view.policy.center_single_notefield,
+    );
     let splode_tex = visual_policy.assets.effects.gameplayin_splode;
     let minisplode_tex = visual_policy.assets.effects.gameplayin_minisplode;
     let splode_zoom_scale = visual_styles::effect_zoom_scale(splode_tex);
@@ -5592,6 +5642,98 @@ mod tests {
     use deadlib_present::actors::SpriteSource;
 
     use deadlib_present::actors::SizeSpec;
+
+    fn fixture_state() -> State {
+        crate::tests::init_paths();
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
+        let simfile = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song_lua/display-size.ssc");
+        let song =
+            Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap());
+        let chart = Arc::new(song.charts[0].clone());
+        let gameplay_chart = Arc::new(
+            deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0)
+                .unwrap()
+                .remove(0),
+        );
+        let gameplay = deadsync_gameplay::init_gameplay_runtime(
+            song,
+            [chart.clone(), chart],
+            [gameplay_chart.clone(), gameplay_chart],
+            GameplayViewport::design(),
+            GameplaySession::default(),
+            GameplayConfig::default(),
+            deadsync_chart::SyncPref::Default,
+            Default::default(),
+            Default::default(),
+            PreparedGameplaySongLua::default(),
+            gameplay_crossover_annotations_for_player,
+            5,
+            1.0,
+            [ScrollSpeedSetting::XMod(1.0); MAX_PLAYERS],
+            std::array::from_fn(|_| GameplayProfile::from(profile_data::Profile::default())),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        );
+        State::from_gameplay(gameplay, GameplayNoteskinAssets::default())
+    }
+
+    #[test]
+    fn hidden_stage_intro_keeps_transition_timing_but_draws_no_intro() {
+        let assets = AssetManager::new();
+        let policy = crate::views::SimplyLoveVisualPolicyView::default();
+        let mut state = fixture_state();
+        state.stage_intro_text = Arc::from("RESTART 1");
+        let stage_label = |state: &State| {
+            let mut actors = Vec::new();
+            push_system_stage_label(&mut actors, state, &assets);
+            actors.len()
+        };
+
+        let (actors, duration) = in_transition(Some(&state), &assets, false, policy);
+        assert!(!actors.is_empty());
+        assert_eq!(duration, TRANSITION_IN_DURATION);
+        assert_eq!(stage_label(&state), 1);
+
+        state.hides_stage_intro = true;
+        for (is_restart, expected) in [
+            (false, TRANSITION_IN_DURATION),
+            (true, TRANSITION_IN_RESTART_DURATION),
+        ] {
+            let (actors, duration) = in_transition(Some(&state), &assets, is_restart, policy);
+            assert!(actors.is_empty());
+            assert_eq!(duration, expected);
+        }
+        assert_eq!(stage_label(&state), 0);
+    }
+
+    #[test]
+    fn pending_gameplay_state_holds_black_instead_of_the_intro() {
+        let assets = AssetManager::new();
+        let policy = crate::views::SimplyLoveVisualPolicyView::default();
+        for (is_restart, expected) in [
+            (false, TRANSITION_IN_DURATION),
+            (true, TRANSITION_IN_RESTART_DURATION),
+        ] {
+            let (actors, duration) = in_transition(None, &assets, is_restart, policy);
+            assert_eq!(duration, expected);
+            let [Actor::Sprite { z, tint, .. }] = actors.as_slice() else {
+                panic!("pending in-transition is one black quad");
+            };
+            assert_eq!(*z, 1200);
+            assert_eq!(*tint, [0.0, 0.0, 0.0, 1.0]);
+        }
+    }
 
     #[test]
     fn background_start_cache_tracks_the_active_timeline_cursor() {

@@ -2388,6 +2388,18 @@ impl App {
                     .take()
                     .expect("received Gameplay state requires a pending worker");
                 let commands = self.finish_gameplay_init(gs, &pending.finish);
+                if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                    // The entry transition only held black while the state was
+                    // pending; start it with the music, from the prepared state,
+                    // so a chart that replaces the intro never shows the splash.
+                    let (_, in_duration) =
+                        self.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    self.state.shell.transition = TransitionState::FadingIn {
+                        elapsed: 0.0,
+                        duration: in_duration,
+                    };
+                    self.sync_gameplay_input_capture();
+                }
                 self.run_commands(commands, event_loop);
                 // Loading time is not gameplay time. Prevent the completion
                 // frame from becoming the next frame's simulation delta.
@@ -7003,6 +7015,8 @@ impl App {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     let smx_overlay_alpha = match self.state.shell.transition {
+                        // The chart hid the intro, so there is no black to mirror.
+                        TransitionState::FadingIn { .. } if gs.hides_stage_intro() => 1.0,
                         TransitionState::FadingIn { elapsed, duration } => {
                             if duration <= gameplay::TRANSITION_IN_RESTART_DURATION + 0.01 {
                                 // Restart: the in-transition black fades over the whole short
@@ -9226,6 +9240,15 @@ impl App {
                             &gameplay_config,
                             video_renderer,
                         )
+                    });
+                    // Later course stages keep the course's short lead-in.
+                    let lead_in_timing = lead_in_timing.or_else(|| {
+                        deadsync_song_lua::playback::song_lua_requested_min_seconds_to_music(
+                            &prepared_song_lua,
+                        )
+                        .map(|seconds| {
+                            LeadInTiming::default().with_min_seconds_to_music_at_least(seconds)
+                        })
                     });
                     gameplay::init(
                         song_arc,

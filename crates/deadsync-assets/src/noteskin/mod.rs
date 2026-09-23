@@ -166,6 +166,46 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
         .get_or_load(style, skin, || load_itg_skin(style, skin))
 }
 
+/// A noteskin a chart asked for, for one play. A copy the chart ships in its
+/// song folder (`<song_dir>/<skin>/`) is used over an installed skin of the
+/// same name. Unlike [`load_itg_skin_cached`], a name that is neither shipped
+/// nor installed is an error rather than the default skin.
+pub fn load_song_itg_skin_cached(
+    style: &Style,
+    skin: &str,
+    song_dir: &Path,
+) -> Result<Arc<Noteskin>, String> {
+    let Some(dir) = noteskin_itg::find_song_noteskin_dir(song_dir, skin) else {
+        let installed = is_pack_skin(skin)
+            || noteskin_itg::load_noteskin_data_cached_from_roots(
+                &noteskin_roots(),
+                style.game_name(),
+                skin,
+            )
+            .is_some();
+        if !installed {
+            return Err(format!(
+                "noteskin '{skin}' is neither installed nor in '{}'",
+                song_dir.display()
+            ));
+        }
+        return load_itg_skin_cached(style, skin);
+    };
+    let key = noteskin_itg::song_noteskin_key(&dir);
+    ITG_SKIN_CACHE
+        .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
+        .get_or_load(style, &key, || load_song_itg_skin(style, &dir, &key))
+}
+
+fn load_song_itg_skin(style: &Style, dir: &Path, key: &str) -> Result<Noteskin, String> {
+    let game = style.game_name();
+    let data =
+        noteskin_itg::load_external_noteskin_data(dir, &noteskin_roots(), game, key.to_owned())?;
+    let bundle = noteskin_compiler::load_or_compile(&crate::paths().noteskin_cache, game, &data)?;
+    load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, None)
+        .map_err(|err| format!("failed to load noteskin '{}': {err}", dir.display()))
+}
+
 /// Load native preview components, reusing a full gameplay runtime when resident.
 /// A partial result is never inserted in the gameplay runtime cache. Its omitted
 /// fields are empty; use it only for the requested components' presentation.

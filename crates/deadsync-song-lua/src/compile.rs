@@ -20,7 +20,8 @@ use crate::{
     read_global_function_nested_tables, read_mod_windows, read_note_column_zoom_hides,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_runtime_mod_eases, read_song_lua_sound_paths,
-    read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
+    read_top_screen_hidden_layers, read_top_screen_hides_in, read_top_screen_min_seconds_to_music,
+    read_tracked_compile_actors, read_update_function_nested_tables,
     read_update_function_overlay_compile_actor_actions, read_update_function_tables,
     read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
     restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
@@ -341,6 +342,11 @@ where
     compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
     compile_timer.push_stage("draw_functions");
+    // Read before any later phase replays mid-song Lua against the same
+    // options tables: the notefield's skin and the lead-in are chosen once, at
+    // load.
+    let requested_noteskins = read_requested_noteskins(&lua, context)?;
+    let requested_min_seconds_to_music = read_top_screen_min_seconds_to_music(&lua)?;
     register_loaded_easing_names(&lua, &mut host).map_err(|err| err.to_string())?;
     compile_timer.push_stage("easing_names");
     mark_compile_layers(&root).map_err(|err| err.to_string())?;
@@ -879,7 +885,10 @@ where
         }
     }
     out.hidden_players = hidden_players;
+    out.requested_noteskins = requested_noteskins;
+    out.requested_min_seconds_to_music = requested_min_seconds_to_music;
     out.hidden_screen_layers = read_top_screen_hidden_layers(&lua)?;
+    out.hides_screen_in = read_top_screen_hides_in(&lua)?;
 
     sort_compiled_song_lua(&mut out);
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
@@ -962,6 +971,29 @@ fn resolve_late_proxy_targets<NoteskinSlot, ModelVertex>(
         *target = resolved;
     }
     Ok(())
+}
+
+fn read_requested_noteskins(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> Result<[Option<String>; crate::LUA_PLAYERS], String> {
+    let tables = crate::update_player_option_tables(lua)?;
+    let mut out: [Option<String>; crate::LUA_PLAYERS] = Default::default();
+    for (player, table) in tables.iter().enumerate() {
+        let seeded = &context.players[player];
+        if !seeded.enabled {
+            continue;
+        }
+        let name = table
+            .raw_get::<Option<String>>("__songlua_noteskin_name")
+            .map_err(|err| err.to_string())?;
+        // The seeded name can be a pack selection such as "base?slot=value",
+        // so only a name the chart actually changed counts as a request.
+        out[player] = name
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty() && !name.eq_ignore_ascii_case(seeded.noteskin_name.trim()));
+    }
+    Ok(out)
 }
 
 fn mark_compile_layers(root: &Value) -> mlua::Result<()> {
@@ -1088,7 +1120,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     primary.player_actors = compiled.player_actors;
     primary.song_foreground = compiled.song_foreground;
     primary.hidden_players = compiled.hidden_players;
+    primary.requested_noteskins = compiled.requested_noteskins;
+    primary.requested_min_seconds_to_music = compiled.requested_min_seconds_to_music;
     primary.hidden_screen_layers = compiled.hidden_screen_layers;
+    primary.hides_screen_in = compiled.hides_screen_in;
     primary.note_hides = compiled.note_hides;
     primary.column_offsets = compiled.column_offsets;
     primary.info = compiled.info;

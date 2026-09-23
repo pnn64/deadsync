@@ -608,20 +608,9 @@ where
         audio_end_time_ns,
         song_time_ns_from_seconds(song.last_second_hint),
     );
-    // ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
-    // MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
-    // MusicRate, so we apply the same here to keep real-world lead-in time
-    // consistent across rates.
-    let lead_in_timing = lead_in_timing.unwrap_or_default();
-    let min_time_to_notes = lead_in_timing.min_seconds_to_step.max(0.0) * rate;
-    let min_time_to_music = lead_in_timing.min_seconds_to_music.max(0.0) * rate;
-    let mut start_delay = min_time_to_notes - first_second;
-    if start_delay < min_time_to_music {
-        start_delay = min_time_to_music;
-    }
-    if start_delay < 0.0 {
-        start_delay = 0.0;
-    }
+    let start_delay = lead_in_timing
+        .unwrap_or_default()
+        .start_delay(first_second, rate);
 
     let first_note_beat = timing.get_beat_for_time(first_second);
     let initial_bpm = timing.get_bpm_for_beat(first_note_beat);

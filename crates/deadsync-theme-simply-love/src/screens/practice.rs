@@ -537,6 +537,9 @@ const SNAP_BEATS: [f32; 9] = [
 
 pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
     gameplay.disable_score_for_practice();
+    // Practice opens in the editor with song visuals off, so a chart's own
+    // intro cannot stand in for the practice transition.
+    gameplay.hides_stage_intro = false;
     let active_players = gameplay.num_players();
     let density_graph = build_practice_density_graph(&gameplay);
     let timing_labels = std::array::from_fn(|player| {

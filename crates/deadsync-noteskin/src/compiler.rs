@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 13;
+const COMPILER_VERSION: u32 = 14;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -325,6 +325,7 @@ fn compile_data(
     let scripts = noteskin_paths(data);
     let lua = Lua::new();
     install_host(&lua, data).map_err(|err| err.to_string())?;
+    install_game_state(&lua, game).map_err(|err| err.to_string())?;
     let noteskin = load_noteskin_table(&lua, &scripts)?;
     Ok(CompiledNoteskinBundle {
         version: noteskin_compiled::CACHE_SCHEMA_VERSION,
@@ -468,6 +469,7 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
             "SpriteOnly" => Ok(Value::Boolean(
                 globals.get::<bool>("__itg_sprite_only").unwrap_or(false),
             )),
+            "Player" => Ok(Value::String(lua.create_string("PlayerNumber_P1")?)),
             _ => Ok(Value::Nil),
         }
     })?;
@@ -527,6 +529,59 @@ fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()
     };
     globals.set("loadfile", loadfile)?;
     Ok(())
+}
+
+/// ITG NoteSkin.lua files may consult GAMESTATE, most often to check a
+/// player's mods for Reverse. A compiled loader is shared by every player
+/// and play, so it answers as a single player with no mods.
+fn install_game_state(lua: &Lua, game: &str) -> mlua::Result<()> {
+    let game = game.trim().to_ascii_lowercase();
+    let steps_type = if game == "pump" {
+        "StepsType_Pump_Single"
+    } else {
+        "StepsType_Dance_Single"
+    };
+    let player_state = lua.create_table()?;
+    player_state.set(
+        "GetPlayerOptionsString",
+        lua.create_function(|_, _args: MultiValue| Ok(""))?,
+    )?;
+    let style = lua.create_table()?;
+    style.set(
+        "GetStepsType",
+        lua.create_function(move |_, _args: MultiValue| Ok(steps_type))?,
+    )?;
+    let current_game = lua.create_table()?;
+    current_game.set(
+        "GetName",
+        lua.create_function(move |_, _args: MultiValue| Ok(game.clone()))?,
+    )?;
+    let state = lua.create_table()?;
+    state.set(
+        "GetPlayerState",
+        lua.create_function(move |_, _args: MultiValue| Ok(player_state.clone()))?,
+    )?;
+    state.set(
+        "GetCurrentStyle",
+        lua.create_function(move |_, _args: MultiValue| Ok(style.clone()))?,
+    )?;
+    state.set(
+        "GetCurrentGame",
+        lua.create_function(move |_, _args: MultiValue| Ok(current_game.clone()))?,
+    )?;
+    state.set(
+        "GetCurrentSong",
+        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+    )?;
+    state.set(
+        "IsCourseMode",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    state.set(
+        "GetMasterPlayerNumber",
+        lua.create_function(|_, _args: MultiValue| Ok("PlayerNumber_P1"))?,
+    )?;
+    lua.globals().set("GAMESTATE", state)
 }
 
 fn make_actor_for_path(make_actor: &Function, value: Value) -> mlua::Result<Table> {
@@ -987,6 +1042,46 @@ mod tests {
         assert!(
             path.components()
                 .all(|component| component.as_os_str() != OsStr::new(&version_dir))
+        );
+    }
+
+    #[test]
+    fn loader_answers_gamestate_as_a_player_without_mods() {
+        let root = temp_noteskin_dir("gamestate-stub");
+        let skin_dir = root.join("dance/reverse-aware");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    local options = GAMESTATE:GetPlayerState(Var "Player"):GetPlayerOptionsString("ModsLevel_Preferred")
+    local reverse = string.find(options:lower(), "reverse")
+    assert(GAMESTATE:GetCurrentStyle():GetStepsType() == "StepsType_Dance_Single")
+    assert(GAMESTATE:GetCurrentGame():GetName() == "dance")
+    assert(GAMESTATE:IsCourseMode() == false)
+    assert(GAMESTATE:GetCurrentSong() == nil)
+    if reverse and button == "Up" then button = "Down" end
+    return Def.Sprite { Texture = NOTESKIN:GetPath(button, element) }
+end
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(skin_dir.join("Up Hold Body Active.png"), []).unwrap();
+
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "reverse-aware".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![skin_dir],
+        };
+        let bundle = super::compile_data("dance", &data, "testhash").expect("compile data");
+
+        assert_eq!(
+            bundle.loader.load_request("Up", "Hold Body Active").load_button,
+            "Up"
         );
     }
 

@@ -555,6 +555,31 @@ impl Default for LeadInTiming {
     }
 }
 
+impl LeadInTiming {
+    #[must_use]
+    pub const fn with_min_seconds_to_music_at_least(self, seconds: f32) -> Self {
+        Self {
+            min_seconds_to_music: self.min_seconds_to_music.max(seconds),
+            ..self
+        }
+    }
+
+    /// Music seconds before the song starts for a chart whose first judgable
+    /// note is at `first_second`.
+    ///
+    /// ITGmania's ScreenGameplay::StartPlayingSong uses theme metrics
+    /// MinSecondsToStep / MinSecondsToMusic. Simply Love scales both by
+    /// MusicRate, so the real-world lead-in stays the same across rates.
+    #[must_use]
+    pub fn start_delay(self, first_second: f32, rate: f32) -> f32 {
+        let min_time_to_notes = self.min_seconds_to_step.max(0.0) * rate;
+        let min_time_to_music = self.min_seconds_to_music.max(0.0) * rate;
+        (min_time_to_notes - first_second)
+            .max(min_time_to_music)
+            .max(0.0)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GameplayAudioClockState {
     lead_in_seconds: f32,

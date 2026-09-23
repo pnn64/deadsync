@@ -324,6 +324,43 @@ pub fn song_lua_sound_paths<S: Clone + std::fmt::Debug>(
     )
 }
 
+fn compiled_song_lua_layers<S>(
+    data: &PreparedGameplaySongLua<S>,
+) -> impl Iterator<Item = &CompiledSongLua<S>> {
+    data.primary
+        .iter()
+        .map(|primary| &primary.compiled)
+        .chain(data.background_layers.iter().map(|layer| &layer.compiled))
+        .chain(data.foreground_layers.iter().map(|layer| &layer.compiled))
+}
+
+/// The noteskin each gameplay player's chart asked for while it loaded, if
+/// any. A shared compile session records it on the primary layer; layers
+/// compiled separately each carry their own, and the first one wins.
+pub fn song_lua_requested_noteskins<S: Clone + std::fmt::Debug>(
+    data: &PreparedGameplaySongLua<S>,
+) -> [Option<String>; MAX_PLAYERS] {
+    std::array::from_fn(|player| {
+        compiled_song_lua_layers(data)
+            .find_map(|compiled| compiled.requested_noteskins.get(player).cloned().flatten())
+    })
+}
+
+/// Whether the chart hid the screen's "In" layer, replacing the theme's
+/// gameplay intro with its own.
+pub fn song_lua_hides_screen_in<S>(data: &PreparedGameplaySongLua<S>) -> bool {
+    compiled_song_lua_layers(data).any(|compiled| compiled.hides_screen_in)
+}
+
+/// The longest lead-in, in real seconds, the chart asked for while it loaded.
+pub fn song_lua_requested_min_seconds_to_music<S>(
+    data: &PreparedGameplaySongLua<S>,
+) -> Option<f32> {
+    compiled_song_lua_layers(data)
+        .filter_map(|compiled| compiled.requested_min_seconds_to_music)
+        .reduce(f32::max)
+}
+
 pub(crate) fn song_lua_video_paths<CapturedActor, StateDelta, S: Clone>(
     visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor<S>, CapturedActor, StateDelta>,
 ) -> Vec<PathBuf> {
@@ -1082,6 +1119,55 @@ mod tests {
 
         assert_eq!(visited, [PathBuf::from("one.ogg")]);
         assert_eq!(next_event_ix, 1);
+    }
+
+    fn intro(hides_screen_in: bool, seconds: Option<f32>) -> CompiledSongLua<()> {
+        CompiledSongLua {
+            hides_screen_in,
+            requested_min_seconds_to_music: seconds,
+            ..CompiledSongLua::default()
+        }
+    }
+
+    #[test]
+    fn intro_requests_merge_across_layers() {
+        let none = PreparedGameplaySongLua::<()>::default();
+        assert!(!song_lua_hides_screen_in(&none));
+        assert_eq!(song_lua_requested_min_seconds_to_music(&none), None);
+
+        let unrequested = PreparedGameplaySongLua {
+            primary: Some(GameplayCompiledSongLua {
+                compiled: intro(false, None),
+                compile_ms: 0.0,
+            }),
+            background_layers: vec![GameplaySongLuaLayer {
+                start_beat: 0.0,
+                compiled: intro(false, None),
+            }],
+            foreground_layers: Vec::new(),
+        };
+        assert!(!song_lua_hides_screen_in(&unrequested));
+        assert_eq!(song_lua_requested_min_seconds_to_music(&unrequested), None);
+
+        let requested = PreparedGameplaySongLua {
+            primary: Some(GameplayCompiledSongLua {
+                compiled: intro(false, Some(4.0)),
+                compile_ms: 0.0,
+            }),
+            background_layers: vec![GameplaySongLuaLayer {
+                start_beat: 0.0,
+                compiled: intro(false, Some(6.01)),
+            }],
+            foreground_layers: vec![GameplaySongLuaLayer {
+                start_beat: 8.0,
+                compiled: intro(true, None),
+            }],
+        };
+        assert!(song_lua_hides_screen_in(&requested));
+        assert_eq!(
+            song_lua_requested_min_seconds_to_music(&requested),
+            Some(6.01)
+        );
     }
 }
 

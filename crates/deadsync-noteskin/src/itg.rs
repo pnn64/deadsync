@@ -845,6 +845,80 @@ pub fn load_noteskin_data_cached_from_roots(
     None
 }
 
+/// `<song_dir>/<skin>` when a chart ships the noteskin it asks for there.
+#[must_use]
+pub fn find_song_noteskin_dir(song_dir: &Path, skin: &str) -> Option<PathBuf> {
+    let skin = skin.trim();
+    if skin.is_empty() || skin.starts_with('.') || skin.contains(['/', '\\', ':']) {
+        return None;
+    }
+    let dir = find_child_dir_case_insensitive(song_dir, skin)?;
+    // A chart's other folders, such as its Lua, are not noteskins.
+    (dir.join("NoteSkin.lua").is_file() || dir.join("metrics.ini").is_file()).then_some(dir)
+}
+
+/// Cache identity for a noteskin loaded from a folder outside the noteskin
+/// roots: never an installed skin's name, and distinct for every folder, so
+/// two charts shipping different copies of one skin never share a cache.
+#[must_use]
+pub fn song_noteskin_key(dir: &Path) -> String {
+    let mut hasher = twox_hash::XxHash64::default();
+    for byte in dir.to_string_lossy().bytes() {
+        hasher.write_u8(if byte == b'\\' { b'/' } else { byte.to_ascii_lowercase() });
+    }
+    let skin: String = dir
+        .file_name()
+        .map(|name| {
+            name.to_string_lossy()
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '_'
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    format!("song-{skin}-{:016x}", hasher.finish())
+}
+
+/// Noteskin data for a skin in `dir` outside the noteskin roots, named
+/// `name`; its FallbackNoteSkin chain resolves from `roots`.
+pub fn load_external_noteskin_data(
+    dir: &Path,
+    roots: &[PathBuf],
+    game: &str,
+    name: String,
+) -> Result<NoteskinData, String> {
+    let metrics_path = dir.join("metrics.ini");
+    let mut metrics = if metrics_path.is_file() {
+        IniData::parse_file(&metrics_path)?
+    } else {
+        IniData::default()
+    };
+    let own = dir.file_name().and_then(|name| name.to_str()).unwrap_or("");
+    let fallback = metrics
+        .get("global", "fallbacknoteskin")
+        .map(str::trim)
+        .filter(|fallback| !fallback.is_empty() && !fallback.eq_ignore_ascii_case(own))
+        .unwrap_or(DEFAULT_SKIN_NAME)
+        .to_ascii_lowercase();
+    let base = load_noteskin_data_cached_from_roots(roots, game, &fallback)
+        .ok_or_else(|| format!("missing noteskin fallback: {fallback}"))?;
+    metrics.merge_missing_from(&base.metrics);
+    let mut search_dirs = Vec::with_capacity(base.search_dirs.len() + 1);
+    search_dirs.push(dir.to_path_buf());
+    search_dirs.extend(base.search_dirs.iter().cloned());
+    Ok(NoteskinData {
+        name,
+        metrics,
+        search_dirs,
+        overrides: Vec::new(),
+    })
+}
+
 #[must_use]
 pub fn song_lua_noteskin_resolve_path_from_roots(
     roots: &[PathBuf],
@@ -1219,8 +1293,9 @@ mod tests {
     use super::{
         BorrowMap, IniData, IniKey, ItgSkinRuntimeCache, NoteskinData, animation_is_beat_based,
         button_for_col, clear_data_cache, clear_lookup_caches, default_skin_candidates,
-        default_skin_name, down_col, find_file_with_prefix, find_texture_with_prefix,
-        load_itg_skin_from_roots, load_noteskin_data_cached, load_noteskin_data_cached_from_roots,
+        default_skin_name, down_col, find_file_with_prefix, find_song_noteskin_dir,
+        find_texture_with_prefix, load_external_noteskin_data, load_itg_skin_from_roots,
+        load_noteskin_data_cached, load_noteskin_data_cached_from_roots, song_noteskin_key,
         normalized_game_name, normalized_skin_name, note_display_metrics, parse_ini_float,
         resolve_skin_dir, resolve_texture_expr, skin_name_is_default,
         song_lua_noteskin_exists_from_roots, song_lua_noteskin_metric_b_from_roots,
@@ -1491,6 +1566,90 @@ mod tests {
         assert_eq!(loaded.get_metric("Down", "Foo"), Some("bar"));
 
         let _ = fs::remove_dir_all(missing_root);
+        let _ = fs::remove_dir_all(root);
+        clear_lookup_caches();
+        clear_data_cache();
+    }
+
+    #[test]
+    fn song_noteskin_loads_from_its_folder_with_fallbacks_from_roots() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let root = temp_root("song-skin-roots");
+        let common = root.join("common").join("common");
+        let default = root.join("dance").join("default");
+        fs::create_dir_all(&common).unwrap();
+        fs::create_dir_all(&default).unwrap();
+        fs::write(
+            common.join("metrics.ini"),
+            b"[NoteDisplay]\nHoldLetGoGrayPercent=0.25\n",
+        )
+        .unwrap();
+        fs::write(
+            default.join("metrics.ini"),
+            b"[NoteDisplay]\nDrawHoldHeadForTapsOnSameRow=0\n",
+        )
+        .unwrap();
+        let song_dir = temp_root("song-skin-song");
+        let skin_dir = song_dir.join("SCH-Test");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            b"[Global]\nFallbackNoteSkin=common\n[NoteDisplay]\nHoldLetGoGrayPercent=0.33\n",
+        )
+        .unwrap();
+        fs::create_dir_all(song_dir.join("lua")).unwrap();
+
+        let dir = find_song_noteskin_dir(&song_dir, "sch-test").expect("song skin dir");
+        assert_eq!(dir, skin_dir);
+        assert!(find_song_noteskin_dir(&song_dir, "lua").is_none());
+        assert!(find_song_noteskin_dir(&song_dir, "../SCH-Test").is_none());
+        assert!(find_song_noteskin_dir(&song_dir, "missing").is_none());
+
+        let key = song_noteskin_key(&dir);
+        assert!(key.starts_with("song-sch-test-"), "{key}");
+        assert_ne!(key, song_noteskin_key(&root.join("dance").join("SCH-Test")));
+
+        let data = load_external_noteskin_data(&dir, &[root.clone()], "dance", key.clone())
+            .expect("song skin data");
+        assert_eq!(data.name, key);
+        assert_eq!(data.search_dirs, vec![skin_dir, common, default]);
+        assert_eq!(
+            data.metrics.get("notedisplay", "holdletgograypercent"),
+            Some("0.33")
+        );
+        assert_eq!(
+            data.metrics.get("notedisplay", "drawholdheadfortapsonsamerow"),
+            Some("0")
+        );
+
+        let _ = fs::remove_dir_all(song_dir);
+        let _ = fs::remove_dir_all(root);
+        clear_lookup_caches();
+        clear_data_cache();
+    }
+
+    #[test]
+    fn song_noteskin_fails_without_its_fallback() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let root = temp_root("song-skin-no-fallback");
+        let song_dir = temp_root("song-skin-no-fallback-song");
+        let skin_dir = song_dir.join("lonely");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            b"[Global]\nFallbackNoteSkin=nowhere\n",
+        )
+        .unwrap();
+
+        let error = load_external_noteskin_data(&skin_dir, &[root.clone()], "dance", "k".into())
+            .expect_err("missing fallback");
+        assert!(error.contains("nowhere"), "{error}");
+
+        let _ = fs::remove_dir_all(song_dir);
         let _ = fs::remove_dir_all(root);
         clear_lookup_caches();
         clear_data_cache();
