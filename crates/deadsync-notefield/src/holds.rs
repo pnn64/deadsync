@@ -517,6 +517,9 @@ fn compose_hold_sprite<S, F>(
     if !diffuse_visible && !glow_visible {
         return;
     }
+    // The sprite compositor treats uv_rect as unsigned bounds. Preserve the
+    // directed coordinates used by ITGmania's hold strips via explicit flips.
+    let [u0, v0, u1, v1] = pass.uv;
     let mut sprite = FlatSprite {
         center: pass.center,
         world_z: pass.world_z,
@@ -529,9 +532,9 @@ fn compose_hold_sprite<S, F>(
             pass.diffuse[3] * pass.alpha,
         ],
         glow: [1.0, 1.0, 1.0, 0.0],
-        uv_rect: pass.uv,
-        flip_x: false,
-        flip_y: false,
+        uv_rect: [u0.min(u1), v0.min(v1), u0.max(u1), v0.max(v1)],
+        flip_x: u0 > u1,
+        flip_y: v0 > v1,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
         rot_y_deg: pass.rotation_y_deg,
@@ -696,6 +699,7 @@ fn body_segment_v(
     segment_bottom: f32,
     natural_bottom: f32,
     phase_end: f32,
+    anchor_to_top: bool,
 ) -> (f32, f32) {
     let v_range = v_bottom - v_top;
     let base_floor = phase.floor();
@@ -705,7 +709,9 @@ fn body_segment_v(
     let body_reaches_tail = (natural_bottom - body_bottom).max(0.0) <= segment_height + 1.0;
     let is_last_visible =
         (body_bottom - segment_bottom).abs() <= 0.5 || next_phase >= phase_end - SEGMENT_PHASE_EPS;
-    if body_reaches_tail && is_last_visible {
+    // ITGmania leaves top-anchored bodies at their original texture phase.
+    // Tail-aligning a partial tile breaks its join with the cap or prior tile.
+    if !anchor_to_top && body_reaches_tail && is_last_visible {
         v1 = v_bottom;
         v0 = if v_range >= 0.0 {
             v_range.abs().mul_add(-portion, v_bottom)
@@ -765,6 +771,7 @@ where
             segment_bottom,
             request.y_tail,
             phase_end,
+            request.lane_reverse && request.top_anchor_reverse,
         );
         let center_y = f32::midpoint(segment_top, segment_bottom);
         let sample = sample_path(center_y);
@@ -985,6 +992,7 @@ where
             segment_bottom,
             request.y_tail,
             phase_end,
+            request.lane_reverse && request.top_anchor_reverse,
         );
         let inverse_segment_size = segment_size.recip();
         let mut slice_top = segment_top;
@@ -1263,15 +1271,12 @@ fn compose_top_cap<S, F, P>(
     } else {
         request.elapsed_s
     };
-    let uv = maybe_mirror_uv_horiz_for_reverse_flipped(
-        maybe_flip_uv_vert(
-            translated_uv_rect(
-                slot.uv_for_frame_at(frame, uv_elapsed),
-                request.top_cap_uv_translation,
-            ),
-            request.body_flipped,
+    // NoteDisplay::DrawHoldPart flips top/bottom only, including swapped caps.
+    let uv = maybe_flip_uv_vert(
+        translated_uv_rect(
+            slot.uv_for_frame_at(frame, uv_elapsed),
+            request.top_cap_uv_translation,
         ),
-        request.lane_reverse,
         request.body_flipped,
     );
     let [u0, v0, u1, mut v1] = uv;
@@ -1359,7 +1364,7 @@ fn compose_top_cap<S, F, P>(
                 size: [cap_width, draw_height],
                 uv: [u0, v0, u1, v1],
                 rotation_y_deg: request.rotation_y_deg,
-                rotation_z_deg: top_cap_rotation_deg(request.lane_reverse, request.body_flipped),
+                rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
                 glow,
@@ -1518,15 +1523,11 @@ fn compose_bottom_cap<S, F, P>(
     } else {
         request.elapsed_s
     };
-    let uv = maybe_mirror_uv_horiz_for_reverse_flipped(
-        maybe_flip_uv_vert(
-            translated_uv_rect(
-                slot.uv_for_frame_at(frame, uv_elapsed),
-                request.bottom_cap_uv_translation,
-            ),
-            request.body_flipped,
+    let uv = maybe_flip_uv_vert(
+        translated_uv_rect(
+            slot.uv_for_frame_at(frame, uv_elapsed),
+            request.bottom_cap_uv_translation,
         ),
-        request.lane_reverse,
         request.body_flipped,
     );
     let [u0, base_v0, u1, base_v1] = uv;
@@ -1655,27 +1656,6 @@ pub(crate) const fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4]
         uv.swap(1, 3);
     }
     uv
-}
-
-pub(crate) const fn maybe_mirror_uv_horiz_for_reverse_flipped(
-    mut uv: [f32; 4],
-    lane_reverse: bool,
-    body_flipped: bool,
-) -> [f32; 4] {
-    if lane_reverse && body_flipped {
-        let tmp = uv[0];
-        uv[0] = uv[2];
-        uv[2] = tmp;
-    }
-    uv
-}
-
-pub(crate) const fn top_cap_rotation_deg(lane_reverse: bool, body_flipped: bool) -> f32 {
-    if lane_reverse && body_flipped {
-        180.0
-    } else {
-        0.0
-    }
 }
 
 pub(crate) fn scale_effect_size(
@@ -2730,8 +2710,269 @@ mod tests {
         assert!(actors.iter().all(|actor| sprite_key(actor) == "model-body"));
     }
 
+    fn render_hold_draws(draws: &[FlatDraw]) -> deadlib_render_core::RenderFrame {
+        use deadlib_present::{compose, font, space, texture};
+        struct HoldTextures;
+        impl texture::TextureContext for HoldTextures {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _key: &str) -> Option<texture::TextureMeta> {
+                None
+            }
+            fn sprite_sheet_dims(&self, _key: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, _key: &str) -> deadlib_render_core::TextureHandle {
+                1
+            }
+        }
+        compose::build_passes(
+            [compose::ActorSegment::flat_proxy(
+                draws,
+                [0.0; 2],
+                0,
+                &[1.0; 4],
+                BlendMode::Alpha,
+            )]
+            .into_iter(),
+            &[],
+            [0.0; 4],
+            &space::Metrics::centered(640.0, 480.0),
+            &font::FontMap::default(),
+            0.0,
+            &mut compose::TextLayoutCache::default(),
+            &mut compose::ComposeScratch::default(),
+            &HoldTextures,
+            None,
+        )
+    }
+
     #[test]
-    fn reverse_flipped_caps_preserve_uv_mirror_and_top_rotation() {
+    fn reverse_roll_body_keeps_vertical_flip_through_compositor() {
+        // Cel's active roll body is a 4x1 atlas of 64x256 frames. ITGmania's
+        // DrawHoldPart swaps rect.top/bottom and leaves left/right unchanged.
+        let mut body = TestSlot::sprite("cel-roll-body");
+        body.def.size = [64, 256];
+        body.uv = [0.25, 0.0, 0.5, 1.0];
+        for legacy in [true, false] {
+            for reverse in [false, true] {
+                let mut request = body_cap_request(Some(&body), None, None);
+                request.y_tail = request.y_head + 256.0;
+                request.draw_span = Some((request.y_head, request.y_tail));
+                request.lane_reverse = reverse;
+                request.body_flipped = reverse;
+                request.top_anchor_reverse = true;
+                request.use_legacy_sprites = legacy;
+                let mut draws = Vec::new();
+                compose_hold_body_caps(
+                    &mut draws,
+                    &mut HoldMeshScratch::default(),
+                    request,
+                    &straight_path,
+                    &test_source,
+                );
+                let frame = render_hold_draws(&draws);
+                if legacy {
+                    assert!(!frame.sprite_instances.is_empty());
+                    for sprite in &frame.sprite_instances {
+                        assert_eq!(sprite.rot_sin_cos, [0.0, 1.0]);
+                        assert_eq!(sprite.uv_offset[0], 0.25);
+                        assert_eq!(sprite.uv_scale[0], 0.25);
+                        assert_eq!(sprite.uv_offset[1], if reverse { 1.0 } else { 0.0 });
+                        assert_eq!(sprite.uv_scale[1], if reverse { -1.0 } else { 1.0 });
+                    }
+                } else {
+                    assert!(!frame.tmesh_geometries.is_empty());
+                    for geometry in &frame.tmesh_geometries {
+                        for quad in geometry.vertices.as_ref().chunks_exact(6) {
+                            let left = quad
+                                .iter()
+                                .min_by(|a, b| a.pos[0].total_cmp(&b.pos[0]))
+                                .expect("quad has six vertices");
+                            let right = quad
+                                .iter()
+                                .max_by(|a, b| a.pos[0].total_cmp(&b.pos[0]))
+                                .expect("quad has six vertices");
+                            assert_eq!((left.uv[0], right.uv[0]), (0.25, 0.5));
+                            let top = quad
+                                .iter()
+                                .min_by(|a, b| a.pos[1].total_cmp(&b.pos[1]))
+                                .expect("quad has six vertices");
+                            let bottom = quad
+                                .iter()
+                                .max_by(|a, b| a.pos[1].total_cmp(&b.pos[1]))
+                                .expect("quad has six vertices");
+                            assert_eq!(top.uv[1] > bottom.uv[1], reverse);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reverse_partial_tiles_keep_itg_top_anchor() {
+        let mut body = TestSlot::sprite("cel-roll-body");
+        body.def.size = [64, 256];
+        body.uv = [0.25, 0.0, 0.5, 1.0];
+        for legacy in [true, false] {
+            for length in [32.0, 128.0, 255.0, 256.0, 257.0, 320.0, 511.0, 544.0] {
+                for clip in [0.0, 17.0] {
+                    let mut request = body_cap_request(Some(&body), None, None);
+                    request.y_tail = request.y_head + length;
+                    request.draw_span = Some((request.y_head + clip, request.y_tail));
+                    request.lane_reverse = true;
+                    request.body_flipped = true;
+                    request.top_anchor_reverse = true;
+                    request.use_legacy_sprites = legacy;
+                    request.appearance = NoteAlphaParams::default();
+                    request.appearance_cache =
+                        crate::transforms::note_appearance_cache(9.0, 0.0, request.appearance);
+                    let mut draws = Vec::new();
+                    compose_hold_body_caps(
+                        &mut draws,
+                        &mut HoldMeshScratch::default(),
+                        request,
+                        &straight_path,
+                        &test_source,
+                    );
+                    let frame = render_hold_draws(&draws);
+                    // NoteDisplay::DrawHoldPart uses SCALE(distance, 0, height,
+                    // rect.top, rect.bottom), with no tail adjustment when
+                    // TopHoldAnchorWhenReverse is set. Sampling within each
+                    // tile avoids the ambiguous wrapped UV at its endpoints.
+                    let check = |y: f32, v: f32| {
+                        let expected = 1.0 - ((y - 100.0) / 256.0).rem_euclid(1.0);
+                        assert!(
+                            (v - expected).abs() < 1e-5,
+                            "legacy={legacy} length={length} clip={clip} y={y}: {v} != {expected}"
+                        );
+                    };
+                    if legacy {
+                        assert_eq!(draws.len(), frame.sprite_instances.len());
+                        assert!(!draws.is_empty());
+                        for (draw, sprite) in draws.iter().zip(&frame.sprite_instances) {
+                            let FlatDraw::Sprite(draw) = draw else {
+                                panic!("body sprite")
+                            };
+                            check(
+                                draw.center[1],
+                                sprite.uv_scale[1].mul_add(0.5, sprite.uv_offset[1]),
+                            );
+                        }
+                    } else {
+                        assert!(!frame.tmesh_geometries.is_empty());
+                        for geometry in &frame.tmesh_geometries {
+                            for quad in geometry.vertices.as_ref().chunks_exact(6) {
+                                check(
+                                    quad.iter().map(|v| v.pos[1]).sum::<f32>() / 6.0,
+                                    quad.iter().map(|v| v.uv[1]).sum::<f32>() / 6.0,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reverse_short_hold_matches_cel_cap_pixels() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/noteskins/dance/cel");
+        for active in [false, true] {
+            let state = if active { "Active" } else { "Inactive" };
+            let body_image = image::open(root.join(format!("Down Hold Body {state}.png")))
+                .expect("bundled cel hold body")
+                .into_rgba8();
+            let cap_image = image::open(root.join(format!(
+                "Down Hold BottomCap {}.png",
+                state.to_ascii_lowercase()
+            )))
+            .expect("bundled cel hold cap")
+            .into_rgba8();
+            let mut body = TestSlot::sprite("cel-hold-body");
+            body.def.size = [body_image.width() as i32, body_image.height() as i32];
+            body.uv = [0.0, 0.0, 1.0, 1.0];
+            let mut cap = TestSlot::sprite("cel-hold-cap");
+            cap.def.size = [cap_image.width() as i32, cap_image.height() as i32];
+            cap.uv = body.uv;
+            for length in [32.0, 100.0, 127.0] {
+                let mut request = body_cap_request(Some(&body), Some(&cap), None);
+                request.y_tail = request.y_head + length;
+                request.draw_span = Some((request.y_head, request.y_tail));
+                request.lane_reverse = true;
+                request.body_flipped = true;
+                request.top_anchor_reverse = true;
+                request.appearance = NoteAlphaParams::default();
+                request.appearance_cache =
+                    crate::transforms::note_appearance_cache(9.0, 0.0, request.appearance);
+                let mut draws = Vec::new();
+                compose_hold_body_caps(
+                    &mut draws,
+                    &mut HoldMeshScratch::default(),
+                    request,
+                    &straight_path,
+                    &test_source,
+                );
+                let frame = render_hold_draws(&draws);
+                assert_eq!(frame.sprite_instances.len(), 2);
+                let body_sprite = &frame.sprite_instances[0];
+                let cap_sprite = &frame.sprite_instances[1];
+                assert_eq!(body_sprite.tint, cap_sprite.tint);
+                let body_v =
+                    body_sprite.uv_scale[1].mul_add(0.5 / length, body_sprite.uv_offset[1]);
+                let cap_v =
+                    cap_sprite.uv_scale[1].mul_add(1.0 - 0.5 / 32.0, cap_sprite.uv_offset[1]);
+                let body_row = (body_v * body_image.height() as f32).floor() as u32;
+                let cap_row = (cap_v * cap_image.height() as f32).floor() as u32;
+                for x in [8, 16, 32, 48, 55] {
+                    assert_eq!(
+                        body_image.get_pixel(x, body_row),
+                        cap_image.get_pixel(x, cap_row),
+                        "{state} length={length} x={x}: body row {body_row}, cap row {cap_row}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reverse_hold_cap_keeps_body_shading_through_compositor() {
+        // Cel's visible bottom cap moves above the body in Reverse. Its
+        // asymmetric shading must retain the body's left/right orientation.
+        let mut cap = TestSlot::sprite("cel-hold-bottomcap");
+        cap.def.size = [64, 32];
+        cap.uv = [0.0, 0.0, 1.0, 1.0];
+        for reverse in [false, true] {
+            let mut request =
+                body_cap_request(None, reverse.then_some(&cap), (!reverse).then_some(&cap));
+            request.lane_reverse = reverse;
+            request.body_flipped = reverse;
+            request.top_anchor_reverse = true;
+            let mut draws = Vec::new();
+            compose_hold_body_caps(
+                &mut draws,
+                &mut HoldMeshScratch::default(),
+                request,
+                &straight_path,
+                &test_source,
+            );
+            let frame = render_hold_draws(&draws);
+            assert!(!frame.sprite_instances.is_empty());
+            for sprite in &frame.sprite_instances {
+                assert_eq!(sprite.rot_sin_cos, [0.0, 1.0]);
+                assert_eq!(sprite.uv_offset[0], 0.0);
+                assert_eq!(sprite.uv_scale[0], 1.0);
+                assert_eq!(sprite.uv_offset[1], if reverse { 1.0 } else { 0.0 });
+                assert_eq!(sprite.uv_scale[1], if reverse { -1.0 } else { 1.0 });
+            }
+        }
+    }
+
+    #[test]
+    fn reverse_flipped_caps_keep_horizontal_uvs_and_zero_rotation() {
         let top = TestSlot::sprite("top");
         let bottom = TestSlot::sprite("bottom");
         let mut request = body_cap_request(None, Some(&top), Some(&bottom));
@@ -2756,6 +2997,8 @@ mod tests {
         let FlatDraw::Sprite(FlatSprite {
             uv_rect: top_uv,
             rot_z_deg: top_rotation,
+            flip_x: top_flip_x,
+            flip_y: top_flip_y,
             ..
         }) = &actors[0]
         else {
@@ -2764,17 +3007,21 @@ mod tests {
         let FlatDraw::Sprite(FlatSprite {
             uv_rect: bottom_uv,
             rot_z_deg: bottom_rotation,
+            flip_x: bottom_flip_x,
+            flip_y: bottom_flip_y,
             ..
         }) = &actors[2]
         else {
             panic!("bottom cap should use reverse-safe sprite fallback");
         };
         for actual in [*top_uv, *bottom_uv] {
-            for (actual, expected) in actual.into_iter().zip([0.91, 0.82, 0.11, 0.22]) {
+            for (actual, expected) in actual.into_iter().zip([0.11, 0.22, 0.91, 0.82]) {
                 assert!((actual - expected).abs() <= 1e-6);
             }
         }
-        assert_eq!(*top_rotation, 180.0);
+        assert_eq!((*top_flip_x, *bottom_flip_x), (false, false));
+        assert_eq!((*top_flip_y, *bottom_flip_y), (true, true));
+        assert_eq!(*top_rotation, 0.0);
         assert_eq!(*bottom_rotation, 0.0);
     }
 
@@ -2865,7 +3112,7 @@ mod tests {
                     &test_source,
                 );
                 assert_eq!(draws.len(), 4);
-                let [mut u0, mut v0, mut u1, mut v1] = [
+                let [u0, mut v0, u1, mut v1] = [
                     0.1_f32 + 0.01,
                     0.2_f32 + 0.02,
                     0.9_f32 + 0.01,
@@ -2873,9 +3120,6 @@ mod tests {
                 ];
                 if flipped {
                     std::mem::swap(&mut v0, &mut v1);
-                }
-                if reverse && flipped {
-                    std::mem::swap(&mut u0, &mut u1);
                 }
                 let top_uv = [u0, v0, u1, (v1 - v0).mul_add(-(20.0 / 64.0), v1)];
                 let bottom_uv = if reverse {
@@ -2895,7 +3139,10 @@ mod tests {
                     assert_eq!(sprite.source.texture_key(), Some(key));
                     assert_eq!(sprite.size, size);
                     assert_eq!(sprite.center, center);
-                    assert_eq!(sprite.uv_rect.map(f32::to_bits), uv.map(f32::to_bits));
+                    let [u0, v0, u1, v1] = uv;
+                    let bounds = [u0.min(u1), v0.min(v1), u0.max(u1), v0.max(v1)];
+                    assert_eq!(sprite.uv_rect.map(f32::to_bits), bounds.map(f32::to_bits));
+                    assert_eq!((sprite.flip_x, sprite.flip_y), (false, flipped));
                     assert_eq!(sprite.z, if index % 2 == 0 { 110 } else { 111 });
                     assert_eq!(sprite.blend, BlendMode::Alpha);
                     assert_eq!(

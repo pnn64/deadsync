@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1507"
+version = "0.5.1508"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1515,6 +1515,7 @@ dependencies = [
  "deadsync-rules",
  "deadsync-theme",
  "glam",
+ "image",
  "serde_json",
  "twox-hash",
 ]
@@ -1757,7 +1758,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1507"
+version = "0.5.1508"
 dependencies = [
  "bitflags 2.13.2",
  "chrono",
@@ -1825,7 +1826,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1507"
+version = "0.5.1508"
 dependencies = [
  "log",
  "semver",
