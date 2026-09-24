@@ -341,6 +341,43 @@ fn gamepad_reading_changed(
 }
 
 #[inline(always)]
+fn raw_reading_change(
+    buttons_prev: &[bool],
+    buttons_now: &[bool],
+    axes_prev: &[i16],
+    axes_now: &[f64],
+    dir_prev: [bool; 4],
+    dir_now: [bool; 4],
+) -> RawReadingChange {
+    if buttons_now != buttons_prev || dir_now != dir_prev {
+        return RawReadingChange {
+            changed: true,
+            first_changed_axis: None,
+        };
+    }
+    for (index, (&axis, &previous)) in axes_now.iter().zip(axes_prev).enumerate() {
+        let scaled = scale_axis(axis);
+        if scaled != previous {
+            return RawReadingChange {
+                changed: true,
+                first_changed_axis: Some((index, scaled)),
+            };
+        }
+    }
+    RawReadingChange {
+        changed: false,
+        first_changed_axis: None,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RawReadingChange {
+    changed: bool,
+    first_changed_axis: Option<(usize, i16)>,
+}
+
+#[inline(always)]
+#[cfg(test)]
 fn raw_reading_changed(
     buttons_prev: &[bool],
     buttons_now: &[bool],
@@ -349,12 +386,15 @@ fn raw_reading_changed(
     dir_prev: [bool; 4],
     dir_now: [bool; 4],
 ) -> bool {
-    buttons_now != buttons_prev
-        || dir_now != dir_prev
-        || axes_now
-            .iter()
-            .zip(axes_prev)
-            .any(|(&axis, &previous)| scale_axis(axis) != previous)
+    raw_reading_change(
+        buttons_prev,
+        buttons_now,
+        axes_prev,
+        axes_now,
+        dir_prev,
+        dir_now,
+    )
+    .changed
 }
 
 #[inline(always)]
@@ -726,14 +766,15 @@ fn pump_raw<F>(
         want[2] |= x < 0;
         want[3] |= x > 0;
     }
-    if !raw_reading_changed(
+    let change = raw_reading_change(
         &st.buttons_prev,
         &st.buttons_now,
         &st.axes_prev,
         &st.axes,
         st.dir,
         want,
-    ) {
+    );
+    if !change.changed {
         st.clock.observe_if_advanced(time, host);
         return;
     }
@@ -762,8 +803,18 @@ fn pump_raw<F>(
 
     emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
-    for (i, (&axis, previous)) in st.axes.iter().zip(&mut st.axes_prev).enumerate() {
-        let v = scale_axis(axis);
+    let mut first_changed_axis_value = change.first_changed_axis.map(|(_, value)| value);
+    let first_changed_axis_index = change.first_changed_axis.map_or(0, |(index, _)| index);
+    for (i, (&axis, previous)) in st
+        .axes
+        .iter()
+        .zip(&mut st.axes_prev)
+        .enumerate()
+        .skip(first_changed_axis_index)
+    {
+        let v = first_changed_axis_value
+            .take()
+            .unwrap_or_else(|| scale_axis(axis));
         if *previous == v {
             continue;
         }
