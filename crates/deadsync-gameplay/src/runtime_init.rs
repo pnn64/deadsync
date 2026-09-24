@@ -335,9 +335,9 @@ where
                 parsed.note_type
             };
 
-            // Pre-calculate judgability to avoid binary searches during gameplay
-            let judgable_by_timing = timing_player.is_judgable_at_beat(beat);
-            let can_be_judged = !is_fake && judgable_by_timing;
+            // Pre-calculate judgability to avoid binary searches during gameplay.
+            // The fake segment was already checked above.
+            let can_be_judged = !is_fake && !timing_player.is_warp_at_beat(beat);
 
             if can_be_judged {
                 match note_type {
