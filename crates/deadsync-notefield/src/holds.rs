@@ -36,6 +36,7 @@ pub(crate) struct HoldEntryPlanRequest<'a, T> {
     pub tail_y: f32,
     pub receptor_y: f32,
     pub screen_height: f32,
+    pub field_zoom: f32,
     pub lane_reverse: bool,
     pub engaged: bool,
     pub use_active: bool,
@@ -349,17 +350,15 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
         }
     }
 
+    // Native NoteField applies its outer zoom after NoteDisplay's pixel offsets.
+    // Our endpoints are already in screen space, so scale those offsets too.
+    let start_offset = request.start_body_offset * request.field_zoom;
+    let stop_offset = request.stop_body_offset * request.field_zoom;
     let body_flipped = request.lane_reverse && request.flip_body_reverse;
     let (y_head, y_tail) = if body_flipped {
-        (
-            hold_start_y - request.stop_body_offset,
-            hold_end_y - request.start_body_offset,
-        )
+        (hold_start_y - stop_offset, hold_end_y - start_offset)
     } else {
-        (
-            hold_start_y + request.start_body_offset,
-            hold_end_y + request.stop_body_offset,
-        )
+        (hold_start_y + start_offset, hold_end_y + stop_offset)
     };
     let flip_head_tail = request.lane_reverse && request.flip_head_tail_reverse;
     let (head_anchor_y, head_anchor_travel) = if flip_head_tail {
@@ -3231,6 +3230,7 @@ mod tests {
             tail_y: 220.0,
             receptor_y: 80.0,
             screen_height: 480.0,
+            field_zoom: 1.0,
             lane_reverse: false,
             engaged: false,
             use_active: false,
@@ -3245,6 +3245,121 @@ mod tests {
             top_cap_phase: 3.0,
             bottom_cap_phase: 4.0,
             visuals,
+        }
+    }
+
+    #[test]
+    fn hold_offsets_follow_field_zoom() {
+        let visuals = visuals();
+        // ScreenEdit scales the whole native NoteField, including pixel metrics.
+        for note_type in [NoteType::Hold, NoteType::Roll] {
+            for reverse in [false, true] {
+                for flip_body in [false, true] {
+                    let mut base = request(&visuals);
+                    base.note_type = note_type;
+                    base.lane_reverse = reverse;
+                    base.flip_body_reverse = flip_body;
+                    base.start_body_offset = -22.0; // pump/cmd
+                    base.stop_body_offset = -32.0; // common and DDR skins
+                    let normal = hold_entry_plan(base);
+                    for zoom in [0.5, 0.75, 1.0, 1.5] {
+                        let mut scaled = request(&visuals);
+                        scaled.note_type = note_type;
+                        scaled.lane_reverse = reverse;
+                        scaled.flip_body_reverse = flip_body;
+                        scaled.start_body_offset = -22.0;
+                        scaled.stop_body_offset = -32.0;
+                        scaled.field_zoom = zoom;
+                        scaled.head_y *= zoom;
+                        scaled.tail_y *= zoom;
+                        let plan = hold_entry_plan(scaled);
+                        assert_eq!(
+                            [plan.y_head, plan.y_tail, plan.head_anchor_y],
+                            [normal.y_head, normal.y_tail, normal.head_anchor_y].map(|y| y * zoom),
+                            "{note_type:?}, reverse={reverse}, flip={flip_body}, zoom={zoom}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn zoomed_hold_caps_keep_their_tail_row() {
+        let mut cap = TestSlot::sprite("tail-cap");
+        cap.def.size = [64, 32];
+        let visuals = HoldVisuals {
+            body_inactive: Some(TestSlot::sprite("body")),
+            bottomcap_inactive: Some(cap),
+            ..HoldVisuals::default()
+        };
+        // A -32 offset places this cap's tip on the tail row; zero places
+        // its base there (cel). Both conventions must survive editor zoom.
+        for offset in [-32.0, 0.0] {
+            for reverse in [false, true] {
+                for zoom in [0.5, 0.75, 1.0, 1.5] {
+                    let dir = if reverse { -1.0 } else { 1.0 };
+                    let origin = if reverse { 440.0 } else { 0.0 };
+                    let mut entry = request(&visuals);
+                    entry.field_zoom = zoom;
+                    entry.head_y = origin + dir * 64.0 * zoom;
+                    entry.tail_y = origin + dir * 256.0 * zoom;
+                    entry.start_body_offset = 0.0;
+                    entry.stop_body_offset = offset;
+                    entry.lane_reverse = reverse;
+                    entry.flip_body_reverse = true;
+                    let tip_y = entry.tail_y + dir * (offset + 32.0) * zoom;
+                    let plan = hold_entry_plan(entry);
+                    for legacy in [false, true] {
+                        let mut draw = body_cap_request(
+                            plan.body_slot,
+                            plan.top_cap_slot,
+                            plan.bottom_cap_slot,
+                        );
+                        draw.y_head = plan.y_head;
+                        draw.y_tail = plan.y_tail;
+                        draw.draw_span = plan.draw_span;
+                        draw.body_flipped = plan.body_flipped;
+                        draw.lane_reverse = reverse;
+                        draw.target_arrow_px = 64.0 * zoom;
+                        draw.use_legacy_sprites = legacy;
+                        let mut draws = Vec::new();
+                        compose_hold_body_caps(
+                            &mut draws,
+                            &mut HoldMeshScratch::default(),
+                            draw,
+                            &|y| HoldPathSample {
+                                arrow_px: 64.0 * zoom,
+                                ..straight_path(y)
+                            },
+                            &test_source,
+                        );
+                        let cap = draws.last().expect("tail cap should be visible");
+                        let actual = match cap {
+                            FlatDraw::Sprite(sprite) => {
+                                sprite.center[1] + dir * sprite.size[1] * 0.5
+                            }
+                            FlatDraw::TexturedMesh(mesh) => {
+                                let vertices = match &mesh.vertices {
+                                    FlatMeshVertices::Shared(vertices) => vertices.as_ref(),
+                                    FlatMeshVertices::Reusable(vertices) => vertices.as_slice(),
+                                };
+                                vertices
+                                    .iter()
+                                    .map(|v| dir * v.pos[1])
+                                    .fold(f32::NEG_INFINITY, f32::max)
+                                    * dir
+                            }
+                            _ => panic!("expected a cap sprite or mesh"),
+                        };
+                        // The shared renderer allows a one-pixel cap seam overlap.
+                        assert!(
+                            (actual - tip_y).abs() <= 1.0,
+                            "offset={offset}, reverse={reverse}, zoom={zoom}, legacy={legacy}: tip {actual}, expected {tip_y}"
+                        );
+                    }
+                }
+            }
         }
     }
 

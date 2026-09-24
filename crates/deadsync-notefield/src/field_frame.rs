@@ -513,6 +513,7 @@ fn compose_field_contents<S, F>(
             tail_y,
             receptor_y: receptor_draw_y,
             screen_height: request.geometry.screen_height,
+            field_zoom,
             lane_reverse,
             engaged,
             use_active,
