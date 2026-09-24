@@ -1362,12 +1362,15 @@ fn apply_stomp_insert_batched(
             cursor += 1;
         }
         let summary = tap_insert_row_slice(&notes[start..cursor], col_offset, cols);
+        let track = summary.taps.trailing_zeros() as usize;
         let held = active_hold_mask(&active_ends, row, cols) & !summary.nonempty;
         let mut added = None;
-        // Each addition shares a row with a nonfake tap/lift, which already
-        // blocks that row in subsequent spacing queries.
+        // Lifts count toward the row total and spacing, but only a tap can
+        // generate a Stomp addition. Check its cell within this row only.
         if summary.nonempty != 0
             && summary.taps.count_ones() == 1
+            && find_tap_index(&notes[start..cursor], row, col_offset.saturating_add(track))
+                .is_some()
             && !sorted_player_range_has_tap(
                 &notes[..original_len],
                 row.saturating_sub(half_beat).saturating_add(1),
@@ -1378,7 +1381,6 @@ fn apply_stomp_insert_batched(
             )
             && held == 0
         {
-            let track = summary.taps.trailing_zeros() as usize;
             let target = stomp_mirror_track(track, cols);
             added = set_batched_row_tap(
                 notes,
@@ -1651,6 +1653,9 @@ fn apply_stomp_insert_unordered(
         let Some(track) = first_tap_track_at_row(notes, row, col_offset, cols) else {
             continue;
         };
+        if find_tap_index(notes, row, col_offset.saturating_add(track)).is_none() {
+            continue;
+        }
         let add_track = stomp_mirror_track(track, cols);
         let _ = set_added_tap_note(
             notes,
@@ -1680,9 +1685,16 @@ fn apply_stomp_insert_sorted(
             cursor += 1;
         }
         let summary = tap_insert_row_slice(&notes[row_start..cursor], col_offset, cols);
+        let track = summary.taps.trailing_zeros() as usize;
         let held = active_hold_mask(&active_ends, row, cols) & !summary.nonempty;
         if summary.nonempty != 0
             && summary.taps.count_ones() == 1
+            && find_tap_index(
+                &notes[row_start..cursor],
+                row,
+                col_offset.saturating_add(track),
+            )
+            .is_some()
             && !sorted_player_range_has_tap(
                 notes,
                 row.saturating_sub(half_beat).saturating_add(1),
@@ -1693,7 +1705,6 @@ fn apply_stomp_insert_sorted(
             )
             && held == 0
         {
-            let track = summary.taps.trailing_zeros() as usize;
             let _ = set_added_tap_note_sorted(
                 notes,
                 timing_player,

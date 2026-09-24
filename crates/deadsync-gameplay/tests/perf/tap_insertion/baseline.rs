@@ -1,4 +1,5 @@
 // Frozen from 1d8ef2f51 (0.5.1166). Helpers imported below are unchanged.
+// Stomp includes the ITG source-note correction: lifts count but cannot add taps.
 use super::*;
 
 pub fn apply_wide_insert(
@@ -111,9 +112,16 @@ fn apply_stomp_insert_sorted(
             cursor += 1;
         }
         let summary = tap_insert_row_slice(&notes[row_start..cursor], col_offset, cols);
+        let track = summary.taps.trailing_zeros() as usize;
         let held = active_hold_mask(&active_ends, row, cols) & !summary.nonempty;
         if summary.nonempty != 0
             && summary.taps.count_ones() == 1
+            && find_tap_index(
+                &notes[row_start..cursor],
+                row,
+                col_offset.saturating_add(track),
+            )
+            .is_some()
             && !sorted_player_range_has_tap(
                 notes,
                 row.saturating_sub(half_beat).saturating_add(1),
@@ -124,7 +132,6 @@ fn apply_stomp_insert_sorted(
             )
             && held == 0
         {
-            let track = summary.taps.trailing_zeros() as usize;
             let _ = set_added_tap_note_sorted(
                 notes,
                 timing_player,

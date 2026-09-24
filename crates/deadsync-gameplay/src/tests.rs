@@ -16562,6 +16562,78 @@ mod tests {
     }
 
     #[test]
+    fn stomp_skips_lift_sources() {
+        let timing = test_timing(240);
+        for offset in [0, 4] {
+            for shape in 0..3 {
+                let mut notes = vec![
+                    test_note_at(NoteType::Lift, None, false, 0, 0.0),
+                    test_note_at(NoteType::Tap, None, false, 96, 2.0),
+                    test_note_at(NoteType::Mine, None, false, 192, 4.0),
+                ];
+                notes[0].column = offset;
+                notes[1].column = offset + 1;
+                notes[2].column = offset;
+                let mut expected = vec![
+                    (0, offset, NoteType::Lift),
+                    (96, offset + 1, NoteType::Tap),
+                    (96, offset + 2, NoteType::Tap),
+                    (192, offset, NoteType::Mine),
+                ];
+                // Public dispatch: unique sorted cells, duplicates, then unsorted.
+                if shape == 1 {
+                    notes.push(notes[2].clone());
+                    expected.push((192, offset, NoteType::Mine));
+                } else if shape == 2 {
+                    notes.reverse();
+                }
+
+                apply_stomp_insert(&mut notes, &timing, offset, 4);
+                sort_player_notes(&mut notes);
+
+                assert_eq!(
+                    notes
+                        .iter()
+                        .map(|note| (note.row_index, note.column, note.note_type))
+                        .collect::<Vec<_>>(),
+                    expected,
+                    "offset {offset}, shape {shape}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn stomp_lifts_block_rows() {
+        let timing = test_timing(144);
+        let mut notes = vec![
+            test_note_at(NoteType::Lift, None, false, 0, 0.0),
+            test_note_at(NoteType::Tap, None, false, 0, 0.0),
+            test_note_at(NoteType::Tap, None, false, 96, 2.0),
+            test_note_at(NoteType::Lift, None, false, 108, 2.25),
+        ];
+        notes[1].column = 1;
+        notes[3].column = 1;
+
+        apply_stomp_insert(&mut notes, &timing, 0, 4);
+
+        // A lift alongside a tap prevents a single-note row; a nearby lift
+        // still blocks Stomp's spacing window even though it cannot add taps.
+        assert_eq!(
+            notes
+                .iter()
+                .map(|note| (note.row_index, note.column, note.note_type))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, 0, NoteType::Lift),
+                (0, 1, NoteType::Tap),
+                (96, 0, NoteType::Tap),
+                (108, 1, NoteType::Lift),
+            ]
+        );
+    }
+
+    #[test]
     fn wide_stomp_and_echo_insert_expected_taps() {
         let timing = TimingData::from_segments(
             0.0,
