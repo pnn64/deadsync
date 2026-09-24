@@ -2388,6 +2388,15 @@ impl App {
                     .take()
                     .expect("received Gameplay state requires a pending worker");
                 let commands = self.finish_gameplay_init(gs, &pending.finish);
+                if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                    // Start the prepared intro with the song, after loading.
+                    let (_, duration) = self.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    self.state.shell.transition = TransitionState::FadingIn {
+                        elapsed: 0.0,
+                        duration,
+                    };
+                    self.sync_gameplay_input_capture();
+                }
                 self.run_commands(commands, event_loop);
                 // Loading time is not gameplay time. Prevent the completion
                 // frame from becoming the next frame's simulation delta.
@@ -3831,8 +3840,14 @@ impl App {
                 self.state.shell.transition,
                 TransitionState::ActorsFadeIn { .. } | TransitionState::FadingIn { .. }
             );
+        // Keep the loading cover alive even if preparation outlasts the intro.
+        let transition_dt = if self.pending_gameplay_init.is_some() {
+            0.0
+        } else {
+            logic_dt
+        };
         let transition_plan = self.state.shell.transition.advance_frame(
-            logic_dt,
+            transition_dt,
             self.state.screens.current_screen,
             MENU_ACTORS_FADE_DURATION,
         );
@@ -7009,6 +7024,7 @@ impl App {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     let smx_overlay_alpha = match self.state.shell.transition {
+                        TransitionState::FadingIn { .. } if gs.hide_song_intro => 1.0,
                         TransitionState::FadingIn { elapsed, duration } => {
                             if duration <= gameplay::TRANSITION_IN_RESTART_DURATION + 0.01 {
                                 // Restart: the in-transition black fades over the whole short

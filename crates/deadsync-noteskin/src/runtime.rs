@@ -859,15 +859,26 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
     let (dim_sprites, bright_sprites) = itg_partition_tap_explosion_sources(sources);
-    itg_tap_explosion_map_from_partitioned_sources(dim_sprites, bright_sprites, metric_command)
+    itg_tap_explosion_map_from_partitioned_sources(
+        dim_sprites,
+        bright_sprites,
+        false,
+        metric_command,
+    )
 }
 
 fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
     dim_sprites: Vec<ItgTapExplosionSource<T>>,
     bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    actor_sources: bool,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
-    itg_tap_explosion_map_from_source_refs(&dim_sprites, &bright_sprites, metric_command)
+    itg_tap_explosion_map_from_source_refs(
+        &dim_sprites,
+        &bright_sprites,
+        actor_sources,
+        metric_command,
+    )
 }
 
 // Both public owned sources and construction-time borrowed sources use one
@@ -904,30 +915,38 @@ fn itg_tap_explosion_source_match<'a, T: 'a, S: TapSource<T>>(
     source: &'a S,
     window: &str,
     command_key: &str,
+    actor_sources: bool,
 ) -> Option<ItgTapExplosionMatch<'a, S>> {
     let view = source.view();
     let direct_command = view.commands.get(command_key).map(String::as_str);
-    (direct_command.is_some() || view.matches_window(window) || view.is_generic_tap_explosion())
-        .then_some(ItgTapExplosionMatch {
-            source,
-            direct_command,
-        })
+    (actor_sources
+        || direct_command.is_some()
+        || view.matches_window(window)
+        || view.is_generic_tap_explosion())
+    .then_some(ItgTapExplosionMatch {
+        source,
+        direct_command,
+    })
 }
 
 fn itg_tap_explosion_matches<'a, T: 'a, S: TapSource<T>>(
     sources: &'a [S],
     window: &str,
     command_key: &str,
+    actor_sources: bool,
 ) -> SmallVec<[ItgTapExplosionMatch<'a, S>; 4]> {
     sources
         .iter()
-        .filter_map(|source| itg_tap_explosion_source_match(source, window, command_key))
+        .filter_map(|source| {
+            itg_tap_explosion_source_match(source, window, command_key, actor_sources)
+        })
         .collect()
 }
 
 fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
     dim_sprites: &[S],
     bright_sprites: &[S],
+    actor_sources: bool,
     mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
     if dim_sprites.is_empty() && bright_sprites.is_empty() {
@@ -944,20 +963,27 @@ fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
         ("Miss", "misscommand", "MissCommand"),
         ("Held", "heldcommand", "HeldCommand"),
     ] {
+        // Player never sends Miss to GhostArrowRow. For other judgments the
+        // actor tree receives Judgment, Bright/Dim, then the score command.
+        if actor_sources && window == "Miss" {
+            continue;
+        }
         for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
-            if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
+            if !actor_sources && mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
                 continue;
             }
             let (preferred, fallback_sprites) = match mode {
                 ItgTapExplosionMode::Dim => (&dim_sprites, &bright_sprites),
                 ItgTapExplosionMode::Bright => (&bright_sprites, &dim_sprites),
             };
-            let preferred_matches = itg_tap_explosion_matches(preferred, window, key);
+            let preferred_matches =
+                itg_tap_explosion_matches(preferred, window, key, actor_sources);
             let has_preferred = !preferred_matches.is_empty();
-            if mode == ItgTapExplosionMode::Bright && !has_preferred {
+            if !actor_sources && mode == ItgTapExplosionMode::Bright && !has_preferred {
                 continue;
             }
-            let fallback_matches = itg_tap_explosion_matches(fallback_sprites, window, key);
+            let fallback_matches =
+                itg_tap_explosion_matches(fallback_sprites, window, key, actor_sources);
 
             let mut layers = SmallVec::new();
             let mut add_source = |matched: &ItgTapExplosionMatch<'_, S>| {
@@ -965,6 +991,10 @@ fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
                 let fallback;
                 let command = if let Some(command) = matched.direct_command {
                     command
+                } else if actor_sources {
+                    // GetMetricA calls have already been resolved into the
+                    // actor's commands. A missing command is not a metric lookup.
+                    ""
                 } else {
                     let Some(command) = metric_command(source.mode, metric_key) else {
                         return;
@@ -972,7 +1002,14 @@ fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
                     fallback = command;
                     fallback.as_str()
                 };
-                if command.trim().is_empty() {
+                let has_actor_event = actor_sources
+                    && ["judgmentcommand", mode.command_key()].iter().any(|key| {
+                        source
+                            .commands
+                            .get(*key)
+                            .is_some_and(|value| !value.trim().is_empty())
+                    });
+                if command.trim().is_empty() && !has_actor_event {
                     return;
                 }
                 layers.push(TapExplosionLayer {
@@ -1026,18 +1063,20 @@ fn itg_partition_tap_explosion_layers<L, T>(
     mut layer_has_tap_command: impl FnMut(&L) -> bool,
     mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
-) -> (Vec<ItgTapExplosionSource<T>>, Vec<ItgTapExplosionSource<T>>) {
+) -> (
+    Vec<ItgTapExplosionSource<T>>,
+    Vec<ItgTapExplosionSource<T>>,
+    bool,
+) {
     let mut dim_sources = Vec::new();
     let mut bright_sources = Vec::new();
     let mut has_actor_sources = false;
     for layer in explosion_layers {
         if layer_has_tap_command(layer) {
             has_actor_sources = true;
-            push_tap_explosion_source(
-                source_from_layer(layer),
-                &mut dim_sources,
-                &mut bright_sources,
-            );
+            // GhostArrowRow broadcasts to the tree without reordering actors
+            // for Bright/Dim. Keep authored draw order in one source list.
+            dim_sources.push(source_from_layer(layer));
         }
     }
 
@@ -1052,7 +1091,7 @@ fn itg_partition_tap_explosion_layers<L, T>(
             }
         }
     }
-    (dim_sources, bright_sources)
+    (dim_sources, bright_sources, has_actor_sources)
 }
 
 pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
@@ -1062,13 +1101,18 @@ pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
-    let (dim_sources, bright_sources) = itg_partition_tap_explosion_layers(
+    let (dim_sources, bright_sources, actor_sources) = itg_partition_tap_explosion_layers(
         explosion_layers,
         &mut layer_has_tap_command,
         &mut direct_layers,
         &mut source_from_layer,
     );
-    itg_tap_explosion_map_from_partitioned_sources(dim_sources, bright_sources, metric_command)
+    itg_tap_explosion_map_from_partitioned_sources(
+        dim_sources,
+        bright_sources,
+        actor_sources,
+        metric_command,
+    )
 }
 
 pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
@@ -1093,13 +1137,17 @@ pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
     }
     // Keep direct fallback storage alive until its borrowed sources are consumed.
     // Resolve both modes in the original order, only when no actor has a tap command.
-    if explosion_layers
+    let actor_sources = explosion_layers
         .iter()
-        .any(|sprite| itg_has_tap_explosion_command(&sprite.commands))
-    {
+        .any(|sprite| itg_has_tap_explosion_command(&sprite.commands));
+    if actor_sources {
         for sprite in explosion_layers {
             if itg_has_tap_explosion_command(&sprite.commands) {
-                add(sprite, &mut dim, &mut bright);
+                dim.push(ItgTapExplosionSourceRef::new(
+                    &sprite.element,
+                    &sprite.slot,
+                    &sprite.commands,
+                ));
             }
         }
     } else {
@@ -1109,7 +1157,7 @@ pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
             add(sprite, &mut dim, &mut bright);
         }
     }
-    itg_tap_explosion_map_from_source_refs(&dim, &bright, metric_command)
+    itg_tap_explosion_map_from_source_refs(&dim, &bright, actor_sources, metric_command)
 }
 
 pub fn itg_direct_tap_explosion_resolved_layers<T>(
@@ -5784,6 +5832,77 @@ mod tests {
             Some(Slot(9))
         );
         assert!((actor_map["W1"].duration() - 0.3).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn actor_explosions_do_not_invent_metric_commands() {
+        // DDR's Dim actor has no W1/Held command; its Bright command still
+        // plays on every bright judgment, before the window's command.
+        let actors = [
+            ItgResolvedSprite {
+                element: "Tap Explosion Dim".into(),
+                slot: Slot(1),
+                commands: HashMap::from([
+                    ("initcommand".into(), "diffusealpha,0".into()),
+                    ("judgmentcommand".into(), "finishtweening".into()),
+                    (
+                        "brightcommand".into(),
+                        "diffusealpha,1;linear,0.1;diffusealpha,0".into(),
+                    ),
+                    (
+                        "w2command".into(),
+                        "finishtweening;diffusealpha,1;linear,0.2;diffusealpha,0".into(),
+                    ),
+                ]),
+            },
+            ItgResolvedSprite {
+                element: "Tap Explosion Bright".into(),
+                slot: Slot(2),
+                commands: HashMap::from([
+                    ("initcommand".into(), "diffusealpha,0".into()),
+                    ("judgmentcommand".into(), "finishtweening".into()),
+                    (
+                        "w1command".into(),
+                        "diffusealpha,1;linear,0.3;diffusealpha,0".into(),
+                    ),
+                ]),
+            },
+        ];
+        let map = itg_tap_explosion_map_from_resolved_layers(
+            &actors,
+            |_| panic!("actor commands already resolved"),
+            |_, _| panic!("GhostArrowRow never applies fallback metrics to actors"),
+        );
+        for (window, visible) in [
+            ("W1", vec![Slot(2)]),
+            ("W1Bright", vec![Slot(1), Slot(2)]),
+            ("W2", vec![Slot(1)]),
+            ("W3Bright", vec![Slot(1)]),
+        ] {
+            assert_eq!(
+                map[window]
+                    .layers
+                    .iter()
+                    .filter(|layer| layer.animation.duration() > 0.0)
+                    .map(|layer| layer.slot.clone())
+                    .collect::<Vec<_>>(),
+                visible,
+                "{window}"
+            );
+        }
+        let cleared = &map["W3"];
+        assert_eq!(
+            cleared.duration(),
+            0.0,
+            "Judgment must still end the preceding flash"
+        );
+        assert!(
+            cleared
+                .layers
+                .iter()
+                .all(|layer| layer.animation.state_at(0.0).diffuse[3] == 0.0)
+        );
+        assert!(!map.contains_key("Miss"));
     }
 
     #[test]

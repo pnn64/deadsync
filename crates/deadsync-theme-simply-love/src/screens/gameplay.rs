@@ -3495,25 +3495,36 @@ pub fn in_transition(
     is_restart: bool,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> (Vec<Actor>, f32) {
-    if let Some(state) = state {
-        state
-            .notefield_combo_assets
-            .prewarm(&visual_policy.assets.effects);
-        if state.hide_song_intro {
-            return (Vec::new(), 0.0);
-        }
+    let duration = if is_restart {
+        TRANSITION_IN_RESTART_DURATION
+    } else {
+        TRANSITION_IN_DURATION
+    };
+    let Some(state) = state else {
+        // Song initialization must finish before the entry animation begins.
+        let cover = act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 1.0):
+            z(1200)
+        );
+        return (vec![cover], duration);
+    };
+    state
+        .notefield_combo_assets
+        .prewarm(&visual_policy.assets.effects);
+    if state.hide_song_intro {
+        return (Vec::new(), duration);
     }
     if is_restart {
-        if let Some(gs) = state {
-            let _ = intro_text_target_x(
-                gs,
-                asset_manager,
-                gs.stage_intro_text.as_ref(),
-                gs.runtime_view.play_style,
-                gs.runtime_view.player_side,
-                gs.runtime_view.policy.center_single_notefield,
-            );
-        }
+        let _ = intro_text_target_x(
+            state,
+            asset_manager,
+            state.stage_intro_text.as_ref(),
+            state.runtime_view.play_style,
+            state.runtime_view.player_side,
+            state.runtime_view.policy.center_single_notefield,
+        );
         // SL/zmod parity: on a song restart, skip the splode + stage-text
         // splash and run only a brief fade-from-black so the first gameplay
         // frame doesn't pop in. The "RESTART N" label still appears in the
@@ -3528,22 +3539,16 @@ pub fn in_transition(
         );
         return (vec![actor], TRANSITION_IN_RESTART_DURATION);
     }
-    let text = state
-        .map(|gs| gs.stage_intro_text.clone())
-        .unwrap_or_else(|| Arc::from("EVENT"));
-    let intro_color = state.map_or(color::decorative_rgba(0), |gs| {
-        color::decorative_rgba(gs.player_color_index())
-    });
-    let text_target_x = state.map_or_else(screen_center_x, |gs| {
-        intro_text_target_x(
-            gs,
-            asset_manager,
-            text.as_ref(),
-            gs.runtime_view.play_style,
-            gs.runtime_view.player_side,
-            gs.runtime_view.policy.center_single_notefield,
-        )
-    });
+    let text = state.stage_intro_text.clone();
+    let intro_color = color::decorative_rgba(state.player_color_index());
+    let text_target_x = intro_text_target_x(
+        state,
+        asset_manager,
+        text.as_ref(),
+        state.runtime_view.play_style,
+        state.runtime_view.player_side,
+        state.runtime_view.policy.center_single_notefield,
+    );
     let splode_tex = visual_policy.assets.effects.gameplayin_splode;
     let minisplode_tex = visual_policy.assets.effects.gameplayin_minisplode;
     let splode_zoom_scale = visual_styles::effect_zoom_scale(splode_tex);
@@ -5637,6 +5642,24 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pending_gameplay_keeps_intro_black() {
+        let assets = AssetManager::new();
+        let policy = crate::views::SimplyLoveVisualPolicyView::default();
+        for (restart, expected_duration) in [
+            (false, TRANSITION_IN_DURATION),
+            (true, TRANSITION_IN_RESTART_DURATION),
+        ] {
+            let (actors, duration) = in_transition(None, &assets, restart, policy);
+            assert_eq!(duration, expected_duration);
+            let [Actor::Sprite { tint, z, .. }] = actors.as_slice() else {
+                panic!("pending gameplay must show only a black cover");
+            };
+            assert_eq!(*tint, [0.0, 0.0, 0.0, 1.0]);
+            assert_eq!(*z, 1200);
+        }
+    }
+
     #[test]
     fn theme_hud_and_transition_stay_above_song_lua() {
         assert!(TOP_SCREEN_HUD_Z > deadsync_song_lua::playback::LUA_FOREGROUND_Z_MAX);

@@ -203,7 +203,17 @@ fn empty_tap_sources_do_not_allocate() {
 #[test]
 fn rejected_actor_commands_borrow_metadata_without_churn() {
     for count in [1, 4] {
-        let input = layers(count, 2);
+        let mut input = layers(count, 2);
+        // A missing score command still dispatches Judgment and Bright/Dim.
+        // Only actors without any such event work are actually rejected.
+        for sprite in &mut input {
+            sprite.commands.retain(|key, _| {
+                !matches!(
+                    key.as_str(),
+                    "judgmentcommand" | "brightcommand" | "dimcommand"
+                )
+            });
+        }
         assert_no_churn(|| {
             let map = itg_tap_explosion_map_from_resolved_layers(
                 &input,
@@ -227,7 +237,8 @@ fn owned_source_compatibility_preserves_explicit_mode_overrides() {
         })
         .collect::<Vec<_>>();
     let (dim, bright) = itg_partition_tap_explosion_sources(sources.clone());
-    let old = baseline::itg_tap_explosion_map_from_partitioned_sources(dim, bright, |_, _| None);
+    let old =
+        baseline::itg_tap_explosion_map_from_partitioned_sources(dim, bright, false, |_, _| None);
     let new = itg_tap_explosion_map_from_sources(sources, |_, _| None);
     assert_maps(&old, &new);
 }
@@ -630,6 +641,7 @@ fn benchmark_visual_assembly() {
                         baseline::itg_tap_explosion_map_from_partitioned_sources(
                             dim,
                             bright,
+                            false,
                             |_, _| None,
                         )
                     } else {

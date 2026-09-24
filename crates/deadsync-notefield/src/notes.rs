@@ -557,7 +557,8 @@ fn compose_flat_mine_slot<S, F, Z>(
             uv,
             rotation_y_deg: request.rotation_y_deg,
             model_rotation_z_deg: base_rotation + request.note_rotation_z_deg,
-            sprite_rotation_z_deg: base_rotation + draw.rot[2] + request.note_rotation_z_deg,
+            // ITG sums both rotations in y-down space; flat sprites use y-up.
+            sprite_rotation_z_deg: base_rotation - draw.rot[2] + request.note_rotation_z_deg,
             tint,
             glow_alpha: request.glow_alpha,
             blend: BlendMode::Alpha,
@@ -1600,6 +1601,35 @@ mod tests {
     }
 
     #[test]
+    fn mine_sprite_rotation_matches_itg_actor_sum() {
+        // Actor::BeginDraw adds BaseRotationZ and rotationz in y-down space.
+        // Flat sprites use y-up space, so both contributions change sign.
+        for base in [90, 0, 180, -90] {
+            for actor in [-36.0, 0.0, 36.0, 90.0] {
+                let mut slot = GlowSlot::sprite();
+                slot.def.rotation_deg = base;
+                slot.draw.rot[2] = actor;
+                let mut request = mine_request(Some(&slot), None, None);
+                request.note_rotation_z_deg = 5.0;
+                let mut draws = Vec::new();
+                compose_flat_mine_layers(
+                    &mut draws,
+                    &mut ModelMeshCache::default(),
+                    request,
+                    &|_| [64.0; 2],
+                    &|slot| SpriteSource::Texture(slot.texture.clone()),
+                );
+                for draw in draws {
+                    let FlatDraw::Sprite(sprite) = draw else {
+                        panic!("mine sprite")
+                    };
+                    assert_eq!(sprite.rot_z_deg, -(base as f32 + actor) + 5.0);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn mine_layers_order_gradient_before_frame_sprite_passes() {
         let fill = named_slot(GlowSlot::sprite(), "mine-fill");
         let gradient = named_slot(GlowSlot::sprite(), "mine-gradient");
@@ -1677,7 +1707,7 @@ mod tests {
         assert_eq!(*z, 140);
         assert_eq!(*world_z, 9.0);
         assert_eq!(*rot_y_deg, 12.0);
-        assert_eq!(*rot_z_deg, -2.0);
+        assert_eq!(*rot_z_deg, -8.0);
         let FlatDraw::Sprite(sprite) = &draws[3] else {
             unreachable!();
         };
@@ -1723,7 +1753,7 @@ mod tests {
             assert_eq!(arrow.tint, [1.0, 1.0, 1.0, 0.8]);
             assert_eq!(spark.source.texture_key(), Some("spark"));
             assert_eq!(spark.size, [96.0, 76.8]);
-            assert_eq!(spark.rot_z_deg, 90.0);
+            assert_eq!(spark.rot_z_deg, -90.0);
             assert_eq!(
                 spark.uv_rect,
                 [frame as f32 / 16.0, 0.0, (frame + 1) as f32 / 16.0, 1.0]

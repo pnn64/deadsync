@@ -1062,6 +1062,34 @@ L000
     }
 
     #[test]
+    fn hidden_gameplay_intro_keeps_transition_timing() {
+        let simfile = write_fixture("hidden-intro", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let (mut state, assets, _) = sprite_core_fixture(&simfile);
+                let policy =
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default();
+                for restart in [false, true] {
+                    state.hide_song_intro = false;
+                    let (visible, duration) =
+                        screen_gameplay::in_transition(Some(&state), &assets, restart, policy);
+                    assert!(!visible.is_empty());
+                    state.hide_song_intro = true;
+                    let (hidden, hidden_duration) =
+                        screen_gameplay::in_transition(Some(&state), &assets, restart, policy);
+                    assert!(hidden.is_empty());
+                    assert!(duration > 0.0);
+                    assert_eq!(hidden_duration, duration);
+                }
+            },
+        );
+    }
+
+    #[test]
     fn sprite_core_frame_is_structurally_repeatable() {
         let simfile = write_fixture("f0-sprite-core", generated_sprite_core_simfile());
         with_session(

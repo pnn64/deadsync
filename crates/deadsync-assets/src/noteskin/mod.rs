@@ -723,6 +723,81 @@ mod tests {
     }
 
     #[test]
+    fn bundled_explosions_use_authored_window_commands() {
+        init_asset_paths();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        for skin in ["ddr-note", "ddr-rainbow", "ddr-vivid", "lambda"] {
+            let ns = load_itg_skin(&style, skin).expect("bundled skin");
+            for window in ["W1", "W2"] {
+                let explosion = ns
+                    .tap_explosion_for_col_with_bright(0, window, false)
+                    .expect("authored judgment");
+                let animated: Vec<_> = explosion
+                    .layers
+                    .iter()
+                    .filter(|layer| layer.animation.duration() > 0.0)
+                    .collect();
+                assert_eq!(
+                    animated.len(),
+                    // Lambda explicitly plays W2 on both tap actors in Dim
+                    // mode. Its separate Held-only actor must stay inactive.
+                    if skin == "lambda" && window == "W2" {
+                        2
+                    } else {
+                        1
+                    },
+                    "{skin} {window}: no invented fallback flash"
+                );
+                if skin != "lambda" {
+                    let expected = if window == "W1" {
+                        "Tap Explosion Bright"
+                    } else {
+                        "Tap Explosion Dim"
+                    };
+                    assert!(
+                        animated[0].slot.texture_key().contains(expected),
+                        "{skin} {window}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn delta_mines_keep_the_authored_base_disc() {
+        init_asset_paths();
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
+        let style = Style {
+            num_cols: 5,
+            num_players: 1,
+        };
+        for skin in [
+            "delta",
+            "delta-note",
+            "delta-routine-p1",
+            "delta-routine-p2",
+        ] {
+            let ns = load_itg(&root, "pump", skin, &style).expect("bundled delta skin");
+            assert!(
+                ns.mine_fill_slots.iter().all(Option::is_none),
+                "{skin}: no generated oval"
+            );
+            for mine in &ns.mines {
+                let mine = mine.as_ref().expect("mine disc");
+                assert!(
+                    mine.texture_key().contains("Mine_Base"),
+                    "{skin}: {}",
+                    mine.texture_key()
+                );
+                assert!(!mine.model_fallback);
+            }
+        }
+    }
+
+    #[test]
     fn loads_default_and_cel_itg_noteskins() {
         init_asset_paths();
         let style = Style {
@@ -1932,8 +2007,9 @@ return t
                 .abs()
                 <= 1e-6
         );
+        // ITG NoteDisplay uses NotePart_HoldBody for both holds and rolls.
         assert!(
-            (ns.note_display_metrics.part_animation[NoteAnimPart::RollBody as usize].length - 2.0)
+            (ns.note_display_metrics.part_animation[NoteAnimPart::RollBody as usize].length - 4.0)
                 .abs()
                 <= 1e-6
         );
@@ -2822,16 +2898,25 @@ return skin
         let w1_bright = ns
             .tap_explosion_for_col_with_bright(0, "W1", true)
             .expect("cel should define bright W1 tap explosion");
-        assert!(
-            w1_bright
-                .slot
-                .texture_key()
-                .to_ascii_lowercase()
-                .contains("tap explosion bright w1"),
-            "cel bright W1 tap explosion should use the bright W1 actor first"
+        // Bright/Dim changes visibility, not the actor tree's draw order.
+        assert_eq!(
+            w1_bright.layers[0].slot.texture_key(),
+            w1.slot.texture_key()
         );
+        assert!(!w1_bright.layers[0].animation.initial.visible);
+        let bright_layer = w1_bright
+            .layers
+            .iter()
+            .find(|layer| {
+                layer
+                    .slot
+                    .texture_key()
+                    .to_ascii_lowercase()
+                    .contains("tap explosion bright w1")
+            })
+            .expect("cel bright W1 actor");
         assert!(
-            w1_bright.animation.initial.color[3] > 0.9,
+            bright_layer.animation.initial.color[3] > 0.9,
             "cel bright W1 tap explosion should start from the bright W1 alpha path"
         );
 

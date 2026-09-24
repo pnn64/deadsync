@@ -1,4 +1,5 @@
-// Frozen from 66b76b17c (0.5.1205). Only imports/visibility adapted.
+// Allocation strategy frozen from 66b76b17c (0.5.1205). Actor-command
+// semantics follow ITGmania so comparisons measure ownership, not old bugs.
 use super::super::*;
 use crate::explosion::parse_itg_tap_explosion_animation;
 
@@ -108,29 +109,37 @@ fn itg_tap_explosion_source_match<'a, T>(
     source: &'a ItgTapExplosionSource<T>,
     window: &str,
     command_key: &str,
+    actor_sources: bool,
 ) -> Option<ItgTapExplosionMatch<'a, T>> {
     let direct_command = source.commands.get(command_key).map(String::as_str);
-    (direct_command.is_some() || source.matches_window(window) || source.is_generic_tap_explosion())
-        .then_some(ItgTapExplosionMatch {
-            source,
-            direct_command,
-        })
+    (actor_sources
+        || direct_command.is_some()
+        || source.matches_window(window)
+        || source.is_generic_tap_explosion())
+    .then_some(ItgTapExplosionMatch {
+        source,
+        direct_command,
+    })
 }
 
 fn itg_tap_explosion_matches<'a, T>(
     sources: &'a [ItgTapExplosionSource<T>],
     window: &str,
     command_key: &str,
+    actor_sources: bool,
 ) -> SmallVec<[ItgTapExplosionMatch<'a, T>; 4]> {
     sources
         .iter()
-        .filter_map(|source| itg_tap_explosion_source_match(source, window, command_key))
+        .filter_map(|source| {
+            itg_tap_explosion_source_match(source, window, command_key, actor_sources)
+        })
         .collect()
 }
 
 pub(super) fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
     dim_sprites: Vec<ItgTapExplosionSource<T>>,
     bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    actor_sources: bool,
     mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
     if dim_sprites.is_empty() && bright_sprites.is_empty() {
@@ -147,26 +156,33 @@ pub(super) fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
         ("Miss", "misscommand", "MissCommand"),
         ("Held", "heldcommand", "HeldCommand"),
     ] {
+        if actor_sources && window == "Miss" {
+            continue;
+        }
         for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
-            if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
+            if !actor_sources && mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
                 continue;
             }
             let (preferred, fallback_sprites) = match mode {
                 ItgTapExplosionMode::Dim => (&dim_sprites, &bright_sprites),
                 ItgTapExplosionMode::Bright => (&bright_sprites, &dim_sprites),
             };
-            let preferred_matches = itg_tap_explosion_matches(preferred, window, key);
+            let preferred_matches =
+                itg_tap_explosion_matches(preferred, window, key, actor_sources);
             let has_preferred = !preferred_matches.is_empty();
-            if mode == ItgTapExplosionMode::Bright && !has_preferred {
+            if !actor_sources && mode == ItgTapExplosionMode::Bright && !has_preferred {
                 continue;
             }
-            let fallback_matches = itg_tap_explosion_matches(fallback_sprites, window, key);
+            let fallback_matches =
+                itg_tap_explosion_matches(fallback_sprites, window, key, actor_sources);
 
             let mut layers = SmallVec::new();
             let mut add_source = |matched: &ItgTapExplosionMatch<'_, T>| {
                 let fallback;
                 let command = if let Some(command) = matched.direct_command {
                     command
+                } else if actor_sources {
+                    ""
                 } else {
                     let Some(command) = metric_command(matched.source.mode, metric_key) else {
                         return;
@@ -174,7 +190,15 @@ pub(super) fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
                     fallback = command;
                     fallback.as_str()
                 };
-                if command.trim().is_empty() {
+                let has_actor_event = actor_sources
+                    && ["judgmentcommand", mode.command_key()].iter().any(|key| {
+                        matched
+                            .source
+                            .commands
+                            .get(*key)
+                            .is_some_and(|value| !value.trim().is_empty())
+                    });
+                if command.trim().is_empty() && !has_actor_event {
                     return;
                 }
                 layers.push(TapExplosionLayer {
@@ -224,18 +248,18 @@ fn itg_partition_tap_explosion_layers<L, T>(
     mut layer_has_tap_command: impl FnMut(&L) -> bool,
     mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
-) -> (Vec<ItgTapExplosionSource<T>>, Vec<ItgTapExplosionSource<T>>) {
+) -> (
+    Vec<ItgTapExplosionSource<T>>,
+    Vec<ItgTapExplosionSource<T>>,
+    bool,
+) {
     let mut dim_sources = Vec::new();
     let mut bright_sources = Vec::new();
     let mut has_actor_sources = false;
     for layer in explosion_layers {
         if layer_has_tap_command(layer) {
             has_actor_sources = true;
-            push_tap_explosion_source(
-                source_from_layer(layer),
-                &mut dim_sources,
-                &mut bright_sources,
-            );
+            dim_sources.push(source_from_layer(layer));
         }
     }
 
@@ -250,7 +274,7 @@ fn itg_partition_tap_explosion_layers<L, T>(
             }
         }
     }
-    (dim_sources, bright_sources)
+    (dim_sources, bright_sources, has_actor_sources)
 }
 
 pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
@@ -260,13 +284,18 @@ pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
-    let (dim_sources, bright_sources) = itg_partition_tap_explosion_layers(
+    let (dim_sources, bright_sources, actor_sources) = itg_partition_tap_explosion_layers(
         explosion_layers,
         &mut layer_has_tap_command,
         &mut direct_layers,
         &mut source_from_layer,
     );
-    itg_tap_explosion_map_from_partitioned_sources(dim_sources, bright_sources, metric_command)
+    itg_tap_explosion_map_from_partitioned_sources(
+        dim_sources,
+        bright_sources,
+        actor_sources,
+        metric_command,
+    )
 }
 
 pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
