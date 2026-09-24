@@ -597,7 +597,8 @@ where
     let body_width = request.target_arrow_px;
     let scale = body_width / texture_width;
     let segment_height = (texture_height * scale).max(f32::EPSILON);
-    let uv_elapsed = if body_slot.model().is_some() {
+    let is_model = body_slot.model().is_some();
+    let uv_elapsed = if is_model {
         request.body_phase
     } else {
         request.elapsed_s
@@ -647,6 +648,7 @@ where
             mesh_scratch,
             request,
             body_slot,
+            is_model,
             body_top,
             body_bottom,
             segment_height,
@@ -813,6 +815,7 @@ fn compose_sliced_hold_body<S, F, P>(
     mesh_scratch: &mut HoldMeshScratch,
     request: &HoldBodyCapRequest<'_, S>,
     slot: &S,
+    is_model: bool,
     body_top: f32,
     body_bottom: f32,
     segment_height: f32,
@@ -829,7 +832,7 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
-    let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
+    let use_mesh = !is_model && request.rotation_y_deg.abs() <= f32::EPSILON;
     let mut pooled_pair = None;
     let mut owned_diffuse = Vec::new();
     let mut owned_glow = Vec::new();
@@ -839,6 +842,7 @@ where
                 draws,
                 request,
                 slot,
+                use_mesh,
                 body_top,
                 body_bottom,
                 segment_height,
@@ -860,6 +864,7 @@ where
                 draws,
                 request,
                 slot,
+                use_mesh,
                 body_top,
                 body_bottom,
                 segment_height,
@@ -879,6 +884,7 @@ where
             draws,
             request,
             slot,
+            use_mesh,
             body_top,
             body_bottom,
             segment_height,
@@ -940,6 +946,7 @@ fn compose_sliced_hold_body_into<S, F, P>(
     draws: &mut Vec<FlatDraw>,
     request: &HoldBodyCapRequest<'_, S>,
     slot: &S,
+    use_mesh: bool,
     body_top: f32,
     body_bottom: f32,
     segment_height: f32,
@@ -960,7 +967,6 @@ where
 {
     let [u0, u1, v_top, v_bottom] = uv;
     let slice_step = if request.depth_test { 4.0 } else { 16.0 };
-    let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
     let mut prev_row: Option<[[f32; 3]; 2]> = None;
     let mut previous_endpoint: Option<HoldPathEndpoint> = None;
     let mut rendered = RenderedHoldBody::default();
@@ -1265,7 +1271,8 @@ fn compose_top_cap<S, F, P>(
         return;
     }
     let frame = slot.frame_index_from_phase(request.top_cap_phase);
-    let uv_elapsed = if slot.model().is_some() {
+    let is_model = slot.model().is_some();
+    let uv_elapsed = if is_model {
         request.top_cap_phase
     } else {
         request.elapsed_s
@@ -1284,9 +1291,8 @@ fn compose_top_cap<S, F, P>(
     }
     let top = sample_path(cap_top);
     let bottom = sample_path(cap_bottom);
-    let use_mesh = !request.use_legacy_sprites
-        && slot.model().is_none()
-        && request.rotation_y_deg.abs() <= f32::EPSILON;
+    let use_mesh =
+        !request.use_legacy_sprites && !is_model && request.rotation_y_deg.abs() <= f32::EPSILON;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
@@ -1517,7 +1523,8 @@ fn compose_bottom_cap<S, F, P>(
         return;
     }
     let frame = slot.frame_index_from_phase(request.bottom_cap_phase);
-    let uv_elapsed = if slot.model().is_some() {
+    let is_model = slot.model().is_some();
+    let uv_elapsed = if is_model {
         request.bottom_cap_phase
     } else {
         request.elapsed_s
@@ -1542,7 +1549,7 @@ fn compose_bottom_cap<S, F, P>(
     let top = sample_path(draw_top);
     let bottom = sample_path(draw_bottom);
     let use_mesh = !request.use_legacy_sprites
-        && slot.model().is_none()
+        && !is_model
         && !request.lane_reverse
         && request.rotation_y_deg.abs() <= f32::EPSILON;
     if use_mesh {
