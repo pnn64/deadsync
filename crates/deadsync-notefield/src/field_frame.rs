@@ -691,14 +691,15 @@ fn compose_field_contents<S, F>(
                 return None;
             }
             let note_scale = hold_note_scale;
-            let base_size = note_slot_base_size(slot, note_scale);
+            let model = slot.model();
+            let base_size = note_slot_base_size(slot, model, note_scale);
             (base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
                 && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON)
-                .then_some((slot, draw, note_scale, base_size))
+                .then_some((slot, draw, note_scale, base_size, model))
         });
-        if let Some((head_slot, draw, note_scale, base_size)) = head_slot {
+        if let Some((head_slot, draw, note_scale, base_size, model)) = head_slot {
             let frame_index = head_slot.frame_index_from_phase(hold_part_phase);
-            let uv_elapsed = if head_slot.model().is_some() {
+            let uv_elapsed = if model.is_some() {
                 hold_part_phase
             } else {
                 elapsed
@@ -709,12 +710,8 @@ fn compose_field_contents<S, F>(
             );
             let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
             let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
-            let model_center = model_center(
-                head_slot,
-                head_center,
-                local_offset,
-                local_offset_rot_sin_cos,
-            );
+            let model_center =
+                model_center(model, head_center, local_offset, local_offset_rot_sin_cos);
             let size = [
                 base_size[0] * draw.zoom[0].max(0.0),
                 base_size[1] * draw.zoom[1].max(0.0),
@@ -1273,7 +1270,8 @@ fn compose_flat_noteskin_layer<S, F>(
     if !draw.visible {
         return;
     }
-    let base_size = note_slot_base_size(slot, scale);
+    let model = slot.model();
+    let base_size = note_slot_base_size(slot, model, scale);
     let size = [
         base_size[0] * draw.zoom[0].max(0.0),
         base_size[1] * draw.zoom[1].max(0.0),
@@ -1282,11 +1280,7 @@ fn compose_flat_noteskin_layer<S, F>(
         return;
     }
     let frame_index = slot.frame_index_from_phase(phase);
-    let uv_elapsed = if slot.model().is_some() {
-        phase
-    } else {
-        elapsed
-    };
+    let uv_elapsed = if model.is_some() { phase } else { elapsed };
     let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
     let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
     let rotation_sin_cos = slot.base_rot_sin_cos();
@@ -1308,7 +1302,7 @@ fn compose_flat_noteskin_layer<S, F>(
         NoteLayerRequest {
             slot,
             draw,
-            model_center: model_center(slot, center, local_offset, rotation_sin_cos),
+            model_center: model_center(model, center, local_offset, rotation_sin_cos),
             sprite_center: offset_center(center, local_offset, rotation_sin_cos),
             size,
             uv,
@@ -1351,13 +1345,10 @@ fn compose_flat_single_slot<S, F>(
     F: Fn(&S) -> SpriteSource,
 {
     let frame_index = slot.frame_index_from_phase(phase);
-    let uv_elapsed = if slot.model().is_some() {
-        phase
-    } else {
-        elapsed
-    };
+    let model = slot.model();
+    let uv_elapsed = if model.is_some() { phase } else { elapsed };
     let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
-    let size = note_slot_base_size(slot, scale);
+    let size = note_slot_base_size(slot, model, scale);
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, elapsed, current_beat),
         rotation_y_deg,
@@ -1388,8 +1379,12 @@ fn compose_flat_single_slot<S, F>(
 }
 
 #[inline(always)]
-fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
-    if let Some(model) = slot.model() {
+fn note_slot_base_size<S: NoteskinSlot>(
+    slot: &S,
+    model: Option<&deadsync_noteskin::ModelMesh>,
+    scale: f32,
+) -> [f32; 2] {
+    if let Some(model) = model {
         let size = model.size();
         if size[0] > f32::EPSILON && size[1] > f32::EPSILON {
             return [size[0] * scale, size[1] * scale];
@@ -1400,13 +1395,13 @@ fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
 }
 
 #[inline(always)]
-fn model_center<S: NoteskinSlot>(
-    slot: &S,
+fn model_center(
+    model: Option<&deadsync_noteskin::ModelMesh>,
     center: [f32; 2],
     local_offset: [f32; 2],
     [sin_r, cos_r]: [f32; 2],
 ) -> [f32; 2] {
-    if slot.model().is_none() {
+    if model.is_none() {
         return center;
     }
     let offset = [
