@@ -2648,6 +2648,47 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn chart_judgment_totals() {
+        let segments = TimingSegments {
+            combos: vec![
+                ComboSegment {
+                    beat: 0.0,
+                    combo: 1,
+                    miss_combo: 1,
+                },
+                ComboSegment {
+                    beat: 1.0,
+                    combo: 3,
+                    miss_combo: 2,
+                },
+                ComboSegment {
+                    beat: 2.0,
+                    combo: 0,
+                    miss_combo: 0,
+                },
+            ],
+            ..TimingSegments::default()
+        };
+        for (row, grade, count, points) in [
+            (47, JudgeGrade::Fantastic, 1, 5),
+            (48, JudgeGrade::Fantastic, 3, 5),
+            (49, JudgeGrade::Miss, 2, -12),
+            (96, JudgeGrade::Great, 0, 2),
+            (96, JudgeGrade::Decent, 0, 0),
+        ] {
+            let mut state = regression_state_with_segments(segments.clone(), 96);
+            set_single_judged_tap(&mut state, 0, row, grade, 0.0);
+            state.finalize_row_judgment(0, row, 0, false);
+
+            let player = &state.players_runtime.players[0];
+            let ix = judgment::display_judge_ix(grade);
+            assert_eq!(player.judgment_counts[ix], count, "row {row}, {grade:?}");
+            assert_eq!(player.scoring_counts[ix], 1);
+            assert_eq!(player.earned_grade_points, points);
+        }
+    }
+
+    #[test]
     fn pump_checkpoints_apply_chart_combo_multiplier() {
         let mut timing_segments = TimingSegments::default();
         timing_segments.bpms = vec![(0.0, 120.0)];

@@ -15831,13 +15831,55 @@ mod tests {
     }
 
     #[test]
-    fn pump_row_finalization_applies_combo_multiplier_once_per_row() {
-        let mut state = RowFinalizationPlayerState::default();
-        let judgment = test_judgment(JudgeGrade::Fantastic);
+    fn combo_judgment_totals() {
+        for (grade, multiplier) in [
+            (JudgeGrade::Fantastic, 3),
+            (JudgeGrade::Excellent, 3),
+            (JudgeGrade::Great, 3),
+            (JudgeGrade::Decent, 2),
+            (JudgeGrade::WayOff, 2),
+            (JudgeGrade::Miss, 2),
+        ] {
+            for (combo_per_row, note_count) in [(false, 1), (false, 3), (true, 3)] {
+                for player_dead in [false, true] {
+                    for zero_multiplier in [false, true] {
+                        let mut state = RowFinalizationPlayerState::default();
+                        let judgment = test_judgment(grade);
+                        let ix = judgment::display_judge_ix(grade);
+                        state.judgment_counts[ix] = 7;
+                        apply_row_finalization_player_state(
+                            &mut state,
+                            &judgment,
+                            note_count,
+                            0,
+                            player_dead,
+                            combo_per_row,
+                            if zero_multiplier { 0 } else { 3 },
+                            if zero_multiplier { 0 } else { 2 },
+                        );
 
-        apply_row_finalization_player_state(&mut state, &judgment, 3, 0, false, true, 3, 2);
-
-        assert_eq!(state.combo.combo, 3);
+                        let expected = if zero_multiplier { 0 } else { multiplier };
+                        assert_eq!(state.judgment_counts[ix], 7 + expected, "{grade:?}");
+                        assert_eq!(state.scoring_counts[ix], u32::from(!player_dead));
+                        let counts = state.current_combo_window_counts;
+                        assert_eq!(
+                            counts.w0
+                                + counts.w1
+                                + counts.w2
+                                + counts.w3
+                                + counts.w4
+                                + counts.w5
+                                + counts.miss,
+                            1
+                        );
+                        if grade == JudgeGrade::Fantastic {
+                            let rows = if combo_per_row { 1 } else { note_count };
+                            assert_eq!(state.combo.combo, rows * expected);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]

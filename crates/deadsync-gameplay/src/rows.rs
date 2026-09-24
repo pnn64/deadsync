@@ -890,7 +890,14 @@ pub fn apply_row_finalization_player_state(
 ) -> RowFinalizationPlayerUpdate {
     let final_grade = judgment.grade;
     let grade_ix = judgment::display_judge_ix(final_grade);
-    state.judgment_counts[grade_ix] = state.judgment_counts[grade_ix].saturating_add(1);
+    // ITG weights judgment totals by #COMBOS, but scores each row only once.
+    let judgment_count = if combo::combo_continues_on_grade(final_grade) {
+        combo_multiplier
+    } else {
+        miss_combo_multiplier
+    };
+    state.judgment_counts[grade_ix] =
+        state.judgment_counts[grade_ix].saturating_add(judgment_count);
     let update_grade_totals = !player_dead;
     if update_grade_totals {
         state.scoring_counts[grade_ix] = state.scoring_counts[grade_ix].saturating_add(1);
