@@ -295,6 +295,8 @@ fn chart_transform_bench() {
 }
 
 // Frozen 0.5.1133 routines for behavior and same-binary performance comparisons.
+// The simultaneous-note baseline includes the ITG lift-preservation correction:
+// lifts contribute to the count, but only taps and hold heads can be removed.
 fn legacy_enforce_max_simultaneous_notes(
     notes: &mut Vec<Note>,
     max_simultaneous: usize,
@@ -357,6 +359,9 @@ fn legacy_enforce_max_simultaneous_notes(
             for &(_, idx) in &row_candidates {
                 if tracks_to_remove == 0 {
                     break;
+                }
+                if notes[idx].note_type == NoteType::Lift {
+                    continue;
                 }
                 remove_idx[idx] = true;
                 tracks_to_remove -= 1;

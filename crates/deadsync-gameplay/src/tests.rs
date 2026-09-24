@@ -16162,6 +16162,82 @@ mod tests {
     }
 
     #[test]
+    fn simultaneous_keeps_lifts() {
+        let timing = test_timing(96);
+        for offset in [0, 4] {
+            for (mask, columns) in [
+                (REMOVE_MASK_BIT_NO_JUMPS, vec![0]),
+                (REMOVE_MASK_BIT_NO_HANDS, vec![0, 3]),
+                (REMOVE_MASK_BIT_NO_QUADS, vec![0, 2, 3]),
+            ] {
+                let mut notes = vec![
+                    test_note_at(NoteType::Lift, None, false, 0, 0.0),
+                    test_note_at(NoteType::Tap, None, false, 0, 0.0),
+                    test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0),
+                    test_note_at(NoteType::Roll, Some(test_hold()), false, 0, 0.0),
+                ];
+                for (column, note) in notes.iter_mut().enumerate() {
+                    note.column = offset + column;
+                }
+
+                apply_uncommon_masks_with_masks(
+                    &mut notes,
+                    0,
+                    mask,
+                    0,
+                    &timing,
+                    offset,
+                    4,
+                    &[],
+                    None,
+                    0,
+                );
+
+                assert_eq!(
+                    notes
+                        .iter()
+                        .map(|note| note.column - offset)
+                        .collect::<Vec<_>>(),
+                    columns
+                );
+                assert_eq!(notes[0].note_type, NoteType::Lift);
+            }
+        }
+    }
+
+    #[test]
+    fn simultaneous_lift_rows() {
+        let mut hold = test_hold();
+        hold.end_row_index = 96;
+        let mut notes = vec![test_note_at(NoteType::Hold, Some(hold), false, 0, 0.0)];
+        for (row, column, kind) in [
+            (48, 1, NoteType::Lift),
+            (48, 2, NoteType::Lift),
+            (48, 3, NoteType::Tap),
+            (96, 1, NoteType::Tap),
+            (97, 1, NoteType::Tap),
+            (144, 0, NoteType::Lift),
+            (144, 1, NoteType::Lift),
+        ] {
+            let mut note = test_note_at(kind, None, false, row, row as f32 / 48.0);
+            note.column = column;
+            notes.push(note);
+        }
+
+        enforce_max_simultaneous_notes(&mut notes, 1, 0, 4);
+
+        // Lifts survive even when they and an existing hold exceed the limit.
+        // The hold still occupies its lane on the tail row, but not after it.
+        assert_eq!(
+            notes
+                .iter()
+                .map(|note| (note.row_index, note.column))
+                .collect::<Vec<_>>(),
+            vec![(0, 0), (48, 1), (48, 2), (97, 1), (144, 0), (144, 1)]
+        );
+    }
+
+    #[test]
     fn simultaneous_limit_counts_active_holds_before_row_taps() {
         let mut hold = test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0);
         hold.column = 0;

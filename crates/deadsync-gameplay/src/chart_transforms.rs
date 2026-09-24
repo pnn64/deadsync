@@ -33,11 +33,17 @@ pub fn enforce_max_simultaneous_notes(
             .count();
         spill_candidates.clear();
         let mut count = 0;
+        let mut lifts = 0usize;
         for (offset, note) in notes[row_start..row_end].iter().enumerate() {
             let Some(local) = local_player_col(note.column, col_offset, cols) else {
                 continue;
             };
             if !note_counts_for_simultaneous_limit(note) {
+                continue;
+            }
+            // ITG counts lifts toward the limit, but never removes them.
+            if note.note_type == NoteType::Lift {
+                lifts += 1;
                 continue;
             }
             let candidate = (local, row_start + offset);
@@ -57,6 +63,7 @@ pub fn enforce_max_simultaneous_notes(
             spill_candidates.as_mut_slice()
         };
         let remove_count = active_holds
+            .saturating_add(lifts)
             .saturating_add(count)
             .saturating_sub(max_simultaneous)
             .min(count);
