@@ -677,6 +677,32 @@ fn intelligent_row_summary_slice(
     )
 }
 
+fn intelligent_row_summary_unordered(
+    notes: &[Note],
+    row: usize,
+    col_offset: usize,
+    cols: usize,
+) -> IntelligentRowSummary {
+    let mut summary = IntelligentRowSummary::default();
+    for note in notes {
+        if note.row_index != row {
+            continue;
+        }
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            continue;
+        };
+        let bit = 1u64 << local;
+        summary.nonempty |= bit;
+        if matches!(
+            note.note_type,
+            NoteType::Tap | NoteType::Lift | NoteType::Hold | NoteType::Roll
+        ) {
+            summary.tap_or_hold |= bit;
+        }
+    }
+    summary
+}
+
 fn intelligent_range_has_note(
     notes: &[Note],
     start_row: usize,
@@ -794,16 +820,18 @@ fn apply_insert_intelligent_taps_fallback(
         let row_later = row_earlier.saturating_add(window_size_rows);
         let row_to_add = row_earlier.saturating_add(insert_offset_rows);
 
-        if require_begin
-            && (count_nonempty_tracks_at_row(notes, row_earlier, col_offset, cols) != 1
-                || count_tap_or_hold_tracks_at_row(notes, row_earlier, col_offset, cols) != 1)
-        {
-            continue;
-        }
-        if require_end
-            && (count_nonempty_tracks_at_row(notes, row_later, col_offset, cols) != 1
-                || count_tap_or_hold_tracks_at_row(notes, row_later, col_offset, cols) != 1)
-        {
+        let earlier_tracks = if require_begin {
+            let summary =
+                intelligent_row_summary_unordered(notes, row_earlier, col_offset, cols);
+            if !summary.single_endpoint() {
+                continue;
+            }
+            Some(summary)
+        } else {
+            None
+        };
+        let later_tracks = intelligent_row_summary_unordered(notes, row_later, col_offset, cols);
+        if require_end && !later_tracks.single_endpoint() {
             continue;
         }
 
@@ -831,9 +859,12 @@ fn apply_insert_intelligent_taps_fallback(
             continue;
         }
 
-        let earlier_track = first_nonempty_track_at_row(notes, row_earlier, col_offset, cols);
-        let later_track = first_nonempty_track_at_row(notes, row_later, col_offset, cols);
-        let Some(later_track) = later_track else {
+        let earlier_track = earlier_tracks
+            .unwrap_or_else(|| {
+                intelligent_row_summary_unordered(notes, row_earlier, col_offset, cols)
+            })
+            .first_track();
+        let Some(later_track) = later_tracks.first_track() else {
             continue;
         };
         let track_to_add = intelligent_add_track(earlier_track, later_track, cols, skippy_mode);
