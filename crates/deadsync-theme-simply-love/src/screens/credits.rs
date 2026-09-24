@@ -121,6 +121,7 @@ const CREDITS: &[CreditLine] = &[
     name("Sereni"),
     name("Romain RoffÃ© (rofferom)"),
     name("Scott Brenner"),
+    name("G. Rosewood"),
     spacer(),
     spacer(),
     section("rssp Contributors"),
