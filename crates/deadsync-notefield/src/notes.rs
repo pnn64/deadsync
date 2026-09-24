@@ -528,7 +528,8 @@ fn compose_flat_mine_slot<S, F, Z>(
     } else {
         slot.frame_index_from_phase(request.mine_uv_phase)
     };
-    let uv_elapsed = if slot.model().is_some() {
+    let is_model = slot.model().is_some();
+    let uv_elapsed = if is_model {
         request.mine_uv_phase
     } else {
         request.elapsed_s
@@ -540,7 +541,7 @@ fn compose_flat_mine_slot<S, F, Z>(
     let base_rotation = -slot.sprite_def().rotation_deg as f32;
     let mut size = size_for_slot(slot);
     let mut tint = [1.0, 1.0, 1.0, request.alpha];
-    if slot.model().is_none() {
+    if !is_model {
         size[0] *= draw.zoom[0];
         size[1] *= draw.zoom[1];
         tint = model_tint(tint, draw);
