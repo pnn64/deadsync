@@ -242,7 +242,12 @@ pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
 {
     let geometries = geometries.into_iter();
-    let geometry_count = geometries.clone().count();
+    let (lower, upper) = geometries.size_hint();
+    let geometry_count = if upper == Some(lower) {
+        lower
+    } else {
+        geometries.clone().count()
+    };
     resolve_textured_mesh_geometries_with_count(geometries, geometry_count, uploads, ensure_cached);
 }
 
