@@ -7,7 +7,8 @@ pub use frame::{
     RenderFrame, RenderTargetFrame, SOFTWARE_MESH_STORAGE_SLOT, SOFTWARE_OBJECTS_STORAGE_SLOT,
     SOFTWARE_TMESH_STORAGE_SLOT, SpriteRun, TexturedMeshBufferCache, TexturedMeshGeometry,
     TexturedMeshRun, TexturedMeshSource, TexturedMeshUploads, draw_storage_stats,
-    resolve_textured_mesh_geometries, resolve_textured_meshes,
+    resolve_render_target_textured_mesh_geometries, resolve_textured_mesh_geometries,
+    resolve_textured_meshes,
 };
 
 use glam::Mat4 as Matrix4;

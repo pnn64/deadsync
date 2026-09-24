@@ -3,8 +3,8 @@ use deadlib_render_core::{
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
     TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
-    render_target_base_handle, render_target_uses_nearest, resolve_textured_mesh_geometries,
-    resolve_textured_meshes,
+    render_target_base_handle, render_target_uses_nearest,
+    resolve_render_target_textured_mesh_geometries, resolve_textured_meshes,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -2199,11 +2199,8 @@ fn draw_offscreen_targets(
         return 0;
     }
     let prepare_started = Instant::now();
-    resolve_textured_mesh_geometries(
-        frame
-            .render_targets
-            .iter()
-            .flat_map(|target| &target.tmesh_geometries),
+    resolve_render_target_textured_mesh_geometries(
+        &frame.render_targets,
         &mut state.offscreen_uploads,
         |key, vertices| {
             ensure_cached_tmesh(

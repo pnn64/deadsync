@@ -235,7 +235,7 @@ pub fn resolve_textured_meshes<EnsureCached>(
 pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
     geometries: I,
     uploads: &mut TexturedMeshUploads,
-    mut ensure_cached: EnsureCached,
+    ensure_cached: EnsureCached,
 ) where
     I: IntoIterator<Item = &'a TexturedMeshGeometry>,
     I::IntoIter: Clone,
@@ -243,6 +243,41 @@ pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
 {
     let geometries = geometries.into_iter();
     let geometry_count = geometries.clone().count();
+    resolve_textured_mesh_geometries_with_count(geometries, geometry_count, uploads, ensure_cached);
+}
+
+/// Resolves textured geometry from render targets without pre-counting the
+/// flattened geometry stream.
+///
+/// Counting each target's geometry slice avoids traversing every geometry a
+/// second time before resolution.
+pub fn resolve_render_target_textured_mesh_geometries<EnsureCached>(
+    targets: &[RenderTargetFrame],
+    uploads: &mut TexturedMeshUploads,
+    ensure_cached: EnsureCached,
+) where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
+{
+    let geometry_count = targets
+        .iter()
+        .map(|target| target.tmesh_geometries.len())
+        .sum::<usize>();
+    let geometries = targets
+        .iter()
+        .flat_map(|target| target.tmesh_geometries.iter());
+    resolve_textured_mesh_geometries_with_count(geometries, geometry_count, uploads, ensure_cached);
+}
+
+fn resolve_textured_mesh_geometries_with_count<'a, I, EnsureCached>(
+    geometries: I,
+    geometry_count: usize,
+    uploads: &mut TexturedMeshUploads,
+    mut ensure_cached: EnsureCached,
+) where
+    I: IntoIterator<Item = &'a TexturedMeshGeometry>,
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
+{
+    let geometries = geometries.into_iter();
     uploads.vertices.clear();
     uploads
         .cache_keys
