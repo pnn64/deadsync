@@ -1,4 +1,5 @@
 // Frozen from 76d58fdc9 (0.5.1167); shared helpers are unchanged.
+// NoLifts runs after NoJumps to include the corrected ITG transform order.
 use super::*;
 
 pub fn apply_insert_intelligent_taps(
@@ -244,6 +245,10 @@ pub fn apply_uncommon_masks_with_masks(
         enforce_max_simultaneous_notes(notes, 1, col_offset, cols);
     }
 
+    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
+        notes.retain(|note| note.note_type != NoteType::Lift);
+    }
+
     if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 {
         notes.retain(|note| note.can_be_judged && !note.is_fake);
     }
@@ -362,10 +367,6 @@ pub fn apply_uncommon_masks_with_masks(
             }
         }
     }
-    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
-        notes.retain(|note| note.note_type != NoteType::Lift);
-    }
-
     if !notes_row_col_sorted(notes) {
         sort_player_notes(notes);
     }

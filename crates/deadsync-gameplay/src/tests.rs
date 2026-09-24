@@ -16466,6 +16466,119 @@ mod tests {
     }
 
     #[test]
+    fn nolifts_before_echo() {
+        let timing = test_timing(96);
+        for offset in [0, 4] {
+            let mut notes = vec![
+                test_note_at(NoteType::Tap, None, false, 0, 0.0),
+                test_note_at(NoteType::Lift, None, false, 12, 0.25),
+                test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            ];
+            for (column, note) in notes.iter_mut().enumerate() {
+                note.column = offset + column;
+            }
+
+            apply_uncommon_masks_with_masks(
+                &mut notes,
+                INSERT_MASK_BIT_ECHO,
+                REMOVE_MASK_BIT_NO_LIFTS,
+                0,
+                &timing,
+                offset,
+                4,
+                &[],
+                None,
+                0,
+            );
+
+            assert_eq!(
+                notes
+                    .iter()
+                    .map(|note| (note.row_index, note.column - offset))
+                    .collect::<Vec<_>>(),
+                vec![(0, 0), (24, 0), (48, 2), (72, 2)]
+            );
+            assert!(notes.iter().all(|note| note.note_type == NoteType::Tap));
+        }
+    }
+
+    #[test]
+    fn nolifts_remove_order() {
+        let timing = test_timing(48);
+        for (mask, columns) in [
+            (REMOVE_MASK_BIT_NO_JUMPS, vec![]),
+            (REMOVE_MASK_BIT_NO_HANDS, vec![2, 3]),
+            (REMOVE_MASK_BIT_NO_QUADS, vec![1, 2, 3]),
+        ] {
+            let mut notes = vec![
+                test_note_at(NoteType::Lift, None, false, 0, 0.0),
+                test_note_at(NoteType::Tap, None, false, 0, 0.0),
+                test_note_at(NoteType::Tap, None, false, 0, 0.0),
+                test_note_at(NoteType::Tap, None, false, 0, 0.0),
+            ];
+            for (column, note) in notes.iter_mut().enumerate() {
+                note.column = column;
+            }
+
+            apply_uncommon_masks_with_masks(
+                &mut notes,
+                0,
+                mask | REMOVE_MASK_BIT_NO_LIFTS,
+                0,
+                &timing,
+                0,
+                4,
+                &[],
+                None,
+                0,
+            );
+
+            assert_eq!(
+                notes.iter().map(|note| note.column).collect::<Vec<_>>(),
+                columns
+            );
+        }
+    }
+
+    #[test]
+    fn nolifts_echo_attack() {
+        let timing = test_timing(144);
+        let mut notes = vec![
+            test_note_at(NoteType::Lift, None, false, 12, 0.25),
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Lift, None, false, 60, 1.25),
+            test_note_at(NoteType::Tap, None, false, 96, 2.0),
+            test_note_at(NoteType::Lift, None, false, 132, 2.75),
+        ];
+
+        apply_chart_attack_window(
+            &mut notes,
+            &timing,
+            0,
+            4,
+            0,
+            (48, 96),
+            parse_attack_mods("nolifts,echo"),
+            0,
+        );
+
+        assert_eq!(
+            notes
+                .iter()
+                .map(|note| (note.row_index, note.note_type))
+                .collect::<Vec<_>>(),
+            vec![
+                (12, NoteType::Lift),
+                (48, NoteType::Tap),
+                (72, NoteType::Tap),
+                (96, NoteType::Tap),
+                (120, NoteType::Tap),
+                (132, NoteType::Lift),
+            ]
+        );
+    }
+
+    #[test]
     fn uncommon_remove_masks_filter_convert_and_cap_notes() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 5);
         let mut notes = vec![
