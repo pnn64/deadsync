@@ -140,13 +140,11 @@ impl SongLuaOverlayUpdateCapture {
         duration_seconds: f32,
         easing: Option<String>,
         opt1: Option<f32>,
-    ) {
+    ) -> Option<usize> {
         if self.active_broadcast.is_none() {
-            return;
+            return None;
         }
-        let Some(index) = self.touch(actor) else {
-            return;
-        };
+        let index = self.touch(actor)?;
         let message = self
             .active_broadcast
             .as_deref()
@@ -174,6 +172,7 @@ impl SongLuaOverlayUpdateCapture {
         } else {
             self.stateful_writes.insert(message.to_owned(), vec![write]);
         }
+        Some(index)
     }
 
     fn touch(&mut self, actor: &Table) -> Option<usize> {
@@ -192,12 +191,14 @@ impl SongLuaOverlayUpdateCapture {
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
-        let Some(index) = self.touch(actor) else {
+        let index = if self.active_broadcast.is_some() {
+            self.record_stateful_message(actor, beat, target, value.clone(), 0.0, 0.0, None, None)
+        } else {
+            self.touch(actor)
+        };
+        let Some(index) = index else {
             return false;
         };
-        if self.active_broadcast.is_some() {
-            self.record_stateful_message(actor, beat, target, value.clone(), 0.0, 0.0, None, None);
-        }
         Self::replace_value(&mut self.final_values[index], target, value.clone());
         Self::replace_value(&mut self.values[index], target, value);
         true
@@ -226,10 +227,7 @@ impl SongLuaOverlayUpdateCapture {
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
-        let Some(index) = self.touch(actor) else {
-            return false;
-        };
-        if self.active_broadcast.is_some() {
+        let index = if self.active_broadcast.is_some() {
             self.record_stateful_message(
                 actor,
                 beat,
@@ -239,8 +237,13 @@ impl SongLuaOverlayUpdateCapture {
                 duration_seconds,
                 easing.clone(),
                 opt1,
-            );
-        }
+            )
+        } else {
+            self.touch(actor)
+        };
+        let Some(index) = index else {
+            return false;
+        };
         Self::replace_value(&mut self.final_values[index], target, value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
             delay_seconds,
