@@ -3669,24 +3669,44 @@ mod tests {
     }
 
     #[test]
-    fn combo_update_feedback_triggers_milestones() {
-        let mut counts = WindowCounts::default();
-        let mut milestones = Vec::new();
+    fn combo_jump_milestones() {
+        for (combo, expected) in [
+            (99, vec![ComboMilestoneKind::Hundred]),
+            (
+                999,
+                vec![ComboMilestoneKind::Thousand, ComboMilestoneKind::Hundred],
+            ),
+        ] {
+            let mut state = RowFinalizationPlayerState {
+                combo: ComboState {
+                    combo,
+                    ..ComboState::default()
+                },
+                ..RowFinalizationPlayerState::default()
+            };
+            let judgment = test_judgment(JudgeGrade::Fantastic);
+            let mut milestones = Vec::new();
 
-        apply_combo_update_feedback(
-            &mut counts,
-            &mut milestones,
-            ComboUpdate {
-                hit_hundred_milestone: true,
-                hit_thousand_milestone: true,
-                ..ComboUpdate::default()
-            },
-            true,
-        );
+            let update = apply_row_finalization_player_state(
+                &mut state, &judgment, 2, 0, false, false, 1, 1,
+            );
+            apply_combo_update_feedback(
+                &mut state.current_combo_window_counts,
+                &mut milestones,
+                update.combo_update,
+                true,
+            );
 
-        assert_eq!(milestones.len(), 2);
-        assert_eq!(milestones[0].kind, ComboMilestoneKind::Thousand);
-        assert_eq!(milestones[1].kind, ComboMilestoneKind::Hundred);
+            assert_eq!(state.combo.combo, combo + 2);
+            assert_eq!(
+                milestones
+                    .iter()
+                    .map(|milestone| milestone.kind)
+                    .collect::<Vec<_>>(),
+                expected,
+                "combo={combo}"
+            );
+        }
     }
 
     #[test]

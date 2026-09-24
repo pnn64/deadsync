@@ -58,10 +58,12 @@ fn apply_successful_row_combo_state(
     row_combo_count: u32,
 ) -> ComboUpdate {
     state.miss_combo = 0;
-    state.combo = state.combo.saturating_add(row_combo_count);
+    let old_combo = state.combo;
+    state.combo = old_combo.saturating_add(row_combo_count);
     let combo = state.combo;
-    let hit_thousand_milestone = combo > 0 && combo.is_multiple_of(1000);
-    let hit_hundred_milestone = hit_thousand_milestone || (combo > 0 && combo.is_multiple_of(100));
+    // Jumps and combo multipliers can cross a milestone without landing on it.
+    let hit_thousand_milestone = combo / 1000 > old_combo / 1000;
+    let hit_hundred_milestone = combo / 100 > old_combo / 100;
 
     if !state.first_fc_attempt_broken {
         let new_grade = if let Some(current_fc_grade) = state.full_combo_grade {
@@ -193,20 +195,42 @@ mod tests {
     }
 
     #[test]
-    fn combo_milestones_track_new_combo_total() {
-        let mut state = ComboState {
-            combo: 99,
-            first_fc_attempt_broken: true,
-            ..ComboState::default()
-        };
+    fn combo_milestone_crossing() {
+        for (combo, added, hundred, thousand) in [
+            (0, 0, false, false),
+            (98, 1, false, false),
+            (99, 1, true, false),
+            (99, 2, true, false),
+            (100, 0, false, false),
+            (100, 1, false, false),
+            (199, 4, true, false),
+            (699, 2, true, false),
+            (999, 1, true, true),
+            (999, 2, true, true),
+            (1000, 0, false, false),
+            (1000, 1, false, false),
+            (1999, 4, true, true),
+            (99, 2002, true, true),
+            (u32::MAX - 1, 2, false, false),
+            (u32::MAX, 1, false, false),
+        ] {
+            let mut state = ComboState {
+                combo,
+                ..ComboState::default()
+            };
 
-        let hundred = apply_row_combo_state(&mut state, JudgeGrade::Fantastic, 1, 0);
-        assert!(hundred.hit_hundred_milestone);
-        assert!(!hundred.hit_thousand_milestone);
+            let update = apply_row_combo_state(&mut state, JudgeGrade::Fantastic, added, 0);
 
-        state.combo = 999;
-        let thousand = apply_row_combo_state(&mut state, JudgeGrade::Fantastic, 1, 0);
-        assert!(thousand.hit_hundred_milestone);
-        assert!(thousand.hit_thousand_milestone);
+            assert_eq!(state.combo, combo.saturating_add(added));
+            assert_eq!(
+                update,
+                ComboUpdate {
+                    combo_broken: false,
+                    hit_hundred_milestone: hundred,
+                    hit_thousand_milestone: thousand,
+                },
+                "combo={combo}, added={added}"
+            );
+        }
     }
 }
