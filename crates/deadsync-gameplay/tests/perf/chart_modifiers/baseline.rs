@@ -1,5 +1,6 @@
 // Frozen from 76d58fdc9 (0.5.1167); shared helpers are unchanged.
 // NoLifts runs after NoJumps to include the corrected ITG transform order.
+// Simultaneous-note filters receive surrounding holds for attack-window parity.
 use super::*;
 
 pub fn apply_insert_intelligent_taps(
@@ -242,7 +243,7 @@ pub fn apply_uncommon_masks_with_masks(
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 {
-        enforce_max_simultaneous_notes(notes, 1, col_offset, cols);
+        enforce_max_simultaneous_notes(notes, 1, col_offset, cols, context_notes);
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
@@ -254,11 +255,11 @@ pub fn apply_uncommon_masks_with_masks(
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 {
-        enforce_max_simultaneous_notes(notes, 2, col_offset, cols);
+        enforce_max_simultaneous_notes(notes, 2, col_offset, cols, context_notes);
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 {
-        enforce_max_simultaneous_notes(notes, 3, col_offset, cols);
+        enforce_max_simultaneous_notes(notes, 3, col_offset, cols, context_notes);
     }
 
     if (insert_mask & INSERT_MASK_BIT_BIG) != 0 {

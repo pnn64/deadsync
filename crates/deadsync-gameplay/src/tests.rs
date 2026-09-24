@@ -2782,6 +2782,157 @@ mod tests {
     }
 
     #[test]
+    fn attack_prior_hold_limits() {
+        let timing = test_timing(192);
+        for (mask, limit) in [
+            (REMOVE_MASK_BIT_NO_JUMPS, 1),
+            (REMOVE_MASK_BIT_NO_HANDS, 2),
+            (REMOVE_MASK_BIT_NO_QUADS, 3),
+        ] {
+            for kind in [NoteType::Hold, NoteType::Roll] {
+                for offset in [0, 4] {
+                    for (tail, first_kept) in [(47, 1), (48, 2), (96, 2)] {
+                        let mut hold = test_hold();
+                        hold.end_row_index = tail;
+                        hold.end_beat = tail as f32 / 48.0;
+                        let mut head = test_note_at(kind, Some(hold), false, 0, 0.0);
+                        head.column = offset;
+                        let mut notes = vec![head];
+                        for row in [48, 97] {
+                            for column in 1..=limit {
+                                let mut tap = test_note_at(
+                                    NoteType::Tap,
+                                    None,
+                                    false,
+                                    row,
+                                    row as f32 / 48.0,
+                                );
+                                tap.column = offset + column;
+                                notes.push(tap);
+                            }
+                        }
+
+                        apply_chart_attack_window(
+                            &mut notes,
+                            &timing,
+                            offset,
+                            4,
+                            offset / 4,
+                            (48, 48),
+                            ParsedAttackMods {
+                                remove_mask: mask,
+                                ..ParsedAttackMods::default()
+                            },
+                            0,
+                        );
+
+                        let mut expected = vec![(0, offset)];
+                        expected.extend((first_kept..=limit).map(|col| (48, offset + col)));
+                        expected.extend((1..=limit).map(|col| (97, offset + col)));
+                        assert_eq!(
+                            notes
+                                .iter()
+                                .map(|note| (note.row_index, note.column))
+                                .collect::<Vec<_>>(),
+                            expected,
+                            "mask {mask}, {kind:?}, offset {offset}, tail {tail}"
+                        );
+                        assert_eq!(notes[0].note_type, kind);
+                        assert_eq!(
+                            notes[0]
+                                .hold
+                                .as_ref()
+                                .expect("outside hold remains")
+                                .end_row_index,
+                            tail
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn attack_hold_tail_expiry() {
+        let timing = test_timing(192);
+        let mut notes = vec![test_note_at(
+            NoteType::Hold,
+            Some(test_hold()),
+            false,
+            0,
+            0.0,
+        )];
+        for row in [48, 49] {
+            for column in [1, 2] {
+                let mut tap = test_note_at(NoteType::Tap, None, false, row, row as f32 / 48.0);
+                tap.column = column;
+                notes.push(tap);
+            }
+        }
+
+        apply_chart_attack_window(
+            &mut notes,
+            &timing,
+            0,
+            4,
+            0,
+            (48, 49),
+            parse_attack_mods("nohands"),
+            0,
+        );
+
+        assert_eq!(
+            notes
+                .iter()
+                .map(|note| (note.row_index, note.column))
+                .collect::<Vec<_>>(),
+            vec![(0, 0), (48, 2), (49, 1), (49, 2)]
+        );
+    }
+
+    #[test]
+    fn attack_hold_context() {
+        let timing = test_timing(192);
+        let mut hold = test_hold();
+        hold.end_row_index = 144;
+        let mut notes = vec![
+            test_note_at(NoteType::Hold, Some(hold.clone()), false, 0, 0.0),
+            test_note_at(NoteType::Mine, None, false, 24, 0.5),
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Hold, Some(hold.clone()), false, 96, 2.0),
+        ];
+        notes[2].column = 1;
+        notes[3].column = 2;
+        let mut foreign_hold = test_note_at(NoteType::Roll, Some(hold), false, 0, 0.0);
+        foreign_hold.column = 4;
+        // Exercise unsorted surrounding notes while the attacked row stays sorted.
+        notes.swap(0, 1);
+        notes.push(foreign_hold);
+
+        apply_chart_attack_window(
+            &mut notes,
+            &timing,
+            0,
+            4,
+            0,
+            (48, 48),
+            parse_attack_mods("nohands"),
+            0,
+        );
+
+        // The intervening mine ends the old hold's occupancy in ITG. Neither a
+        // future hold nor the other player's roll occupies this player's lanes.
+        assert_eq!(
+            notes
+                .iter()
+                .map(|note| (note.row_index, note.column))
+                .collect::<Vec<_>>(),
+            vec![(0, 0), (0, 4), (24, 0), (48, 1), (48, 2), (96, 0)]
+        );
+    }
+
+    #[test]
     fn chart_attack_windows_apply_only_targeted_rows() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 3);
         let mut notes = vec![
@@ -16224,7 +16375,7 @@ mod tests {
             notes.push(note);
         }
 
-        enforce_max_simultaneous_notes(&mut notes, 1, 0, 4);
+        enforce_max_simultaneous_notes(&mut notes, 1, 0, 4, &[]);
 
         // Lifts survive even when they and an existing hold exceed the limit.
         // The hold still occupies its lane on the tail row, but not after it.
@@ -16251,7 +16402,7 @@ mod tests {
         tap2.column = 2;
         let mut notes = vec![hold, tap1, tap2];
 
-        enforce_max_simultaneous_notes(&mut notes, 2, 0, 4);
+        enforce_max_simultaneous_notes(&mut notes, 2, 0, 4, &[]);
 
         assert_eq!(notes.len(), 2);
         assert_eq!((notes[0].column, notes[0].row_index), (0, 0));

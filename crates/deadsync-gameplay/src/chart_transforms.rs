@@ -3,13 +3,32 @@ pub fn enforce_max_simultaneous_notes(
     max_simultaneous: usize,
     col_offset: usize,
     cols: usize,
+    context_notes: &[Note],
 ) {
     if notes.is_empty() || cols == 0 || cols > MAX_COLS {
         return;
     }
     debug_assert!(notes_row_sorted(notes));
 
-    let mut active_hold_ends: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
+    // Attack windows omit earlier heads from `notes`. Seed each lane from its
+    // latest preceding context cell, without modifying notes outside the window.
+    let mut preceding: [Option<&Note>; MAX_COLS] = [None; MAX_COLS];
+    for note in context_notes {
+        if note.row_index >= notes[0].row_index {
+            continue;
+        }
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            continue;
+        };
+        if preceding[local].is_none_or(|prev| note.row_index >= prev.row_index) {
+            preceding[local] = Some(note);
+        }
+    }
+    let mut active_hold_ends = preceding.map(|note| {
+        note.filter(|note| matches!(note.note_type, NoteType::Hold | NoteType::Roll))
+            .and_then(|note| note.hold.as_ref())
+            .map(|hold| hold.end_row_index)
+    });
     let mut inline_candidates = [(0usize, 0usize); MAX_COLS];
     // Ordinary rows fit the lane domain. Compatibility inputs can contain
     // arbitrarily many duplicate cells, so retain their former sorting policy.
@@ -2196,7 +2215,7 @@ pub fn apply_uncommon_masks_with_masks(
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 {
-        enforce_max_simultaneous_notes(notes, 1, col_offset, cols);
+        enforce_max_simultaneous_notes(notes, 1, col_offset, cols, context_notes);
     }
 
     // ITG removes lifts after NoJumps, before inserts. These adjacent filters
@@ -2213,11 +2232,11 @@ pub fn apply_uncommon_masks_with_masks(
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 {
-        enforce_max_simultaneous_notes(notes, 2, col_offset, cols);
+        enforce_max_simultaneous_notes(notes, 2, col_offset, cols, context_notes);
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 {
-        enforce_max_simultaneous_notes(notes, 3, col_offset, cols);
+        enforce_max_simultaneous_notes(notes, 3, col_offset, cols, context_notes);
     }
 
     if (insert_mask & INSERT_MASK_BIT_BIG) != 0 {

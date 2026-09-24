@@ -9,7 +9,9 @@ fn ordinary_simultaneous_filter_keeps_storage_without_churn() {
         let mut notes = chart_fixture(512, 4, 0);
         let pointer = notes.as_ptr();
         let capacity = notes.capacity();
-        crate::perf::assert_no_churn(|| enforce_max_simultaneous_notes(&mut notes, limit, 0, 4));
+        crate::perf::assert_no_churn(|| {
+            enforce_max_simultaneous_notes(&mut notes, limit, 0, 4, &[])
+        });
         assert_eq!(notes.len(), 512 * limit);
         assert_eq!(notes.as_ptr(), pointer);
         assert_eq!(notes.capacity(), capacity);
@@ -113,7 +115,7 @@ fn simultaneous_filter_matches_legacy_for_holds_duplicates_and_foreign_lanes() {
                 for limit in [0, 1, 2, 3, usize::MAX] {
                     let mut actual = notes.clone();
                     let mut expected = notes.clone();
-                    enforce_max_simultaneous_notes(&mut actual, limit, offset, cols);
+                    enforce_max_simultaneous_notes(&mut actual, limit, offset, cols, &[]);
                     legacy_enforce_max_simultaneous_notes(&mut expected, limit, offset, cols);
                     assert_notes_equal(&actual, &expected);
                 }
@@ -187,7 +189,7 @@ fn chart_attack_owner_paths_match_legacy_ranges_and_seeded_results() {
 #[test]
 fn empty_chart_and_hold_endpoints_keep_filter_policy() {
     let mut empty = vec![];
-    enforce_max_simultaneous_notes(&mut empty, 0, 0, 4);
+    enforce_max_simultaneous_notes(&mut empty, 0, 0, 4, &[]);
     assert!(empty.is_empty());
     let mut hold = test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0);
     hold.hold.as_mut().unwrap().end_row_index = 48;
@@ -197,7 +199,7 @@ fn empty_chart_and_hold_endpoints_keep_filter_policy() {
         tap.column = 1;
         notes.push(tap);
     }
-    enforce_max_simultaneous_notes(&mut notes, 1, 0, 4);
+    enforce_max_simultaneous_notes(&mut notes, 1, 0, 4, &[]);
     assert_eq!(
         notes.iter().map(|note| note.row_index).collect::<Vec<_>>(),
         vec![0, 49]
@@ -213,7 +215,9 @@ fn chart_transform_bench() {
         for limit in [2, 4] {
             let mut routines: [(&str, SimultaneousFilter); 2] = [
                 ("old", legacy_enforce_max_simultaneous_notes),
-                ("new", enforce_max_simultaneous_notes),
+                ("new", |notes, limit, offset, cols| {
+                    enforce_max_simultaneous_notes(notes, limit, offset, cols, &[])
+                }),
             ];
             if reverse {
                 routines.reverse();
