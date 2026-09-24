@@ -2138,13 +2138,17 @@ pub fn apply_uncommon_masks_with_masks(
         enforce_max_simultaneous_notes(notes, 1, col_offset, cols);
     }
 
-    // ITG removes lifts after NoJumps, before the remaining removals and inserts.
-    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 {
-        notes.retain(|note| note.note_type != NoteType::Lift);
-    }
-
-    if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 {
-        notes.retain(|note| note.can_be_judged && !note.is_fake);
+    // ITG removes lifts after NoJumps, before inserts. These adjacent filters
+    // can share a pass when both options are enabled.
+    let remove_lifts = (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0;
+    let remove_fakes = (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0;
+    match (remove_lifts, remove_fakes) {
+        (true, true) => notes.retain(|note| {
+            note.note_type != NoteType::Lift && note.can_be_judged && !note.is_fake
+        }),
+        (true, false) => notes.retain(|note| note.note_type != NoteType::Lift),
+        (false, true) => notes.retain(|note| note.can_be_judged && !note.is_fake),
+        (false, false) => {}
     }
 
     if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 {
