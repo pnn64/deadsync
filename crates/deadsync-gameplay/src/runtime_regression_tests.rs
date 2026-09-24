@@ -3328,35 +3328,102 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn autosync_row_hits_use_music_time_offsets_at_rate() {
-        let mut state = regression_state();
-        let row_index = 48usize;
-        let autosync_offset_ns = song_time_ns_from_seconds(0.015);
+    fn autosync_rate_correction() {
+        for mode in [AutosyncMode::Song, AutosyncMode::Machine] {
+            for rate in [0.5, 1.0, 1.5, 2.0] {
+                for error_ms in [-10.0, 10.0] {
+                    let mut state = regression_state();
+                    state.set_music_rate(rate);
+                    state.set_autosync_mode(mode);
+                    set_single_judged_tap(&mut state, 0, 48, JudgeGrade::Fantastic, error_ms);
+                    let song_offset = state.song_offset_seconds();
+                    let global_offset = state.global_offset_seconds();
+                    let error_ns = judgment::judgment_time_error_music_ns_from_ms(error_ms, rate);
+                    let hit = state
+                        .note_hit_eval(0, 1_000_000_000, 1_000_000_000 + error_ns)
+                        .expect("10 ms hit is inside the judgment window");
+                    state.chart_runtime.notes[0].result =
+                        Some(state.build_final_note_hit_plan(0, hit, rate).judgment);
 
-        assert!(state.set_music_rate(1.5));
-        state.control.autosync.mode = AutosyncMode::Song;
-        state.chart_runtime.notes = vec![test_note(0, row_index, NoteType::Tap)];
-        state.chart_runtime.notes[0].result = Some(Judgment {
-            time_error_ms: -10.0,
-            time_error_music_ns: -autosync_offset_ns,
-            grade: JudgeGrade::Great,
-            window: Some(TimingWindow::W3),
-            miss_because_held: false,
-        });
-        state.chart_runtime.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0)];
-        state.chart_runtime.row_entries = vec![test_row_entry_with_times(
-            &state.chart_runtime.notes,
-            &state.chart_runtime.note_time_cache_ns,
-            row_index,
-            vec![0],
-        )];
-        state.control.autosync.offset_samples = [autosync_offset_ns; AUTOSYNC_OFFSET_SAMPLE_COUNT];
-        state.control.autosync.offset_sample_count = AUTOSYNC_OFFSET_SAMPLE_COUNT - 1;
+                    for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
+                        state.apply_autosync_for_row_hits(0);
+                    }
 
-        state.apply_autosync_for_row_hits(0);
+                    let correction = -error_ms / 1000.0;
+                    let (song_delta, global_delta) = match mode {
+                        AutosyncMode::Song => (correction, 0.0),
+                        AutosyncMode::Machine => (0.0, correction),
+                        AutosyncMode::Off => unreachable!(),
+                    };
+                    assert!(
+                        (state.song_offset_seconds() - song_offset - song_delta).abs() <= 1e-6,
+                        "mode={mode:?}, rate={rate}, error_ms={error_ms}"
+                    );
+                    assert!(
+                        (state.global_offset_seconds() - global_offset - global_delta).abs()
+                            <= 1e-6,
+                        "mode={mode:?}, rate={rate}, error_ms={error_ms}"
+                    );
+                    assert_eq!(state.autosync_sample_count(), 0);
+                    assert_eq!(state.autosync_standard_deviation(), 0.0);
+                }
+            }
+        }
+    }
 
-        assert!((state.song_offset_seconds() - 0.015).abs() <= 1e-6);
-        assert_eq!(state.control.autosync.offset_sample_count, 0);
+    #[test]
+    fn autosync_rate_noise_gate() {
+        for mode in [AutosyncMode::Song, AutosyncMode::Machine] {
+            for rate in [0.5, 1.0, 1.5, 2.0] {
+                for spread_ms in [29.0, 30.0, 31.0] {
+                    let mut state = regression_state();
+                    state.set_music_rate(rate);
+                    state.set_autosync_mode(mode);
+                    set_single_judged_tap(&mut state, 0, 48, JudgeGrade::Great, 0.0);
+                    let song_offset = state.song_offset_seconds();
+                    let global_offset = state.global_offset_seconds();
+
+                    for sample in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
+                        let error_ms = -10.0
+                            + if sample % 2 == 0 {
+                                spread_ms
+                            } else {
+                                -spread_ms
+                            };
+                        let error_ns =
+                            judgment::judgment_time_error_music_ns_from_ms(error_ms, rate);
+                        let hit = state
+                            .note_hit_eval(0, 1_000_000_000, 1_000_000_000 + error_ns)
+                            .expect("noise samples are inside the Great window");
+                        state.chart_runtime.notes[0].result =
+                            Some(state.build_final_note_hit_plan(0, hit, rate).judgment);
+                        state.apply_autosync_for_row_hits(0);
+                    }
+
+                    // ITGmania accepts only standard deviations strictly below 30 ms.
+                    let correction = if spread_ms < 30.0 { 0.010 } else { 0.0 };
+                    let (song_delta, global_delta) = match mode {
+                        AutosyncMode::Song => (correction, 0.0),
+                        AutosyncMode::Machine => (0.0, correction),
+                        AutosyncMode::Off => unreachable!(),
+                    };
+                    assert!(
+                        (state.song_offset_seconds() - song_offset - song_delta).abs() <= 1e-6,
+                        "mode={mode:?}, rate={rate}, spread_ms={spread_ms}"
+                    );
+                    assert!(
+                        (state.global_offset_seconds() - global_offset - global_delta).abs()
+                            <= 1e-6,
+                        "mode={mode:?}, rate={rate}, spread_ms={spread_ms}"
+                    );
+                    assert!(
+                        (state.autosync_standard_deviation() - spread_ms / 1000.0).abs() <= 1e-6,
+                        "mode={mode:?}, rate={rate}, spread_ms={spread_ms}"
+                    );
+                    assert_eq!(state.autosync_sample_count(), 0);
+                }
+            }
+        }
     }
 
     #[test]

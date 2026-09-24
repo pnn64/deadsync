@@ -108,8 +108,9 @@ pub fn collect_autosync_row_hit_offsets(
             judgment.grade,
             JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great
         ) {
-            // ITG's fNoteOffset is positive when stepping early.
-            offsets[count] = judgment.time_error_music_ns.saturating_neg();
+            // ITG's fNoteOffset uses real elapsed time and is positive for early hits.
+            // Judgment milliseconds already include the music rate at the hit.
+            offsets[count] = song_time_ns_from_seconds(-judgment.time_error_ms / 1000.0);
             count += 1;
         }
     }

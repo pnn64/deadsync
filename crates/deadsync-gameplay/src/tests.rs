@@ -5688,16 +5688,19 @@ mod tests {
     fn autosync_row_hit_offsets_collect_good_tap_offsets() {
         let mut fantastic = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         fantastic.result = Some(Judgment {
+            time_error_ms: -12.0,
             time_error_music_ns: song_time_ns_from_seconds(-0.012),
             ..test_judgment(JudgeGrade::Fantastic)
         });
         let mut great = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         great.result = Some(Judgment {
+            time_error_ms: 20.0,
             time_error_music_ns: song_time_ns_from_seconds(0.020),
             ..test_judgment(JudgeGrade::Great)
         });
         let mut decent = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         decent.result = Some(Judgment {
+            time_error_ms: 30.0,
             time_error_music_ns: song_time_ns_from_seconds(0.030),
             ..test_judgment(JudgeGrade::Decent)
         });
