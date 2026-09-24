@@ -259,11 +259,10 @@ fn line_window(
     let left = offset.max(0.0);
     let right = left + width;
     let start = points.partition_point(|p| p[0] < left);
-    let end = if right >= left {
-        start + points[start..].partition_point(|p| p[0] <= right)
-    } else {
-        points.partition_point(|p| p[0] <= right)
-    };
+    if start == points.len() {
+        return None;
+    }
+    let end = points.partition_point(|p| p[0] <= right);
     let clip_left = start > 0 && start < points.len() && points[start][0] > left;
     let clip_right = end > 0 && end < points.len() && points[end - 1][0] < right;
     let point_count = end.saturating_sub(start) + usize::from(clip_left) + usize::from(clip_right);
