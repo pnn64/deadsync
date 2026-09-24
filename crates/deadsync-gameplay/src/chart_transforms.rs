@@ -174,11 +174,33 @@ pub fn sort_player_notes(notes: &mut [Note]) {
     notes.sort_unstable_by_key(|note| (note.row_index, note.column));
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlayerNoteOrder {
+    SortedUnique,
+    Sorted,
+    Unsorted,
+}
+
+fn player_note_order(notes: &[Note]) -> PlayerNoteOrder {
+    let mut has_duplicate_cells = false;
+    for pair in notes.windows(2) {
+        let previous = (pair[0].row_index, pair[0].column);
+        let current = (pair[1].row_index, pair[1].column);
+        if previous > current {
+            return PlayerNoteOrder::Unsorted;
+        }
+        has_duplicate_cells |= previous == current;
+    }
+    if has_duplicate_cells {
+        PlayerNoteOrder::Sorted
+    } else {
+        PlayerNoteOrder::SortedUnique
+    }
+}
+
 #[inline(always)]
 fn notes_row_col_sorted(notes: &[Note]) -> bool {
-    notes.windows(2).all(|pair| {
-        (pair[0].row_index, pair[0].column) <= (pair[1].row_index, pair[1].column)
-    })
+    !matches!(player_note_order(notes), PlayerNoteOrder::Unsorted)
 }
 
 #[must_use]
@@ -1531,12 +1553,14 @@ pub fn apply_wide_insert(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    if notes_have_unique_sorted_cells(notes) {
-        apply_wide_insert_batched(notes, timing_player, col_offset, cols);
-    } else if notes_row_col_sorted(notes) {
-        apply_wide_insert_sorted(notes, timing_player, col_offset, cols);
-    } else {
-        apply_wide_insert_unordered(notes, timing_player, col_offset, cols);
+    match player_note_order(notes) {
+        PlayerNoteOrder::SortedUnique => {
+            apply_wide_insert_batched(notes, timing_player, col_offset, cols)
+        }
+        PlayerNoteOrder::Sorted => apply_wide_insert_sorted(notes, timing_player, col_offset, cols),
+        PlayerNoteOrder::Unsorted => {
+            apply_wide_insert_unordered(notes, timing_player, col_offset, cols)
+        }
     }
 }
 
@@ -1648,12 +1672,16 @@ pub fn apply_stomp_insert(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    if notes_have_unique_sorted_cells(notes) {
-        apply_stomp_insert_batched(notes, timing_player, col_offset, cols);
-    } else if notes_row_col_sorted(notes) {
-        apply_stomp_insert_sorted(notes, timing_player, col_offset, cols);
-    } else {
-        apply_stomp_insert_unordered(notes, timing_player, col_offset, cols);
+    match player_note_order(notes) {
+        PlayerNoteOrder::SortedUnique => {
+            apply_stomp_insert_batched(notes, timing_player, col_offset, cols)
+        }
+        PlayerNoteOrder::Sorted => {
+            apply_stomp_insert_sorted(notes, timing_player, col_offset, cols)
+        }
+        PlayerNoteOrder::Unsorted => {
+            apply_stomp_insert_unordered(notes, timing_player, col_offset, cols)
+        }
     }
 }
 
@@ -1803,12 +1831,14 @@ pub fn apply_echo_insert(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    if notes_have_unique_sorted_cells(notes) {
-        apply_echo_insert_batched(notes, timing_player, col_offset, cols);
-    } else if notes_row_col_sorted(notes) {
-        apply_echo_insert_sorted(notes, timing_player, col_offset, cols);
-    } else {
-        apply_echo_insert_unordered(notes, timing_player, col_offset, cols);
+    match player_note_order(notes) {
+        PlayerNoteOrder::SortedUnique => {
+            apply_echo_insert_batched(notes, timing_player, col_offset, cols)
+        }
+        PlayerNoteOrder::Sorted => apply_echo_insert_sorted(notes, timing_player, col_offset, cols),
+        PlayerNoteOrder::Unsorted => {
+            apply_echo_insert_unordered(notes, timing_player, col_offset, cols)
+        }
     }
 }
 
