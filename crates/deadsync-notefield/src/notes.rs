@@ -1174,7 +1174,7 @@ fn find_first_displayed_beat_inner<F: FnMut(f32) -> f32>(
     let mut first = low;
     for _ in 0..24 {
         let mid = f32::midpoint(low, high);
-        if y_for_beat(mid) < -draw_distance || note_count_cutoff.is_some_and(|cutoff| mid < cutoff)
+        if note_count_cutoff.is_some_and(|cutoff| mid < cutoff) || y_for_beat(mid) < -draw_distance
         {
             first = mid;
             low = mid;
