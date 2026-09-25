@@ -738,7 +738,7 @@ pub fn push_actors(
                     zoom(ITEM_TEXT_ZOOM):
                     diffuse(color_t[0], color_t[1], color_t[2], color_t[3]):
                     font("miso"):
-                    settext(&label):
+                    settext(label):
                     horizalign(left)
                 ));
             }
@@ -826,7 +826,7 @@ pub fn push_actors(
                         zoom(ITEM_TEXT_ZOOM):
                         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
                         font("miso"):
-                        settext(&label):
+                        settext(label):
                         horizalign(left)
                     ));
 
@@ -1011,7 +1011,7 @@ pub fn push_actors(
                             zoom(ITEM_TEXT_ZOOM):
                             diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                             font("miso"):
-                            settext(&label):
+                            settext(label):
                             maxwidth(label_text_max_w):
                             horizalign(left)
                         ));
@@ -1256,8 +1256,7 @@ pub fn push_actors(
                         }
                     } else {
                         // Exit row: centered "Exit" text in the items column.
-                        let exit_label = tr("Common", "Exit");
-                        let label = exit_label.clone();
+                        let label = tr("Common", "Exit");
                         let value_zoom = SUBMENU_VALUE_ZOOM;
                         let mut choice_color = if is_active { col_white } else { sl_gray };
                         choice_color[3] *= row_alpha;
