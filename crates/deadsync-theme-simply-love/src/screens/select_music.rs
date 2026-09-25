@@ -743,9 +743,8 @@ pub fn pad_profile_rows(state: &State, pad: usize) -> &[SelectMusicPadProfileVie
 }
 
 #[inline(always)]
-fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
-    let beat = sl_selection_anim_beat(entry_opt, state);
-    let t = (beat + state.arrow_bounce_offset).rem_euclid(1.0);
+fn sl_arrow_bounce01(selection_animation_beat: f32, arrow_bounce_offset: f32) -> f32 {
+    let t = (selection_animation_beat + arrow_bounce_offset).rem_euclid(1.0);
     (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
 }
 
@@ -14120,7 +14119,7 @@ pub fn push_actors(
     }
 
     // Bouncing Arrow (SL parity: bounce + effectperiod(1) + effectoffset(-10*GlobalOffsetSeconds))
-    let bounce = sl_arrow_bounce01(entry_opt, state);
+    let bounce = sl_arrow_bounce01(selection_animation_beat, state.arrow_bounce_offset);
     let dx_p1 = -3.0 * bounce;
     let dx_p2 = 3.0 * bounce;
     if is_versus {
