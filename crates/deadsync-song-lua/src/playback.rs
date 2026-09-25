@@ -10670,6 +10670,16 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
         {
             continue;
         }
+        // These kinds never build actors; their children are drawn on their own.
+        if matches!(
+            overlay.kind,
+            SongLuaOverlayKind::Actor
+                | SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::UpdateTracks { .. }
+                | SongLuaOverlayKind::Sound { .. }
+        ) {
+            continue;
+        }
         let overlay_state = overlay_states
             .get(idx)
             .copied()
