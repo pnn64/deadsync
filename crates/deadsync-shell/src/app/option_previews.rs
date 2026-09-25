@@ -219,10 +219,8 @@ impl Service {
 
     fn next_work(&mut self, assets: &AssetManager) -> Option<Work> {
         for request in &self.requests {
-            let loaded = self
-                .runtimes
-                .get(&request.name)
-                .map_or(0, |runtime| runtime.loaded_parts);
+            let runtime = self.runtimes.get_mut(&request.name);
+            let loaded = runtime.as_ref().map_or(0, |runtime| runtime.loaded_parts);
             if request.parts & !loaded != 0
                 && !self.failed_skins.contains(&request.name)
                 // Variants may share a compiler-cache file. Runtime preparation
@@ -235,7 +233,7 @@ impl Service {
                     request.parts | loaded,
                 ));
             }
-            if let Some(runtime) = self.runtimes.get_mut(&request.name) {
+            if let Some(runtime) = runtime {
                 runtime.set_parts(request.parts);
                 for (key, model) in &runtime.textures {
                     if !assets.has_uploaded_texture_key(key)
