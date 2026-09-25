@@ -6855,7 +6855,11 @@ impl App {
             ui_time_sec,
             enabled,
         );
-        let srpg_key = if key == "__black" { None } else { Some(key) };
+        let srpg_key = if key == "__black" {
+            None
+        } else {
+            Some(key.into_owned())
+        };
         screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
     }
 

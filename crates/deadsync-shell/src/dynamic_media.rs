@@ -749,7 +749,7 @@ impl DynamicMedia {
         path_opt: Option<PathBuf>,
         video_started_at_sec: f32,
         animate_video: bool,
-    ) -> String {
+    ) -> Cow<'static, str> {
         const FALLBACK_KEY: &str = "__black";
 
         self.failed_gameplay_background_key = None;
@@ -772,7 +772,8 @@ impl DynamicMedia {
                     .as_ref()
                     .unwrap()
                     .key
-                    .clone();
+                    .clone()
+                    .into();
             }
 
             self.destroy_current_dynamic_background(assets, backend);
@@ -801,7 +802,7 @@ impl DynamicMedia {
                     video_started_at_sec,
                     1.0,
                 ));
-                return key;
+                return key.into();
             }
 
             if dynamic::is_dynamic_video_path(&path) {
@@ -815,20 +816,20 @@ impl DynamicMedia {
                     ) {
                         Ok((key, state)) => {
                             self.current_dynamic_background = Some(state);
-                            return key;
+                            return key.into();
                         }
                         Err(BackgroundTextureError::OpenVideo(e)) => {
                             warn!(
                                 "Failed to open video background '{}': {e}. Using fallback.",
                                 path.display()
                             );
-                            return FALLBACK_KEY.to_string();
+                            return Cow::Borrowed(FALLBACK_KEY);
                         }
                         Err(BackgroundTextureError::CreateVideo(e)) => {
                             warn!(
                                 "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
                             );
-                            return FALLBACK_KEY.to_string();
+                            return Cow::Borrowed(FALLBACK_KEY);
                         }
                         Err(_) => unreachable!("video background helper returned wrong error kind"),
                     }
@@ -842,20 +843,20 @@ impl DynamicMedia {
                 ) {
                     Ok((key, state)) => {
                         self.current_dynamic_background = Some(state);
-                        return key;
+                        return key.into();
                     }
                     Err(BackgroundTextureError::LoadPoster(e)) => {
                         warn!(
                             "Failed to load video background poster '{}': {e}. Using fallback.",
                             path.display()
                         );
-                        return FALLBACK_KEY.to_string();
+                        return Cow::Borrowed(FALLBACK_KEY);
                     }
                     Err(BackgroundTextureError::CreatePoster(e)) => {
                         warn!(
                             "Failed to create GPU texture for video background poster {path:?}: {e}. Using fallback."
                         );
-                        return FALLBACK_KEY.to_string();
+                        return Cow::Borrowed(FALLBACK_KEY);
                     }
                     Err(_) => unreachable!("video poster helper returned wrong error kind"),
                 }
@@ -864,23 +865,23 @@ impl DynamicMedia {
             match set_image_background_texture(assets, backend, &path, video_started_at_sec, 1.0) {
                 Ok((key, state)) => {
                     self.current_dynamic_background = Some(state);
-                    key
+                    key.into()
                 }
                 Err(BackgroundTextureError::OpenImage(e)) => {
                     warn!("Failed to open background image {path:?}: {e}. Using fallback.");
-                    FALLBACK_KEY.to_string()
+                    Cow::Borrowed(FALLBACK_KEY)
                 }
                 Err(BackgroundTextureError::CreateImage(e)) => {
                     warn!(
                         "Failed to create GPU texture for background {path:?}: {e}. Using fallback."
                     );
-                    FALLBACK_KEY.to_string()
+                    Cow::Borrowed(FALLBACK_KEY)
                 }
                 Err(_) => unreachable!("image background helper returned wrong error kind"),
             }
         } else {
             self.destroy_current_dynamic_background(assets, backend);
-            FALLBACK_KEY.to_string()
+            Cow::Borrowed(FALLBACK_KEY)
         }
     }
 
