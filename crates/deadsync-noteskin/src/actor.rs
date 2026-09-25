@@ -56,6 +56,7 @@ pub struct ItgLuaSpriteDecl {
 pub struct ItgLuaModelDecl {
     pub meshes_expr: Option<String>,
     pub materials_expr: Option<String>,
+    pub bones_expr: Option<String>,
     pub texture_expr: Option<String>,
     pub frame0: usize,
     pub commands: HashMap<String, String>,
@@ -1114,6 +1115,7 @@ fn parse_model_block(
 ) -> Option<ItgLuaModelDecl> {
     let mut meshes_expr = None;
     let mut materials_expr = None;
+    let mut bones_expr = None;
     let mut texture_expr = None;
     let mut frame0 = 0usize;
     let mut commands = HashMap::new();
@@ -1142,6 +1144,10 @@ fn parse_model_block(
             materials_expr = Some(value.to_string());
             continue;
         }
+        if key.eq_ignore_ascii_case("Bones") {
+            bones_expr = Some(value.to_string());
+            continue;
+        }
         if key.eq_ignore_ascii_case("Texture") {
             texture_expr = Some(value.to_string());
             continue;
@@ -1167,6 +1173,7 @@ fn parse_model_block(
     Some(ItgLuaModelDecl {
         meshes_expr,
         materials_expr,
+        bones_expr,
         texture_expr,
         frame0,
         commands,

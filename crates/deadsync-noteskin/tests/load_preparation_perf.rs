@@ -76,6 +76,7 @@ fn actor_fixture(count: usize) -> (CompiledActors, Vec<PathBuf>, PathBuf) {
         decl.models.push(ItgLuaModelDecl {
             meshes_expr: Some("\"mesh.txt\"".into()),
             materials_expr: Some("\"material.txt\"".into()),
+            bones_expr: Some("\"bones.txt\"".into()),
             texture_expr: Some("\"model.png\"".into()),
             frame0: index,
             commands: commands.clone(),

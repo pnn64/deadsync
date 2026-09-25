@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::actor as noteskin_actor;
 
-pub const CACHE_SCHEMA_VERSION: u32 = 5;
+pub const CACHE_SCHEMA_VERSION: u32 = 6;
 pub const ACTOR_RECURSION_MAX_DEPTH: usize = 24;
 pub const ACTOR_FILE_RECURSION_MAX_DEPTH: usize = 48;
 static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);

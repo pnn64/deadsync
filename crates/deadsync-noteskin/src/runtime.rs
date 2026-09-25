@@ -1439,18 +1439,30 @@ pub fn itg_resolve_model_decl<T>(
     mut apply_rotation: impl FnMut(&mut T, i32),
 ) -> Vec<ItgResolvedSprite<T>> {
     let model_path = model_decl
-        .materials_expr
+        .meshes_expr
         .as_deref()
-        .or(model_decl.meshes_expr.as_deref())
+        .or(model_decl.materials_expr.as_deref())
         .or(model_decl.texture_expr.as_deref())
         .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
     let Some(model_path) = model_path else {
         return Vec::new();
     };
+    let materials_path = model_decl
+        .materials_expr
+        .as_deref()
+        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
+    let materials_path = materials_path.as_deref().unwrap_or(&model_path);
+    let bones_path = model_decl
+        .bones_expr
+        .as_deref()
+        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
+    let bones_path = bones_path.as_deref().unwrap_or(&model_path);
 
     let (draw, timeline, effect) = model_draw_program(&model_decl.commands);
-    let model_auto_rot = model::itg_parse_milkshape_model_auto_rot(&model_path);
-    if let Some(model_layers) = model::itg_parse_milkshape_model_layers(data, &model_path) {
+    let model_auto_rot = model::itg_parse_milkshape_model_auto_rot(bones_path);
+    if let Some(model_layers) =
+        model::itg_parse_milkshape_model_layers(data, &model_path, materials_path)
+    {
         let mut out = Vec::new();
         for layer in model_layers {
             let mut slot = load_frame(&layer.texture.texture_path, model_decl.frame0)
@@ -1482,7 +1494,7 @@ pub fn itg_resolve_model_decl<T>(
         }
     }
 
-    let Some(model_texture) = model::itg_resolve_model_texture_path(data, &model_path) else {
+    let Some(model_texture) = model::itg_resolve_model_texture_path(data, materials_path) else {
         log::warn!(
             "noteskin model '{}' for '{button} {element}' did not resolve a texture fallback",
             model_path.display()
@@ -5152,6 +5164,133 @@ mod tests {
     }
 
     #[test]
+    fn model_decl_loads_separate_pieces() {
+        let root =
+            std::env::temp_dir().join(format!("deadsync-model-pieces-{}", std::process::id()));
+        let materials_dir = root.join("materials");
+        std::fs::create_dir_all(&materials_dir).unwrap();
+        for name in ["first.png", "second.png"] {
+            std::fs::write(materials_dir.join(name), []).unwrap();
+        }
+        std::fs::write(
+            root.join("mesh.txt"),
+            r#"// MilkShape 3D ASCII
+Meshes: 2
+"first" 0 1
+3
+0 -2 -1 0 0 0 -1
+0 0 -1 0 1 0 -1
+0 0 1 2 1 1 -1
+0
+1
+0 0 1 2 0 0 0 1
+"second" 0 0
+3
+0 0 -1 0 0 0 -1
+0 2 -1 0 1 0 -1
+0 0 1 2 1 1 -1
+0
+1
+0 0 1 2 0 0 0 1
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            materials_dir.join("skin.txt"),
+            r#"Materials: 2
+"first nomove"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"first.png"
+""
+"second"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"second.png"
+""
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("bones.txt"),
+            r#"// MilkShape 3D ASCII
+Bones: 1
+"root"
+""
+0 0 0 0 0 0 0
+0
+2
+0 0 0 0
+30 0 0 1.570796327
+"#,
+        )
+        .unwrap();
+        let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "pieces".into(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![root.clone(), materials_dir.clone()],
+        };
+        let actor = crate::actor::parse_actor_decl(
+            r#"return Def.Model {
+    Meshes = "mesh.txt";
+    Materials = "skin.txt";
+    Bones = "bones.txt";
+}"#,
+            &data.metrics,
+        );
+        let resolved = itg_resolve_model_decl(
+            &data,
+            "Left",
+            "Tap Note",
+            actor.models[0].clone(),
+            None,
+            None,
+            |path| Some((path.to_path_buf(), None)),
+            |path, _| Some((path.to_path_buf(), None)),
+            |slot, plan| slot.1 = Some(plan),
+            |_, _| {},
+        );
+        assert_eq!(resolved.len(), 2);
+        for (index, (texture, translate, first_x)) in
+            [("second.png", true, -2.0), ("first.png", false, 0.0)]
+                .into_iter()
+                .enumerate()
+        {
+            let (path, plan) = &resolved[index].slot;
+            assert_eq!(path, &materials_dir.join(texture));
+            let plan = plan.as_ref().unwrap();
+            let mesh = plan
+                .model
+                .as_ref()
+                .expect("retain geometry with separate materials");
+            assert_eq!(mesh.vertices.len(), 3);
+            assert_eq!(mesh.vertices[0].pos[0], first_x);
+            assert_eq!(mesh.bounds, [-2.0, -1.0, 0.0, 2.0, 1.0, 2.0]);
+            assert_eq!(plan.note_color_translate, translate);
+            assert_eq!(plan.model_auto_rot_total_frames, 30.0);
+            assert_eq!(plan.model_auto_rot_z_keys.len(), 2);
+            assert!((plan.model_auto_rot_z_keys[1].z_deg - 90.0).abs() < 1e-4);
+        }
+        for file in ["first.png", "second.png", "skin.txt"] {
+            std::fs::remove_file(materials_dir.join(file)).unwrap();
+        }
+        for file in ["mesh.txt", "bones.txt"] {
+            std::fs::remove_file(root.join(file)).unwrap();
+        }
+        std::fs::remove_dir(materials_dir).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
     fn model_decl_resolves_fallback_texture_and_applies_plan() {
         let root = std::env::temp_dir().join(format!("deadsync-model-decl-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -5167,6 +5306,7 @@ mod tests {
         let model = crate::actor::ItgLuaModelDecl {
             meshes_expr: None,
             materials_expr: None,
+            bones_expr: None,
             texture_expr: Some("\"Model Texture.png\"".to_string()),
             frame0: 3,
             commands: HashMap::from([("initcommand".to_string(), "zoom,2".to_string())]),

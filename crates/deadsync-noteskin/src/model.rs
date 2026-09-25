@@ -376,7 +376,7 @@ pub fn itg_load_model_slots_from_path<T>(
     let model_auto_rot = itg_parse_milkshape_model_auto_rot(model_path);
     let mut slots = Vec::new();
 
-    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, model_path) {
+    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, model_path, model_path) {
         for layer in model_layers {
             let Some(mut slot) = slot_from_texture_path(&layer.texture.texture_path) else {
                 continue;
@@ -604,9 +604,10 @@ fn itg_resolve_model_material_texture(
 
 pub fn itg_parse_milkshape_model_layers(
     data: &noteskin_itg::NoteskinData,
-    path: &Path,
+    meshes_path: &Path,
+    materials_path: &Path,
 ) -> Option<Vec<ItgResolvedModelLayer>> {
-    let content = fs::read_to_string(path).ok()?;
+    let content = fs::read_to_string(meshes_path).ok()?;
     if !has_milkshape_ascii_signature(&content) {
         return None;
     }
@@ -727,6 +728,17 @@ pub fn itg_parse_milkshape_model_layers(
         return None;
     }
 
+    // ITG Model::LoadPieces reads each section from its own declared file.
+    // Materials-only files need neither a MilkShape header nor a mesh section.
+    let materials_content = if materials_path == meshes_path {
+        content
+    } else {
+        fs::read_to_string(materials_path).ok()?
+    };
+    let mut lines = materials_content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//"));
     let material_count = loop {
         let line = lines.next()?;
         if let Some(raw_count) = line.strip_prefix("Materials:") {
@@ -765,7 +777,7 @@ pub fn itg_parse_milkshape_model_layers(
             material_textures
                 .get(mesh.material_index as usize)
                 .and_then(|(raw, flags)| {
-                    itg_resolve_model_material_texture(data, path, raw)
+                    itg_resolve_model_material_texture(data, materials_path, raw)
                         .map(|resolved| (resolved, *flags))
                 })
         } else {
@@ -773,7 +785,7 @@ pub fn itg_parse_milkshape_model_layers(
         }
         .or_else(|| {
             fallback_texture
-                .get_or_init(|| itg_resolve_model_texture_path(data, path))
+                .get_or_init(|| itg_resolve_model_texture_path(data, materials_path))
                 .clone()
                 .map(|resolved| (resolved, ItgModelMaterialFlags::default()))
         });
@@ -807,7 +819,7 @@ pub fn itg_parse_milkshape_model(
     data: &noteskin_itg::NoteskinData,
     path: &Path,
 ) -> Option<Arc<ModelMesh>> {
-    itg_parse_milkshape_model_layers(data, path)
+    itg_parse_milkshape_model_layers(data, path, path)
         .and_then(|layers| layers.into_iter().next().map(|layer| layer.mesh))
 }
 
@@ -1071,7 +1083,7 @@ Materials: 1
             search_dirs: vec![root.clone()],
         };
 
-        let layers = itg_parse_milkshape_model_layers(&data, &model_path)
+        let layers = itg_parse_milkshape_model_layers(&data, &model_path, &model_path)
             .expect("model should resolve backslash material texture path");
         let layer = layers.first().expect("expected one model-backed layer");
 
