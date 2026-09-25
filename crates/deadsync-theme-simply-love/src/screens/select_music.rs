@@ -11410,7 +11410,10 @@ pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView, effects: &mut
 }
 
 fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
-    state.smx_pads.clone_from(&smx.pads);
+    // The derived clone reallocates every string, so copy only on change.
+    if state.smx_pads != smx.pads {
+        state.smx_pads.clone_from(&smx.pads);
+    }
     process_smx_pad_profile_events(state);
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
     if state.lobby_notice_time_left > 0.0 {
