@@ -6,7 +6,7 @@ use crate::scorebox::{
     logo_alpha, scorebox_cycle_state,
 };
 use crate::views::ScoreboxSideView;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadsync_config::theme::SrpgVariant;
 use deadsync_score as score_data;
@@ -55,7 +55,7 @@ pub(crate) fn unknown_score_percent_text() -> Arc<str> {
 #[derive(Clone, Debug)]
 struct GameplayScoreboxRow {
     rank: Arc<str>,
-    name: Arc<str>,
+    name: TextContent,
     score: Arc<str>,
     rank_color: [f32; 4],
     name_color: [f32; 4],
@@ -66,7 +66,7 @@ struct GameplayScoreboxRow {
 struct GameplayScoreboxPane {
     kind: PaneKind,
     is_arrowcloud: bool,
-    mode_text: Arc<str>,
+    mode_text: TextContent,
     border_color: [f32; 4],
     rows: [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES],
 }
@@ -242,6 +242,18 @@ fn rank_text(rank: u32) -> Arc<str> {
 #[inline(always)]
 fn owned_text(text: &str) -> Arc<str> {
     Arc::<str>::from(text)
+}
+
+/// Pane text. Retained gameplay plans keep one shared pointer for the text
+/// layout cache; Select Music rebuilds its panes every frame, so its text is
+/// looked up by content instead of by a new pointer each frame.
+#[inline(always)]
+fn pane_text(text: &str, retained: bool) -> TextContent {
+    if retained {
+        TextContent::Shared(owned_text(text))
+    } else {
+        TextContent::inline_str(text).unwrap_or_else(|| TextContent::Owned(text.to_owned()))
+    }
 }
 
 #[inline(always)]
@@ -484,7 +496,7 @@ fn build_select_music_scorebox_view(
 fn gameplay_empty_row() -> GameplayScoreboxRow {
     GameplayScoreboxRow {
         rank: empty_text(),
-        name: empty_text(),
+        name: TextContent::Shared(empty_text()),
         score: empty_text(),
         rank_color: [1.0; 4],
         name_color: [1.0; 4],
@@ -493,10 +505,10 @@ fn gameplay_empty_row() -> GameplayScoreboxRow {
 }
 
 #[inline(always)]
-fn gameplay_status_row(text: &str) -> GameplayScoreboxRow {
+fn gameplay_status_row(text: &str, retained: bool) -> GameplayScoreboxRow {
     GameplayScoreboxRow {
         rank: empty_text(),
-        name: owned_text(text),
+        name: pane_text(text, retained),
         score: empty_text(),
         rank_color: [1.0; 4],
         name_color: [1.0; 4],
@@ -508,9 +520,9 @@ fn empty_rows() -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
     std::array::from_fn(|_| gameplay_empty_row())
 }
 
-fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane {
+fn gameplay_status_pane(show_ex_score: bool, text: &str, retained: bool) -> GameplayScoreboxPane {
     let mut rows = empty_rows();
-    rows[0] = gameplay_status_row(text);
+    rows[0] = gameplay_status_row(text, retained);
     let kind = if show_ex_score {
         PaneKind::Ex
     } else {
@@ -519,7 +531,10 @@ fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane
     GameplayScoreboxPane {
         kind,
         is_arrowcloud: false,
-        mode_text: owned_text(score_data::default_scorebox_mode_text(show_ex_score)),
+        mode_text: pane_text(
+            score_data::default_scorebox_mode_text(show_ex_score),
+            retained,
+        ),
         border_color: SCOREBOX_GS_BLUE,
         rows,
     }
@@ -529,6 +544,7 @@ fn gameplay_row_from_entry(
     entry: &score_data::LeaderboardEntry,
     kind: PaneKind,
     palette: JudgmentPalette,
+    retained: bool,
 ) -> GameplayScoreboxRow {
     let mut rank_color = [1.0; 4];
     let mut name_color = [1.0; 4];
@@ -561,7 +577,7 @@ fn gameplay_row_from_entry(
 
     GameplayScoreboxRow {
         rank: rank_text(entry.rank),
-        name: owned_text(name),
+        name: pane_text(name, retained),
         score: score_text_without_percent(entry.score),
         rank_color,
         name_color,
@@ -573,16 +589,17 @@ fn scorebox_rows_for_kind(
     entries: &[score_data::LeaderboardEntry],
     kind: PaneKind,
     palette: JudgmentPalette,
+    retained: bool,
 ) -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
     let mut rows = empty_rows();
     if entries.is_empty() {
-        rows[0] = gameplay_status_row("No Scores");
+        rows[0] = gameplay_status_row("No Scores", retained);
         return rows;
     }
 
     let selected = score_data::neighboring_leaderboard_entry_refs(entries, SCOREBOX_NUM_ENTRIES);
     for (slot, entry) in rows.iter_mut().zip(selected) {
-        *slot = gameplay_row_from_entry(entry, kind, palette);
+        *slot = gameplay_row_from_entry(entry, kind, palette, retained);
     }
     rows
 }
@@ -591,14 +608,15 @@ fn gameplay_pane_from_leaderboard(
     pane: &score_data::LeaderboardPane,
     entries: &[score_data::LeaderboardEntry],
     palette: JudgmentPalette,
+    retained: bool,
 ) -> GameplayScoreboxPane {
     let kind = score_data::scorebox_pane_kind(pane);
     GameplayScoreboxPane {
         kind,
         is_arrowcloud: pane.is_arrowcloud(),
-        mode_text: owned_text(score_data::scorebox_pane_mode_text(kind, pane)),
+        mode_text: pane_text(score_data::scorebox_pane_mode_text(kind, pane), retained),
         border_color: pane_color(kind),
-        rows: scorebox_rows_for_kind(entries, kind, palette),
+        rows: scorebox_rows_for_kind(entries, kind, palette, retained),
     }
 }
 
@@ -612,22 +630,29 @@ fn gameplay_panes_from_snapshot(
         return vec![gameplay_status_pane(
             profile_snapshot.show_ex_score,
             "Loading ...",
+            true,
         )];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(profile_snapshot.show_ex_score, text)];
+        return vec![gameplay_status_pane(
+            profile_snapshot.show_ex_score,
+            text,
+            true,
+        )];
     }
     let Some(data) = snapshot.data.as_ref() else {
         return vec![gameplay_status_pane(
             profile_snapshot.show_ex_score,
             "No Scores",
+            true,
         )];
     };
     if data.panes.is_empty() {
         return vec![gameplay_status_pane(
             profile_snapshot.show_ex_score,
             "No Scores",
+            true,
         )];
     }
 
@@ -640,6 +665,7 @@ fn gameplay_panes_from_snapshot(
         return vec![gameplay_status_pane(
             profile_snapshot.show_ex_score,
             "No Scores",
+            true,
         )];
     }
 
@@ -649,6 +675,7 @@ fn gameplay_panes_from_snapshot(
             pane,
             pane.entries.as_slice(),
             palette,
+            true,
         ));
     }
     panes
@@ -659,14 +686,22 @@ fn select_music_panes_from_snapshot(
     runtime: &ScoreboxSideView,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane(runtime.show_ex_score, "Loading ...")];
+        return vec![gameplay_status_pane(
+            runtime.show_ex_score,
+            "Loading ...",
+            false,
+        )];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(runtime.show_ex_score, text)];
+        return vec![gameplay_status_pane(runtime.show_ex_score, text, false)];
     }
     let Some(data) = snapshot.data.as_ref() else {
-        return vec![gameplay_status_pane(runtime.show_ex_score, "No Scores")];
+        return vec![gameplay_status_pane(
+            runtime.show_ex_score,
+            "No Scores",
+            false,
+        )];
     };
     let filter = runtime.pane_filter;
     if !score_data::select_music_scorebox_filter_has_any(filter) {
@@ -675,7 +710,11 @@ fn select_music_panes_from_snapshot(
 
     let filtered = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     if filtered.is_empty() {
-        return vec![gameplay_status_pane(runtime.show_ex_score, "No Scores")];
+        return vec![gameplay_status_pane(
+            runtime.show_ex_score,
+            "No Scores",
+            false,
+        )];
     }
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
@@ -684,6 +723,7 @@ fn select_music_panes_from_snapshot(
             pane,
             entries.as_ref(),
             crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+            false,
         ));
     }
     panes
@@ -726,20 +766,20 @@ const fn is_fallback_text(pane: &GameplayScoreboxPane) -> bool {
 
 fn push_mode_text(
     actors: &mut Vec<Actor>,
-    text: &Arc<str>,
+    text: &TextContent,
     center_x: f32,
     center_y: f32,
     zoom: f32,
     z_base: i16,
     alpha: f32,
 ) {
-    if text.is_empty() || alpha <= 0.0 {
+    if text.as_str().is_empty() || alpha <= 0.0 {
         return;
     }
     let c = color_with_alpha([1.0, 1.0, 1.0, SCOREBOX_MODE_ALPHA], alpha);
     actors.push(act!(text:
         font("miso"):
-        settext(Arc::clone(text)):
+        settext(text.clone()):
         align(0.5, 0.5):
         xy(2.0f32.mul_add(zoom, center_x), 5.0f32.mul_add(-zoom, center_y)):
         zoom(0.9 * zoom):
@@ -1268,6 +1308,7 @@ mod tests {
             entries.as_slice(),
             PaneKind::Itl,
             crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+            true,
         );
         let ranks = rows
             .iter()
@@ -1276,7 +1317,7 @@ mod tests {
             .collect::<Vec<_>>();
         let names = rows
             .iter()
-            .map(|row| row.name.as_ref().to_string())
+            .map(|row| row.name.as_str().to_string())
             .collect::<Vec<_>>();
 
         assert_eq!(ranks, vec![1, 2, 3, 4, 473]);
@@ -1300,6 +1341,7 @@ mod tests {
             entries.as_slice(),
             PaneKind::Itl,
             crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+            true,
         );
         let ranks = rows
             .iter()
@@ -1322,6 +1364,7 @@ mod tests {
             entries.as_slice(),
             PaneKind::Itl,
             crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+            true,
         );
 
         for row in rows.iter().take(3) {
@@ -1403,7 +1446,7 @@ mod tests {
         let mut rows = empty_rows();
         rows[1] = GameplayScoreboxRow {
             rank: owned_text("123456789."),
-            name: owned_text("DF.LemmingOnTheRun"),
+            name: TextContent::Shared(owned_text("DF.LemmingOnTheRun")),
             score: owned_text("100.00"),
             rank_color: [1.0; 4],
             name_color: [1.0; 4],
@@ -1468,6 +1511,6 @@ mod tests {
 
         assert_eq!(panes.len(), 1);
         assert_eq!(panes[0].kind, PaneKind::HardEx);
-        assert_eq!(panes[0].mode_text.as_ref(), "H.EX");
+        assert_eq!(panes[0].mode_text.as_str(), "H.EX");
     }
 }
