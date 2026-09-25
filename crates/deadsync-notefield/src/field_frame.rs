@@ -567,7 +567,11 @@ fn compose_field_contents<S, F>(
         let hold_target_arrow_px = lane_frame.target_arrow_px;
         let hold_head_zoom = column_zoom
             * (visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache)
-                + note_hides.zoom_offset(local_col, note.beat));
+                + if has_zoom_spline {
+                    note_hides.zoom_offset(local_col, note.beat)
+                } else {
+                    0.0
+                });
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
         let use_legacy_hold_sprites = lane_frame.use_legacy_sprites && !has_zoom_spline;
@@ -945,13 +949,15 @@ fn compose_visible_notes<S, F>(
         let direction = prepared.field.column_dirs[local_col];
         let receptor_y = prepared.field.column_receptor_ys[local_col];
         let lane_offset = lane_offsets[local_col];
+        let lane_has_hides = request.song_lua.note_hides.has_column_hides(local_col);
         for_each_lane_index(
             request.chart.lane_note_rows(col),
             visible_note_bounds[local_col],
             |note_index| {
                 let note = &request.chart.notes[note_index];
                 if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
-                    || song_lua_note_hidden(request.song_lua.note_hides, local_col, note.beat)
+                    || (lane_has_hides
+                        && song_lua_note_hidden(request.song_lua.note_hides, local_col, note.beat))
                 {
                     return;
                 }
