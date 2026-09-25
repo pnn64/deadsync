@@ -179,27 +179,20 @@ impl Service {
         if demand_changed {
             self.last_requests.clone_from(&self.requests);
         }
-        // Budget deferrals can be retried once the visible working set changes.
-        self.wanted_textures.clear();
-        self.visible_textures.clear();
         for request in &self.requests {
             if let Some(runtime) = self.runtimes.get_mut(&request.name) {
                 runtime.used = self.tick;
                 runtime.set_parts(request.parts);
-                self.wanted_textures
-                    .extend(runtime.textures.iter().map(|(key, _)| key.clone()));
-                if request.priority != NoteskinPreviewPriority::Nearby {
-                    self.visible_textures
-                        .extend(runtime.textures.iter().map(|(key, _)| key.clone()));
+                for (key, _) in &runtime.textures {
+                    if let Some(resident) = self.resident.get_mut(key) {
+                        resident.used = self.tick;
+                    }
                 }
             }
         }
-        for key in &self.wanted_textures {
-            if let Some(resident) = self.resident.get_mut(key) {
-                resident.used = self.tick;
-            }
-        }
         if demand_changed {
+            // Budget deferrals can be retried once the visible working set changes.
+            self.collect_wanted_textures();
             self.deferred_textures.clear();
             self.failed_skins
                 .retain(|name| self.requests.iter().any(|request| request.name == *name));
@@ -358,6 +351,7 @@ impl Service {
                 self.runtimes.insert(name.clone(), runtime);
             }
             (Work::Texture(key, _), Ok(Ready::Texture(image, sampler))) => {
+                self.collect_wanted_textures();
                 // Navigation may have made the decode obsolete while it ran.
                 if !self.wanted_textures.contains(key) || assets.has_uploaded_texture_key(key) {
                     return;
@@ -390,6 +384,23 @@ impl Service {
             }
             (_, Err(error)) => self.fail(&pending.work, &error),
             _ => {} // Result from a previous catalog/style generation.
+        }
+    }
+
+    /// Rebuild the requested and visible texture sets from current runtimes.
+    /// Only demand changes and finished texture decodes read them.
+    fn collect_wanted_textures(&mut self) {
+        self.wanted_textures.clear();
+        self.visible_textures.clear();
+        for request in &self.requests {
+            if let Some(runtime) = self.runtimes.get(&request.name) {
+                self.wanted_textures
+                    .extend(runtime.textures.iter().map(|(key, _)| key.clone()));
+                if request.priority != NoteskinPreviewPriority::Nearby {
+                    self.visible_textures
+                        .extend(runtime.textures.iter().map(|(key, _)| key.clone()));
+                }
+            }
         }
     }
 
