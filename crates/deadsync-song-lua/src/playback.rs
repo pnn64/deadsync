@@ -8212,9 +8212,12 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     };
     let effect = song_lua_overlay_effect_state(state);
     let overlay_blend = song_lua_overlay_blend(state.blend);
-    let perspective_view_proj = camera_state.and_then(|camera| {
-        song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
-    });
+    // Only sprites and quads that reach geometry use the camera projection.
+    let perspective_view_proj = || {
+        camera_state.and_then(|camera| {
+            song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
+        })
+    };
     let finalize_actor = |actor, glow, scratch| {
         song_lua_finalize_overlay_actor(state, actor, glow, x_scale, y_scale, scratch)
     };
@@ -8251,7 +8254,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             {
                 return None;
             }
-            if let Some(view_proj) = perspective_view_proj {
+            if let Some(view_proj) = perspective_view_proj() {
                 let (center, size) = song_lua_overlay_rect(
                     state,
                     source_size,
@@ -8912,7 +8915,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             ))
         }
         SongLuaOverlayKind::Quad => {
-            if let Some(view_proj) = perspective_view_proj {
+            if let Some(view_proj) = perspective_view_proj() {
                 let (center, size) = song_lua_overlay_rect(
                     state,
                     state.size.unwrap_or([1.0, 1.0]),
