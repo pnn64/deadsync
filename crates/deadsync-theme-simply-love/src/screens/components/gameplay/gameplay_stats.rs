@@ -1916,25 +1916,23 @@ pub fn push_versus_step_stats(
             continue;
         }
 
-        let (score_value, mut score_color) = if player_profile.show_ex_score {
-            let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
+        let score_mode = score_display_mode_from_profile(player_profile.score_display_mode);
+        // EX and H.EX share one score snapshot.
+        let ex_score = player_profile.show_ex_score.then(|| {
+            state.display_scored_ex_score_data(
+                player_idx,
+                state.gameplay_stats_text.blue_window_ms(player_idx),
+            )
+        });
+        let (score_value, mut score_color) = if let Some(ex_score) = &ex_score {
             (
-                state
-                    .display_gameplay_ex_score_percent(
-                        player_idx,
-                        score_display_mode_from_profile(player_profile.score_display_mode),
-                        blue_window_ms,
-                    )
-                    .max(0.0),
+                deadsync_gameplay::display_ex_score_percent_for_mode(ex_score, score_mode).max(0.0),
                 state
                     .judgment_palette(player_idx)
                     .color(JudgmentColorRole::FantasticBlue),
             )
         } else {
-            let score_percent = state.display_gameplay_itg_score_percent(
-                player_idx,
-                score_display_mode_from_profile(player_profile.score_display_mode),
-            );
+            let score_percent = state.display_gameplay_itg_score_percent(player_idx, score_mode);
             (score_percent, [1.0, 1.0, 1.0, 1.0])
         };
         score_color[3] *= score_alphas[player_idx];
@@ -1954,13 +1952,11 @@ pub fn push_versus_step_stats(
             },
         );
 
-        if player_profile.show_ex_score && player_profile.show_hard_ex_score {
-            let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
-            let hard_ex_percent = state.display_gameplay_hard_ex_score_percent(
-                player_idx,
-                score_display_mode_from_profile(player_profile.score_display_mode),
-                blue_window_ms,
-            );
+        if player_profile.show_hard_ex_score
+            && let Some(ex_score) = &ex_score
+        {
+            let hard_ex_percent =
+                deadsync_gameplay::display_hard_ex_score_percent_for_mode(ex_score, score_mode);
             let mut hex = color::HARD_EX_SCORE_RGBA;
             hex[3] *= score_alphas[player_idx];
             let is_p1 = player_idx == 0;

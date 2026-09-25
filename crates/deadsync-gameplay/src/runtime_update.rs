@@ -1860,16 +1860,6 @@ where
         )
     }
 
-    pub fn display_gameplay_ex_score_percent(
-        &self,
-        player_idx: usize,
-        mode: GameplayScoreDisplayMode,
-        player_blue_window_ms: f32,
-    ) -> f64 {
-        let score = self.display_scored_ex_score_data(player_idx, player_blue_window_ms);
-        display_ex_score_percent_for_mode(&score, mode)
-    }
-
     pub fn display_hard_ex_score_percent(
         &self,
         player_idx: usize,
@@ -1878,16 +1868,6 @@ where
         judgment::hard_ex_score_percent(
             &self.display_scored_ex_score_data(player_idx, player_blue_window_ms),
         )
-    }
-
-    pub fn display_gameplay_hard_ex_score_percent(
-        &self,
-        player_idx: usize,
-        mode: GameplayScoreDisplayMode,
-        player_blue_window_ms: f32,
-    ) -> f64 {
-        let score = self.display_scored_ex_score_data(player_idx, player_blue_window_ms);
-        display_hard_ex_score_percent_for_mode(&score, mode)
     }
 
     #[inline(always)]
