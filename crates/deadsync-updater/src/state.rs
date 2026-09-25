@@ -140,10 +140,15 @@ pub fn replace_snapshot(state: UpdateState) {
     }
 }
 
-/// Snapshot of the latest [`UpdateState`] for the UI.  `None` when no
-/// check has completed yet (or the check failed silently).
-pub fn snapshot() -> Option<UpdateState> {
-    SNAPSHOT.read().ok().and_then(|guard| guard.clone())
+/// Tag of the newer release from the latest [`UpdateState`] for the UI.
+/// `None` when no check has completed yet (or the check failed silently),
+/// or when no newer release is available.
+pub fn available_tag() -> Option<String> {
+    let guard = SNAPSHOT.read().ok()?;
+    match guard.as_ref()? {
+        UpdateState::Available(info) => Some(info.tag.clone()),
+        UpdateState::UpToDate | UpdateState::UnknownLatest => None,
+    }
 }
 
 /// Read-only copy of the persisted cache.

@@ -7013,7 +7013,7 @@ impl App {
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
-                let update_tag = updater::available_update_tag();
+                let update_tag = deadsync_updater::state::available_tag();
                 menu::push_actors(
                     &mut actors,
                     &self.state.screens.menu_state,

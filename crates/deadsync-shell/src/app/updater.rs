@@ -14,15 +14,6 @@ pub(super) fn capabilities() -> SimplyLoveUpdaterCapabilities {
     }
 }
 
-pub(super) fn available_update_tag() -> Option<String> {
-    match deadsync_updater::state::snapshot()? {
-        deadsync_updater::UpdateState::Available(info) => Some(info.tag),
-        deadsync_updater::UpdateState::UpToDate | deadsync_updater::UpdateState::UnknownLatest => {
-            None
-        }
-    }
-}
-
 pub(super) struct RuntimeCursor {
     update_revision: u64,
     ffmpeg_revision: u64,
