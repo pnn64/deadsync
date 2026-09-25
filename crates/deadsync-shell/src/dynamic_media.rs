@@ -756,7 +756,6 @@ impl DynamicMedia {
         self.reset_pending_gameplay_background();
 
         if let Some(path) = path_opt {
-            let key = path.to_string_lossy().into_owned();
             let wants_video = animate_video && dynamic::is_dynamic_video_path(&path);
             if self
                 .current_dynamic_background
@@ -776,6 +775,7 @@ impl DynamicMedia {
                     .into();
             }
 
+            let key = path.to_string_lossy().into_owned();
             self.destroy_current_dynamic_background(assets, backend);
 
             if assets.has_texture_key(&key) {
