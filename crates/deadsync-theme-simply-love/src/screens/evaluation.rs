@@ -3661,7 +3661,9 @@ fn sync_submit_event_progress(state: &mut State) {
         if state.score_info[player_idx].is_none() {
             continue;
         }
-        let progress = &state.submissions[player_idx].event_progress;
+        // Move each delivered update once; later frames find it empty and keep
+        // the displayed copy, instead of cloning the same pages every frame.
+        let progress = &mut state.submissions[player_idx].event_progress;
         if progress.is_empty() {
             continue;
         }
@@ -3675,7 +3677,7 @@ fn sync_submit_event_progress(state: &mut State) {
         } else if state.event_overlay_page[player_idx] >= page_count {
             state.event_overlay_page[player_idx] = page_count - 1;
         }
-        state.event_progress[player_idx].clone_from(progress);
+        state.event_progress[player_idx] = std::mem::take(progress);
     }
     if found_new && !state.event_overlay_shown {
         state.event_overlay_shown = true;
