@@ -572,7 +572,11 @@ pub(super) fn revealed_text(
     if visible_chars >= char_count {
         TextContent::Shared(text.clone())
     } else {
-        TextContent::Owned(text.chars().take(visible_chars).collect())
+        let end = text
+            .char_indices()
+            .nth(visible_chars)
+            .map_or(text.len(), |(index, _)| index);
+        TextContent::Owned(text[..end].to_owned())
     }
 }
 
