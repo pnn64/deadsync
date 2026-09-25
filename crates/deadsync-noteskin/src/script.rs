@@ -1035,6 +1035,7 @@ pub struct ItgCommandEffect {
     pub tween: TweenType,
     pub blend_add: Option<bool>,
     pub interrupts: bool,
+    pub finishes_tween: bool,
 }
 
 impl Default for ItgCommandEffect {
@@ -1048,6 +1049,7 @@ impl Default for ItgCommandEffect {
             tween: TweenType::Linear,
             blend_add: None,
             interrupts: false,
+            finishes_tween: false,
         }
     }
 }
@@ -1083,16 +1085,18 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
             ScriptCommand::StopTweening | ScriptCommand::FinishTweening
         ) {
             out.interrupts = true;
+            out.finishes_tween = command == ScriptCommand::FinishTweening;
+            pending_duration = 0.0;
             continue;
         }
         if let Some(mod_cmd) = parse_script_actor_mod(command, args) {
             match mod_cmd {
-                ScriptActorMod::DiffuseAlpha(alpha) => {
+                ScriptActorMod::DiffuseAlpha(alpha) | ScriptActorMod::Diffuse([_, _, _, alpha]) => {
+                    // All properties after a tween command share its destination.
                     if pending_duration > f32::EPSILON {
                         out.target_alpha = Some(alpha);
                         out.duration = pending_duration;
                         out.tween = pending_tween;
-                        pending_duration = 0.0;
                     } else {
                         out.start_alpha = Some(alpha);
                         out.target_alpha = Some(alpha);
@@ -1103,7 +1107,6 @@ pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
                         out.target_zoom = Some(zoom);
                         out.duration = pending_duration;
                         out.tween = pending_tween;
-                        pending_duration = 0.0;
                     } else {
                         out.start_zoom = Some(zoom);
                         out.target_zoom = Some(zoom);
@@ -1774,10 +1777,11 @@ mod tests {
         assert_eq!(effect.start_alpha, Some(0.25));
         assert_eq!(effect.target_alpha, Some(1.0));
         assert_eq!(effect.duration, 0.1);
-        assert_eq!(effect.start_zoom, Some(1.5));
+        assert_eq!(effect.start_zoom, None);
         assert_eq!(effect.target_zoom, Some(1.5));
         assert_eq!(effect.blend_add, Some(true));
         assert!(effect.interrupts);
+        assert!(!effect.finishes_tween);
     }
 
     #[test]
@@ -1789,6 +1793,7 @@ mod tests {
         assert!((effect.duration - 0.11).abs() <= 1e-6);
         assert!((effect.start_zoom.unwrap_or_default() - 0.75).abs() <= 1e-6);
         assert!((effect.target_zoom.unwrap_or_default() - 1.0).abs() <= 1e-6);
+        assert!(effect.finishes_tween);
     }
 
     #[test]

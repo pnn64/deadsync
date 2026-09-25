@@ -74,6 +74,14 @@ fn original_skins_keep_model_geometry() {
                     .as_ref()
                     .expect("composite keeps its idle overlay separate from its base");
                 let press = skin.receptor_glow[column].as_ref().unwrap();
+                let flash = skin.receptor_glow_behavior;
+                assert!(flash.lift_finishes_press);
+                assert_eq!(flash.press_duration, 0.2);
+                assert_eq!(flash.duration, 0.12);
+                assert_eq!(flash.sample_press(0.2), (0.0, 1.2));
+                let (alpha, zoom) = flash.sample_lift(0.06, 0.8, 1.0);
+                assert!((alpha - 0.6).abs() < 1e-6);
+                assert!((zoom - 1.5).abs() < 1e-6);
                 assert_eq!(
                     skin.receptor_idle_glow,
                     noteskin::ReceptorIdleGlow::ActorEffect

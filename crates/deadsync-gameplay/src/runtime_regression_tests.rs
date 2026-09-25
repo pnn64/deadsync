@@ -4398,29 +4398,43 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn synthetic_receptor_step_survives_until_lift() {
-        let mut state = regression_state();
+    fn synthetic_receptor_lift_overlaps_tap_explosion() {
+        let profile = TestProfile {
+            tap_explosion_options: all_tap_explosion_options(),
+            ..TestProfile::default()
+        };
+        let mut state = regression_state_with_profiles(std::array::from_fn(|_| profile.clone()));
         let column = 0usize;
+        state.display.noteskin_effects.set_receptor_glow_behavior(
+            0,
+            GameplayReceptorGlowBehavior {
+                press_duration: 0.2,
+                lift_finishes_press: true,
+                duration: 0.12,
+                ..GameplayReceptorGlowBehavior::default()
+            },
+        );
 
-        state.trigger_receptor_step_pulse(column);
-        let started_press = state.display.receptor_feedback.glow_press_timers[column];
-        if started_press <= f32::EPSILON {
-            assert!(state.display.receptor_feedback.bop_timers[column] > 0.0);
-            return;
-        }
-        state.tick_visual_effects(0.01);
-
-        if started_press > 0.01 {
-            assert!(state.display.receptor_feedback.glow_press_timers[column] > 0.0);
-            assert!(state.display.receptor_feedback.glow_press_timers[column] < started_press);
-        }
-        state.tick_visual_effects(started_press.max(0.01));
+        enable_tap_explosion_durations(&mut state);
+        set_single_judged_tap(&mut state, column, 48, JudgeGrade::Fantastic, 0.0);
+        state.trigger_completed_row_tap_explosions(0, 0);
+        state.trigger_receptor_score_pulse(column, "W1");
+        assert!(state.display.visual_feedback.tap_explosions[column].is_some());
+        assert_eq!(
+            state.display.receptor_feedback.glow_press_timers[column],
+            0.2
+        );
+        state.tick_visual_effects(1.0 / 120.0);
 
         assert_eq!(
             state.display.receptor_feedback.glow_press_timers[column],
             0.0
         );
-        assert!(state.display.receptor_feedback.glow_lift_timers[column] > 0.0);
+        assert_eq!(
+            state.display.receptor_feedback.glow_lift_timers[column],
+            0.12
+        );
+        assert!(state.display.visual_feedback.tap_explosions[column].is_some());
     }
 
     #[test]

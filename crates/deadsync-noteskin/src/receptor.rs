@@ -16,6 +16,10 @@ pub struct ReceptorGlowBehavior {
     pub press_zoom_start: f32,
     pub press_zoom_end: f32,
     pub press_tween: TweenType,
+    pub lift_interrupts_press: bool,
+    pub lift_finishes_press: bool,
+    pub lift_alpha_start: Option<f32>,
+    pub lift_zoom_start: Option<f32>,
     pub duration: f32,
     pub alpha_start: f32,
     pub alpha_end: f32,
@@ -74,6 +78,10 @@ impl Default for ReceptorGlowBehavior {
             press_zoom_start: 1.0,
             press_zoom_end: 1.0,
             press_tween: TweenType::Linear,
+            lift_interrupts_press: true,
+            lift_finishes_press: false,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             duration: 0.2,
             alpha_start: 1.0,
             alpha_end: 0.0,
@@ -374,7 +382,6 @@ pub fn receptor_glow_behavior_from_commands(
     out.press_duration = press.duration.max(0.0);
     out.press_alpha_start = press
         .start_alpha
-        .or(press.target_alpha)
         .or(init.target_alpha)
         .unwrap_or(out.press_alpha_start);
     out.press_alpha_end = press
@@ -384,7 +391,6 @@ pub fn receptor_glow_behavior_from_commands(
         .unwrap_or(out.press_alpha_end);
     out.press_zoom_start = press
         .start_zoom
-        .or(press.target_zoom)
         .or(init.target_zoom)
         .unwrap_or(out.press_zoom_start);
     out.press_zoom_end = press
@@ -408,6 +414,10 @@ pub fn receptor_glow_behavior_from_commands(
         out.duration
     };
     out.alpha_start = out.press_alpha_end;
+    out.lift_interrupts_press = lift.interrupts;
+    out.lift_finishes_press = lift.finishes_tween;
+    out.lift_alpha_start = lift.start_alpha.map(|alpha| alpha.clamp(0.0, 1.0));
+    out.lift_zoom_start = lift.start_zoom.map(|zoom| zoom.max(0.0));
     out.alpha_end = lift
         .target_alpha
         .or(none.target_alpha)
@@ -749,9 +759,9 @@ mod tests {
         );
 
         assert!((behavior.press_duration - 0.1).abs() <= f32::EPSILON);
-        assert!((behavior.press_alpha_start - 1.0).abs() <= f32::EPSILON);
+        assert!((behavior.press_alpha_start - 0.4).abs() <= f32::EPSILON);
         assert!((behavior.press_alpha_end - 1.0).abs() <= f32::EPSILON);
-        assert!((behavior.press_zoom_start - 1.2).abs() <= f32::EPSILON);
+        assert!((behavior.press_zoom_start - 0.8).abs() <= f32::EPSILON);
         assert!((behavior.press_zoom_end - 1.2).abs() <= f32::EPSILON);
         assert!((behavior.duration - 0.3).abs() <= f32::EPSILON);
         assert!((behavior.alpha_start - 1.0).abs() <= f32::EPSILON);
@@ -759,6 +769,26 @@ mod tests {
         assert!((behavior.zoom_start - 1.2).abs() <= f32::EPSILON);
         assert!((behavior.zoom_end - 0.9).abs() <= f32::EPSILON);
         assert!(behavior.blend_add);
+        assert!(!behavior.lift_interrupts_press);
+    }
+
+    #[test]
+    fn composite_flash_tweens_alpha_and_zoom_together() {
+        let behavior = receptor_glow_behavior_from_commands(
+            "diffusealpha,0;blend,BlendMode_Add",
+            "finishtweening;zoom,1.2;decelerate,0.2;rotationz,0;zoom,1;diffusealpha,0.8",
+            "finishtweening;accelerate,0.12;zoom,1;diffusealpha,0;zoom,3",
+            "",
+        );
+        assert!(behavior.lift_finishes_press);
+        assert!(behavior.lift_interrupts_press);
+        assert_eq!(behavior.sample_press(0.2), (0.0, 1.2));
+        let (alpha, zoom) = behavior.sample_press(0.1);
+        assert!((alpha - 0.6).abs() < 1e-6);
+        assert!((zoom - 1.05).abs() < 1e-6);
+        let (alpha, zoom) = behavior.sample_lift(0.06, 0.8, 1.0);
+        assert!((alpha - 0.6).abs() < 1e-6);
+        assert!((zoom - 1.5).abs() < 1e-6);
     }
 
     #[test]

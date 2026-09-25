@@ -918,8 +918,11 @@ mod tests {
         assert_eq!(idle.def.src[0], 64);
         assert_eq!(tap.def.src[0], 128);
         assert_eq!(ns.receptor_idle_glow, ReceptorIdleGlow::ActorEffect);
-        assert!((ns.receptor_glow_behavior.press_alpha_start - 0.6).abs() <= 1e-6);
+        // Press sets an opaque diffuse before tweening alpha and zoom together.
+        assert!((ns.receptor_glow_behavior.press_alpha_start - 1.0).abs() <= 1e-6);
         assert!((ns.receptor_glow_behavior.press_alpha_end - 0.6).abs() <= 1e-6);
+        assert_eq!(ns.receptor_glow_behavior.lift_alpha_start, Some(0.6));
+        assert_eq!(ns.receptor_glow_behavior.lift_zoom_start, Some(1.0));
     }
 
     #[test]

@@ -314,7 +314,10 @@ impl SongLuaEase {
                 if t < 0.5 {
                     0.5 * ((t * std::f32::consts::PI).sin())
                 } else {
-                    0.5f32.mul_add(1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos(), 0.5)
+                    0.5f32.mul_add(
+                        1.0 - (((t * 2.0) - 1.0) * std::f32::consts::FRAC_PI_2).cos(),
+                        0.5,
+                    )
                 }
             }
             Self::InExpo => {
@@ -357,14 +360,29 @@ impl SongLuaEase {
                 if t < 0.5 {
                     0.5 * (1.0 - (4.0 * t).mul_add(-t, 1.0).sqrt())
                 } else {
-                    f32::midpoint((-2.0f32).mul_add(t, 2.0).mul_add(-(-2.0f32).mul_add(t, 2.0), 1.0).sqrt(), 1.0)
+                    f32::midpoint(
+                        (-2.0f32)
+                            .mul_add(t, 2.0)
+                            .mul_add(-(-2.0f32).mul_add(t, 2.0), 1.0)
+                            .sqrt(),
+                        1.0,
+                    )
                 }
             }
             Self::OutInCirc => {
                 if t < 0.5 {
-                    0.5 * 2.0f32.mul_add(t, -1.0).mul_add(-2.0f32.mul_add(t, -1.0), 1.0).sqrt()
+                    0.5 * 2.0f32
+                        .mul_add(t, -1.0)
+                        .mul_add(-2.0f32.mul_add(t, -1.0), 1.0)
+                        .sqrt()
                 } else {
-                    0.5f32.mul_add(1.0 - 2.0f32.mul_add(t, -1.0).mul_add(-2.0f32.mul_add(t, -1.0), 1.0).sqrt(), 0.5)
+                    0.5f32.mul_add(
+                        1.0 - 2.0f32
+                            .mul_add(t, -1.0)
+                            .mul_add(-2.0f32.mul_add(t, -1.0), 1.0)
+                            .sqrt(),
+                        0.5,
+                    )
                 }
             }
             Self::InElastic => song_lua_in_elastic(t, opt1),
@@ -481,6 +499,10 @@ pub struct GameplayReceptorGlowBehavior {
     pub press_zoom_start: f32,
     pub press_zoom_end: f32,
     pub press_tween: GameplayTween,
+    pub lift_interrupts_press: bool,
+    pub lift_finishes_press: bool,
+    pub lift_alpha_start: Option<f32>,
+    pub lift_zoom_start: Option<f32>,
     pub duration: f32,
     pub alpha_start: f32,
     pub alpha_end: f32,
@@ -541,6 +563,10 @@ impl Default for GameplayReceptorGlowBehavior {
             press_zoom_start: 1.0,
             press_zoom_end: 1.0,
             press_tween: GameplayTween::Linear,
+            lift_interrupts_press: true,
+            lift_finishes_press: false,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             duration: 0.2,
             alpha_start: 1.0,
             alpha_end: 0.0,
@@ -593,8 +619,7 @@ pub struct GameplayReceptorFeedbackState {
 
 const RECEPTOR_FEEDBACK_LANES: LaneMask = input_lane_mask(MAX_COLS);
 const RECEPTOR_DENSE_CLEANUP_FRAMES: LaneMask = 63;
-const RECEPTOR_DENSE_CLEANUP_MASK: LaneMask =
-    RECEPTOR_DENSE_CLEANUP_FRAMES << MAX_COLS;
+const RECEPTOR_DENSE_CLEANUP_MASK: LaneMask = RECEPTOR_DENSE_CLEANUP_FRAMES << MAX_COLS;
 const RECEPTOR_DENSE_CLEANUP_STEP: LaneMask = 1 << MAX_COLS;
 
 impl Default for GameplayReceptorFeedbackState {
@@ -645,11 +670,7 @@ impl GameplayReceptorFeedbackState {
                 col,
                 glow_timers_active(self.glow_press_timers[col], self.glow_lift_timers[col]),
             );
-            set_feedback_bit(
-                &mut self.bop_active,
-                col,
-                self.bop_timers[col] > 0.0,
-            );
+            set_feedback_bit(&mut self.bop_active, col, self.bop_timers[col] > 0.0);
         }
         if (self.glow_active_lanes() | self.bop_active).count_ones() as usize > MAX_COLS / 2 {
             self.set_dense_cleanup_frames(RECEPTOR_DENSE_CLEANUP_FRAMES);
@@ -923,11 +944,18 @@ pub fn receptor_glow_lift_start(
     behavior: GameplayReceptorGlowBehavior,
     press_timer: f32,
 ) -> (f32, f32) {
-    if press_timer > f32::EPSILON && behavior.press_duration > f32::EPSILON {
+    let (alpha, zoom) = if !behavior.lift_finishes_press
+        && press_timer > f32::EPSILON
+        && behavior.press_duration > f32::EPSILON
+    {
         behavior.sample_press(press_timer)
     } else {
         (behavior.press_alpha_end, behavior.press_zoom_end)
-    }
+    };
+    (
+        behavior.lift_alpha_start.unwrap_or(alpha),
+        behavior.lift_zoom_start.unwrap_or(zoom),
+    )
 }
 
 #[inline(always)]
@@ -936,6 +964,14 @@ pub fn receptor_glow_release_timers(
     behavior: GameplayReceptorGlowBehavior,
     press_timer: f32,
 ) -> GameplayReceptorGlowTimers {
+    if !behavior.lift_interrupts_press && press_timer > f32::EPSILON {
+        return GameplayReceptorGlowTimers {
+            press_timer,
+            lift_timer: 0.0,
+            lift_start_alpha: behavior.press_alpha_end,
+            lift_start_zoom: behavior.press_zoom_end,
+        };
+    }
     let (alpha, zoom) = receptor_glow_lift_start(behavior, press_timer);
     GameplayReceptorGlowTimers {
         press_timer: 0.0,
@@ -961,14 +997,14 @@ pub fn tick_receptor_glow_timers(
         };
     }
     if timers.press_timer > f32::EPSILON {
-        if timers.press_timer <= delta_time {
-            receptor_glow_release_timers(behavior, timers.press_timer)
-        } else {
-            GameplayReceptorGlowTimers {
-                press_timer: timers.press_timer - delta_time,
-                ..timers
-            }
+        // ITGmania releases synthetic Step presses on the next frame. Lift's
+        // stop/finish command interrupts Press; otherwise its tween stays queued.
+        let mut next =
+            receptor_glow_release_timers(behavior, (timers.press_timer - delta_time).max(0.0));
+        if !behavior.lift_interrupts_press && timers.press_timer < delta_time {
+            next.lift_timer = (next.lift_timer - (delta_time - timers.press_timer)).max(0.0);
         }
+        next
     } else {
         GameplayReceptorGlowTimers {
             lift_timer: (timers.lift_timer - delta_time).max(0.0),

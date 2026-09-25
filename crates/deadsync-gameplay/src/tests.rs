@@ -3,19 +3,31 @@ mod tests {
     use super::*;
 
     mod chart_modifier_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/chart_modifiers.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/chart_modifiers.rs"
+        ));
     }
 
     mod tap_insertion_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/tap_insertion.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/tap_insertion.rs"
+        ));
     }
 
     mod preparation_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/preparation.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/preparation.rs"
+        ));
     }
 
     mod chart_transform_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/chart_transforms.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/chart_transforms.rs"
+        ));
     }
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::song_time::{
@@ -5992,14 +6004,10 @@ mod tests {
         );
         let mut fresh = FrameStableDisplayClock::new(start);
         let mut fresh_events = Vec::new();
-        let fresh_time = frame_stable_display_clock_step(
-            &mut fresh,
-            target,
-            1.0 / 120.0,
-            1.0,
-            false,
-            |event| fresh_events.push(event.kind),
-        );
+        let fresh_time =
+            frame_stable_display_clock_step(&mut fresh, target, 1.0 / 120.0, 1.0, false, |event| {
+                fresh_events.push(event.kind)
+            });
 
         assert_eq!(warmed_time, fresh_time);
         assert_eq!(warmed_events, fresh_events);
@@ -6022,14 +6030,10 @@ mod tests {
         clock.reset(start);
 
         let mut events = Vec::new();
-        let display_time = frame_stable_display_clock_step(
-            &mut clock,
-            target,
-            1.0 / 60.0,
-            2.0,
-            false,
-            |event| events.push(event.kind),
-        );
+        let display_time =
+            frame_stable_display_clock_step(&mut clock, target, 1.0 / 60.0, 2.0, false, |event| {
+                events.push(event.kind)
+            });
 
         assert_ne!(display_time, target);
         assert!(!events.contains(&DisplayClockDiagEventKind::ResetJump));
@@ -6052,14 +6056,9 @@ mod tests {
         clock.reset(start);
 
         let mut events = Vec::new();
-        frame_stable_display_clock_step(
-            &mut clock,
-            target,
-            1.0 / 60.0,
-            2.0,
-            false,
-            |event| events.push(event.kind),
-        );
+        frame_stable_display_clock_step(&mut clock, target, 1.0 / 60.0, 2.0, false, |event| {
+            events.push(event.kind)
+        });
 
         assert!(!events.contains(&DisplayClockDiagEventKind::TargetJump));
     }
@@ -8670,6 +8669,10 @@ mod tests {
             press_zoom_end: 2.0,
             press_tween: GameplayTween::Linear,
             duration: 1.0,
+            lift_finishes_press: false,
+            lift_interrupts_press: true,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             alpha_start: 1.0,
             alpha_end: 0.0,
             zoom_start: 2.0,
@@ -8695,6 +8698,10 @@ mod tests {
             press_zoom_end: 2.0,
             press_tween: GameplayTween::Linear,
             duration: 1.0,
+            lift_finishes_press: false,
+            lift_interrupts_press: true,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             alpha_start: 1.0,
             alpha_end: 0.0,
             zoom_start: 2.0,
@@ -8752,6 +8759,10 @@ mod tests {
             press_zoom_end: 2.0,
             press_tween: GameplayTween::Linear,
             duration: 0.0,
+            lift_finishes_press: false,
+            lift_interrupts_press: true,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             alpha_start: 1.0,
             alpha_end: 0.0,
             zoom_start: 2.0,
@@ -8781,6 +8792,10 @@ mod tests {
             press_zoom_end: 1.75,
             press_tween: GameplayTween::Linear,
             duration: 0.5,
+            lift_finishes_press: false,
+            lift_interrupts_press: true,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             alpha_start: 1.0,
             alpha_end: 0.0,
             zoom_start: 2.0,
@@ -8822,6 +8837,10 @@ mod tests {
             press_zoom_end: 2.0,
             press_tween: GameplayTween::Linear,
             duration: 0.4,
+            lift_finishes_press: false,
+            lift_interrupts_press: true,
+            lift_alpha_start: None,
+            lift_zoom_start: None,
             alpha_start: 1.0,
             alpha_end: 0.0,
             zoom_start: 2.0,
@@ -8859,8 +8878,8 @@ mod tests {
         );
         assert_near(release.press_timer, 0.0);
         assert_near(release.lift_timer, 0.4);
-        assert_near(release.lift_start_alpha, 0.7);
-        assert_near(release.lift_start_zoom, 1.7);
+        assert_near(release.lift_start_alpha, 1.0);
+        assert_near(release.lift_start_zoom, 2.0);
 
         let lift = tick_receptor_glow_timers(
             behavior,
@@ -8876,6 +8895,73 @@ mod tests {
         assert_near(lift.lift_timer, 0.15);
         assert_near(lift.lift_start_alpha, 0.7);
         assert_near(lift.lift_start_zoom, 1.7);
+    }
+
+    #[test]
+    fn receptor_lift_finishes_press_only_when_command_requests_it() {
+        let mut behavior = GameplayReceptorGlowBehavior {
+            press_duration: 0.2,
+            press_alpha_start: 0.0,
+            press_alpha_end: 0.8,
+            press_zoom_start: 1.2,
+            press_zoom_end: 1.0,
+            press_tween: GameplayTween::Decelerate,
+            lift_finishes_press: true,
+            duration: 0.12,
+            alpha_end: 0.0,
+            zoom_end: 3.0,
+            tween: GameplayTween::Accelerate,
+            ..GameplayReceptorGlowBehavior::default()
+        };
+        let press = receptor_glow_press_timers(behavior);
+        let held = tick_receptor_glow_timers(behavior, press, true, 0.01);
+        assert_near(held.press_timer, 0.19);
+        assert_near(held.lift_timer, 0.0);
+        for release in [
+            receptor_glow_release_timers(behavior, held.press_timer),
+            tick_receptor_glow_timers(behavior, press, false, 0.01),
+        ] {
+            assert_near(release.press_timer, 0.0);
+            assert_near(release.lift_timer, 0.12);
+            assert_near(release.lift_start_alpha, 0.8);
+            assert_near(release.lift_start_zoom, 1.0);
+            let (alpha, zoom) =
+                behavior.sample_lift(0.06, release.lift_start_alpha, release.lift_start_zoom);
+            assert_near(alpha, 0.6);
+            assert_near(zoom, 1.5);
+        }
+        behavior.lift_finishes_press = false;
+        let release = tick_receptor_glow_timers(behavior, press, false, 0.1);
+        assert_near(release.lift_start_alpha, 0.6);
+        assert_near(release.lift_start_zoom, 1.05);
+        behavior.lift_alpha_start = Some(0.4);
+        let release = receptor_glow_release_timers(behavior, 0.1);
+        assert_near(release.lift_start_alpha, 0.4);
+        assert_near(release.lift_start_zoom, 1.05);
+        behavior.lift_zoom_start = Some(1.0);
+        let release = receptor_glow_release_timers(behavior, 0.1);
+        assert_near(release.lift_start_alpha, 0.4);
+        assert_near(release.lift_start_zoom, 1.0);
+    }
+
+    #[test]
+    fn receptor_lift_without_interrupt_keeps_press_tween_queued() {
+        let behavior = GameplayReceptorGlowBehavior {
+            press_duration: 0.2,
+            lift_interrupts_press: false,
+            duration: 0.12,
+            ..GameplayReceptorGlowBehavior::default()
+        };
+        let press = receptor_glow_press_timers(behavior);
+        let queued = tick_receptor_glow_timers(behavior, press, false, 0.05);
+        assert_near(queued.press_timer, 0.15);
+        assert_near(queued.lift_timer, 0.0);
+        let release = receptor_glow_release_timers(behavior, queued.press_timer);
+        assert_near(release.press_timer, 0.15);
+        assert_near(release.lift_timer, 0.0);
+        let lifted = tick_receptor_glow_timers(behavior, release, false, 0.17);
+        assert_near(lifted.press_timer, 0.0);
+        assert_near(lifted.lift_timer, 0.1);
     }
 
     #[test]
@@ -8916,10 +9002,10 @@ mod tests {
 
         assert_near(press_timers[0], 0.15);
         assert_near(lift_timers[0], 0.0);
-        assert_near(press_timers[1], 0.15);
+        assert_near(press_timers[1], 0.0);
         assert_near(lift_timers[1], 0.5);
-        assert_near(lift_start_alpha[1], 0.2);
-        assert_near(lift_start_zoom[1], 1.2);
+        assert_near(lift_start_alpha[1], 1.0);
+        assert_near(lift_start_zoom[1], 1.0);
         assert_near(lift_timers[4], 0.75);
         assert_near(press_timers[5], 9.0);
         assert_near(lift_timers[5], 9.0);
@@ -17159,13 +17245,7 @@ mod tests {
         assert_eq!(crossed_mine_bounds_ns(&times, times[0], times[2]), (1, 3));
         let mut cursor = LaneNoteWindowCursor::default();
         assert_eq!(
-            lane_note_window_bounds_rows_from_cursor(
-                &note_indices,
-                &notes,
-                96,
-                192,
-                &mut cursor,
-            ),
+            lane_note_window_bounds_rows_from_cursor(&note_indices, &notes, 96, 192, &mut cursor,),
             (1, 3)
         );
     }
@@ -17991,10 +18071,16 @@ mod tests {
         assert_eq!(note_index, 2);
     }
     mod pump_checkpoint_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/pump_checkpoints.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/pump_checkpoints.rs"
+        ));
     }
     mod pump_hold_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/pump_holds.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/pump_holds.rs"
+        ));
     }
     mod crossover_row_perf {
         include!(concat!(
