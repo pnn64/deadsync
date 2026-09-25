@@ -178,11 +178,10 @@ pub fn write_resampler_output(
     }
     let produced_samples = produced_frames.saturating_mul(out_ch);
     resize_output(out_tmp, produced_samples);
-    for frame in 0..produced_frames {
-        let base = frame * out_ch;
-        for channel in 0..out_ch {
-            let sample = out[channel % out.len()][frame];
-            out_tmp[base + channel] = sample_to_i16(sample);
+    // Output channel `c` reads source channel `c % out.len()`.
+    for (frame, output) in out_tmp.chunks_exact_mut(out_ch).enumerate() {
+        for (dst, source) in output.iter_mut().zip(out.iter().cycle()) {
+            *dst = sample_to_i16(source[frame]);
         }
     }
     produced_frames
@@ -228,11 +227,13 @@ pub fn write_channel_mapped_i16(
             *output = [input[0], input[1]];
         }
     } else {
-        for frame in 0..frames {
-            let in_base = frame * in_ch;
-            let out_base = frame * out_ch;
-            for channel in 0..out_ch {
-                out_tmp[out_base + channel] = input[in_base + channel % in_ch];
+        // Output channel `c` copies input channel `c % in_ch`.
+        for (output, input) in out_tmp
+            .chunks_exact_mut(out_ch)
+            .zip(input.chunks_exact(in_ch))
+        {
+            for (dst, &src) in output.iter_mut().zip(input.iter().cycle()) {
+                *dst = src;
             }
         }
     }
