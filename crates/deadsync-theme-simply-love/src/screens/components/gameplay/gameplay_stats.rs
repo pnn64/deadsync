@@ -168,12 +168,6 @@ const fn gameplay_font_key(state: &State, role: FontRole) -> &'static str {
     machine_font_key(state.machine_font(), role)
 }
 
-#[derive(Clone, Copy)]
-struct LabeledColor {
-    label: LookupKey,
-    color: [f32; 4],
-}
-
 const JUDGMENT_LABELS: [LookupKey; 6] = [
     lookup_key("Gameplay", "JudgmentFantastic"),
     lookup_key("Gameplay", "JudgmentExcellent"),
@@ -2463,12 +2457,11 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Miss,
 ];
 
-fn judgment_info(state: &State, player: usize, grade: JudgeGrade) -> LabeledColor {
-    let index = judgment::judge_grade_ix(grade);
-    LabeledColor {
-        label: JUDGMENT_LABELS[index],
-        color: standard_judgment_color(state.judgment_palette(player), index),
-    }
+fn judgment_color(state: &State, player: usize, grade: JudgeGrade) -> [f32; 4] {
+    standard_judgment_color(
+        state.judgment_palette(player),
+        judgment::judge_grade_ix(grade),
+    )
 }
 
 fn build_banner(
@@ -3034,7 +3027,7 @@ fn build_side_pane(
         if show_judgments && show_standard_judgments {
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
-                let info = judgment_info(state, player_idx, *grade);
+                let color = judgment_color(state, player_idx, *grade);
                 let count = state.display_judgment_count(player_idx, *grade);
                 let disabled = standard_row_disabled(disabled_windows, index);
 
@@ -3044,7 +3037,7 @@ fn build_side_pane(
                 let bright = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
-                    info.color
+                    color
                 };
                 let dim = if disabled {
                     DISABLED_WINDOW_RGBA
@@ -3095,7 +3088,7 @@ fn build_side_pane(
 
                 let label_world_y = 1.0f32.mul_add(final_text_base_zoom, world_y);
                 let label_zoom = final_text_base_zoom * 0.833;
-                let label = info.label.get();
+                let label = state.gameplay_stats_text.judgment(index);
 
                 if player_side == profile_data::PlayerSide::P1 {
                     actors.push(act!(text:
@@ -3119,12 +3112,12 @@ fn build_side_pane(
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
             let wc = state.display_window_counts(player_idx, Some(blue_window_ms), blue_window_ms);
-            let fantastic_color = judgment_info(state, player_idx, JudgeGrade::Fantastic).color;
-            let excellent_color = judgment_info(state, player_idx, JudgeGrade::Excellent).color;
-            let great_color = judgment_info(state, player_idx, JudgeGrade::Great).color;
-            let decent_color = judgment_info(state, player_idx, JudgeGrade::Decent).color;
-            let wayoff_color = judgment_info(state, player_idx, JudgeGrade::WayOff).color;
-            let miss_color = judgment_info(state, player_idx, JudgeGrade::Miss).color;
+            let fantastic_color = judgment_color(state, player_idx, JudgeGrade::Fantastic);
+            let excellent_color = judgment_color(state, player_idx, JudgeGrade::Excellent);
+            let great_color = judgment_color(state, player_idx, JudgeGrade::Great);
+            let decent_color = judgment_color(state, player_idx, JudgeGrade::Decent);
+            let wayoff_color = judgment_color(state, player_idx, JudgeGrade::WayOff);
+            let miss_color = judgment_color(state, player_idx, JudgeGrade::Miss);
 
             // Dim palette for FA+ side pane: reuse gameplay dim colors for Fantastic..Miss,
             // and a dedicated dim color for the white FA+ row.
