@@ -1817,24 +1817,26 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 while let Some(next) = builder.items.get(cursor + object_count).copied() {
                     // A layer boundary restarts triangle assembly if the preceding
                     // mesh run ends with one or two unused vertices.
-                    let compatible = next.z == item.z
-                        && next.blend == blend
-                        && next.camera == camera
-                        && next.kind == DrawKind::Mesh
-                        && builder.meshes[next.payload_index as usize]
-                            .as_ref()
-                            .is_some_and(|payload| !payload.vertices.is_empty());
-                    if !compatible {
+                    if next.z != item.z
+                        || next.blend != blend
+                        || next.camera != camera
+                        || next.kind != DrawKind::Mesh
+                    {
                         break;
                     }
-                    let MeshPayload {
-                        transform,
-                        tint,
-                        vertices,
-                    } = builder.meshes[next.payload_index as usize]
-                        .take()
-                        .expect("draw item references live mesh payload");
-                    append_mesh_vertices(mesh_vertices, &transform, tint, vertices.as_ref());
+                    // Followers are never revisited; `builder.clear()` drops them.
+                    let Some(payload) = builder.meshes[next.payload_index as usize]
+                        .as_ref()
+                        .filter(|payload| !payload.vertices.is_empty())
+                    else {
+                        break;
+                    };
+                    append_mesh_vertices(
+                        mesh_vertices,
+                        &payload.transform,
+                        payload.tint,
+                        payload.vertices.as_ref(),
+                    );
                     object_count += 1;
                 }
                 ops.push(renderer::DrawOp::Mesh(renderer::MeshRun {
@@ -1875,23 +1877,24 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 while identity.is_some()
                     && let Some(next) = builder.items.get(cursor + object_count).copied()
                 {
-                    let compatible = next.texture_handle == texture_handle
-                        && next.blend == blend
-                        && next.camera == camera
-                        && next.kind == DrawKind::TexturedMesh
-                        && builder.textured_meshes[next.payload_index as usize]
-                            .as_ref()
-                            .is_some_and(|payload| {
-                                payload.depth_test == depth_test
-                                    && tmesh_identity(&payload.vertices, payload.geom_cache_key)
-                                        == identity
-                            });
-                    if !compatible {
+                    if next.texture_handle != texture_handle
+                        || next.blend != blend
+                        || next.camera != camera
+                        || next.kind != DrawKind::TexturedMesh
+                    {
                         break;
                     }
-                    let payload = builder.textured_meshes[next.payload_index as usize]
-                        .take()
-                        .expect("draw item references live textured-mesh payload");
+                    // Followers are never revisited; `builder.clear()` drops them.
+                    let Some(payload) = builder.textured_meshes[next.payload_index as usize]
+                        .as_ref()
+                        .filter(|payload| {
+                            payload.depth_test == depth_test
+                                && tmesh_identity(&payload.vertices, payload.geom_cache_key)
+                                    == identity
+                        })
+                    else {
+                        break;
+                    };
                     tmesh_instances.push(payload.instance);
                     object_count += 1;
                 }
