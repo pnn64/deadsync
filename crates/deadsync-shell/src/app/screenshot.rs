@@ -51,6 +51,10 @@ pub(super) fn auto_screenshot_eval_results(
 
 impl App {
     pub(super) fn capture_pending_screenshot(&mut self, now: Instant) {
+        // Most frames have no request; skip copying the song title for them.
+        if !self.state.shell.screenshot.pending() {
+            return;
+        }
         let song_info = current_song_title(&self.state);
         let song_info_ref = song_info
             .as_ref()
