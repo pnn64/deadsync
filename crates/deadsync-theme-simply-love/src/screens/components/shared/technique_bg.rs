@@ -120,7 +120,7 @@ impl State {
 
         for i in 0..GRID_VELOCITY.len() {
             let uv = wrapped_grid_uv_rect(GRID_VELOCITY[i], elapsed_s);
-            out.push(act!(sprite(SQUARE_TEX):
+            out.push(act!(sprite_static(SQUARE_TEX):
                 align(0.5, 0.5):
                 xy(center[0], center[1]):
                 zoom(GRID_ZOOM):

@@ -273,7 +273,7 @@ fn spinner_actor(cx: f32, cy: f32) -> Actor {
     static SPIN_START: LazyLock<Instant> = LazyLock::new(Instant::now);
     let elapsed = SPIN_START.elapsed().as_secs_f32();
     let frame = ((elapsed * SPINNER_FPS) as u32) % SPINNER_FRAMES;
-    act!(sprite(SPINNER_TEXTURE):
+    act!(sprite_static(SPINNER_TEXTURE):
         align(0.5, 0.5):
         xy(cx, cy):
         setsize(SPINNER_PX, SPINNER_PX):

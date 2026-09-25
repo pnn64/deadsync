@@ -689,7 +689,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
 
     let one_w2 = p.taunt.great == 0 && p.taunt.excellent == 1;
     if one_w3_flag(p.taunt) {
-        return Some(act!(sprite(GOLDSTAR_TEX):
+        return Some(act!(sprite_static(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx):
@@ -706,7 +706,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
     let zoom = goldstar_zoom(p.elapsed);
     let wag = goldstar_wag_deg(p.elapsed);
     if p.elapsed >= GOLDSTAR_ANIM_DELAY_S + GOLDSTAR_ZOOM_OUT_S + GOLDSTAR_ZOOM_BACK_S {
-        Some(act!(sprite(GOLDSTAR_TEX):
+        Some(act!(sprite_static(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx * zoom):
@@ -717,7 +717,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
             texcoordvelocity(1.0, 0.0)
         ))
     } else if p.elapsed >= GOLDSTAR_ANIM_DELAY_S {
-        Some(act!(sprite(GOLDSTAR_TEX):
+        Some(act!(sprite_static(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx * zoom):
@@ -727,7 +727,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
             diffuse(1.0, 1.0, 1.0, 1.0)
         ))
     } else {
-        Some(act!(sprite(GOLDSTAR_TEX):
+        Some(act!(sprite_static(GOLDSTAR_TEX):
             align(0.5, 0.5):
             xy(st.x, st.y):
             zoomx(st.sx):

@@ -360,7 +360,7 @@ pub fn push_actors(
         let rot_deg = lerp(0.0, rot_deg_final, form_p);
         let zoom = lerp(1.0, zoom_final, form_p);
 
-        let mut actor = act!(sprite(select_color_texture):
+        let mut actor = act!(sprite_static(select_color_texture):
             align(0.5, 0.5):
             xy(x, y):
             rotationz(rot_deg):

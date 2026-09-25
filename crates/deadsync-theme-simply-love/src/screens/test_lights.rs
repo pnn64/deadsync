@@ -282,7 +282,7 @@ pub fn push_actors(
         },
     );
 
-    actors.push(act!(sprite(CABINET_TEX):
+    actors.push(act!(sprite_static(CABINET_TEX):
         align(0.5, 0.5):
         xy(root_x, root_y):
         zoom(CABINET_ZOOM):
@@ -294,7 +294,7 @@ pub fn push_actors(
         if !lights.cabinet[highlight.light.ix()] {
             continue;
         }
-        actors.push(act!(sprite(highlight.texture):
+        actors.push(act!(sprite_static(highlight.texture):
             align(0.5, 0.5):
             xy(
                 highlight.x.mul_add(CABINET_ZOOM, root_x),
@@ -364,7 +364,7 @@ fn push_pad(
     let origin_x = side_x.mul_add(PAD_ZOOM, root_x);
     let origin_y = root_y + PAD_FRAME_Y;
 
-    actors.push(act!(sprite(PAD_TEX):
+    actors.push(act!(sprite_static(PAD_TEX):
         align(0.5, 0.5):
         xy(origin_x, origin_y):
         zoom(PAD_ZOOM):
@@ -376,7 +376,7 @@ fn push_pad(
         if !lights.buttons[player.ix()][highlight.button.ix()] {
             continue;
         }
-        actors.push(act!(sprite(PANEL_HIGHLIGHT_TEX):
+        actors.push(act!(sprite_static(PANEL_HIGHLIGHT_TEX):
             align(0.5, 0.5):
             xy(
                 (side_x + highlight.x).mul_add(PAD_ZOOM, root_x),

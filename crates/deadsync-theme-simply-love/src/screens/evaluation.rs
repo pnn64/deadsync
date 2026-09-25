@@ -4329,7 +4329,7 @@ const fn stage_in_stinger_seconds(failed: bool, srpg10: bool) -> f32 {
 
 fn build_srpg10_failed_stinger() -> Vec<Actor> {
     vec![
-        act!(sprite(visual_styles::SRPG10_EVAL_PAINT):
+        act!(sprite_static(visual_styles::SRPG10_EVAL_PAINT):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoomto(screen_width() + 350.0, screen_height() + 200.0):
@@ -4351,7 +4351,7 @@ fn build_srpg10_failed_stinger() -> Vec<Actor> {
             linear(0.5): alpha(0.0):
             linear(0.0): visible(false)
         ),
-        act!(sprite(visual_styles::SRPG10_EVAL_RED_LINES):
+        act!(sprite_static(visual_styles::SRPG10_EVAL_RED_LINES):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(SRPG10_EVAL_ZOOM):
@@ -4362,7 +4362,7 @@ fn build_srpg10_failed_stinger() -> Vec<Actor> {
             linear(0.5): alpha(0.0):
             linear(0.0): visible(false)
         ),
-        act!(sprite(visual_styles::SRPG10_EVAL_EXPEDITION_FAILED):
+        act!(sprite_static(visual_styles::SRPG10_EVAL_EXPEDITION_FAILED):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(SRPG10_EVAL_ZOOM):
@@ -4378,7 +4378,7 @@ fn build_srpg10_failed_stinger() -> Vec<Actor> {
 
 fn build_srpg10_passed_stinger() -> Vec<Actor> {
     vec![
-        act!(sprite(visual_styles::SRPG10_EVAL_PASS_BG):
+        act!(sprite_static(visual_styles::SRPG10_EVAL_PASS_BG):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(SRPG10_EVAL_ZOOM):
@@ -4387,7 +4387,7 @@ fn build_srpg10_passed_stinger() -> Vec<Actor> {
             linear(0.5): alpha(0.0):
             linear(0.0): visible(false)
         ),
-        act!(sprite(visual_styles::SRPG10_EVAL_GOLD_LEAF_BG):
+        act!(sprite_static(visual_styles::SRPG10_EVAL_GOLD_LEAF_BG):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(SRPG10_EVAL_ZOOM):
@@ -4397,7 +4397,7 @@ fn build_srpg10_passed_stinger() -> Vec<Actor> {
             linear(0.5): alpha(0.0):
             linear(0.0): visible(false)
         ),
-        act!(sprite(visual_styles::SRPG10_EVAL_VICTORY):
+        act!(sprite_static(visual_styles::SRPG10_EVAL_VICTORY):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(0.5):
@@ -4436,7 +4436,7 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
         linear(0.0): visible(false)
     )];
     if let Some(texture_key) = texture_key {
-        actors.push(act!(sprite(texture_key):
+        actors.push(act!(sprite_static(texture_key):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(0.8):
@@ -6888,7 +6888,7 @@ pub fn push_actors(
                         let icon_frame = if *animated { frame } else { 0 };
                         let [tr, tg, tb, ta] = *tint;
                         let h = SUBMIT_FOOTER_SPRITE_PX * *scale_y;
-                        actors.push(act!(sprite(*texture_key):
+                        actors.push(act!(sprite_static(*texture_key):
                             align(0.0, 0.5):
                             xy(cursor, base_y):
                             setsize(SUBMIT_FOOTER_SPRITE_PX, h):

@@ -565,7 +565,7 @@ pub fn push_actors(
         } else {
             "select_mode/arrow-body.png"
         };
-        actors.push(act!(sprite(receptor_texture):
+        actors.push(act!(sprite_static(receptor_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
             zoom(column_zoom(state.runtime.game, dir) * demo.field_zoom):
@@ -637,7 +637,7 @@ pub fn push_actors(
         } else {
             "select_mode/arrow-stripes.png"
         };
-        actors.push(act!(sprite(border_texture):
+        actors.push(act!(sprite_static(border_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
             zoom(arrow_zoom):
@@ -645,7 +645,7 @@ pub fn push_actors(
             MaskDest():
             rotationz(rot):
         ));
-        actors.push(act!(sprite(body_texture):
+        actors.push(act!(sprite_static(body_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
             zoom(arrow_zoom):
@@ -654,7 +654,7 @@ pub fn push_actors(
             rotationz(rot):
         ));
         let detail_tint = if is_center { tint } else { [1.0; 4] };
-        actors.push(act!(sprite(detail_texture):
+        actors.push(act!(sprite_static(detail_texture):
             align(0.5, 0.5): xy(x, y):
             setsize(aw, ah):
             zoom(arrow_zoom):

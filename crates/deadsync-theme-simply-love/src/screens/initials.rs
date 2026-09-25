@@ -1236,7 +1236,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
             let pc = player_color_rgba(side, state.active_color_index);
 
             // zmod: PlayerNameAndDecorations.lua tints the cursor to PlayerColor.
-            children.push(act!(sprite(NAME_ENTRY_CURSOR_TEX):
+            children.push(act!(sprite_static(NAME_ENTRY_CURSOR_TEX):
                 align(0.5, 0.5):
                 xy(0.0, CURSOR_Y_IN_FRAME):
                 setsize(248.0, 46.0):

@@ -2487,7 +2487,7 @@ fn append_field_cursor(
 }
 
 fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, frame: u32) {
-    actors.push(act!(sprite(EDIT_FIELD_CURSOR_TEX):
+    actors.push(act!(sprite_static(EDIT_FIELD_CURSOR_TEX):
         align(0.5, 0.5):
         xy(x, y):
         zoom(zoom * EDIT_SNAP_CURSOR_ZOOM):
