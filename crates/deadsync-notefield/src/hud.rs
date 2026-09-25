@@ -265,13 +265,12 @@ fn append_run_timer(
     let measure_seconds = 4.0 / (current_bps * request.music_rate);
     let current_time = request.current_display_beat / (current_bps * request.music_rate);
     let segment_len = (((segment.end() - segment.start()) as f32) * measure_seconds).ceil() as i32;
-    let total = (request.timer_text)(segment_len, 60, false);
     let remaining = (segment.end() as f32)
         .mul_add(measure_seconds, -current_time)
         .ceil()
         .max(0.0) as i32;
     let text = if remaining > segment_len {
-        total
+        (request.timer_text)(segment_len, 60, false)
     } else if remaining < 1 {
         (request.timer_text)(0, 59, true)
     } else {
