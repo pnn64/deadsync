@@ -331,7 +331,7 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// that do not provide screen scratch.
 /// Authored text changes reserve their largest string length and one uppercase
 /// string per change at entry. They never grow or evict during playback and
-/// are released with this song; selection costs at most two binary searches per draw.
+/// are released with this song; selection costs one binary search per draw.
 #[derive(Default)]
 struct SongLuaProjectedMeshScratch {
     sprite_key: Option<Arc<str>>,
@@ -8496,10 +8496,10 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             attributes,
             ..
         } => {
-            let text = crate::overlay_text_at(text, text_changes, effect_beat);
             let text_index = text_changes
                 .partition_point(|(beat, _)| *beat <= effect_beat)
                 .checked_sub(1);
+            let text = text_index.map_or(text, |index| &text_changes[index].1);
             let content = if state.uppercase {
                 projected_mesh_scratch
                     .as_deref()
