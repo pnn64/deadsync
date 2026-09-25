@@ -69,6 +69,31 @@ fn original_skins_keep_model_geometry() {
                         .ends_with(&format!("texcher_{}.png", direction.to_ascii_lowercase()))
                 );
                 assert_eq!(layers[0].uv_velocity, [0.25, 0.0]);
+                let base = &skin.receptor_off[column];
+                let idle = skin.receptor_idle_glow_layers[column]
+                    .as_ref()
+                    .expect("composite keeps its idle overlay separate from its base");
+                let press = skin.receptor_glow[column].as_ref().unwrap();
+                assert_eq!(
+                    skin.receptor_idle_glow,
+                    noteskin::ReceptorIdleGlow::ActorEffect
+                );
+                assert_eq!(base.texture_key(), idle.texture_key());
+                assert!(press.texture_key().contains("Tap Flash"));
+                assert_eq!(base.model_effect.mode, noteskin::ModelEffectMode::None);
+                assert_eq!(
+                    idle.model_effect.mode,
+                    noteskin::ModelEffectMode::DiffuseRamp
+                );
+                assert_eq!(idle.model_effect.clock, noteskin::ModelEffectClock::Beat);
+                for (beat, alpha) in [(0.0, 0.875), (0.15, 0.5), (0.55, 0.25), (0.95, 1.0)] {
+                    assert_eq!(skin.receptor_pulse.color_for_beat(beat), [1.0; 4]);
+                    assert_eq!(base.model_draw_at(1.0, beat).tint, [1.0; 4]);
+                    let glow = idle.model_draw_at(1.0, beat);
+                    assert!(glow.blend_add);
+                    assert_eq!(glow.tint[..3], [1.0; 3]);
+                    assert!((glow.tint[3] - alpha).abs() < 1e-5, "beat {beat}: {glow:?}");
+                }
             } else if name == "FNF-3d" {
                 assert!(
                     layers[0]

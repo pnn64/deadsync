@@ -2158,8 +2158,11 @@ fn itg_receptor_actor_effect_layers<T>(
     let [.., off, idle, glow] = layers else {
         return None;
     };
-    let idle_command = idle.commands.get("oncommand")?;
-    let has_actor_effect = itg_has_receptor_actor_effect_command(idle_command);
+    let has_actor_effect = ["initcommand", "oncommand"].into_iter().any(|key| {
+        idle.commands
+            .get(key)
+            .is_some_and(|command| itg_has_receptor_actor_effect_command(command))
+    });
     let has_press_glow =
         glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
     (has_actor_effect && has_press_glow).then_some([off, idle, glow])
@@ -2859,7 +2862,7 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
         {
             return sprites.clone();
         }
-        let sprites = itg_resolve_actor_sprites_with_ops_compiled(
+        let mut sprites = itg_resolve_actor_sprites_with_ops_compiled(
             data,
             compiled,
             compiled_actors,
@@ -2868,6 +2871,15 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             style.steps_type(),
             ops,
         );
+        if element.eq_ignore_ascii_case("Receptor")
+            && let Some([_, idle, _]) = itg_receptor_actor_effect_layers(&sprites)
+        {
+            // The independent idle overlay runs Init/On once at load. Its
+            // compiled effect is then sampled without rebuilding on a frame.
+            let slot = (ops.apply_active_cmd)(&idle.slot, &idle.commands, "oncommand");
+            let idle_index = sprites.len() - 2;
+            sprites[idle_index].slot = slot;
+        }
         resolved
             .borrow_mut()
             .entry(button.to_string())
@@ -5586,7 +5598,7 @@ Bones: 1
 
     #[test]
     fn receptor_column_keeps_actor_effect_between_base_and_press_glow() {
-        let layers = [
+        let mut layers = [
             ItgResolvedSprite {
                 element: "Base".to_string(),
                 slot: Slot(1),
@@ -5595,10 +5607,7 @@ Bones: 1
             ItgResolvedSprite {
                 element: "Glow".to_string(),
                 slot: Slot(2),
-                commands: HashMap::from([(
-                    "oncommand".to_string(),
-                    "effectclock,bgm;diffuseshift".to_string(),
-                )]),
+                commands: HashMap::new(),
             },
             ItgResolvedSprite {
                 element: "Tap".to_string(),
@@ -5610,21 +5619,25 @@ Bones: 1
             },
         ];
 
-        let column = itg_receptor_column(
-            &layers,
-            &crate::itg::IniData::default(),
-            || None,
-            || None,
-            || None,
-            |_, _| {},
-            |_| 1.0,
-        )
-        .expect("three-layer receptor should resolve");
+        for key in ["initcommand", "oncommand"] {
+            layers[1].commands =
+                HashMap::from([(key.to_string(), "effectclock,bgm;diffuseshift".to_string())]);
+            let column = itg_receptor_column(
+                &layers,
+                &crate::itg::IniData::default(),
+                || None,
+                || None,
+                || None,
+                |_, _| {},
+                |_| 1.0,
+            )
+            .expect("three-layer receptor should resolve");
 
-        assert_eq!(column.off, Slot(1));
-        assert_eq!(column.idle_glow_layer, Some(Slot(2)));
-        assert_eq!(column.glow, Some(Slot(3)));
-        assert_eq!(column.idle_glow, ReceptorIdleGlow::ActorEffect);
+            assert_eq!(column.off, Slot(1));
+            assert_eq!(column.idle_glow_layer, Some(Slot(2)));
+            assert_eq!(column.glow, Some(Slot(3)));
+            assert_eq!(column.idle_glow, ReceptorIdleGlow::ActorEffect);
+        }
     }
 
     #[test]
