@@ -12482,45 +12482,12 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     }
     let song_foreground_state =
         song_lua_song_foreground_state(state, song_lua_song_foreground_message_state_cache);
-    let p1_proxy_slices = [
-        p1_proxy_sources[0].as_ref().map(PreparedProxySource::view),
-        p1_proxy_sources[1].as_ref().map(PreparedProxySource::view),
-        p1_proxy_sources[2].as_ref().map(PreparedProxySource::view),
-    ];
-    let p2_proxy_slices = [
-        p2_proxy_sources[0].as_ref().map(PreparedProxySource::view),
-        p2_proxy_sources[1].as_ref().map(PreparedProxySource::view),
-        p2_proxy_sources[2].as_ref().map(PreparedProxySource::view),
-    ];
-    let p1_player_proxy_slice = p1_player_proxy_source
-        .as_ref()
-        .map(PreparedProxySource::view);
-    let p2_player_proxy_slice = p2_player_proxy_source
-        .as_ref()
-        .map(PreparedProxySource::view);
     let underlay_proxy_slice = underlay_proxy_source.as_deref();
     let overlay_proxy_slice = overlay_proxy_source.as_deref();
     let proxy_sources = SongLuaScreenProxySources {
-        players: [
-            SongLuaPlayerProxySources {
-                player: p1_player_proxy_slice,
-                direct_player: p1_direct_player.is_some(),
-                note_field: p1_proxy_slices[0],
-                direct_note_field: p1_direct_note_field.is_some(),
-                judgment: p1_proxy_slices[1],
-                combo: p1_proxy_slices[2],
-                direct_combo: p1_direct_combo.is_some(),
-            },
-            SongLuaPlayerProxySources {
-                player: p2_player_proxy_slice,
-                direct_player: p2_direct_player.is_some(),
-                note_field: p2_proxy_slices[0],
-                direct_note_field: p2_direct_note_field.is_some(),
-                judgment: p2_proxy_slices[1],
-                combo: p2_proxy_slices[2],
-                direct_combo: p2_direct_combo.is_some(),
-            },
-        ],
+        // The same prepared views the replacement analysis read; the prepared
+        // sources are not modified in between.
+        players: replacement_proxy_sources,
         direct_players: [p1_direct_player, p2_direct_player],
         direct_note_fields: [p1_direct_note_field, p2_direct_note_field],
         direct_judgments: [p1_direct_judgment, p2_direct_judgment],
