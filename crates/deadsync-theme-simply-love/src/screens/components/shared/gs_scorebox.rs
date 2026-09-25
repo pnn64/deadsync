@@ -1110,8 +1110,8 @@ fn push_rows(
     }
 }
 
-#[must_use]
-pub fn select_music_scorebox_actors(
+pub fn push_select_music_scorebox_actors(
+    actors: &mut Vec<Actor>,
     runtime: &ScoreboxSideView,
     chart_hash: Option<&str>,
     show_scorebox: bool,
@@ -1119,38 +1119,26 @@ pub fn select_music_scorebox_actors(
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
-) -> Vec<Actor> {
+) {
     if !show_scorebox || !runtime.groovestats_active || runtime.chart_hash.as_deref() != chart_hash
     {
-        return Vec::new();
+        return;
     }
     if chart_hash.is_none() {
-        return Vec::new();
+        return;
     }
     let Some(snapshot) = runtime.leaderboards.as_ref() else {
-        return Vec::new();
+        return;
     };
     let panes = select_music_panes_from_snapshot(snapshot, runtime);
-    gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
-}
-
-fn gameplay_scorebox_actors_from_panes(
-    panes: &[GameplayScoreboxPane],
-    center_x: f32,
-    center_y: f32,
-    zoom: f32,
-    elapsed_seconds: f32,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(4 + SCOREBOX_NUM_ENTRIES * 6);
     push_gameplay_scorebox_actors_from_panes(
-        &mut actors,
-        panes,
+        actors,
+        &panes,
         center_x,
         center_y,
         zoom,
         elapsed_seconds,
     );
-    actors
 }
 
 fn push_gameplay_scorebox_actors_from_panes(

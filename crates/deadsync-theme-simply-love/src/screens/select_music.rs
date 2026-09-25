@@ -14005,7 +14005,9 @@ pub fn push_actors(
                     None
                 };
             let runtime = &state.scoreboxes[profile_data::player_side_index(side)];
-            let scorebox = gs_scorebox::select_music_scorebox_actors(
+            let start = actors.len();
+            gs_scorebox::push_select_music_scorebox_actors(
+                actors,
                 runtime,
                 chart_hash,
                 presentation.show_scorebox && scorebox_cycle_enabled,
@@ -14014,16 +14016,15 @@ pub fn push_actors(
                 zoom,
                 state.selection_animation_timer,
             );
-            if z_boost == 0 || scorebox.is_empty() {
-                actors.extend(scorebox);
-            } else {
+            if z_boost != 0 && actors.len() > start {
+                let children = actors.split_off(start);
                 actors.push(Actor::Frame {
                     align: [0.0, 0.0],
                     offset: [0.0, 0.0],
                     size: [SizeSpec::Fill, SizeSpec::Fill],
                     background: None,
                     z: z_boost,
-                    children: scorebox,
+                    children,
                 });
             }
         };
