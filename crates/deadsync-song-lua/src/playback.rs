@@ -3429,63 +3429,87 @@ fn song_lua_proxy_request_analysis_indexed_active<S: NoteskinSlot + Clone>(
 ) -> SongLuaProxyRequestAnalysis {
     let mut analysis = SongLuaProxyRequestAnalysis::default();
     visit_scratch.begin(overlays.len());
-    for &overlay_index in &index.root_indices {
+    // Only root proxies and root AFT sprites contribute. Proxy marks are ORed
+    // and counts saturate, so visiting the two kinds separately is equivalent.
+    for &overlay_index in &index.proxy_indices {
+        if !song_lua_overlay_is_aft_root(index, overlay_index) {
+            continue;
+        }
         let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
             continue;
         };
         if !song_lua_overlay_is_visible(overlay_state) {
             continue;
         }
-        match &overlays[overlay_index].kind {
-            SongLuaOverlayKind::ActorProxy { target } => {
-                song_lua_mark_proxy_target(&mut analysis.all, target);
-                match target {
-                    SongLuaProxyTarget::Player { player_index } => {
-                        if let Some(count) = analysis.root_players.get_mut(*player_index) {
-                            *count = count.saturating_add(1);
-                        }
-                    }
-                    SongLuaProxyTarget::NoteField { player_index } => {
-                        if let Some(count) = analysis.root_note_fields.get_mut(*player_index) {
-                            *count = count.saturating_add(1);
-                        }
-                    }
-                    SongLuaProxyTarget::Judgment { player_index } => {
-                        if let Some(count) = analysis.root_judgments.get_mut(*player_index) {
-                            *count = count.saturating_add(1);
-                        }
-                    }
-                    SongLuaProxyTarget::Combo { player_index } => {
-                        if let Some(count) = analysis.root_combos.get_mut(*player_index) {
-                            *count = count.saturating_add(1);
-                        }
-                    }
-                    _ => {}
+        let SongLuaOverlayKind::ActorProxy { target } = &overlays[overlay_index].kind else {
+            continue;
+        };
+        song_lua_mark_proxy_target(&mut analysis.all, target);
+        match target {
+            SongLuaProxyTarget::Player { player_index } => {
+                if let Some(count) = analysis.root_players.get_mut(*player_index) {
+                    *count = count.saturating_add(1);
                 }
             }
-            SongLuaOverlayKind::AftSprite { .. } => {
-                if let Some(capture_index) = index
-                    .topology
-                    .aft_sprite_targets
-                    .get(overlay_index)
-                    .copied()
-                    .and_then(SongLuaOverlayIndex::get)
-                {
-                    song_lua_collect_capture_requests_indexed(
-                        overlays,
-                        overlay_states,
-                        capture_index,
-                        index,
-                        &mut analysis.captured,
-                        visit_scratch,
-                    );
+            SongLuaProxyTarget::NoteField { player_index } => {
+                if let Some(count) = analysis.root_note_fields.get_mut(*player_index) {
+                    *count = count.saturating_add(1);
+                }
+            }
+            SongLuaProxyTarget::Judgment { player_index } => {
+                if let Some(count) = analysis.root_judgments.get_mut(*player_index) {
+                    *count = count.saturating_add(1);
+                }
+            }
+            SongLuaProxyTarget::Combo { player_index } => {
+                if let Some(count) = analysis.root_combos.get_mut(*player_index) {
+                    *count = count.saturating_add(1);
                 }
             }
             _ => {}
         }
     }
+    for &overlay_index in &index.topology.aft_sprite_indices {
+        if !song_lua_overlay_is_aft_root(index, overlay_index) {
+            continue;
+        }
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+            continue;
+        };
+        if !song_lua_overlay_is_visible(overlay_state) {
+            continue;
+        }
+        if let Some(capture_index) = index
+            .topology
+            .aft_sprite_targets
+            .get(overlay_index)
+            .copied()
+            .and_then(SongLuaOverlayIndex::get)
+        {
+            song_lua_collect_capture_requests_indexed(
+                overlays,
+                overlay_states,
+                capture_index,
+                index,
+                &mut analysis.captured,
+                visit_scratch,
+            );
+        }
+    }
     song_lua_merge_proxy_requests(&mut analysis.all, analysis.captured);
     analysis
+}
+
+/// Whether an overlay draws at the layer root rather than inside an AFT capture.
+#[inline(always)]
+fn song_lua_overlay_is_aft_root(index: &SongLuaProxyRequestIndex, overlay_index: usize) -> bool {
+    index
+        .topology
+        .aft_ancestors
+        .get(overlay_index)
+        .copied()
+        .and_then(SongLuaOverlayIndex::get)
+        .is_none()
 }
 
 fn song_lua_covering_capture_requests<S: NoteskinSlot + Clone>(
@@ -3501,11 +3525,11 @@ fn song_lua_covering_capture_requests<S: NoteskinSlot + Clone>(
         return SongLuaScreenProxyRequests::default();
     }
     let mut requests = SongLuaScreenProxyRequests::default();
-    for &overlay_index in &index.root_indices {
-        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
+    for &overlay_index in &index.topology.aft_sprite_indices {
+        if !song_lua_overlay_is_aft_root(index, overlay_index) {
             continue;
-        };
-        let SongLuaOverlayKind::AftSprite { .. } = &overlays[overlay_index].kind else {
+        }
+        let Some(overlay_state) = overlay_states.get(overlay_index).copied() else {
             continue;
         };
         let Some(capture_index) = index
