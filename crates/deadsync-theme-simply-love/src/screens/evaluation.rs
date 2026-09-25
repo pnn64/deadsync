@@ -7022,7 +7022,8 @@ pub fn push_actors(
         } else {
             &progress_single
         };
-        let mut panels = Vec::with_capacity(progress_players.len());
+        // At most one panel per player, held inline.
+        let mut panels = smallvec::SmallVec::<[_; 2]>::new();
         for &(player_idx, side) in progress_players {
             let Some((progress, page_idx)) = event_progress_page(
                 state.event_progress[player_idx].as_slice(),
