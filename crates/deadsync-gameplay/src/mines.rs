@@ -686,17 +686,3 @@ pub fn track_held_misses_at_note_time_for_players(
     }
     HeldMissTrackingUpdate { players_scanned }
 }
-
-#[inline(always)]
-#[must_use]
-pub const fn collect_edge_judge_indices(
-    row_note_count: usize,
-    lead_note_index: usize,
-) -> Option<([usize; MAX_COLS], usize)> {
-    if row_note_count == 0 {
-        return None;
-    }
-    let mut judge_indices = [usize::MAX; MAX_COLS];
-    judge_indices[0] = lead_note_index;
-    Some((judge_indices, 1))
-}

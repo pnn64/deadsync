@@ -2346,50 +2346,8 @@ where
                     );
                     return true;
                 }
-
-                log_tap_judge_candidate(
-                    input_log,
-                    "hit",
-                    player,
-                    column,
-                    current_row_index,
-                    current_time_ns,
-                    note_index,
-                    &self.chart_runtime.notes[note_index],
-                    self.chart_runtime.note_time_cache_ns[note_index],
-                    rate,
-                );
-                let hit_plan = self.build_final_note_hit_plan(player, hit, rate);
-                let judgment = hit_plan.judgment;
-                self.set_final_note_result(note_index, judgment);
-
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    hit.grade,
-                    note_row_index,
-                    note_col,
-                    self.chart_runtime.notes[note_index].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    hit.note_time_ns,
-                    hit_plan.judgment_event_time_ns,
-                    self.current_music_time_seconds(),
-                    rate,
-                    lead_in_s,
-                );
-
-                self.trigger_completed_row_tap_explosions(player, note_index);
-                if let Some(window_key) = hit_plan.receptor_window {
-                    self.trigger_receptor_score_pulse(note_col, window_key);
-                }
-                self.start_active_hold_for_hit(note_index, note_col, hit, current_time_ns);
-                return true;
-            }
-
-            let Some((judge_indices, judge_count)) =
-                collect_edge_judge_indices(row_note_count, note_index)
-            else {
+                // FinalSingleTrackHit is judged below like any other lead note.
+            } else if row_note_count == 0 {
                 log_tap_judge_candidate(
                     input_log,
                     "no_row_judge_indices",
@@ -2403,80 +2361,46 @@ where
                     rate,
                 );
                 return false;
-            };
-
-            for &idx in &judge_indices[..judge_count] {
-                let note_col = self.chart_runtime.notes[idx].column;
-                let Some(mut hit) = self.note_hit_eval(
-                    player,
-                    self.chart_runtime.note_time_cache_ns[idx],
-                    current_time_ns,
-                ) else {
-                    log_tap_judge_candidate(
-                        input_log,
-                        "row_sibling_outside_tap_window",
-                        player,
-                        column,
-                        current_row_index,
-                        current_time_ns,
-                        idx,
-                        &self.chart_runtime.notes[idx],
-                        self.chart_runtime.note_time_cache_ns[idx],
-                        rate,
-                    );
-                    continue;
-                };
-                if self.setup.session.play_style.is_pump()
-                    && matches!(
-                        self.chart_runtime.notes[idx].note_type,
-                        NoteType::Hold | NoteType::Roll
-                    )
-                    && let Some(max_hit) = self.note_hit_eval(
-                        player,
-                        self.chart_runtime.note_time_cache_ns[idx],
-                        self.chart_runtime.note_time_cache_ns[idx],
-                    )
-                {
-                    hit = max_hit;
-                }
-                log_tap_judge_candidate(
-                    input_log,
-                    "hit",
-                    player,
-                    column,
-                    current_row_index,
-                    current_time_ns,
-                    idx,
-                    &self.chart_runtime.notes[idx],
-                    self.chart_runtime.note_time_cache_ns[idx],
-                    rate,
-                );
-                let hit_plan = self.build_final_note_hit_plan(player, hit, rate);
-                let judgment = hit_plan.judgment;
-                self.set_final_note_result(idx, judgment);
-
-                log_timing_hit_detail(
-                    timing_hit_log,
-                    stream_pos_s,
-                    hit.grade,
-                    note_row_index,
-                    note_col,
-                    self.chart_runtime.notes[idx].beat,
-                    song_offset_s,
-                    global_offset_s,
-                    hit.note_time_ns,
-                    hit_plan.judgment_event_time_ns,
-                    self.current_music_time_seconds(),
-                    rate,
-                    lead_in_s,
-                );
-
-                self.trigger_completed_row_tap_explosions(player, idx);
-                if let Some(window_key) = hit_plan.receptor_window {
-                    self.trigger_receptor_score_pulse(note_col, window_key);
-                }
-                self.start_active_hold_for_hit(idx, note_col, hit, current_time_ns);
             }
+
+            let note_col = self.chart_runtime.notes[note_index].column;
+            log_tap_judge_candidate(
+                input_log,
+                "hit",
+                player,
+                column,
+                current_row_index,
+                current_time_ns,
+                note_index,
+                &self.chart_runtime.notes[note_index],
+                self.chart_runtime.note_time_cache_ns[note_index],
+                rate,
+            );
+            let hit_plan = self.build_final_note_hit_plan(player, hit, rate);
+            let judgment = hit_plan.judgment;
+            self.set_final_note_result(note_index, judgment);
+
+            log_timing_hit_detail(
+                timing_hit_log,
+                stream_pos_s,
+                hit.grade,
+                note_row_index,
+                note_col,
+                self.chart_runtime.notes[note_index].beat,
+                song_offset_s,
+                global_offset_s,
+                hit.note_time_ns,
+                hit_plan.judgment_event_time_ns,
+                self.current_music_time_seconds(),
+                rate,
+                lead_in_s,
+            );
+
+            self.trigger_completed_row_tap_explosions(player, note_index);
+            if let Some(window_key) = hit_plan.receptor_window {
+                self.trigger_receptor_score_pulse(note_col, window_key);
+            }
+            self.start_active_hold_for_hit(note_index, note_col, hit, current_time_ns);
             return true;
         }
         if input_log {

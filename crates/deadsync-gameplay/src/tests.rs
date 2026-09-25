@@ -17881,16 +17881,6 @@ mod tests {
     }
 
     #[test]
-    fn edge_judge_indices_use_lead_note_only() {
-        assert_eq!(collect_edge_judge_indices(0, 7), None);
-
-        let (indices, count) = collect_edge_judge_indices(3, 7).expect("row has notes");
-        assert_eq!(count, 1);
-        assert_eq!(indices[0], 7);
-        assert!(indices[1..].iter().all(|index| *index == usize::MAX));
-    }
-
-    #[test]
     fn quantization_index_matches_note_row_subdivision() {
         assert_eq!(quantization_index_from_beat(0.0), QUANT_4TH);
         assert_eq!(quantization_index_from_beat(0.5), QUANT_8TH);
