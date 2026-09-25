@@ -91,7 +91,7 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
         ));
         out.push(act!(text:
             font("miso"):
-            settext(label.clone()):
+            settext(label):
             align(0.0, 0.5):
             xy(pane_cx + l.cols[c] + 3.0, l.pane_top + l.rows[r]):
             zoom(l.text_zoom):
