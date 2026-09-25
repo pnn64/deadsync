@@ -470,17 +470,26 @@ fn sync_i18n_cache(state: &State) {
 
 #[inline(always)]
 fn menu_info_text(state: &State, update_banner_tag: Option<&str>) -> Arc<str> {
-    let key = InfoTextKey {
-        banner_tag: update_banner_tag.map(str::to_owned),
-        song_count: state.runtime_view.song_count,
-        pack_count: state.runtime_view.pack_count,
-        course_count: state.runtime_view.course_count,
-    };
+    let (song_count, pack_count, course_count) = (
+        state.runtime_view.song_count,
+        state.runtime_view.pack_count,
+        state.runtime_view.course_count,
+    );
+    // Compare against the cached key without copying the banner tag.
     if let Some((cached_key, text)) = state.info_text_cache.borrow().as_ref()
-        && cached_key == &key
+        && cached_key.banner_tag.as_deref() == update_banner_tag
+        && cached_key.song_count == song_count
+        && cached_key.pack_count == pack_count
+        && cached_key.course_count == course_count
     {
         return text.clone();
     }
+    let key = InfoTextKey {
+        banner_tag: update_banner_tag.map(str::to_owned),
+        song_count,
+        pack_count,
+        course_count,
+    };
 
     let version = deadsync_version::current().to_string();
     let mut version_line = tr_fmt("Menu", "VersionLine", &[("version", &version)]).to_string();
