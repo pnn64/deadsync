@@ -33,33 +33,29 @@ pub fn push(
         .avatar_texture_key
         .map(|texture_key| AvatarParams { texture_key });
 
-    let insert_card = tr("Common", "InsertCard");
-    let press_start = tr("Common", "PressStart");
+    // Resolve only the footer labels a side will show.
+    let insert_card =
+        ((p1.joined && p1.guest) || (p2.joined && p2.guest)).then(|| tr("Common", "InsertCard"));
+    let press_start = (!p1.joined || !p2.joined).then(|| tr("Common", "PressStart"));
     let event_mode = tr("Common", "EventMode");
 
     let (footer_left, left_avatar) = if p1.joined {
-        (
-            Some(if p1.guest {
-                insert_card.as_ref()
-            } else {
-                p1.display_name
-            }),
-            if p1.guest { None } else { p1_avatar },
-        )
+        if p1.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p1.display_name), p1_avatar)
+        }
     } else {
-        (Some(press_start.as_ref()), None)
+        (press_start.as_deref(), None)
     };
     let (footer_right, right_avatar) = if p2.joined {
-        (
-            Some(if p2.guest {
-                insert_card.as_ref()
-            } else {
-                p2.display_name
-            }),
-            if p2.guest { None } else { p2_avatar },
-        )
+        if p2.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p2.display_name), p2_avatar)
+        }
     } else {
-        (Some(press_start.as_ref()), None)
+        (press_start.as_deref(), None)
     };
 
     out.push(screen_bar::build_select_music(ScreenBarParams {
