@@ -6929,29 +6929,25 @@ pub fn push_actors(
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let insert_card = tr("Common", "InsertCard");
+    // Only guest footers show this label.
+    let insert_card =
+        ((p1.joined && p1.guest) || (p2.joined && p2.guest)).then(|| tr("Common", "InsertCard"));
 
     let (p1_footer_text, p1_footer_avatar) = if p1.joined {
-        (
-            Some(if p1.guest {
-                insert_card.as_ref()
-            } else {
-                p1.display_name.as_str()
-            }),
-            if p1.guest { None } else { p1_avatar },
-        )
+        if p1.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p1.display_name.as_str()), p1_avatar)
+        }
     } else {
         (None, None)
     };
     let (p2_footer_text, p2_footer_avatar) = if p2.joined {
-        (
-            Some(if p2.guest {
-                insert_card.as_ref()
-            } else {
-                p2.display_name.as_str()
-            }),
-            if p2.guest { None } else { p2_avatar },
-        )
+        if p2.guest {
+            (insert_card.as_deref(), None)
+        } else {
+            (Some(p2.display_name.as_str()), p2_avatar)
+        }
     } else {
         (None, None)
     };
