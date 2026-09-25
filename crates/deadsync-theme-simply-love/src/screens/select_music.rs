@@ -12888,8 +12888,10 @@ pub fn push_actors(
     let preferred_idx_p1 = state
         .preferred_difficulty_index
         .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-    let mut sel_col_p1 = color::difficulty_rgba_with_scheme(
-        STANDARD_DIFFICULTY_NAMES[preferred_idx_p1],
+    let sel_col_p1 = color::difficulty_rgba_with_scheme(
+        immediate_chart_p1.map_or(STANDARD_DIFFICULTY_NAMES[preferred_idx_p1], |chart| {
+            chart.difficulty.as_str()
+        }),
         state.active_color_index,
         presentation.difficulty_color_scheme,
     );
@@ -12897,25 +12899,13 @@ pub fn push_actors(
     let preferred_idx_p2 = state
         .p2_preferred_difficulty_index
         .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-    let mut sel_col_p2 = color::difficulty_rgba_with_scheme(
-        STANDARD_DIFFICULTY_NAMES[preferred_idx_p2],
+    let sel_col_p2 = color::difficulty_rgba_with_scheme(
+        immediate_chart_p2.map_or(STANDARD_DIFFICULTY_NAMES[preferred_idx_p2], |chart| {
+            chart.difficulty.as_str()
+        }),
         state.active_color_index,
         presentation.difficulty_color_scheme,
     );
-    if let Some(chart) = immediate_chart_p1 {
-        sel_col_p1 = color::difficulty_rgba_with_scheme(
-            &chart.difficulty,
-            state.active_color_index,
-            presentation.difficulty_color_scheme,
-        );
-    }
-    if let Some(chart) = immediate_chart_p2 {
-        sel_col_p2 = color::difficulty_rgba_with_scheme(
-            &chart.difficulty,
-            state.active_color_index,
-            presentation.difficulty_color_scheme,
-        );
-    }
 
     // Timer (zmod parity: optional gameplay timer to the right of session timer).
     actors.push(timers::build_session(
