@@ -10687,6 +10687,10 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
         let z = song_lua_depth.draw_z(draw_idx);
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
+                // Effects never change visibility, and hidden proxies draw nothing.
+                if !overlay_state.visible {
+                    continue;
+                }
                 let overlay_state =
                     song_lua_proxy_effect(overlay_state, effect_time, effect_beat, idx as u32);
                 if let Some((player_index, sources)) =
