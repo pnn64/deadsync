@@ -18,6 +18,7 @@ struct Registry {
     indices: TweenIndex,
     entries: Vec<Entry>,
     frame: u64,
+    // Entries before this cursor were seen this frame; the rest are unseen.
     materialize_cursor: usize,
 }
 
@@ -98,11 +99,6 @@ thread_local! {
     static REG: RefCell<Registry> = RefCell::new(Registry::default());
 }
 
-#[inline(always)]
-const fn seen_recently(last_seen_frame: u64, frame: u64) -> bool {
-    frame.wrapping_sub(last_seen_frame) <= 1
-}
-
 /// Advance all tweens once per frame and GC unseen actors from the previous frame.
 /// # Panics
 ///
@@ -110,27 +106,20 @@ const fn seen_recently(last_seen_frame: u64, frame: u64) -> bool {
 pub fn tick(dt: f32) {
     REG.with(|r| {
         let mut r = r.borrow_mut();
-        let frame = r.frame.wrapping_add(1);
-        r.frame = frame;
+        r.frame = r.frame.wrapping_add(1);
+        let seen = r.materialize_cursor;
         r.materialize_cursor = 0;
 
-        // Tween programs are already stored densely in their observed render
-        // order, so the common path advances them without a hash lookup.
-        let mut index = 0;
-        while index < r.entries.len() {
-            if seen_recently(r.entries[index].last_seen_frame, frame) {
-                r.entries[index].seq.update(dt);
-                index += 1;
-                continue;
-            }
-
-            let removed = r.entries.swap_remove(index);
-            r.indices.remove(&removed.id);
-            if let Some(moved_id) = r.entries.get(index).map(|entry| entry.id) {
-                *r.indices
-                    .get_mut(&moved_id)
-                    .expect("moved tween must have an index") = index;
-            }
+        // Materialization already partitions the registry: advance the seen
+        // prefix, then drop the unseen suffix without moving surviving entries.
+        let Registry {
+            entries, indices, ..
+        } = &mut *r;
+        for entry in &mut entries[..seen] {
+            entry.seq.update(dt);
+        }
+        for entry in entries.drain(seen..) {
+            indices.remove(&entry.id);
         }
     });
 }
@@ -302,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn stale_removal_repairs_swapped_entry_index() {
+    fn stale_suffix_removal_preserves_retained_entry_index() {
         reset_registry(0);
         let steps = [anim::linear(10.0).x(30.0).build()];
         let _ = materialize(1, TweenState::default(), &steps);
