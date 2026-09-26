@@ -180,8 +180,13 @@ pub fn write_resampler_output(
     resize_output(out_tmp, produced_samples);
     // Output channel `c` reads source channel `c % out.len()`.
     for (frame, output) in out_tmp.chunks_exact_mut(out_ch).enumerate() {
-        for (dst, source) in output.iter_mut().zip(out.iter().cycle()) {
+        let (converted, repeated) = output.split_at_mut(out.len().min(out_ch));
+        for (dst, source) in converted.iter_mut().zip(out) {
             *dst = sample_to_i16(source[frame]);
+        }
+        // Extra channels reuse this frame's PCM instead of converting it again.
+        for (dst, &sample) in repeated.iter_mut().zip(converted.iter().cycle()) {
+            *dst = sample;
         }
     }
     produced_frames
