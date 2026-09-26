@@ -106,7 +106,13 @@ impl MusicBlockWriter {
     /// A return value of zero is backpressure; the caller may sleep and retry.
     pub fn try_push(&mut self, samples: &[i16], timing: MusicBlockTiming) -> usize {
         let channels = self.channels;
-        let sample_len = samples.len().min(MUSIC_BLOCK_FRAMES * channels) / channels * channels;
+        let block_samples = MUSIC_BLOCK_FRAMES * channels;
+        // A full block already contains a whole number of device frames.
+        let sample_len = if samples.len() >= block_samples {
+            block_samples
+        } else {
+            samples.len() / channels * channels
+        };
         if sample_len == 0 {
             return 0;
         }
