@@ -6,7 +6,9 @@ use deadlib_render_core::{
     BlendMode, DrawOp, ProjectionMatrix, RenderFrame, SamplerDesc, TexturedMeshGeometry,
     TexturedMeshVertices,
 };
+use glow::HasContext;
 use image::{Rgba, RgbaImage};
+use std::hint::black_box;
 use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize, event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,
@@ -16,6 +18,10 @@ use winit::{
 #[allow(dead_code)]
 #[path = "../../../tests/support/draw_batching.rs"]
 mod fixtures;
+
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
 
 struct TestTexture(Texture);
 
@@ -112,6 +118,7 @@ fn interleaved_vertex_buffers_preserve_pixels() {
     });
     let textures = TestTexture(create_texture(&state, &image, SamplerDesc::default()).unwrap());
     let mut cases = 0;
+    let mut snapshot_hash = 0xcbf2_9ce4_8422_2325u64;
     for base_instance in [true, false] {
         if base_instance && !supports_base_instance {
             continue;
@@ -143,6 +150,10 @@ fn interleaved_vertex_buffers_preserve_pixels() {
                                 actual.as_raw() == expected.as_raw(),
                                 "base_instance={base_instance} storage={storage} blend={blend:?} depth={depth} glow={glow} target_alpha={target_alpha:?}"
                             );
+                            for &byte in actual.as_raw() {
+                                snapshot_hash ^= u64::from(byte);
+                                snapshot_hash = snapshot_hash.wrapping_mul(0x0100_0000_01b3);
+                            }
                             cases += 1;
                         }
                     }
@@ -153,4 +164,108 @@ fn interleaved_vertex_buffers_preserve_pixels() {
     delete_texture(&state, &textures.0);
     cleanup(&mut state);
     eprintln!("{cases} interleaved vertex-buffer pixel comparisons passed");
+    eprintln!("pixel snapshot FNV-1a: {snapshot_hash:016x}");
+}
+
+// Frozen camera selection and upload from 73cf2f40c. The driver's arguments
+// and the current implementation are otherwise identical.
+unsafe fn upload_camera_before(
+    gl: &glow::Context,
+    location: &glow::UniformLocation,
+    cameras: &[ProjectionMatrix],
+    fallback: &ProjectionMatrix,
+    camera: u8,
+) {
+    let matrix = cameras.get(camera as usize).copied().unwrap_or(*fallback);
+    let columns = matrix.to_cols_array_2d();
+    // SAFETY: the benchmark owns the current context and its uniform location.
+    unsafe {
+        gl.uniform_matrix_4_f32_slice(Some(location), false, bytemuck::cast_slice(&columns));
+    }
+}
+
+unsafe fn upload_camera_after(
+    gl: &glow::Context,
+    location: &glow::UniformLocation,
+    cameras: &[ProjectionMatrix],
+    fallback: &ProjectionMatrix,
+    camera: u8,
+) {
+    // SAFETY: the benchmark owns the current context and its uniform location.
+    unsafe {
+        gl.uniform_matrix_4_f32_slice(
+            Some(location),
+            false,
+            super::camera_uniform(cameras, fallback, camera),
+        );
+    }
+}
+
+#[test]
+#[ignore = "manual release benchmark with a current OpenGL context; --ignored --nocapture --test-threads=1"]
+fn benchmark_camera_uniform_upload() {
+    let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
+    #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+    let window = Arc::new(
+        event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(PhysicalSize::new(96, 96)),
+            )
+            .unwrap(),
+    );
+    let mut state = init(window, ProjectionMatrix::IDENTITY, false, true, true).unwrap();
+    let reverse = std::env::var_os("DEADSYNC_PERF_REVERSE").is_some();
+    let matrices: Vec<_> = (0..8)
+        .map(|index| {
+            ProjectionMatrix::from_translation(glam::Vec3::new(index as f32 * 0.125, 0.0, 0.0))
+                * ProjectionMatrix::from_rotation_z(index as f32 * 0.0625)
+        })
+        .collect();
+    let indices: [u8; 256] = std::array::from_fn(|index| (index % 8) as u8);
+    type Upload = unsafe fn(
+        &glow::Context,
+        &glow::UniformLocation,
+        &[ProjectionMatrix],
+        &ProjectionMatrix,
+        u8,
+    );
+    let variants: [(&str, Upload); 2] = [
+        ("before", upload_camera_before),
+        ("after", upload_camera_after),
+    ];
+    // SAFETY: init made this context current on the benchmark thread; the
+    // selected program and location belong to it. No rendering is submitted.
+    unsafe {
+        eprintln!(
+            "OpenGL renderer: {}",
+            state.gl.get_parameter_string(glow::RENDERER)
+        );
+        eprintln!(
+            "OpenGL version: {}",
+            state.gl.get_parameter_string(glow::VERSION)
+        );
+        state.gl.use_program(Some(state.program));
+        for (name, count) in [("valid", 8), ("fallback", 0), ("mixed", 4)] {
+            let cameras = &matrices[..count];
+            for variant in if reverse { [1, 0] } else { [0, 1] } {
+                let (label, upload) = variants[variant];
+                let upload = black_box(upload);
+                perf::measure_sampled(&format!("{name}/{label}"), 8192, indices.len(), || {
+                    for &index in black_box(&indices) {
+                        upload(
+                            &state.gl,
+                            &state.mvp_location,
+                            black_box(cameras),
+                            black_box(&state.projection),
+                            index,
+                        );
+                    }
+                });
+            }
+        }
+        assert_eq!(state.gl.get_error(), glow::NO_ERROR);
+    }
+    cleanup(&mut state);
 }

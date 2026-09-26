@@ -1399,6 +1399,11 @@ pub const fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
 }
 
+#[inline(always)]
+fn camera_uniform<'a>(cameras: &'a [Matrix4], fallback: &'a Matrix4, camera: u8) -> &'a [f32; 16] {
+    cameras.get(camera as usize).unwrap_or(fallback).as_ref()
+}
+
 fn draw_modern_offscreen_pass(
     state: &State,
     frame: &deadlib_render_core::RenderTargetFrame,
@@ -2280,16 +2285,10 @@ pub fn draw(
                         }
 
                         if last_cameras[0].update_required(run.camera) {
-                            let cam = frame
-                                .cameras
-                                .get(run.camera as usize)
-                                .copied()
-                                .unwrap_or(state.projection);
-                            let mvp_array = cam.to_cols_array_2d();
                             gl.uniform_matrix_4_f32_slice(
                                 Some(&state.mvp_location),
                                 false,
-                                bytemuck::cast_slice(&mvp_array),
+                                camera_uniform(&frame.cameras, &state.projection, run.camera),
                             );
                         }
 
@@ -2340,16 +2339,10 @@ pub fn draw(
                         }
 
                         if last_cameras[1].update_required(run.camera) {
-                            let cam = frame
-                                .cameras
-                                .get(run.camera as usize)
-                                .copied()
-                                .unwrap_or(state.projection);
-                            let mvp_array = cam.to_cols_array_2d();
                             gl.uniform_matrix_4_f32_slice(
                                 Some(&state.mesh_mvp_location),
                                 false,
-                                bytemuck::cast_slice(&mvp_array),
+                                camera_uniform(&frame.cameras, &state.projection, run.camera),
                             );
                         }
 
@@ -2499,16 +2492,10 @@ pub fn draw(
                         }
 
                         if last_cameras[2].update_required(run.camera) {
-                            let cam = frame
-                                .cameras
-                                .get(run.camera as usize)
-                                .copied()
-                                .unwrap_or(state.projection);
-                            let mvp_array = cam.to_cols_array_2d();
                             gl.uniform_matrix_4_f32_slice(
                                 Some(&state.tmesh_mvp_location),
                                 false,
-                                bytemuck::cast_slice(&mvp_array),
+                                camera_uniform(&frame.cameras, &state.projection, run.camera),
                             );
                         }
 
@@ -2583,16 +2570,10 @@ pub fn draw(
                         }
 
                         if last_cameras[0].update_required(run.camera) {
-                            let cam = frame
-                                .cameras
-                                .get(run.camera as usize)
-                                .copied()
-                                .unwrap_or(state.projection);
-                            let mvp_array = cam.to_cols_array_2d();
                             gl.uniform_matrix_4_f32_slice(
                                 Some(&state.mvp_location),
                                 false,
-                                bytemuck::cast_slice(&mvp_array),
+                                camera_uniform(&frame.cameras, &state.projection, run.camera),
                             );
                         }
 
@@ -2706,16 +2687,10 @@ pub fn draw(
                         }
 
                         if last_cameras[1].update_required(run.camera) {
-                            let cam = frame
-                                .cameras
-                                .get(run.camera as usize)
-                                .copied()
-                                .unwrap_or(state.projection);
-                            let mvp_array = cam.to_cols_array_2d();
                             gl.uniform_matrix_4_f32_slice(
                                 Some(&state.mesh_mvp_location),
                                 false,
-                                bytemuck::cast_slice(&mvp_array),
+                                camera_uniform(&frame.cameras, &state.projection, run.camera),
                             );
                         }
 
@@ -2786,16 +2761,10 @@ pub fn draw(
                         }
 
                         if last_cameras[2].update_required(run.camera) {
-                            let cam = frame
-                                .cameras
-                                .get(run.camera as usize)
-                                .copied()
-                                .unwrap_or(state.projection);
-                            let mvp_array = cam.to_cols_array_2d();
                             gl.uniform_matrix_4_f32_slice(
                                 Some(&state.tmesh_mvp_location),
                                 false,
-                                bytemuck::cast_slice(&mvp_array),
+                                camera_uniform(&frame.cameras, &state.projection, run.camera),
                             );
                         }
 
@@ -3530,6 +3499,38 @@ mod tests {
         assert_eq!(surface_extent(0, 0).1.get(), 1);
         assert_eq!(surface_extent(1920, 1080).0.get(), 1920);
         assert_eq!(surface_extent(1920, 1080).1.get(), 1080);
+    }
+
+    #[test]
+    fn camera_uniform_preserves_column_bits_and_borrows_selected_storage() {
+        use glam::Mat4;
+        let mut seed = 0x1234_5678u32;
+        let columns: Vec<[f32; 16]> = (0..257)
+            .map(|_| {
+                std::array::from_fn(|_| {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    f32::from_bits(seed)
+                })
+            })
+            .collect();
+        let matrices: Vec<_> = columns.iter().map(Mat4::from_cols_array).collect();
+        for fallback_bits in [0x8000_0000, 0x7f80_0000, 0xff80_0000, 0x7fc1_2345] {
+            let fallback_columns = [f32::from_bits(fallback_bits); 16];
+            let fallback = Mat4::from_cols_array(&fallback_columns);
+            for count in [0, 1, 3, 8, 256, 257] {
+                let cameras = &matrices[..count];
+                for index in 0..=u8::MAX {
+                    let actual = super::camera_uniform(cameras, &fallback, index);
+                    let expected = columns[..count]
+                        .get(index as usize)
+                        .unwrap_or(&fallback_columns);
+                    assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
+                    let selected: &[f32; 16] =
+                        cameras.get(index as usize).unwrap_or(&fallback).as_ref();
+                    assert_eq!(actual.as_ptr(), selected.as_ptr());
+                }
+            }
+        }
     }
 
     #[test]
