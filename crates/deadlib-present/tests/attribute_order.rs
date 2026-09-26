@@ -19,4 +19,8 @@ pub mod compose {
     mod attribute_order {
         include!("attribute_order/cases.rs");
     }
+
+    mod attribute_expiry {
+        include!("attribute_expiry/cases.rs");
+    }
 }

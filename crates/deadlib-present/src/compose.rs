@@ -4347,19 +4347,31 @@ impl<'a> TextAttrCursor<'a> {
             return;
         };
         self.scratch.active.swap_remove(index);
-        if self.active_max == Some(attr_index) {
-            self.active_max = self.scratch.active.iter().copied().max();
-        }
     }
 
     #[inline(always)]
     fn colors_for(&mut self, char_index: usize) -> [[f32; 4]; 4] {
-        while self.next_end < self.scratch.end_order.len()
+        if self.next_end < self.scratch.end_order.len()
             && attr_end(&self.attributes[self.scratch.end_order[self.next_end]]) <= char_index
         {
-            let attr_index = self.scratch.end_order[self.next_end];
-            self.remove_active(attr_index);
-            self.next_end += 1;
+            loop {
+                let attr_index = self.scratch.end_order[self.next_end];
+                self.remove_active(attr_index);
+                self.next_end += 1;
+                if self.next_end == self.scratch.end_order.len()
+                    || attr_end(&self.attributes[self.scratch.end_order[self.next_end]])
+                        > char_index
+                {
+                    break;
+                }
+            }
+            // Intermediate winners are never observed while expiring a group.
+            if self
+                .active_max
+                .is_some_and(|index| attr_end(&self.attributes[index]) <= char_index)
+            {
+                self.active_max = self.scratch.active.iter().copied().max();
+            }
         }
 
         while self.next_start < self.scratch.start_order.len()
