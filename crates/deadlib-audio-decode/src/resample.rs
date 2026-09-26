@@ -330,11 +330,11 @@ pub fn apply_fade_envelope(
         return;
     }
     let frames_f = frames as f32;
+    // Both endpoints and t are in [0, 1], so the fused interpolation stays in
+    // that range without another clamp for every frame.
     for (frame, samples) in samples.chunks_exact_mut(channels).enumerate() {
         let t = frame as f32 / frames_f;
-        let volume = (end_volume - start_volume)
-            .mul_add(t, start_volume)
-            .clamp(0.0, 1.0);
+        let volume = (end_volume - start_volume).mul_add(t, start_volume);
         if (volume - 1.0).abs() < 0.0001 {
             continue;
         }
