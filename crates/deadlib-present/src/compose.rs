@@ -1800,19 +1800,22 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 cursor = cursor.saturating_add(instance_count as usize);
             }
             DrawKind::Mesh => {
-                let MeshPayload {
-                    transform,
-                    tint,
-                    vertices,
-                } = builder.meshes[item.payload_index as usize]
-                    .take()
+                // The final builder.clear() releases all copied mesh sources.
+                let payload = builder.meshes[item.payload_index as usize]
+                    .as_ref()
                     .expect("draw item references live mesh payload");
-                if vertices.is_empty() {
+                if payload.vertices.is_empty() {
                     cursor += 1;
                     continue;
                 }
                 let vertex_start = saturating_u32(mesh_vertices.len());
-                append_mesh_vertices(mesh_vertices, &transform, tint, vertices.as_ref());
+                let transform = payload.transform;
+                append_mesh_vertices(
+                    mesh_vertices,
+                    &transform,
+                    payload.tint,
+                    payload.vertices.as_ref(),
+                );
                 let mut object_count = 1usize;
                 while let Some(next) = builder.items.get(cursor + object_count).copied() {
                     // A layer boundary restarts triangle assembly if the preceding
