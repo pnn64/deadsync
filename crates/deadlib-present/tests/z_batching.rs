@@ -21,4 +21,8 @@ pub mod compose {
     mod z_batching {
         include!("z_batching/cases.rs");
     }
+
+    mod draw_order_recheck {
+        include!("draw_order_recheck/cases.rs");
+    }
 }

@@ -2029,19 +2029,15 @@ fn sort_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
 
     let mut min_z = objects[0].z;
     let mut max_z = min_z;
+    // Composition already checked full (z, order) sortedness. Only Z ordering
+    // is needed here to choose between comparison and bucket sorting.
     let mut sorted_by_z = true;
-    let mut sorted_by_key = true;
-    let mut prev_key = (min_z, objects[0].order);
+    let mut prev_z = min_z;
     for object in &objects[1..] {
-        let key = (object.z, object.order);
-        sorted_by_z &= prev_key.0 <= object.z;
-        sorted_by_key &= prev_key <= key;
+        sorted_by_z &= prev_z <= object.z;
         min_z = min_z.min(object.z);
         max_z = max_z.max(object.z);
-        prev_key = key;
-    }
-    if sorted_by_key {
-        return;
+        prev_z = object.z;
     }
     if sorted_by_z {
         objects.sort_unstable_by_key(|object| (object.z, object.order));
