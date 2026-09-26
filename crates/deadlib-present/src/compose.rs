@@ -4313,8 +4313,10 @@ impl<'a> TextAttrCursor<'a> {
         start_order.extend(0..attributes.len());
         end_order.extend(0..attributes.len());
 
-        start_order.sort_unstable_by_key(|&index| (attributes[index].start, index));
-        end_order.sort_unstable_by_key(|&index| (attr_end(&attributes[index]), index));
+        // Equal-boundary events are consumed together; active_max preserves
+        // original attribute precedence independently of their event order.
+        start_order.sort_unstable_by_key(|&index| attributes[index].start);
+        end_order.sort_unstable_by_key(|&index| attr_end(&attributes[index]));
 
         Some(Self {
             attributes,
