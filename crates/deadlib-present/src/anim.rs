@@ -1003,8 +1003,8 @@ impl RuntimeSegment {
 
         self.elapsed = (self.elapsed + dt).min(self.dur);
 
-        // The caller finalizes completed segments after taking them out of
-        // `current`, so avoid applying the same endpoint twice here.
+        // The caller finalizes completed segments, so avoid applying the same
+        // endpoint twice here.
         if self.elapsed >= self.dur {
             return true;
         }
@@ -1419,11 +1419,11 @@ impl TweenSeq {
             }
             // Only completed steps pass unused time to the next queued step.
             dt -= (seg.elapsed - before).max(0.0);
-            let seg = self.current.take().unwrap();
             // Snap to exact targets. Sleeps have no prepared operations.
             for p in &seg.prepared {
                 p.apply_final(&mut self.state);
             }
+            self.current = None;
         }
     }
 }
