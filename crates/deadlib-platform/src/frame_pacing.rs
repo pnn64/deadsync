@@ -41,6 +41,12 @@ pub fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Durati
     if step_ns == 0 {
         return now;
     }
+    // Normal redraws advance by one interval; only missed frames need division.
+    if let Some(next) = deadline.checked_add(interval)
+        && next > now
+    {
+        return next;
+    }
     let overdue_ns = now.duration_since(deadline).as_nanos();
     let steps = overdue_ns / step_ns + 1;
     if steps <= u128::from(u32::MAX)
