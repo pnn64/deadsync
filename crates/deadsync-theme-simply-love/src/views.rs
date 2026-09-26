@@ -59,7 +59,7 @@ impl<'a> PostSelectStageView<'a> {
 }
 
 /// Shell-prepared visual policy shared by screen backgrounds and screen bars.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct SimplyLoveVisualPolicyView {
     pub background: VisualBackgroundView,
     pub assets: &'static crate::visual_styles::Assets,
@@ -67,6 +67,20 @@ pub struct SimplyLoveVisualPolicyView {
     pub title_logo_texture_key: Option<&'static str>,
     pub srpg10_tint: bool,
     pub screen_bar: ScreenBarBackgroundView,
+}
+
+impl PartialEq for SimplyLoveVisualPolicyView {
+    /// Same fields and order as a derived comparison. Style assets come from a
+    /// static table, so frame caches usually match by pointer before comparing
+    /// every asset path.
+    fn eq(&self, other: &Self) -> bool {
+        self.background == other.background
+            && (std::ptr::eq(self.assets, other.assets) || self.assets == other.assets)
+            && self.machine_font == other.machine_font
+            && self.title_logo_texture_key == other.title_logo_texture_key
+            && self.srpg10_tint == other.srpg10_tint
+            && self.screen_bar == other.screen_bar
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
