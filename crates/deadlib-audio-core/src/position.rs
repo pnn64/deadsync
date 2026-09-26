@@ -513,16 +513,18 @@ impl PlaybackPosMap {
                 break;
             };
             let excess = self.backlog_frames - MUSIC_POS_MAP_BACKLOG_FRAMES;
-            let drop = excess.min(front.frames);
-            front.stream_frame_start += drop;
+            if excess >= front.frames {
+                // Fully expired segments need no timestamp adjustment.
+                self.backlog_frames -= front.frames;
+                self.queue.pop_front();
+                continue;
+            }
+            front.stream_frame_start += excess;
             front.music_start_sec = front
                 .music_sec_per_frame
-                .mul_add(drop as f64, front.music_start_sec);
-            front.frames -= drop;
-            self.backlog_frames -= drop;
-            if front.frames <= 0 {
-                self.queue.pop_front();
-            }
+                .mul_add(excess as f64, front.music_start_sec);
+            front.frames -= excess;
+            self.backlog_frames -= excess;
         }
     }
 
