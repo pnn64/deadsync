@@ -35,6 +35,12 @@ const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const PROJECTION_PUSH_BYTES: u32 = mem::size_of::<[f32; 16]>() as u32;
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod perf;
+#[cfg(test)]
+mod staging_tests;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
@@ -1357,6 +1363,10 @@ fn retire_submitted_texture_uploads(state: &mut State, frame: usize) {
 }
 
 fn best_fit_staging_index(pool: &[TextureStagingBuffer], needed: vk::DeviceSize) -> Option<usize> {
+    // An exact fit is optimal; keep the first entry on ties.
+    if pool.first().is_some_and(|staging| staging.capacity == needed) {
+        return Some(0);
+    }
     pool.iter()
         .enumerate()
         .filter(|(_, staging)| staging.capacity >= needed)
