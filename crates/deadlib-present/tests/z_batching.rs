@@ -25,4 +25,8 @@ pub mod compose {
     mod draw_order_recheck {
         include!("draw_order_recheck/cases.rs");
     }
+
+    mod sort_inversion {
+        include!("sort_inversion/cases.rs");
+    }
 }
