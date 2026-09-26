@@ -272,8 +272,13 @@ impl StripeBins {
                 _ => Self::count_rows(&mut self.offsets, object.rows(height), stripe_count),
             }
         }
-        for stripe in 0..stripe_count {
-            self.offsets[stripe + 1] += self.offsets[stripe];
+        // Convert range boundaries to stripe counts and then to item offsets.
+        let mut covered = 0u32;
+        let mut total = 0;
+        for offset in &mut self.offsets {
+            covered = covered.wrapping_add(*offset);
+            *offset = total;
+            total += covered;
         }
 
         self.items
@@ -338,8 +343,11 @@ impl StripeBins {
         let end = (rows.end as usize)
             .div_ceil(SOFTWARE_ROW_CHUNK)
             .min(stripe_count);
-        for stripe in first..end {
-            offsets[stripe + 1] += 1;
+        if first < end {
+            // Record a range once; the prefix scan recovers each stripe's count.
+            // Wrapping encodes negative end deltas in the existing u32 storage.
+            offsets[first] = offsets[first].wrapping_add(1);
+            offsets[end] = offsets[end].wrapping_sub(1);
         }
     }
 
