@@ -516,9 +516,8 @@ fn itg_finish_model_auto_rot_keys(mut keys: Vec<ModelAutoRotKey>) -> Arc<[ModelA
 
 pub fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot> {
     let content = fs::read_to_string(path).ok()?;
-    if !has_milkshape_ascii_signature(&content) {
-        return None;
-    }
+    // ITG's LoadMilkshapeAsciiBones scans for Bones directly. Separate bone
+    // files need neither the MilkShape comment nor the mesh file's headers.
     let mut lines = content
         .lines()
         .map(str::trim)
@@ -878,6 +877,34 @@ mod tests {
             }]),
             bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
         })
+    }
+
+    #[test]
+    fn bone_animation_accepts_headerless_files_and_loops() {
+        let path = std::env::temp_dir().join(format!(
+            "deadsync-headerless-bones-{}.txt",
+            std::process::id()
+        ));
+        let bones = "Bones: 1\n\"root\"\n\"\"\n0 0 0 0 0 0 0\n0\n3\n\
+                     0 0 0 0\n30 0 0 2.35619449\n60 0 0 -1.570796327\n";
+        for header in ["", "// MilkShape 3D ASCII\nFrames: 999\nFrame: 1\n"] {
+            fs::write(&path, format!("{header}{bones}")).unwrap();
+            let rotation = itg_parse_milkshape_model_auto_rot(&path)
+                .expect("the Bones section defines the animation without a file header");
+            assert_eq!(rotation.total_frames, 60.0);
+            assert_eq!(rotation.z_keys.len(), 3);
+            for (time, expected) in [(0.0, 0.0), (0.5, 67.5), (1.5, 202.5), (2.0, 0.0)] {
+                let angle =
+                    crate::draw::model_auto_rot_z_at(rotation.total_frames, &rotation.z_keys, time)
+                        .unwrap();
+                assert!((angle - expected).abs() < 1e-4, "{time}: {angle}");
+            }
+        }
+        for invalid in ["Materials: 0\n", "Bones: 0\n", "Bones: 1\n\"root\"\n"] {
+            fs::write(&path, invalid).unwrap();
+            assert!(itg_parse_milkshape_model_auto_rot(&path).is_none());
+        }
+        fs::remove_file(path).unwrap();
     }
 
     #[test]

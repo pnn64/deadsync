@@ -5300,8 +5300,7 @@ Meshes: 2
         .unwrap();
         std::fs::write(
             root.join("bones.txt"),
-            r#"// MilkShape 3D ASCII
-Bones: 1
+            r#"Bones: 1
 "root"
 ""
 0 0 0 0 0 0 0
@@ -5358,6 +5357,16 @@ Bones: 1
             assert_eq!(plan.model_auto_rot_total_frames, 30.0);
             assert_eq!(plan.model_auto_rot_z_keys.len(), 2);
             assert!((plan.model_auto_rot_z_keys[1].z_deg - 90.0).abs() < 1e-4);
+            let draw = crate::draw::model_draw_at(
+                plan.model_draw,
+                &plan.model_timeline,
+                plan.model_effect,
+                plan.model_auto_rot_total_frames,
+                &plan.model_auto_rot_z_keys,
+                0.5,
+                8.0,
+            );
+            assert!((draw.rot[2] - 45.0).abs() < 1e-4);
         }
         for file in ["first.png", "second.png", "skin.txt"] {
             std::fs::remove_file(materials_dir.join(file)).unwrap();
