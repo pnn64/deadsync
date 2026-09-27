@@ -1932,8 +1932,17 @@ fn draw_tap_explosion_preview(
         0.0
     };
     let scale = size / explosion.slot.logical_size()[1].max(1.0);
+    let seed = if duration > f32::EPSILON {
+        (time / duration).floor() as u64
+    } else {
+        0
+    };
     for (index, layer) in explosion.layers.iter().enumerate() {
-        let visual = layer.animation.state_at(elapsed);
+        let visual = layer.animation.state_at_seeded(
+            elapsed,
+            elapsed,
+            seed.wrapping_add((index as u64).wrapping_mul(0xd1b54a32d192ed03)),
+        );
         let slot = &layer.slot;
         let frame_beat = if slot.source.is_beat_based() {
             elapsed

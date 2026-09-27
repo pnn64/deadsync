@@ -11,11 +11,35 @@ use std::collections::HashMap;
 
 pub const ITG_TAP_EXPLOSION_WINDOWS: [&str; 7] = ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"];
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ExplosionAngle {
+    Fixed(f32),
+    Random { scale: f32, sample: u32 },
+}
+
+impl ExplosionAngle {
+    fn value_at(self, seed: u64) -> f32 {
+        match self {
+            Self::Fixed(value) => value,
+            Self::Random { scale, sample } => {
+                // SplitMix64: each command gets an independent sample, stable
+                // for the hit's lifetime without mutable RNG state or allocation.
+                let mut bits =
+                    seed.wrapping_add((u64::from(sample) + 1).wrapping_mul(0x9e3779b97f4a7c15));
+                bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+                bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
+                bits ^= bits >> 31;
+                ((bits >> 40) as f32 / 16_777_216.0) * scale
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ExplosionState {
     pub zoom: f32,
     pub color: [f32; 4],
-    pub rotation_z: f32,
+    pub rotation_z: ExplosionAngle,
     pub visible: bool,
 }
 
@@ -24,7 +48,7 @@ impl Default for ExplosionState {
         Self {
             zoom: 1.0,
             color: [1.0, 1.0, 1.0, 1.0],
-            rotation_z: 0.0,
+            rotation_z: ExplosionAngle::Fixed(0.0),
             visible: true,
         }
     }
@@ -37,7 +61,7 @@ pub struct ExplosionSegment {
     pub start: ExplosionState,
     pub end_zoom: Option<f32>,
     pub end_color: Option<[f32; 4]>,
-    pub end_rotation_z: Option<f32>,
+    pub end_rotation_z: Option<ExplosionAngle>,
     pub end_visible: Option<bool>,
 }
 
@@ -132,7 +156,7 @@ impl Default for ExplosionAnimation {
             initial: ExplosionState {
                 zoom: 1.0,
                 color: [1.0, 1.0, 1.0, 1.0],
-                rotation_z: 0.0,
+                rotation_z: ExplosionAngle::Fixed(0.0),
                 visible: true,
             },
             segments: vec![ExplosionSegment {
@@ -141,7 +165,7 @@ impl Default for ExplosionAnimation {
                 start: ExplosionState {
                     zoom: 1.0,
                     color: [1.0, 1.0, 1.0, 1.0],
-                    rotation_z: 0.0,
+                    rotation_z: ExplosionAngle::Fixed(0.0),
                     visible: true,
                 },
                 end_zoom: Some(1.0),
@@ -174,6 +198,13 @@ impl ExplosionAnimation {
     /// the glow clock when the same effect is commanded again.
     #[must_use]
     pub fn state_at_clocks(&self, time: f32, effect_time: f32) -> ExplosionVisualState {
+        self.state_at_seeded(time, effect_time, 0)
+    }
+
+    /// The caller supplies a stable hit/layer seed; random rotation commands
+    /// are sampled per hit, never per frame or at noteskin load.
+    #[must_use]
+    pub fn state_at_seeded(&self, time: f32, effect_time: f32, seed: u64) -> ExplosionVisualState {
         if time.is_finite()
             && let Some(state) = self.canonical_fade_state_at(time)
         {
@@ -235,10 +266,10 @@ impl ExplosionAnimation {
                 }
                 color = interpolated;
             }
-            let mut rotation_z = current.rotation_z;
+            let mut rotation_z = current.rotation_z.value_at(seed);
             if let Some(target_rotation_z) = segment.end_rotation_z {
-                rotation_z = (target_rotation_z - segment.start.rotation_z)
-                    .mul_add(eased, segment.start.rotation_z);
+                let start = segment.start.rotation_z.value_at(seed);
+                rotation_z = (target_rotation_z.value_at(seed) - start).mul_add(eased, start);
             }
 
             let diffuse = color;
@@ -269,7 +300,7 @@ impl ExplosionAnimation {
             zoom: current.zoom,
             diffuse: clamp_rgba_unit(diffuse),
             glow: clamp_rgba_unit(glow),
-            rotation_z: current.rotation_z,
+            rotation_z: current.rotation_z.value_at(seed),
             visible: current.visible,
         }
     }
@@ -283,11 +314,11 @@ impl ExplosionAnimation {
             || !matches!(segment.tween, TweenType::Linear)
             || self.initial.zoom != 1.0
             || self.initial.color != [1.0; 4]
-            || self.initial.rotation_z.to_bits() != 0.0_f32.to_bits()
+            || !matches!(self.initial.rotation_z, ExplosionAngle::Fixed(v) if v.to_bits() == 0)
             || !self.initial.visible
             || segment.start.zoom != 1.0
             || segment.start.color != [1.0; 4]
-            || segment.start.rotation_z.to_bits() != 0.0_f32.to_bits()
+            || !matches!(segment.start.rotation_z, ExplosionAngle::Fixed(v) if v.to_bits() == 0)
             || !segment.start.visible
             || segment.end_zoom != Some(1.0)
             || target_color[0] != 1.0
@@ -295,7 +326,7 @@ impl ExplosionAnimation {
             || target_color[2] != 1.0
             || segment
                 .end_rotation_z
-                .is_some_and(|rotation_z| rotation_z.to_bits() != 0.0_f32.to_bits())
+                .is_some_and(|angle| !matches!(angle, ExplosionAngle::Fixed(v) if v.to_bits() == 0))
             || !matches!(segment.end_visible, None | Some(true))
         {
             return None;
@@ -331,7 +362,7 @@ struct PendingSegment {
     start: ExplosionState,
     target_zoom: Option<f32>,
     target_color: Option<[f32; 4]>,
-    target_rotation_z: Option<f32>,
+    target_rotation_z: Option<ExplosionAngle>,
     target_visible: Option<bool>,
 }
 
@@ -410,6 +441,7 @@ fn parse_explosion_animation_parts<'a>(
     let mut current_state = ExplosionState::default();
     let mut initial_locked = false;
     let mut recognized_command = false;
+    let mut rotation_sample = 0;
     let mut pending: Option<PendingSegment> = None;
 
     let finish_pending = |pending: &mut Option<PendingSegment>,
@@ -487,6 +519,23 @@ fn parse_explosion_animation_parts<'a>(
             }
             continue;
         }
+        if command == ScriptCommand::RotationZ
+            && let Some(angle) = args
+                .first()
+                .and_then(|raw| parse_explosion_angle(raw, rotation_sample))
+        {
+            recognized_command = true;
+            rotation_sample += 1;
+            if let Some(segment) = pending.as_mut() {
+                segment.target_rotation_z = Some(angle);
+            } else {
+                current_state.rotation_z = angle;
+                if !initial_locked {
+                    animation.initial = current_state;
+                }
+            }
+            continue;
+        }
         if let Some(mod_cmd) = parse_script_actor_mod(command, args) {
             recognized_command = true;
             match mod_cmd {
@@ -507,16 +556,6 @@ fn parse_explosion_animation_parts<'a>(
                         segment.target_zoom = Some(value);
                     } else {
                         current_state.zoom = value;
-                        if !initial_locked {
-                            animation.initial = current_state;
-                        }
-                    }
-                }
-                ScriptActorMod::RotationZ(value) => {
-                    if let Some(segment) = pending.as_mut() {
-                        segment.target_rotation_z = Some(value);
-                    } else {
-                        current_state.rotation_z = value;
                         if !initial_locked {
                             animation.initial = current_state;
                         }
@@ -669,6 +708,27 @@ fn parse_explosion_animation_parts<'a>(
     }
 
     animation
+}
+
+fn parse_explosion_angle(raw: &str, sample: u32) -> Option<ExplosionAngle> {
+    if let Some(value) = parse_script_number(raw) {
+        return Some(ExplosionAngle::Fixed(value));
+    }
+    let scale = if raw.trim() == "math.random()" {
+        1.0
+    } else {
+        let (left, right) = raw.split_once('*')?;
+        if left.trim() == "math.random()" {
+            parse_script_number(right)?
+        } else if right.trim() == "math.random()" {
+            parse_script_number(left)?
+        } else {
+            return None;
+        }
+    };
+    scale
+        .is_finite()
+        .then_some(ExplosionAngle::Random { scale, sample })
 }
 
 pub fn itg_command_with_init(init_command: Option<&str>, command: &str) -> Option<String> {
@@ -1187,6 +1247,54 @@ fn for_each_direct_tap_explosion_element(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn random_rotation_is_stable_per_hit() {
+        let animation = parse_explosion_animation(
+            "function(self) self:rotationz(math.random() * 360):linear(1):diffusealpha(0) end",
+        );
+        let angles: Vec<_> = (0..8)
+            .map(|seed| {
+                let angle = animation.state_at_seeded(0.0, 0.0, seed).rotation_z;
+                assert!((0.0..360.0).contains(&angle));
+                for time in [0.1, 0.5, 1.0, 2.0] {
+                    let state = animation.state_at_seeded(time, time, seed);
+                    assert_eq!(state.rotation_z, angle);
+                    assert_eq!(state.diffuse[3], (1.0 - time).max(0.0));
+                }
+                angle
+            })
+            .collect();
+        assert!(angles.windows(2).all(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
+    fn random_rotation_tweens_to_fixed_and_independent_random_targets() {
+        let animation = parse_explosion_animation(
+            "rotationz,360 * math.random();linear,1;rotationz,90;linear,1;rotationz,math.random() * 180",
+        );
+        for seed in [0, 13, 127] {
+            let angle = |time| animation.state_at_seeded(time, time, seed).rotation_z;
+            let start = angle(0.0);
+            let end = angle(2.0);
+            assert!((0.0..360.0).contains(&start));
+            assert!((0.0..180.0).contains(&end));
+            assert_ne!(start / 2.0, end, "commands sample independently");
+            assert!((angle(0.5) - (start + 90.0) / 2.0).abs() < 1e-5);
+            assert!((angle(1.0) - 90.0).abs() < 1e-5);
+            assert!((angle(1.5) - (90.0 + end) / 2.0).abs() < 1e-5);
+            assert!((angle(3.0) - end).abs() < 1e-5);
+        }
+        let fixed = parse_explosion_animation("rotationz,math.random();rotationz,42");
+        assert_eq!(fixed.state_at_seeded(0.0, 0.0, 7).rotation_z, 42.0);
+        for invalid in [
+            "math.random() * nope",
+            "math.random() * inf",
+            "unknown() * 360",
+        ] {
+            assert!(parse_explosion_angle(invalid, 0).is_none());
+        }
+    }
 
     #[test]
     fn parse_explosion_animation_builds_tween_segments() {

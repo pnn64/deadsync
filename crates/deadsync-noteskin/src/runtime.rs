@@ -4206,7 +4206,7 @@ mod tests {
         assert_eq!(explosion.layers[1].animation.duration(), 0.4);
         assert_eq!(
             explosion.layers[1].animation.segments[0].end_rotation_z,
-            Some(90.0)
+            Some(crate::ExplosionAngle::Fixed(90.0))
         );
     }
 

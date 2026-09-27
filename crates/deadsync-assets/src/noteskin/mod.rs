@@ -931,7 +931,10 @@ end
 return Def.ActorFrame {
     NOTESKIN:LoadActor(Var "Button", "Tap Explosion " .. BrightName) .. {
         InitCommand=cmd(diffusealpha,0);
-        JudgmentCommand=cmd(finishtweening);
+        JudgmentCommand=function(self)
+            if self:getaux() > 0 then Other:Notify() end
+            self:finishtweening():rotationz(math.random() * 360)
+        end;
         W1Command=cmd(diffusealpha,0);
         BrightCommand=Flash;
         DimCommand=cmd(visible,false);
@@ -967,6 +970,10 @@ return Def.ActorFrame {
                     reference.commands.get("brightcommand").map(String::as_str),
                     Some(command)
                 );
+                assert_eq!(
+                    reference.commands["judgmentcommand"],
+                    "finishtweening;rotationz,math.random() * 360"
+                );
             }
         }
         let style = Style {
@@ -992,8 +999,12 @@ return Def.ActorFrame {
                 assert_eq!(bright.layers.len(), 1);
                 let animation = &bright.layers[0].animation;
                 assert!((animation.duration() - 0.2).abs() < 1e-6);
+                let angle = animation.state_at_seeded(0.0, 0.0, 17).rotation_z;
+                assert!((0.0..360.0).contains(&angle));
+                assert_ne!(animation.state_at_seeded(0.0, 0.0, 18).rotation_z, angle);
                 for (time, alpha, zoom) in [(0.0, 1.0, 1.4), (0.1, 0.5, 1.2), (0.2, 0.0, 1.0)] {
-                    let state = animation.state_at(time);
+                    let state = animation.state_at_seeded(time, time, 17);
+                    assert_eq!(state.rotation_z, angle);
                     assert!(state.visible);
                     assert!((state.diffuse[3] - alpha).abs() < 1e-6, "{time}: {state:?}");
                     assert!((state.zoom - zoom).abs() < 1e-6, "{time}: {state:?}");
@@ -3686,7 +3697,8 @@ return skin
                 "mine layer {idx} should become visible when E/E2Command fires"
             );
             assert_eq!(
-                layer.animation.initial.rotation_z, 0.0,
+                layer.animation.initial.rotation_z,
+                deadsync_noteskin::ExplosionAngle::Fixed(0.0),
                 "mine layer {idx} should not inherit the common rotating HitMineCommand"
             );
             assert!(

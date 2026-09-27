@@ -15,6 +15,7 @@ pub(crate) enum ExplosionRotation {
 /// Canonical inputs for an ordered noteskin explosion layer sequence.
 pub(crate) struct ExplosionComposeRequest<'a, S> {
     pub layers: &'a [TapExplosionLayer<S>],
+    pub hit_seed: u64,
     pub elapsed_s: f32,
     pub effect_elapsed_s: f32,
     pub current_frame_beat: f32,
@@ -38,10 +39,14 @@ pub(crate) fn compose_explosion_layers<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    for layer in request.layers {
-        let visual = layer
-            .animation
-            .state_at_clocks(request.elapsed_s, request.effect_elapsed_s);
+    for (index, layer) in request.layers.iter().enumerate() {
+        let seed = request
+            .hit_seed
+            .wrapping_add((index as u64).wrapping_mul(0xd1b54a32d192ed03));
+        let visual =
+            layer
+                .animation
+                .state_at_seeded(request.elapsed_s, request.effect_elapsed_s, seed);
         if !visual.visible {
             continue;
         }
@@ -218,7 +223,7 @@ mod tests {
                 initial: ExplosionState {
                     zoom: 1.5,
                     color: [0.2, 0.3, 0.4, 0.5],
-                    rotation_z: 20.0,
+                    rotation_z: deadsync_noteskin::ExplosionAngle::Fixed(20.0),
                     visible,
                 },
                 segments: Vec::new(),
@@ -233,6 +238,55 @@ mod tests {
     }
 
     #[test]
+    fn random_particle_angles_vary_by_hit_and_layer_without_frame_jitter() {
+        let mut layers = [layer(true, false), layer(true, false)];
+        for layer in &mut layers {
+            layer.animation = deadsync_noteskin::parse_explosion_animation(
+                "rotationz,math.random() * 360;linear,1;diffusealpha,0",
+            );
+        }
+        let angles = |seed, elapsed| {
+            let mut draws = Vec::new();
+            compose_explosion_layers(
+                &mut draws,
+                ExplosionComposeRequest {
+                    layers: &layers,
+                    hit_seed: seed,
+                    elapsed_s: elapsed,
+                    effect_elapsed_s: elapsed,
+                    current_frame_beat: 0.0,
+                    relative_frame_beat: None,
+                    uv_elapsed_s: elapsed,
+                    center: [0.0; 2],
+                    field_zoom: 1.0,
+                    effect_zoom: 1.0,
+                    rotation: ExplosionRotation::Tap {
+                        rotation_y_deg: 0.0,
+                        extra_z_deg: 0.0,
+                    },
+                    z: 0,
+                },
+                &|slot: &TestSlot| SpriteSource::Texture(Arc::clone(&slot.texture)),
+            );
+            draws
+                .into_iter()
+                .map(|draw| {
+                    let FlatDraw::Sprite(sprite) = draw else {
+                        panic!("particle sprite")
+                    };
+                    sprite.rot_z_deg
+                })
+                .collect::<Vec<_>>()
+        };
+        let first = angles(13, 0.0);
+        assert_eq!(first.len(), 2);
+        assert_ne!(first[0], first[1]);
+        assert_eq!(angles(13, 0.5), first);
+        assert_ne!(angles(14, 0.0), first);
+        assert!(first.iter().all(|angle| (-5.0..355.0).contains(angle)));
+    }
+
+    #[test]
     fn tap_layers_emit_diffuse_then_glow_with_authored_transform() {
         let layers = [layer(true, true)];
         let mut actors = Vec::new();
@@ -240,6 +294,7 @@ mod tests {
             &mut actors,
             ExplosionComposeRequest {
                 layers: &layers,
+                hit_seed: 0,
                 elapsed_s: 0.0,
                 effect_elapsed_s: 0.0,
                 current_frame_beat: 9.0,
@@ -300,6 +355,7 @@ mod tests {
             &mut actors,
             ExplosionComposeRequest {
                 layers: &layers,
+                hit_seed: 0,
                 elapsed_s: 0.0,
                 effect_elapsed_s: 0.0,
                 current_frame_beat: 0.0,
@@ -341,6 +397,7 @@ mod tests {
             &mut actors,
             ExplosionComposeRequest {
                 layers: &layers,
+                hit_seed: 0,
                 elapsed_s: 0.0,
                 effect_elapsed_s: 0.0,
                 current_frame_beat: 7.0,

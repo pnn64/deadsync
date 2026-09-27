@@ -29,8 +29,8 @@ pub use draw::{
     model_texture_uv_params_cached,
 };
 pub use explosion::{
-    ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState, GlowEffect,
-    itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,
+    ExplosionAngle, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,
+    GlowEffect, itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,
     parse_explosion_animation,
 };
 pub use model::{ItgModelSlotPlan, itg_load_model_slots_from_path};

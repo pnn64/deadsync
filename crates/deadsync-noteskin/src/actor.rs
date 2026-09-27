@@ -1678,6 +1678,7 @@ fn parse_self_chain_commands_scoped(
     };
     let mut out = String::new();
     let mut cursor = 0usize;
+    let mut read_aux = false;
     while let Some(rel) = body[cursor..].find("self:") {
         let mut name_start = cursor + rel + 5;
         loop {
@@ -1685,6 +1686,13 @@ fn parse_self_chain_commands_scoped(
                 cursor = name_start;
                 break;
             };
+            // GetAux returns a number, not the actor. A read in a condition
+            // is not an animation command or the start of an actor chain.
+            if name.eq_ignore_ascii_case("getaux") {
+                read_aux = true;
+                cursor = next;
+                break;
+            }
             if out.capacity() == 0 {
                 out.reserve(body.len());
             }
@@ -1706,7 +1714,7 @@ fn parse_self_chain_commands_scoped(
             break;
         }
     }
-    (!out.is_empty()).then_some(out)
+    (!out.is_empty() || read_aux).then_some(out)
 }
 
 fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(&str, ItgCallArgs<'_>, usize)> {
@@ -1938,6 +1946,35 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn aux_reads_are_not_actor_commands() {
+        let read = "function(self) if self:getaux() > 0 then Other:Notify() end end";
+        let script = format!(
+            r#"return Def.Sprite {{
+            Texture="particle.png";
+            BrightCommand={read};
+            JudgmentCommand=function(self)
+                local value = self:getaux()
+                self:finishtweening():rotationz(math.random() * 360)
+            end;
+        }}"#
+        );
+        let actor = parse_actor_decl(&script, &noteskin_itg::IniData::default());
+        let commands = &actor.sprites[0].commands;
+        assert_eq!(commands["brightcommand"], "");
+        assert_eq!(
+            commands["judgmentcommand"],
+            "finishtweening;rotationz,math.random() * 360"
+        );
+        assert_eq!(crate::script::normalized_script_command(read), "");
+        assert_eq!(
+            crate::script::normalized_script_command(
+                "local value = self:getaux(); self:rotationz(90)"
+            ),
+            "rotationz,90"
+        );
+    }
 
     #[test]
     fn named_hold_emitter_preserves_interval_and_child_count() {

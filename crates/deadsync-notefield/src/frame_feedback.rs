@@ -392,6 +392,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     draws,
                     ExplosionComposeRequest {
                         layers: std::slice::from_ref(&emitter.flash),
+                        hit_seed: (u64::from(started.to_bits()) << 32) | local_col as u64,
                         elapsed_s: age,
                         effect_elapsed_s: age,
                         current_frame_beat: current_beat,
@@ -439,6 +440,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 ExplosionComposeRequest {
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
+                    hit_seed: (u64::from(active.start_beat.to_bits()) << 32) | local_col as u64,
                     effect_elapsed_s: (elapsed_screen - active.effect_started_at_screen_s).max(0.0),
                     current_frame_beat: request.visual.current_display_beat,
                     relative_frame_beat: Some(
@@ -477,6 +479,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
                     effect_elapsed_s: active.elapsed,
+                    hit_seed: (u64::from(active.started_at_screen_s.to_bits()) << 32)
+                        | local_col as u64,
                     current_frame_beat: current_beat,
                     relative_frame_beat: None,
                     uv_elapsed_s: elapsed_screen,
