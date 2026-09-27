@@ -445,6 +445,7 @@ fn itg_slot_with_active_cmd(
 
 fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSlot> {
     deadsync_noteskin::ItgCompiledSpriteOps {
+        prepare_commands: itg_prepare_commands,
         load_texture: itg_slot_from_path,
         load_frame: itg_slot_from_path_with_frame,
         load_animated: itg_slot_from_path_animated,
@@ -464,6 +465,21 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         model_info: itg_slot_model_info,
         texture_key: itg_slot_texture_key,
     }
+}
+
+fn itg_prepare_commands(commands: &mut HashMap<String, String>) {
+    if !commands
+        .values()
+        .any(|s| s.contains("math.random") || s.contains("PREFSMAN"))
+    {
+        return;
+    }
+    use std::hash::{BuildHasher, Hasher};
+    let seed = std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish();
+    let offset = deadsync_config::runtime::get().global_offset_seconds;
+    noteskin_script::resolve_effect_args(commands, offset, seed);
 }
 
 fn itg_apply_model_draw(
@@ -2183,6 +2199,90 @@ return skin
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn cached_actor_effects_resolve_numeric_locals_and_preferences() {
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("effect-arguments");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load=function() return LoadActor(NOTESKIN:GetPath("Down", Var "Element")) end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Tap Note.lua"),
+            r#"
+local Scale = 100
+return Def.Sprite {
+    Texture=NOTESKIN:GetPath("Down", "Sheet");
+    InitCommand=function(self)
+        self:spin():effectmagnitude(0,0,math.random(0.75*Scale,0.75*Scale)/Scale)
+            :effectoffset(PREFSMAN:GetPreference("GlobalOffsetSeconds"))
+    end;
+}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Tap Lift.lua"),
+            r#"
+local Scale = 100
+return LoadActor("Down Sheet.png") .. {
+    InitCommand=function(self)
+        self:pulse():effectmagnitude(math.random(0.75*Scale,0.75*Scale)/Scale,1,1)
+    end;
+}
+"#,
+        )
+        .unwrap();
+        write_noteskin_png(&root.join("Down Sheet.png"));
+        write_noteskin_png(&root.join("Down Receptor.png"));
+        let data = noteskin_itg::NoteskinData {
+            name: "effect-arguments".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+            overrides: Vec::new(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "test", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let skin = super::load_itg_sprite_noteskin_parts_compiled(
+            &data,
+            &Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            &bundle.loader,
+            &bundle.actors,
+            None,
+        )
+        .unwrap();
+        let effect = skin.notes[0].model_effect;
+        assert_eq!(effect.magnitude, [0.0, 0.0, 0.75]);
+        assert_eq!(
+            effect.offset,
+            deadsync_config::runtime::get().global_offset_seconds
+        );
+        assert_eq!(
+            skin.lift_note_layers[0][0].model_effect.magnitude,
+            [0.75, 1.0, 1.0]
+        );
+        assert!(
+            bundle
+                .actors
+                .files
+                .iter()
+                .any(|file| file.decl.sprites.iter().any(|s| s
+                    .commands
+                    .values()
+                    .any(|command| command.contains("math.random"))))
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

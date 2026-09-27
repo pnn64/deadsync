@@ -398,6 +398,7 @@ pub struct ItgRuntimeColumns<T> {
 }
 
 pub struct ItgCompiledSpriteOps<T> {
+    pub prepare_commands: fn(&mut HashMap<String, String>),
     pub load_texture: fn(&Path) -> Option<T>,
     pub load_frame: fn(&Path, usize) -> Option<T>,
     pub load_animated: fn(&Path, usize, usize, Option<&[usize]>, Option<&[f32]>, bool) -> Option<T>,
@@ -1606,6 +1607,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
     depth: usize,
     visiting: &mut HashSet<String>,
     arg0_path: Option<&Path>,
+    mut prepare_commands: impl FnMut(&mut HashMap<String, String>),
     mut load_texture: impl FnMut(&Path) -> Option<T>,
     mut load_frame: impl FnMut(&Path, usize) -> Option<T>,
     mut load_animated: impl FnMut(
@@ -1660,13 +1662,24 @@ pub fn itg_resolve_actor_file_compiled<T>(
         return Vec::new();
     }
 
-    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path, Some(button), color)
+    let Some(mut decl) =
+        compiled_actors.decl_for_path(&data.search_dirs, path, Some(button), color)
     else {
         log::warn!("compiled noteskin actors are missing '{}'", path.display());
         visiting.remove(&path_key);
         return Vec::new();
     };
 
+    for commands in decl
+        .sprites
+        .iter_mut()
+        .map(|s| &mut s.commands)
+        .chain(decl.models.iter_mut().map(|s| &mut s.commands))
+        .chain(decl.path_refs.iter_mut().map(|s| &mut s.commands))
+        .chain(decl.refs.iter_mut().map(|s| &mut s.commands))
+    {
+        prepare_commands(commands);
+    }
     let mut out = Vec::new();
     let default_anim_is_beat = itg::animation_is_beat_based(data);
     for sprite in decl.sprites {
@@ -1971,6 +1984,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
         depth,
         visiting,
         arg0_path,
+        ops.prepare_commands,
         ops.load_texture,
         ops.load_frame,
         ops.load_animated,
@@ -3647,6 +3661,7 @@ mod tests {
             }],
             glow: None,
             blend_add: false,
+            animation_seconds: None,
         };
         let long = ExplosionAnimation {
             initial: ExplosionState::default(),
@@ -3661,6 +3676,7 @@ mod tests {
             }],
             glow: None,
             blend_add: false,
+            animation_seconds: None,
         };
         let explosion = TapExplosion::from_inline_layers(SmallVec::from_vec(vec![
             TapExplosionLayer {
@@ -4613,6 +4629,7 @@ mod tests {
             None,
             "StepsType_Dance_Single",
             ItgCompiledSpriteOps {
+                prepare_commands: |_| {},
                 load_texture: |_| Some(Slot(7)),
                 load_frame: |_, _| None,
                 load_animated: |_, _, _, _, _, _| None,
@@ -4935,6 +4952,7 @@ mod tests {
             0,
             &mut visiting,
             None,
+            |_| {},
             |_| Some(1),
             |path, frame| {
                 assert_eq!(path, std::path::Path::new("Tap Note.png"));
@@ -5012,6 +5030,7 @@ mod tests {
             0,
             &mut visiting,
             None,
+            |_| {},
             |_| Some(1),
             |path, frame| {
                 assert_eq!(path, texture_path.as_path());

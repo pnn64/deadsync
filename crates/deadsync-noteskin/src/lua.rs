@@ -134,29 +134,75 @@ fn strip_wrapped_parens(raw: &str) -> &str {
 
 #[must_use]
 pub fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
+    parse_float_expr(raw, &mut |_| None).map(|value| value as f32)
+}
+
+// Lua arithmetic uses doubles, including expressions passed to math.random's
+// integer bounds. Round to actor floats only after evaluating the expression.
+pub(crate) fn parse_float_expr(
+    raw: &str,
+    resolve: &mut impl FnMut(&str) -> Option<f64>,
+) -> Option<f64> {
+    if raw.len() > 4096 {
+        return None;
+    }
+    float_expr_inner(raw, resolve, 0)
+}
+
+fn float_expr_inner(
+    raw: &str,
+    resolve: &mut impl FnMut(&str) -> Option<f64>,
+    level: usize,
+) -> Option<f64> {
+    if level > 32 {
+        return None;
+    }
     let value = strip_wrapped_parens(raw.trim().trim_end_matches(';'));
     if let Some(v) = itg_parse_lua_float_token(value) {
         return Some(v);
     }
     let bytes = value.as_bytes();
-    let mut depth = 0usize;
-    for (idx, b) in bytes.iter().enumerate() {
-        match *b {
-            b'(' => depth += 1,
-            b')' => depth = depth.saturating_sub(1),
-            b'/' if depth == 0 => {
-                let lhs = value[..idx].trim();
-                let rhs = value[idx + 1..].trim();
-                let denom = itg_parse_lua_float_expr(rhs)?;
-                if denom.abs() <= f32::EPSILON {
-                    return None;
+    for operators in [b"+-".as_slice(), b"*/"] {
+        let mut depth = 0usize;
+        for (idx, &b) in bytes.iter().enumerate().rev() {
+            match b {
+                b')' => depth += 1,
+                b'(' => depth = depth.checked_sub(1)?,
+                _ if depth == 0 && operators.contains(&b) => {
+                    let left = value[..idx].trim_end();
+                    let exponent = left.ends_with(['e', 'E'])
+                        && left
+                            .as_bytes()
+                            .get(left.len().saturating_sub(2))
+                            .is_some_and(|b| b.is_ascii_digit() || *b == b'.');
+                    if left.is_empty()
+                        || (matches!(b, b'+' | b'-')
+                            && (left.ends_with(['+', '-', '*', '/']) || exponent))
+                    {
+                        continue;
+                    }
+                    let lhs = float_expr_inner(left, resolve, level + 1)?;
+                    let rhs = float_expr_inner(&value[idx + 1..], resolve, level + 1)?;
+                    let result = match b {
+                        b'+' => lhs + rhs,
+                        b'-' => lhs - rhs,
+                        b'*' => lhs * rhs,
+                        b'/' if rhs != 0.0 => lhs / rhs,
+                        _ => return None,
+                    };
+                    return result.is_finite().then_some(result);
                 }
-                return Some(itg_parse_lua_float_expr(lhs)? / denom);
+                _ => {}
             }
-            _ => {}
         }
     }
-    None
+    if let Some(rest) = value.strip_prefix('-') {
+        return float_expr_inner(rest, resolve, level + 1).map(|v| -v);
+    }
+    if let Some(rest) = value.strip_prefix('+') {
+        return float_expr_inner(rest, resolve, level + 1);
+    }
+    resolve(value).filter(|v| v.is_finite())
 }
 
 #[must_use]
@@ -316,17 +362,17 @@ impl<'a> Iterator for ItgQuotedStrings<'a> {
     }
 }
 
-fn itg_parse_lua_float_token(raw: &str) -> Option<f32> {
+fn itg_parse_lua_float_token(raw: &str) -> Option<f64> {
     let value = raw.trim().trim_matches('"').trim_matches('\'');
     if value.is_empty() {
         return None;
     }
-    if let Ok(v) = value.parse::<f32>() {
+    if let Ok(v) = value.parse::<f64>() {
         return Some(v);
     }
     if value.contains(',') && !value.contains('.') {
         let patched = value.replace(',', ".");
-        return patched.parse::<f32>().ok();
+        return patched.parse::<f64>().ok();
     }
     None
 }

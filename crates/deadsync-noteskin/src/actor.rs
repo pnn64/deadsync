@@ -36,6 +36,7 @@ const BEAT_FADE_GLOW_SIGNATURES: [&[u8]; 4] = [
 #[derive(Debug, Default)]
 struct CommandContext {
     colors: HashMap<String, String>,
+    numbers: HashMap<String, String>,
     functions: HashMap<String, LocalFunction>,
     aliases: HashMap<String, String>,
     scope: HashMap<String, String>,
@@ -752,6 +753,13 @@ fn collect_actor_aliases(
             + 1;
         let value_start = skip_ws(content, value_start);
         cursor = end;
+        if let Some(number) =
+            crate::lua::parse_float_expr(value, &mut |name| context.numbers.get(name)?.parse().ok())
+        {
+            context.numbers.insert(name.to_owned(), number.to_string());
+            continue;
+        }
+        context.numbers.remove(name);
         if value.starts_with("function") {
             let Some(open) = content[value_start..]
                 .find('(')
@@ -1669,7 +1677,46 @@ impl CommandContext {
         get_ascii_lowercase_from_two(scope, &self.colors, key)
             .map(|value| Cow::Borrowed(value.as_str()))
             .or_else(|| parse_lua_color_expr(raw).map(Cow::Owned))
-            .unwrap_or_else(|| Cow::Borrowed(raw.trim()))
+            .unwrap_or_else(|| {
+                let raw = raw.trim();
+                let mut out = String::new();
+                let bytes = raw.as_bytes();
+                let mut start = 0;
+                let mut cursor = 0;
+                let mut quote = 0;
+                while cursor < bytes.len() {
+                    let b = bytes[cursor];
+                    if quote != 0 {
+                        if b == b'\\' {
+                            cursor += 2;
+                            continue;
+                        }
+                        if b == quote {
+                            quote = 0;
+                        }
+                    } else if b == b'\'' || b == b'"' {
+                        quote = b;
+                    } else if b.is_ascii_alphabetic() || b == b'_' {
+                        let name_start = cursor;
+                        while bytes.get(cursor).is_some_and(|b| is_lua_ident(*b)) {
+                            cursor += 1;
+                        }
+                        if let Some(value) = self.numbers.get(&raw[name_start..cursor]) {
+                            out.push_str(&raw[start..name_start]);
+                            out.push_str(value);
+                            start = cursor;
+                        }
+                        continue;
+                    }
+                    cursor += 1;
+                }
+                if out.is_empty() {
+                    Cow::Borrowed(raw)
+                } else {
+                    out.push_str(&raw[start..]);
+                    Cow::Owned(out)
+                }
+            })
     }
 }
 
@@ -2097,6 +2144,27 @@ return Def.ActorFrame {
             assert!(!decl.refs[0].commands.contains_key(ITG_HOLD_EMITTER));
             assert!(!decl.refs[0].commands.contains_key(ITG_ROLL_EMITTER));
         }
+    }
+
+    #[test]
+    fn numeric_bindings_survive_nested_effect_expressions() {
+        let script = r#"
+local Scale = 10 * 10
+return Def.Sprite {
+    Texture="note.png";
+    InitCommand=function(self)
+        self:pulse():effectmagnitude(math.random(0.75*Scale,0.85*Scale)/Scale,1,1)
+            :effectoffset(PREFSMAN:GetPreference("GlobalOffsetSeconds"))
+    end;
+}
+"#;
+        let decl = parse_actor_decl(script, &noteskin_itg::IniData::default());
+        let command = &decl.sprites[0].commands["initcommand"];
+        assert!(
+            command.contains("math.random(0.75*100,0.85*100)/100"),
+            "{command}"
+        );
+        assert!(command.contains("PREFSMAN:GetPreference(\"GlobalOffsetSeconds\")"));
     }
 
     #[test]

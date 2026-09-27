@@ -467,6 +467,10 @@ impl NoteskinSlot for SpriteSlot {
         self.actor_frame_child
     }
 
+    fn animation_start_time(&self) -> f32 {
+        self.animation_start_time
+    }
+
     #[inline(always)]
     fn frame_index(&self, time: f32, beat: f32) -> usize {
         Self::frame_index(self, time, beat)
@@ -1071,6 +1075,7 @@ fn itg_apply_initial_sprite_state(
     commands: &std::collections::HashMap<String, String>,
 ) {
     let mut frame = None;
+    let mut seconds = None;
     let mut paused = false;
     for key in ["initcommand", "oncommand"] {
         let Some(script) = commands.get(key) else {
@@ -1107,11 +1112,19 @@ fn itg_apply_initial_sprite_state(
                     }
                 }
                 ScriptCommand::SetState => {
+                    seconds = None;
                     frame = token
                         .args()
                         .first()
                         .and_then(|arg| parse_script_number(arg))
                         .map(|value| value.max(0.0) as usize);
+                }
+                ScriptCommand::SetSecondsIntoAnimation => {
+                    seconds = token
+                        .args()
+                        .first()
+                        .and_then(|arg| parse_script_number(arg));
+                    frame = None;
                 }
                 ScriptCommand::Pause => paused = true,
                 ScriptCommand::Play => paused = false,
@@ -1126,6 +1139,10 @@ fn itg_apply_initial_sprite_state(
     }
     if let Some(frame) = frame {
         itg_apply_frame_override(slot, frame);
+    }
+    if let Some(seconds) = seconds {
+        slot.animation_start_time = seconds;
+        slot.animation_start_frame = slot.frame_index(0.0, 0.0);
     }
     if paused {
         freeze_sprite_animation(slot);
@@ -1348,6 +1365,29 @@ mod contract_tests {
         assert_eq!(Arc::strong_count(texture_key), 2);
         assert_eq!(arena.stats().texture_misses, 1);
         assert_eq!(arena.stats().texture_hits, 1);
+    }
+
+    #[test]
+    fn sprite_seek_uses_seconds_without_changing_sheet_rate() {
+        for script in [
+            "setstate,0;SetSecondsIntoAnimation,0.75;rate,2",
+            "SetSecondsIntoAnimation,0.25;setstate,1;rate,0.5",
+        ] {
+            let mut slot = slot_from_plan(generated_animation_sprite_slot_plan(
+                "tests/seek 3x1.png".into(),
+                (192, 64),
+                [64, 64],
+                3,
+                AnimationRate::FramesPerSecond(2.0),
+                false,
+            ));
+            itg_apply_initial_sprite_state(
+                &mut slot,
+                &std::collections::HashMap::from([("initcommand".into(), script.into())]),
+            );
+            assert_eq!(slot.frame_index(0.0, 0.0), 1);
+            assert_eq!(slot.frame_index(0.5, 0.0), 2);
+        }
     }
 
     #[test]

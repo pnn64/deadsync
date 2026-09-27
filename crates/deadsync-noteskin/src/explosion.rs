@@ -24,12 +24,7 @@ impl ExplosionAngle {
             Self::Random { scale, sample } => {
                 // SplitMix64: each command gets an independent sample, stable
                 // for the hit's lifetime without mutable RNG state or allocation.
-                let mut bits =
-                    seed.wrapping_add((u64::from(sample) + 1).wrapping_mul(0x9e3779b97f4a7c15));
-                bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-                bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
-                bits ^= bits >> 31;
-                ((bits >> 40) as f32 / 16_777_216.0) * scale
+                crate::script::script_random(seed, sample) * scale
             }
         }
     }
@@ -148,6 +143,7 @@ pub struct ExplosionAnimation {
     pub segments: Vec<ExplosionSegment>,
     pub glow: Option<GlowEffect>,
     pub blend_add: bool,
+    pub animation_seconds: Option<f32>,
 }
 
 impl Default for ExplosionAnimation {
@@ -175,6 +171,7 @@ impl Default for ExplosionAnimation {
             }],
             glow: None,
             blend_add: false,
+            animation_seconds: None,
         }
     }
 }
@@ -436,6 +433,7 @@ fn parse_explosion_animation_parts<'a>(
         segments: Vec::new(),
         glow: None,
         blend_add: false,
+        animation_seconds: None,
     };
 
     let mut current_state = ExplosionState::default();
@@ -468,6 +466,21 @@ fn parse_explosion_animation_parts<'a>(
         };
         let command = token.command();
         let args = token.args();
+
+        // Sprite::rate forwards to the movie texture. Raster textures and
+        // sprite-sheet state delays are unaffected, including pending tweens.
+        if command == ScriptCommand::Rate {
+            recognized_command = true;
+            continue;
+        }
+        if command == ScriptCommand::SetSecondsIntoAnimation {
+            if let Some(seconds) = args.first().and_then(|arg| parse_script_number(arg)) {
+                // This setter executes immediately, even after linear/sleep.
+                animation.animation_seconds = Some(seconds);
+                recognized_command = true;
+            }
+            continue;
+        }
 
         if let Some((tween, duration)) = parse_script_tween(command, args) {
             recognized_command = true;
@@ -1247,6 +1260,19 @@ fn for_each_direct_tap_explosion_element(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn animation_seek_and_movie_rate_do_not_split_tweens() {
+        let animation = parse_explosion_animation(
+            "zoom,1;SetSecondsIntoAnimation,0;rate,2;linear,1;zoom,2;SetSecondsIntoAnimation,0.25;rate,0.5;diffusealpha,0",
+        );
+        assert_eq!(animation.animation_seconds, Some(0.25));
+        assert_eq!(animation.segments.len(), 1);
+        assert_eq!(animation.duration(), 1.0);
+        let mid = animation.state_at(0.5);
+        assert_eq!(mid.zoom, 1.5);
+        assert_eq!(mid.diffuse[3], 0.5);
+    }
 
     #[test]
     fn random_rotation_is_stable_per_hit() {

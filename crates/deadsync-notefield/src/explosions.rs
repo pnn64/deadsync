@@ -55,7 +55,18 @@ pub(crate) fn compose_explosion_layers<S, F>(
             .relative_frame_beat
             .filter(|_| slot.animation_is_beat_based())
             .unwrap_or(request.current_frame_beat);
-        let frame = slot.frame_index(request.elapsed_s, frame_beat);
+        let (frame_time, frame_beat) =
+            layer
+                .animation
+                .animation_seconds
+                .map_or((request.elapsed_s, frame_beat), |seconds| {
+                    let seconds = seconds - slot.animation_start_time();
+                    (
+                        request.elapsed_s + seconds,
+                        request.relative_frame_beat.unwrap_or(request.elapsed_s) + seconds,
+                    )
+                });
+        let frame = slot.frame_index(frame_time, frame_beat);
         let uv = slot.uv_for_frame_at(frame, request.uv_elapsed_s);
         let size = scale_effect_size(
             slot.logical_size(),
@@ -151,6 +162,7 @@ mod tests {
         def: SpriteDefinition,
         texture: Arc<str>,
         beat_based: bool,
+        start_time: f32,
     }
 
     impl NoteskinSlot for TestSlot {
@@ -178,8 +190,12 @@ mod tests {
             self.beat_based
         }
 
+        fn animation_start_time(&self) -> f32 {
+            self.start_time
+        }
+
         fn frame_index(&self, _time: f32, beat: f32) -> usize {
-            beat.max(0.0).floor() as usize
+            (beat + self.start_time).max(0.0).floor() as usize
         }
 
         fn frame_index_from_phase(&self, _phase: f32) -> usize {
@@ -218,6 +234,7 @@ mod tests {
                 },
                 texture: Arc::from("explosion"),
                 beat_based: true,
+                start_time: 0.0,
             },
             animation: ExplosionAnimation {
                 initial: ExplosionState {
@@ -233,7 +250,43 @@ mod tests {
                     color2: [0.0; 4],
                 }),
                 blend_add,
+                animation_seconds: None,
             },
+        }
+    }
+
+    #[test]
+    fn explosion_seek_changes_frames_without_seeking_the_fade() {
+        let mut layers = [layer(true, false)];
+        layers[0].slot.start_time = 5.0;
+        layers[0].animation = deadsync_noteskin::parse_explosion_animation(
+            "SetSecondsIntoAnimation,2;rate,2;linear,2;diffusealpha,0",
+        );
+        for elapsed in [0.0, 1.0] {
+            let mut draws = Vec::new();
+            compose_explosion_layers(
+                &mut draws,
+                ExplosionComposeRequest {
+                    layers: &layers,
+                    hit_seed: 0,
+                    elapsed_s: elapsed,
+                    effect_elapsed_s: elapsed,
+                    current_frame_beat: 90.0,
+                    relative_frame_beat: Some(elapsed),
+                    uv_elapsed_s: elapsed,
+                    center: [0.0; 2],
+                    field_zoom: 1.0,
+                    effect_zoom: 1.0,
+                    rotation: ExplosionRotation::Mine,
+                    z: 0,
+                },
+                &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
+            );
+            let FlatDraw::Sprite(sprite) = &draws[0] else {
+                panic!("explosion sprite");
+            };
+            assert!((sprite.uv_rect[0] - (elapsed + 2.0) * 0.1).abs() < 1e-6);
+            assert_eq!(sprite.tint[3], 1.0 - elapsed * 0.5);
         }
     }
 

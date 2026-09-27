@@ -99,6 +99,8 @@ pub enum ScriptCommand<'a> {
     SetStateProperties,
     SetAllStateDelays,
     SetTextureFiltering,
+    SetSecondsIntoAnimation,
+    Rate,
     ZTest,
     ZWrite,
     ClearZBuffer,
@@ -168,6 +170,8 @@ impl<'a> ScriptCommand<'a> {
             Self::SetStateProperties => "setstateproperties",
             Self::SetAllStateDelays => "setallstatedelays",
             Self::SetTextureFiltering => "settexturefiltering",
+            Self::SetSecondsIntoAnimation => "SetSecondsIntoAnimation",
+            Self::Rate => "rate",
             Self::ZTest => "ztest",
             Self::ZWrite => "zwrite",
             Self::ClearZBuffer => "clearzbuffer",
@@ -238,6 +242,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("z", Z);
             }
             4 => {
+                command!("rate", Rate);
                 command!("play", Play);
                 command!("addx", AddX);
                 command!("addy", AddY);
@@ -316,6 +321,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
             }
             18 => command!("setstateproperties", SetStateProperties),
             19 => command!("settexturefiltering", SetTextureFiltering),
+            23 => command!("SetSecondsIntoAnimation", SetSecondsIntoAnimation),
             _ => {}
         }
         Self::Unknown(raw)
@@ -407,6 +413,98 @@ pub fn split_script_token(token: &str) -> Option<ScriptToken<'_>> {
 #[must_use]
 pub fn parse_script_number(raw: &str) -> Option<f32> {
     itg_parse_lua_float_expr(raw)
+}
+
+pub(crate) fn script_random(seed: u64, sample: u32) -> f32 {
+    let mut bits = seed.wrapping_add((u64::from(sample) + 1).wrapping_mul(0x9e3779b97f4a7c15));
+    bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
+    bits ^= bits >> 31;
+    (bits >> 40) as f32 / 16_777_216.0
+}
+
+/// Resolve actor-instance effect arguments on the load worker, after reading
+/// the compiled cache. Preferences and random samples must not be baked into it.
+pub fn resolve_effect_args(commands: &mut HashMap<String, String>, offset: f32, seed: u64) {
+    for (key, script) in commands {
+        if !script.contains("math.random") && !script.contains("PREFSMAN") {
+            continue;
+        }
+        let seed = key.bytes().fold(seed, |seed, b| {
+            seed.wrapping_mul(1099511628211) ^ u64::from(b)
+        });
+        let mut sample = 0;
+        let mut out = String::with_capacity(script.len());
+        let mut changed = false;
+        for raw in script.split(';') {
+            if !out.is_empty() {
+                out.push(';');
+            }
+            let Some(token) = split_script_token(raw) else {
+                out.push_str(raw);
+                continue;
+            };
+            if !matches!(
+                token.command(),
+                ScriptCommand::EffectMagnitude | ScriptCommand::EffectOffset
+            ) {
+                out.push_str(raw);
+                continue;
+            }
+            let mut values = SmallVec::<[f64; 3]>::new();
+            for arg in token.args() {
+                let Some(value) = crate::lua::parse_float_expr(arg, &mut |term| {
+                    if let Some(args) = term
+                        .strip_prefix("math.random(")
+                        .and_then(|s| s.strip_suffix(')'))
+                    {
+                        let args = itg_call_args(args)
+                            .map(|arg| crate::lua::parse_float_expr(arg, &mut |_| None))
+                            .collect::<Option<SmallVec<[f64; 2]>>>()?;
+                        let value = f64::from(script_random(seed, sample));
+                        sample += 1;
+                        let (min, max) = match args.as_slice() {
+                            [] => return Some(value),
+                            [max] => (1.0, max.trunc()),
+                            [min, max] => (min.trunc(), max.trunc()),
+                            _ => return None,
+                        };
+                        if !min.is_finite()
+                            || !max.is_finite()
+                            || min > max
+                            || min < f64::from(i32::MIN)
+                            || max > f64::from(i32::MAX)
+                        {
+                            return None;
+                        }
+                        return Some(min + (value * (max - min + 1.0)).floor());
+                    }
+                    let arg = term
+                        .strip_prefix("PREFSMAN:GetPreference(")?
+                        .strip_suffix(')')?
+                        .trim();
+                    (matches!(arg, "\"GlobalOffsetSeconds\"" | "'GlobalOffsetSeconds'"))
+                        .then_some(f64::from(offset))
+                }) else {
+                    break;
+                };
+                values.push(value);
+            }
+            if values.len() != token.args().len() {
+                out.push_str(raw);
+                continue;
+            }
+            use std::fmt::Write;
+            out.push_str(token.command().as_str());
+            for value in values {
+                let _ = write!(out, ",{value}");
+            }
+            changed = true;
+        }
+        if changed {
+            *script = out;
+        }
+    }
 }
 
 #[must_use]
@@ -1362,6 +1460,8 @@ pub fn model_draw_program(
                     | ScriptCommand::ClearZBuffer
                     | ScriptCommand::CustomTextureRect
                     | ScriptCommand::TexCoordVelocity
+                    | ScriptCommand::SetSecondsIntoAnimation
+                    | ScriptCommand::Rate
             ) {
                 continue;
             }
@@ -1741,6 +1841,71 @@ mod tests {
     }
 
     #[test]
+    fn effect_arguments_resolve_once_per_actor_with_injected_values() {
+        let template = HashMap::from([("initcommand".to_string(),
+            "pulse;effectmagnitude,math.random(0.75*100,0.85*100)/100,math.random(1),1;effectoffset,PREFSMAN:GetPreference('GlobalOffsetSeconds')".to_string())]);
+        let mut samples = Vec::new();
+        for seed in [0, 1, 2, 13] {
+            let mut commands = template.clone();
+            resolve_effect_args(&mut commands, -0.125, seed);
+            let (_, _, effect) = model_draw_program(&commands);
+            assert_eq!(effect.offset, -0.125);
+            assert_eq!(&effect.magnitude[1..], &[1.0, 1.0]);
+            assert!((0.75..=0.85).contains(&effect.magnitude[0]));
+            assert!(
+                (effect.magnitude[0] * 100.0 - (effect.magnitude[0] * 100.0).round()).abs() < 1e-5
+            );
+            samples.push(effect.magnitude[0]);
+            let fixed = commands.clone();
+            resolve_effect_args(&mut commands, 9.0, seed + 1);
+            assert_eq!(
+                commands, fixed,
+                "resolved commands are stable for the actor lifetime"
+            );
+        }
+        assert!(samples.windows(2).any(|pair| pair[0] != pair[1]));
+        let mut fractional_bounds = HashMap::from([(
+            "initcommand".into(),
+            "pulse;effectmagnitude,math.random(1.15*100,1.15*100)/100,1,1".into(),
+        )]);
+        resolve_effect_args(&mut fractional_bounds, 0.0, 0);
+        // Lua truncates the double result 114.999... before sampling.
+        assert_eq!(model_draw_program(&fractional_bounds).2.magnitude[0], 1.14);
+        let mut commands = template.clone();
+        resolve_effect_args(&mut commands, 0.25, 0);
+        assert_eq!(model_draw_program(&commands).2.offset, 0.25);
+        assert!(
+            template["initcommand"].contains("PREFSMAN"),
+            "compiled source is reusable"
+        );
+        let mut invalid = HashMap::from([(
+            "initcommand".into(),
+            "effectmagnitude,math.random(10,1),unknown,1".into(),
+        )]);
+        let original = invalid.clone();
+        resolve_effect_args(&mut invalid, 0.0, 0);
+        assert_eq!(
+            invalid, original,
+            "invalid arguments still reach the diagnostic path"
+        );
+    }
+
+    #[test]
+    fn numeric_arithmetic_matches_lua_precedence() {
+        for (expr, expected) in [
+            ("8/4/2", 1.0),
+            ("0.75*100", 75.0),
+            ("-(2+3)*4", -20.0),
+            ("1e-3 + 2*-3", -5.999),
+        ] {
+            assert_eq!(parse_script_number(expr), Some(expected), "{expr}");
+        }
+        for expr in ["1/0", "math.random(1,3)", "(2+3", "unknown*2"] {
+            assert_eq!(parse_script_number(expr), None, "{expr}");
+        }
+    }
+
+    #[test]
     fn model_sleep_retains_state_until_following_commands() {
         for script in [
             "diffusealpha,0;sleep,1;diffusealpha,1",
@@ -1791,7 +1956,10 @@ mod tests {
         impl log::Log for CaptureWarnings {
             fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
                 metadata.level() == log::Level::Warn
-                    && metadata.target() == "deadsync_noteskin::script"
+                    && matches!(
+                        metadata.target(),
+                        "deadsync_noteskin::script" | "deadsync_noteskin::explosion"
+                    )
             }
             fn log(&self, record: &log::Record<'_>) {
                 if self.enabled(record.metadata()) {
@@ -1812,7 +1980,7 @@ mod tests {
         let commands = HashMap::from([(
             "initcommand".to_string(),
             "linear,0.5;x,8;ZTest,true;ZWrite,1;ClearZBuffer,true;\
-             CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;y,4"
+             CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;rate,2;SetSecondsIntoAnimation,0;y,4"
                 .to_string(),
         )]);
         let (draw, timeline, _) = model_draw_program(&commands);
@@ -1821,6 +1989,13 @@ mod tests {
         assert_eq!(timeline[0].from.pos, [0.0; 3]);
         assert_eq!(timeline[0].to.pos, [8.0, 4.0, 0.0]);
         assert_eq!(draw.pos, [8.0, 4.0, 0.0]);
+        let mut effects = HashMap::from([("initcommand".into(), "spin;effectmagnitude,0,0,math.random(70,190);effectoffset,PREFSMAN:GetPreference(\"GlobalOffsetSeconds\")".into())]);
+        resolve_effect_args(&mut effects, 0.125, 13);
+        model_draw_program(&effects);
+        let animation = crate::explosion::parse_explosion_animation(
+            "SetSecondsIntoAnimation,0;rate,2;linear,0.15;rotationz,90;rate,0.5;diffusealpha,0",
+        );
+        assert_eq!(animation.animation_seconds, Some(0.0));
         WARNINGS
             .with_borrow(|warnings| assert!(warnings.as_ref().unwrap().is_empty(), "{warnings:?}"));
 
