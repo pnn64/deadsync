@@ -520,6 +520,124 @@ fn decode(key: &str, model: bool) -> Result<Ready, String> {
 mod tests {
     use super::*;
 
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires a window system; run alone because asset paths are session-global"]
+    fn loose_preview_uploads() {
+        use std::fs;
+        use std::time::{Duration, Instant};
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        let parent = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target")
+            .canonicalize()
+            .unwrap();
+        let root = parent.join(format!("loose-preview-{}", std::process::id()));
+        let skin = root.join("assets/noteskins/dance/startup-fixture");
+        fs::create_dir_all(&skin).unwrap();
+        fs::write(
+            skin.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=startup-fixture\n",
+        )
+        .unwrap();
+        fs::write(
+            skin.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local part = Var('Element') == 'Tap Note' and 'tap' or 'other'
+    return Def.Sprite { Texture = NOTESKIN:GetPath(part, '') }
+end }
+"#,
+        )
+        .unwrap();
+        for name in ["tap", "other", "unused"] {
+            RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+                .save(skin.join(format!("{name}.png")))
+                .unwrap();
+        }
+        let dirs = deadsync_config::dirs::AppDirs {
+            data_dir: root.clone(),
+            exe_dir: root.clone(),
+            cache_dir: root.join("cache"),
+            portable: true,
+        };
+        let paths = dirs.asset_paths(None);
+        assert!(deadsync_assets::textures::initial_texture_jobs([], &paths, |_| false).is_empty());
+        deadsync_assets::init_paths(paths).unwrap();
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        #[expect(deprecated, reason = "hidden upload fixture needs no event loop")]
+        let window = event_loop
+            .create_window(winit::window::Window::default_attributes().with_visible(false))
+            .unwrap();
+        let mut backend = deadlib_render::create_backend(
+            deadlib_render_core::BackendType::Software,
+            Arc::new(window),
+            deadlib_render_core::ProjectionMatrix::IDENTITY,
+            false,
+            deadlib_render_core::PresentModePolicy::Immediate,
+            false,
+            false,
+        )
+        .unwrap();
+        let mut assets = AssetManager::new();
+        let mut service = Service::default();
+        service.requests.push(NoteskinPreviewRequest {
+            name: Arc::from("startup-fixture"),
+            parts: 1,
+            priority: NoteskinPreviewPriority::Visible,
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            service.update_cache(4, &mut assets, &mut backend);
+            assert!(service.failed_skins.is_empty());
+            assert!(service.failed_textures.is_empty());
+            if service
+                .runtimes
+                .get("startup-fixture")
+                .is_some_and(|runtime| runtime.ready_parts(&assets) == 1)
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "preview did not finish");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let tap = "noteskins/dance/startup-fixture/tap.png";
+        let other = "noteskins/dance/startup-fixture/other.png";
+        let unused = "noteskins/dance/startup-fixture/unused.png";
+        assert!(assets.has_uploaded_texture_key(tap));
+        assert!(!assets.has_uploaded_texture_key(other));
+        assert!(!assets.has_uploaded_texture_key(unused));
+        assert_eq!(service.resident_bytes, 8 * 8 * 4);
+        // Full gameplay construction discovers additional textures on demand.
+        let full = noteskin::load_itg_skin(
+            &Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            "startup-fixture",
+        )
+        .unwrap();
+        full.for_each_slot(|slot| {
+            deadsync_assets::textures::ensure_texture_for_key(
+                &mut assets,
+                &mut backend,
+                slot.texture_key(),
+                |_| false,
+            );
+        });
+        assert!(assets.has_uploaded_texture_key(other));
+        assert!(!assets.has_uploaded_texture_key(unused));
+        assert_eq!(root.parent(), Some(parent.as_path()));
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn eviction_preserves_visible_sources_and_chooses_oldest_hidden_source() {
         let resident = HashMap::from([

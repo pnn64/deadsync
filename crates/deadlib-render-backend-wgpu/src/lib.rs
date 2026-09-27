@@ -1034,6 +1034,13 @@ pub fn create_texture(
     image: &RgbaImage,
     sampler_desc: SamplerDesc,
 ) -> Result<Texture, Box<dyn Error>> {
+    // wgpu otherwise panics on allocation failure. Capture the whole upload,
+    // including any validation errors caused by a failed allocation.
+    let validation = state.device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let internal = state.device.push_error_scope(wgpu::ErrorFilter::Internal);
+    let out_of_memory = state
+        .device
+        .push_error_scope(wgpu::ErrorFilter::OutOfMemory);
     let size = wgpu::Extent3d {
         width: image.width(),
         height: image.height(),
@@ -1070,6 +1077,14 @@ pub fn create_texture(
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let (bind_group, bind_group_repeat) =
         create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
+
+    // Native wgpu resolves these immediately, without waiting for GPU work.
+    // Report allocation failure before secondary invalid-resource errors.
+    for scope in [out_of_memory, internal, validation] {
+        if let Some(error) = pollster::block_on(scope.pop()) {
+            return Err(error.into());
+        }
+    }
     let id = next_texture_id(state);
 
     Ok(Texture {
@@ -3529,6 +3544,50 @@ mod pipeline_state_tests;
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires a Vulkan device and a window system"]
+    fn texture_upload_recovers() {
+        use super::{Api, PresentModePolicy, SamplerDesc, Window, create_texture, init};
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("test event loop");
+        #[expect(deprecated, reason = "hidden upload fixture needs no event loop")]
+        let window = event_loop
+            .create_window(Window::default_attributes().with_visible(false))
+            .expect("hidden test window");
+        let mut state = init(
+            Api::Vulkan,
+            Arc::new(window),
+            Matrix4::IDENTITY,
+            false,
+            PresentModePolicy::Immediate,
+            false,
+        )
+        .expect("wgpu backend");
+        let invalid = image::RgbaImage::new(0, 1);
+        let valid = image::RgbaImage::from_pixel(2, 2, image::Rgba([255; 4]));
+        for _ in 0..2 {
+            let result = create_texture(&mut state, &invalid, SamplerDesc::default());
+            assert!(matches!(
+                result
+                    .as_ref()
+                    .err()
+                    .and_then(|error| error.downcast_ref::<wgpu::Error>()),
+                Some(wgpu::Error::Validation { .. })
+            ));
+            create_texture(&mut state, &valid, SamplerDesc::default())
+                .expect("valid upload after failure");
+        }
+    }
+
     #[cfg(all(
         target_os = "windows",
         not(target_pointer_width = "32"),

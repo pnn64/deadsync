@@ -101,6 +101,8 @@ pub fn initial_texture_jobs(
     dirs: &AssetPaths,
     needs_repeat: fn(&str) -> bool,
 ) -> Vec<TextureDecodeJob> {
+    // Installed noteskins stay on disk. Options loads bounded preview textures;
+    // gameplay prewarms the selected skins before starting a song.
     let textures = texture_assets
         .into_iter()
         .map(|asset| {
@@ -109,9 +111,6 @@ pub fn initial_texture_jobs(
                 initial_texture_source_path(asset.path, |path| dirs.resolve_asset_path(path)),
             )
         })
-        .chain(noteskin_png_texture_entries(&dirs.noteskin_roots, |path| {
-            canonical_texture_key_with_asset_roots(path, &dirs.texture_roots)
-        }))
         .chain(INITIAL_GRAPHIC_TEXTURES.iter().flat_map(|spec| {
             discover_graphic_textures_in_roots(
                 spec.folder,
@@ -450,54 +449,6 @@ pub fn texture_key_source_path(
     }
 }
 
-fn noteskin_png_texture_entries(
-    roots: &[PathBuf],
-    canonical_key: impl Fn(&Path) -> String,
-) -> Vec<(String, PathBuf)> {
-    let mut list = Vec::new();
-    let mut seen_keys = HashSet::new();
-    for root in roots {
-        let mut dirs = vec![root.clone()];
-        while let Some(dir) = dirs.pop() {
-            // Pack assets and installer staging stay on disk. Player Options
-            // and gameplay load the selected native components on demand.
-            if dir.join("pack.json").is_file()
-                || dir
-                    .file_name()
-                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
-            {
-                continue;
-            }
-            let Ok(entries) = fs::read_dir(&dir) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let is_dir = match entry.file_type() {
-                    Ok(kind) if !kind.is_symlink() => kind.is_dir(),
-                    _ => entry.path().is_dir(),
-                };
-                if is_dir {
-                    dirs.push(entry.path());
-                    continue;
-                }
-                let name = entry.file_name();
-                if !Path::new(&name)
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-                {
-                    continue;
-                }
-                let path = entry.path();
-                let key = canonical_key(&path);
-                if key.starts_with("noteskins/") && seen_keys.insert(key.clone()) {
-                    list.push((key, path));
-                }
-            }
-        }
-    }
-    list
-}
-
 #[cfg(test)]
 #[path = "../tests/asset_discovery/textures.rs"]
 mod asset_discovery;
@@ -535,27 +486,6 @@ pub fn resolve_texture_choice_entry<'a>(
 mod tests {
     use super::*;
     use deadlib_render_core::SamplerFilter;
-
-    #[test]
-    fn noteskin_scan_skips_packs_and_partial_installs() {
-        let root = std::env::temp_dir().join(format!("deadsync-pack-scan-{}", std::process::id()));
-        for name in [
-            "dance/cel",
-            "hurg/Customizations/Arrows",
-            ".workshop-partial/pack",
-        ] {
-            let dir = root.join(name);
-            fs::create_dir_all(&dir).unwrap();
-            fs::write(dir.join("texture.png"), b"fixture").unwrap();
-        }
-        fs::write(root.join("hurg/pack.json"), b"{}").unwrap();
-        let entries = noteskin_png_texture_entries(&[root.clone()], |path| {
-            format!("noteskins/{}", path.strip_prefix(&root).unwrap().display())
-        });
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].1, root.join("dance/cel/texture.png"));
-        fs::remove_dir_all(root).unwrap();
-    }
 
     #[test]
     fn initial_sampler_keeps_startup_policy() {
@@ -621,7 +551,10 @@ mod tests {
                 .expect("write non-image fixture");
         }
         let jobs = initial_texture_jobs(
-            [deadlib_assets::texture_asset("boundary (nearest).png")],
+            [
+                deadlib_assets::texture_asset("boundary (nearest).png"),
+                deadlib_assets::texture_asset(key),
+            ],
             &dirs.asset_paths(None),
             |key| key == "boundary (nearest).png",
         );
