@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 19;
+const COMPILER_VERSION: u32 = 20;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -553,6 +553,13 @@ fn install_host(
         lua.create_function(move |_, _: MultiValue| Ok(player.clone()))?,
     )?;
     globals.set("GAMESTATE", state)?;
+    let theme = lua.create_table()?;
+    // DeadSync has no ThemeInfo.ini author; match its song-Lua compatibility API.
+    theme.set(
+        "GetThemeAuthor",
+        lua.create_function(|_, _: MultiValue| Ok(""))?,
+    )?;
+    globals.set("THEME", theme)?;
     let actor_mt = lua.create_table()?;
     let actor_methods = lua.create_table()?;
     for name in [
@@ -642,6 +649,17 @@ fn install_host(
         lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
     )?;
     let noteskin = lua.create_table()?;
+    let metrics = data.metrics.clone();
+    noteskin.set(
+        "GetMetric",
+        lua.create_function(move |_, (_self, section, key): (Table, String, String)| {
+            Ok(metrics
+                .get(&section, &key)
+                .or_else(|| metrics.get("NoteDisplay", &key))
+                .unwrap_or("")
+                .to_owned())
+        })?,
+    )?;
     noteskin.set(
         "GetPath",
         lua.create_function(|lua, (_self, button, element): (Table, String, String)| {
@@ -1153,6 +1171,49 @@ mod tests {
             path.components()
                 .all(|component| component.as_os_str() != OsStr::new(&version_dir))
         );
+    }
+
+    #[test]
+    fn loader_reads_theme_author_and_metrics() {
+        let root = temp_noteskin_dir("loader-metadata");
+        fs::write(
+            root.join("metrics.ini"),
+            "[ReceptorArrow]\nFont=some author\nValue=local\n[NoteDisplay]\nValue=fallback\nBlank=\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    assert(THEME:GetThemeAuthor() == "")
+    assert(NOTESKIN:GetMetric("receptorarrow", "value") == "local")
+    assert(NOTESKIN:GetMetric("Left", "Value") == "fallback")
+    assert(NOTESKIN:GetMetric("Left", "Blank") == "")
+    assert(NOTESKIN:GetMetric("Left", "Missing") == "")
+    local actor = LoadActor(NOTESKIN:GetPath("Down", "Tap Note"))
+    if string.find(THEME:GetThemeAuthor(), NOTESKIN:GetMetric("ReceptorArrow", "Font")) then
+        actor.BaseRotationY = 90
+    end
+    return actor
+end }
+"#,
+        )
+        .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "loader-metadata".into(),
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = super::compile_data("dance", &data, "test", "").expect("compile loader");
+        let path = root.join("compiled.bin");
+        noteskin_compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let bundle = noteskin_compiled::load_compiled_bundle(&path).unwrap();
+        let request = bundle.loader.load_request("Left", "Tap Note");
+        assert_eq!(request.load_button, "Down");
+        assert_eq!(request.load_element, "Tap Note");
+        assert_eq!(request.rotation_y, None);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

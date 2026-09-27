@@ -1121,8 +1121,31 @@ pub fn parse_ini_float(raw: &str) -> Option<f32> {
 }
 
 fn resolve_skin_dir(root: &Path, game: &str, skin: &str) -> Option<PathBuf> {
-    find_child_dir_case_insensitive(&root.join(game), skin)
-        .or_else(|| find_child_dir_case_insensitive(&root.join("common"), skin))
+    if skin.starts_with(['/', '\\']) || skin.contains(':') {
+        return None;
+    }
+    // ITGmania appends fallback paths to the game directory, then common.
+    // Resolve each component case insensitively, including Windows separators
+    // on Unix, while keeping relative paths inside the noteskin root.
+    let resolve = |base: &str| {
+        let mut dir = root.join(base);
+        let mut depth = 1usize;
+        for component in skin.split(['/', '\\']) {
+            match component {
+                "" | "." => {}
+                ".." => {
+                    depth = depth.checked_sub(1)?;
+                    dir.pop();
+                }
+                name => {
+                    dir = find_child_dir_case_insensitive(&dir, name)?;
+                    depth += 1;
+                }
+            }
+        }
+        dir.is_dir().then_some(dir)
+    };
+    resolve(game).or_else(|| resolve("common"))
 }
 
 fn cached_path_lookup(
@@ -1891,6 +1914,49 @@ mod tests {
 
         assert!(animation_is_beat_based(&global));
         assert!(!animation_is_beat_based(&override_off));
+    }
+
+    #[test]
+    fn relative_fallbacks_resolve_shared_skin_directories() {
+        let root = temp_root("relative-fallback");
+        let shared = root.join("common/Shared");
+        let common = root.join("common/common");
+        fs::create_dir_all(&shared).unwrap();
+        fs::create_dir_all(&common).unwrap();
+        fs::write(
+            shared.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n[NoteDisplay]\nLength=2\nSpacing=4\n",
+        )
+        .unwrap();
+        fs::write(
+            common.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=common\n[NoteDisplay]\nSpacing=8\n",
+        )
+        .unwrap();
+        fs::write(shared.join("Down Tap Note.png"), []).unwrap();
+        for (name, fallback) in [
+            ("backslash", r"..\Common\Shared"),
+            ("slash", "../COMMON/./SHARED"),
+        ] {
+            let entry = root.join("dance").join(name);
+            fs::create_dir_all(&entry).unwrap();
+            fs::write(
+                entry.join("metrics.ini"),
+                format!("[Global]\nFallbackNoteSkin={fallback}\n[NoteDisplay]\nLength=1\n"),
+            )
+            .unwrap();
+            let data =
+                super::load_noteskin_data(&root, "dance", name).expect("relative fallback loads");
+            assert_eq!(data.search_dirs, [entry, shared.clone(), common.clone()]);
+            assert_eq!(data.metrics.get("NoteDisplay", "Length"), Some("1"));
+            assert_eq!(data.metrics.get("NoteDisplay", "Spacing"), Some("4"));
+            assert_eq!(
+                data.resolve_path("Down", "Tap Note"),
+                Some(shared.join("Down Tap Note.png"))
+            );
+        }
+        assert!(resolve_skin_dir(&root, "dance", "../../outside").is_none());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
