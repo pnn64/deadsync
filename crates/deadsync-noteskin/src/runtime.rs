@@ -409,6 +409,7 @@ pub struct ItgCompiledSpriteOps<T> {
     pub apply_rotation: fn(&mut T, i32),
     pub apply_frame: fn(&mut T, usize),
     pub apply_state: fn(&mut T, &HashMap<String, String>),
+    pub apply_masks: fn(&mut Vec<ItgResolvedSprite<T>>),
     pub apply_loader_command: fn(&mut [ItgResolvedSprite<T>], Option<&str>),
     pub apply_active_cmd: fn(&T, &HashMap<String, String>, &str) -> T,
     pub mine_fill_slots: fn(&[Option<T>]) -> Vec<Option<T>>,
@@ -2913,6 +2914,7 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             style.steps_type(),
             ops,
         );
+        (ops.apply_masks)(&mut sprites);
         if element.eq_ignore_ascii_case("Receptor")
             && let Some(start) = itg_receptor_effect_start(&sprites)
         {
@@ -4619,6 +4621,7 @@ mod tests {
                 apply_rotation: |_, _| {},
                 apply_frame: |_, _| {},
                 apply_state: |_, _| {},
+                apply_masks: |_| {},
                 apply_loader_command: |_, _| {},
                 apply_active_cmd: |slot, _, _| slot.clone(),
                 mine_fill_slots: |mines| mines.to_vec(),

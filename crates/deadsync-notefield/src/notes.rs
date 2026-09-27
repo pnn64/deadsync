@@ -519,7 +519,7 @@ fn compose_flat_mine_slot<S, F, Z>(
         slot.frame_index_from_phase(request.mine_uv_phase)
     };
     let is_model = slot.model().is_some();
-    let uv_elapsed = if is_model {
+    let uv_elapsed = if slot.uv_uses_phase() {
         request.mine_uv_phase
     } else {
         request.elapsed_s

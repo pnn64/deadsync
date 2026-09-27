@@ -1623,7 +1623,7 @@ fn push_scroller_frame(
                         continue;
                     }
                     let frame = note_slot.frame_index_from_phase(note_uv_phase);
-                    let uv_elapsed = if note_slot.model.is_some() {
+                    let uv_elapsed = if note_slot.uv_uses_phase() {
                         note_uv_phase
                     } else {
                         preview_time
@@ -1715,7 +1715,7 @@ fn push_scroller_frame(
                 }
             } else if let Some(note_slot) = ns.notes.get(note_idx) {
                 let frame = note_slot.frame_index_from_phase(note_uv_phase);
-                let uv_elapsed = if note_slot.model.is_some() {
+                let uv_elapsed = if note_slot.uv_uses_phase() {
                     note_uv_phase
                 } else {
                     preview_time

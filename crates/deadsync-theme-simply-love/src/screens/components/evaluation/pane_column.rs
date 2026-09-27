@@ -609,7 +609,7 @@ fn push_column_judgments_pane_from_inputs(
                                 continue;
                             }
                             let frame = slot.frame_index_from_phase(note_uv_phase);
-                            let uv_elapsed = if slot.model.is_some() {
+                            let uv_elapsed = if slot.uv_uses_phase() {
                                 note_uv_phase
                             } else {
                                 elapsed
@@ -721,7 +721,7 @@ fn push_column_judgments_pane_from_inputs(
                         let draw = slot.model_draw_at(elapsed, beat);
                         if draw.visible {
                         let frame = slot.frame_index_from_phase(note_uv_phase);
-                            let uv_elapsed = if slot.model.is_some() {
+                            let uv_elapsed = if slot.uv_uses_phase() {
                                 note_uv_phase
                             } else {
                                 elapsed
@@ -993,7 +993,7 @@ pub(crate) fn push_pane3_arrow_preview(
                 continue;
             }
             let frame = slot.frame_index_from_phase(note_uv_phase);
-            let uv_elapsed = if slot.model.is_some() {
+            let uv_elapsed = if slot.uv_uses_phase() {
                 note_uv_phase
             } else {
                 elapsed
@@ -1103,7 +1103,7 @@ pub(crate) fn push_pane3_arrow_preview(
             return;
         }
         let frame = slot.frame_index_from_phase(note_uv_phase);
-        let uv_elapsed = if slot.model.is_some() {
+        let uv_elapsed = if slot.uv_uses_phase() {
             note_uv_phase
         } else {
             elapsed

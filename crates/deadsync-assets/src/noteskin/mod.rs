@@ -1,3 +1,4 @@
+mod mask;
 mod texture;
 
 pub use self::texture::{
@@ -455,6 +456,7 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         apply_rotation: itg_apply_rotation,
         apply_frame: itg_apply_frame_override,
         apply_state: itg_apply_state_properties_from_commands,
+        apply_masks: mask::apply_sprite_masks,
         apply_loader_command: itg_apply_loader_command,
         apply_active_cmd: itg_slot_with_active_cmd,
         mine_fill_slots: |mines| mine_fill_slots(mines, &texture::MINE_SAMPLES),
@@ -497,7 +499,7 @@ const fn itg_slot_base_zoom(slot: &SpriteSlot) -> f32 {
 }
 
 const fn itg_slot_model_info(slot: &SpriteSlot) -> (bool, [f32; 2]) {
-    (slot.model.is_some(), slot.uv_velocity)
+    (slot.uv_uses_phase(), slot.uv_velocity)
 }
 
 fn itg_slot_texture_key(slot: &SpriteSlot) -> String {
@@ -552,6 +554,127 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn nested_sprite_cutouts_keep_fill_clock_and_quant_uvs() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("sprite-cutout");
+        let art = root.join("Arrow Art");
+        fs::create_dir_all(&art).unwrap();
+        let mut mask = image::RgbaImage::from_pixel(16, 8, image::Rgba([255; 4]));
+        for frame in 0..2 {
+            for y in 2..6 {
+                for x in 2..6 {
+                    mask.put_pixel(frame * 8 + x, y, image::Rgba([255, 255, 255, 0]));
+                }
+            }
+            // Alpha=1 still writes depth in ITG; it must punch a hole in the fill.
+            mask.put_pixel(frame * 8 + 3, 3, image::Rgba([255, 255, 255, 1]));
+        }
+        mask.save(art.join("mask 2x1.png")).unwrap();
+        for name in ["fill", "gloss", "frame"] {
+            image::RgbaImage::from_pixel(16, 8, image::Rgba([128; 4]))
+                .save(art.join(format!("{name} 2x1.png")))
+                .unwrap();
+        }
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    return LoadActor(NOTESKIN:GetPath("Down", "Tap Note"))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(root.join("Down Tap Note.lua"), r#"
+return Def.ActorFrame { children = {
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath('arrow art/mask','');
+        Frame0000=0; Delay0000=0;
+        InitCommand=function(self) self:clearzbuffer(true):SetTextureFiltering(false):zwrite(1):blend("BlendMode_NoEffect") end;
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath('arrow art/fill','');
+        Frame0000=0; Delay0000=0;
+        InitCommand=function(self) self:ztest(true):customtexturerect(0,1,0.5,1):texcoordvelocity(0,-1) end;
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath('arrow art/gloss','');
+        Frame0000=0; Delay0000=0;
+        InitCommand=function(self) self:blend("BlendMode_Add") end;
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath('arrow art/frame','');
+        Frame0000=0; Delay0000=0;
+    };
+} }
+"#).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            name: "cutout-fixture".into(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::default(),
+            overrides: Vec::new(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for bundle in [&bundle, &cached] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                Some(SkinParts::default().with(SkinPart::Arrows)),
+            )
+            .unwrap();
+            for layers in &skin.note_layers {
+                assert_eq!(layers.len(), 3, "the depth-only mask must not be visible");
+                let fill = &layers[0];
+                assert!(fill.texture_key().ends_with("fill 2x1.png"));
+                assert!(fill.actor_frame_child && fill.sprite_mesh);
+                assert!(!fill.uv_uses_phase());
+                assert!(!<SpriteSlot as NoteskinSlot>::uv_uses_phase(fill));
+                assert_eq!(fill.source.frame_count(), 1);
+                assert_eq!(fill.logical_size(), [8.0; 2]);
+                let uv = fill.uv_for_frame_at(0, 0.25);
+                assert_eq!(uv, [0.0, 0.75, 0.5, 0.75]);
+                assert_eq!(fill.uv_for_frame_at(0, 1.25), uv);
+                assert_eq!(fill.uv_for_frame_at(0, 0.5), [0.0, 0.5, 0.5, 0.5]);
+                let mesh = fill.model.as_ref().unwrap();
+                assert_eq!(mesh.bounds, [-4.0, -4.0, 0.0, 4.0, 4.0, 0.0]);
+                let area: f32 = mesh
+                    .vertices
+                    .chunks_exact(3)
+                    .map(|tri| {
+                        let [a, b, c] = [tri[0].pos, tri[1].pos, tri[2].pos];
+                        ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])).abs() * 0.5
+                    })
+                    .sum();
+                assert_eq!(area, 15.0, "16 open pixels minus the alpha=1 pixel");
+                assert!(mesh.vertices.iter().all(|v| v.uv[0] >= 0.25
+                    && v.uv[0] <= 0.75
+                    && v.uv[1] >= 0.25
+                    && v.uv[1] <= 0.75));
+                let (scale, offset, _) = fill.model_uv_params([0.5, uv[1], 1.0, uv[3]]);
+                assert_eq!(
+                    scale,
+                    [0.5, 0.0],
+                    "quant translation retains the collapsed fill row"
+                );
+                assert_eq!(offset, [0.5, 0.75]);
+                assert!(layers[1].texture_key().ends_with("gloss 2x1.png"));
+                assert!(layers[1].model_draw.blend_add);
+                assert!(layers[2].texture_key().ends_with("frame 2x1.png"));
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

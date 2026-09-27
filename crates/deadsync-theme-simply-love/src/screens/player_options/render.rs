@@ -1460,7 +1460,7 @@ fn draw_noteskin_note(
     let note_scale = target_height / primary.logical_size()[1].max(1.0);
     for (layer_idx, slot) in slots.iter().enumerate() {
         let frame = slot.frame_index_from_phase(phase);
-        let uv_elapsed = if slot.model.is_some() { phase } else { elapsed };
+        let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
         let uv = slot.uv_for_frame_at(frame, uv_elapsed);
         let uv = [
             uv[0] + translation[0],
@@ -1622,7 +1622,7 @@ fn draw_mine_preview(
         } else {
             slot.frame_index_from_phase(phase)
         };
-        let uv_time = if slot.model.is_some() {
+        let uv_time = if slot.uv_uses_phase() {
             phase
         } else {
             state.preview_time
@@ -1714,7 +1714,7 @@ fn draw_skin_part(
                 || slot.frame_index(elapsed, beat),
                 |phase| slot.frame_index_from_phase(phase),
             );
-            let uv_time = if slot.model.is_some() {
+            let uv_time = if slot.uv_uses_phase() {
                 phase.unwrap_or(elapsed)
             } else {
                 elapsed
@@ -1950,7 +1950,7 @@ fn draw_tap_explosion_preview(
             beat
         };
         let frame = slot.frame_index(elapsed, frame_beat);
-        let uv = slot.uv_for_frame_at(frame, if slot.model.is_some() { elapsed } else { time });
+        let uv = slot.uv_for_frame_at(frame, if slot.uv_uses_phase() { elapsed } else { time });
         let logical = slot.logical_size();
         let draw = deadsync_noteskin::ModelDrawState {
             zoom: [visual.zoom, visual.zoom, 1.0],

@@ -136,6 +136,12 @@ pub trait NoteskinSlot: Sized {
     fn model(&self) -> Option<&ModelMesh>;
     fn base_rot_sin_cos(&self) -> [f32; 2];
 
+    /// MilkShape materials use note animation phase; sprites use elapsed time,
+    /// including sprites compiled to a mesh for static depth masking.
+    fn uv_uses_phase(&self) -> bool {
+        self.model().is_some()
+    }
+
     #[inline(always)]
     fn frame_count(&self) -> usize {
         1

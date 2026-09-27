@@ -169,6 +169,9 @@ pub struct SpriteSlot {
     animation_start_time: f32,
     pub actor_frame_child: bool,
     pub uv_velocity: [f32; 2],
+    pub custom_uv: Option<[f32; 4]>,
+    /// A clipped sprite keeps sprite UV clocks despite using mesh geometry.
+    pub sprite_mesh: bool,
     pub uv_offset: [f32; 2],
     pub uv_cycle_seconds: Option<f32>,
     /// Three-state beat receptor, activated eight beats before the first note.
@@ -197,6 +200,8 @@ impl Clone for SpriteSlot {
             animation_start_time: self.animation_start_time,
             actor_frame_child: self.actor_frame_child,
             uv_velocity: self.uv_velocity,
+            custom_uv: self.custom_uv,
+            sprite_mesh: self.sprite_mesh,
             uv_offset: self.uv_offset,
             uv_cycle_seconds: self.uv_cycle_seconds,
             beat_receptor_start: self.beat_receptor_start,
@@ -361,7 +366,23 @@ impl SpriteSlot {
     }
 
     #[must_use]
+    pub const fn uv_uses_phase(&self) -> bool {
+        self.model.is_some() && !self.sprite_mesh
+    }
+
+    #[must_use]
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
+        if let Some(mut uv) = self.custom_uv {
+            for axis in 0..2 {
+                let shift = self.uv_velocity[axis] * elapsed;
+                uv[axis] += shift;
+                uv[axis + 2] += shift;
+                let wrap = uv[axis].floor();
+                uv[axis] -= wrap;
+                uv[axis + 2] -= wrap;
+            }
+            return uv;
+        }
         let uv = match self.source.as_ref() {
             SpriteSource::Atlas { uv_cache, .. } => uv_cache.get(self.model.is_none()),
             SpriteSource::Animated {
@@ -419,6 +440,10 @@ impl NoteskinSlot for SpriteSlot {
     }
 
     #[inline(always)]
+    fn uv_uses_phase(&self) -> bool {
+        Self::uv_uses_phase(self)
+    }
+
     fn model(&self) -> Option<&ModelMesh> {
         self.model.as_deref()
     }
@@ -542,6 +567,8 @@ pub fn test_model_slot() -> SpriteSlot {
             cached_actor_texture: AtomicU64::new(0),
         }),
         uv_velocity: [0.0, 0.0],
+        custom_uv: None,
+        sprite_mesh: false,
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
         beat_receptor_start: None,
@@ -758,6 +785,8 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         actor_frame_child: false,
         model_fallback: false,
         uv_velocity: [0.0, 0.0],
+        custom_uv: None,
+        sprite_mesh: false,
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
         beat_receptor_start: None,
@@ -1053,6 +1082,30 @@ fn itg_apply_initial_sprite_state(
                 continue;
             };
             match token.command() {
+                ScriptCommand::Unknown(name) if name.eq_ignore_ascii_case("customtexturerect") => {
+                    if let [a, b, c, d] = token.args()
+                        && let (Some(a), Some(b), Some(c), Some(d)) = (
+                            parse_script_number(a),
+                            parse_script_number(b),
+                            parse_script_number(c),
+                            parse_script_number(d),
+                        )
+                    {
+                        slot.custom_uv = Some([a, b, c, d]);
+                    }
+                }
+                ScriptCommand::Unknown(name) if name.eq_ignore_ascii_case("texcoordvelocity") => {
+                    if let [x, y] = token.args()
+                        && let (Some(x), Some(y)) = (parse_script_number(x), parse_script_number(y))
+                    {
+                        slot.uv_velocity = [x, y];
+                        // Sprite::SetTexCoordVelocity starts from the active frame
+                        // and scrolls across the whole wrapping texture.
+                        if slot.custom_uv.is_none() {
+                            slot.custom_uv = Some(slot.uv_for_frame_at(0, 0.0));
+                        }
+                    }
+                }
                 ScriptCommand::SetState => {
                     frame = token
                         .args()
@@ -1216,7 +1269,7 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     )
 }
 
-fn resolve_asset_path(path: &Path) -> PathBuf {
+pub(super) fn resolve_asset_path(path: &Path) -> PathBuf {
     let resolved = crate::paths().resolve_asset_path(&path.to_string_lossy());
     if resolved.exists() {
         return resolved;

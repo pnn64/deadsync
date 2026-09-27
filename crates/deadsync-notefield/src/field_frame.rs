@@ -703,7 +703,7 @@ fn compose_field_contents<S, F>(
         });
         if let Some((head_slot, draw, note_scale, base_size, model)) = head_slot {
             let frame_index = head_slot.frame_index_from_phase(hold_part_phase);
-            let uv_elapsed = if model.is_some() {
+            let uv_elapsed = if head_slot.uv_uses_phase() {
                 hold_part_phase
             } else {
                 elapsed
@@ -796,7 +796,7 @@ fn compose_field_contents<S, F>(
             }
         } else if let Some(note_slot) = ns.notes.get(note_idx) {
             let frame_index = note_slot.frame_index_from_phase(hold_part_phase);
-            let uv_elapsed = if note_slot.model().is_some() {
+            let uv_elapsed = if note_slot.uv_uses_phase() {
                 hold_part_phase
             } else {
                 elapsed
@@ -1199,7 +1199,7 @@ fn compose_visible_notes<S, F>(
                         notes.part_phase_caches[tap_part as usize],
                     );
                     let frame_index = note_slot.frame_index_from_phase(phase);
-                    let uv_elapsed = if note_slot.model().is_some() {
+                    let uv_elapsed = if note_slot.uv_uses_phase() {
                         phase
                     } else {
                         elapsed
@@ -1284,7 +1284,7 @@ fn compose_flat_noteskin_layer<S, F>(
         return;
     }
     let frame_index = slot.frame_index_from_phase(phase);
-    let uv_elapsed = if model.is_some() { phase } else { elapsed };
+    let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
     let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
     let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
     let rotation_sin_cos = slot.base_rot_sin_cos();
@@ -1350,7 +1350,7 @@ fn compose_flat_single_slot<S, F>(
 {
     let frame_index = slot.frame_index_from_phase(phase);
     let model = slot.model();
-    let uv_elapsed = if model.is_some() { phase } else { elapsed };
+    let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
     let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
     let size = note_slot_base_size(slot, model, scale);
     let draw = song_lua_note_model_draw(
@@ -1843,6 +1843,7 @@ mod note_layer_tests {
     struct TestSlot {
         def: SpriteDefinition,
         draw: ModelDrawState,
+        model: Option<ModelMesh>,
         frame_samples: Cell<usize>,
         uv_samples: Cell<usize>,
     }
@@ -1858,7 +1859,10 @@ mod note_layer_tests {
             Arc::from("layer")
         }
         fn model(&self) -> Option<&ModelMesh> {
-            None
+            self.model.as_ref()
+        }
+        fn uv_uses_phase(&self) -> bool {
+            false
         }
         fn base_rot_sin_cos(&self) -> [f32; 2] {
             [0.0, 1.0]
@@ -1922,6 +1926,7 @@ mod note_layer_tests {
                     blend_add: true,
                     ..ModelDrawState::default()
                 },
+                model: None,
                 frame_samples: Cell::new(0),
                 uv_samples: Cell::new(0),
             };
@@ -1984,6 +1989,60 @@ mod note_layer_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sprite_cutout_mesh_keeps_elapsed_uv_clock() {
+        let slot = TestSlot {
+            def: SpriteDefinition {
+                size: [64; 2],
+                ..SpriteDefinition::default()
+            },
+            draw: ModelDrawState::default(),
+            model: Some(ModelMesh {
+                bounds: [-32.0, -32.0, 0.0, 32.0, 32.0, 0.0],
+                vertices: [[-32.0, 32.0, 0.0], [-32.0, -32.0, 0.0], [32.0, -32.0, 0.0]]
+                    .map(|pos| deadsync_noteskin::ModelVertex {
+                        pos,
+                        uv: [0.0; 2],
+                        tex_matrix_scale: [1.0; 2],
+                    })
+                    .into(),
+            }),
+            frame_samples: Cell::new(0),
+            uv_samples: Cell::new(0),
+        };
+        let mut cache = ModelMeshCache::with_capacity(1);
+        assert!(cache.prewarm_slot(&slot));
+        cache.seal();
+        let mut draws = Vec::new();
+        compose_flat_noteskin_layer(
+            &mut draws,
+            &mut cache,
+            &slot,
+            [120.0, 180.0],
+            1.0,
+            0.25,
+            [0.5, 0.0],
+            3.0,
+            4.0,
+            0.0,
+            0.0,
+            0.0,
+            [1.0; 4],
+            0.0,
+            140,
+            0.0,
+            false,
+            &|slot| SpriteSource::Texture(slot.texture_key_shared()),
+        );
+        let [FlatDraw::TexturedMesh(mesh)] = draws.as_slice() else {
+            panic!("expected clipped mesh");
+        };
+        assert_eq!(mesh.uv_offset, [0.625, 0.25]);
+        assert_eq!(mesh.uv_scale, [0.375, 0.5]);
+        assert_eq!(slot.uv_samples.get(), 1);
+        assert_eq!(cache.stats().saturated_misses, 0);
     }
 }
 

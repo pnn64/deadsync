@@ -1209,6 +1209,21 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
 }
 
 fn find_file_with_prefix(dir: &Path, prefix: &str, png_only: bool) -> Option<PathBuf> {
+    // GetPath's button/element and redirects may include asset subdirectories.
+    // Match each directory case-insensitively before matching the file prefix.
+    if let Some((parent, name)) = prefix.rsplit_once(['/', '\\']) {
+        let mut dir = dir.to_path_buf();
+        for component in parent.split(['/', '\\']) {
+            match component {
+                "" | "." => {}
+                ".." => {
+                    dir.pop();
+                }
+                name => dir = find_child_dir_case_insensitive(&dir, name)?,
+            }
+        }
+        return find_file_with_prefix(&dir, name, png_only);
+    }
     let caches =
         FILE_PREFIX_CACHE.get_or_init(|| std::array::from_fn(|_| Mutex::new(BorrowMap::new())));
     let cache = &caches[usize::from(png_only)];
@@ -1956,6 +1971,36 @@ mod tests {
             );
         }
         assert!(resolve_skin_dir(&root, "dance", "../../outside").is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn texture_paths_resolve_asset_subdirectories() {
+        let root = temp_root("asset-subdirs");
+        let skin = root.join("skin");
+        let textures = skin.join("Arrow Tex/Nested");
+        fs::create_dir_all(&textures).unwrap();
+        let path = textures.join("_down tap fill 4x1.png");
+        fs::write(&path, []).unwrap();
+        fs::write(
+            skin.join("Down Tap Note.redir"),
+            "arrow tex/nested/_down tap fill",
+        )
+        .unwrap();
+        let data = NoteskinData {
+            name: "fixture".into(),
+            metrics: IniData::default(),
+            search_dirs: vec![skin],
+            overrides: Vec::new(),
+        };
+        for button in ["ARROW TEX/NESTED/_down", r"arrow tex\nested\_down"] {
+            assert_eq!(data.resolve_path(button, "tap fill"), Some(path.clone()));
+        }
+        assert_eq!(data.resolve_path("Down", "Tap Note"), Some(path.clone()));
+        assert_eq!(
+            find_texture_with_prefix(&data, "arrow tex/./nested/_DOWN TAP FILL"),
+            Some(path)
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
