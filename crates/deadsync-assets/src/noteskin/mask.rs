@@ -1,5 +1,7 @@
 use super::{ItgLuaResolvedSprite, ModelMesh, ModelVertex, SpriteSlot};
-use deadsync_noteskin::script::{normalized_script_command, parse_script_bool, split_script_token};
+use deadsync_noteskin::script::{
+    ScriptCommand, normalized_script_command, parse_script_bool, split_script_token,
+};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -26,19 +28,17 @@ fn depth_mode(sprite: &ItgLuaResolvedSprite) -> DepthMode {
             let Some(&arg) = token.args().first() else {
                 continue;
             };
-            let name = token.command().as_str();
-            if name.eq_ignore_ascii_case("clearzbuffer") {
-                mode.clear = parse_script_bool(arg);
-            } else if name.eq_ignore_ascii_case("zwrite") {
-                mode.write = parse_script_bool(arg);
-            } else if name.eq_ignore_ascii_case("ztest") {
-                mode.test = parse_script_bool(arg);
-            } else if name.eq_ignore_ascii_case("settexturefiltering") {
-                mode.nearest = !parse_script_bool(arg);
-            } else if name.eq_ignore_ascii_case("blend") {
-                mode.invisible = arg
-                    .trim_matches(['\'', '"'])
-                    .eq_ignore_ascii_case("BlendMode_NoEffect");
+            match token.command() {
+                ScriptCommand::ClearZBuffer => mode.clear = parse_script_bool(arg),
+                ScriptCommand::ZWrite => mode.write = parse_script_bool(arg),
+                ScriptCommand::ZTest => mode.test = parse_script_bool(arg),
+                ScriptCommand::SetTextureFiltering => mode.nearest = !parse_script_bool(arg),
+                ScriptCommand::Blend => {
+                    mode.invisible = arg
+                        .trim_matches(['\'', '"'])
+                        .eq_ignore_ascii_case("BlendMode_NoEffect");
+                }
+                _ => {}
             }
         }
     }

@@ -96,6 +96,11 @@ pub enum ScriptCommand<'a> {
     SetStateProperties,
     SetAllStateDelays,
     SetTextureFiltering,
+    ZTest,
+    ZWrite,
+    ClearZBuffer,
+    CustomTextureRect,
+    TexCoordVelocity,
     X,
     Y,
     Z,
@@ -158,6 +163,11 @@ impl<'a> ScriptCommand<'a> {
             Self::SetStateProperties => "setstateproperties",
             Self::SetAllStateDelays => "setallstatedelays",
             Self::SetTextureFiltering => "settexturefiltering",
+            Self::ZTest => "ztest",
+            Self::ZWrite => "zwrite",
+            Self::ClearZBuffer => "clearzbuffer",
+            Self::CustomTextureRect => "customtexturerect",
+            Self::TexCoordVelocity => "texcoordvelocity",
             Self::X => "x",
             Self::Y => "y",
             Self::Z => "z",
@@ -231,6 +241,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("spin", Spin);
             }
             5 => {
+                command!("ztest", ZTest);
                 command!("sleep", Sleep);
                 command!("pause", Pause);
                 command!("zoomx", ZoomX);
@@ -240,6 +251,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("pulse", Pulse);
             }
             6 => {
+                command!("zwrite", ZWrite);
                 command!("linear", Linear);
                 command!("valign", VAlign);
             }
@@ -273,6 +285,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("effectclock", EffectClock);
             }
             12 => {
+                command!("clearzbuffer", ClearZBuffer);
                 command!("stoptweening", StopTweening);
                 command!("addrotationx", AddRotationX);
                 command!("addrotationy", AddRotationY);
@@ -288,7 +301,11 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
             13 => command!("baserotationz", BaseRotationZ),
             14 => command!("finishtweening", FinishTweening),
             15 => command!("effectmagnitude", EffectMagnitude),
-            17 => command!("setallstatedelays", SetAllStateDelays),
+            16 => command!("texcoordvelocity", TexCoordVelocity),
+            17 => {
+                command!("setallstatedelays", SetAllStateDelays);
+                command!("customtexturerect", CustomTextureRect);
+            }
             18 => command!("setstateproperties", SetStateProperties),
             19 => command!("settexturefiltering", SetTextureFiltering),
             _ => {}
@@ -1310,6 +1327,19 @@ pub fn model_draw_program(
             };
             let command = token.command();
             let args = token.args();
+            // Sprite UV state and static depth masks are applied by the asset
+            // loader. They are not model transforms and must not split a tween
+            // group or be reported as unsupported on this second pass.
+            if matches!(
+                command,
+                ScriptCommand::ZTest
+                    | ScriptCommand::ZWrite
+                    | ScriptCommand::ClearZBuffer
+                    | ScriptCommand::CustomTextureRect
+                    | ScriptCommand::TexCoordVelocity
+            ) {
+                continue;
+            }
             if let Some((tween, duration)) = parse_script_tween(command, args) {
                 flush_group(
                     &mut state,
@@ -1693,6 +1723,60 @@ mod tests {
         assert_eq!(draw.tint, [1.0, 0.0, 0.0, 0.501_960_8]);
         assert_eq!(effect.clock, ModelEffectClock::Beat);
         assert_eq!(effect.mode, ModelEffectMode::GlowShift);
+    }
+
+    #[test]
+    fn model_draw_program_leaves_sprite_commands_to_asset_loading() {
+        use std::cell::RefCell;
+        thread_local! {
+            static WARNINGS: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+        }
+        struct CaptureWarnings;
+        impl log::Log for CaptureWarnings {
+            fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+                metadata.level() == log::Level::Warn
+                    && metadata.target() == "deadsync_noteskin::script"
+            }
+            fn log(&self, record: &log::Record<'_>) {
+                if self.enabled(record.metadata()) {
+                    WARNINGS.with_borrow_mut(|warnings| {
+                        if let Some(warnings) = warnings {
+                            warnings.push(record.args().to_string());
+                        }
+                    });
+                }
+            }
+            fn flush(&self) {}
+        }
+        static LOGGER: CaptureWarnings = CaptureWarnings;
+        log::set_logger(&LOGGER).expect("this test binary has no other logger");
+        log::set_max_level(log::LevelFilter::Warn);
+        WARNINGS.with_borrow_mut(|warnings| *warnings = Some(Vec::new()));
+
+        let commands = HashMap::from([(
+            "initcommand".to_string(),
+            "linear,0.5;x,8;ZTest,true;ZWrite,1;ClearZBuffer,true;\
+             CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;y,4"
+                .to_string(),
+        )]);
+        let (draw, timeline, _) = model_draw_program(&commands);
+        assert_eq!(timeline.len(), 1, "sprite commands must not split a tween");
+        assert_eq!(timeline[0].duration, 0.5);
+        assert_eq!(timeline[0].from.pos, [0.0; 3]);
+        assert_eq!(timeline[0].to.pos, [8.0, 4.0, 0.0]);
+        assert_eq!(draw.pos, [8.0, 4.0, 0.0]);
+        WARNINGS
+            .with_borrow(|warnings| assert!(warnings.as_ref().unwrap().is_empty(), "{warnings:?}"));
+
+        model_draw_program(&HashMap::from([(
+            "initcommand".to_string(),
+            "FutureCommand,1".to_string(),
+        )]));
+        let warnings = WARNINGS.with_borrow_mut(Option::take).unwrap();
+        assert_eq!(
+            warnings,
+            ["unsupported noteskin actor command in model DSL path: 'FutureCommand'"]
+        );
     }
 
     #[test]

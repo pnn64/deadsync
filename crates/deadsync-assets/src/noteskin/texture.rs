@@ -1082,7 +1082,7 @@ fn itg_apply_initial_sprite_state(
                 continue;
             };
             match token.command() {
-                ScriptCommand::Unknown(name) if name.eq_ignore_ascii_case("customtexturerect") => {
+                ScriptCommand::CustomTextureRect => {
                     if let [a, b, c, d] = token.args()
                         && let (Some(a), Some(b), Some(c), Some(d)) = (
                             parse_script_number(a),
@@ -1094,7 +1094,7 @@ fn itg_apply_initial_sprite_state(
                         slot.custom_uv = Some([a, b, c, d]);
                     }
                 }
-                ScriptCommand::Unknown(name) if name.eq_ignore_ascii_case("texcoordvelocity") => {
+                ScriptCommand::TexCoordVelocity => {
                     if let [x, y] = token.args()
                         && let (Some(x), Some(y)) = (parse_script_number(x), parse_script_number(y))
                     {
