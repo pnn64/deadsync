@@ -406,16 +406,17 @@ fn animate_layer_groups(
     beat_based: bool,
 ) {
     for group in groups.chunks_exact_mut(quantizations) {
-        let Some(first) = group.first() else {
-            continue;
-        };
-        let mut layers = first.as_ref().to_vec();
-        for slot in &mut layers {
-            itg_apply_note_animation(slot, animation, translate, beat_based);
-        }
-        let layers = Arc::<[SpriteSlot]>::from(layers);
-        for entry in group {
-            *entry = Arc::clone(&layers);
+        // Atlas skins share one layer set across quants; Var("Color") skins
+        // have distinct sets. Animate each set without replacing its neighbors.
+        for shared in group.chunk_by_mut(Arc::ptr_eq) {
+            let mut layers = shared[0].as_ref().to_vec();
+            for slot in &mut layers {
+                itg_apply_note_animation(slot, animation, translate, beat_based);
+            }
+            let layers = Arc::<[SpriteSlot]>::from(layers);
+            for entry in shared {
+                *entry = Arc::clone(&layers);
+            }
         }
     }
 }
@@ -599,6 +600,169 @@ mod tests {
             .save(path)
             .unwrap();
         itg_register_texture_dims_for_path(path);
+    }
+
+    #[test]
+    fn color_models_keep_quant_materials_through_loading() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("color-materials");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Tap Note" or element == "Tap Lift" then
+        local actor = LoadActor(NOTESKIN:GetPath("Down", element))
+        actor.BaseRotationZ = ({Left=90, Down=0, Up=180, Right=-90})[Var "Button"]
+        return actor
+    end
+    if element == "Receptor" then return LoadActor(NOTESKIN:GetPath("", "border.png")) end
+    return Def.Actor {}
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Tap Note.lua"),
+            "return LoadActor(NOTESKIN:GetPath('', 'Color Actor'))",
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Tap Lift.lua"),
+            "return NOTESKIN:LoadActor(Var 'Button', 'Tap Note')",
+        )
+        .unwrap();
+        fs::write(
+            root.join("Color Actor.lua"),
+            r#"
+local quant = Var "Color"
+local palette = { ["192nd"] = "64th" }
+local side = Var "Button" == "Left" and "left" or "other"
+return Def.Model {
+    Meshes = NOTESKIN:GetPath('', 'geometry'),
+    Materials = NOTESKIN:GetPath(side .. ' ' .. (palette[quant] or quant), 'materials'),
+    Bones = NOTESKIN:GetPath('', 'geometry'),
+    InitCommand = function(self) self:zoom(0.75) end
+}
+"#,
+        )
+        .unwrap();
+        let mut geometry = String::from("MilkShape 3D ASCII\nMeshes: 2\n");
+        for material in 0..2 {
+            geometry.push_str(&format!(
+                r#""layer{material}" 0 {material}
+3
+0 -32 -32 0 0 0 -1
+0 32 -32 0 1 0 -1
+0 0 32 0 0 1 -1
+0
+1
+0 0 1 2 0 0 0 1
+"#
+            ));
+        }
+        fs::write(root.join("geometry.txt"), geometry).unwrap();
+        write_noteskin_png(&root.join("border.png"));
+        for color in ["4th", "8th", "12th", "16th", "24th", "32nd", "48th", "64th"] {
+            for side in ["left", "other"] {
+                let name = format!("{side}-{color}");
+                write_noteskin_png(&root.join(format!("{name}.png")));
+                fs::write(
+                    root.join(format!("{name}.ini")),
+                    format!(
+                        "[AnimatedTexture]\nTexVelocityY=-1\nFrame0000={name}.png\nDelay0000=1\n"
+                    ),
+                )
+                .unwrap();
+                let mut materials = String::from("Materials: 2\n");
+                for texture in ["border.png".to_owned(), format!("{name}.ini")] {
+                    materials.push_str(&format!(
+                        r#""material"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"{texture}"
+""
+"#
+                    ));
+                }
+                fs::write(
+                    root.join(format!("{side} {color} materials.txt")),
+                    materials,
+                )
+                .unwrap();
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "color-fixture".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        // Round-trip the cache: quant variants must survive a later process load.
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let parts = SkinParts::default()
+            .with(SkinPart::Arrows)
+            .with(SkinPart::Lifts);
+        for parts in [None, Some(parts)] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            assert_eq!(skin.notes.len(), 4 * NUM_QUANTIZATIONS);
+            for (col, rotation) in [90, 0, 180, -90].into_iter().enumerate() {
+                for (quant, color) in [
+                    "4th", "8th", "12th", "16th", "24th", "32nd", "48th", "64th", "64th",
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let index = col * NUM_QUANTIZATIONS + quant;
+                    let side = if col == 0 { "left" } else { "other" };
+                    for layers in [&skin.note_layers[index], &skin.lift_note_layers[index]] {
+                        assert_eq!(layers.len(), 2);
+                        assert!(
+                            layers[0].texture_key().ends_with("border.png"),
+                            "keep authored material order"
+                        );
+                        assert!(
+                            layers[1]
+                                .texture_key()
+                                .ends_with(&format!("{side}-{color}.png")),
+                            "column {col}, quant {quant}: {}",
+                            layers[1].texture_key()
+                        );
+                        assert_eq!(layers[0].uv_velocity, [0.0, 0.0]);
+                        assert_eq!(layers[1].uv_velocity, [0.0, -1.0]);
+                        for slot in layers.iter() {
+                            assert!(slot.model.is_some());
+                            assert_eq!(slot.logical_size(), [64.0; 2]);
+                            assert_eq!(slot.def.rotation_deg, rotation);
+                            assert_eq!(slot.model_draw.zoom, [0.75; 3]);
+                        }
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -935,9 +1099,15 @@ mod tests {
         let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
         assert!(!ns.notes.is_empty());
         assert!(ns.notes.iter().any(|slot| slot.model.is_some()));
-        assert!(ns.notes.iter().any(|slot| {
-            slot.uv_velocity[0].abs() > f32::EPSILON || slot.uv_velocity[1].abs() > f32::EPSILON
-        }));
+        assert!(
+            ns.note_layers
+                .iter()
+                .flat_map(|layers| layers.iter())
+                .any(|slot| {
+                    slot.uv_velocity[0].abs() > f32::EPSILON
+                        || slot.uv_velocity[1].abs() > f32::EPSILON
+                })
+        );
     }
 
     #[test]

@@ -1488,7 +1488,7 @@ fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, ce
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
     for &(col, quant_idx, x_mult) in preview_arrows(ns.column_xs.len()) {
         let x = x_mult.mul_add(target_height, center_x);
-        let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+        let note_idx = col * NUM_QUANTIZATIONS + quant_idx as usize;
         draw_noteskin_note(
             actors,
             rc.fc.state,

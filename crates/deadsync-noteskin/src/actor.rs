@@ -483,7 +483,7 @@ fn has_beat_fade_glow_signature(body: &str) -> bool {
         .all(|signature| find_compact_ascii_case_insensitive(body, signature).is_some())
 }
 
-fn strip_lua_comments(content: &str) -> Cow<'_, str> {
+pub(crate) fn strip_lua_comments(content: &str) -> Cow<'_, str> {
     if !content.contains("--") {
         return Cow::Borrowed(content);
     }

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 16;
+const COMPILER_VERSION: u32 = 17;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -342,7 +342,7 @@ pub fn compile_data(
         },
         actors: CompiledActors {
             version: COMPILER_VERSION,
-            files: compile_actor_files(data)?,
+            files: compile_actor_files(&lua, data)?,
         },
     })
 }
@@ -359,6 +359,7 @@ fn noteskin_paths(data: &noteskin_itg::NoteskinData) -> Vec<PathBuf> {
 }
 
 fn compile_actor_files(
+    lua: &Lua,
     data: &noteskin_itg::NoteskinData,
 ) -> Result<Vec<CompiledActorFile>, String> {
     let mut out = Vec::new();
@@ -381,26 +382,155 @@ fn compile_actor_files(
             let Some(key) = noteskin_compiled::actor_manifest_key_for_dir(dir, &path) else {
                 continue;
             };
-            if content.contains("Var") && content.contains("Button") {
-                for button in DANCE_BUTTONS.iter().chain(PUMP_BUTTONS.iter()) {
-                    out.push(CompiledActorFile {
-                        key: format!("{key}|{button}"),
-                        decl: noteskin_actor::parse_actor_for_button(
-                            &content,
-                            &data.metrics,
-                            Some(button),
-                        ),
-                    });
+            let uses_button = uses_actor_var(&content, "Button");
+            let uses_color = uses_actor_var(&content, "Color");
+            let buttons: Vec<_> = if uses_button {
+                DANCE_BUTTONS
+                    .iter()
+                    .chain(PUMP_BUTTONS.iter())
+                    .copied()
+                    .map(Some)
+                    .collect()
+            } else {
+                vec![None]
+            };
+            for button in buttons {
+                let key = button.map_or_else(|| key.clone(), |button| format!("{key}|{button}"));
+                let decl = noteskin_actor::parse_actor_for_button(&content, &data.metrics, button);
+                if uses_color {
+                    for color in crate::Quantization::ALL {
+                        let mut variant = decl.clone();
+                        compile_color_paths(lua, &content, button, color, &mut variant).map_err(
+                            |err| {
+                                format!(
+                                    "failed to compile '{}' ({}, {}): {err}",
+                                    path.display(),
+                                    button.unwrap_or("Down"),
+                                    color.color_name()
+                                )
+                            },
+                        )?;
+                        if color == crate::Quantization::Q4th {
+                            out.push(CompiledActorFile {
+                                key: key.clone(),
+                                decl: variant.clone(),
+                            });
+                        }
+                        out.push(CompiledActorFile {
+                            key: format!("{key}|color={}", color.color_name()),
+                            decl: variant,
+                        });
+                    }
+                } else {
+                    out.push(CompiledActorFile { key, decl });
                 }
             }
-            out.push(CompiledActorFile {
-                key,
-                decl: noteskin_actor::parse_actor_decl(&content, &data.metrics),
-            });
+            if uses_button {
+                let mut decl = noteskin_actor::parse_actor_decl(&content, &data.metrics);
+                if uses_color {
+                    compile_color_paths(lua, &content, None, crate::Quantization::Q4th, &mut decl)
+                        .map_err(|err| format!("failed to compile '{}': {err}", path.display()))?;
+                }
+                out.push(CompiledActorFile { key, decl });
+            }
         }
     }
     out.sort_by(|left, right| left.key.cmp(&right.key));
     Ok(out)
+}
+
+fn uses_actor_var(content: &str, name: &str) -> bool {
+    let content = noteskin_actor::strip_lua_comments(content);
+    content.match_indices("Var").any(|(offset, _)| {
+        if offset > 0
+            && (content.as_bytes()[offset - 1].is_ascii_alphanumeric()
+                || content.as_bytes()[offset - 1] == b'_')
+        {
+            return false;
+        }
+        let arg = content[offset + 3..]
+            .trim_start()
+            .trim_start_matches('(')
+            .trim_start();
+        matches!(arg.as_bytes().first(), Some(b'\'' | b'"'))
+            && crate::lua::itg_quoted_strings(arg).next() == Some(name)
+    })
+}
+
+// Evaluate resource expressions with Lua so tables, concatenation and aliases
+// follow ITG's Var("Color") semantics. Commands remain in the existing compiler;
+// actor constructors only capture properties and never run animation callbacks.
+fn compile_color_paths(
+    lua: &Lua,
+    content: &str,
+    button: Option<&str>,
+    color: crate::Quantization,
+    decl: &mut noteskin_actor::ItgLuaActorDecl,
+) -> mlua::Result<()> {
+    let env = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.set("__index", lua.globals())?;
+    env.set_metatable(Some(mt))?;
+    let button = button.unwrap_or("Down").to_owned();
+    env.set(
+        "Var",
+        lua.create_function(move |lua, name: String| match name.as_str() {
+            "Color" => Ok(Value::String(lua.create_string(color.color_name())?)),
+            "Button" => Ok(Value::String(lua.create_string(&button)?)),
+            _ => lua.globals().get::<Function>("Var")?.call(name),
+        })?,
+    )?;
+    let def = lua.create_table()?;
+    let models = lua.create_table()?;
+    let sprites = lua.create_table()?;
+    for (name, output) in [("Model", models.clone()), ("Sprite", sprites.clone())] {
+        def.set(
+            name,
+            lua.create_function(move |_, props: Table| {
+                output.raw_set(output.raw_len() + 1, props.clone())?;
+                Ok(props)
+            })?,
+        )?;
+    }
+    def.set(
+        "ActorFrame",
+        lua.create_function(|_, props: Table| Ok(props))?,
+    )?;
+    def.set("Actor", lua.create_function(|_, props: Table| Ok(props))?)?;
+    env.set("Def", def)?;
+    lua.load(content).set_environment(env).exec()?;
+    if models.raw_len() != decl.models.len() || sprites.raw_len() != decl.sprites.len() {
+        return Err(mlua::Error::runtime(
+            "color-dependent actor structure is unsupported",
+        ));
+    }
+    for (index, model) in decl.models.iter_mut().enumerate() {
+        let props: Table = models.raw_get(index + 1)?;
+        model.meshes_expr = compiled_path_expr(props.get("Meshes")?)?;
+        model.materials_expr = compiled_path_expr(props.get("Materials")?)?;
+        model.bones_expr = compiled_path_expr(props.get("Bones")?)?;
+        model.texture_expr = compiled_path_expr(props.get("Texture")?)?;
+    }
+    for (index, sprite) in decl.sprites.iter_mut().enumerate() {
+        let props: Table = sprites.raw_get(index + 1)?;
+        if let Some(path) = compiled_path_expr(props.get("Texture")?)? {
+            sprite.texture_expr = path;
+        }
+    }
+    Ok(())
+}
+
+fn compiled_path_expr(value: Value) -> mlua::Result<Option<String>> {
+    Ok(match value {
+        Value::Nil => None,
+        Value::String(value) => Some(format!("{:?}", value.to_str()?.as_ref())),
+        Value::Table(path) => {
+            let button: String = path.get("load_button")?;
+            let element: String = path.get("load_element")?;
+            Some(format!("NOTESKIN:GetPath({button:?},{element:?})"))
+        }
+        _ => return Err(mlua::Error::runtime("invalid noteskin resource path")),
+    })
 }
 
 fn install_host(
@@ -496,6 +626,7 @@ fn install_host(
             "Element" => Ok(Value::String(
                 lua.create_string(&globals.get::<String>("__itg_element")?)?,
             )),
+            "Color" => Ok(Value::String(lua.create_string("4th")?)),
             "SpriteOnly" => Ok(Value::Boolean(
                 globals.get::<bool>("__itg_sprite_only").unwrap_or(false),
             )),

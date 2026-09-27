@@ -9,9 +9,9 @@ use crate::explosion::{
 use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
     ExplosionAnimation, ModelDrawState, ModelEffectState, ModelTweenSegment, NoteAnimPart,
-    NoteColorType, NoteDisplayMetrics, NotePartTextureTranslate, ReceptorGlowBehavior,
-    ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior,
-    ReceptorStepBehaviors,
+    NoteColorType, NoteDisplayMetrics, NotePartTextureTranslate, Quantization,
+    ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior,
+    ReceptorStepBehavior, ReceptorStepBehaviors,
 };
 use crate::{actor, compiled, itg, model, receptor};
 use smallvec::SmallVec;
@@ -1223,7 +1223,9 @@ pub fn itg_tap_note_layers<T>(mut layers: Vec<T>, fallback: impl FnOnce() -> Opt
 }
 
 fn sort_tap_note_layers<T>(layers: &mut [T], mut layer_info: impl FnMut(&T) -> (bool, [f32; 2])) {
-    if layers.len() > 1 {
+    // A Model's meshes already follow authored material order. UV motion must
+    // not move an animated material in front of its border/overlay meshes.
+    if layers.len() > 1 && !layers.iter().all(|layer| layer_info(layer).0) {
         layers.sort_by_key(|layer| {
             let (has_model, uv_velocity) = layer_info(layer);
             if !has_model {
@@ -1593,6 +1595,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    color: Option<Quantization>,
     steps_type: &str,
     path: &Path,
     rotation_x: Option<i32>,
@@ -1655,7 +1658,8 @@ pub fn itg_resolve_actor_file_compiled<T>(
         return Vec::new();
     }
 
-    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path, Some(button)) else {
+    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path, Some(button), color)
+    else {
         log::warn!("compiled noteskin actors are missing '{}'", path.display());
         visiting.remove(&path_key);
         return Vec::new();
@@ -1873,6 +1877,7 @@ pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    color: Option<Quantization>,
     steps_type: &str,
     ops: ItgCompiledSpriteOps<T>,
 ) -> Vec<ItgResolvedSprite<T>> {
@@ -1883,6 +1888,7 @@ pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
         compiled_actors,
         button,
         element,
+        color,
         steps_type,
         0,
         &mut visiting,
@@ -1896,6 +1902,7 @@ fn itg_resolve_actor_sprites_with_ops_inner<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    color: Option<Quantization>,
     steps_type: &str,
     depth: usize,
     visiting: &mut HashSet<String>,
@@ -1915,6 +1922,7 @@ fn itg_resolve_actor_sprites_with_ops_inner<T>(
                 compiled_actors,
                 button,
                 element,
+                color,
                 steps_type,
                 path,
                 rotation_x,
@@ -1936,6 +1944,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
     compiled_actors: &compiled::CompiledActors,
     button: &str,
     element: &str,
+    color: Option<Quantization>,
     steps_type: &str,
     path: &Path,
     rotation_x: Option<i32>,
@@ -1951,6 +1960,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
         compiled_actors,
         button,
         element,
+        color,
         steps_type,
         path,
         rotation_x,
@@ -1974,6 +1984,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
                 compiled_actors,
                 button,
                 element,
+                color,
                 steps_type,
                 path,
                 None,
@@ -1992,6 +2003,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
                 compiled_actors,
                 child_button,
                 child_element,
+                color,
                 steps_type,
                 depth + 1,
                 visiting,
@@ -2218,7 +2230,7 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
     compiled: &compiled::CompiledLoader,
     quantizations: usize,
     resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
-    resolve_slots: impl FnMut(&str, &str) -> Vec<T>,
+    mut resolve_slots: impl FnMut(&str, &str) -> Vec<T>,
     resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
     resolve_prefix_slot: impl FnMut(&str) -> Option<T>,
     apply_receptor_init: impl FnMut(&mut T, &str),
@@ -2231,12 +2243,13 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
         compiled,
         quantizations,
         resolve_sprites,
-        resolve_slots,
+        |button, element, _| resolve_slots(button, element),
         resolve_direct_slot,
         resolve_prefix_slot,
         apply_receptor_init,
         receptor_base_zoom,
         tap_layer_info,
+        false,
         RuntimeLoad::GAMEPLAY,
     )
 }
@@ -2247,12 +2260,13 @@ fn itg_runtime_columns_selected<T: Clone>(
     compiled: &compiled::CompiledLoader,
     quantizations: usize,
     mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
-    mut resolve_slots: impl FnMut(&str, &str) -> Vec<T>,
+    mut resolve_slots: impl FnMut(&str, &str, Option<Quantization>) -> Vec<T>,
     mut resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
     mut resolve_prefix_slot: impl FnMut(&str) -> Option<T>,
     mut apply_receptor_init: impl FnMut(&mut T, &str),
     mut receptor_base_zoom: impl FnMut(&T) -> f32,
     mut tap_layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+    color_variants: bool,
     load: RuntimeLoad,
 ) -> Result<ItgRuntimeColumns<T>, String> {
     let mut notes = Vec::new();
@@ -2304,22 +2318,31 @@ fn itg_runtime_columns_selected<T: Clone>(
     for col in 0..style.num_cols {
         let button = itg::button_for_col(style.num_cols, col);
         if load.has(SkinPart::Arrows) || load.has(SkinPart::Lifts) {
-            let note_sprites = resolve_slots(button, "Tap Note");
-            let note_sprites = itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
-            let note_column = emit_tap_note_column(
-                note_sprites,
-                quantizations,
-                &mut tap_layer_info,
-                &mut notes,
-                &mut note_layers,
-            )
-            .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
-            if load.has(SkinPart::Lifts) {
-                let lift_sprites = resolve_slots(button, "Tap Lift");
-                let lift_layers_for_col =
-                    itg_lift_layers_for_col_shared(lift_sprites, &note_column.shared_layers);
-                for _ in 0..quantizations {
-                    lift_note_layers.push(Arc::clone(&lift_layers_for_col));
+            let variants = if color_variants { quantizations } else { 1 };
+            let repeats = if color_variants { 1 } else { quantizations };
+            for quant in 0..variants {
+                let color = color_variants
+                    .then(|| Quantization::ALL[quant.min(crate::NUM_QUANTIZATIONS - 1)]);
+                let note_sprites = resolve_slots(button, "Tap Note", color);
+                let note_sprites =
+                    itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
+                let note_column = emit_tap_note_column(
+                    note_sprites,
+                    repeats,
+                    &mut tap_layer_info,
+                    &mut notes,
+                    &mut note_layers,
+                )
+                .ok_or_else(|| {
+                    format!("failed to resolve Tap Note for button '{button}' ({color:?})")
+                })?;
+                if load.has(SkinPart::Lifts) {
+                    let lift_sprites = resolve_slots(button, "Tap Lift", color);
+                    let lift_layers_for_col =
+                        itg_lift_layers_for_col_shared(lift_sprites, &note_column.shared_layers);
+                    for _ in 0..repeats {
+                        lift_note_layers.push(Arc::clone(&lift_layers_for_col));
+                    }
                 }
             }
         }
@@ -2355,7 +2378,7 @@ fn itg_runtime_columns_selected<T: Clone>(
         }
 
         if load.has(SkinPart::Mines) {
-            let mine_sprites = resolve_slots(button, "Tap Mine");
+            let mine_sprites = resolve_slots(button, "Tap Mine", None);
             let mine_fallback = resolve_prefix_slot("_mine");
             let (mine_fill, mine_frame) =
                 itg_mine_visuals_from_layers(&mine_sprites, mine_fallback);
@@ -2365,7 +2388,7 @@ fn itg_runtime_columns_selected<T: Clone>(
 
         if bodies {
             let mut resolve_head_slots = |element: &str| {
-                let slots = resolve_slots(button, element);
+                let slots = resolve_slots(button, element, None);
                 itg_hold_head_layers(slots)
             };
             let mut resolve_single_slot = |element: &str| {
@@ -2849,16 +2872,19 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
 ) -> Result<NoteskinRuntime<T>, String> {
     let note_display_metrics = itg::note_display_metrics(&data.metrics);
     let animation_is_beat_based = itg::animation_is_beat_based(data);
-    // One load owns this small set of requested button/element pairs. Hold,
-    // roll, tap and mine effects often refer to the same Explosion actor tree.
-    // Resolve each once, then clone its slots before applying component state.
-    let resolved =
-        RefCell::new(HashMap::<String, HashMap<String, Vec<ItgResolvedSprite<T>>>>::new());
-    let resolve_sprites = |button: &str, element: &str| {
+    // Load-worker scratch: requested button/element pairs each retain at most
+    // nine colors, then release everything when the runtime is assembled. Hold,
+    // roll, tap and mine effects often refer to the same actor tree; resolve it
+    // once per color before cloning slots for component state. No live-song I/O.
+    type ColorSprites<T> = [Option<Vec<ItgResolvedSprite<T>>>; crate::NUM_QUANTIZATIONS];
+    let resolved = RefCell::new(HashMap::<String, HashMap<String, ColorSprites<T>>>::new());
+    let resolve_color_sprites = |button: &str, element: &str, color: Option<Quantization>| {
+        let index = color.unwrap_or(Quantization::Q4th) as usize;
         if let Some(sprites) = resolved
             .borrow()
             .get(button)
             .and_then(|parts| parts.get(element))
+            .and_then(|colors| colors[index].as_ref())
         {
             return sprites.clone();
         }
@@ -2868,6 +2894,7 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             compiled_actors,
             button,
             element,
+            color,
             style.steps_type(),
             ops,
         );
@@ -2884,18 +2911,21 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             .borrow_mut()
             .entry(button.to_string())
             .or_default()
-            .insert(element.to_string(), sprites.clone());
+            .entry(element.to_string())
+            .or_default()[index] = Some(sprites.clone());
         sprites
     };
+    let resolve_sprites =
+        |button: &str, element: &str| resolve_color_sprites(button, element, None);
     let columns = itg_runtime_columns_selected(
         data,
         style,
         compiled,
         quantizations,
         resolve_sprites,
-        |button, element| {
+        |button, element, color| {
             itg_resolved_slots_with_model_draw(
-                resolve_sprites(button, element),
+                resolve_color_sprites(button, element, color),
                 ops.apply_model_draw,
             )
         },
@@ -2909,6 +2939,7 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
         ops.apply_parent_command,
         ops.base_zoom,
         ops.model_info,
+        compiled_actors.has_color_variants(),
         load,
     )?;
 
@@ -4566,6 +4597,7 @@ mod tests {
             &compiled_actors,
             "Down",
             "Tap Note",
+            None,
             "StepsType_Dance_Single",
             ItgCompiledSpriteOps {
                 load_texture: |_| Some(Slot(7)),
@@ -4880,6 +4912,7 @@ mod tests {
             &actors,
             "Down",
             "Tap Note",
+            None,
             "StepsType_Dance_Single",
             std::path::Path::new("Tap Note.png"),
             None,
@@ -4956,6 +4989,7 @@ mod tests {
             &actors,
             "Down",
             "Tap Note",
+            None,
             "StepsType_Dance_Single",
             &actor_path,
             None,

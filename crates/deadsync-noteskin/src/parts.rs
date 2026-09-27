@@ -70,6 +70,26 @@ pub enum Quantization {
     Q192nd,
 }
 
+impl Quantization {
+    pub const ALL: [Self; NUM_QUANTIZATIONS] = [
+        Self::Q4th,
+        Self::Q8th,
+        Self::Q12th,
+        Self::Q16th,
+        Self::Q24th,
+        Self::Q32nd,
+        Self::Q48th,
+        Self::Q64th,
+        Self::Q192nd,
+    ];
+
+    pub const fn color_name(self) -> &'static str {
+        [
+            "4th", "8th", "12th", "16th", "24th", "32nd", "48th", "64th", "192nd",
+        ][self as usize]
+    }
+}
+
 pub const NOTE_ANIM_PART_COUNT: usize = 14;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

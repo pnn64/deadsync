@@ -2071,12 +2071,12 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn model_preview_ignores_material_texture_sizes() {
+    fn model_previews_preserve_layers_and_quants() {
         use super::super::render;
         use deadlib_present::actors::Actor;
         use deadsync_assets::noteskin::{ModelMesh, ModelVertex, Noteskin, test_model_slot};
         ensure_i18n();
-        let (mut state, _) = setup_versus_state();
+        let (mut state, asset_manager) = setup_state();
         // A triangle shared by materials with different texture dimensions.
         // Every layer must occupy the same screen coordinates after fitting.
         let model = Arc::new(ModelMesh {
@@ -2178,6 +2178,39 @@ pub(super) mod tests {
                 assert_preview_bounds(&actors, "model-fixture", size);
             }
         }
+        let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
+        skin.column_xs = vec![-96, -32, 32, 96];
+        skin.note_layers = (0..4 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|index| {
+                let quant = index % deadsync_noteskin::NUM_QUANTIZATIONS;
+                let mut slots = layers.to_vec();
+                for slot in &mut slots {
+                    slot.model_draw.tint[0] = quant as f32 / 8.0;
+                }
+                Arc::from(slots)
+            })
+            .collect();
+        state.player_options[P1].noteskin = deadsync_profile::NoteSkin::new("model-fixture");
+        super::super::apply_pane(&mut state, OptionsPane::Display);
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let actors = super::get_actors(&state, &asset_manager);
+        let quants: Vec<_> = actors
+            .iter()
+            .filter_map(|actor| {
+                if let Actor::TexturedMesh { tint, .. } = actor {
+                    Some(tint[0])
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(
+            quants,
+            [0.0, 0.125, 0.375, 0.25]
+                .into_iter()
+                .flat_map(|quant| [quant; 4])
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

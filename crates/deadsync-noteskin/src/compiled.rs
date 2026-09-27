@@ -183,14 +183,28 @@ impl CompiledActors {
         search_dirs: &[PathBuf],
         path: &Path,
         button: Option<&str>,
+        color: Option<crate::Quantization>,
     ) -> Option<noteskin_actor::ItgLuaActorDecl> {
+        let key = actor_manifest_key(search_dirs, path)?;
+        if let Some(color) = color {
+            let color = color.color_name();
+            let file = button
+                .and_then(|button| self.find(&format!("{key}|{button}|color={color}")))
+                .or_else(|| self.find(&format!("{key}|color={color}")));
+            if let Some(file) = file {
+                return Some(file.decl.clone());
+            }
+        }
         if let Some(button) = button {
-            let key = actor_manifest_key(search_dirs, path)?;
             if let Some(file) = self.find(&format!("{key}|{button}")) {
                 return Some(file.decl.clone());
             }
         }
-        self.decl_for_path_ref(search_dirs, path).cloned()
+        self.find(&key).map(|file| file.decl.clone())
+    }
+
+    pub fn has_color_variants(&self) -> bool {
+        self.files.iter().any(|file| file.key.contains("|color="))
     }
 
     /// Borrow compiled metadata when a reader does not consume the actor graph.
@@ -401,6 +415,6 @@ mod tests {
             }],
         };
 
-        assert!(actors.decl_for_path(&[root], &path, None).is_some());
+        assert!(actors.decl_for_path(&[root], &path, None, None).is_some());
     }
 }
