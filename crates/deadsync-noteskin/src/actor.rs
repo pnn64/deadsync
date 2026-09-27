@@ -8,13 +8,17 @@ use std::path::Path;
 
 use crate::itg as noteskin_itg;
 use crate::lua::{ItgCallArgs, itg_call_args, itg_quoted_strings};
-use crate::script::parse_linear_frames_expr;
+use crate::script::{
+    ScriptActorMod, parse_linear_frames_expr, parse_script_actor_mod, parse_script_sleep,
+    parse_script_tween, split_script_token,
+};
 
 pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 pub const ITG_BEAT_RECEPTOR_UPDATE: &str = "beat_receptor";
 pub const ITG_ACTOR_FRAME_CHILD: &str = "__deadsync_actor_frame_child";
+pub const ITG_FRAME_ROTATION_Z: &str = "__deadsync_frame_rotation_z";
 pub const ITG_HOLD_EMITTER: &str = "__deadsync_hold_emitter";
 pub const ITG_ROLL_EMITTER: &str = "__deadsync_roll_emitter";
 pub const MAX_HOLD_FLASHES: usize = 16;
@@ -137,18 +141,25 @@ pub fn parse_actor_for_button(
         if let Some(mut sprite) =
             parse_sprite_block(&content[open + 1..close], metrics, &command_context)
         {
-            if content[..start]
-                .match_indices("Def.ActorFrame")
-                .any(|(frame, _)| {
-                    content[frame..].find('{').is_some_and(|open| {
-                        find_matching(content, frame + open, '{', '}')
-                            .is_some_and(|end| end > close)
-                    })
-                })
-            {
+            let mut rotation = 0.0;
+            for (frame, _) in content[..start].match_indices("Def.ActorFrame") {
+                let Some(open) = content[frame..].find('{').map(|offset| frame + offset) else {
+                    continue;
+                };
+                let Some(end) = find_matching(content, open, '{', '}').filter(|end| *end > close)
+                else {
+                    continue;
+                };
                 sprite
                     .commands
                     .insert(ITG_ACTOR_FRAME_CHILD.to_owned(), String::new());
+                rotation +=
+                    actor_frame_rotation(&content[open + 1..end], metrics, &command_context);
+            }
+            if rotation != 0.0 {
+                sprite
+                    .commands
+                    .insert(ITG_FRAME_ROTATION_Z.to_owned(), rotation.to_string());
             }
             decl.sprites.push(sprite);
         }
@@ -1355,6 +1366,72 @@ fn resolve_resource_expr(expr: &str, context: &CommandContext) -> String {
     expr.to_owned()
 }
 
+fn actor_frame_rotation(
+    block: &str,
+    metrics: &noteskin_itg::IniData,
+    context: &CommandContext,
+) -> f32 {
+    // Read this frame's commands, excluding child tables. Skip whole functions
+    // so tables inside an Init callback remain part of the callback.
+    let bytes = block.as_bytes();
+    let mut own = String::with_capacity(block.len());
+    let mut cursor = 0;
+    let mut start = 0;
+    let mut quote = 0;
+    while cursor < bytes.len() {
+        let b = bytes[cursor];
+        if quote != 0 {
+            if b == b'\\' {
+                cursor += 2;
+                continue;
+            }
+            if b == quote {
+                quote = 0;
+            }
+        } else if b == b'\'' || b == b'"' {
+            quote = b;
+        } else if bytes[cursor..].starts_with(b"function")
+            && token_boundary(bytes, cursor, 8)
+            && let Some(end) = find_function_end(block, cursor + 8)
+        {
+            cursor = end + 3;
+            continue;
+        } else if b == b'{'
+            && let Some(end) = find_matching(block, cursor, '{', '}')
+        {
+            own.push_str(&block[start..cursor]);
+            own.push_str("{}");
+            cursor = end + 1;
+            start = cursor;
+            continue;
+        }
+        cursor += 1;
+    }
+    own.push_str(&block[start..]);
+    let commands = parse_commands_block(&own, metrics, context);
+    let mut rotation = 0.0;
+    for token in commands
+        .get("initcommand")
+        .into_iter()
+        .flat_map(|script| script.split(';'))
+    {
+        let Some(token) = split_script_token(token.trim()) else {
+            continue;
+        };
+        if parse_script_tween(token.command(), token.args()).is_some()
+            || parse_script_sleep(token.command(), token.args()).is_some()
+        {
+            break;
+        }
+        match parse_script_actor_mod(token.command(), token.args()) {
+            Some(ScriptActorMod::RotationZ(value)) => rotation = value,
+            Some(ScriptActorMod::AddRotationZ(value)) => rotation += value,
+            _ => {}
+        }
+    }
+    rotation
+}
+
 fn parse_commands_block(
     block: &str,
     metrics: &noteskin_itg::IniData,
@@ -2020,6 +2097,33 @@ return Def.ActorFrame {
             assert!(!decl.refs[0].commands.contains_key(ITG_HOLD_EMITTER));
             assert!(!decl.refs[0].commands.contains_key(ITG_ROLL_EMITTER));
         }
+    }
+
+    #[test]
+    fn frame_rotation_excludes_children_and_combines_ancestors() {
+        let script = r#"
+local root = Def.Sprite { Texture="root.png", InitCommand=cmd(rotationz,8) }
+return Def.ActorFrame {
+    Def.Sprite {
+        Texture="child.png";
+        InitCommand=cmd(rotationz,15);
+    };
+    Def.ActorFrame {
+        InitCommand=cmd(rotationz,-30;rotationz,-45;addrotationz,5);
+        Def.Sprite {
+            Texture="nested.png";
+            InitCommand=cmd(rotationz,180);
+        };
+    };
+    InitCommand=function(self) self:rotationz(90) end;
+}
+"#;
+        let decl = parse_actor_decl(script, &noteskin_itg::IniData::default());
+        assert!(!decl.sprites[0].commands.contains_key(ITG_FRAME_ROTATION_Z));
+        assert_eq!(decl.sprites[1].commands[ITG_FRAME_ROTATION_Z], "90");
+        assert_eq!(decl.sprites[2].commands[ITG_FRAME_ROTATION_Z], "50");
+        assert_eq!(decl.sprites[1].commands["initcommand"], "rotationz,15");
+        assert_eq!(decl.sprites[2].commands["initcommand"], "rotationz,180");
     }
 
     #[test]

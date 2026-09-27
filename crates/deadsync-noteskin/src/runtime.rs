@@ -404,7 +404,7 @@ pub struct ItgCompiledSpriteOps<T> {
     pub load_all_frames: fn(&Path, Option<f32>, bool) -> Option<T>,
     pub apply_model: fn(&mut T, model::ItgModelSlotPlan),
     pub apply_model_draw: fn(&mut T, ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState),
-    pub apply_parent_command: fn(&mut T, &str),
+    pub apply_receptor_init: fn(&mut T, &str),
     pub apply_xy_rotation: fn(&mut T, Option<i32>, Option<i32>),
     pub apply_rotation: fn(&mut T, i32),
     pub apply_frame: fn(&mut T, usize),
@@ -1410,8 +1410,17 @@ pub fn itg_resolve_sprite_decl<T>(
         load_frame,
         load_animated,
     )?;
-    if let Some(rotation_z) = rotation_z {
-        apply_rotation(&mut slot, rotation_z);
+    let frame_rotation = sprite
+        .commands
+        .get(actor::ITG_FRAME_ROTATION_Z)
+        .and_then(|value| value.parse::<f32>().ok());
+    if rotation_z.is_some() || frame_rotation.is_some() {
+        // SpriteDefinition stores the inverse of actor rotationz; retain the
+        // parent's rotation independently of the child's own Init/tweens.
+        apply_rotation(
+            &mut slot,
+            rotation_z.unwrap_or(0) - frame_rotation.unwrap_or(0.0).round() as i32,
+        );
     }
     apply_state(&mut slot, &sprite.commands);
     Some(ItgResolvedSprite {
@@ -2179,21 +2188,15 @@ fn itg_receptor_effect_start<T>(layers: &[ItgResolvedSprite<T>]) -> Option<usize
     layers.windows(3).rposition(|layers| {
         let idle = &layers[1];
         let glow = &layers[2];
-        let has_actor_effect = ["initcommand", "oncommand"].into_iter().any(|key| {
+        let has_idle_command = ["initcommand", "oncommand"].into_iter().any(|key| {
             idle.commands
                 .get(key)
-                .is_some_and(|command| itg_has_receptor_actor_effect_command(command))
+                .is_some_and(|command| !command.trim().is_empty())
         });
         let has_press_glow =
             glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
-        has_actor_effect && has_press_glow
+        has_idle_command && has_press_glow
     })
-}
-
-fn itg_has_receptor_actor_effect_command(command: &str) -> bool {
-    [b"diffuseramp".as_slice(), b"diffuseshift", b"glowshift"]
-        .into_iter()
-        .any(|effect| contains_ascii_case_insensitive(command, effect))
 }
 
 fn itg_receptor_visual_layers<T>(layers: &[ItgResolvedSprite<T>]) -> &[ItgResolvedSprite<T>] {
@@ -2954,7 +2957,7 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
         |prefix| {
             itg::find_texture_with_prefix(data, prefix).and_then(|path| (ops.load_texture)(&path))
         },
-        ops.apply_parent_command,
+        ops.apply_receptor_init,
         ops.base_zoom,
         ops.model_info,
         compiled_actors.has_color_variants(),
@@ -4616,7 +4619,7 @@ mod tests {
                 load_all_frames: |_, _, _| None,
                 apply_model: |_, _| {},
                 apply_model_draw: |_, _, _, _| {},
-                apply_parent_command: |_, _| {},
+                apply_receptor_init: |_, _| {},
                 apply_xy_rotation: |_, _, _| {},
                 apply_rotation: |_, _| {},
                 apply_frame: |_, _| {},

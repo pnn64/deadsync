@@ -5,6 +5,7 @@ pub enum TweenType {
     Linear,
     Accelerate,
     Decelerate,
+    Smooth,
 }
 
 impl TweenType {
@@ -15,6 +16,8 @@ impl TweenType {
             Self::Linear => t,
             Self::Accelerate => t * t,
             Self::Decelerate => (1.0 - t).mul_add(-(1.0 - t), 1.0),
+            // ITG's Actor:smooth uses the 1D cubic Bezier [0, 0, 1, 1].
+            Self::Smooth => t * t * (3.0 - 2.0 * t),
         }
     }
 }

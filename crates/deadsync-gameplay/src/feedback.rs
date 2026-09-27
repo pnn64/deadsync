@@ -3,6 +3,7 @@ pub enum GameplayTween {
     Linear,
     Accelerate,
     Decelerate,
+    Smooth,
 }
 
 impl GameplayTween {
@@ -14,6 +15,7 @@ impl GameplayTween {
             Self::Linear => t,
             Self::Accelerate => t * t,
             Self::Decelerate => (1.0 - t).mul_add(-(1.0 - t), 1.0),
+            Self::Smooth => t * t * (3.0 - 2.0 * t),
         }
     }
 }

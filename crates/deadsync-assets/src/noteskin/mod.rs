@@ -451,7 +451,7 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         load_all_frames: itg_slot_from_path_all_frames,
         apply_model: apply_model_slot_plan,
         apply_model_draw: itg_apply_model_draw,
-        apply_parent_command: itg_apply_parent_command,
+        apply_receptor_init: itg_apply_receptor_init,
         apply_xy_rotation: itg_apply_xy_rotation,
         apply_rotation: itg_apply_rotation,
         apply_frame: itg_apply_frame_override,
@@ -477,8 +477,43 @@ fn itg_apply_model_draw(
     slot.model_effect = effect;
 }
 
-fn itg_apply_parent_command(slot: &mut SpriteSlot, command: &str) {
-    noteskin_script::itg_apply_parent_command(&mut slot.def, &mut slot.model_draw, command);
+fn itg_apply_receptor_init(slot: &mut SpriteSlot, command: &str) {
+    // Init belongs to the child actor: alpha/zoom setters replace its state.
+    // Keep loader transforms separate, and retain timed commands for sampling.
+    let commands = HashMap::from([("initcommand".to_owned(), command.to_owned())]);
+    let (mut draw, mut timeline, mut effect) = noteskin_script::model_draw_program(&commands);
+    // The target's color pulse already runs through ReceptorPulse in the
+    // notefield. Independent idle overlays keep their own full effect program.
+    if matches!(
+        effect.mode,
+        ModelEffectMode::DiffuseRamp | ModelEffectMode::DiffuseShift
+    ) {
+        effect.mode = ModelEffectMode::None;
+    }
+    let parent = slot.model_draw;
+    if draw.zoom[0] < 0.0 {
+        slot.def.mirror_h = !slot.def.mirror_h;
+    }
+    if draw.zoom[1] < 0.0 {
+        slot.def.mirror_v = !slot.def.mirror_v;
+    }
+    let apply_parent = |draw: &mut ModelDrawState| {
+        for axis in 0..3 {
+            draw.pos[axis] += parent.pos[axis];
+            draw.rot[axis] += parent.rot[axis];
+            draw.zoom[axis] = draw.zoom[axis].abs() * parent.zoom[axis];
+        }
+        for channel in 0..4 {
+            draw.tint[channel] *= parent.tint[channel];
+        }
+        draw.visible &= parent.visible;
+    };
+    apply_parent(&mut draw);
+    for segment in Arc::make_mut(&mut timeline) {
+        apply_parent(&mut segment.from);
+        apply_parent(&mut segment.to);
+    }
+    itg_apply_model_draw(slot, draw, timeline, effect);
 }
 
 fn itg_apply_xy_rotation(slot: &mut SpriteSlot, rotation_x: Option<i32>, rotation_y: Option<i32>) {
@@ -2148,6 +2183,170 @@ return skin
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();
+    }
+
+    #[test]
+    fn receptor_intro_keeps_loader_transform_and_static_mirror() {
+        init_asset_paths();
+        let root = temp_noteskin_root("receptor-transform");
+        let texture = root.join("target.png");
+        write_noteskin_png(&texture);
+        let mut slot = super::itg_slot_from_path(&texture).unwrap();
+        super::noteskin_script::itg_apply_parent_command(
+            &mut slot.def,
+            &mut slot.model_draw,
+            "y,2;zoom,0.5;diffusealpha,0.5",
+        );
+        super::itg_apply_receptor_init(
+            &mut slot,
+            "zoom,0.8;zoomx,-0.8;diffusealpha,0;sleep,1;linear,2;diffusealpha,1",
+        );
+        assert!(slot.def.mirror_h);
+        assert!(!slot.def.mirror_v);
+        for (time, alpha) in [(0.0, 0.0), (2.0, 0.25), (3.0, 0.5)] {
+            let draw = slot.model_draw_at(time, 0.0);
+            assert_eq!(draw.pos, [0.0, 2.0, 0.0]);
+            assert_eq!(draw.zoom, [0.4; 3]);
+            assert_eq!(draw.tint[3], alpha);
+        }
+        let command =
+            "diffuseramp;effectclock,beat;effectcolor1,0.25,0.25,0.25,1;effectcolor2,1,1,1,1";
+        let mut slot = super::itg_slot_from_path(&texture).unwrap();
+        super::itg_apply_receptor_init(&mut slot, command);
+        let pulse = deadsync_noteskin::receptor::receptor_pulse_from_script(command);
+        for beat in [0.0, 0.25, 0.5, 0.75] {
+            let color = pulse.color_for_beat(beat);
+            assert_eq!(slot.model_draw_at(0.0, beat).tint[0] * color[0], color[0]);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn receptor_intro_preserves_layers_timing_and_frame_rotation() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("receptor-intro");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    return LoadActor(NOTESKIN:GetPath(Var "Button", Var "Element"))
+end }
+"#,
+        )
+        .unwrap();
+        for (button, rotation, delay) in [
+            ("Left", 90, 0.75),
+            ("Down", 0, 1.0),
+            ("Up", 180, 1.25),
+            ("Right", -90, 1.5),
+        ] {
+            fs::write(
+                root.join(format!("{button} Receptor.lua")),
+                format!(
+                    r#"
+return Def.ActorFrame {{
+    InitCommand=function(self) self:rotationz({rotation}) end,
+    Def.Sprite {{
+        Texture=NOTESKIN:GetPath("Down", "Target"),
+        InitCommand=function(self)
+            self:diffusealpha(0):sleep({delay}):linear(1.5):diffusealpha(1)
+        end,
+        NoneCommand=cmd(finishtweening;zoom,1.15;linear,0.12;zoom,1)
+    }},
+    Def.Sprite {{
+        Texture=NOTESKIN:GetPath("Down", "Idle"),
+        InitCommand=cmd(diffusealpha,0;sleep,1;smooth,8;diffusealpha,1;thump;effectclock,'beat'),
+        NoneCommand=cmd(finishtweening;zoom,1.15;linear,0.12;zoom,1)
+    }},
+    Def.Sprite {{
+        Texture=NOTESKIN:GetPath("Down", "Press"),
+        InitCommand=cmd(diffusealpha,0;blend,'BlendMode_Add'),
+        PressCommand=cmd(stoptweening;diffusealpha,0.6),
+        LiftCommand=cmd(stoptweening;diffusealpha,0)
+    }}
+}}
+"#
+                ),
+            )
+            .unwrap();
+            write_noteskin_png(&root.join(format!("{button} Tap Note.png")));
+        }
+        for element in ["Target", "Idle", "Press"] {
+            write_noteskin_png(&root.join(format!("Down {element}.png")));
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "receptor-intro".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+            overrides: Vec::new(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "test", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        for parts in [None, Some(SkinParts::default().with(SkinPart::Receptors))] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            assert_eq!(skin.receptor_idle_glow, ReceptorIdleGlow::ActorEffect);
+            assert_eq!(skin.receptor_glow_behavior.press_alpha_start, 0.6);
+            for (col, rotation, delay) in
+                [(0, 90, 0.75), (1, 0, 1.0), (2, 180, 1.25), (3, -90, 1.5)]
+            {
+                let base = &skin.receptor_off[col];
+                let idle = skin.receptor_idle_glow_layers[col].as_ref().unwrap();
+                let press = skin.receptor_glow[col].as_ref().unwrap();
+                for (slot, texture) in [(base, "Target"), (idle, "Idle"), (press, "Press")] {
+                    assert!(slot.texture_key().ends_with(&format!("Down {texture}.png")));
+                    assert_eq!(slot.def.rotation_deg, -rotation);
+                }
+                for (time, alpha) in [
+                    (0.0, 0.0),
+                    (delay, 0.0),
+                    (delay + 0.75, 0.5),
+                    (delay + 1.5, 1.0),
+                    (20.0, 1.0),
+                ] {
+                    let draw = base.model_draw_at(time, 0.0);
+                    assert!(
+                        (draw.tint[3] - alpha).abs() < 1e-5,
+                        "column {col} at {time}: {draw:?}"
+                    );
+                    assert_eq!(
+                        draw.zoom, [1.0; 3],
+                        "NoneCommand is an input event, not an intro"
+                    );
+                }
+                // Actor:smooth is Bezier [0,0,1,1]; thump peaks on the beat
+                // and settles to unit scale for the last quarter of each beat.
+                for (time, alpha) in [
+                    (0.0, 0.0),
+                    (1.0, 0.0),
+                    (3.0, 0.15625),
+                    (5.0, 0.5),
+                    (7.0, 0.84375),
+                    (9.0, 1.0),
+                ] {
+                    let draw = idle.model_draw_at(time, 0.0);
+                    assert!((draw.tint[3] - alpha).abs() < 1e-5);
+                    assert_eq!(draw.zoom, [1.125; 3]);
+                }
+                assert_eq!(idle.model_draw_at(10.0, 0.875).zoom, [1.0; 3]);
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

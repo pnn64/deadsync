@@ -313,6 +313,7 @@ mod tests {
             TweenType::Linear => super::GameplayTween::Linear,
             TweenType::Accelerate => super::GameplayTween::Accelerate,
             TweenType::Decelerate => super::GameplayTween::Decelerate,
+            TweenType::Smooth => super::GameplayTween::Smooth,
         }
     }
 

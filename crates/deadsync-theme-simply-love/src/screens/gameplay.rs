@@ -514,6 +514,7 @@ const fn gameplay_tween(tween: TweenType) -> GameplayTween {
         TweenType::Linear => GameplayTween::Linear,
         TweenType::Accelerate => GameplayTween::Accelerate,
         TweenType::Decelerate => GameplayTween::Decelerate,
+        TweenType::Smooth => GameplayTween::Smooth,
     }
 }
 

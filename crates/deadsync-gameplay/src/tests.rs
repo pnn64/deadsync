@@ -7028,6 +7028,8 @@ mod tests {
         assert_near(GameplayTween::Linear.ease(0.5), 0.5);
         assert_near(GameplayTween::Accelerate.ease(0.5), 0.25);
         assert_near(GameplayTween::Decelerate.ease(0.5), 0.75);
+        assert_near(GameplayTween::Smooth.ease(0.25), 0.15625);
+        assert_near(GameplayTween::Smooth.ease(0.75), 0.84375);
         assert_near(GameplayTween::Linear.ease(-1.0), 0.0);
         assert_near(GameplayTween::Linear.ease(2.0), 1.0);
     }

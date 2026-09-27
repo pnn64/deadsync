@@ -18,6 +18,7 @@ pub enum ScriptTween {
     Linear,
     Accelerate,
     Decelerate,
+    Smooth,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +71,7 @@ pub enum ScriptEffectMod {
     DiffuseShift,
     GlowShift,
     Pulse,
+    Thump(f32),
     Spin,
     StopEffect,
     EffectColor1([f32; 4]),
@@ -85,6 +87,7 @@ pub enum ScriptCommand<'a> {
     Linear,
     Accelerate,
     Decelerate,
+    Smooth,
     Sleep,
     StopTweening,
     FinishTweening,
@@ -132,6 +135,7 @@ pub enum ScriptCommand<'a> {
     DiffuseShift,
     GlowShift,
     Pulse,
+    Thump,
     Spin,
     StopEffect,
     EffectColor1,
@@ -152,6 +156,7 @@ impl<'a> ScriptCommand<'a> {
             Self::Linear => "linear",
             Self::Accelerate => "accelerate",
             Self::Decelerate => "decelerate",
+            Self::Smooth => "smooth",
             Self::Sleep => "sleep",
             Self::StopTweening => "stoptweening",
             Self::FinishTweening => "finishtweening",
@@ -199,6 +204,7 @@ impl<'a> ScriptCommand<'a> {
             Self::DiffuseShift => "diffuseshift",
             Self::GlowShift => "glowshift",
             Self::Pulse => "pulse",
+            Self::Thump => "thump",
             Self::Spin => "spin",
             Self::StopEffect => "stopeffect",
             Self::EffectColor1 => "effectcolor1",
@@ -249,10 +255,12 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("zoomz", ZoomZ);
                 command!("blend", Blend);
                 command!("pulse", Pulse);
+                command!("thump", Thump);
             }
             6 => {
                 command!("zwrite", ZWrite);
                 command!("linear", Linear);
+                command!("smooth", Smooth);
                 command!("valign", VAlign);
             }
             7 => {
@@ -788,6 +796,7 @@ pub fn parse_script_tween<'a, A: AsRef<str>>(
         ScriptCommand::Linear => ScriptTween::Linear,
         ScriptCommand::Accelerate => ScriptTween::Accelerate,
         ScriptCommand::Decelerate => ScriptTween::Decelerate,
+        ScriptCommand::Smooth => ScriptTween::Smooth,
         _ => return None,
     };
     args.first()
@@ -916,6 +925,11 @@ pub fn parse_script_effect_mod<'a, A: AsRef<str>>(
         ScriptCommand::DiffuseShift => Some(ScriptEffectMod::DiffuseShift),
         ScriptCommand::GlowShift => Some(ScriptEffectMod::GlowShift),
         ScriptCommand::Pulse => Some(ScriptEffectMod::Pulse),
+        ScriptCommand::Thump => Some(ScriptEffectMod::Thump(
+            args.first()
+                .and_then(|arg| parse_script_number(arg.as_ref()))
+                .unwrap_or(1.0),
+        )),
         ScriptCommand::Spin => Some(ScriptEffectMod::Spin),
         ScriptCommand::StopEffect => Some(ScriptEffectMod::StopEffect),
         ScriptCommand::EffectColor1 => {
@@ -1146,6 +1160,7 @@ pub const fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
         ScriptTween::Linear => TweenType::Linear,
         ScriptTween::Accelerate => TweenType::Accelerate,
         ScriptTween::Decelerate => TweenType::Decelerate,
+        ScriptTween::Smooth => TweenType::Smooth,
     }
 }
 
@@ -1308,7 +1323,17 @@ pub fn model_draw_program(
             grouped_mods.clear();
             return;
         }
+        let from = *state;
         itg_apply_actor_mods(state, grouped_mods);
+        if !timeline.is_empty() {
+            timeline.push(ModelTweenSegment {
+                start: *cursor_time,
+                duration: 0.0,
+                tween: TweenType::Linear,
+                from,
+                to: *state,
+            });
+        }
         grouped_mods.clear();
     };
 
@@ -1359,7 +1384,15 @@ pub fn model_draw_program(
                     &mut pending_tween,
                     &mut grouped_mods,
                 );
-                cursor_time += duration.max(0.0);
+                let duration = duration.max(0.0);
+                timeline.push(ModelTweenSegment {
+                    start: cursor_time,
+                    duration,
+                    tween: TweenType::Linear,
+                    from: state,
+                    to: state,
+                });
+                cursor_time += duration;
                 continue;
             }
             if command == ScriptCommand::EffectClock {
@@ -1414,6 +1447,14 @@ pub fn model_draw_program(
                         effect.period = 2.0;
                         effect.timing = [1.0, 0.0, 1.0, 0.0, 0.0];
                         effect.magnitude = [0.5, 1.0, 0.0];
+                    }
+                    ScriptEffectMod::Thump(period) => {
+                        // Themes/_fallback/Scripts/02 Actor.lua: Actor:thump.
+                        let period = period.max(f32::EPSILON);
+                        effect.mode = ModelEffectMode::Pulse;
+                        effect.period = period;
+                        effect.timing = [0.0, 0.0, 0.75 * period, 0.0, 0.25 * period];
+                        effect.magnitude = [1.0, 1.125, 1.0];
                     }
                     ScriptEffectMod::Spin => {
                         effect.mode = ModelEffectMode::Spin;
@@ -1485,9 +1526,8 @@ pub fn model_draw_program(
         &mut grouped_mods,
     );
 
-    state.zoom[0] = state.zoom[0].max(0.0);
-    state.zoom[1] = state.zoom[1].max(0.0);
-    state.zoom[2] = state.zoom[2].max(0.0);
+    // Preserve scale signs for sprite mirroring at load time. Model sampling
+    // sanitizes scale after evaluating the timeline, including its final state.
     state.tint[0] = state.tint[0].clamp(0.0, 1.0);
     state.tint[1] = state.tint[1].clamp(0.0, 1.0);
     state.tint[2] = state.tint[2].clamp(0.0, 1.0);
@@ -1698,6 +1738,22 @@ mod tests {
         assert_eq!(draw.pos[1], 8.0);
         assert_eq!(draw.tint[3], 0.25);
         assert!(!draw.visible);
+    }
+
+    #[test]
+    fn model_sleep_retains_state_until_following_commands() {
+        for script in [
+            "diffusealpha,0;sleep,1;diffusealpha,1",
+            "diffusealpha,0;sleep,1;linear,2;diffusealpha,1",
+        ] {
+            let commands = HashMap::from([("initcommand".into(), script.into())]);
+            let (draw, timeline, effect) = model_draw_program(&commands);
+            for (time, alpha) in [(0.0, 0.0), (0.5, 0.0), (3.0, 1.0)] {
+                let sampled =
+                    crate::draw::model_draw_at(draw, &timeline, effect, 0.0, &[], time, 0.0);
+                assert_eq!(sampled.tint[3], alpha, "{script} at {time}");
+            }
+        }
     }
 
     #[test]
