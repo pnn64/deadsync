@@ -348,6 +348,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     target_slot,
                     target_reverse,
                     idle_glow_slot,
+                    overlays: receptor
+                        .receptor_overlays
+                        .get(local_col)
+                        .map(AsRef::as_ref)
+                        .unwrap_or_default(),
                     idle_glow_reverse,
                     idle_glow_shares_press,
                     hold_slot,
@@ -684,6 +689,7 @@ mod tests {
             receptor_off: vec![TestSlot::new("target0"), TestSlot::new("target1")],
             receptor_glow: vec![Some(TestSlot::new("press0")), Some(TestSlot::new("press1"))],
             receptor_idle_glow_layers: vec![None; 2],
+            receptor_overlays: Vec::new(),
             receptor_off_reverse: vec![ReceptorReverseBehavior::default(); 2],
             receptor_glow_reverse: vec![ReceptorReverseBehavior::default(); 2],
             receptor_idle_glow_reverse: vec![ReceptorReverseBehavior::default(); 2],

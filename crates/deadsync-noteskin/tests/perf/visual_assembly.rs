@@ -260,6 +260,7 @@ fn columns(num_cols: usize) -> ItgRuntimeColumns<u32> {
         receptor_off: Vec::new(),
         receptor_glow: Vec::new(),
         receptor_idle_glow_layers: Vec::new(),
+        receptor_overlays: Vec::new(),
         receptor_off_reverse: Vec::new(),
         receptor_glow_reverse: Vec::new(),
         receptor_idle_glow_reverse: Vec::new(),

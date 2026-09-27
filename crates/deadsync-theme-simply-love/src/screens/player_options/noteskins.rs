@@ -52,6 +52,11 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
             {
                 add(slot);
             }
+            for overlays in &skin.receptor_overlays {
+                for overlay in overlays.iter() {
+                    add(&overlay.slot);
+                }
+            }
         }
         2 => {
             if let Some(slot) = &skin.hold.body_active {

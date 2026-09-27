@@ -360,12 +360,20 @@ pub struct ItgReceptorColumn<T> {
     pub off: T,
     pub glow: Option<T>,
     pub idle_glow_layer: Option<T>,
+    pub overlays: Arc<[ReceptorOverlay<T>]>,
     pub off_reverse: ReceptorReverseBehavior,
     pub glow_reverse: ReceptorReverseBehavior,
     pub idle_glow_reverse: ReceptorReverseBehavior,
     pub step_behaviors: ReceptorStepBehaviors,
     pub pulse_command: Option<String>,
     pub idle_glow: ReceptorIdleGlow,
+}
+
+/// Independent receptor artwork drawn after the press highlight.
+#[derive(Debug, Clone)]
+pub struct ReceptorOverlay<T> {
+    pub slot: T,
+    pub reverse: ReceptorReverseBehavior,
 }
 
 #[derive(Debug, Clone)]
@@ -376,6 +384,7 @@ pub struct ItgRuntimeColumns<T> {
     pub receptor_off: Vec<T>,
     pub receptor_glow: Vec<Option<T>>,
     pub receptor_idle_glow_layers: Vec<Option<T>>,
+    pub receptor_overlays: Vec<Arc<[ReceptorOverlay<T>]>>,
     pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_idle_glow_reverse: Vec<ReceptorReverseBehavior>,
@@ -2096,6 +2105,17 @@ pub fn itg_receptor_column<T: Clone>(
         off,
         glow: visuals.glow,
         idle_glow_layer,
+        overlays: itg_receptor_effect_start(layers)
+            .map(|start| {
+                layers[start + 3..]
+                    .iter()
+                    .map(|layer| ReceptorOverlay {
+                        slot: layer.slot.clone(),
+                        reverse: receptor::receptor_reverse_behavior(&layer.commands),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         off_reverse,
         glow_reverse,
         idle_glow_reverse,
@@ -2150,17 +2170,23 @@ fn itg_receptor_visuals_from_resolved<T: Clone>(
 fn itg_receptor_actor_effect_layers<T>(
     layers: &[ItgResolvedSprite<T>],
 ) -> Option<[&ItgResolvedSprite<T>; 3]> {
-    let [.., off, idle, glow] = layers else {
-        return None;
-    };
-    let has_actor_effect = ["initcommand", "oncommand"].into_iter().any(|key| {
-        idle.commands
-            .get(key)
-            .is_some_and(|command| itg_has_receptor_actor_effect_command(command))
-    });
-    let has_press_glow =
-        glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
-    (has_actor_effect && has_press_glow).then_some([off, idle, glow])
+    let start = itg_receptor_effect_start(layers)?;
+    Some([&layers[start], &layers[start + 1], &layers[start + 2]])
+}
+
+fn itg_receptor_effect_start<T>(layers: &[ItgResolvedSprite<T>]) -> Option<usize> {
+    layers.windows(3).rposition(|layers| {
+        let idle = &layers[1];
+        let glow = &layers[2];
+        let has_actor_effect = ["initcommand", "oncommand"].into_iter().any(|key| {
+            idle.commands
+                .get(key)
+                .is_some_and(|command| itg_has_receptor_actor_effect_command(command))
+        });
+        let has_press_glow =
+            glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
+        has_actor_effect && has_press_glow
+    })
 }
 
 fn itg_has_receptor_actor_effect_command(command: &str) -> bool {
@@ -2181,7 +2207,7 @@ pub fn itg_receptor_glow_behavior_from_layers<T>(
     layers: &[ItgResolvedSprite<T>],
     metric_command: impl FnMut(&str) -> Option<String>,
 ) -> ReceptorGlowBehavior {
-    let layers = itg_receptor_visual_layers(layers);
+    let layers = itg_receptor_layer_refs(layers, itg_receptor_actor_effect_layers(layers));
     receptor::receptor_glow_behavior(layers.get(1).map(|sprite| &sprite.commands), metric_command)
 }
 
@@ -2258,6 +2284,7 @@ fn itg_runtime_columns_selected<T: Clone>(
     let mut receptor_off = Vec::new();
     let mut receptor_glow = Vec::new();
     let mut receptor_idle_glow_layers = Vec::new();
+    let mut receptor_overlays = Vec::new();
     let mut receptor_off_reverse = Vec::new();
     let mut receptor_glow_reverse = Vec::new();
     let mut receptor_idle_glow_reverse = Vec::new();
@@ -2280,6 +2307,7 @@ fn itg_runtime_columns_selected<T: Clone>(
         receptor_off.reserve(style.num_cols);
         receptor_glow.reserve(style.num_cols);
         receptor_idle_glow_layers.reserve(style.num_cols);
+        receptor_overlays.reserve(style.num_cols);
         receptor_off_reverse.reserve(style.num_cols);
         receptor_glow_reverse.reserve(style.num_cols);
         receptor_idle_glow_reverse.reserve(style.num_cols);
@@ -2354,6 +2382,7 @@ fn itg_runtime_columns_selected<T: Clone>(
             receptor_off.push(receptor_column.off);
             receptor_glow.push(receptor_column.glow);
             receptor_idle_glow_layers.push(receptor_column.idle_glow_layer);
+            receptor_overlays.push(receptor_column.overlays);
             receptor_off_reverse.push(receptor_column.off_reverse);
             receptor_glow_reverse.push(receptor_column.glow_reverse);
             receptor_idle_glow_reverse.push(receptor_column.idle_glow_reverse);
@@ -2435,6 +2464,7 @@ fn itg_runtime_columns_selected<T: Clone>(
         receptor_off,
         receptor_glow,
         receptor_idle_glow_layers,
+        receptor_overlays,
         receptor_off_reverse,
         receptor_glow_reverse,
         receptor_idle_glow_reverse,
@@ -2592,6 +2622,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
         receptor_off,
         receptor_glow,
         receptor_idle_glow_layers,
+        receptor_overlays,
         receptor_off_reverse,
         receptor_glow_reverse,
         receptor_idle_glow_reverse,
@@ -2775,6 +2806,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
         receptor_off,
         receptor_glow,
         receptor_idle_glow_layers,
+        receptor_overlays,
         receptor_off_reverse,
         receptor_glow_reverse,
         receptor_idle_glow_reverse,
@@ -2882,13 +2914,14 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             ops,
         );
         if element.eq_ignore_ascii_case("Receptor")
-            && let Some([_, idle, _]) = itg_receptor_actor_effect_layers(&sprites)
+            && let Some(start) = itg_receptor_effect_start(&sprites)
         {
-            // The independent idle overlay runs Init/On once at load. Its
-            // compiled effect is then sampled without rebuilding on a frame.
-            let slot = (ops.apply_active_cmd)(&idle.slot, &idle.commands, "oncommand");
-            let idle_index = sprites.len() - 2;
-            sprites[idle_index].slot = slot;
+            // Independent overlays run Init/On once at load, then retain their
+            // animation programs for allocation-free frame sampling.
+            for index in std::iter::once(start + 1).chain(start + 3..sprites.len()) {
+                let sprite = &mut sprites[index];
+                sprite.slot = (ops.apply_active_cmd)(&sprite.slot, &sprite.commands, "oncommand");
+            }
         }
         resolved
             .borrow_mut()
@@ -2983,6 +3016,7 @@ pub struct NoteskinRuntime<T> {
     pub receptor_off: Vec<T>,
     pub receptor_glow: Vec<Option<T>>,
     pub receptor_idle_glow_layers: Vec<Option<T>>,
+    pub receptor_overlays: Vec<Arc<[ReceptorOverlay<T>]>>,
     pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
     pub receptor_idle_glow_reverse: Vec<ReceptorReverseBehavior>,
@@ -3075,6 +3109,7 @@ impl<T: Clone> NoteskinRuntime<T> {
                 self.receptor_glow.clone_from(&source.receptor_glow);
                 self.receptor_idle_glow_layers
                     .clone_from(&source.receptor_idle_glow_layers);
+                self.receptor_overlays.clone_from(&source.receptor_overlays);
                 self.receptor_off_reverse
                     .clone_from(&source.receptor_off_reverse);
                 self.receptor_glow_reverse
@@ -3257,6 +3292,11 @@ impl<T> NoteskinRuntime<T> {
         for slot in &self.receptor_idle_glow_layers {
             if let Some(slot) = slot.as_ref() {
                 visit(slot);
+            }
+        }
+        for overlays in &self.receptor_overlays {
+            for overlay in overlays.iter() {
+                visit(&overlay.slot);
             }
         }
         for slot in &self.mines {
@@ -4405,6 +4445,7 @@ mod tests {
             receptor_off: vec![Slot(3)],
             receptor_glow: vec![None],
             receptor_idle_glow_layers: vec![None],
+            receptor_overlays: Vec::new(),
             receptor_off_reverse: vec![ReceptorReverseBehavior::default()],
             receptor_glow_reverse: vec![ReceptorReverseBehavior::default()],
             receptor_idle_glow_reverse: vec![ReceptorReverseBehavior::default()],
@@ -6142,6 +6183,7 @@ Bones: 1
             note_layers: vec![Arc::from([Slot(2)])],
             receptor_glow: vec![Some(Slot(3))],
             receptor_idle_glow_layers: vec![Some(Slot(7))],
+            receptor_overlays: Vec::new(),
             hold: HoldVisuals {
                 head_active_layers: Some(Arc::from([Slot(4), Slot(5)])),
                 explosion: Some(Slot(6)),
@@ -6164,6 +6206,7 @@ Bones: 1
             receptor_off: Vec::new(),
             receptor_glow: Vec::new(),
             receptor_idle_glow_layers: Vec::new(),
+            receptor_overlays: Vec::new(),
             receptor_off_reverse: Vec::new(),
             receptor_glow_reverse: Vec::new(),
             receptor_idle_glow_reverse: Vec::new(),

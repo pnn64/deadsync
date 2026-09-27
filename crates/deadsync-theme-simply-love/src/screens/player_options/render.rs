@@ -1,6 +1,7 @@
 use super::*;
 use crate::fonts::machine_font_key;
 use deadlib_present::actors::TextContent;
+use deadsync_noteskin::ReceptorIdleGlow;
 use deadsync_theme::FontRole;
 
 pub(super) fn top_bar_actor(
@@ -1851,7 +1852,7 @@ fn draw_receptor_note(
     let beat = state.preview_beat;
     let pulse = skin.receptor_pulse.color_for_beat(beat);
     let idle = skin.receptor_idle_glow.alpha(beat, false);
-    for (index, slot, color) in [
+    let layers = [
         (
             0,
             skin.receptor_off.get(col),
@@ -1865,7 +1866,17 @@ fn draw_receptor_note(
                 .or_else(|| skin.receptor_glow.get(col).and_then(Option::as_ref)),
             [1.0, 1.0, 1.0, idle * alpha],
         ),
-    ] {
+    ]
+    .into_iter()
+    .chain(
+        skin.receptor_overlays
+            .get(col)
+            .into_iter()
+            .flat_map(|layers| layers.iter())
+            .enumerate()
+            .map(|(index, layer)| (index as i16 + 2, Some(&layer.slot), [1.0, 1.0, 1.0, alpha])),
+    );
+    for (index, slot, color) in layers {
         let Some(slot) = slot else { continue };
         if color[3] <= f32::EPSILON {
             continue;
@@ -1874,19 +1885,22 @@ fn draw_receptor_note(
         let uv = slot.uv_for_frame_at(frame, elapsed);
         let logical = slot.logical_size();
         let scale = size / logical[1].max(1.0);
+        let draw = preview_slot_draw(slot, elapsed, beat);
         draw_preview_slot(
             actors,
             slot,
-            preview_slot_draw(slot, elapsed, beat),
+            draw,
             center,
             [logical[0] * scale, logical[1] * scale],
             uv,
             -slot.def.rotation_deg as f32,
             color,
-            if index == 0 {
-                BlendMode::Alpha
-            } else {
+            if draw.blend_add
+                || (index == 1 && skin.receptor_idle_glow != ReceptorIdleGlow::ActorEffect)
+            {
                 BlendMode::Add
+            } else {
+                BlendMode::Alpha
             },
             z + index,
         );

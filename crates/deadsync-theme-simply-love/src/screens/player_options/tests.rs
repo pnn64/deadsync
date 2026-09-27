@@ -2074,6 +2074,7 @@ pub(super) mod tests {
     fn model_previews_preserve_layers_and_quants() {
         use super::super::render;
         use deadlib_present::actors::Actor;
+        use deadlib_render_core::BlendMode;
         use deadsync_assets::noteskin::{
             ModelMesh, ModelVertex, Noteskin, SpriteSource, test_model_slot,
         };
@@ -2123,6 +2124,7 @@ pub(super) mod tests {
             receptor_off: Vec::new(),
             receptor_glow: Vec::new(),
             receptor_idle_glow_layers: Vec::new(),
+            receptor_overlays: Vec::new(),
             receptor_off_reverse: Vec::new(),
             receptor_glow_reverse: Vec::new(),
             receptor_idle_glow_reverse: Vec::new(),
@@ -2203,6 +2205,66 @@ pub(super) mod tests {
                 }
                 assert_preview_bounds(&actors, "model-fixture", size);
             }
+        }
+        let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
+        let mut receptors = mine_layers.to_vec();
+        for slot in &mut receptors {
+            slot.model = None;
+            slot.def.rotation_deg = 90;
+        }
+        receptors[3].model_draw.blend_add = true;
+        receptors[4].model_draw.visible = false;
+        skin.receptor_off = vec![receptors[0].clone()];
+        skin.receptor_idle_glow_layers = vec![Some(receptors[1].clone())];
+        skin.receptor_glow = vec![Some(receptors[2].clone())];
+        skin.receptor_idle_glow = deadsync_noteskin::ReceptorIdleGlow::ActorEffect;
+        skin.receptor_overlays = vec![
+            receptors[3..]
+                .iter()
+                .map(|slot| deadsync_noteskin::runtime::ReceptorOverlay {
+                    slot: slot.clone(),
+                    reverse: Default::default(),
+                })
+                .collect(),
+        ];
+        assert_eq!(super::super::noteskins::preview_textures(skin, 1).len(), 5);
+        let mut actors = Vec::new();
+        render::draw_live_preview(
+            &mut actors,
+            &state,
+            "model-fixture",
+            1,
+            [100.0; 2],
+            32.0,
+            0.5,
+            102,
+        );
+        assert_eq!(actors.len(), 3, "base, idle flash, and visible overlay");
+        for (actor, index) in actors.iter().zip([0, 1, 3]) {
+            let Actor::Sprite {
+                source,
+                tint,
+                blend,
+                rot_z_deg,
+                ..
+            } = actor
+            else {
+                panic!("receptor sprite");
+            };
+            assert!(
+                matches!(source, deadlib_present::actors::SpriteSource::Texture(key)
+                if key.as_ref() == format!("mine-{index}"))
+            );
+            assert_eq!(tint[3], (index + 1) as f32 / 10.0);
+            assert_eq!(*rot_z_deg, -90.0);
+            assert_eq!(
+                *blend,
+                if index == 3 {
+                    BlendMode::Add
+                } else {
+                    BlendMode::Alpha
+                }
+            );
         }
         let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
         skin.column_xs = vec![-96, -32, 32, 96];

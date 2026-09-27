@@ -2017,6 +2017,147 @@ return skin
     }
 
     #[test]
+    fn receptor_aliases_keep_all_layers_and_column_rotations() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("layered-receptor");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    local actor = LoadActor(NOTESKIN:GetPath("Down", element))
+    actor.BaseRotationZ = ({Left=90, Down=0, Up=180, Right=-90})[Var "Button"]
+    return actor
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Receptor.lua"),
+            r#"
+local Button = "Down"
+local Sheet = "ReceptorSheet"
+return Def.ActorFrame {
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath(Button, Sheet);
+        Frame0000=0;
+        InitCommand=cmd(diffusealpha,1);
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath(Button, Sheet);
+        Frame0000=1;
+        InitCommand=function(self)
+            self:effectclock("beat"):diffuseramp()
+                :effectcolor1(1,1,1,1):effectcolor2(1,1,1,0)
+                :effecttiming(0.0625, 0, 0.0625, 0.125, 0.75)
+        end;
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath(Button, Sheet);
+        Frame0000=2;
+        InitCommand=cmd(diffusealpha,0);
+        PressCommand=cmd(diffusealpha,0.75);
+        LiftCommand=cmd(diffusealpha,0);
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath(Button, 'ReceptorAdd');
+        Frames=Sprite.LinearFrames(2,1);
+        Delay0000=0.25;
+        Delay0001=0.75;
+        InitCommand=cmd(blend,'BlendMode_Add';diffusealpha,0.25);
+        ReverseOnCommand=cmd(baserotationz,180);
+    };
+    Def.Sprite {
+        Texture=NOTESKIN:GetPath(Button, 'ReceptorAdd');
+        Frame0000=1;
+        InitCommand=cmd(diffusealpha,0.5);
+    };
+}
+"#,
+        )
+        .unwrap();
+        for (name, width) in [
+            ("Down ReceptorSheet 3x1.png", 192),
+            ("Down ReceptorAdd 2x1.png", 128),
+        ] {
+            image::RgbaImage::from_pixel(width, 64, image::Rgba([255; 4]))
+                .save(root.join(name))
+                .unwrap();
+        }
+        write_noteskin_png(&root.join("Down Tap Note.png"));
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "layered-receptor".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "test", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        for parts in [None, Some(SkinParts::default().with(SkinPart::Receptors))] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            assert_eq!(skin.receptor_idle_glow, ReceptorIdleGlow::ActorEffect);
+            assert_eq!(skin.receptor_glow_behavior.press_alpha_start, 0.75);
+            for (col, rotation) in [90, 0, 180, -90].into_iter().enumerate() {
+                for (frame, slot) in [
+                    (0, &skin.receptor_off[col]),
+                    (1, skin.receptor_idle_glow_layers[col].as_ref().unwrap()),
+                    (2, skin.receptor_glow[col].as_ref().unwrap()),
+                ] {
+                    assert!(slot.texture_key().ends_with("Down ReceptorSheet 3x1.png"));
+                    assert_eq!(slot.def.src, [frame * 64, 0]);
+                    assert_eq!(slot.def.rotation_deg, rotation);
+                }
+                let idle = skin.receptor_idle_glow_layers[col].as_ref().unwrap();
+                // ITG Actor::PreDraw ramps color2 -> color1, then holds at
+                // full before zero; effecttiming's fourth argument is hold-zero.
+                for (beat, alpha) in [(0.0, 0.0), (0.1, 0.8), (0.5, 1.0), (0.9, 0.0)] {
+                    assert!((idle.model_draw_at(0.0, beat).tint[3] - alpha).abs() < 1e-5);
+                }
+                let overlays = &skin.receptor_overlays[col];
+                assert_eq!(overlays.len(), 2);
+                let slot = &overlays[0].slot;
+                assert_eq!(slot.def.rotation_deg, rotation);
+                assert_eq!(slot.model_draw.tint[3], 0.25);
+                assert!(slot.model_draw.blend_add);
+                assert_eq!(slot.frame_index(0.1, 0.1), 0);
+                assert_eq!(slot.frame_index(0.4, 0.4), 1);
+                assert_eq!(overlays[0].reverse.state(true).base_rotation_z(), 180.0);
+                assert_eq!(overlays[1].slot.model_draw.tint[3], 0.5);
+                assert!(!overlays[1].slot.model_draw.blend_add);
+            }
+            let mut textures = Vec::new();
+            skin.for_each_slot(|slot| textures.push(slot.texture_key().to_owned()));
+            assert!(
+                textures
+                    .iter()
+                    .any(|key| key.ends_with("Down ReceptorAdd 2x1.png"))
+            );
+            let mut copied = skin.clone();
+            copied.receptor_overlays.clear();
+            copied.apply_part(&skin, SkinPart::Receptors);
+            assert_eq!(copied.receptor_overlays.len(), 4);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn loader_base_rotation_y_mirrors_receptor() {
         init_asset_paths();
         clear_itg_runtime_caches();

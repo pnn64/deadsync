@@ -1103,7 +1103,7 @@ fn parse_sprite_block(
         let key = k.trim();
         let value = v.trim();
         if key.eq_ignore_ascii_case("Texture") {
-            texture_expr = Some(value.to_string());
+            texture_expr = Some(resolve_resource_expr(value, command_context));
             continue;
         }
         if key.eq_ignore_ascii_case("Frames")
@@ -1328,6 +1328,31 @@ fn resolve_string_expr(mut expr: &str, context: &CommandContext) -> Option<Strin
         }
         expr = expr.strip_prefix("..")?;
     }
+}
+
+fn resolve_resource_expr(expr: &str, context: &CommandContext) -> String {
+    if let Some(args) = expr.strip_prefix("NOTESKIN:GetPath")
+        && let Some(args) = args
+            .trim()
+            .strip_prefix('(')
+            .and_then(|s| s.strip_suffix(')'))
+    {
+        let mut args = itg_call_args(args);
+        if let (Some(button), Some(element)) = (args.next(), args.next())
+            && (parse_lua_quoted(button).is_none() || parse_lua_quoted(element).is_none())
+            && let (Some(button), Some(element)) = (
+                resolve_string_expr(button, context),
+                resolve_string_expr(element, context),
+            )
+        {
+            return format!("NOTESKIN:GetPath({button:?},{element:?})");
+        }
+    } else if parse_lua_quoted(expr).is_none()
+        && let Some(path) = resolve_string_expr(expr, context)
+    {
+        return format!("{path:?}");
+    }
+    expr.to_owned()
 }
 
 fn parse_commands_block(
