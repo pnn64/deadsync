@@ -253,10 +253,7 @@ impl SpriteSlot {
     #[inline(always)]
     #[must_use]
     pub fn logical_size(&self) -> [f32; 2] {
-        [
-            self.source_size[0].max(0) as f32,
-            self.source_size[1].max(0) as f32,
-        ]
+        <Self as NoteskinSlot>::logical_size(self)
     }
 
     #[must_use]
@@ -1353,6 +1350,25 @@ mod contract_tests {
         }
         // NoteDisplay seeks root sprites from the chart phase, overwriting setstate.
         assert_eq!(slot.frame_index_from_phase(0.0), 0);
+    }
+
+    #[test]
+    fn model_layers_ignore_texture_resolution() {
+        let mut slot = test_model_slot();
+        slot.model = Some(Arc::new(ModelMesh {
+            vertices: Arc::from([]),
+            bounds: [-30.0, -31.0, 0.0, 30.0, 31.0, 8.0],
+        }));
+        for source_size in [[32, 32], [64, 64], [512, 512], [64, 128]] {
+            slot.source_size = source_size;
+            assert_eq!(slot.logical_size(), [60.0, 62.0]);
+            assert_eq!(
+                <SpriteSlot as NoteskinSlot>::logical_size(&slot),
+                [60.0, 62.0]
+            );
+        }
+        slot.model = None;
+        assert_eq!(slot.logical_size(), [64.0, 128.0]);
     }
 
     #[test]

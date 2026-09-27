@@ -2071,6 +2071,116 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn model_preview_ignores_material_texture_sizes() {
+        use super::super::render;
+        use deadlib_present::actors::Actor;
+        use deadsync_assets::noteskin::{ModelMesh, ModelVertex, Noteskin, test_model_slot};
+        ensure_i18n();
+        let (mut state, _) = setup_versus_state();
+        // A triangle shared by materials with different texture dimensions.
+        // Every layer must occupy the same screen coordinates after fitting.
+        let model = Arc::new(ModelMesh {
+            vertices: Arc::from(
+                [[-32.0, -24.0, 0.0], [32.0, -24.0, 0.0], [0.0, 24.0, 0.0]].map(|pos| {
+                    ModelVertex {
+                        pos,
+                        uv: [0.0; 2],
+                        tex_matrix_scale: [1.0; 2],
+                    }
+                }),
+            ),
+            bounds: [-32.0, -24.0, 0.0, 32.0, 24.0, 0.0],
+        });
+        let layers: Arc<[_]> = [[32, 32], [64, 64], [512, 512], [64, 128]]
+            .map(|source_size| {
+                let mut slot = test_model_slot();
+                slot.source_size = source_size;
+                slot.def.size = source_size;
+                slot.model = Some(Arc::clone(&model));
+                slot
+            })
+            .into();
+        let skin = Noteskin {
+            notes: vec![layers[0].clone()],
+            note_layers: vec![Arc::clone(&layers)],
+            lift_note_layers: vec![Arc::from(&layers[..3])],
+            receptor_off: Vec::new(),
+            receptor_glow: Vec::new(),
+            receptor_idle_glow_layers: Vec::new(),
+            receptor_off_reverse: Vec::new(),
+            receptor_glow_reverse: Vec::new(),
+            receptor_idle_glow_reverse: Vec::new(),
+            receptor_step_behaviors: Vec::new(),
+            mines: Vec::new(),
+            mine_fill_slots: Vec::new(),
+            mine_frames: Vec::new(),
+            column_xs: vec![0],
+            tap_explosions: Default::default(),
+            tap_explosions_by_col: Vec::new(),
+            mine_hit_explosion: None,
+            receptor_glow_behavior: Default::default(),
+            receptor_idle_glow: deadsync_noteskin::ReceptorIdleGlow::None,
+            receptor_pulse: Default::default(),
+            hold_let_go_gray_percent: 0.25,
+            hold_columns: Vec::new(),
+            roll_columns: Vec::new(),
+            hold: Default::default(),
+            roll: Default::default(),
+            custom_parts: Default::default(),
+            part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
+            note_display_metrics: Default::default(),
+        };
+        state
+            .noteskin
+            .cache
+            .insert("model-fixture".into(), Arc::new(skin));
+        for (part, layer_count) in [(0, 4), (10, 3)] {
+            for size in [18.0, 32.0] {
+                let mut actors = Vec::new();
+                render::draw_live_preview(
+                    &mut actors,
+                    &state,
+                    "model-fixture",
+                    part,
+                    [100.0; 2],
+                    size,
+                    1.0,
+                    102,
+                );
+                assert_eq!(actors.len(), layer_count);
+                for actor in &actors {
+                    let Actor::TexturedMesh {
+                        local_transform,
+                        vertices,
+                        offset,
+                        ..
+                    } = actor
+                    else {
+                        panic!("preview must preserve its model layers")
+                    };
+                    assert_eq!(vertices.len(), 3);
+                    for vertex in vertices.iter() {
+                        let point = local_transform.transform_point3(glam::Vec3::from(vertex.pos));
+                        let expected = [
+                            100.0 + vertex.pos[0] * size / 64.0,
+                            100.0 - vertex.pos[1] * size / 64.0,
+                        ];
+                        assert!(
+                            (point.x + offset[0] - expected[0]).abs() < 1e-5,
+                            "part {part}: x"
+                        );
+                        assert!(
+                            (point.y + offset[1] - expected[1]).abs() < 1e-5,
+                            "part {part}: y"
+                        );
+                    }
+                }
+                assert_preview_bounds(&actors, "model-fixture", size);
+            }
+        }
+    }
+
+    #[test]
     fn arrow_lift_previews_render_selected_layers() {
         use super::super::{NoteAnimPart, pack_options, render};
         use deadlib_present::actors::Actor;

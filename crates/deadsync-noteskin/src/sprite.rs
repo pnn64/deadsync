@@ -120,6 +120,14 @@ pub trait NoteskinSlot: Sized {
 
     #[inline(always)]
     fn logical_size(&self) -> [f32; 2] {
+        // ITG Model draws every material in shared mesh coordinates. Texture
+        // dimensions affect sampling, not the scale of individual model layers.
+        if let Some(model) = self.model() {
+            let size = model.size();
+            if size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+                return size;
+            }
+        }
         let size = self.source_size();
         [size[0].max(0) as f32, size[1].max(0) as f32]
     }
