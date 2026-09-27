@@ -1012,6 +1012,101 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn hold_caps_keep_column_redirects_after_cache_reload() {
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("column-hold-caps");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local button = Var "Button"
+    local element = Var "Element"
+    if string.find(element, " Topcap ") or string.find(element, " Tail ") then
+        return Def.Actor {}
+    end
+    if not string.find(element, " Body ") and not string.find(element, " Bottomcap ") then
+        button = "Down"
+    end
+    return LoadActor(NOTESKIN:GetPath(button, element))
+end }
+"#,
+        )
+        .expect("write synthetic loader");
+        let buttons = ["Left", "Down", "Up", "Right"];
+        for button in buttons {
+            for kind in ["Hold", "Roll"] {
+                for state in ["Active", "Inactive"] {
+                    for part in ["Body", "BottomCap", "TopCap"] {
+                        let path = root.join(format!("{button} {kind} {part} {state}.png"));
+                        let height = if part == "Body" { 64 } else { 32 };
+                        image::RgbaImage::from_pixel(64, height, image::Rgba([255; 4]))
+                            .save(path)
+                            .expect("write synthetic hold texture");
+                    }
+                }
+            }
+        }
+        for element in ["Tap Note", "Receptor"] {
+            write_noteskin_png(&root.join(format!("Down {element}.png")));
+        }
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "column-caps".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle =
+            compiler::compile_data("dance", &data, "fixture", "").expect("compile synthetic skin");
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).expect("save synthetic cache");
+        let bundle = compiled::load_compiled_bundle(&cache).expect("reload synthetic cache");
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let skin = super::load_itg_sprite_noteskin_parts_compiled(
+            &data,
+            &style,
+            &bundle.loader,
+            &bundle.actors,
+            None,
+        )
+        .expect("load synthetic skin");
+        for (col, button) in buttons.into_iter().enumerate() {
+            for (is_roll, kind) in [(false, "Hold"), (true, "Roll")] {
+                let visuals = skin.hold_visuals_for_col(col, is_roll);
+                assert!(visuals.topcap_active.is_none());
+                assert!(visuals.topcap_inactive.is_none());
+                for (state, body, cap) in [
+                    ("Active", &visuals.body_active, &visuals.bottomcap_active),
+                    (
+                        "Inactive",
+                        &visuals.body_inactive,
+                        &visuals.bottomcap_inactive,
+                    ),
+                ] {
+                    for (part, slot, size) in
+                        [("Body", body, [64, 64]), ("BottomCap", cap, [64, 32])]
+                    {
+                        let expected = format!("{button} {kind} {part} {state}.png");
+                        let slot = slot
+                            .as_ref()
+                            .unwrap_or_else(|| panic!("missing {expected}"));
+                        assert!(
+                            slot.texture_key().ends_with(&expected),
+                            "expected {expected}, got {}",
+                            slot.texture_key(),
+                        );
+                        assert_eq!(slot.def.size, size);
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).expect("remove synthetic skin");
+    }
+
+    #[test]
     fn texture_header_probe_is_reused_before_upload() {
         init_asset_paths();
         let root = temp_noteskin_root("header-cache");

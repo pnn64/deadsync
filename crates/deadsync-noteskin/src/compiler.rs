@@ -15,39 +15,41 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 18;
+const COMPILER_VERSION: u32 = 19;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
 const DANCE_BUTTONS: [&str; 4] = ["Left", "Down", "Up", "Right"];
+// Match NoteDisplay::Load exactly: Lua comparisons of Var "Element" are case
+// sensitive even though file and compiled-entry lookup are case insensitive.
 const CORE_ELEMENTS: [&str; 33] = [
     "Explosion",
     "Go Receptor",
     "HitMine Explosion",
     "Hold Body Active",
     "Hold Body Inactive",
-    "Hold BottomCap Active",
-    "Hold BottomCap Inactive",
+    "Hold Bottomcap Active",
+    "Hold Bottomcap Inactive",
     "Hold Explosion",
     "Hold Head Active",
     "Hold Head Inactive",
     "Hold Tail Active",
     "Hold Tail Inactive",
-    "Hold TopCap Active",
-    "Hold TopCap Inactive",
+    "Hold Topcap Active",
+    "Hold Topcap Inactive",
     "Ready Receptor",
     "Receptor",
     "Roll Body Active",
     "Roll Body Inactive",
-    "Roll BottomCap Active",
-    "Roll BottomCap Inactive",
+    "Roll Bottomcap Active",
+    "Roll Bottomcap Inactive",
     "Roll Explosion",
     "Roll Head Active",
     "Roll Head Inactive",
     "Roll Tail Active",
     "Roll Tail Inactive",
-    "Roll TopCap Active",
-    "Roll TopCap Inactive",
+    "Roll Topcap Active",
+    "Roll Topcap Inactive",
     "Tap Explosion Bright",
     "Tap Explosion Dim",
     "Tap Fake",
