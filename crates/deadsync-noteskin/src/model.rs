@@ -25,8 +25,21 @@ impl Default for ItgModelTexturePath {
 }
 
 #[derive(Debug, Clone)]
+pub struct ItgTextureFrame {
+    pub path: PathBuf,
+    pub delay: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItgTextureAnimation {
+    pub path: PathBuf,
+    pub frames: Vec<ItgTextureFrame>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ItgResolvedModelTexture {
     pub texture_path: PathBuf,
+    pub animation: Option<ItgTextureAnimation>,
     pub tex: ItgModelTexturePath,
 }
 
@@ -34,6 +47,7 @@ impl ItgResolvedModelTexture {
     fn from_path(texture_path: PathBuf) -> Self {
         Self {
             texture_path,
+            animation: None,
             tex: ItgModelTexturePath::default(),
         }
     }
@@ -212,24 +226,39 @@ fn itg_resolve_animated_texture_ini(
         .and_then(noteskin_itg::parse_ini_float)
         .unwrap_or(0.0);
     let mut cycle_seconds = 0.0f32;
+    let mut frames = Vec::new();
     for idx in first_frame_idx..1000 {
         let frame_key = itg_animated_texture_key(*b"Frame0000", idx);
         let delay_key = itg_animated_texture_key(*b"Delay0000", idx);
-        if ini
-            .get("AnimatedTexture", itg_animated_texture_key_str(&frame_key))
-            .is_none()
-        {
+        let Some(frame) = ini.get("AnimatedTexture", itg_animated_texture_key_str(&frame_key))
+        else {
             break;
-        }
+        };
         let Some(delay) = ini
             .get("AnimatedTexture", itg_animated_texture_key_str(&delay_key))
             .and_then(noteskin_itg::parse_ini_float)
         else {
             break;
         };
-        cycle_seconds += delay.max(0.0);
+        if !delay.is_finite() || delay < 0.0 {
+            return None;
+        }
+        frames.push(ItgTextureFrame {
+            path: itg_resolve_relative_or_noteskin_path(data, path, frame)?,
+            delay,
+        });
+        cycle_seconds += delay;
     }
     Some(ItgResolvedModelTexture {
+        // Repeated references to one image need no atlas. Keep its full UV
+        // domain for scrolling materials instead of adding duplicate tiles.
+        animation: (frames.iter().any(|frame| frame.path != texture_path)
+            && cycle_seconds > f32::EPSILON
+            && cycle_seconds.is_finite())
+        .then(|| ItgTextureAnimation {
+            path: path.to_path_buf(),
+            frames,
+        }),
         texture_path,
         tex: ItgModelTexturePath {
             uv_velocity: [tex_velocity_x, tex_velocity_y],
@@ -282,6 +311,7 @@ pub struct ItgModelAutoRot {
 
 #[derive(Debug, Clone)]
 pub struct ItgModelSlotPlan {
+    pub texture_animation: Option<ItgTextureAnimation>,
     pub model: Option<Arc<ModelMesh>>,
     pub model_draw: ModelDrawState,
     pub model_timeline: Arc<[ModelTweenSegment]>,
@@ -310,6 +340,7 @@ impl ItgModelSlotPlan {
             (true, tex.uv_velocity)
         };
         Self {
+            texture_animation: layer.texture.animation,
             model: Some(layer.mesh),
             model_draw,
             model_timeline,
@@ -336,6 +367,7 @@ impl ItgModelSlotPlan {
     ) -> Self {
         let tex = texture.tex;
         Self {
+            texture_animation: texture.animation,
             model,
             model_draw,
             model_timeline,
@@ -913,6 +945,7 @@ mod tests {
             mesh: test_mesh(),
             texture: ItgResolvedModelTexture {
                 texture_path: PathBuf::from("tap.png"),
+                animation: None,
                 tex: ItgModelTexturePath {
                     uv_velocity: [2.0, -1.0],
                     uv_offset: [0.25, 0.5],
@@ -948,6 +981,7 @@ mod tests {
         };
         let texture = ItgResolvedModelTexture {
             texture_path: PathBuf::from("tap.png"),
+            animation: None,
             tex: ItgModelTexturePath {
                 uv_velocity: [1.0, 2.0],
                 uv_offset: [0.1, 0.2],
@@ -1044,6 +1078,10 @@ Materials: 1
                 Some(("zero.png", 0.75)),
             ),
             ("Frame0001=one.png\nDelay0001=0.5\n", Some(("one.png", 0.5))),
+            (
+                "Frame0000=one.png\nDelay0000=0.5\nFrame0001=one.png\nDelay0001=0.75\n",
+                Some(("one.png", 1.25)),
+            ),
             ("Frame0000=\nFrame0001=one.png\nDelay0001=0.5\n", None),
             ("Delay0000=1\n", None),
         ] {
@@ -1053,6 +1091,7 @@ Materials: 1
                 let resolved = resolved.expect("first frame should resolve");
                 assert_eq!(resolved.texture_path, root.join(name));
                 assert_eq!(resolved.tex.uv_cycle_seconds, Some(cycle));
+                assert_eq!(resolved.animation.is_some(), name == "zero.png");
             } else {
                 assert!(resolved.is_none());
             }

@@ -119,7 +119,7 @@ use holds::{
     TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
     hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
     hold_head_part_for_roll, hold_segment_bounds, hold_strip_draw, hold_strip_glow_draw,
-    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, scale_cap_to_arrow,
+    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, scale_hold_part,
     song_time_ns_delta_seconds,
 };
 pub use measure_actors::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER;
@@ -230,7 +230,7 @@ mod tests {
         mine_part, mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_x_extra,
         note_x_offset, notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
         quantize_centi_i32, quantize_centi_u32, quantize_step, receptor_row_center, rgba8,
-        scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, share_actor_range,
+        scale_effect_size, scale_hold_part, scale_sprite_to_arrow, share_actor_range,
         signed_effect_active, sm_scale, smoothstep01, song_time_ns_delta_seconds,
         song_time_ns_to_seconds, tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
         timing_window_from_num, tiny_spacing_scale, tipsy_y_extra, tornado_x_extra,
@@ -788,11 +788,11 @@ mod tests {
     }
 
     #[test]
-    fn cap_scale_uses_width_as_arrow_target() {
-        assert_eq!(scale_cap_to_arrow([32, 16], 64.0), [64.0, 32.0]);
-        assert_eq!(scale_cap_to_arrow([0, 16], 64.0), [0.0, 16.0]);
-        assert_eq!(scale_cap_to_arrow([32, -16], 64.0), [64.0, 0.0]);
-        assert_eq!(scale_cap_to_arrow([32, 16], 0.0), [32.0, 16.0]);
+    fn hold_scale_preserves_native_dimensions() {
+        assert_eq!(scale_hold_part([32, 16], 64.0), [32.0, 16.0]);
+        assert_eq!(scale_hold_part([0, 16], 64.0), [0.0, 16.0]);
+        assert_eq!(scale_hold_part([32, -16], 64.0), [32.0, 0.0]);
+        assert_eq!(scale_hold_part([32, 16], 0.0), [32.0, 16.0]);
     }
 
     #[test]

@@ -567,7 +567,7 @@ where
         return RenderedHoldBody::default();
     };
     if let Some(cap_slot) = request.bottom_cap_slot {
-        let cap_size = scale_cap_to_arrow(cap_slot.size(), request.target_arrow_px);
+        let cap_size = scale_hold_part(cap_slot.source_size(), request.target_arrow_px);
         body_bottom = hold_body_bottom_for_tail_cap(body_bottom, request.y_tail, cap_size[1]);
     }
     if request.y_tail <= request.y_head || body_bottom <= body_top {
@@ -576,7 +576,7 @@ where
     let Some(body_slot) = request.body_slot else {
         return RenderedHoldBody::default();
     };
-    let texture_size = body_slot.size();
+    let texture_size = body_slot.source_size();
     let texture_width = texture_size[0].max(1) as f32;
     let texture_height = texture_size[1].max(1) as f32;
     if texture_width <= f32::EPSILON || texture_height <= f32::EPSILON {
@@ -594,8 +594,7 @@ where
     }
 
     let body_frame = body_slot.frame_index_from_phase(request.body_phase);
-    let body_width = request.target_arrow_px;
-    let scale = body_width / texture_width;
+    let scale = request.target_arrow_px / 64.0;
     let segment_height = (texture_height * scale).max(f32::EPSILON);
     let is_model = body_slot.model().is_some();
     let uv_elapsed = if is_model {
@@ -789,7 +788,10 @@ where
                 HoldSpritePass {
                     slot,
                     center: [sample.center_x, center_y],
-                    size: [request.target_arrow_px, segment_size],
+                    size: [
+                        scale_hold_part(slot.source_size(), request.target_arrow_px)[0],
+                        segment_size,
+                    ],
                     uv: [u0, v0, u1, v1],
                     rotation_y_deg: request.rotation_y_deg,
                     rotation_z_deg: 0.0,
@@ -1080,7 +1082,10 @@ where
                     HoldSpritePass {
                         slot,
                         center: center_xy,
-                        size: [request.target_arrow_px, slice_height],
+                        size: [
+                            scale_hold_part(slot.source_size(), request.target_arrow_px)[0],
+                            slice_height,
+                        ],
                         uv: [u0, slice_v0, u1, slice_v1],
                         rotation_y_deg: request.rotation_y_deg,
                         rotation_z_deg: 0.0,
@@ -1132,7 +1137,7 @@ fn hold_segment_slice_v(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn append_hold_body_mesh_slice<S>(
+fn append_hold_body_mesh_slice<S: NoteskinSlot>(
     request: &HoldBodyCapRequest<'_, S>,
     u0: f32,
     u1: f32,
@@ -1149,12 +1154,15 @@ fn append_hold_body_mesh_slice<S>(
     diffuse_vertices: &mut Vec<TexturedMeshVertex>,
     glow_vertices: &mut Vec<TexturedMeshVertex>,
 ) {
+    let width_ratio = request
+        .body_slot
+        .map_or(1.0, |slot| slot.source_size()[0].max(0) as f32 / 64.0);
     let (top_alpha, top_glow) = top_appearance;
     let (bottom_alpha, bottom_glow) = bottom_appearance;
     let top_row_positions = prev_row.unwrap_or_else(|| {
         let row = hold_strip_row_3d(
             [top.center_x, top_y, top.world_z],
-            top.arrow_px * 0.5,
+            top.arrow_px * width_ratio * 0.5,
             u0,
             u1,
             v0,
@@ -1185,7 +1193,7 @@ fn append_hold_body_mesh_slice<S>(
     }
     let bottom_row = hold_strip_row_3d(
         [bottom.center_x, bottom_y, bottom.world_z],
-        bottom.arrow_px * 0.5,
+        bottom.arrow_px * width_ratio * 0.5,
         u0,
         u1,
         v1,
@@ -1244,7 +1252,7 @@ fn compose_top_cap<S, F, P>(
         return;
     }
 
-    let cap_size = scale_cap_to_arrow(slot.size(), request.target_arrow_px);
+    let cap_size = scale_hold_part(slot.source_size(), request.target_arrow_px);
     let cap_width = cap_size[0];
     let mut cap_height = cap_size[1];
     let cap_top = request.y_head - cap_height;
@@ -1298,7 +1306,7 @@ fn compose_top_cap<S, F, P>(
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
         let top_row = hold_strip_row_3d(
             [top.center_x, cap_top, top.world_z],
-            top.arrow_px * 0.5,
+            scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
             u0,
             u1,
             v0,
@@ -1310,6 +1318,9 @@ fn compose_top_cap<S, F, P>(
             ],
         );
         let bottom_row = if let Some(body_head_row) = rendered.head_row
+            && request
+                .body_slot
+                .is_some_and(|body| body.source_size()[0] == slot.source_size()[0])
             && rendered
                 .top
                 .is_some_and(|body_top| (body_top - cap_bottom).abs() <= 2.0)
@@ -1330,7 +1341,7 @@ fn compose_top_cap<S, F, P>(
         } else {
             hold_strip_row_3d(
                 [bottom.center_x, cap_bottom, bottom.world_z],
-                bottom.arrow_px * 0.5,
+                scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
                 u0,
                 u1,
                 v1,
@@ -1495,7 +1506,7 @@ fn compose_bottom_cap<S, F, P>(
         return;
     }
 
-    let cap_size = scale_cap_to_arrow(slot.size(), request.target_arrow_px);
+    let cap_size = scale_hold_part(slot.source_size(), request.target_arrow_px);
     let cap_width = cap_size[0];
     let cap_span = cap_size[1];
     let Some((raw_top, draw_bottom)) =
@@ -1555,7 +1566,11 @@ fn compose_bottom_cap<S, F, P>(
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
-        let top_row = if let Some(body_tail_row) = rendered.tail_row {
+        let top_row = if let Some(body_tail_row) = rendered.tail_row
+            && request
+                .body_slot
+                .is_some_and(|body| body.source_size()[0] == slot.source_size()[0])
+        {
             hold_strip_row_from_positions(
                 body_tail_row[0],
                 body_tail_row[1],
@@ -1572,7 +1587,7 @@ fn compose_bottom_cap<S, F, P>(
         } else {
             hold_strip_row_3d(
                 [top.center_x, draw_top, top.world_z],
-                top.arrow_px * 0.5,
+                scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
                 u0,
                 u1,
                 v0,
@@ -1586,7 +1601,7 @@ fn compose_bottom_cap<S, F, P>(
         };
         let bottom_row = hold_strip_row_3d(
             [bottom.center_x, draw_bottom, bottom.world_z],
-            bottom.arrow_px * 0.5,
+            scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
             u0,
             u1,
             v1,
@@ -1685,14 +1700,16 @@ pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f3
     [width * scale, target_arrow_px]
 }
 
-pub(crate) fn scale_cap_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
+pub(crate) fn scale_hold_part(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
     if width <= 0.0 || target_arrow_px <= 0.0 {
         return [width, height];
     }
-    let scale = target_arrow_px / width;
-    [target_arrow_px, height * scale]
+    // NoteDisplay scales the sprite's logical dimensions by ArrowEffects zoom.
+    // Narrow hold textures must retain their width relative to a 64px arrow.
+    let scale = target_arrow_px / 64.0;
+    [width * scale, height * scale]
 }
 
 #[must_use]
@@ -2035,6 +2052,7 @@ mod tests {
 
     struct TestSlot {
         def: SpriteDefinition,
+        resolution: i32,
         model: Option<ModelMesh>,
         texture: Arc<str>,
         uv: [f32; 4],
@@ -2050,6 +2068,7 @@ mod tests {
                     size: [64, 64],
                     ..SpriteDefinition::default()
                 },
+                resolution: 1,
                 model: None,
                 texture: Arc::from(texture),
                 uv: [0.1, 0.2, 0.9, 0.8],
@@ -2080,7 +2099,7 @@ mod tests {
         }
 
         fn source_size(&self) -> [i32; 2] {
-            [64, 64]
+            self.def.size.map(|size| size / self.resolution)
         }
 
         fn texture_key_shared(&self) -> Arc<str> {
@@ -2176,6 +2195,110 @@ mod tests {
             center_x: 32.0,
             world_z: y * 0.1,
             arrow_px: 64.0,
+        }
+    }
+
+    #[test]
+    fn hold_parts_keep_native_width_and_tile_height() {
+        for resolution in [1, 2] {
+            let mut body = TestSlot::sprite("body");
+            body.def.size = [24 * resolution, 32 * resolution];
+            body.resolution = resolution;
+            let mut top = TestSlot::sprite("top");
+            top.def.size = [20 * resolution, 12 * resolution];
+            top.resolution = resolution;
+            let mut bottom = TestSlot::sprite("bottom");
+            bottom.def.size = [28 * resolution, 12 * resolution];
+            bottom.resolution = resolution;
+            for zoom in [0.5, 1.0, 1.5] {
+                for legacy in [false, true] {
+                    for reverse in [false, true] {
+                        let mut request = body_cap_request(Some(&body), Some(&top), Some(&bottom));
+                        request.use_legacy_sprites = legacy;
+                        request.lane_reverse = reverse;
+                        request.target_arrow_px = 64.0 * zoom;
+                        request.y_tail = 300.0;
+                        request.draw_span = Some((100.0, 300.0));
+                        let mut draws = Vec::new();
+                        let mut scratch = HoldMeshScratch::with_columns(1);
+                        scratch.begin_frame();
+                        compose_hold_body_caps(
+                            &mut draws,
+                            &mut scratch,
+                            request,
+                            &|y| HoldPathSample {
+                                arrow_px: 64.0 * zoom,
+                                ..straight_path(y)
+                            },
+                            &test_source,
+                        );
+                        assert!(!draws.is_empty());
+                        for draw in draws {
+                            let (key, width) = match &draw {
+                                FlatDraw::Sprite(sprite) => {
+                                    (sprite.source.texture_key().unwrap(), sprite.size[0])
+                                }
+                                FlatDraw::TexturedMesh(mesh) => {
+                                    let vertices = match &mesh.vertices {
+                                        FlatMeshVertices::Shared(vertices) => vertices.as_ref(),
+                                        FlatMeshVertices::Reusable(vertices) => vertices.as_slice(),
+                                    };
+                                    let left = vertices
+                                        .iter()
+                                        .map(|v| v.pos[0])
+                                        .fold(f32::INFINITY, f32::min);
+                                    let right = vertices
+                                        .iter()
+                                        .map(|v| v.pos[0])
+                                        .fold(f32::NEG_INFINITY, f32::max);
+                                    (mesh.texture.as_ref(), right - left)
+                                }
+                                _ => panic!("unexpected hold draw"),
+                            };
+                            if key == "body" {
+                                let (height, v_span) = match &draw {
+                                    FlatDraw::Sprite(sprite) => (
+                                        sprite.size[1],
+                                        (sprite.uv_rect[3] - sprite.uv_rect[1]).abs(),
+                                    ),
+                                    FlatDraw::TexturedMesh(mesh) => {
+                                        let vertices = match &mesh.vertices {
+                                            FlatMeshVertices::Shared(vertices) => vertices.as_ref(),
+                                            FlatMeshVertices::Reusable(vertices) => {
+                                                vertices.as_slice()
+                                            }
+                                        };
+                                        let first = vertices[0];
+                                        let other = vertices
+                                            .iter()
+                                            .find(|v| (v.pos[1] - first.pos[1]).abs() > 1e-4)
+                                            .unwrap();
+                                        (
+                                            (other.pos[1] - first.pos[1]).abs(),
+                                            (other.uv[1] - first.uv[1]).abs(),
+                                        )
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                // A 32px-tall texture repeats every 32px * zoom,
+                                // independently of its 24px width and resolution.
+                                let expected = (body.uv[3] - body.uv[1]).abs() / (32.0 * zoom);
+                                assert!((v_span / height - expected).abs() < 1e-4);
+                            }
+                            let native = match key {
+                                "body" => 24.0,
+                                "top" => 20.0,
+                                "bottom" => 28.0,
+                                _ => unreachable!(),
+                            };
+                            assert!(
+                                (width - native * zoom).abs() < 1e-5,
+                                "{key} width={width}, zoom={zoom}"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -7,7 +7,7 @@ use deadsync_noteskin::mine::{
     MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
     mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
 };
-use deadsync_noteskin::model::ItgModelSlotPlan;
+use deadsync_noteskin::model::{ItgModelSlotPlan, ItgTextureAnimation};
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
 use deadsync_noteskin::script::{
@@ -682,6 +682,15 @@ pub fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
 }
 
 pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
+    if let Some(animation) = plan.texture_animation {
+        match model_animation_source(&animation) {
+            Ok(source) => slot.source = source,
+            Err(error) => warn!(
+                "Model texture animation '{}': {error}",
+                animation.path.display()
+            ),
+        }
+    }
     slot.model_fallback = plan.model.is_none();
     slot.model = plan.model;
     slot.model_draw = plan.model_draw;
@@ -693,6 +702,78 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
     slot.uv_velocity = plan.uv_velocity;
     slot.uv_offset = plan.uv_offset;
     slot.uv_cycle_seconds = plan.uv_cycle_seconds;
+}
+
+// Built on the asset worker, retained by the existing generated-texture registry,
+// and uploaded with the skin before gameplay. Drawing only selects cached UVs.
+// Bound each atlas to 64 MiB / 8192px; no runtime decoding or cache maintenance.
+fn model_animation_source(animation: &ItgTextureAnimation) -> Result<Arc<SpriteSource>, String> {
+    let count = animation.frames.len();
+    let first = animation.frames.first().ok_or("empty frame sequence")?;
+    let (width, height) = image_dimensions(&first.path).map_err(|error| error.to_string())?;
+    let columns = (count as f32).sqrt().ceil() as u32;
+    let rows = (count as u32).div_ceil(columns.max(1));
+    let atlas_width = width.checked_mul(columns).ok_or("atlas width overflow")?;
+    let atlas_height = height.checked_mul(rows).ok_or("atlas height overflow")?;
+    if width == 0
+        || height == 0
+        || atlas_width > 8192
+        || atlas_height > 8192
+        || u64::from(atlas_width) * u64::from(atlas_height) > 16 * 1024 * 1024
+    {
+        return Err("frame atlas exceeds 64 MiB or 8192px".into());
+    }
+    let key = format!(
+        "{}#model-frames",
+        crate::textures::canonical_texture_key(&animation.path)
+    );
+    if assets::texture_dims(&key).is_none() {
+        let mut atlas = image::RgbaImage::new(atlas_width, atlas_height);
+        for (index, frame) in animation.frames.iter().enumerate() {
+            let image = assets::open_image_fallback(&frame.path)
+                .map_err(|error| error.to_string())?
+                .into_rgba8();
+            let image = if image.dimensions() == (width, height) {
+                image
+            } else {
+                image::imageops::resize(
+                    &image,
+                    width,
+                    height,
+                    image::imageops::FilterType::Triangle,
+                )
+            };
+            image::imageops::replace(
+                &mut atlas,
+                &image,
+                i64::from(index as u32 % columns * width),
+                i64::from(index as u32 / columns * height),
+            );
+        }
+        assets::register_generated_texture(
+            &key,
+            atlas,
+            crate::textures::model_texture_sampler(&key),
+        );
+    }
+    let mut plan = generated_animation_sprite_slot_plan(
+        key,
+        (atlas_width, atlas_height),
+        [width as i32, height as i32],
+        count,
+        AnimationRate::FramesPerSecond(1.0),
+        false,
+    );
+    if let SpriteSourcePlan::Animated {
+        grid,
+        frame_durations,
+        ..
+    } = &mut plan.source
+    {
+        *grid = (columns as usize, rows as usize);
+        *frame_durations = Some(animation.frames.iter().map(|frame| frame.delay).collect());
+    }
+    Ok(source_from_plan(plan.source, &plan.def))
 }
 
 pub fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {

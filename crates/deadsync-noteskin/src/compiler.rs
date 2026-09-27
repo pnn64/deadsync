@@ -15,14 +15,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 25;
+const COMPILER_VERSION: u32 = 26;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
 const DANCE_BUTTONS: [&str; 4] = ["Left", "Down", "Up", "Right"];
 // Match NoteDisplay::Load exactly: Lua comparisons of Var "Element" are case
 // sensitive even though file and compiled-entry lookup are case insensitive.
-const CORE_ELEMENTS: [&str; 33] = [
+const CORE_ELEMENTS: [&str; 43] = [
     "Explosion",
     "Go Receptor",
     "HitMine Explosion",
@@ -51,7 +51,17 @@ const CORE_ELEMENTS: [&str; 33] = [
     "Roll Topcap Active",
     "Roll Topcap Inactive",
     "Tap Explosion Bright",
+    "Tap Explosion Bright W1",
+    "Tap Explosion Bright W2",
+    "Tap Explosion Bright W3",
+    "Tap Explosion Bright W4",
+    "Tap Explosion Bright W5",
     "Tap Explosion Dim",
+    "Tap Explosion Dim W1",
+    "Tap Explosion Dim W2",
+    "Tap Explosion Dim W3",
+    "Tap Explosion Dim W4",
+    "Tap Explosion Dim W5",
     "Tap Fake",
     "Tap Lift",
     "Tap Mine",
@@ -59,7 +69,7 @@ const CORE_ELEMENTS: [&str; 33] = [
 ];
 const ASCII_CASE_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const ASCII_CASE_HASH_PRIME: u64 = 0x0100_0000_01b3;
-// The built-in loader domain has 33 elements. Keeping 64 fingerprints inline
+// The built-in loader domain has 43 elements. Keeping 64 fingerprints inline
 // also covers typical third-party additions without heap storage.
 const INLINE_LOADER_DOMAIN_KEYS: usize = 64;
 type LoaderFingerprints = SmallVec<[u64; INLINE_LOADER_DOMAIN_KEYS]>;

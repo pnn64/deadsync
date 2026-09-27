@@ -1070,6 +1070,184 @@ return Def.Model {
     }
 
     #[test]
+    fn model_frames_and_grade_redirects_survive_cache_reload() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("material-frames-and-grades");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Tap Mine" then
+        return LoadActor(NOTESKIN:GetPath("Down", "Tap Mine"))
+    elseif element == "Explosion" then
+        return LoadActor(NOTESKIN:GetPath("", "Fallback Explosion"))
+    elseif string.find(element, "Tap Explosion Dim") then
+        return LoadActor(NOTESKIN:GetPath("Down", "Tap Explosion Dim"))
+    elseif string.find(element, "Tap Explosion Bright") then
+        return LoadActor(NOTESKIN:GetPath("Down", "Tap Explosion Bright"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "plain.png"))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Tap Mine.lua"),
+            r#"
+return Def.Model {
+    Meshes = NOTESKIN:GetPath('', 'geometry'),
+    Materials = NOTESKIN:GetPath('', 'geometry'),
+}
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("geometry.txt"),
+            r#"MilkShape 3D ASCII
+Meshes: 1
+"flame" 0 0
+3
+0 -32 -32 0 0 0 -1
+0 32 -32 0 1 0 -1
+0 0 32 0 0 1 -1
+0
+1
+0 0 1 2 0 0 0 1
+Materials: 1
+"fire"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"frames.ini"
+""
+Bones: 0
+"#,
+        )
+        .unwrap();
+        fs::write(root.join("frames.ini"), "[AnimatedTexture]\nFrame0000=red.png\nDelay0000=0.125\nFrame0001=green.png\nDelay0001=0.125\nFrame0002=blue.png\nDelay0002=0.25\n").unwrap();
+        for (name, color) in [
+            ("red", [255, 0, 0, 255]),
+            ("green", [0, 255, 0, 255]),
+            ("blue", [0, 0, 255, 255]),
+        ] {
+            image::RgbaImage::from_pixel(4, 4, image::Rgba(color))
+                .save(root.join(format!("{name}.png")))
+                .unwrap();
+        }
+        for name in [
+            "plain",
+            "Down Tap Explosion Dim",
+            "Down Tap Explosion Bright",
+        ] {
+            write_noteskin_png(&root.join(format!("{name}.png")));
+        }
+        let mut actors = String::from("return Def.ActorFrame {\n");
+        for grade in 1..=5 {
+            for (mode, bright, dim) in [("Dim", "false", "true"), ("Bright", "true", "false")] {
+                actors.push_str(&format!(
+                    r#"
+    NOTESKIN:LoadActor(Var "Button", "Tap Explosion {mode} W{grade}") .. {{
+        InitCommand=cmd(diffusealpha,0);
+        W{grade}Command=cmd(diffusealpha,1;sleep,0.1;linear,0.1;diffusealpha,0);
+        BrightCommand=cmd(visible,{bright});
+        DimCommand=cmd(visible,{dim});
+    }};
+"#
+                ));
+            }
+        }
+        actors.push('}');
+        fs::write(root.join("Fallback Explosion.lua"), actors).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "synthetic-frames-and-grades".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        for parts in [
+            None,
+            Some(
+                SkinParts::default()
+                    .with(SkinPart::Mines)
+                    .with(SkinPart::TapExplosions),
+            ),
+        ] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for col in 0..4 {
+                let mine = &skin.mine_layers[col][0];
+                assert_eq!(mine.source.frame_count(), 3);
+                assert_eq!(mine.logical_size(), [64.0; 2]);
+                let atlas = deadlib_assets::generated_texture(mine.texture_key()).unwrap();
+                for (phase, expected, color) in [
+                    (0.0, 0, [255, 0, 0, 255]),
+                    (0.249, 0, [255, 0, 0, 255]),
+                    (0.25, 1, [0, 255, 0, 255]),
+                    (0.5, 2, [0, 0, 255, 255]),
+                    (0.999, 2, [0, 0, 255, 255]),
+                    (1.0, 0, [255, 0, 0, 255]),
+                ] {
+                    let frame = mine.frame_index_from_phase(phase);
+                    assert_eq!(frame, expected);
+                    let uv = mine.uv_for_frame_at(frame, phase);
+                    let x = ((uv[0] + uv[2]) * 0.5 * atlas.image.width() as f32) as u32;
+                    let y = ((uv[1] + uv[3]) * 0.5 * atlas.image.height() as f32) as u32;
+                    assert_eq!(atlas.image.get_pixel(x, y).0, color);
+                }
+                let mut warmed = false;
+                skin.for_each_slot(|slot| warmed |= slot.texture_key() == mine.texture_key());
+                assert!(warmed, "the entire frame atlas reaches texture prewarming");
+                for grade in 1..=5 {
+                    for bright in [false, true] {
+                        let explosion = skin
+                            .tap_explosion_for_col_with_bright(col, &format!("W{grade}"), bright)
+                            .unwrap();
+                        let visible: Vec<_> = explosion
+                            .layers
+                            .iter()
+                            .filter(|layer| {
+                                let state = layer.animation.state_at(0.05);
+                                state.visible && state.diffuse[3] > 0.0
+                            })
+                            .collect();
+                        assert_eq!(
+                            visible.len(),
+                            1,
+                            "col={col}, grade={grade}, bright={bright}"
+                        );
+                        let suffix = if bright { "Bright.png" } else { "Dim.png" };
+                        assert!(visible[0].slot.texture_key().ends_with(suffix));
+                        assert_eq!(visible[0].animation.state_at(0.2).diffuse[3], 0.0);
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn explosion_aliases_keep_metric_animation_after_cache_reload() {
         use deadsync_noteskin::{
             compiled, compiler,
