@@ -33,6 +33,7 @@ const BEAT_FADE_GLOW_SIGNATURES: [&[u8]; 4] = [
 struct CommandContext {
     colors: HashMap<String, String>,
     functions: HashMap<String, LocalFunction>,
+    aliases: HashMap<String, String>,
     scope: HashMap<String, String>,
 }
 
@@ -99,6 +100,12 @@ pub fn parse_actor_for_button(
     button: Option<&str>,
 ) -> ItgLuaActorDecl {
     let content = strip_lua_comments(content);
+    // Select the ITGmania compatibility branch before resolving local callbacks.
+    let content = if content.contains("ProductFamily") {
+        Cow::Owned(resolve_lua_conditionals(&content, &HashMap::new()))
+    } else {
+        content
+    };
     let content = content.as_ref();
     let mut decl = ItgLuaActorDecl::default();
     let arg0_aliases = parse_arg0_aliases(content);
@@ -115,6 +122,7 @@ pub fn parse_actor_for_button(
             }
         }
     }
+    collect_actor_aliases(content, metrics, &mut command_context);
 
     let mut cursor = 0usize;
     while let Some(rel) = content[cursor..].find("Def.Sprite") {
@@ -201,7 +209,8 @@ pub fn parse_actor_for_button(
         let Some(close) = find_matching(content, open, '(', ')') else {
             break;
         };
-        let Some((button_override, element)) = parse_loadactor_args(&content[open + 1..close])
+        let Some((button_override, element)) =
+            parse_loadactor_args(&content[open + 1..close], &command_context)
         else {
             cursor = close + 1;
             continue;
@@ -566,14 +575,19 @@ pub fn parse_wrapper_commands(
     content: &str,
     metrics: &noteskin_itg::IniData,
 ) -> Option<HashMap<String, String>> {
+    let content = strip_lua_comments(content);
+    let content = resolve_lua_conditionals(&content, &HashMap::new());
+    let content = content.as_str();
     let marker = ".. {";
     let marker_idx = content.find(marker)?;
     let open = marker_idx + marker.len() - 1;
     let close = find_matching(content, open, '{', '}')?;
+    let mut context = command_context(content);
+    collect_actor_aliases(content, metrics, &mut context);
     Some(parse_commands_block(
         &content[open + 1..close],
         metrics,
-        &CommandContext::default(),
+        &context,
     ))
 }
 
@@ -667,6 +681,103 @@ fn command_context(content: &str) -> CommandContext {
     }
     context.functions = parse_local_functions(content);
     context
+}
+
+// Fold command and string bindings before actor construction.
+// Function bodies and unresolved branches must not reassign those bindings.
+fn collect_actor_aliases(
+    content: &str,
+    metrics: &noteskin_itg::IniData,
+    context: &mut CommandContext,
+) {
+    let mut cursor = 0;
+    while cursor < content.len() {
+        cursor = skip_ws(content, cursor);
+        let end = content[cursor..]
+            .find('\n')
+            .map_or(content.len(), |rel| cursor + rel);
+        let line = content[cursor..end].trim().trim_end_matches(';').trim();
+        if line.starts_with("return ") || line.contains("Def.") || line.contains("LoadActor(") {
+            break;
+        }
+        if line.starts_with("local function ") || line.starts_with("function ") {
+            let Some(open) = content[cursor..].find('(').map(|rel| cursor + rel) else {
+                break;
+            };
+            let Some(close) = find_matching(content, open, '(', ')') else {
+                break;
+            };
+            let Some(close) = find_function_end(content, close + 1) else {
+                break;
+            };
+            cursor = close + 3;
+            continue;
+        }
+        if line.starts_with("if") && token_boundary(line.as_bytes(), 0, 2) {
+            let Some(then) = find_lua_keyword(content, cursor, "then") else {
+                break;
+            };
+            let Some((_, close)) = find_lua_if_close(content, then + 4) else {
+                break;
+            };
+            cursor = close + 3;
+            continue;
+        }
+        let Some((name, value)) = line.strip_prefix("local ").unwrap_or(line).split_once('=')
+        else {
+            cursor = end;
+            continue;
+        };
+        let name = name.trim();
+        let mut value = value.trim();
+        if name.is_empty() || !name.bytes().all(is_lua_ident) {
+            cursor = end;
+            continue;
+        }
+        let value_start = cursor
+            + content[cursor..end]
+                .find('=')
+                .expect("assignment has equals")
+            + 1;
+        let value_start = skip_ws(content, value_start);
+        cursor = end;
+        if value.starts_with("function") {
+            let Some(open) = content[value_start..]
+                .find('(')
+                .map(|rel| value_start + rel)
+            else {
+                break;
+            };
+            let Some(close) = find_matching(content, open, '(', ')') else {
+                break;
+            };
+            let Some(close) = find_function_end(content, close + 1) else {
+                break;
+            };
+            cursor = close + 3;
+            value = &content[value_start..cursor];
+        } else if value.starts_with("cmd(") || value.starts_with("NOTESKIN:GetMetricA(") {
+            let open = value_start + value.find('(').expect("command call has parentheses");
+            let Some(close) = find_matching(content, open, '(', ')') else {
+                break;
+            };
+            cursor = close + 1;
+            value = &content[value_start..cursor];
+        } else if !context.aliases.contains_key(value)
+            && get_ascii_lowercase(&context.functions, value).is_none()
+            && !split_lua_call(value)
+                .is_some_and(|(name, _)| get_ascii_lowercase(&context.functions, name).is_some())
+            && parse_lua_quoted(value).is_none()
+        {
+            context.aliases.remove(name);
+            continue;
+        }
+        if let Some(command) = resolve_command_expr(value, metrics, context) {
+            context.aliases.insert(name.to_owned(), command);
+        } else {
+            context.aliases.remove(name);
+        }
+    }
 }
 
 fn parse_local_assignment(line: &str) -> Option<(&str, &str)> {
@@ -1180,24 +1291,43 @@ fn parse_model_block(
     })
 }
 
-fn parse_loadactor_args(args: &str) -> Option<(Option<String>, String)> {
-    let mut quoted = itg_quoted_strings(args);
-    let first = quoted.next()?;
-    let mut last = first;
-    let mut count = 1usize;
-    for value in quoted {
-        last = value;
-        count += 1;
+fn parse_loadactor_args(args: &str, context: &CommandContext) -> Option<(Option<String>, String)> {
+    let mut args = itg_call_args(args);
+    let button = args.next()?;
+    let element = args.next()?;
+    Some((
+        resolve_string_expr(button, context),
+        resolve_string_expr(element, context)?,
+    ))
+}
+
+fn resolve_string_expr(mut expr: &str, context: &CommandContext) -> Option<String> {
+    let mut out = String::new();
+    loop {
+        expr = expr.trim_start();
+        let first = *expr.as_bytes().first()?;
+        let end = if matches!(first, b'\'' | b'"') {
+            let mut end = 1;
+            while let Some(&byte) = expr.as_bytes().get(end) {
+                if byte == first {
+                    break;
+                }
+                end += if byte == b'\\' { 2 } else { 1 };
+            }
+            let value = parse_lua_quoted(expr.get(..end + 1)?)?;
+            out.push_str(&value);
+            end + 1
+        } else {
+            let end = expr.bytes().take_while(|byte| is_lua_ident(*byte)).count();
+            out.push_str(context.aliases.get(&expr[..end])?);
+            end
+        };
+        expr = expr[end..].trim_start();
+        if expr.is_empty() {
+            return Some(out);
+        }
+        expr = expr.strip_prefix("..")?;
     }
-    let element = last.to_string();
-    let button_override = if args.contains("Var \"Button\"") || args.contains("Var 'Button'") {
-        None
-    } else if count >= 2 {
-        Some(first.to_string())
-    } else {
-        None
-    };
-    Some((button_override, element))
 }
 
 fn parse_commands_block(
@@ -1350,6 +1480,15 @@ fn resolve_command_expr(
         .trim_end_matches(',')
         .trim_end_matches(';')
         .trim();
+    if let Some(command) = command_context.aliases.get(value) {
+        return Some(command.clone());
+    }
+    if let Some(function) = get_ascii_lowercase(&command_context.functions, value) {
+        return Some(
+            parse_self_chain_commands_scoped(&function.body, command_context, &HashMap::new())
+                .unwrap_or_default(),
+        );
+    }
     if value.starts_with("function") {
         return Some(resolve_lua_function_command(value, command_context).unwrap_or_default());
     }
@@ -1647,6 +1786,13 @@ fn find_lua_if_close(content: &str, mut cursor: usize) -> Option<(Option<usize>,
             cursor += 1;
             continue;
         }
+        if content[cursor..].starts_with("function")
+            && token_boundary(bytes, cursor, "function".len())
+        {
+            depth += 1;
+            cursor += "function".len();
+            continue;
+        }
         if content[cursor..].starts_with("if") && token_boundary(bytes, cursor, "if".len()) {
             depth += 1;
             cursor += "if".len();
@@ -1685,6 +1831,11 @@ fn eval_lua_condition(condition: &str, scope: &HashMap<String, String>) -> Optio
     for (operator, equal) in [("==", true), ("~=", false)] {
         if let Some((left, right)) = condition.split_once(operator) {
             let value = |term: &str| {
+                if split_lua_call(term.trim()).is_some_and(|(name, mut args)| {
+                    name == "ProductFamily" && args.next().is_none()
+                }) {
+                    return Some("ITGmania".to_owned());
+                }
                 parse_lua_quoted(term.trim()).or_else(|| {
                     get_ascii_lowercase(scope, term.trim())
                         .and_then(|value| parse_lua_quoted(value))
@@ -2010,6 +2161,82 @@ Def.Model {
             model.commands.get("oncommand").map(String::as_str),
             Some("diffuse,1,0,0,1;zoom,1.5")
         );
+    }
+
+    #[test]
+    fn local_command_aliases_capture_callbacks_and_reassignments() {
+        let content = r#"
+local Flash = function(self)
+    self:visible(true):diffusealpha(1):linear(0.2):diffusealpha(0)
+end
+local Copy = Flash
+Flash = function(self) self:visible(false) end
+if UnknownFlag then
+    Copy = cmd(visible,false)
+end
+local function Uncalled(self)
+    Copy = cmd(visible,false)
+end
+local function Reset(self) self:zoom(1) end
+return Def.Sprite {
+    Texture="flash.png";
+    InitCommand=Reset;
+    BrightCommand=Copy;
+    DimCommand=Flash;
+}
+"#;
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+        let commands = &decl.sprites[0].commands;
+        assert_eq!(commands["initcommand"], "zoom,1");
+        assert_eq!(
+            commands["brightcommand"],
+            "visible,true;diffusealpha,1;linear,0.2;diffusealpha,0"
+        );
+        assert_eq!(commands["dimcommand"], "visible,false");
+    }
+
+    #[test]
+    fn loadactor_refs_resolve_local_names_without_splitting_quoted_dots() {
+        let content = r#"
+local Direction = "Left"
+local Suffix = "Bright..W1"
+return Def.ActorFrame {
+    NOTESKIN:LoadActor(Direction, "Tap Explosion " .. Suffix) .. {
+        BrightCommand=cmd(visible,true);
+    };
+}
+"#;
+        let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+        assert_eq!(decl.refs.len(), 1);
+        assert_eq!(decl.refs[0].button_override.as_deref(), Some("Left"));
+        assert_eq!(decl.refs[0].element, "Tap Explosion Bright..W1");
+    }
+
+    #[test]
+    fn command_aliases_select_itgmania_branch() {
+        let content = r#"
+local Flash = function(self) self:visible(true) end
+if ProductFamily() == "OutFox" then
+    if UnknownFlag then
+        Flash = function(self) self:zoom(9) end
+    end
+else
+    if ProductFamily() == "ITGmania" then
+        Flash = cmd(diffusealpha,1;linear,0.2;diffusealpha,0)
+    else
+        Flash = function(self) self:visible(false) end
+    end
+end
+return LoadActor("flash.png") .. {
+    BrightCommand=Flash;
+}
+"#;
+        let metrics = noteskin_itg::IniData::default();
+        let expected = "diffusealpha,1;linear,0.2;diffusealpha,0";
+        let decl = parse_actor_decl(content, &metrics);
+        assert_eq!(decl.path_refs[0].commands["brightcommand"], expected);
+        let wrapper = parse_wrapper_commands(content, &metrics).expect("wrapper commands");
+        assert_eq!(wrapper["brightcommand"], expected);
     }
 
     #[test]

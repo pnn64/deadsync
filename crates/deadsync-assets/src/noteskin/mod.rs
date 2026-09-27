@@ -894,6 +894,124 @@ return Def.Model {
     }
 
     #[test]
+    fn explosion_aliases_keep_metric_animation_after_cache_reload() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("explosion-alias");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    if Var "Element" == "Explosion" then
+        return LoadActor(NOTESKIN:GetPath("", "Fallback Explosion"))
+    end
+    if Var "Element" == "Tap Explosion Bright W1" then
+        return LoadActor(NOTESKIN:GetPath("Down", "Tap Explosion Bright W1"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "plain.png"))
+end }
+"#,
+        )
+        .expect("write fixture loader");
+        fs::write(
+            root.join("Fallback Explosion.lua"),
+            r#"
+local Flash = function(self) self:visible(true) end
+local BrightName = "Bright W1"
+if ProductFamily() == "OutFox" then
+    Flash = function(self) self:diffusealpha(0) end
+elseif ProductFamily() == "ITGmania" then
+    Flash = NOTESKIN:GetMetricA("GhostArrowBright", "W1Command")
+else
+    Flash = function(self) self:visible(false) end
+end
+return Def.ActorFrame {
+    NOTESKIN:LoadActor(Var "Button", "Tap Explosion " .. BrightName) .. {
+        InitCommand=cmd(diffusealpha,0);
+        JudgmentCommand=cmd(finishtweening);
+        W1Command=cmd(diffusealpha,0);
+        BrightCommand=Flash;
+        DimCommand=cmd(visible,false);
+    };
+}
+"#,
+        )
+        .expect("write fixture explosion");
+        let command = "visible,true;diffusealpha,1;zoom,1.4;linear,0.2;zoom,1;diffusealpha,0";
+        fs::write(
+            root.join("metrics.ini"),
+            format!("[GhostArrowBright]\nW1Command={command}\n"),
+        )
+        .expect("write fixture metrics");
+        write_noteskin_png(&root.join("plain.png"));
+        write_noteskin_png(&root.join("Down Tap Explosion Bright W1.png"));
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "alias-fixture".into(),
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini"))
+                .expect("read fixture metrics"),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle =
+            compiler::compile_data("dance", &data, "fixture", "").expect("compile fixture");
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).expect("save fixture cache");
+        let bundle = compiled::load_compiled_bundle(&cache).expect("reload fixture cache");
+        for file in &bundle.actors.files {
+            for reference in &file.decl.refs {
+                assert_eq!(reference.element, "Tap Explosion Bright W1");
+                assert_eq!(
+                    reference.commands.get("brightcommand").map(String::as_str),
+                    Some(command)
+                );
+            }
+        }
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        for parts in [
+            None,
+            Some(SkinParts::default().with(SkinPart::TapExplosions)),
+        ] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .expect("load fixture runtime");
+            for col in 0..4 {
+                let bright = skin
+                    .tap_explosion_for_col_with_bright(col, "W1", true)
+                    .expect("bright W1 explosion");
+                assert_eq!(bright.layers.len(), 1);
+                let animation = &bright.layers[0].animation;
+                assert!((animation.duration() - 0.2).abs() < 1e-6);
+                for (time, alpha, zoom) in [(0.0, 1.0, 1.4), (0.1, 0.5, 1.2), (0.2, 0.0, 1.0)] {
+                    let state = animation.state_at(time);
+                    assert!(state.visible);
+                    assert!((state.diffuse[3] - alpha).abs() < 1e-6, "{time}: {state:?}");
+                    assert!((state.zoom - zoom).abs() < 1e-6, "{time}: {state:?}");
+                }
+                let dim = skin
+                    .tap_explosion_for_col_with_bright(col, "W1", false)
+                    .expect("dim W1 explosion");
+                assert!(
+                    !dim.layers[0].animation.state_at(0.0).visible,
+                    "parts={parts:?}, col={col}: {:?}",
+                    dim.layers[0].animation
+                );
+            }
+        }
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
     fn texture_header_probe_is_reused_before_upload() {
         init_asset_paths();
         let root = temp_noteskin_root("header-cache");
