@@ -1817,6 +1817,39 @@ end }
     }
 
     #[test]
+    fn untextured_model_loads() {
+        init_asset_paths();
+        let dir = temp_noteskin_root("untextured-model");
+        let path = dir.join("piece.txt");
+        fs::write(
+            &path,
+            r#"// MilkShape 3D ASCII
+Frames: 1
+Frame: 1
+Meshes: 1
+"piece" 0 -1
+3
+0 -1 -1 0 0 0 -1
+0 1 -1 0 1 0 -1
+0 0 1 0 0 1 -1
+1
+0 0 1
+1
+0 0 1 2 0 0 0 1
+Materials: 0
+Bones: 0
+"#,
+        )
+        .unwrap();
+        let slots = load_itg_model_slots_from_path(&path).unwrap();
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].texture_key(), deadlib_assets::WHITE_TEXTURE_KEY);
+        let mesh = slots[0].model.as_ref().unwrap();
+        assert_eq!(mesh.vertices.len(), 3);
+        assert_eq!(mesh.bounds, [-1.0, -1.0, 0.0, 1.0, 1.0, 0.0]);
+    }
+
+    #[test]
     fn shared_background_arrow_model_loads_with_texture_scroll() {
         init_asset_paths();
         let slots = load_itg_model_slots_from_path(Path::new(

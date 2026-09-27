@@ -455,7 +455,7 @@ fn resolve_bgchange_file_like_itg(
         return None;
     }
     resolve_song_path_like_itg(song_dir, target)
-        .filter(|path| path.exists())
+        .filter(|path| path.is_file())
         .or_else(|| {
             resolve_global_bgchange_movie_like_itg(
                 song_dir,
@@ -726,6 +726,27 @@ mod tests {
         assert!(background.changes.is_empty());
         assert!(background.uses_lua);
         assert!(simfile_uses_lua(&song_dir, invalid_beat, ""));
+    }
+
+    #[test]
+    fn exclude_lua_directories() {
+        let song_dir = test_dir("background-directory");
+        let background = song_dir.join("background");
+        fs::create_dir_all(&background).unwrap();
+        let script = background.join("default.lua");
+        fs::write(&script, "return Def.ActorFrame{}").unwrap();
+        let image = song_dir.join("scene.png");
+        fs::write(&image, []).unwrap();
+        let source = b"#BGCHANGES:0=background=1=0=0=1,4=scene.png=1=0=0=1;";
+        let lua = extract_background_lua_changes(&song_dir, source, "");
+        assert_eq!(lua.len(), 1);
+        assert_eq!(PathBuf::from(&lua[0].path), script);
+        let media = resolve_background_changes_from_roots(&song_dir, source, &[], &[]);
+        assert_eq!(media.len(), 1);
+        assert_eq!(media[0].start_beat, 4.0);
+        assert!(
+            matches!(&media[0].target, SongBackgroundChangeTarget::File(path) if path == &image)
+        );
     }
 
     #[test]

@@ -117,15 +117,39 @@ pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resu
 }
 
 pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
-    if let Ok(resolved) = resolve_script_path(lua, song_dir, path) {
+    let mut resolved = if let Ok(resolved) = resolve_script_path(lua, song_dir, path) {
         if resolved.is_dir() {
             return resolve_load_actor_directory(&resolved, song_dir, path);
         }
-        if resolved.is_file() {
+        resolved
+    } else {
+        resolve_load_actor_autowildcard(lua, song_dir, path)?
+    };
+    // ITGmania's DerefRedir resolves each target beside its redirect, with
+    // autowildcarding and a bounded chain so malformed assets cannot recurse.
+    for _ in 0..100 {
+        if !resolved
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("redir"))
+        {
             return Ok(resolved);
         }
+        let contents = fs::read_to_string(&resolved).map_err(mlua::Error::external)?;
+        let target = contents.lines().next().unwrap_or_default().trim();
+        if target.is_empty() {
+            return Err(mlua::Error::external(format!(
+                "empty redirect '{}'",
+                resolved.display()
+            )));
+        }
+        let target = resolved.parent().unwrap_or(song_dir).join(target);
+        let target = std::path::absolute(target).map_err(mlua::Error::external)?;
+        resolved = resolve_load_actor_autowildcard(lua, song_dir, &target.to_string_lossy())?;
     }
-    resolve_load_actor_autowildcard(lua, song_dir, path)
+    Err(mlua::Error::external(format!(
+        "circular redirect '{}'",
+        path
+    )))
 }
 
 fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {

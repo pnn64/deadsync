@@ -427,6 +427,7 @@ pub fn install_basic_globals(
             Ok(Value::String(lua.create_string(short)?))
         })?,
     )?;
+    globals.set("pname", globals.get::<Function>("ToEnumShortString")?)?;
     globals.set(
         "FormatPercentScore",
         lua.create_function(|lua, args: MultiValue| {

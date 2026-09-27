@@ -1868,6 +1868,10 @@ fn prefsmgr_default_value_normalized(
         Ok(Value::String(lua.create_string(video_renderers)?))
     } else if lower == "visualdelayseconds" {
         Ok(Value::Number(0.0))
+    } else if lower == "backgroundfitmode" {
+        Ok(Value::String(
+            lua.create_string("BackgroundFitMode_CoverPreserve")?,
+        ))
     } else if lower == "bgbrightness" {
         Ok(Value::Number(1.0))
     } else if lower == "timingwindowscale" {

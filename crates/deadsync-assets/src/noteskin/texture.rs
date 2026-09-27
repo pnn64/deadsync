@@ -608,6 +608,9 @@ static TEXTURE_KEYS: LazyLock<TextureKeyCache> = LazyLock::new(|| {
 });
 
 pub fn itg_texture_key(path: &Path, keys: &TextureKeyCache) -> Option<String> {
+    if path == Path::new(deadsync_noteskin::model::MODEL_WHITE_TEXTURE) {
+        return Some(deadlib_assets::WHITE_TEXTURE_KEY.to_string());
+    }
     if let Some(key) = keys
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -665,6 +668,9 @@ fn workspace_asset_relative_path_from_base(path: &Path, base: &Path) -> Option<P
 }
 
 pub fn itg_register_texture_dims_for_path(path: &Path) {
+    if path == Path::new(deadsync_noteskin::model::MODEL_WHITE_TEXTURE) {
+        return;
+    }
     let Some(key) = itg_texture_key(path, &TEXTURE_KEYS) else {
         return;
     };
@@ -1094,6 +1100,9 @@ pub fn itg_slot_from_path_all_frames(
 }
 
 pub fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
+    if key == deadlib_assets::WHITE_TEXTURE_KEY {
+        return Some((1, 1));
+    }
     if let Some(meta) = assets::texture_dims(key) {
         return Some((meta.w, meta.h));
     }

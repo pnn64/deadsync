@@ -7,6 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// Virtual texture identifier for meshes with no material. The asset bridge
+/// supplies its built-in white texel instead of opening an image file.
+pub const MODEL_WHITE_TEXTURE: &str = "__white";
+
 #[derive(Debug, Clone, Copy)]
 pub struct ItgModelTexturePath {
     pub uv_velocity: [f32; 2],
@@ -811,6 +815,11 @@ pub fn itg_parse_milkshape_model_layers(
                     itg_resolve_model_material_texture(data, materials_path, raw)
                         .map(|resolved| (resolved, *flags))
                 })
+        } else if mesh.material_index == -1 {
+            Some((
+                ItgResolvedModelTexture::from_path(PathBuf::from(MODEL_WHITE_TEXTURE)),
+                ItgModelMaterialFlags::default(),
+            ))
         } else {
             None
         }

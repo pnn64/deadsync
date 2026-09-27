@@ -52,6 +52,21 @@ pub fn install_stdlib_compat(
         "rotate_left",
         lua.create_function(|lua, args: MultiValue| rotate_lua_table(lua, &args, true))?,
     )?;
+    let shuffle = lua
+        .load(
+            r#"
+        return function(input)
+            local result = {}
+            for i = 1, #input do
+                table.insert(result, math.random(i), input[i])
+            end
+            return result
+        end
+    "#,
+        )
+        .eval::<Function>()?;
+    table.set("shuffle", shuffle.clone())?;
+    globals.set("tableshuffle", shuffle)?;
     let string: Table = globals.get("string")?;
     if matches!(string.get::<Value>("gfind")?, Value::Nil) {
         let gmatch = string.get::<Value>("gmatch")?;

@@ -666,15 +666,12 @@ pub fn install_file_loader_globals(
     )?;
     globals.set(
         "LoadActor",
-        lua.create_function(move |lua, value: Value| match value {
-            Value::String(path) => {
-                let path = path.to_str()?.to_string();
-                match load_actor_path(lua, &song_dir, &path, create_dummy_actor)? {
-                    Value::Table(table) => Ok(table),
-                    _ => create_dummy_actor(lua, "LoadActor"),
-                }
-            }
-            _ => create_dummy_actor(lua, "LoadActor"),
+        lua.create_function(move |lua, mut args: MultiValue| {
+            let Some(Value::String(path)) = args.pop_front() else {
+                return create_dummy_actor(lua, "LoadActor").map(Value::Table);
+            };
+            let path = path.to_str()?;
+            load_actor_path(lua, &song_dir, &path, args, create_dummy_actor)
         })?,
     )?;
     Ok(())
@@ -684,6 +681,7 @@ pub fn load_actor_path(
     lua: &Lua,
     song_dir: &Path,
     path: &str,
+    args: MultiValue,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Value> {
     if let Some(actor) = create_theme_path_actor(lua, path, create_dummy_actor)? {
@@ -699,12 +697,11 @@ pub fn load_actor_path(
         return Ok(Value::Table(create_media_actor(
             lua,
             actor_type,
-            path,
             resolved.as_path(),
             create_dummy_actor,
         )?));
     }
-    load_script_file(lua, &resolved, song_dir)?.call::<Value>(())
+    load_script_file(lua, &resolved, song_dir)?.call::<Value>(args)
 }
 
 pub fn create_theme_path_actor(
@@ -736,13 +733,12 @@ pub fn create_theme_path_actor(
 pub fn create_media_actor(
     lua: &Lua,
     actor_type: &'static str,
-    path: &str,
     resolved_path: &Path,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Table> {
     let actor = create_dummy_actor(lua, actor_type)?;
     if actor_type.eq_ignore_ascii_case("Sound") {
-        actor.set("File", path)?;
+        actor.set("File", file_path_string(resolved_path))?;
     } else {
         actor.set("Texture", file_path_string(resolved_path))?;
         set_actor_decode_movie_for_texture(&actor)?;
@@ -790,6 +786,11 @@ pub fn install_def_globals(
     }
     globals.set("Def", def)?;
     globals.set("ActorFrame", create_actorframe_class_table(lua)?)?;
+    let player = lua.create_table()?;
+    let parent = lua.create_table()?;
+    parent.set("__index", globals.get::<Table>("ActorFrame")?)?;
+    player.set_metatable(Some(parent))?;
+    globals.set("Player", player)?;
     globals.set("Sprite", create_sprite_class_table(lua)?)?;
     globals.set(
         "LoadFont",
@@ -3593,7 +3594,62 @@ pub fn crop_actor_to_source_size(
     Ok(())
 }
 
+fn scale_background(lua: &Lua, actor: &Table, center: bool) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let width: f32 = globals.get("SCREEN_WIDTH")?;
+    let height: f32 = globals.get("SCREEN_HEIGHT")?;
+    let preferences: Table = globals.get("PREFSMAN")?;
+    let mode = preferences
+        .get::<Function>("GetPreference")?
+        .call::<Value>((preferences.clone(), "BackgroundFitMode"))?;
+    let mode = read_string(mode).unwrap_or_default();
+    let (base_width, base_height) = actor_base_size(actor)?;
+    if base_width > 0.0 && base_height > 0.0 {
+        let x = width / base_width;
+        let y = height / base_height;
+        let zoom = match mode.as_str() {
+            "BackgroundFitMode_CoverDistort" => None,
+            "BackgroundFitMode_CoverPreserve" => Some(x.max(y)),
+            "BackgroundFitMode_FitInside" => Some(x.min(y)),
+            "BackgroundFitMode_FitInsideAvoidLetter" => Some(y),
+            "BackgroundFitMode_FitInsideAvoidPillar" => Some(x),
+            _ => {
+                scale_actor_to_rect(lua, actor, [0.0, 0.0, width, height], true)?;
+                None
+            }
+        };
+        if let Some(zoom) = zoom {
+            capture_block_set_f32(lua, actor, "zoom", zoom)?;
+            capture_block_set_zoom_axes(lua, actor, zoom, "zoom_x", "zoom_y", "zoom_z")?;
+        } else if mode == "BackgroundFitMode_CoverDistort" {
+            capture_block_set_f32(lua, actor, "zoom_x", x)?;
+            capture_block_set_f32(lua, actor, "zoom_y", y)?;
+        }
+        actor_update_text_pre_zoom_flags(lua, actor, true, true)?;
+    }
+    if center {
+        capture_block_set_f32(lua, actor, "x", width * 0.5)?;
+        capture_block_set_f32(lua, actor, "y", height * 0.5)?;
+    }
+    Ok(())
+}
+
 pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    for (name, center) in [
+        ("scale_or_crop_background", true),
+        ("scale_or_crop_background_no_move", false),
+    ] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |lua, _args: MultiValue| {
+                    scale_background(lua, &actor, center)?;
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
+    }
     for (name, cover) in [("scaletofit", false), ("scaletocover", true)] {
         actor.set(
             name,
@@ -3969,6 +4025,51 @@ pub fn set_actor_sound_file_from_value(
         Some(Value::Nil) | None if clear_on_nil => actor.set("File", Value::Nil)?,
         _ => {}
     }
+    Ok(())
+}
+
+fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if !actor_type_is(actor, "Sound")? {
+        return Ok(());
+    }
+    let sound = lua.create_table()?;
+    sound.set(
+        "get_length",
+        lua.create_function({
+            let actor = actor.clone();
+            // Per-actor metadata lives with the compile-time Lua VM. Probe once on
+            // first use (or after load changes File), never on a gameplay frame.
+            let cached = std::cell::RefCell::new(None::<(Option<String>, f32)>);
+            move |_, _args: MultiValue| {
+                let file = actor.get::<Option<String>>("File")?;
+                let mut cached = cached.borrow_mut();
+                if let Some((previous, length)) = cached.as_ref() {
+                    if previous == &file {
+                        return Ok(*length);
+                    }
+                }
+                let length = file
+                    .as_deref()
+                    .and_then(|file| resolve_actor_asset_path(&actor, file).ok())
+                    .and_then(|path| {
+                        deadlib_audio_decode::file_length_seconds(&path, Default::default()).ok()
+                    })
+                    .unwrap_or(-1.0);
+                *cached = Some((file, length));
+                Ok(length)
+            }
+        })?,
+    )?;
+    // RageSound returns whether its reader accepts the property. The current
+    // scheduled-SFX path has no mutable reader properties; report that honestly.
+    sound.set(
+        "SetProperty",
+        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+    )?;
+    actor.set(
+        "get",
+        lua.create_function(move |_, _args: MultiValue| Ok(sound.clone()))?,
+    )?;
     Ok(())
 }
 
@@ -7311,9 +7412,13 @@ pub fn add_actor_child_from_path(
     else {
         return Ok(());
     };
-    let Ok(Value::Table(child)) =
-        load_actor_path(lua, Path::new(&song_dir), path, create_dummy_actor)
-    else {
+    let Ok(Value::Table(child)) = load_actor_path(
+        lua,
+        Path::new(&song_dir),
+        path,
+        MultiValue::new(),
+        create_dummy_actor,
+    ) else {
         return Ok(());
     };
     child.set("__songlua_parent", actor.clone())?;
@@ -7414,6 +7519,7 @@ pub fn install_actor_methods(
     install_actor_command_methods(lua, actor)?;
     install_actor_texture_load_methods(lua, actor)?;
     install_actor_texture_proxy_getter_methods(lua, actor)?;
+    install_sound_methods(lua, actor)?;
     install_actor_transform_methods(lua, actor)?;
     install_actor_display_state_methods(lua, actor)?;
     install_actor_crop_shadow_methods(lua, actor)?;

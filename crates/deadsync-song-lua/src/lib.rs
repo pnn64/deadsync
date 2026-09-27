@@ -6791,6 +6791,43 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn theme_helpers() {
+        let song_dir = test_dir("theme-shuffle");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local input = {'a', 'b', 'c'}
+local calls = 0
+math.random = function(limit)
+    calls = calls + 1
+    assert(limit == calls)
+    return 1
+end
+assert(table.shuffle == tableshuffle)
+local output = table.shuffle(input)
+assert(output ~= input and table.concat(output) == 'cba')
+assert(table.concat(input) == 'abc' and calls == 3)
+assert(#table.shuffle({}) == 0 and calls == 3)
+assert(pname(PLAYER_1) == 'P1' and pname(PLAYER_2) == 'P2')
+assert(type(Player) == 'table' and Player ~= ActorFrame)
+return Def.ActorFrame{
+    InitCommand=function(self)
+        assert(Player.GetChild(self, 'child') == self:GetChild('child'))
+    end,
+    Def.Actor{Name='child'},
+}
+"#,
+        )
+        .unwrap();
+        test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Theme helpers"),
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn compile_song_lua_exposes_ivalues_helper() {
         let song_dir = test_dir("ivalues-helper");
         let entry = song_dir.join("default.lua");
@@ -10306,6 +10343,63 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn sound_length_reload() {
+        let song_dir = test_dir("sound-length");
+        for (name, frames) in [("first.wav", 8_000_u32), ("second.wav", 2_000)] {
+            let mut wav = b"RIFF".to_vec();
+            wav.extend_from_slice(&(36 + frames).to_le_bytes());
+            wav.extend_from_slice(b"WAVEfmt \x10\0\0\0\x01\0\x01\0");
+            wav.extend_from_slice(&8_000_u32.to_le_bytes());
+            wav.extend_from_slice(&8_000_u32.to_le_bytes());
+            wav.extend_from_slice(b"\x01\0\x08\0data");
+            wav.extend_from_slice(&frames.to_le_bytes());
+            wav.resize(44 + frames as usize, 128);
+            fs::write(song_dir.join(name), wav).unwrap();
+        }
+        fs::write(song_dir.join("broken.ogg"), b"invalid audio").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.Sound{
+    File='first',
+    OnCommand=function(self)
+        local sound = self:get()
+        assert(sound == self:get())
+        assert(sound:get_length() == 1 and sound:get_length() == 1)
+        self:load('second.wav')
+        assert(sound:get_length() == 0.25)
+        self:sleep(sound:get_length()):play()
+        self:load('broken.ogg')
+        assert(sound:get_length() == -1)
+        self:load(nil)
+        assert(sound:get_length() == -1)
+        assert(sound:SetProperty('UnsupportedProperty', 1) == false)
+        self:load('second.wav')
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sound length"),
+        )
+        .unwrap();
+        let startup = compiled.overlays[0]
+            .message_commands
+            .iter()
+            .find(|command| command.message == SONG_LUA_STARTUP_MESSAGE)
+            .unwrap();
+        assert!(
+            startup
+                .blocks
+                .iter()
+                .any(|block| block.start == 0.25 && block.delta.sound_play == Some(true))
+        );
+    }
+
+    #[test]
     fn compile_song_lua_extracts_sound_actor_assets() {
         let song_dir = test_dir("sound-actor-assets");
         fs::write(song_dir.join("hit.ogg"), b"not decoded during compile").unwrap();
@@ -11487,6 +11581,98 @@ return Def.ActorFrame{
         assert!(error.contains("multiple matches"), "{error}");
         assert!(error.contains("overlay 2x2.png"), "{error}");
         assert!(error.contains("overlay 3x4.png"), "{error}");
+    }
+
+    #[test]
+    fn loadactor_varargs() {
+        let song_dir = test_dir("loadactor-varargs");
+        let parts = song_dir.join("parts");
+        fs::create_dir_all(&parts).unwrap();
+        fs::write(
+            parts.join("factory.lua"),
+            "local n = ...; return function(x) return x*n end",
+        )
+        .unwrap();
+        fs::write(parts.join("broken.lua"), "assert(..., 'child assertion')").unwrap();
+        fs::write(
+            parts.join("child.lua"),
+            r#"
+assert(select('#', ...) == 4)
+local width, empty, data, f = ...
+assert(empty == nil and data.value == 7 and type(f) == 'function')
+return Def.Quad { OnCommand=function(self) self:setsize(width, f(data.value)) end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            parts.join("bridge.lua"),
+            r#"
+local ok, err = pcall(LoadActor, 'broken', false)
+assert(not ok and string.find(tostring(err), 'child assertion'))
+return LoadActor('child', ...)
+"#,
+        )
+        .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local f = LoadActor('parts/factory', 3)
+return LoadActor('parts/bridge', 12, nil, {value=7}, f)
+"#,
+        )
+        .unwrap();
+        let compiled =
+            test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Varargs"))
+                .unwrap();
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].initial_state.size, Some([12.0, 21.0]));
+        fs::write(&entry, "return LoadActor('parts/broken', false)").unwrap();
+        let error =
+            test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Assertion"))
+                .unwrap_err();
+        assert!(error.contains("child assertion"), "{error}");
+    }
+
+    #[test]
+    fn loadactor_redirects() {
+        let song_dir = test_dir("loadactor-redirects");
+        let parts = song_dir.join("parts");
+        fs::create_dir_all(&parts).unwrap();
+        fs::write(song_dir.join("alias.redir"), "parts/bridge\r\n").unwrap();
+        fs::write(parts.join("bridge.redir"), "child").unwrap();
+        fs::write(parts.join("child.lua"), "local width = ...; return Def.Quad{InitCommand=function(self) self:setsize(width, 17) end}").unwrap();
+        fs::write(parts.join("audio.redir"), "tone").unwrap();
+        fs::write(parts.join("tone.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            "return Def.ActorFrame{LoadActor('alias', 23), LoadActor('parts/audio')}",
+        )
+        .unwrap();
+        let compiled =
+            test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Redirects"))
+                .unwrap();
+        assert_eq!(compiled.overlays[0].initial_state.size, Some([23.0, 17.0]));
+        assert_eq!(compiled.sound_paths, vec![parts.join("tone.ogg")]);
+
+        fs::write(parts.join("loop.redir"), "loop").unwrap();
+        fs::write(parts.join("empty.redir"), "").unwrap();
+        fs::write(parts.join("missing.redir"), "absent").unwrap();
+        fs::write(parts.join("ambiguous.redir"), "variant").unwrap();
+        fs::write(parts.join("variant1.lua"), "return {}").unwrap();
+        fs::write(parts.join("variant2.lua"), "return {}").unwrap();
+        let lua = mlua::Lua::new();
+        for (name, expected) in [
+            ("loop", "circular redirect"),
+            ("empty", "empty redirect"),
+            ("missing", "not found"),
+            ("ambiguous", "multiple matches"),
+        ] {
+            let error = crate::resolve_load_actor_path(&lua, &song_dir, &format!("parts/{name}"))
+                .unwrap_err();
+            assert!(error.to_string().contains(expected), "{error}");
+        }
     }
 
     #[test]
@@ -13017,6 +13203,61 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 2);
         assert_eq!(compiled.overlays[0].initial_state.size, Some([90.0, 36.0]));
         assert_eq!(compiled.overlays[1].initial_state.size, Some([10.0, 20.0]));
+    }
+
+    #[test]
+    fn background_fit_modes() {
+        let song_dir = test_dir("background-scale");
+        image::RgbaImage::new(200, 100)
+            .save(song_dir.join("background.png"))
+            .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+assert(PREFSMAN:GetPreference('BackgroundFitMode') == 'BackgroundFitMode_CoverPreserve')
+local root = Def.ActorFrame{}
+for _, mode in ipairs({'CoverDistort', 'CoverPreserve', 'FitInside', 'FitInsideAvoidLetter', 'FitInsideAvoidPillar'}) do
+    for _, center in ipairs({false, true}) do
+        root[#root+1] = Def.Sprite {
+            Texture=GAMESTATE:GetCurrentSong():GetBackgroundPath(),
+            OnCommand=function(self)
+                PREFSMAN:SetPreference('BackgroundFitMode', 'BackgroundFitMode_' .. mode)
+                self:xy(17,29):halign(0):valign(1)
+                if center then assert(self:scale_or_crop_background() == self)
+                else assert(self:scale_or_crop_background_no_move() == self) end
+            end,
+        }
+    end
+end
+return root
+"#).unwrap();
+        for width in [640.0, 854.0] {
+            let mut context = SongLuaCompileContext::new(&song_dir, "Background scale");
+            context.screen_width = width;
+            let compiled = test_compile_song_lua(&entry, &context).unwrap();
+            assert_eq!(compiled.overlays.len(), 10);
+            let x = width / 200.0;
+            let y = context.screen_height / 100.0;
+            for (index, actor) in compiled.overlays.iter().enumerate() {
+                let state = actor.initial_state;
+                let zoom = match index / 2 {
+                    0 => [x, y],
+                    1 => [x.max(y); 2],
+                    2 => [x.min(y); 2],
+                    3 => [y; 2],
+                    4 => [x; 2],
+                    _ => unreachable!(),
+                };
+                assert_eq!([state.zoom_x, state.zoom_y], zoom);
+                assert_eq!(
+                    [state.x, state.y],
+                    if index % 2 == 0 {
+                        [17.0, 29.0]
+                    } else {
+                        [width * 0.5, 240.0]
+                    }
+                );
+            }
+        }
     }
 
     #[test]

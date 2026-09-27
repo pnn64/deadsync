@@ -8,6 +8,7 @@ license = "GPL-3.0"
 test-support = []
 
 [dependencies]
+deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
