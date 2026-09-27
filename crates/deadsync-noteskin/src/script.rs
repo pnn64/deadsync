@@ -122,6 +122,10 @@ pub enum ScriptCommand<'a> {
     ZoomX,
     ZoomY,
     ZoomZ,
+    BaseZoom,
+    BaseZoomX,
+    BaseZoomY,
+    BaseZoomZ,
     Diffuse,
     DiffuseAlpha,
     Glow,
@@ -193,6 +197,10 @@ impl<'a> ScriptCommand<'a> {
             Self::ZoomX => "zoomx",
             Self::ZoomY => "zoomy",
             Self::ZoomZ => "zoomz",
+            Self::BaseZoom => "basezoom",
+            Self::BaseZoomX => "basezoomx",
+            Self::BaseZoomY => "basezoomy",
+            Self::BaseZoomZ => "basezoomz",
             Self::Diffuse => "diffuse",
             Self::DiffuseAlpha => "diffusealpha",
             Self::Glow => "glow",
@@ -275,10 +283,14 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("visible", Visible);
             }
             8 => {
+                command!("basezoom", BaseZoom);
                 command!("setstate", SetState);
                 command!("fadeleft", FadeLeft);
             }
             9 => {
+                command!("basezoomx", BaseZoomX);
+                command!("basezoomy", BaseZoomY);
+                command!("basezoomz", BaseZoomZ);
                 command!("rotationx", RotationX);
                 command!("rotationy", RotationY);
                 command!("rotationz", RotationZ);
@@ -1317,12 +1329,28 @@ pub fn itg_apply_parent_actor_mod(
     }
 }
 
+fn apply_base_zoom(zoom: &mut [f32; 3], command: ScriptCommand<'_>, args: &[&str]) -> bool {
+    let target = match command {
+        ScriptCommand::BaseZoom => &mut zoom[..],
+        ScriptCommand::BaseZoomX => &mut zoom[0..1],
+        ScriptCommand::BaseZoomY => &mut zoom[1..2],
+        ScriptCommand::BaseZoomZ => &mut zoom[2..3],
+        _ => return false,
+    };
+    let Some(value) = args.first().and_then(|arg| parse_script_number(arg)) else {
+        return false;
+    };
+    target.fill(value);
+    true
+}
+
 pub fn itg_apply_parent_command(
     def: &mut SpriteDefinition,
     draw: &mut ModelDrawState,
     script: &str,
 ) {
     let script = normalized_script_command(script);
+    let mut base_zoom = [1.0; 3];
     for raw_token in script.split(';') {
         let token = raw_token.trim();
         if token.is_empty() {
@@ -1331,9 +1359,15 @@ pub fn itg_apply_parent_command(
         let Some(token) = split_script_token(token) else {
             continue;
         };
+        if apply_base_zoom(&mut base_zoom, token.command(), token.args()) {
+            continue;
+        }
         if let Some(actor_mod) = parse_script_actor_mod(token.command(), token.args()) {
             itg_apply_parent_actor_mod(def, draw, actor_mod);
         }
+    }
+    for (axis, zoom) in base_zoom.into_iter().enumerate() {
+        itg_apply_parent_zoom(def, draw, axis, zoom);
     }
 }
 
@@ -1389,6 +1423,7 @@ pub fn model_draw_program(
     commands: &HashMap<String, String>,
 ) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
     let mut state = ModelDrawState::default();
+    let mut base_zoom = [1.0; 3];
     let mut effect = ModelEffectState::default();
     let mut timeline: Vec<ModelTweenSegment> = Vec::new();
     let mut cursor_time = 0.0f32;
@@ -1450,6 +1485,10 @@ pub fn model_draw_program(
             };
             let command = token.command();
             let args = token.args();
+            // Actor base scale is immediate and independent of tweened zoom.
+            if apply_base_zoom(&mut base_zoom, command, args) {
+                continue;
+            }
             // Sprite UV state and static depth masks are applied by the asset
             // loader. They are not model transforms and must not split a tween
             // group or be reported as unsupported on this second pass.
@@ -1625,6 +1664,18 @@ pub fn model_draw_program(
         &mut pending_tween,
         &mut grouped_mods,
     );
+
+    // Bake the final base scale into every tween endpoint. SetBaseZoom changes
+    // the whole actor immediately, even when invoked after a queued tween.
+    for draw in std::iter::once(&mut state).chain(
+        timeline
+            .iter_mut()
+            .flat_map(|segment| [&mut segment.from, &mut segment.to]),
+    ) {
+        for (zoom, base) in draw.zoom.iter_mut().zip(base_zoom) {
+            *zoom *= base;
+        }
+    }
 
     // Preserve scale signs for sprite mirroring at load time. Model sampling
     // sanitizes scale after evaluating the timeline, including its final state.
@@ -1841,6 +1892,57 @@ mod tests {
     }
 
     #[test]
+    fn base_zoom_multiplies_regular_zoom_with_last_setter_winning() {
+        for script in [
+            "basezoom,2;basezoomx,0.9;BaseZoomX,0.8;basezoomy,0.6;basezoomz,1.5;zoom,2",
+            "zoom,2;basezoom,2;basezoomx,0.8;basezoomy,0.6;basezoomz,1.5",
+        ] {
+            let commands = HashMap::from([("initcommand".into(), script.into())]);
+            let (draw, timeline, _) = model_draw_program(&commands);
+            assert_eq!(draw.zoom, [1.6, 1.2, 3.0]);
+            assert!(timeline.is_empty());
+            let mut parent = ModelDrawState::default();
+            itg_apply_parent_command(&mut SpriteDefinition::default(), &mut parent, script);
+            assert_eq!(parent.zoom, draw.zoom);
+        }
+        let mut def = SpriteDefinition::default();
+        let mut draw = ModelDrawState::default();
+        itg_apply_parent_command(&mut def, &mut draw, "basezoomx,-2;basezoomx,-0.8;zoom,2");
+        assert!(def.mirror_h);
+        assert!(!def.mirror_v);
+        assert_eq!(draw.zoom, [1.6, 2.0, 2.0]);
+    }
+
+    #[test]
+    fn base_zoom_is_immediate_and_preserved_by_tweens_and_pulses() {
+        let commands = HashMap::from([(
+            "initcommand".into(),
+            "zoom,1;linear,2;zoom,3;basezoomx,0.8;basezoomy,0.6;diffusealpha,0".into(),
+        )]);
+        let (draw, timeline, effect) = model_draw_program(&commands);
+        assert_eq!(timeline.len(), 1, "base zoom must not split the tween");
+        assert_eq!(timeline[0].from.zoom, [0.8, 0.6, 1.0]);
+        let mid = crate::draw::model_draw_at(draw, &timeline, effect, 0.0, &[], 1.0, 0.0);
+        for (value, expected) in mid.zoom.into_iter().zip([1.6, 1.2, 2.0]) {
+            assert!((value - expected).abs() < 1e-6);
+        }
+        assert_eq!(mid.tint[3], 0.5);
+
+        let commands = HashMap::from([(
+            "initcommand".into(),
+            "basezoomx,0.8;basezoomy,0.6;pulse".into(),
+        )]);
+        let (draw, timeline, effect) = model_draw_program(&commands);
+        for (time, multiplier) in [(0.0, 0.5), (1.0, 1.0)] {
+            let sampled = crate::draw::model_draw_at(draw, &timeline, effect, 0.0, &[], time, 0.0);
+            assert_eq!(
+                sampled.zoom,
+                [0.8 * multiplier, 0.6 * multiplier, multiplier]
+            );
+        }
+    }
+
+    #[test]
     fn effect_arguments_resolve_once_per_actor_with_injected_values() {
         let template = HashMap::from([("initcommand".to_string(),
             "pulse;effectmagnitude,math.random(0.75*100,0.85*100)/100,math.random(1),1;effectoffset,PREFSMAN:GetPreference('GlobalOffsetSeconds')".to_string())]);
@@ -1980,7 +2082,8 @@ mod tests {
         let commands = HashMap::from([(
             "initcommand".to_string(),
             "linear,0.5;x,8;ZTest,true;ZWrite,1;ClearZBuffer,true;\
-             CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;rate,2;SetSecondsIntoAnimation,0;y,4"
+             CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;rate,2;SetSecondsIntoAnimation,0;\
+             basezoomx,0.8;basezoomy,0.8;y,4"
                 .to_string(),
         )]);
         let (draw, timeline, _) = model_draw_program(&commands);

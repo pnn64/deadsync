@@ -965,7 +965,9 @@ end }
 return Def.Model {
     Meshes = NOTESKIN:GetPath('', 'geometry'),
     Materials = NOTESKIN:GetPath('', 'materials'),
-    InitCommand = function(self) self:zoom(0.75):spin():effectmagnitude(0,0,30) end
+    InitCommand = function(self)
+        self:basezoomx(0.8):basezoomy(0.6):zoom(0.75):spin():effectmagnitude(0,0,30)
+    end
 }
 "#,
         )
@@ -1044,7 +1046,7 @@ return Def.Model {
                     }));
                     assert_eq!(slot.uv_velocity, [0.0, if moving { -1.0 } else { 0.0 }]);
                     assert_eq!(slot.logical_size(), [64.0; 2]);
-                    assert_eq!(slot.model_draw.zoom, [0.75; 3]);
+                    assert_eq!(slot.model_draw.zoom, [0.8 * 0.75, 0.6 * 0.75, 0.75]);
                     assert!((slot.model_draw_at(1.0, 0.0).rot[2] - 30.0).abs() < 1e-5);
                     let model = slot.model.as_ref().unwrap();
                     assert!(
