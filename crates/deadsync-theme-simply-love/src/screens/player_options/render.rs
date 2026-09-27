@@ -1418,7 +1418,7 @@ const PUMP_PREVIEW_ARROWS: [(usize, f32, f32); 5] = [
     (4, 4.0, 2.0),
 ];
 
-const fn preview_arrows(num_cols: usize) -> &'static [(usize, f32, f32)] {
+pub(super) const fn preview_arrows(num_cols: usize) -> &'static [(usize, f32, f32)] {
     if matches!(num_cols, 5 | 10) {
         &PUMP_PREVIEW_ARROWS
     } else {
@@ -1446,16 +1446,7 @@ fn draw_noteskin_note(
     let phase = ns.part_uv_phase(part, elapsed, beat, 0.0);
     let spacing = ns.note_display_metrics.part_texture_translate[part as usize].note_color_spacing;
     let translation = [spacing[0] * quant_idx, spacing[1] * quant_idx];
-    let layers = if part == NoteAnimPart::Lift {
-        ns.lift_note_layers.get(note_idx)
-    } else {
-        None
-    };
-    let slots = layers
-        .or_else(|| ns.note_layers.get(note_idx))
-        .map(AsRef::as_ref)
-        .or_else(|| ns.notes.get(note_idx).map(std::slice::from_ref))
-        .unwrap_or_default();
+    let slots = preview_note_slots(ns, part, note_idx);
     let Some(primary) = slots.first() else { return };
     let note_scale = target_height / primary.logical_size()[1].max(1.0);
     for (layer_idx, slot) in slots.iter().enumerate() {

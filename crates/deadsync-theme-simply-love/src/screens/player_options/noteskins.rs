@@ -1,6 +1,23 @@
 use super::*;
 use deadsync_profile as profile_data;
 
+pub(super) fn preview_note_slots(
+    skin: &Noteskin,
+    part: NoteAnimPart,
+    index: usize,
+) -> &[SpriteSlot] {
+    let layers = if part == NoteAnimPart::Lift {
+        skin.lift_note_layers.get(index)
+    } else {
+        None
+    };
+    layers
+        .or_else(|| skin.note_layers.get(index))
+        .map(AsRef::as_ref)
+        .or_else(|| skin.notes.get(index).map(std::slice::from_ref))
+        .unwrap_or_default()
+}
+
 pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
     let mut add = |slot: &SpriteSlot| {
@@ -13,29 +30,18 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
     };
     match part {
         0 | 10 => {
-            let layers = if part == 10 {
-                &skin.lift_note_layers
+            let note_part = if part == 10 {
+                NoteAnimPart::Lift
             } else {
-                &skin.note_layers
+                NoteAnimPart::Tap
             };
-            // Rows show quarter notes; a component icon shows only the left
-            // column. Use the same layer/fallback selection as draw_noteskin_note.
-            let cols = if part == 10 {
-                1
-            } else if matches!(skin.column_xs.len(), 5 | 10) {
-                5
-            } else {
-                4
-            };
-            for col in 0..cols {
-                let index = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-                let slots = layers
-                    .get(index)
-                    .or_else(|| skin.note_layers.get(index))
-                    .map(AsRef::as_ref)
-                    .or_else(|| skin.notes.get(index).map(std::slice::from_ref))
-                    .unwrap_or_default();
-                for slot in slots {
+            // The row samples different quants. A lift icon uses only the first
+            // sample; share the renderer's selection so readiness covers every draw.
+            let arrows = render::preview_arrows(skin.column_xs.len());
+            let count = if part == 10 { 1 } else { arrows.len() };
+            for &(col, quant, _) in &arrows[..count] {
+                let index = col * NUM_QUANTIZATIONS + quant as usize;
+                for slot in preview_note_slots(skin, note_part, index) {
                     add(slot);
                 }
             }

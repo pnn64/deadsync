@@ -2266,39 +2266,74 @@ pub(super) mod tests {
                 }
             );
         }
-        let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
-        skin.column_xs = vec![-96, -32, 32, 96];
-        skin.note_layers = (0..4 * deadsync_noteskin::NUM_QUANTIZATIONS)
-            .map(|index| {
-                let quant = index % deadsync_noteskin::NUM_QUANTIZATIONS;
-                let mut slots = layers.to_vec();
-                for slot in &mut slots {
-                    slot.model_draw.tint[0] = quant as f32 / 8.0;
-                }
-                Arc::from(slots)
-            })
-            .collect();
         state.player_options[P1].noteskin = deadsync_profile::NoteSkin::new("model-fixture");
         super::super::apply_pane(&mut state, OptionsPane::Display);
         super::super::prepare_presentation(&mut state, &asset_manager);
-        let actors = super::get_actors(&state, &asset_manager);
-        let quants: Vec<_> = actors
-            .iter()
-            .filter_map(|actor| {
-                if let Actor::TexturedMesh { tint, .. } = actor {
-                    Some(tint[0])
-                } else {
-                    None
-                }
-            })
-            .collect();
-        assert_eq!(
-            quants,
-            [0.0, 0.125, 0.375, 0.25]
-                .into_iter()
-                .flat_map(|quant| [quant; 4])
-                .collect::<Vec<_>>()
-        );
+        for cols in [4, 8, 5, 10] {
+            let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
+            skin.column_xs = vec![0; cols];
+            skin.note_layers = (0..cols * deadsync_noteskin::NUM_QUANTIZATIONS)
+                .map(|index| {
+                    let col = index / deadsync_noteskin::NUM_QUANTIZATIONS;
+                    let quant = index % deadsync_noteskin::NUM_QUANTIZATIONS;
+                    let mut slots = layers.to_vec();
+                    for (layer, slot) in slots.iter_mut().enumerate() {
+                        slot.model_draw.tint[0] = quant as f32 / 8.0;
+                        slot.source = test_model_slot().source;
+                        let SpriteSource::Atlas { texture_key, .. } =
+                            Arc::get_mut(&mut slot.source).unwrap()
+                        else {
+                            panic!("synthetic atlas")
+                        };
+                        *texture_key = Arc::from(format!("col{col}-quant{quant}-layer{layer}"));
+                    }
+                    Arc::from(slots)
+                })
+                .collect();
+            let samples: &[(usize, usize)] = if matches!(cols, 5 | 10) {
+                &[(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]
+            } else {
+                &[(0, 0), (1, 1), (2, 3), (3, 2)]
+            };
+            let requested = super::super::noteskin_preview_textures(skin, 1);
+            let expected: Vec<_> = samples
+                .iter()
+                .flat_map(|(col, quant)| {
+                    (0..4).map(move |layer| format!("col{col}-quant{quant}-layer{layer}"))
+                })
+                .collect();
+            assert_eq!(requested.len(), expected.len());
+            for key in &expected {
+                assert!(
+                    requested
+                        .iter()
+                        .any(|(actual, model)| actual.as_ref() == key && *model),
+                    "missing preview texture {key} for {cols} columns"
+                );
+            }
+            let actors = super::get_actors(&state, &asset_manager);
+            let drawn: Vec<_> = actors
+                .iter()
+                .filter_map(|actor| {
+                    if let Actor::TexturedMesh { texture, tint, .. } = actor {
+                        Some((texture.as_ref(), tint[0]))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(
+                drawn.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(
+                drawn.iter().map(|(_, tint)| *tint).collect::<Vec<_>>(),
+                samples
+                    .iter()
+                    .flat_map(|(_, quant)| [*quant as f32 / 8.0; 4])
+                    .collect::<Vec<_>>()
+            );
+        }
     }
 
     #[test]

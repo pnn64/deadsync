@@ -548,13 +548,31 @@ mod tests {
             skin.join("NoteSkin.lua"),
             r#"
 return { Load = function()
-    local part = Var('Element') == 'Tap Note' and 'tap' or 'other'
-    return Def.Sprite { Texture = NOTESKIN:GetPath(part, '') }
+    if Var('Element') == 'Tap Note' then
+        return LoadActor(NOTESKIN:GetPath('Down', 'Tap Note'))
+    end
+    return Def.Sprite { Texture = NOTESKIN:GetPath('other', '') }
 end }
 "#,
         )
         .unwrap();
-        for name in ["tap", "other", "unused"] {
+        fs::write(
+            skin.join("Down Tap Note.lua"),
+            r#"
+return Def.Sprite {
+    Texture = NOTESKIN:GetPath(Var('Button') .. ' ' .. Var('Color'), '')
+}
+"#,
+        )
+        .unwrap();
+        for button in ["Left", "Down", "Up", "Right"] {
+            for quant in deadsync_noteskin::Quantization::ALL {
+                RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+                    .save(skin.join(format!("{button} {}.png", quant.color_name())))
+                    .unwrap();
+            }
+        }
+        for name in ["other", "unused"] {
             RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
                 .save(skin.join(format!("{name}.png")))
                 .unwrap();
@@ -608,13 +626,23 @@ end }
             assert!(Instant::now() < deadline, "preview did not finish");
             std::thread::sleep(Duration::from_millis(1));
         }
-        let tap = "noteskins/dance/startup-fixture/tap.png";
+        let shown = ["Left 4th", "Down 8th", "Up 16th", "Right 12th"];
+        for button in ["Left", "Down", "Up", "Right"] {
+            for quant in deadsync_noteskin::Quantization::ALL {
+                let name = format!("{button} {}", quant.color_name());
+                let key = format!("noteskins/dance/startup-fixture/{name}.png");
+                assert_eq!(
+                    assets.has_uploaded_texture_key(&key),
+                    shown.contains(&name.as_str()),
+                    "only the displayed column/color textures are uploaded: {name}"
+                );
+            }
+        }
         let other = "noteskins/dance/startup-fixture/other.png";
         let unused = "noteskins/dance/startup-fixture/unused.png";
-        assert!(assets.has_uploaded_texture_key(tap));
         assert!(!assets.has_uploaded_texture_key(other));
         assert!(!assets.has_uploaded_texture_key(unused));
-        assert_eq!(service.resident_bytes, 8 * 8 * 4);
+        assert_eq!(service.resident_bytes, 4 * 8 * 8 * 4);
         // Full gameplay construction discovers additional textures on demand.
         let full = noteskin::load_itg_skin(
             &Style {
