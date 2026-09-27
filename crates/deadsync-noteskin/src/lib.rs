@@ -56,7 +56,7 @@ pub use runtime::{
     itg_hold_explosion_from_resolved_layers, itg_hold_head_layers, itg_hold_visual_parts,
     itg_hold_visuals_from_parts, itg_is_common_fallback_hold_explosion_key,
     itg_is_common_noteskin_key, itg_lift_layers_for_col, itg_load_sprite_decl_slot,
-    itg_mine_explosion_from_commands, itg_mine_visuals_from_layers, itg_noteskin_runtime_compiled,
+    itg_mine_explosion_from_commands, itg_noteskin_runtime_compiled,
     itg_noteskin_runtime_with_ops_compiled, itg_receptor_column,
     itg_receptor_glow_behavior_from_layers, itg_receptor_pulse_from_command,
     itg_resolve_actor_file_compiled, itg_resolve_actor_sprites_compiled,

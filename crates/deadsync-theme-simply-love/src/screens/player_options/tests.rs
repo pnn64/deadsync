@@ -2074,7 +2074,9 @@ pub(super) mod tests {
     fn model_previews_preserve_layers_and_quants() {
         use super::super::render;
         use deadlib_present::actors::Actor;
-        use deadsync_assets::noteskin::{ModelMesh, ModelVertex, Noteskin, test_model_slot};
+        use deadsync_assets::noteskin::{
+            ModelMesh, ModelVertex, Noteskin, SpriteSource, test_model_slot,
+        };
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
         // A triangle shared by materials with different texture dimensions.
@@ -2100,6 +2102,20 @@ pub(super) mod tests {
                 slot
             })
             .into();
+        let mine_layers: Arc<[_]> = (0..5)
+            .map(|index| {
+                let mut slot = test_model_slot();
+                slot.model = Some(Arc::clone(&model));
+                slot.model_draw.tint[3] = (index + 1) as f32 / 5.0;
+                let SpriteSource::Atlas { texture_key, .. } =
+                    Arc::get_mut(&mut slot.source).unwrap()
+                else {
+                    panic!("synthetic atlas")
+                };
+                *texture_key = Arc::from(format!("mine-{index}"));
+                slot
+            })
+            .collect();
         let skin = Noteskin {
             notes: vec![layers[0].clone()],
             note_layers: vec![Arc::clone(&layers)],
@@ -2111,9 +2127,9 @@ pub(super) mod tests {
             receptor_glow_reverse: Vec::new(),
             receptor_idle_glow_reverse: Vec::new(),
             receptor_step_behaviors: Vec::new(),
-            mines: Vec::new(),
+            mines: vec![Some(mine_layers[0].clone())],
             mine_fill_slots: Vec::new(),
-            mine_frames: Vec::new(),
+            mine_layers: vec![Arc::clone(&mine_layers)],
             column_xs: vec![0],
             tap_explosions: Default::default(),
             tap_explosions_by_col: Vec::new(),
@@ -2130,11 +2146,17 @@ pub(super) mod tests {
             part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
             note_display_metrics: Default::default(),
         };
+        let textures = super::super::noteskins::preview_textures(&skin, 8);
+        assert_eq!(textures.len(), 5);
+        for (index, (key, model)) in textures.iter().enumerate() {
+            assert_eq!(key.as_ref(), format!("mine-{index}"));
+            assert!(*model);
+        }
         state
             .noteskin
             .cache
             .insert("model-fixture".into(), Arc::new(skin));
-        for (part, layer_count) in [(0, 4), (10, 3)] {
+        for (part, layer_count) in [(0, 4), (10, 3), (8, 5)] {
             for size in [18.0, 32.0] {
                 let mut actors = Vec::new();
                 render::draw_live_preview(
@@ -2148,16 +2170,20 @@ pub(super) mod tests {
                     102,
                 );
                 assert_eq!(actors.len(), layer_count);
-                for actor in &actors {
+                for (index, actor) in actors.iter().enumerate() {
                     let Actor::TexturedMesh {
                         local_transform,
                         vertices,
                         offset,
+                        tint,
                         ..
                     } = actor
                     else {
                         panic!("preview must preserve its model layers")
                     };
+                    if part == 8 {
+                        assert_eq!(tint[3], (index + 1) as f32 / 5.0);
+                    }
                     assert_eq!(vertices.len(), 3);
                     for vertex in vertices.iter() {
                         let point = local_transform.transform_point3(glam::Vec3::from(vertex.pos));

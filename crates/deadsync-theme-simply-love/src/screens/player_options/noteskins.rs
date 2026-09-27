@@ -90,12 +90,11 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
             }
         }
         8 => {
-            let col = usize::from(skin.mines.len() > 1 || skin.mine_frames.len() > 1);
-            if let Some(slot) = skin.mines.get(col).and_then(Option::as_ref) {
-                add(slot);
-            }
-            if let Some(slot) = skin.mine_frames.get(col).and_then(Option::as_ref) {
-                add(slot);
+            let col = usize::from(skin.mine_layers.len() > 1);
+            if let Some(layers) = skin.mine_layers.get(col) {
+                for slot in layers.iter() {
+                    add(slot);
+                }
             }
         }
         _ => {}

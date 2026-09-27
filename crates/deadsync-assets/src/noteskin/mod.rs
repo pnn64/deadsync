@@ -766,6 +766,134 @@ return Def.Model {
     }
 
     #[test]
+    fn mine_models_keep_all_meshes_through_loading() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("mine-meshes");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    if Var "Element" == "Tap Mine" then
+        return LoadActor(NOTESKIN:GetPath("Down", "Tap Mine"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "plain.png"))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Tap Mine.lua"),
+            r#"
+return Def.Model {
+    Meshes = NOTESKIN:GetPath('', 'geometry'),
+    Materials = NOTESKIN:GetPath('', 'materials'),
+    InitCommand = function(self) self:zoom(0.75):spin():effectmagnitude(0,0,30) end
+}
+"#,
+        )
+        .unwrap();
+        // Five distinct meshes deliberately reuse only two materials.
+        let mut geometry = String::from("MilkShape 3D ASCII\nMeshes: 5\n");
+        for (index, material) in [0, 0, 1, 0, 1].into_iter().enumerate() {
+            geometry.push_str(&format!(
+                r#""layer{index}" 0 {material}
+3
+0 -32 -32 {index} 0 0 -1
+0 32 -32 {index} 1 0 -1
+0 0 32 {index} 0 1 -1
+0
+1
+0 0 1 2 0 0 0 1
+"#
+            ));
+        }
+        fs::write(root.join("geometry.txt"), geometry).unwrap();
+        write_noteskin_png(&root.join("plain.png"));
+        write_noteskin_png(&root.join("moving.png"));
+        fs::write(
+            root.join("moving.ini"),
+            "[AnimatedTexture]\nTexVelocityY=-1\nFrame0000=moving.png\nDelay0000=1\n",
+        )
+        .unwrap();
+        let mut materials = String::from("Materials: 2\n");
+        for texture in ["plain.png", "moving.ini"] {
+            materials.push_str(&format!(
+                r#""material"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"{texture}"
+""
+"#
+            ));
+        }
+        fs::write(root.join("materials.txt"), materials).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "mine-fixture".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        for parts in [None, Some(SkinParts::default().with(SkinPart::Mines))] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            assert_eq!(skin.mine_layers.len(), 4);
+            for layers in &skin.mine_layers {
+                assert_eq!(layers.len(), 5);
+                for (index, slot) in layers.iter().enumerate() {
+                    let moving = matches!(index, 2 | 4);
+                    assert!(slot.texture_key().ends_with(if moving {
+                        "moving.png"
+                    } else {
+                        "plain.png"
+                    }));
+                    assert_eq!(slot.uv_velocity, [0.0, if moving { -1.0 } else { 0.0 }]);
+                    assert_eq!(slot.logical_size(), [64.0; 2]);
+                    assert_eq!(slot.model_draw.zoom, [0.75; 3]);
+                    assert!((slot.model_draw_at(1.0, 0.0).rot[2] - 30.0).abs() < 1e-5);
+                    let model = slot.model.as_ref().unwrap();
+                    assert!(
+                        model
+                            .vertices
+                            .iter()
+                            .all(|vertex| vertex.pos[2] == index as f32)
+                    );
+                    let mut warmed = false;
+                    skin.for_each_slot(|candidate| {
+                        warmed |= candidate
+                            .model
+                            .as_ref()
+                            .is_some_and(|mesh| Arc::ptr_eq(mesh, model));
+                    });
+                    assert!(warmed, "mesh {index} reaches resource prewarming");
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn texture_header_probe_is_reused_before_upload() {
         init_asset_paths();
         let root = temp_noteskin_root("header-cache");
@@ -3239,7 +3367,9 @@ return skin
             "cel mine should come from Tap Mine model actor, not _mine texture fallback"
         );
         assert!(
-            ns.mine_frames.first().is_some_and(Option::is_none),
+            ns.mine_layers
+                .first()
+                .is_some_and(|layers| layers.len() == 1),
             "cel mine uses a single model actor and should not duplicate it as a frame layer"
         );
     }
@@ -3350,7 +3480,7 @@ return skin
     }
 
     #[test]
-    fn ddr_note_tap_mine_keeps_second_model_layer_as_frame() {
+    fn ddr_note_tap_mine_keeps_both_model_layers() {
         init_asset_paths();
         let style = Style {
             num_cols: 4,
@@ -3364,9 +3494,9 @@ return skin
             .and_then(|slot| slot.as_ref())
             .expect("ddr-note should define first-column mine slot");
         let frame = ns
-            .mine_frames
+            .mine_layers
             .first()
-            .and_then(|slot| slot.as_ref())
+            .and_then(|layers| layers.get(1))
             .expect("ddr-note should preserve second mine layer");
         assert!(
             mine.model.is_some(),

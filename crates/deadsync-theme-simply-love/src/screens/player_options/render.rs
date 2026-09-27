@@ -1,7 +1,6 @@
 use super::*;
 use crate::fonts::machine_font_key;
 use deadlib_present::actors::TextContent;
-use deadsync_notefield::noteskin_model_actor_from_draw;
 use deadsync_theme::FontRole;
 
 pub(super) fn top_bar_actor(
@@ -1609,87 +1608,44 @@ fn draw_mine_preview(
     alpha: f32,
     z: i16,
 ) {
-    let mine_col = if mine_ns.mines.len() > 1 || mine_ns.mine_frames.len() > 1 {
-        1
-    } else {
-        0
-    };
-    let fill_slot = mine_ns.mines.get(mine_col).and_then(|slot| slot.as_ref());
-    let frame_slot = mine_ns
-        .mine_frames
-        .get(mine_col)
-        .and_then(|slot| slot.as_ref());
-    let Some(primary_slot) = frame_slot.or(fill_slot) else {
+    let mine_col = usize::from(mine_ns.mine_layers.len() > 1);
+    let Some(layers) = mine_ns.mine_layers.get(mine_col) else {
         return;
     };
-    let mine_phase = mine_ns.tap_mine_uv_phase(state.preview_time, state.preview_beat, 0.0);
-    let mine_translation = mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
-
-    let scale_mine_slot = |slot: &SpriteSlot| {
-        let size = slot
-            .model
-            .as_ref()
-            .map(|model| model.size())
-            .unwrap_or_else(|| {
-                let logical = slot.logical_size();
-                [logical[0], logical[1]]
-            });
-        let width = size[0].max(1.0);
-        let height = size[1].max(1.0);
-        let scale = target_height / height;
-        [width * scale, target_height]
-    };
-    let draw_mine_slot = |slot: &SpriteSlot, alpha: f32, z: i32, actors: &mut Vec<Actor>| {
+    let phase = mine_ns.tap_mine_uv_phase(state.preview_time, state.preview_beat, 0.0);
+    let translation = mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
+    for slot in layers.iter() {
         let draw = slot.model_draw_at(state.preview_time, state.preview_beat);
-        if !draw.visible {
-            return;
-        }
-        let frame = slot.frame_index_from_phase(mine_phase);
-        let uv_elapsed = if slot.model.is_some() {
-            mine_phase
+        let frame = if slot.actor_frame_child {
+            slot.frame_index(state.preview_time, state.preview_beat)
+        } else {
+            slot.frame_index_from_phase(phase)
+        };
+        let uv_time = if slot.model.is_some() {
+            phase
         } else {
             state.preview_time
         };
-        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-        let uv = [
-            uv[0] + mine_translation[0],
-            uv[1] + mine_translation[1],
-            uv[2] + mine_translation[0],
-            uv[3] + mine_translation[1],
-        ];
-        let size = scale_mine_slot(slot);
-        if let Some(model_actor) = noteskin_model_actor(
+        let uv = slot.uv_for_frame_at(frame, uv_time);
+        let logical = slot.logical_size();
+        let scale = target_height / logical[1].max(1.0);
+        draw_preview_slot(
+            actors,
             slot,
+            draw,
             mine_center,
-            size,
-            uv,
+            [logical[0] * scale, target_height],
+            [
+                uv[0] + translation[0],
+                uv[1] + translation[1],
+                uv[2] + translation[0],
+                uv[3] + translation[1],
+            ],
             -slot.def.rotation_deg as f32,
-            state.preview_time,
-            state.preview_beat,
             [1.0, 1.0, 1.0, alpha],
             BlendMode::Alpha,
-            z as i16,
-        ) {
-            actors.push(model_actor);
-        } else {
-            actors.push(act!(sprite(slot.texture_key_shared()):
-                align(0.5, 0.5):
-                xy(mine_center[0], mine_center[1]):
-                setsize(size[0], size[1]):
-                rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
-                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                diffuse(1.0, 1.0, 1.0, alpha):
-                z(z)
-            ));
-        }
-    };
-    if let Some(slot) = fill_slot {
-        draw_mine_slot(slot, 0.85 * alpha, i32::from(z), actors);
-    }
-    if let Some(slot) = frame_slot {
-        draw_mine_slot(slot, alpha, i32::from(z) + 1, actors);
-    } else if fill_slot.is_none() {
-        draw_mine_slot(primary_slot, alpha, i32::from(z) + 1, actors);
+            z,
+        );
     }
 }
 

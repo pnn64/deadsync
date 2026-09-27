@@ -936,13 +936,12 @@ fn compose_visible_notes<S, F>(
     let prefer_sprite_note_path = false;
 
     for local_col in 0..num_cols {
-        let fill_slot = mine_ns.mines.get(local_col).and_then(|slot| slot.as_ref());
+        let mine_layers = mine_ns
+            .mine_layers
+            .get(local_col)
+            .map_or(&[][..], AsRef::as_ref);
         let fill_gradient_slot = mine_ns
             .mine_fill_slots
-            .get(local_col)
-            .and_then(|slot| slot.as_ref());
-        let frame_slot = mine_ns
-            .mine_frames
             .get(local_col)
             .and_then(|slot| slot.as_ref());
         let col = col_start + local_col;
@@ -1038,7 +1037,7 @@ fn compose_visible_notes<S, F>(
                     + calc_note_rotation_z(note.beat, transform_cache);
 
                 if matches!(note.note_type, NoteType::Mine) {
-                    if fill_slot.is_none() && frame_slot.is_none() {
+                    if mine_layers.is_empty() {
                         return;
                     }
                     let mine_part = mine_part();
@@ -1053,9 +1052,8 @@ fn compose_visible_notes<S, F>(
                         flat_draws,
                         model_cache,
                         MineLayerRequest {
-                            fill_slot,
+                            layers: mine_layers,
                             gradient_slot: fill_gradient_slot,
-                            frame_slot,
                             gradient_size_ratio: crate::style::MINE_CORE_SIZE_RATIO,
                             center: [column_center_x, y_pos],
                             mine_uv_phase,

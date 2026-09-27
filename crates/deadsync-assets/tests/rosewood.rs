@@ -76,8 +76,8 @@ fn rosewood_loads_skin_and_compiles_chart() {
         .into_iter()
         .enumerate()
     {
-        let spark = skin.mine_frames[column]
-            .as_ref()
+        let spark = skin.mine_layers[column]
+            .get(1)
             .expect("animated mine spark");
         let arrow = skin.mines[column].as_ref().expect("mine arrow");
         assert!(arrow.texture_key().contains("_down tap mine"));

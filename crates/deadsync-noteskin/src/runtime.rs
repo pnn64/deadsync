@@ -382,7 +382,7 @@ pub struct ItgRuntimeColumns<T> {
     pub receptor_step_behaviors: Vec<ReceptorStepBehaviors>,
     pub receptor_idle_glow: ReceptorIdleGlow,
     pub mines: Vec<Option<T>>,
-    pub mine_frames: Vec<Option<T>>,
+    pub mine_layers: Vec<Arc<[T]>>,
     pub hold_columns: Vec<HoldVisuals<T>>,
     pub roll_columns: Vec<HoldVisuals<T>>,
     pub receptor_pulse_command: Option<String>,
@@ -1167,23 +1167,6 @@ pub fn itg_direct_tap_explosion_resolved_layers<T>(
     resolve_element: impl FnMut(&str) -> Vec<ItgResolvedSprite<T>>,
 ) -> Vec<ItgResolvedSprite<T>> {
     itg_direct_tap_explosion_layers(base_element, base_blank, is_blank, resolve_element)
-}
-
-pub fn itg_mine_visuals_from_layers<T: Clone>(
-    layers: &[T],
-    fallback: Option<T>,
-) -> (Option<T>, Option<T>) {
-    let fill = layers
-        .first()
-        .cloned()
-        .or_else(|| layers.get(1).cloned())
-        .or(fallback);
-    let frame = if layers.len() > 1 {
-        layers.get(1).cloned()
-    } else {
-        None
-    };
-    (fill, frame)
 }
 
 pub fn itg_hit_mine_explosion_from_layers<T: Clone>(
@@ -2280,7 +2263,7 @@ fn itg_runtime_columns_selected<T: Clone>(
     let mut receptor_idle_glow_reverse = Vec::new();
     let mut receptor_step_behaviors = Vec::new();
     let mut mines = Vec::new();
-    let mut mine_frames = Vec::new();
+    let mut mine_layers = Vec::new();
     let mut hold_columns = Vec::new();
     let mut roll_columns = Vec::new();
     let mut receptor_pulse_command: Option<String> = None;
@@ -2304,7 +2287,7 @@ fn itg_runtime_columns_selected<T: Clone>(
     }
     if load.has(SkinPart::Mines) {
         mines.reserve(style.num_cols);
-        mine_frames.reserve(style.num_cols);
+        mine_layers.reserve(style.num_cols);
     }
     let bodies = load.has(SkinPart::HoldActive)
         || load.has(SkinPart::HoldInactive)
@@ -2378,12 +2361,12 @@ fn itg_runtime_columns_selected<T: Clone>(
         }
 
         if load.has(SkinPart::Mines) {
-            let mine_sprites = resolve_slots(button, "Tap Mine", None);
-            let mine_fallback = resolve_prefix_slot("_mine");
-            let (mine_fill, mine_frame) =
-                itg_mine_visuals_from_layers(&mine_sprites, mine_fallback);
-            mines.push(mine_fill);
-            mine_frames.push(mine_frame);
+            let mut layers = resolve_slots(button, "Tap Mine", None);
+            if layers.is_empty() {
+                layers.extend(resolve_prefix_slot("_mine"));
+            }
+            mines.push(layers.first().cloned());
+            mine_layers.push(Arc::from(layers));
         }
 
         if bodies {
@@ -2458,7 +2441,7 @@ fn itg_runtime_columns_selected<T: Clone>(
         receptor_step_behaviors,
         receptor_idle_glow,
         mines,
-        mine_frames,
+        mine_layers,
         hold_columns,
         roll_columns,
         receptor_pulse_command,
@@ -2615,7 +2598,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
         receptor_step_behaviors,
         receptor_idle_glow,
         mines,
-        mine_frames,
+        mine_layers,
         mut hold_columns,
         mut roll_columns,
         receptor_pulse_command,
@@ -2803,7 +2786,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
         roll,
         mine_fill_slots,
         mines,
-        mine_frames,
+        mine_layers,
         hold_columns,
         roll_columns,
         receptor_glow_behavior,
@@ -3006,7 +2989,7 @@ pub struct NoteskinRuntime<T> {
     pub receptor_step_behaviors: Vec<ReceptorStepBehaviors>,
     pub mines: Vec<Option<T>>,
     pub mine_fill_slots: Vec<Option<T>>,
-    pub mine_frames: Vec<Option<T>>,
+    pub mine_layers: Vec<Arc<[T]>>,
     pub column_xs: Vec<i32>,
     pub tap_explosions: TapExplosionMap<T>,
     pub tap_explosions_by_col: Vec<TapExplosionMap<T>>,
@@ -3107,7 +3090,7 @@ impl<T: Clone> NoteskinRuntime<T> {
             Mines => {
                 self.mines.clone_from(&source.mines);
                 self.mine_fill_slots.clone_from(&source.mine_fill_slots);
-                self.mine_frames.clone_from(&source.mine_frames);
+                self.mine_layers.clone_from(&source.mine_layers);
                 self.mine_hit_explosion
                     .clone_from(&source.mine_hit_explosion);
             }
@@ -3286,8 +3269,8 @@ impl<T> NoteskinRuntime<T> {
                 visit(slot);
             }
         }
-        for slot in &self.mine_frames {
-            if let Some(slot) = slot.as_ref() {
+        for layers in &self.mine_layers {
+            for slot in layers.iter() {
                 visit(slot);
             }
         }
@@ -3568,12 +3551,12 @@ mod tests {
         itg_hit_mine_explosion_from_slot, itg_hold_explosion_from_resolved_layers,
         itg_hold_head_layers, itg_hold_visual_parts, itg_hold_visuals_from_parts,
         itg_lift_layers_for_col, itg_lift_layers_for_col_shared, itg_load_sprite_decl_slot,
-        itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
-        itg_noteskin_runtime_compiled, itg_receptor_column, itg_receptor_glow_behavior_from_layers,
-        itg_receptor_pulse_from_command, itg_resolve_actor_file_compiled,
-        itg_resolve_actor_sprites_compiled, itg_resolve_actor_sprites_with_ops_compiled,
-        itg_resolve_model_decl, itg_resolve_path_ref_decl, itg_resolve_ref_decl,
-        itg_resolve_sprite_decl, itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
+        itg_mine_explosion_from_commands, itg_noteskin_runtime_compiled, itg_receptor_column,
+        itg_receptor_glow_behavior_from_layers, itg_receptor_pulse_from_command,
+        itg_resolve_actor_file_compiled, itg_resolve_actor_sprites_compiled,
+        itg_resolve_actor_sprites_with_ops_compiled, itg_resolve_model_decl,
+        itg_resolve_path_ref_decl, itg_resolve_ref_decl, itg_resolve_sprite_decl,
+        itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
         itg_roll_explosion_from_resolved, itg_roll_explosion_from_resolved_layers,
         itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
@@ -4188,22 +4171,6 @@ mod tests {
     }
 
     #[test]
-    fn mine_visuals_use_first_layer_fill_and_second_layer_frame() {
-        let (fill, frame) = itg_mine_visuals_from_layers(&[Slot(1), Slot(2)], Some(Slot(9)));
-
-        assert_eq!(fill, Some(Slot(1)));
-        assert_eq!(frame, Some(Slot(2)));
-    }
-
-    #[test]
-    fn mine_visuals_use_fallback_when_layers_are_empty() {
-        let (fill, frame) = itg_mine_visuals_from_layers(&[], Some(Slot(9)));
-
-        assert_eq!(fill, Some(Slot(9)));
-        assert_eq!(frame, None);
-    }
-
-    #[test]
     fn tap_note_layers_only_use_fallback_when_empty() {
         let layers = itg_tap_note_layers(vec![Slot(1)], || panic!("fallback should be lazy"));
         assert_eq!(layers, vec![Slot(1)]);
@@ -4313,7 +4280,7 @@ mod tests {
             |_, element| match element {
                 "Tap Note" => vec![1],
                 "Tap Lift" => vec![2],
-                "Tap Mine" => vec![3],
+                "Tap Mine" => vec![3, 6, 7, 8, 9],
                 "Hold Head Inactive" | "Hold Head Active" => vec![4],
                 "Roll Head Inactive" | "Roll Head Active" => vec![5],
                 _ => Vec::new(),
@@ -4332,7 +4299,7 @@ mod tests {
         assert_eq!(columns.receptor_off, vec![110]);
         assert_eq!(columns.receptor_pulse_command.as_deref(), Some("zoom,2"));
         assert_eq!(columns.mines, vec![Some(3)]);
-        assert_eq!(columns.mine_frames, vec![None]);
+        assert_eq!(columns.mine_layers[0].as_ref(), [3, 6, 7, 8, 9]);
         assert_eq!(columns.hold_columns.len(), 1);
         assert_eq!(columns.hold_columns[0].head_inactive, Some(4));
         assert_eq!(columns.roll_columns.len(), 1);
@@ -4444,7 +4411,7 @@ mod tests {
             receptor_step_behaviors: vec![ReceptorStepBehaviors::default()],
             receptor_idle_glow: ReceptorIdleGlow::None,
             mines: vec![Some(Slot(4))],
-            mine_frames: vec![None],
+            mine_layers: vec![Arc::from([Slot(4)])],
             hold_columns: vec![HoldVisuals {
                 head_inactive: Some(Slot(5)),
                 ..Default::default()
@@ -6213,7 +6180,7 @@ Bones: 1
             )],
             mines: Vec::new(),
             mine_fill_slots: Vec::new(),
-            mine_frames: Vec::new(),
+            mine_layers: Vec::new(),
             column_xs: Vec::new(),
             tap_explosions: TapExplosionMap::new(),
             tap_explosions_by_col: Vec::new(),
@@ -6295,7 +6262,7 @@ Bones: 1
         });
         source.hold_columns = vec![source.hold.clone()];
         source.mines = vec![Some(Slot(9))];
-        source.mine_frames = vec![Some(Slot(10))];
+        source.mine_layers = vec![Arc::from([Slot(9), Slot(10), Slot(12), Slot(13), Slot(14)])];
         source.note_display_metrics.part_animation[NoteAnimPart::Tap as usize].length = 4.0;
         source.part_animation_is_beat_based[NoteAnimPart::Tap as usize] = true;
         base.apply_part(&source, SkinPart::Arrows);
@@ -6321,7 +6288,7 @@ Bones: 1
         assert_eq!(hold.emitter.as_ref().unwrap().flash.slot, Slot(11));
         let mut uploaded = Vec::new();
         base.for_each_slot(|slot| uploaded.push(slot.0));
-        for id in [4, 5, 6, 7, 8, 9, 10, 11] {
+        for id in [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] {
             assert!(
                 uploaded.contains(&id),
                 "component slot {id} reaches texture/model prewarming"

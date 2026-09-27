@@ -40,12 +40,11 @@ pub(crate) struct NoteLayerRequest<'a, S> {
     pub prefer_sprite: bool,
 }
 
-/// Renderer-neutral inputs for one mine's fill-gradient/core/frame sequence.
+/// Renderer-neutral inputs for one mine's authored layers and optional fallback gradient.
 /// Slot lookup and size calculation remain owned by the concrete theme adapter.
 pub(crate) struct MineLayerRequest<'a, S> {
-    pub fill_slot: Option<&'a S>,
+    pub layers: &'a [S],
     pub gradient_slot: Option<&'a S>,
-    pub frame_slot: Option<&'a S>,
     pub gradient_size_ratio: f32,
     pub center: [f32; 2],
     pub mine_uv_phase: f32,
@@ -320,11 +319,6 @@ mod note_metadata_cache_tests {
     }
 }
 
-struct MineSlotPass<'a, S> {
-    slot: &'a S,
-    z: i16,
-}
-
 #[inline(always)]
 fn flat_sprite<S, F>(slot: &S, request: &NoteLayerRequest<'_, S>, sprite_source: &F) -> FlatDraw
 where
@@ -406,7 +400,8 @@ pub(crate) fn compose_flat_note_layer<S, F>(
     }
 }
 
-/// Appends a mine's gradient-or-fill draws followed by its frame draws.
+/// Appends every authored mine layer in order, substituting a gradient only
+/// for the legacy texture fallback's first layer.
 pub(crate) fn compose_flat_mine_layers<S, F, Z>(
     draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
@@ -418,9 +413,9 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
     F: Fn(&S) -> SpriteSource,
     Z: Fn(&S) -> [f32; 2],
 {
-    let frame = request.frame_slot.map(|slot| (slot, size_for_slot(slot)));
-    if let (Some((_, frame_size)), Some(fill_slot), Some(gradient_slot)) =
-        (frame, request.fill_slot, request.gradient_slot)
+    let frame_size = request.layers.get(1).map(size_for_slot);
+    let use_gradient = if let (Some(frame_size), Some(fill_slot), Some(gradient_slot)) =
+        (frame_size, request.layers.first(), request.gradient_slot)
         && fill_slot.model().is_none()
         && fill_slot.frame_count() <= 1
     {
@@ -435,29 +430,25 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             ],
             sprite_source,
         );
-    } else if let Some(slot) = request.fill_slot {
+        true
+    } else {
+        false
+    };
+    for (index, slot) in request
+        .layers
+        .iter()
+        .enumerate()
+        .skip(usize::from(use_gradient))
+    {
         compose_flat_mine_slot(
             draws,
             model_cache,
-            MineSlotPass {
-                slot,
-                z: request.note_z.saturating_sub(1),
-            },
+            slot,
             &request,
-            size_for_slot,
-            sprite_source,
-        );
-    }
-    if let Some((slot, size)) = frame {
-        compose_flat_mine_slot(
-            draws,
-            model_cache,
-            MineSlotPass {
-                slot,
-                z: request.note_z,
+            &|slot| match (index, frame_size) {
+                (1, Some(size)) => size,
+                _ => size_for_slot(slot),
             },
-            &request,
-            &|_| size,
             sprite_source,
         );
     }
@@ -506,7 +497,7 @@ fn compose_flat_mine_gradient<S, F>(
 fn compose_flat_mine_slot<S, F, Z>(
     draws: &mut Vec<FlatDraw>,
     model_cache: &mut ModelMeshCache,
-    pass: MineSlotPass<'_, S>,
+    slot: &S,
     request: &MineLayerRequest<'_, S>,
     size_for_slot: &Z,
     sprite_source: &F,
@@ -515,7 +506,6 @@ fn compose_flat_mine_slot<S, F, Z>(
     F: Fn(&S) -> SpriteSource,
     Z: Fn(&S) -> [f32; 2],
 {
-    let slot = pass.slot;
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, request.display_time_s, request.current_beat),
         request.rotation_y_deg,
@@ -563,7 +553,7 @@ fn compose_flat_mine_slot<S, F, Z>(
             tint,
             glow_alpha: request.glow_alpha,
             blend: BlendMode::Alpha,
-            z: pass.z,
+            z: request.note_z,
             world_z: request.world_z,
             prefer_sprite: request.prefer_sprite,
         },
@@ -1575,14 +1565,12 @@ mod tests {
     }
 
     fn mine_request<'a>(
-        fill_slot: Option<&'a GlowSlot>,
+        layers: &'a [GlowSlot],
         gradient_slot: Option<&'a GlowSlot>,
-        frame_slot: Option<&'a GlowSlot>,
     ) -> MineLayerRequest<'a, GlowSlot> {
         MineLayerRequest {
-            fill_slot,
+            layers,
             gradient_slot,
-            frame_slot,
             gradient_size_ratio: 0.25,
             center: [30.0, 40.0],
             mine_uv_phase: 0.25,
@@ -1610,7 +1598,7 @@ mod tests {
                 let mut slot = GlowSlot::sprite();
                 slot.def.rotation_deg = base;
                 slot.draw.rot[2] = actor;
-                let mut request = mine_request(Some(&slot), None, None);
+                let mut request = mine_request(std::slice::from_ref(&slot), None);
                 request.note_rotation_z_deg = 5.0;
                 let mut draws = Vec::new();
                 compose_flat_mine_layers(
@@ -1644,7 +1632,7 @@ mod tests {
         compose_flat_mine_layers(
             &mut draws,
             &mut cache,
-            mine_request(Some(&fill), Some(&gradient), Some(&frame)),
+            mine_request(&[fill, frame], Some(&gradient)),
             &|slot| {
                 size_calls.set(size_calls.get() + 1);
                 assert_eq!(slot.texture.as_ref(), "mine-frame");
@@ -1725,8 +1713,9 @@ mod tests {
         spark.frame_count = 16;
         spark.draw.zoom = [1.2, 1.2, 1.0];
         spark.draw.rot[2] = 90.0;
+        let layers = [arrow, spark];
         for (time, frame) in [(0.001, 13), (0.201, 1)] {
-            let mut request = mine_request(Some(&arrow), None, Some(&spark));
+            let mut request = mine_request(&layers, None);
             request.elapsed_s = time;
             request.mine_uv_phase = 0.75;
             request.uv_translation = [0.0, 0.0];
@@ -1793,8 +1782,6 @@ mod tests {
             slot
         };
         for &(fill_kind, frame_kind, has_gradient, expected_layers) in cases {
-            let fill = slot_for_kind(fill_kind, "fill");
-            let frame = slot_for_kind(frame_kind, "frame");
             let gradient = named_slot(GlowSlot::sprite(), "gradient");
             for frame_size in [
                 [72.3, 80.7],
@@ -1816,11 +1803,14 @@ mod tests {
                         }
                         _ => panic!("gradient must use frame dimensions"),
                     };
-                    let mut request = mine_request(
-                        (fill_kind != 0).then_some(&fill),
-                        has_gradient.then_some(&gradient),
-                        (frame_kind != 0).then_some(&frame),
-                    );
+                    let layers: Vec<_> = [
+                        (fill_kind != 0).then(|| slot_for_kind(fill_kind, "fill")),
+                        (frame_kind != 0).then(|| slot_for_kind(frame_kind, "frame")),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                    let mut request = mine_request(&layers, has_gradient.then_some(&gradient));
                     request.gradient_size_ratio = ratio;
                     let mut draws = Vec::new();
                     compose_flat_mine_layers(
@@ -1862,7 +1852,7 @@ mod tests {
                         let key = sprite.source.texture_key().unwrap();
                         let (size, z, alpha) = match key {
                             "gradient" => (gradient_size, 138, 0.8),
-                            "fill" => ([61.3, 65.7], 139, 0.8),
+                            "fill" => ([61.3, 65.7], 140, 0.8),
                             "frame" => (frame_size, 140, 0.8),
                             _ => unreachable!(),
                         };
@@ -1886,6 +1876,57 @@ mod tests {
     }
 
     #[test]
+    fn mine_models_draw_every_mesh_in_authored_order() {
+        let mut layers = ["core", "inner", "ornament", "decoration", "shine"]
+            .map(|key| named_slot(GlowSlot::model(), key));
+        for slot in &mut layers {
+            slot.draw.zoom = [0.75; 3];
+            slot.draw.rot[2] = 30.0;
+            slot.draw.tint[3] = 0.5;
+        }
+        for hidden in [None, Some(2)] {
+            layers[2].draw.visible = hidden.is_none();
+            let mut draws = Vec::new();
+            compose_flat_mine_layers(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                mine_request(&layers, None),
+                &|_| [64.0; 2],
+                &|slot| SpriteSource::Texture(slot.texture.clone()),
+            );
+            let expected: Vec<_> = layers
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| Some(*index) != hidden)
+                .flat_map(|(_, slot)| [slot.texture.as_ref(); 2])
+                .collect();
+            let actual: Vec<_> = draws
+                .iter()
+                .map(|draw| {
+                    let FlatDraw::TexturedMesh(mesh) = draw else {
+                        panic!("mine mesh")
+                    };
+                    assert_eq!(mesh.z, 140);
+                    assert_eq!(mesh.world_z, 9.0);
+                    mesh.texture.as_ref()
+                })
+                .collect();
+            assert_eq!(actual, expected);
+            for passes in draws.chunks_exact(2) {
+                let [
+                    FlatDraw::TexturedMesh(diffuse),
+                    FlatDraw::TexturedMesh(glow),
+                ] = passes
+                else {
+                    panic!("diffuse and glow mesh passes")
+                };
+                assert_eq!(diffuse.tint[3], 0.4);
+                assert_eq!(glow.glow[3], 0.6);
+            }
+        }
+    }
+
+    #[test]
     fn mine_layers_model_fill_reuses_geometry_for_glow() {
         let mut fill = named_slot(GlowSlot::model(), "mine-model-fill");
         fill.def.rotation_deg = 10;
@@ -1898,7 +1939,7 @@ mod tests {
         compose_flat_mine_layers(
             &mut draws,
             &mut cache,
-            mine_request(Some(&fill), None, None),
+            mine_request(std::slice::from_ref(&fill), None),
             &|_| [64.0, 66.0],
             &|_| {
                 source_calls.set(source_calls.get() + 1);
@@ -1922,7 +1963,7 @@ mod tests {
         assert_eq!(mesh.tint[..3], [1.0, 1.0, 1.0]);
         assert_near(mesh.tint[3], 0.8);
         assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(mesh.z, 139);
+        assert_eq!(mesh.z, 140);
         assert_eq!(mesh.world_z, 9.0);
         let FlatDraw::TexturedMesh(mesh) = &draws[1] else {
             unreachable!();

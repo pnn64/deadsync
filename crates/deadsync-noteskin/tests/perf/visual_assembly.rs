@@ -266,7 +266,7 @@ fn columns(num_cols: usize) -> ItgRuntimeColumns<u32> {
         receptor_step_behaviors: Vec::new(),
         receptor_idle_glow: ReceptorIdleGlow::None,
         mines: Vec::new(),
-        mine_frames: Vec::new(),
+        mine_layers: Vec::new(),
         receptor_pulse_command: None,
         hold_columns: vec![HoldVisuals::default(); num_cols],
         roll_columns: vec![HoldVisuals::default(); num_cols],

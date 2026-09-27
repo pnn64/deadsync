@@ -20,7 +20,7 @@ use deadsync_assets::noteskin::{
 };
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_notefield::noteskin_model_actor;
+use deadsync_notefield::noteskin_model_actor_from_draw;
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
 use deadsync_theme::views::{NoteskinCatalogView, SmxGifCatalogView};

@@ -690,7 +690,7 @@ mod tests {
             receptor_step_behaviors: Vec::new(),
             mines: Vec::new(),
             mine_fill_slots: Vec::new(),
-            mine_frames: Vec::new(),
+            mine_layers: Vec::new(),
             column_xs: vec![-32, 32],
             tap_explosions: TapExplosionMap::new(),
             tap_explosions_by_col,
