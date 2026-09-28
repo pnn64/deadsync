@@ -56,6 +56,7 @@ pub(super) fn project_tmesh_polygon(
         &clipped[..result.1]
     };
     let mut projected = [ScreenVertexTexColor {
+        z: 0.0,
         x: 0.0,
         y: 0.0,
         u: 0.0,
@@ -72,6 +73,7 @@ pub(super) fn project_tmesh_polygon(
             return None;
         }
         projected[i] = ScreenVertexTexColor {
+            z: 0.0,
             x: f32::midpoint(ndc_x, 1.0) * width as f32,
             y: ((1.0 - ndc_y) * 0.5) * height as f32,
             u: vertex.u,

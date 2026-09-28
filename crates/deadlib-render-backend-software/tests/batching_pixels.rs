@@ -52,6 +52,7 @@ mod backend {
                     start + rows.len() / 96,
                     rows,
                     fixed,
+                    &mut [],
                 );
             }
             pixels

@@ -110,6 +110,7 @@ mod backend {
                                 tmeshes.push(PreparedTriangle {
                                     object: index,
                                     vertices: [ScreenVertexTexColor {
+                                        z: 0.0,
                                         x: 0.0,
                                         y: 0.0,
                                         u: 0.0,
@@ -124,6 +125,7 @@ mod backend {
                                     rows,
                                     texture_mask: false,
                                     blend: BlendMode::Alpha,
+                                    depth_test: false,
                                     texture_handle: 7,
                                 });
                                 expected.push((rows, StripeItem::tmesh(triangle)));
@@ -149,6 +151,7 @@ mod backend {
                                     instance: 0,
                                     mvp: Matrix4::IDENTITY,
                                     blend: BlendMode::Alpha,
+                                    depth_test: false,
                                     texture_handle: 7,
                                 });
                                 expected.push((

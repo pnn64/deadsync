@@ -22,21 +22,15 @@ fn project<const OLD: bool>(
     matrix: &Matrix4,
     vertices: &[TexturedMeshVertex],
 ) -> Option<([ScreenVertexTexColor; 4], usize)> {
-    let project = if OLD {
-        baseline::project_tmesh_polygon
+    let (tint, scale, offset, shift) = ([0.8, 0.7, 0.6, 0.5], [0.4, 0.8], [-0.1, 0.2], [0.3, -0.4]);
+    if OLD {
+        baseline::project_tmesh_polygon(matrix, tint, scale, offset, shift, vertices, 640, 480)
     } else {
-        project_tmesh_polygon
-    };
-    project(
-        matrix,
-        [0.8, 0.7, 0.6, 0.5],
-        [0.4, 0.8],
-        [-0.1, 0.2],
-        [0.3, -0.4],
-        vertices,
-        640,
-        480,
-    )
+        // Unculled projection is the frozen baseline's contract.
+        project_tmesh_polygon(
+            matrix, tint, scale, offset, shift, vertices, 640, 480, false,
+        )
+    }
 }
 
 fn bits(projected: Option<([ScreenVertexTexColor; 4], usize)>) -> Option<([[u32; 8]; 4], usize)> {
