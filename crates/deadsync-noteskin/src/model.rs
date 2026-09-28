@@ -293,11 +293,14 @@ pub struct ItgResolvedModelLayer {
     pub mesh: Arc<ModelMesh>,
     pub texture: ItgResolvedModelTexture,
     pub flags: ItgModelMaterialFlags,
+    /// Shared vertex binding; unbound and mixed-bone meshes have no rigid bone.
+    pub bone_index: Option<u8>,
 }
 
 #[derive(Debug)]
 struct ItgMilkshapeMeshLayer {
     material_index: i32,
+    bone_index: Option<u8>,
     vertices: Vec<ModelVertex>,
     bounds: [f32; 6],
 }
@@ -337,6 +340,9 @@ impl ItgModelSlotPlan {
         model_effect: ModelEffectState,
         auto_rot: Option<&ItgModelAutoRot>,
     ) -> Self {
+        // The auto-rotation track represents bone zero, not the whole actor.
+        // Match ITG's mesh binding: unbound geometry must stay stationary.
+        let auto_rot = auto_rot.filter(|_| layer.bone_index == Some(0));
         let tex = layer.texture.tex;
         let (note_color_translate, uv_velocity) = if layer.flags.nomove {
             (false, [0.0, 0.0])
@@ -674,7 +680,8 @@ pub fn itg_parse_milkshape_model_layers(
         let material_index = itg_parse_milkshape_mesh_material_index(mesh_header);
         let vertex_count = lines.next()?.trim().parse::<usize>().ok()?;
         let mut mesh_vertices = Vec::with_capacity(vertex_count);
-        for _ in 0..vertex_count {
+        let mut bone_index = None;
+        for vertex_index in 0..vertex_count {
             let line = lines.next()?;
             let mut parts = line.split_whitespace();
             let flags = parts.next()?.parse::<u32>().ok()?;
@@ -683,6 +690,13 @@ pub fn itg_parse_milkshape_model_layers(
             let z = parts.next()?.parse::<f32>().ok()?;
             let mut u = parts.next()?.parse::<f32>().ok()?;
             let mut v = parts.next()?.parse::<f32>().ok()?;
+            let bone = parts.next()?.parse::<i8>().ok()?;
+            let bone = u8::try_from(bone).ok();
+            if vertex_index == 0 {
+                bone_index = bone;
+            } else if bone_index != bone {
+                bone_index = None;
+            }
             if flags & 4 != 0 {
                 if u.abs() > f32::EPSILON {
                     u = x / u;
@@ -753,6 +767,7 @@ pub fn itg_parse_milkshape_model_layers(
             model_bounds[5] = model_bounds[5].max(bounds[5]);
             meshes.push(ItgMilkshapeMeshLayer {
                 material_index,
+                bone_index,
                 vertices: tri_vertices,
                 bounds,
             });
@@ -844,6 +859,7 @@ pub fn itg_parse_milkshape_model_layers(
             }),
             texture,
             flags,
+            bone_index: mesh.bone_index,
         });
     }
 
@@ -962,6 +978,7 @@ mod tests {
                 },
             },
             flags: ItgModelMaterialFlags { nomove: true },
+            bone_index: None,
         };
 
         let plan = ItgModelSlotPlan::from_layer(
@@ -1066,6 +1083,61 @@ Materials: 1
 
         assert_eq!(slots, ["tap:model"]);
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn model_bone_rotation_leaves_unbound_meshes_still() {
+        let root = temp_model_root("bone-bindings");
+        let path = root.join("model.txt");
+        let mut source = String::from("// MilkShape 3D ASCII\nMeshes: 5\n");
+        // Four stationary pieces and one rotating piece share a material.
+        for (index, bone) in [-1, -1, -1, -1, 0].into_iter().enumerate() {
+            source.push_str(&format!(
+                "\"part{index}\" 0 -1\n3\n\
+                 0 -1 -1 0 0 0 {bone}\n\
+                 0 1 -1 0 1 0 {bone}\n\
+                 0 0 1 0 0 1 {bone}\n\
+                 0\n1\n0 0 1 2 0 0 0 1\n"
+            ));
+        }
+        source.push_str(
+            "Materials: 0\nBones: 1\n\"rotor\"\n\"\"\n0 0 0 0 0 0 0\n0\n3\n\
+             0 0 0 0\n30 0 0 1.570796327\n60 0 0 3.141592654\n",
+        );
+        fs::write(&path, source).unwrap();
+        let slots = itg_load_model_slots_from_path(
+            &path,
+            |texture| {
+                assert_eq!(texture, Path::new(MODEL_WHITE_TEXTURE));
+                Some(None)
+            },
+            |slot, plan| *slot = Some(plan),
+        )
+        .expect("load synthetic model with rigid bone bindings");
+        assert_eq!(slots.len(), 5);
+        for (index, slot) in slots.into_iter().enumerate() {
+            let plan = slot.expect("model plan");
+            assert_eq!(plan.model.as_ref().unwrap().vertices.len(), 3);
+            assert_eq!(plan.model_auto_rot_z_keys.is_empty(), index != 4);
+            for (time, angle) in [(0.0, 0.0), (0.5, 45.0), (1.5, 135.0), (2.0, 0.0)] {
+                let draw = crate::draw::model_draw_at(
+                    plan.model_draw,
+                    &plan.model_timeline,
+                    plan.model_effect,
+                    plan.model_auto_rot_total_frames,
+                    &plan.model_auto_rot_z_keys,
+                    time,
+                    0.0,
+                );
+                let expected = if index == 4 { angle } else { 0.0 };
+                assert!(
+                    (draw.rot[2] - expected).abs() < 1e-4,
+                    "part {index}, t={time}"
+                );
+            }
+        }
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
     }
 
     #[test]

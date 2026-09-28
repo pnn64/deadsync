@@ -5262,9 +5262,9 @@ mod tests {
 Meshes: 2
 "first" 0 1
 3
-0 -2 -1 0 0 0 -1
-0 0 -1 0 1 0 -1
-0 0 1 2 1 1 -1
+0 -2 -1 0 0 0 0
+0 0 -1 0 1 0 0
+0 0 1 2 1 1 0
 0
 1
 0 0 1 2 0 0 0 1
@@ -5327,6 +5327,7 @@ Meshes: 2
     Meshes = "mesh.txt";
     Materials = "skin.txt";
     Bones = "bones.txt";
+    InitCommand = cmd(rotationz,10);
 }"#,
             &data.metrics,
         );
@@ -5359,19 +5360,27 @@ Meshes: 2
             assert_eq!(mesh.vertices[0].pos[0], first_x);
             assert_eq!(mesh.bounds, [-2.0, -1.0, 0.0, 2.0, 1.0, 2.0]);
             assert_eq!(plan.note_color_translate, translate);
-            assert_eq!(plan.model_auto_rot_total_frames, 30.0);
-            assert_eq!(plan.model_auto_rot_z_keys.len(), 2);
-            assert!((plan.model_auto_rot_z_keys[1].z_deg - 90.0).abs() < 1e-4);
-            let draw = crate::draw::model_draw_at(
-                plan.model_draw,
-                &plan.model_timeline,
-                plan.model_effect,
-                plan.model_auto_rot_total_frames,
-                &plan.model_auto_rot_z_keys,
-                0.5,
-                8.0,
-            );
-            assert!((draw.rot[2] - 45.0).abs() < 1e-4);
+            if index == 0 {
+                assert_eq!(plan.model_auto_rot_total_frames, 30.0);
+                assert_eq!(plan.model_auto_rot_z_keys.len(), 2);
+                assert!((plan.model_auto_rot_z_keys[1].z_deg - 90.0).abs() < 1e-4);
+            } else {
+                assert_eq!(plan.model_auto_rot_total_frames, 0.0);
+                assert!(plan.model_auto_rot_z_keys.is_empty());
+            }
+            for (time, bone_angle) in [(0.0, 0.0), (0.5, 45.0), (1.0, 0.0)] {
+                let draw = crate::draw::model_draw_at(
+                    plan.model_draw,
+                    &plan.model_timeline,
+                    plan.model_effect,
+                    plan.model_auto_rot_total_frames,
+                    &plan.model_auto_rot_z_keys,
+                    time,
+                    8.0,
+                );
+                let expected = 10.0 + if index == 0 { bone_angle } else { 0.0 };
+                assert!((draw.rot[2] - expected).abs() < 1e-4);
+            }
         }
         for file in ["first.png", "second.png", "skin.txt"] {
             std::fs::remove_file(materials_dir.join(file)).unwrap();
