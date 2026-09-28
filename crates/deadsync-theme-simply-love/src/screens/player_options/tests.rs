@@ -2334,6 +2334,77 @@ pub(super) mod tests {
                     .collect::<Vec<_>>()
             );
         }
+
+        // Separate animated model images contain their own note-color strips.
+        // Packing them into a 3x2 atlas must not change which color is sampled.
+        let mut slot = layers[0].clone();
+        slot.def.size = [256, 64];
+        let texel_scale = [1.0 / 768.0, 1.0 / 128.0];
+        slot.source = Arc::new(SpriteSource::Animated {
+            texture_key: Arc::from("synthetic-model-frames"),
+            tex_dims: (768, 128),
+            texel_scale,
+            frame_size: [256, 64],
+            grid: (3, 2),
+            frame_count: 6,
+            frame_indices: None,
+            rate: deadsync_noteskin::AnimationRate::FramesPerSecond(6.0),
+            frame_durations: None,
+            frame_timing: None,
+            uv_cache: deadsync_noteskin::SpriteAnimatedUvCache::new(
+                texel_scale,
+                &slot.def,
+                [256, 64],
+                [3, 2],
+                6,
+                false,
+            ),
+            cached_handle: std::sync::atomic::AtomicU64::new(
+                deadlib_render_core::INVALID_TEXTURE_HANDLE,
+            ),
+            cached_generation: std::sync::atomic::AtomicU64::new(u64::MAX),
+            cached_actor_texture: std::sync::atomic::AtomicU64::new(0),
+        });
+        let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
+        skin.column_xs = vec![0; 4];
+        skin.note_layers = vec![Arc::from([slot]); 4 * deadsync_noteskin::NUM_QUANTIZATIONS];
+        skin.note_display_metrics.part_animation[0].length = 1.0;
+        skin.note_display_metrics.part_texture_translate[0].note_color_spacing = [0.12, 0.0];
+        for frame in 0..6 {
+            state.preview_time = (frame as f32 + 0.25) / 6.0;
+            let actors = super::get_actors(&state, &asset_manager);
+            let meshes: Vec<_> = actors
+                .iter()
+                .filter_map(|actor| {
+                    if let Actor::TexturedMesh {
+                        texture,
+                        uv_scale,
+                        uv_offset,
+                        ..
+                    } = actor
+                        && texture.as_ref() == "synthetic-model-frames"
+                    {
+                        Some((uv_scale, uv_offset))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(meshes.len(), 4);
+            for ((scale, offset), quant) in meshes.into_iter().zip([0.0, 1.0, 3.0, 2.0]) {
+                let expected = [
+                    (frame % 3) as f32 / 3.0 + quant * 0.04,
+                    (frame / 3) as f32 / 2.0,
+                ];
+                for axis in 0..2 {
+                    assert!((scale[axis] - [1.0 / 3.0, 0.5][axis]).abs() < 1e-6);
+                    assert!(
+                        (offset[axis] - expected[axis]).abs() < 1e-6,
+                        "frame {frame}, quant {quant}, axis {axis}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

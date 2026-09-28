@@ -603,10 +603,7 @@ where
         request.elapsed_s
     };
     let body_uv = maybe_flip_uv_vert(
-        translated_uv_rect(
-            body_slot.uv_for_frame_at(body_frame, uv_elapsed),
-            request.body_uv_translation,
-        ),
+        body_slot.uv_for_note_at(body_frame, uv_elapsed, request.body_uv_translation),
         request.body_flipped,
     );
     let visible_top_distance = clipped_top - request.y_head;
@@ -1287,10 +1284,7 @@ fn compose_top_cap<S, F, P>(
     };
     // NoteDisplay::DrawHoldPart flips top/bottom only, including swapped caps.
     let uv = maybe_flip_uv_vert(
-        translated_uv_rect(
-            slot.uv_for_frame_at(frame, uv_elapsed),
-            request.top_cap_uv_translation,
-        ),
+        slot.uv_for_note_at(frame, uv_elapsed, request.top_cap_uv_translation),
         request.body_flipped,
     );
     let [u0, v0, u1, mut v1] = uv;
@@ -1541,10 +1535,7 @@ fn compose_bottom_cap<S, F, P>(
         request.elapsed_s
     };
     let uv = maybe_flip_uv_vert(
-        translated_uv_rect(
-            slot.uv_for_frame_at(frame, uv_elapsed),
-            request.bottom_cap_uv_translation,
-        ),
+        slot.uv_for_note_at(frame, uv_elapsed, request.bottom_cap_uv_translation),
         request.body_flipped,
     );
     let [u0, base_v0, u1, base_v1] = uv;
@@ -1662,14 +1653,6 @@ fn preferred_hold_visual<'a, T: ?Sized>(
     } else {
         inactive.or(active)
     }
-}
-
-pub(crate) fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
-    uv[0] += translate[0];
-    uv[2] += translate[0];
-    uv[1] += translate[1];
-    uv[3] += translate[1];
-    uv
 }
 
 pub(crate) const fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4] {

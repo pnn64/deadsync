@@ -395,11 +395,16 @@ impl SpriteSlot {
         // ITG model textures can scroll via AnimatedTexture TexVelocity/TexOffset.
         // ITGmania applies TexVelocity over the animation cycle percentage, not
         // raw seconds (see AnimatedTexture::GetTextureTranslate), so keep model
-        // UVs on that clock while preserving the full [0..1] span.
+        // UVs on that clock. Packed model frames retain translations in the
+        // original image's UV units, just like NoteDisplay's note-color offsets.
+        let scale = self.uv_translation_scale();
         sprite_scrolled_uv(
             uv,
-            self.uv_velocity,
-            self.uv_offset,
+            [
+                self.uv_velocity[0] * scale[0],
+                self.uv_velocity[1] * scale[1],
+            ],
+            [self.uv_offset[0] * scale[0], self.uv_offset[1] * scale[1]],
             elapsed,
             self.model
                 .is_some()
@@ -484,6 +489,23 @@ impl NoteskinSlot for SpriteSlot {
     #[inline(always)]
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
         Self::uv_for_frame_at(self, frame_index, elapsed)
+    }
+
+    fn uv_translation_scale(&self) -> [f32; 2] {
+        if self.uv_uses_phase()
+            && self.custom_uv.is_none()
+            && let SpriteSource::Animated {
+                frame_size,
+                texel_scale,
+                ..
+            } = self.source.as_ref()
+        {
+            return [
+                frame_size[0] as f32 * texel_scale[0],
+                frame_size[1] as f32 * texel_scale[1],
+            ];
+        }
+        [1.0; 2]
     }
 
     #[inline(always)]
@@ -1533,6 +1555,88 @@ mod contract_tests {
         }
         // NoteDisplay seeks root sprites from the chart phase, overwriting setstate.
         assert_eq!(slot.frame_index_from_phase(0.0), 0);
+    }
+
+    #[test]
+    fn model_frames_preserve_authored_uv_offsets() {
+        // Six separate frame images, each containing eight horizontal colors.
+        // A non-square atlas catches translations scaled by the wrong axis.
+        let mut plan = generated_animation_sprite_slot_plan(
+            "tests/model-frames".into(),
+            (768, 128),
+            [256, 64],
+            6,
+            AnimationRate::FramesPerSecond(6.0),
+            false,
+        );
+        if let SpriteSourcePlan::Animated { grid, .. } = &mut plan.source {
+            *grid = (3, 2);
+        }
+        let mut slot = slot_from_plan(plan);
+        slot.model = test_model_slot().model;
+        slot.uv_cycle_seconds = Some(1.0);
+        for (velocity, offset) in [([0.0; 2], [0.0; 2]), ([0.02, -0.04], [0.01, 0.03])] {
+            slot.uv_velocity = velocity;
+            slot.uv_offset = offset;
+            for frame in 0..6 {
+                let phase = frame as f32 / 6.0;
+                assert_eq!(slot.frame_index_from_phase(phase), frame);
+                for quant in 0..8 {
+                    let translation = [quant as f32 * 0.12, 0.02];
+                    let uv = slot.uv_for_note_at(frame, phase, translation);
+                    let (scale, origin, _) = slot.model_uv_params(uv);
+                    for vertex in [[0.03, 0.18], [0.13, 0.82]] {
+                        let expected = [
+                            (frame as f32 % 3.0
+                                + vertex[0]
+                                + translation[0]
+                                + velocity[0] * phase
+                                + offset[0])
+                                / 3.0,
+                            ((frame / 3) as f32
+                                + vertex[1]
+                                + translation[1]
+                                + velocity[1] * phase
+                                + offset[1])
+                                / 2.0,
+                        ];
+                        for axis in 0..2 {
+                            let actual = vertex[axis] * scale[axis] + origin[axis];
+                            assert!(
+                                (actual - expected[axis]).abs() < 1e-6,
+                                "frame {frame}, quant {quant}, axis {axis}: {actual} != {}",
+                                expected[axis]
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sprite_sheets_keep_texture_space_offsets() {
+        let mut slot = slot_from_plan(generated_animation_sprite_slot_plan(
+            "tests/sprite-sheet".into(),
+            (192, 64),
+            [64, 64],
+            3,
+            AnimationRate::FramesPerSecond(6.0),
+            false,
+        ));
+        for mesh in [false, true] {
+            slot.model = mesh.then(|| test_model_slot().model.unwrap());
+            slot.sprite_mesh = mesh;
+            let uv = slot.uv_for_frame_at(1, 0.0);
+            let actual = slot.uv_for_note_at(1, 0.0, [0.5, -0.1]);
+            assert_eq!(actual, [uv[0] + 0.5, uv[1] - 0.1, uv[2] + 0.5, uv[3] - 0.1]);
+        }
+        let slot = test_model_slot();
+        let uv = slot.uv_for_frame_at(0, 0.0);
+        assert_eq!(
+            slot.uv_for_note_at(0, 0.0, [0.5, -0.1]),
+            [uv[0] + 0.5, uv[1] - 0.1, uv[2] + 0.5, uv[3] - 0.1]
+        );
     }
 
     #[test]

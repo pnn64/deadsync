@@ -1,7 +1,7 @@
 use super::*;
 use crate::fonts::machine_font_key;
 use deadlib_present::actors::TextContent;
-use deadsync_noteskin::ReceptorIdleGlow;
+use deadsync_noteskin::{NoteskinSlot, ReceptorIdleGlow};
 use deadsync_theme::FontRole;
 
 pub(super) fn top_bar_actor(
@@ -1452,13 +1452,7 @@ fn draw_noteskin_note(
     for (layer_idx, slot) in slots.iter().enumerate() {
         let frame = slot.frame_index_from_phase(phase);
         let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
-        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-        let uv = [
-            uv[0] + translation[0],
-            uv[1] + translation[1],
-            uv[2] + translation[0],
-            uv[3] + translation[1],
-        ];
+        let uv = slot.uv_for_note_at(frame, uv_elapsed, translation);
         let logical = slot.logical_size();
         draw_preview_slot(
             actors,
@@ -1618,7 +1612,7 @@ fn draw_mine_preview(
         } else {
             state.preview_time
         };
-        let uv = slot.uv_for_frame_at(frame, uv_time);
+        let uv = slot.uv_for_note_at(frame, uv_time, translation);
         let logical = slot.logical_size();
         let scale = target_height / logical[1].max(1.0);
         draw_preview_slot(
@@ -1627,12 +1621,7 @@ fn draw_mine_preview(
             draw,
             mine_center,
             [logical[0] * scale, target_height],
-            [
-                uv[0] + translation[0],
-                uv[1] + translation[1],
-                uv[2] + translation[0],
-                uv[3] + translation[1],
-            ],
+            uv,
             -slot.def.rotation_deg as f32,
             [1.0, 1.0, 1.0, alpha],
             BlendMode::Alpha,

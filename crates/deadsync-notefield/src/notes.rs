@@ -1,4 +1,4 @@
-use crate::holds::{song_time_ns_delta_seconds, translated_uv_rect};
+use crate::holds::song_time_ns_delta_seconds;
 use crate::measure_lines::{beat_scroll_travel, edit_beat_scroll_travel};
 use crate::transforms::{
     AccelYCache, AccelYParams, accel_y_cache, accel_y_is_identity, apply_accel_y_cached,
@@ -524,10 +524,7 @@ fn compose_flat_mine_slot<S, F, Z>(
     } else {
         request.elapsed_s
     };
-    let uv = translated_uv_rect(
-        slot.uv_for_frame_at(frame, uv_elapsed),
-        request.uv_translation,
-    );
+    let uv = slot.uv_for_note_at(frame, uv_elapsed, request.uv_translation);
     let base_rotation = -slot.sprite_def().rotation_deg as f32;
     let mut size = size_for_slot(slot);
     let mut tint = [1.0, 1.0, 1.0, request.alpha];

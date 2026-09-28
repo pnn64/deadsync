@@ -112,7 +112,6 @@ pub(crate) use holds::{
     HoldBodyCapRequest, HoldEntryPlanRequest, HoldPathSample, compose_hold_body_caps,
     hold_entry_head_beat, hold_entry_plan, hold_parts_for_note_type, mine_part, scale_effect_size,
     scale_sprite_to_arrow, song_time_ns_to_seconds, tap_part_for_note_type, tap_replacement_head,
-    translated_uv_rect,
 };
 #[cfg(test)]
 use holds::{
@@ -234,11 +233,11 @@ mod tests {
         signed_effect_active, sm_scale, smoothstep01, song_time_ns_delta_seconds,
         song_time_ns_to_seconds, tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
         timing_window_from_num, tiny_spacing_scale, tipsy_y_extra, tornado_x_extra,
-        translated_uv_rect, visual_arrow_effect_zoom, visual_confusion_rotation_deg,
-        visual_effect_params_for_col, visual_hold_body_needs_z_buffer,
-        visual_hold_head_rotation_z_cached, visual_pulse_inner_zoom, visual_pulse_zoom_for_y,
-        visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_counter_text,
-        zmod_broken_run_end, zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
+        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
+        visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
+        visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
+        visual_use_legacy_hold_sprites, zmod_broken_run_counter_text, zmod_broken_run_end,
+        zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
         zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
         zmod_indicator_detailed_color, zmod_layout_ys, zmod_measure_counter_text,
         zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_pacemaker_color,
@@ -768,14 +767,6 @@ mod tests {
         assert!(
             (edit_raw - displayed_raw).abs() > 100.0,
             "ITG's step editor ignores displayed beat and speed segments"
-        );
-    }
-
-    #[test]
-    fn translated_uv_rect_offsets_all_edges() {
-        assert_eq!(
-            translated_uv_rect([0.1, 0.2, 0.3, 0.4], [0.5, -0.1]),
-            [0.6, 0.1, 0.8, 0.3]
         );
     }
 

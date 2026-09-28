@@ -166,6 +166,24 @@ pub trait NoteskinSlot: Sized {
     fn frame_index(&self, time: f32, beat: f32) -> usize;
     fn frame_index_from_phase(&self, phase: f32) -> usize;
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];
+
+    /// Converts authored texture translations to the backing texture's UV units.
+    /// Model animations packed from separate images use the selected frame's span.
+    fn uv_translation_scale(&self) -> [f32; 2] {
+        [1.0; 2]
+    }
+
+    fn uv_for_note_at(&self, frame_index: usize, elapsed: f32, translation: [f32; 2]) -> [f32; 4] {
+        let mut uv = self.uv_for_frame_at(frame_index, elapsed);
+        let scale = self.uv_translation_scale();
+        for axis in 0..2 {
+            let shift = translation[axis] * scale[axis];
+            uv[axis] += shift;
+            uv[axis + 2] += shift;
+        }
+        uv
+    }
+
     fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState;
 
     #[inline(always)]

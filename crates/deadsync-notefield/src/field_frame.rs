@@ -13,10 +13,9 @@ use crate::{
     note_appearance_cache, note_part_phase_cached, note_part_uv_translation_for_quantization,
     note_world_z_for_bumpy_cached, note_x_offset_cached as canonical_note_x_offset_cached,
     offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
-    visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
-    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
-    visual_use_legacy_hold_sprites,
+    tap_part_for_note_type, tap_replacement_head, visual_arrow_effect_zoom_cached,
+    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
+    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
     Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAlign, TextAttributes,
@@ -708,10 +707,7 @@ fn compose_field_contents<S, F>(
             } else {
                 elapsed
             };
-            let uv = translated_uv_rect(
-                head_slot.uv_for_frame_at(frame_index, uv_elapsed),
-                hold_head_translation,
-            );
+            let uv = head_slot.uv_for_note_at(frame_index, uv_elapsed, hold_head_translation);
             let local_offset = [draw.pos[0] * note_scale, draw.pos[1] * note_scale];
             let local_offset_rot_sin_cos = head_slot.base_rot_sin_cos();
             let model_center =
@@ -801,10 +797,7 @@ fn compose_field_contents<S, F>(
             } else {
                 elapsed
             };
-            let uv = translated_uv_rect(
-                note_slot.uv_for_frame_at(frame_index, uv_elapsed),
-                hold_head_translation,
-            );
+            let uv = note_slot.uv_for_note_at(frame_index, uv_elapsed, hold_head_translation);
             let size = scale_sprite_to_arrow(note_slot.size(), hold_head_target_arrow_px);
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(note_slot, elapsed, current_beat),
@@ -1204,10 +1197,7 @@ fn compose_visible_notes<S, F>(
                     } else {
                         elapsed
                     };
-                    let uv = translated_uv_rect(
-                        note_slot.uv_for_frame_at(frame_index, uv_elapsed),
-                        translation,
-                    );
+                    let uv = note_slot.uv_for_note_at(frame_index, uv_elapsed, translation);
                     let size = scale_sprite_to_arrow(note_slot.size(), target_arrow_px);
                     let center = [column_center_x, y_pos];
                     let draw = song_lua_note_model_draw(
@@ -1285,7 +1275,7 @@ fn compose_flat_noteskin_layer<S, F>(
     }
     let frame_index = slot.frame_index_from_phase(phase);
     let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
-    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
+    let uv = slot.uv_for_note_at(frame_index, uv_elapsed, translation);
     let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
     let rotation_sin_cos = slot.base_rot_sin_cos();
     let blend = if draw.blend_add {
@@ -1351,7 +1341,7 @@ fn compose_flat_single_slot<S, F>(
     let frame_index = slot.frame_index_from_phase(phase);
     let model = slot.model();
     let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
-    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
+    let uv = slot.uv_for_note_at(frame_index, uv_elapsed, translation);
     let size = note_slot_base_size(slot, model, scale);
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, elapsed, current_beat),
