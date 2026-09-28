@@ -1823,6 +1823,7 @@ pub fn itg_resolve_actor_sprites_compiled<T>(
         compiled,
         button,
         element,
+        None,
         0,
         &mut visiting,
         &mut resolve_file,
@@ -1835,6 +1836,7 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
     compiled: &compiled::CompiledLoader,
     button: &str,
     element: &str,
+    color: Option<Quantization>,
     depth: usize,
     visiting: &mut HashSet<String>,
     mut resolve_file: impl FnMut(
@@ -1859,7 +1861,7 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
         return Vec::new();
     }
 
-    let request = compiled.load_request_ref(button, element);
+    let request = compiled.load_request_color_ref(button, element, color);
     if request.blank {
         visiting.remove(&visit_key);
         return Vec::new();
@@ -1928,6 +1930,7 @@ fn itg_resolve_actor_sprites_with_ops_inner<T>(
         compiled,
         button,
         element,
+        color,
         depth,
         visiting,
         |path, rotation_x, rotation_y, rotation_z, depth, visiting, arg0_path| {
@@ -2974,7 +2977,7 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
         ops.apply_receptor_init,
         ops.base_zoom,
         ops.model_info,
-        compiled_actors.has_color_variants(),
+        compiled_actors.has_color_variants() || compiled.has_color_variants(),
         load,
     )?;
 
@@ -4821,6 +4824,7 @@ mod tests {
             entries: vec![compiled::CompiledLoaderEntry {
                 button: "Left".to_string(),
                 element: "Tap Note".to_string(),
+                color: None,
                 load_button: "Up".to_string(),
                 load_element: "Tap Note".to_string(),
                 blank: false,
@@ -4884,6 +4888,7 @@ mod tests {
             entries: vec![compiled::CompiledLoaderEntry {
                 button: "Left".to_string(),
                 element: "Tap Note".to_string(),
+                color: None,
                 load_button: String::new(),
                 load_element: String::new(),
                 blank: true,

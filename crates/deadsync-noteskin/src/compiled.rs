@@ -6,9 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::actor as noteskin_actor;
+use crate::{Quantization, actor as noteskin_actor};
 
-pub const CACHE_SCHEMA_VERSION: u32 = 6;
+pub const CACHE_SCHEMA_VERSION: u32 = 7;
 pub const ACTOR_RECURSION_MAX_DEPTH: usize = 24;
 pub const ACTOR_FILE_RECURSION_MAX_DEPTH: usize = 48;
 static CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -25,6 +25,8 @@ pub struct CompiledLoader {
 pub struct CompiledLoaderEntry {
     pub button: String,
     pub element: String,
+    /// None is the default (4th); only differing color variants are stored.
+    pub color: Option<Quantization>,
     pub load_button: String,
     pub load_element: String,
     pub blank: bool,
@@ -101,7 +103,31 @@ impl CompiledLoader {
         button: &'a str,
         element: &'a str,
     ) -> ItgLoadRequestRef<'a> {
-        if let Some(entry) = self.find(button, element) {
+        self.load_request_color_ref(button, element, None)
+    }
+
+    #[must_use]
+    pub fn load_request_color_ref<'a>(
+        &'a self,
+        button: &'a str,
+        element: &'a str,
+        color: Option<Quantization>,
+    ) -> ItgLoadRequestRef<'a> {
+        let variant = color
+            .filter(|color| *color != Quantization::Q4th)
+            .and_then(|color| {
+                let index = self.entries.partition_point(|entry| {
+                    compiled_loader_entry_cmp(entry, button, element)
+                        .then_with(|| entry.color.cmp(&Some(color)))
+                        == CmpOrdering::Less
+                });
+                self.entries.get(index).filter(|entry| {
+                    entry.color == Some(color)
+                        && entry.button.eq_ignore_ascii_case(button)
+                        && entry.element.eq_ignore_ascii_case(element)
+                })
+            });
+        if let Some(entry) = variant.or_else(|| self.find(button, element)) {
             return ItgLoadRequestRef {
                 blank: entry.blank,
                 load_button: &entry.load_button,
@@ -122,6 +148,10 @@ impl CompiledLoader {
             rotation_z: None,
             init_command: None,
         }
+    }
+
+    pub fn has_color_variants(&self) -> bool {
+        self.entries.iter().any(|entry| entry.color.is_some())
     }
 }
 
@@ -378,6 +408,7 @@ mod tests {
             entries: vec![CompiledLoaderEntry {
                 button: "Down".to_string(),
                 element: "Hold Explosion".to_string(),
+                color: None,
                 load_button: "Left".to_string(),
                 load_element: "Roll Explosion".to_string(),
                 blank: true,

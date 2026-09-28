@@ -786,6 +786,90 @@ return Def.ActorFrame { children = {
     }
 
     #[test]
+    fn loader_color_rotation_reaches_each_column() {
+        use deadsync_noteskin::{
+            Quantization, compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("loader-color-rotation");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local actor = LoadActor(NOTESKIN:GetPath("Down", Var "Element"))
+    if Var "Color" == "8th" and Var "Element" == "Tap Note" then
+        actor.BaseRotationZ = ({Left=90, Down=0, Up=180, Right=-90})[Var "Button"]
+    end
+    return actor
+end }
+"#,
+        )
+        .unwrap();
+        // No child Var Color: the loader alone must enable per-quant loading.
+        write_noteskin_png(&root.join("Down Tap Note.png"));
+        write_noteskin_png(&root.join("Down Receptor.png"));
+        fs::write(
+            root.join("Down Tap Lift.lua"),
+            "return NOTESKIN:LoadActor(Var 'Button', 'Tap Note')",
+        )
+        .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "loader-color-rotation".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        assert!(bundle.loader.has_color_variants());
+        assert!(!bundle.actors.has_color_variants());
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let parts = SkinParts::default()
+            .with(SkinPart::Arrows)
+            .with(SkinPart::Lifts);
+        for parts in [None, Some(parts)] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for (col, rotation) in [90, 0, 180, -90].into_iter().enumerate() {
+                for quant in Quantization::ALL {
+                    let index = col * NUM_QUANTIZATIONS + quant as usize;
+                    let expected = if quant == Quantization::Q8th {
+                        rotation
+                    } else {
+                        0
+                    };
+                    for layers in [&skin.note_layers[index], &skin.lift_note_layers[index]] {
+                        assert_eq!(layers.len(), 1);
+                        assert_eq!(
+                            layers[0].def.rotation_deg, expected,
+                            "column {col}, {quant:?}"
+                        );
+                        let (sin, cos) = (-(expected as f32)).to_radians().sin_cos();
+                        for (actual, expected) in
+                            layers[0].base_rot_sin_cos().into_iter().zip([sin, cos])
+                        {
+                            assert!((actual - expected).abs() < 1e-6);
+                        }
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn color_models_keep_quant_materials_through_loading() {
         use deadsync_noteskin::{
             compiled, compiler,
@@ -800,7 +884,9 @@ return { Load = function()
     local element = Var "Element"
     if element == "Tap Note" or element == "Tap Lift" then
         local actor = LoadActor(NOTESKIN:GetPath("Down", element))
-        actor.BaseRotationZ = ({Left=90, Down=0, Up=180, Right=-90})[Var "Button"]
+        if Var "Color" == "8th" then
+            actor.BaseRotationZ = ({Left=90, Down=0, Up=180, Right=-90})[Var "Button"]
+        end
         return actor
     end
     if element == "Receptor" then return LoadActor(NOTESKIN:GetPath("", "border.png")) end
@@ -938,7 +1024,10 @@ return Def.Model {
                         for slot in layers.iter() {
                             assert!(slot.model.is_some());
                             assert_eq!(slot.logical_size(), [64.0; 2]);
-                            assert_eq!(slot.def.rotation_deg, rotation);
+                            assert_eq!(
+                                slot.def.rotation_deg,
+                                if quant == 1 { rotation } else { 0 }
+                            );
                             assert_eq!(slot.model_draw.zoom, [0.75; 3]);
                         }
                     }

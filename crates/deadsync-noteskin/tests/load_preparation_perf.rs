@@ -24,6 +24,7 @@ fn loader_fixture() -> CompiledLoader {
             entries.push(CompiledLoaderEntry {
                 button: button.into(),
                 element: element.into(),
+                color: None,
                 load_button: "Down".into(),
                 load_element: if element == "Hold Head Active" {
                     "tAp NoTe"

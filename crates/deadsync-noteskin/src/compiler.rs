@@ -1,6 +1,6 @@
 pub use crate::compiled::{CompiledActors, CompiledLoader, actor_manifest_key};
 use crate::{
-    actor as noteskin_actor, compiled as noteskin_compiled,
+    Quantization, actor as noteskin_actor, compiled as noteskin_compiled,
     compiled::{CompiledActorFile, CompiledLoaderEntry, CompiledNoteskinBundle},
     itg as noteskin_itg,
 };
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 26;
+const COMPILER_VERSION: u32 = 27;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -340,7 +340,7 @@ pub fn compile_data(
     let scripts = noteskin_paths(data);
     let lua = Lua::new();
     install_host(&lua, data, player_options).map_err(|err| err.to_string())?;
-    let noteskin = load_noteskin_table(&lua, &scripts)?;
+    let (noteskin, color_variants) = load_noteskin_table(&lua, &scripts)?;
     Ok(CompiledNoteskinBundle {
         version: noteskin_compiled::CACHE_SCHEMA_VERSION,
         game: game.to_string(),
@@ -350,7 +350,7 @@ pub fn compile_data(
             version: COMPILER_VERSION,
             game: game.to_string(),
             skin: data.name.clone(),
-            entries: compile_entries(&lua, &noteskin, game, data)?,
+            entries: compile_entries(&lua, &noteskin, game, data, color_variants)?,
         },
         actors: CompiledActors {
             version: COMPILER_VERSION,
@@ -645,7 +645,14 @@ fn install_host(
             "Element" => Ok(Value::String(
                 lua.create_string(&globals.get::<String>("__itg_element")?)?,
             )),
-            "Color" => Ok(Value::String(lua.create_string("4th")?)),
+            "Color" => Ok(Value::String(
+                lua.create_string(
+                    globals
+                        .get::<Option<String>>("__itg_color")?
+                        .as_deref()
+                        .unwrap_or("4th"),
+                )?,
+            )),
             "SpriteOnly" => Ok(Value::Boolean(
                 globals.get::<bool>("__itg_sprite_only").unwrap_or(false),
             )),
@@ -819,11 +826,13 @@ fn lua_command_arg(value: Value) -> mlua::Result<String> {
     })
 }
 
-fn load_noteskin_table(lua: &Lua, paths: &[PathBuf]) -> Result<Table, String> {
+fn load_noteskin_table(lua: &Lua, paths: &[PathBuf]) -> Result<(Table, bool), String> {
     let mut current = None;
+    let mut color_variants = false;
     for path in paths {
         let content = fs::read_to_string(path)
             .map_err(|err| format!("failed to read '{}': {err}", path.display()))?;
+        color_variants |= uses_actor_var(&content, "Color");
         let chunk = lua.load(&content).set_name(path.to_string_lossy().as_ref());
         let function = chunk
             .into_function()
@@ -839,7 +848,9 @@ fn load_noteskin_table(lua: &Lua, paths: &[PathBuf]) -> Result<Table, String> {
         };
         current = Some(next);
     }
-    current.ok_or_else(|| "no NoteSkin.lua files were found in fallback chain".to_string())
+    current
+        .map(|table| (table, color_variants))
+        .ok_or_else(|| "no NoteSkin.lua files were found in fallback chain".to_string())
 }
 
 fn compile_entries(
@@ -847,6 +858,7 @@ fn compile_entries(
     noteskin: &Table,
     game: &str,
     data: &noteskin_itg::NoteskinData,
+    color_variants: bool,
 ) -> Result<Vec<CompiledLoaderEntry>, String> {
     let (buttons, elements) = collect_loader_domain(game, data);
     normalize_noteskin_tables(noteskin, &buttons, &elements)
@@ -867,12 +879,35 @@ fn compile_entries(
             globals
                 .set("__itg_sprite_only", true)
                 .map_err(|err| err.to_string())?;
-            let actor = load
-                .call::<Table>(())
-                .map_err(|err| format!("Load() failed for '{button} {element}': {err}"))?;
-            out.push(read_entry(button, element, &actor)?);
+            let default_index = out.len();
+            let colors = if color_variants {
+                &Quantization::ALL[..]
+            } else {
+                &Quantization::ALL[..1]
+            };
+            for color in colors {
+                globals
+                    .set("__itg_color", color.color_name())
+                    .map_err(|err| err.to_string())?;
+                let actor = load.call::<Table>(()).map_err(|err| {
+                    format!(
+                        "Load() failed for '{button} {element}' ({}): {err}",
+                        color.color_name()
+                    )
+                })?;
+                let mut entry = read_entry(button, element, &actor)?;
+                if *color == Quantization::Q4th {
+                    out.push(entry);
+                } else if entry != out[default_index] {
+                    entry.color = Some(*color);
+                    out.push(entry);
+                }
+            }
         }
     }
+    globals
+        .set("__itg_color", "4th")
+        .map_err(|err| err.to_string())?;
     sort_compiled_loader_entries(&mut out);
     Ok(out)
 }
@@ -920,7 +955,12 @@ impl PartialOrd for LoaderSortKey {
 }
 
 fn sort_compiled_loader_entries(entries: &mut [CompiledLoaderEntry]) {
-    entries.sort_by_cached_key(|entry| LoaderSortKey::new(&entry.button, &entry.element));
+    entries.sort_by_cached_key(|entry| {
+        (
+            LoaderSortKey::new(&entry.button, &entry.element),
+            entry.color,
+        )
+    });
 }
 
 fn normalize_noteskin_tables(
@@ -1134,6 +1174,7 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
     Ok(CompiledLoaderEntry {
         button: button.to_string(),
         element: element.to_string(),
+        color: None,
         load_button,
         load_element,
         blank,
@@ -1223,6 +1264,111 @@ end }
         assert_eq!(request.load_button, "Down");
         assert_eq!(request.load_element, "Tap Note");
         assert_eq!(request.rotation_y, None);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn loader_keeps_color_variants_through_cache() {
+        use crate::Quantization;
+        let root = temp_noteskin_dir("loader-colors");
+        let fallback = root.join("fallback");
+        fs::create_dir_all(&fallback).unwrap();
+        fs::write(
+            fallback.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Tap Fake" or string.find(element, "Head") then element = "Tap Note" end
+    if Var('Color') == "16th" and element == "Tap Note" then return Def.Actor {} end
+    return LoadActor(NOTESKIN:GetPath("Down", element))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(root.join("NoteSkin.lua"), r#"
+local skin = ...
+local load = skin.Load
+function skin.Load()
+    local actor = load()
+    local element = Var "Element"
+    if Var "Color" == "8th" and (element == "Tap Note" or element == "Tap Fake" or string.find(element, "Head")) then
+        actor.BaseRotationZ = ({Left=90, Down=0, Up=180, Right=-90})[Var "Button"]
+        actor.InitCommand = function(self) self:zoom(0.75) end
+    end
+    if Var("Color") == "12th" and element == "Tap Note" then
+        return LoadActor(NOTESKIN:GetPath("Down", "Alternate"))
+    end
+    return actor
+end
+return skin
+"#).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "loader-colors".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone(), fallback],
+        };
+        let bundle = super::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        noteskin_compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let mut bundle = noteskin_compiled::load_compiled_bundle(&path).unwrap();
+        let loader = &bundle.loader;
+        assert!(loader.has_color_variants());
+        assert!(
+            loader
+                .entries
+                .iter()
+                .all(|entry| entry.color.is_none_or(|color| matches!(
+                    color,
+                    Quantization::Q8th | Quantization::Q12th | Quantization::Q16th
+                )))
+        );
+        for (button, rotation) in [("left", 90), ("DOWN", 0), ("Up", 180), ("Right", -90)] {
+            for color in Quantization::ALL {
+                for element in [
+                    "Tap Note",
+                    "Tap Fake",
+                    "Hold Head Active",
+                    "Hold Head Inactive",
+                    "Roll Head Active",
+                    "Roll Head Inactive",
+                ] {
+                    let request = loader.load_request_color_ref(button, element, Some(color));
+                    assert_eq!(
+                        request.rotation_z,
+                        (color == Quantization::Q8th).then_some(rotation)
+                    );
+                    assert_eq!(
+                        request.init_command,
+                        (color == Quantization::Q8th).then_some("zoom,0.75")
+                    );
+                    assert_eq!(request.blank, color == Quantization::Q16th);
+                    if !request.blank {
+                        assert_eq!(request.load_button, "Down");
+                        assert_eq!(
+                            request.load_element,
+                            if color == Quantization::Q12th && element == "Tap Note" {
+                                "Alternate"
+                            } else {
+                                "Tap Note"
+                            }
+                        );
+                    }
+                }
+                assert_eq!(
+                    loader.load_request_color_ref(button, "Receptor", Some(color)),
+                    loader.load_request_ref(button, "Receptor")
+                );
+            }
+            assert_eq!(
+                loader.load_request_ref(button, "Tap Note"),
+                loader.load_request_color_ref(button, "Tap Note", Some(Quantization::Q4th))
+            );
+        }
+        bundle.version -= 1;
+        let old_path = root.join("old.bin");
+        noteskin_compiled::save_compiled_bundle(&old_path, &bundle).unwrap();
+        assert!(noteskin_compiled::load_compiled_bundle(&old_path).is_none());
         fs::remove_dir_all(root).unwrap();
     }
 

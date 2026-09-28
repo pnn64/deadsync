@@ -302,6 +302,7 @@ fn runtime_fixture(num_cols: usize, blank: bool) -> RuntimeFixture {
             loader.entries.push(compiled::CompiledLoaderEntry {
                 button: button.into(),
                 element: element.into(),
+                color: None,
                 load_button: button.into(),
                 load_element: element.into(),
                 blank,

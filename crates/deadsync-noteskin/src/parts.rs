@@ -56,7 +56,9 @@ pub fn itg_column_xs(num_cols: usize) -> Vec<i32> {
         .collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bincode::Encode, bincode::Decode,
+)]
 #[repr(usize)]
 pub enum Quantization {
     Q4th = 0,
