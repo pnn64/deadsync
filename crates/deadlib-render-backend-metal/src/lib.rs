@@ -731,11 +731,8 @@ fn draw_inner(
     let mut vertices_drawn = 0u32;
     let mut cache = EncoderCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-    let mut clear_after = false;
     for op in &frame.ops {
-        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-        if reset_depth {
+        if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
             encoder.set_render_pipeline_state(&state.depth_clear_pipeline);
             encoder.set_depth_stencil_state(&state.depth_clear);
             encoder.set_cull_mode(MTLCullMode::None);
@@ -1429,11 +1426,8 @@ fn record_offscreen_pass(
     } else {
         &state.opaque_tmesh_pipelines
     };
-    let mut clear_after = false;
     for op in &frame.ops {
-        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-        if reset_depth {
+        if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
             encoder.set_render_pipeline_state(&state.depth_clear_pipeline);
             encoder.set_depth_stencil_state(&state.depth_clear);
             encoder.set_cull_mode(MTLCullMode::None);

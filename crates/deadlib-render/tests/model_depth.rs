@@ -63,8 +63,8 @@ fn model_frame() -> RenderFrame {
                     texture_handle: 1,
                     camera: 0,
                     depth_test: true,
-                    clear_depth: i != 1,
-                    clear_depth_after: i != 0,
+                    // Notes 0 and 1 share depth; note 2 is isolated from them.
+                    clear_depth: i == 2,
                 })
             })
             .collect(),
@@ -157,8 +157,7 @@ fn model_depth_isolation() {
             texture_handle: 1,
             camera: 0,
             depth_test: true,
-            clear_depth: false,
-            clear_depth_after: false,
+            clear_depth: true,
         }));
         backend.request_screenshot();
         backend

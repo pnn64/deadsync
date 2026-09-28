@@ -1518,11 +1518,8 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     } else {
         &state.tmesh_depth_pipelines
     };
-    let mut clear_after = false;
     for op in data.ops {
-        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-        if reset_depth {
+        if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
             pass.set_pipeline(&state.depth_clear_pipeline);
             pass.draw(0..3, 0..1);
             last_kind = None;
@@ -3844,7 +3841,6 @@ mod tests {
                 instance_count: 1,
                 depth_test: false,
                 clear_depth: false,
-                clear_depth_after: false,
             })],
         };
         for (transform, expected) in [

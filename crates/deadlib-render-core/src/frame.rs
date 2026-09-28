@@ -83,10 +83,10 @@ pub struct TexturedMeshRun {
     pub texture_handle: TextureHandle,
     pub camera: u8,
     pub depth_test: bool,
-    /// Clear depth before this draw to isolate a new model in painter order.
+    /// Clear depth before this depth-tested draw to isolate it from earlier
+    /// models. Passes start with cleared depth, so the first depth-tested draw
+    /// never needs this.
     pub clear_depth: bool,
-    /// Clear depth after this draw so subsequent draws cannot inherit it.
-    pub clear_depth_after: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

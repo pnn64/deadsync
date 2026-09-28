@@ -830,11 +830,8 @@ fn prepare_objects(
     tmesh_triangles.clear();
     let mut fixed_vertices = 0u32;
 
-    let mut clear_after = false;
     for op in frame.ops {
-        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-        if reset_depth {
+        if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
             prepared.push(PreparedObject::ClearDepth);
         }
         match *op {
@@ -3677,8 +3674,8 @@ mod tests {
                         blend: BlendMode::Alpha,
                         camera: 0,
                         depth_test: true,
-                        clear_depth: i != 1,
-                        clear_depth_after: i != 0,
+                        // Runs 0 and 1 share depth; run 2 is isolated from them.
+                        clear_depth: i == 2,
                     })
                 })
                 .collect(),
@@ -3707,8 +3704,7 @@ mod tests {
                     blend: BlendMode::Alpha,
                     camera: 0,
                     depth_test: true,
-                    clear_depth: false,
-                    clear_depth_after: false,
+                    clear_depth: true,
                 }));
             }
             frame.tmesh_instances[0].tint[3] = if transparent { 0.0 } else { 1.0 };
@@ -3793,7 +3789,7 @@ mod tests {
                 }),
             )),
         };
-        let run = |geometry, instance_start, depth_test, clear_depth_after| {
+        let run = |geometry, instance_start, depth_test, clear_depth| {
             DrawOp::TexturedMesh(TexturedMeshRun {
                 geometry,
                 instance_start,
@@ -3802,12 +3798,11 @@ mod tests {
                 blend: BlendMode::Alpha,
                 camera: 0,
                 depth_test,
-                clear_depth: false,
-                clear_depth_after,
+                clear_depth,
             })
         };
-        // A near green model in the first stripe requests a reset, a full-screen
-        // blue quad ignores depth, and a farther red model must pass the reset.
+        // A near green model in the first stripe, a full-screen blue quad that
+        // ignores depth, and a farther red model that must pass its reset.
         let frame = RenderFrame {
             clear_color: [0.0; 4],
             render_targets: vec![],
@@ -3832,9 +3827,9 @@ mod tests {
             })
             .to_vec(),
             ops: vec![
-                run(0, 2, true, true),
+                run(0, 2, true, false),
                 run(1, 1, false, false),
-                run(0, 0, true, false),
+                run(0, 0, true, true),
             ],
         };
         for staged in [false, true] {
@@ -4504,7 +4499,6 @@ mod tests {
                     camera: 0,
                     depth_test: false,
                     clear_depth: false,
-                    clear_depth_after: false,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
                     geometry: 0,
@@ -4515,7 +4509,6 @@ mod tests {
                     camera: 0,
                     depth_test: false,
                     clear_depth: false,
-                    clear_depth_after: false,
                 }),
                 DrawOp::Sprite(SpriteRun {
                     instance_start: 3,

@@ -1486,12 +1486,8 @@ fn draw_modern_offscreen_pass(
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_depth = None;
 
-        let mut clear_after = false;
         for op in frame.ops.iter().copied() {
-            let reset_depth =
-                clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-            clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-            if reset_depth {
+            if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                 gl.clear(glow::DEPTH_BUFFER_BIT);
             }
             match op {
@@ -1755,12 +1751,8 @@ fn draw_legacy_offscreen_pass(
         let mut vertices = 0u64;
         let mut last_blend = None;
         let mut last_depth = None;
-        let mut clear_after = false;
         for op in frame.ops.iter().copied() {
-            let reset_depth =
-                clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-            clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-            if reset_depth {
+            if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                 gl.clear(glow::DEPTH_BUFFER_BIT);
             }
             match op {
@@ -2205,12 +2197,8 @@ pub fn draw(
                 .tmesh_instance_vbo
                 .expect("modern OpenGL path creates a textured mesh instance VBO");
 
-            let mut clear_after = false;
             for op in frame.ops.iter().copied() {
-                let reset_depth =
-                    clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-                clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-                if reset_depth {
+                if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                     gl.clear(glow::DEPTH_BUFFER_BIT);
                 }
                 match op {
@@ -2581,12 +2569,8 @@ pub fn draw(
                 .legacy_tmesh_uniforms
                 .expect("legacy OpenGL path creates textured mesh uniforms");
 
-            let mut clear_after = false;
             for op in frame.ops.iter().copied() {
-                let reset_depth =
-                    clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-                clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-                if reset_depth {
+                if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                     gl.clear(glow::DEPTH_BUFFER_BIT);
                 }
                 match op {

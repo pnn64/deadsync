@@ -105,7 +105,6 @@ pub fn fixture(kind: usize, blend: BlendMode, depth: bool, glow: bool) -> Render
                     camera,
                     depth_test: depth,
                     clear_depth: false,
-                    clear_depth_after: false,
                 }));
             }
         }

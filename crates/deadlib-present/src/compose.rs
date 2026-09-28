@@ -1770,7 +1770,12 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
     let mut sprite_stats = SpriteGatherStats::default();
     let mut previous_sprite = None;
     let mut cursor = 0usize;
+    // Isolated models request depth resets around themselves. Every backend
+    // starts a pass with cleared depth, and only depth-tested runs read or write
+    // it, so a request resolves to one reset before the next depth-tested run,
+    // emitted only when an earlier depth-tested run may have written depth.
     let mut pending_clear = false;
+    let mut depth_written = false;
     while cursor < builder.items.len() {
         let item = builder.items[cursor];
         let texture_handle = item.texture_handle;
@@ -1887,7 +1892,13 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     cursor += 1;
                     continue;
                 }
-                let clear_depth = std::mem::take(&mut pending_clear);
+                let clear_depth = if depth_test {
+                    let clear = std::mem::take(&mut pending_clear) && depth_written;
+                    depth_written = true;
+                    clear
+                } else {
+                    false
+                };
                 let mut clear_depth_after = clear_depth_after;
                 let identity = tmesh_identity(&vertices, geom_cache_key);
                 let geometry = push_tmesh_geometry(
@@ -1937,8 +1948,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     camera,
                     depth_test,
                     clear_depth,
-                    clear_depth_after,
                 }));
+                pending_clear |= clear_depth_after;
                 if TRACK_SPRITE_RUNS {
                     previous_sprite = None;
                 }
@@ -9611,7 +9622,6 @@ mod tests {
                     assert_eq!(expected_run.camera, actual_run.camera);
                     assert_eq!(expected_run.depth_test, actual_run.depth_test);
                     assert_eq!(expected_run.clear_depth, actual_run.clear_depth);
-                    assert_eq!(expected_run.clear_depth_after, actual_run.clear_depth_after);
                     let expected_geometry =
                         &expected.tmesh_geometries[expected_run.geometry as usize];
                     let actual_geometry = &actual.tmesh_geometries[actual_run.geometry as usize];
@@ -13750,9 +13760,133 @@ mod tests {
                 let DrawOp::TexturedMesh(run) = op else {
                     panic!("model run")
                 };
-                assert!(run.clear_depth && run.clear_depth_after && run.depth_test);
+                assert!(run.depth_test);
+                // The pass starts with cleared depth; only the second model resets it.
+                assert_eq!(run.clear_depth, i > 0);
                 assert_eq!(run.instance_count, if i == 0 { 2 * passes } else { passes });
             }
+        }
+    }
+
+    #[test]
+    fn depth_resets_follow_depth_writes() {
+        use deadlib_render_core::TexturedMeshVertices::{Shared, Transient};
+        let mut seed = 0x9e37_79b9_u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed
+        };
+        let shared: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex::default(); 3]);
+        for case in 0..2048 {
+            let mut builder = FrameBuilder::default();
+            let mut sprites = Vec::new();
+            // Producers request resets before and after items. Each depth-tested
+            // item must see exactly the writes since the last requested reset.
+            let mut expected = Vec::new();
+            let (mut written, mut reset) = (Vec::new(), false);
+            for id in 0..next() % 24 {
+                let kind = next() % 6;
+                let depth_test = next() % 3 != 0;
+                let clear_depth = next() % 4 == 0;
+                let clear_depth_after = next() % 4 == 0;
+                let instanced = next() % 2 == 0;
+                let (texture_handle, object_type) = if kind == 0 {
+                    sprites.push(SpriteInstanceRaw {
+                        center: [0.0, 0.0, 0.0, 1.0],
+                        size: [1.0; 2],
+                        rot_sin_cos: [0.0, 1.0],
+                        tint: [1.0; 4],
+                        uv_scale: [1.0; 2],
+                        uv_offset: [0.0; 2],
+                        local_offset: [0.0; 2],
+                        local_offset_rot_sin_cos: [0.0, 1.0],
+                        edge_fade: [0.0; 4],
+                        texture_mask: 0.0,
+                    });
+                    (1, EditablePayload::Sprite(sprites.len() as u32 - 1))
+                } else {
+                    // Kind 1 is skipped (empty or untextured); its requests remain.
+                    let empty = kind == 1 && next() % 2 == 0;
+                    let vertices = if empty {
+                        Transient(Vec::new())
+                    } else if instanced {
+                        Shared(Arc::clone(&shared))
+                    } else {
+                        Transient(vec![TexturedMeshVertex::default(); 3])
+                    };
+                    let texture_handle = if kind == 1 && !empty {
+                        INVALID_TEXTURE_HANDLE
+                    } else {
+                        1
+                    };
+                    let payload = EditablePayload::TexturedMesh {
+                        instance: TexturedMeshInstanceRaw::new(
+                            Matrix4::from_translation(Vector3::new(id as f32, 0.0, 0.0)),
+                            [1.0; 4],
+                            [1.0; 2],
+                            [0.0; 2],
+                            [0.0; 2],
+                            false,
+                        ),
+                        vertices,
+                        // Cache keys identify their vertices, so only shared meshes use one.
+                        geom_cache_key: if instanced && !empty {
+                            7
+                        } else {
+                            INVALID_TMESH_CACHE_KEY
+                        },
+                        depth_test,
+                        clear_depth,
+                        clear_depth_after,
+                    };
+                    (texture_handle, payload)
+                };
+                builder.push(EditableDraw {
+                    texture_handle,
+                    order: id,
+                    z: 0,
+                    blend: BlendMode::Alpha,
+                    camera: 0,
+                    object_type,
+                });
+                if kind == 0 {
+                    continue;
+                }
+                reset |= clear_depth;
+                if kind > 1 && depth_test {
+                    if std::mem::take(&mut reset) {
+                        written.clear();
+                    }
+                    expected.push((id, written.clone()));
+                    written.push(id);
+                }
+                reset |= clear_depth_after;
+            }
+            let frame = finish_test_builder(builder, sprites);
+            let mut actual = Vec::new();
+            let mut written = Vec::new();
+            for op in &frame.ops {
+                let DrawOp::TexturedMesh(run) = op else {
+                    continue;
+                };
+                if run.clear_depth {
+                    assert!(run.depth_test, "case {case}: reset without depth test");
+                    assert!(!written.is_empty(), "case {case}: redundant reset");
+                    written.clear();
+                }
+                if !run.depth_test {
+                    continue;
+                }
+                let start = run.instance_start as usize;
+                for instance in &frame.tmesh_instances[start..start + run.instance_count as usize] {
+                    let id = instance.model_col3[0] as u32;
+                    actual.push((id, written.clone()));
+                    written.push(id);
+                }
+            }
+            assert_eq!(actual, expected, "case {case}");
         }
     }
 

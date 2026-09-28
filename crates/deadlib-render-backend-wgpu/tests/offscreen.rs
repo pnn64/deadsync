@@ -61,7 +61,6 @@ fn mesh_op(geometry: u32, instance: u32, camera: u8) -> DrawOp {
         camera,
         depth_test: true,
         clear_depth: false,
-        clear_depth_after: false,
     })
 }
 
@@ -251,7 +250,6 @@ fn rotated_field(angle: f32, offscreen: bool) -> (RenderFrame, Mat4) {
             camera: 0,
             depth_test: true,
             clear_depth: false,
-            clear_depth_after: false,
         }),
     ];
     let frame = if offscreen {

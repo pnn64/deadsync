@@ -2320,12 +2320,8 @@ fn record_render_pass(
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_depth = false;
         let mut vertices_drawn = 0u64;
-        let mut clear_after = false;
         for op in pass.ops {
-            let reset_depth =
-                clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-            clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-            if reset_depth {
+            if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                 let clear = vk::ClearAttachment::default()
                     .aspect_mask(vk::ImageAspectFlags::DEPTH)
                     .clear_value(vk::ClearValue {
@@ -2953,12 +2949,8 @@ pub fn draw(
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_depth = false;
         let mut vertices_drawn = 0u64;
-        let mut clear_after = false;
         for op in &frame.ops {
-            let reset_depth =
-                clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
-            clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
-            if reset_depth {
+            if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                 let clear = vk::ClearAttachment::default()
                     .aspect_mask(vk::ImageAspectFlags::DEPTH)
                     .clear_value(vk::ClearValue {
