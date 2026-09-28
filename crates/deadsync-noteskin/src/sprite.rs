@@ -134,6 +134,15 @@ pub trait NoteskinSlot: Sized {
 
     fn texture_key_shared(&self) -> Arc<str>;
     fn model(&self) -> Option<&ModelMesh>;
+    fn model_seconds_from_phase(&self, phase: f32) -> f32 {
+        phase
+    }
+    fn model_texture_mode(&self) -> u8 {
+        0
+    }
+    fn model_additive(&self, _seconds: f32) -> Option<(Arc<str>, [f32; 4])> {
+        None
+    }
     /// ITG Models cull backfaces; sprite cutouts retain two-sided drawing.
     fn model_cull_back(&self) -> bool {
         true
@@ -219,10 +228,12 @@ pub trait NoteskinSlot: Sized {
 pub fn model_vertex_for_sprite(def: &SpriteDefinition, mut vertex: ModelVertex) -> ModelVertex {
     if def.mirror_h {
         vertex.pos[0] = -vertex.pos[0];
+        vertex.normal[0] = -vertex.normal[0];
         vertex.uv[0] = 1.0 - vertex.uv[0];
     }
     if def.mirror_v {
         vertex.pos[1] = -vertex.pos[1];
+        vertex.normal[1] = -vertex.normal[1];
         vertex.uv[1] = 1.0 - vertex.uv[1];
     }
     vertex
@@ -1328,6 +1339,7 @@ mod tests {
     #[test]
     fn model_vertex_mirroring_preserves_depth_and_texture_scale() {
         let vertex = ModelVertex {
+            normal: [0.0, 0.0, 1.0],
             pos: [3.0, -5.0, 7.0],
             uv: [0.2, 0.75],
             tex_matrix_scale: [2.0, 4.0],

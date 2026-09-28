@@ -168,6 +168,7 @@ fn cutout_mesh(image: &image::RgbaImage, [x, y, w, h]: [u32; 4], size: [i32; 2])
         ] {
             let (u, v) = (px as f32 / w as f32, py as f32 / h as f32);
             vertices.push(ModelVertex {
+                normal: [0.0, 0.0, 1.0],
                 pos: [(u - 0.5) * width, (0.5 - v) * height, 0.0],
                 uv: [u, v],
                 tex_matrix_scale: [1.0; 2],

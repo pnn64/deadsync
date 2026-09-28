@@ -360,6 +360,12 @@ fn build_model_geometry<S: NoteskinSlot>(slot: &S) -> Arc<[TexturedMeshVertex]> 
     for &vertex in model.vertices.iter() {
         let vertex = model_vertex_for_sprite(slot.sprite_def(), vertex);
         vertices.push(TexturedMeshVertex {
+            normal: [
+                vertex.normal[0],
+                vertex.normal[1],
+                vertex.normal[2],
+                f32::from(slot.model_texture_mode()),
+            ],
             pos: vertex.pos,
             uv: vertex.uv,
             color: [1.0; 4],
@@ -483,6 +489,39 @@ fn sm_rotation_xyz(rot_x_deg: f32, rot_y_deg: f32, rot_z_deg: f32) -> Matrix4 {
     )
 }
 
+fn model_environment<S: NoteskinSlot>(
+    slot: &S,
+    affine: Matrix4,
+    seconds: f32,
+    uv_rect: [f32; 4],
+) -> Option<deadlib_present::actors::MeshEnvironment> {
+    if slot.model_texture_mode() == 0 {
+        return None;
+    }
+    let additive = slot.model_additive(seconds);
+    let (scale, _, shift) = slot.model_uv_params(uv_rect);
+    let (additive_texture, mut additive_uv) =
+        additive.map_or((None, [0.0, 0.0, 1.0, 1.0]), |(key, uv)| (Some(key), uv));
+    // Model::DrawPrimitives applies the diffuse texture matrix to both stages.
+    for axis in 0..2 {
+        let delta = if scale[axis].abs() > f32::EPSILON {
+            shift[axis] / scale[axis]
+        } else {
+            0.0
+        };
+        let span = additive_uv[axis + 2] - additive_uv[axis];
+        additive_uv[axis] += delta * span;
+        additive_uv[axis + 2] += delta * span;
+    }
+    Some(deadlib_present::actors::MeshEnvironment {
+        camera: None,
+        // The affine model coordinates are y-up; presentation places them y-down.
+        transform: Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)) * affine,
+        additive_texture,
+        additive_uv,
+    })
+}
+
 #[inline(always)]
 fn actor_from_vertices<S: NoteskinSlot>(
     slot: &S,
@@ -491,6 +530,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
     vertices: Arc<[TexturedMeshVertex]>,
     geom_cache_key: TMeshCacheKey,
     local_transform: Matrix4,
+    environment: Option<deadlib_present::actors::MeshEnvironment>,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -499,6 +539,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
     z: i16,
 ) -> Actor {
     Actor::TexturedMesh {
+        environment,
         align: [0.0, 0.0],
         offset: xy,
         world_z: 0.0,
@@ -530,6 +571,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
     vertices: Arc<[TexturedMeshVertex]>,
     geom_cache_key: TMeshCacheKey,
     local_transform: Matrix4,
+    environment: Option<deadlib_present::actors::MeshEnvironment>,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
@@ -537,6 +579,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
     z: i16,
 ) -> FlatTexturedMesh {
     FlatTexturedMesh {
+        environment,
         offset: xy,
         world_z: 0.0,
         local_transform,
@@ -587,6 +630,7 @@ fn actor_from_draw<S: NoteskinSlot>(
         vertices,
         deadlib_render_core::INVALID_TMESH_CACHE_KEY,
         local_transform,
+        model_environment(slot, affine, draw.texture_seconds, uv_rect),
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -641,6 +685,7 @@ pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
         vertices,
         geom_cache_key,
         local_transform,
+        model_environment(slot, affine, draw.texture_seconds, uv_rect),
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -680,6 +725,7 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
         vertices,
         geom_cache_key,
         local_transform,
+        model_environment(slot, affine, draw.texture_seconds, uv_rect),
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -718,6 +764,10 @@ pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry<S: Not
         vertices,
         geom_cache_key,
         local_transform,
+        model_environment(slot, affine, draw.texture_seconds, uv_rect).map(|mut environment| {
+            environment.transform = local_transform;
+            environment
+        }),
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -762,6 +812,7 @@ mod tests {
                 def: SpriteDefinition::default(),
                 model: Some(ModelMesh {
                     vertices: Arc::from([ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos: [2.0, 3.0, 4.0],
                         uv: [0.2, 0.3],
                         tex_matrix_scale: [5.0, 6.0],
@@ -930,6 +981,7 @@ mod tests {
         let (_, verts_b) = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [draw.pos[0], draw.pos[1], draw.pos[2]],
                 ..TexturedMeshVertex::default()
             }])

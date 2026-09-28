@@ -32,6 +32,7 @@ fn fixture(kind: &str, count: usize) -> Fixture {
         triangle
             .iter()
             .map(|v| renderer::TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [v.pos[0], v.pos[1], 0.0],
                 color: v.color,
                 uv: [0.5; 2],

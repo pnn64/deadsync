@@ -48,25 +48,18 @@ fn prewarm_noteskin_textures(
     noteskin: &Noteskin,
 ) {
     noteskin.for_each_slot(|slot| {
-        let key = slot.texture_key();
-        if insert_texture_key(seen, key) {
-            deadsync_assets::textures::ensure_texture_for_key(
-                assets,
-                backend,
-                key,
-                deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
-            );
-        }
-    });
-    noteskin.for_each_slot(|slot| {
-        if slot.model.is_some() {
-            prewarm_model_texture_key(
-                assets,
-                backend,
-                seen,
-                seen_model_textures,
-                slot.texture_key(),
-            );
+        for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
+            let key = texture_slot.texture_key();
+            if slot.model.is_some() {
+                prewarm_model_texture_key(assets, backend, seen, seen_model_textures, key);
+            } else if insert_texture_key(seen, key) {
+                deadsync_assets::textures::ensure_texture_for_key(
+                    assets,
+                    backend,
+                    key,
+                    deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
+                );
+            }
         }
     });
 }
@@ -159,25 +152,33 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                 }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
-                        prewarm_model_texture_key(
-                            assets,
-                            backend,
-                            &mut seen,
-                            &mut seen_model_textures,
-                            layer.texture_key.as_ref(),
-                        );
-                    }
-                }
-                SongLuaOverlayKind::NoteskinActor { slots } => {
-                    for slot in slots.iter() {
-                        if slot.model.is_some() {
+                        for key in std::iter::once(&layer.texture_key)
+                            .chain(layer.additive.as_ref().map(|(key, _)| key))
+                        {
                             prewarm_model_texture_key(
                                 assets,
                                 backend,
                                 &mut seen,
                                 &mut seen_model_textures,
-                                slot.texture_key(),
+                                key.as_ref(),
                             );
+                        }
+                    }
+                }
+                SongLuaOverlayKind::NoteskinActor { slots } => {
+                    for slot in slots.iter() {
+                        if slot.model.is_some() {
+                            for texture in
+                                std::iter::once(slot).chain(slot.model_additive.as_deref())
+                            {
+                                prewarm_model_texture_key(
+                                    assets,
+                                    backend,
+                                    &mut seen,
+                                    &mut seen_model_textures,
+                                    texture.texture_key(),
+                                );
+                            }
                         } else if insert_texture_key(&mut seen, slot.texture_key()) {
                             deadsync_assets::textures::ensure_texture_for_key(
                                 assets,

@@ -18,6 +18,7 @@ fn geometry(key: u64, count: usize, value: f32) -> TexturedMeshGeometry {
         cache_key: key,
         vertices: TexturedMeshVertices::Transient(vec![
             TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [value, 0.0, 0.0],
                 ..Default::default()
             };

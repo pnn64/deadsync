@@ -40,6 +40,7 @@ fn quad(bounds: [f32; 4], key: u64) -> TexturedMeshGeometry {
         [left, top],
     ]
     .map(|[x, y]| TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [x, y, 0.5],
         uv: [0.5; 2],
         color: [1.0; 4],
@@ -53,6 +54,7 @@ fn quad(bounds: [f32; 4], key: u64) -> TexturedMeshGeometry {
 
 fn mesh_op(geometry: u32, instance: u32, camera: u8) -> DrawOp {
     DrawOp::TexturedMesh(TexturedMeshRun {
+        additive_texture: 0,
         geometry,
         instance_start: instance,
         instance_count: 1,
@@ -242,6 +244,7 @@ fn rotated_field(angle: f32, offscreen: bool) -> (RenderFrame, Mat4) {
             camera: 0,
         }),
         DrawOp::TexturedMesh(TexturedMeshRun {
+            additive_texture: 0,
             geometry: 0,
             instance_start: 0,
             instance_count: 8,

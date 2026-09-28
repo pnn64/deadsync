@@ -521,6 +521,7 @@ mod tests {
             let mut slot = Self::sprite(key);
             slot.model = Some(ModelMesh {
                 vertices: Arc::from([ModelVertex {
+                    normal: [0.0, 0.0, 1.0],
                     pos: [0.0, 0.0, 0.0],
                     uv: [0.0, 0.0],
                     tex_matrix_scale: [1.0, 1.0],

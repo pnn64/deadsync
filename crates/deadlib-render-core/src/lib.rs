@@ -263,6 +263,10 @@ pub struct MeshVertex {
     bytemuck::Zeroable,
 )]
 pub struct TexturedMeshVertex {
+    /// Object-space normal; w selects texgen (bit 0 primary, bit 1 additive).
+    /// Bit 2 enables the secondary additive texture stage.
+    #[serde(default)]
+    pub normal: [f32; 4],
     pub pos: [f32; 3],
     pub uv: [f32; 2],
     pub color: [f32; 4],
@@ -273,12 +277,75 @@ impl Default for TexturedMeshVertex {
     #[inline(always)]
     fn default() -> Self {
         Self {
+            normal: [0.0; 4],
             pos: [0.0, 0.0, 0.0],
             uv: [0.0, 0.0],
             color: [0.0, 0.0, 0.0, 0.0],
             tex_matrix_scale: [1.0, 1.0],
         }
     }
+}
+
+/// Fixed-function GL_SPHERE_MAP, evaluated per vertex before interpolation.
+pub fn sphere_texture_uv(pos: [f32; 3], normal: [f32; 3], rows: [[f32; 4]; 3]) -> [f32; 2] {
+    let matrix = glam::Mat3::from_cols(
+        glam::Vec3::new(rows[0][0], rows[1][0], rows[2][0]),
+        glam::Vec3::new(rows[0][1], rows[1][1], rows[2][1]),
+        glam::Vec3::new(rows[0][2], rows[1][2], rows[2][2]),
+    );
+    let cofactor = glam::Mat3::from_cols(
+        matrix.y_axis.cross(matrix.z_axis),
+        matrix.z_axis.cross(matrix.x_axis),
+        matrix.x_axis.cross(matrix.y_axis),
+    );
+    let n =
+        (cofactor * glam::Vec3::from(normal) * matrix.determinant().signum()).normalize_or_zero();
+    let p = glam::Vec4::new(pos[0], pos[1], pos[2], 1.0);
+    let eye = glam::Vec3::new(
+        glam::Vec4::from(rows[0]).dot(p),
+        glam::Vec4::from(rows[1]).dot(p),
+        glam::Vec4::from(rows[2]).dot(p),
+    )
+    .normalize_or_zero();
+    let reflection = eye - 2.0 * n * eye.dot(n);
+    let denominator = (2.0 * (reflection + glam::Vec3::Z).length()).max(1e-20);
+    [
+        reflection.x / denominator + 0.5,
+        reflection.y / denominator + 0.5,
+    ]
+}
+
+/// The two independent coordinate-generation modes share the diffuse matrix.
+pub fn textured_mesh_uvs(
+    vertex: TexturedMeshVertex,
+    instance: TexturedMeshInstanceRaw,
+) -> [[f32; 2]; 2] {
+    let mode = if instance.texture_mask > 0.5 {
+        0
+    } else {
+        vertex.normal[3] as u8
+    };
+    let sphere = if mode & 3 != 0 {
+        sphere_texture_uv(
+            vertex.pos,
+            [vertex.normal[0], vertex.normal[1], vertex.normal[2]],
+            instance.sphere_rows,
+        )
+    } else {
+        vertex.uv
+    };
+    let uv = if mode & 1 != 0 { sphere } else { vertex.uv };
+    let additive = if mode & 2 != 0 { sphere } else { vertex.uv };
+    [
+        std::array::from_fn(|axis| {
+            uv[axis] * instance.uv_scale[axis]
+                + instance.uv_offset[axis]
+                + instance.uv_tex_shift[axis] * (vertex.tex_matrix_scale[axis] - 1.0)
+        }),
+        std::array::from_fn(|axis| {
+            additive[axis] * instance.additive_uv[axis] + instance.additive_uv[axis + 2]
+        }),
+    ]
 }
 
 #[derive(Clone)]
@@ -356,6 +423,14 @@ pub struct TexturedMeshInstanceRaw {
     /// Cull clockwise faces in clip space, independently of depth testing.
     #[serde(default)]
     pub cull_back: f32,
+    /// Affine object-to-eye transform, stored as rows for vertex attributes.
+    #[serde(default)]
+    pub sphere_rows: [[f32; 4]; 3],
+    /// Secondary texture scale.xy / offset.zw (shares the primary translation).
+    #[serde(default)]
+    pub additive_uv: [f32; 4],
+    #[serde(default)]
+    pub additive_texture: TextureHandle,
 }
 
 impl TexturedMeshInstanceRaw {
@@ -400,6 +475,9 @@ impl TexturedMeshInstanceRaw {
             uv_tex_shift,
             texture_mask: f32::from(u8::from(texture_mask)),
             cull_back: 0.0,
+            sphere_rows: [[0.0; 4]; 3],
+            additive_uv: [1.0, 1.0, 0.0, 0.0],
+            additive_texture: 0,
         }
     }
 

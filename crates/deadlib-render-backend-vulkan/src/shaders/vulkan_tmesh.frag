@@ -1,19 +1,24 @@
 #version 450
-
-layout(set = 0, binding = 0) uniform sampler2D u_tex;
-
 layout(location = 0) in vec2 v_uv;
 layout(location = 1) in vec4 v_color;
-layout(location = 2) flat in float v_texture_mask;
-layout(location = 3) flat in float v_cull_back;
-
-layout(location = 0) out vec4 outColor;
+layout(location = 2) in float v_texture_mask;
+layout(location = 3) in float v_cull_back;
+layout(location = 4) in vec2 v_additive_uv;
+layout(location = 5) in float v_additive;
+layout(set = 0, binding = 0) uniform sampler2D u_texture;
+layout(set = 1, binding = 0) uniform sampler2D u_additive;
+layout(location = 0) out vec4 out_color;
 
 void main() {
     if (v_cull_back > 0.5 && !gl_FrontFacing) discard;
-    vec4 texel = texture(u_tex, v_uv);
-    outColor = texel * v_color;
+    vec4 texel = texture(u_texture, v_uv);
+    vec4 color = texel * v_color;
     if (v_texture_mask > 0.5) {
-        outColor = vec4(v_color.rgb, texel.a * v_color.a);
+        color = vec4(v_color.rgb, texel.a * v_color.a);
+    } else if (v_additive > 0.5) {
+        vec4 reflection = texture(u_additive, v_additive_uv);
+        color = vec4(min(color.rgb + reflection.rgb, vec3(1.0)), color.a * reflection.a);
     }
+    if (color.a <= 1.0 / 256.0) discard;
+    out_color = color;
 }

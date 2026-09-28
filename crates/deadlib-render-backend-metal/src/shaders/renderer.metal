@@ -143,6 +143,7 @@ fragment float4 mesh_fragment(MeshOut in [[stage_in]])
 }
 
 struct TexturedMeshVertex {
+    packed_float4 normal;
     packed_float3 pos;
     packed_float2 uv;
     packed_float4 color;
@@ -160,9 +161,14 @@ struct TexturedMeshInstance {
     packed_float2 uv_tex_shift;
     float texture_mask;
     float cull_back;
+    packed_float4 sphere_rows[3];
+    packed_float4 additive_uv;
+    ulong additive_texture;
 };
 
 struct TexturedMeshOut {
+    float2 additive_uv;
+    float additive;
     float4 pos [[position]];
     float2 uv;
     float4 color;
@@ -187,7 +193,26 @@ vertex TexturedMeshOut textured_mesh_vertex(
     out.pos = proj * model * float4(float3(vertex_data.pos), 1.0);
     // Engine cameras use [-w, w] depth; Metal clips to [0, w].
     out.pos.z = (out.pos.z + out.pos.w) * 0.5;
-    out.uv = float2(vertex_data.uv) * float2(inst.uv_scale)
+    float2 primary = float2(vertex_data.uv);
+    float2 secondary = primary;
+    uint mode = uint(vertex_data.normal.w);
+    if ((mode & 3u) != 0u && inst.texture_mask < 0.5) {
+        float4 r0 = float4(inst.sphere_rows[0]);
+        float4 r1 = float4(inst.sphere_rows[1]);
+        float4 r2 = float4(inst.sphere_rows[2]);
+        float3x3 a = transpose(float3x3(r0.xyz, r1.xyz, r2.xyz));
+        float3x3 cof = float3x3(cross(a[1], a[2]), cross(a[2], a[0]), cross(a[0], a[1]));
+        float3 n = cof * float3(vertex_data.normal.xyz) * sign(dot(a[0], cof[0]));
+        float4 p = float4(float3(vertex_data.pos), 1.0);
+        float3 eye = float3(dot(r0, p), dot(r1, p), dot(r2, p));
+        float3 r = reflect(eye / max(length(eye), 1e-20f), n / max(length(n), 1e-20f));
+        float2 uv = r.xy / max(2.0f * length(r + float3(0.0, 0.0, 1.0)), 1e-20f) + 0.5;
+        if ((mode & 1u) != 0u) primary = uv;
+        if ((mode & 2u) != 0u) secondary = uv;
+    }
+    out.additive = float((mode & 4u) != 0u);
+    out.additive_uv = secondary * float2(inst.additive_uv.xy) + float2(inst.additive_uv.zw);
+    out.uv = primary * float2(inst.uv_scale)
         + float2(inst.uv_offset)
         + float2(inst.uv_tex_shift) * (float2(vertex_data.tex_matrix_scale) - float2(1.0));
     out.color = float4(vertex_data.color) * float4(inst.tint);
@@ -200,13 +225,18 @@ fragment float4 textured_mesh_fragment(
     TexturedMeshOut in [[stage_in]],
     bool front [[front_facing]],
     texture2d<float> tex [[texture(0)]],
-    sampler tex_sampler [[sampler(0)]])
+    sampler tex_sampler [[sampler(0)]],
+    texture2d<float> additive [[texture(1)]],
+    sampler additive_sampler [[sampler(1)]])
 {
     if (in.cull_back > 0.5 && !front) discard_fragment();
     float4 texel = tex.sample(tex_sampler, in.uv);
     float4 color = texel * in.color;
     if (in.texture_mask > 0.5) {
         color = float4(in.color.rgb, texel.a * in.color.a);
+    } else if (in.additive > 0.5) {
+        float4 reflection = additive.sample(additive_sampler, in.additive_uv);
+        color = float4(min(color.rgb + reflection.rgb, float3(1.0)), color.a * reflection.a);
     }
     if (color.a <= (1.0 / 256.0)) {
         discard_fragment();

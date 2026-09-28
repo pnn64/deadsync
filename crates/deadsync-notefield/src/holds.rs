@@ -1806,12 +1806,14 @@ pub(crate) const fn hold_strip_row_from_positions(
 ) -> [TexturedMeshVertex; 2] {
     [
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: left,
             uv: [u0, v],
             color,
             tex_matrix_scale: [1.0, 1.0],
         },
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: right,
             uv: [u1, v],
             color,
@@ -1835,6 +1837,7 @@ pub(crate) const fn hold_strip_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
@@ -1862,6 +1865,7 @@ pub(crate) const fn hold_strip_glow_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
@@ -1890,6 +1894,7 @@ const fn hold_reusable_strip_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
@@ -1917,6 +1922,7 @@ const fn hold_reusable_strip_glow_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
@@ -2077,6 +2083,7 @@ mod tests {
             Self {
                 model: Some(ModelMesh {
                     vertices: Arc::from([ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                         tex_matrix_scale: [1.0, 1.0],

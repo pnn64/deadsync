@@ -21,11 +21,13 @@ pub(super) fn preview_note_slots(
 pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
     let mut add = |slot: &SpriteSlot| {
-        let key = slot.texture_key_shared();
-        if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
-            *model |= slot.model.is_some();
-        } else {
-            textures.push((key, slot.model.is_some()));
+        for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
+            let key = texture_slot.texture_key_shared();
+            if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
+                *model |= slot.model.is_some();
+            } else {
+                textures.push((key, slot.model.is_some()));
+            }
         }
     };
     match part {

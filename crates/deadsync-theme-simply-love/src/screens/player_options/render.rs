@@ -1458,7 +1458,14 @@ fn draw_noteskin_note(
         draw_preview_slot(
             actors,
             slot,
-            preview_slot_draw(slot, elapsed, beat),
+            deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child {
+                    elapsed
+                } else {
+                    phase * slot.model_animation_length
+                },
+                ..preview_slot_draw(slot, elapsed, beat)
+            },
             center,
             [logical[0] * note_scale, logical[1] * note_scale],
             uv,
@@ -1580,12 +1587,16 @@ fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2], recenter
             Actor::TexturedMesh {
                 offset,
                 local_transform,
+                environment,
                 ..
             } => {
                 *offset = (glam::Vec2::from(center) + (glam::Vec2::from(*offset) - origin) * scale)
                     .to_array();
-                *local_transform =
-                    glam::Mat4::from_scale(glam::Vec3::new(scale, scale, 1.0)) * *local_transform;
+                let transform = glam::Mat4::from_scale(glam::Vec3::new(scale, scale, 1.0));
+                *local_transform = transform * *local_transform;
+                if let Some(environment) = environment {
+                    environment.transform = transform * environment.transform;
+                }
             }
             _ => {}
         }
@@ -1628,7 +1639,14 @@ fn draw_mine_preview(
         draw_preview_slot(
             actors,
             slot,
-            draw,
+            deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child {
+                    draw.texture_seconds
+                } else {
+                    phase * slot.model_animation_length
+                },
+                ..draw
+            },
             mine_center,
             [logical[0] * scale, target_height],
             uv,
@@ -1758,7 +1776,14 @@ fn draw_skin_part(
             draw_preview_slot(
                 actors,
                 slot,
-                preview_slot_draw(slot, elapsed, beat),
+                deadsync_noteskin::ModelDrawState {
+                    texture_seconds: if slot.actor_frame_child {
+                        elapsed
+                    } else {
+                        phase.map_or(elapsed, |phase| phase * slot.model_animation_length)
+                    },
+                    ..preview_slot_draw(slot, elapsed, beat)
+                },
                 center,
                 [logical[0] * scale, logical[1] * scale],
                 uv,

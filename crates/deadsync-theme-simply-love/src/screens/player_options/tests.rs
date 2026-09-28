@@ -2222,6 +2222,7 @@ pub(super) mod tests {
                     [left, top],
                 ]
                 .map(|[x, y]| ModelVertex {
+                    normal: [0.0, 0.0, 1.0],
                     pos: [x, y, depth],
                     uv: [0.5; 2],
                     tex_matrix_scale: [1.0; 2],

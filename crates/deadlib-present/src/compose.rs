@@ -1927,6 +1927,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                         .as_ref()
                         .filter(|payload| {
                             !payload.clear_depth
+                                && payload.instance.additive_texture == instance.additive_texture
                                 && payload.depth_test == depth_test
                                 && tmesh_identity(&payload.vertices, payload.geom_cache_key)
                                     == identity
@@ -1939,6 +1940,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     object_count += 1;
                 }
                 ops.push(renderer::DrawOp::TexturedMesh(renderer::TexturedMeshRun {
+                    additive_texture: instance.additive_texture,
                     geometry,
                     instance_start,
                     instance_count: saturating_u32(tmesh_instances.len())
@@ -4551,24 +4553,28 @@ fn push_text_mesh_quad_vertices(
     let tex_matrix_scale = [1.0, 1.0];
 
     let top_left = renderer::TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [x0, y0, 0.0],
         uv: [u0, v0],
         tex_matrix_scale,
         color,
     };
     let bottom_left = renderer::TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [x0, y1, 0.0],
         uv: [u0, v1],
         tex_matrix_scale,
         color,
     };
     let bottom_right = renderer::TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [x1, y1, 0.0],
         uv: [u1, v1],
         tex_matrix_scale,
         color,
     };
     let top_right = renderer::TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [x1, y0, 0.0],
         uv: [u1, v0],
         tex_matrix_scale,
@@ -4816,6 +4822,7 @@ fn push_transient_text_mesh_quad(
         }
     }
     let corners: [_; 4] = std::array::from_fn(|corner| renderer::TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: positions[corner],
         uv: uvs[corner],
         tex_matrix_scale: [1.0, 1.0],
@@ -5999,6 +6006,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             offset: mesh.offset,
                             world_z: mesh.world_z,
                             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                            environment: mesh.environment.as_ref(),
                             local_transform: mesh.local_transform,
                             texture: &mesh.texture,
                             tint: tints.apply(mesh.tint),
@@ -6020,6 +6028,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                         m,
                         base_z,
                         camera,
+                        cameras.get(camera as usize),
                         style,
                         x_fold,
                         order_counter,
@@ -6373,6 +6382,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
 }
 
 struct TexturedMeshActorView<'a> {
+    environment: Option<&'a actors::MeshEnvironment>,
     align: [f32; 2],
     offset: [f32; 2],
     world_z: f32,
@@ -6516,7 +6526,13 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         }
         _ => unreachable!("textured mesh fields were matched above"),
     };
+    let environment = match actor {
+        actors::Actor::TexturedMesh { environment, .. }
+        | actors::Actor::ReusableTexturedMesh { environment, .. } => environment.as_ref(),
+        _ => None,
+    };
     Some(TexturedMeshActorView {
+        environment,
         align,
         offset,
         world_z,
@@ -6540,6 +6556,32 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
     })
 }
 
+/// Recover the eye-space camera from its projection. Menu cameras are ITG's
+/// identity view in top-left screen coordinates. Perspective rows separate
+/// the view basis from the off-axis frustum before normals are transformed.
+fn sphere_view(camera: Option<&Matrix4>, m: &Metrics) -> Matrix4 {
+    let screen = Matrix4::from_cols(
+        Vector4::X,
+        -Vector4::Y,
+        Vector4::Z,
+        Vector4::new(-m.left, m.top, 0.0, 1.0),
+    );
+    let Some(camera) = camera else { return screen };
+    let z = -camera.row(3);
+    let length = z.truncate().length();
+    if length <= f32::EPSILON {
+        return screen;
+    }
+    let z = z / length;
+    let row_x = camera.row(0) / length;
+    let row_y = camera.row(1) / length;
+    let x = row_x - z * row_x.truncate().dot(z.truncate());
+    let y = row_y - z * row_y.truncate().dot(z.truncate());
+    let x = x / x.truncate().length().max(f32::EPSILON);
+    let y = -y / y.truncate().length().max(f32::EPSILON);
+    Matrix4::from_cols(x, y, z, Vector4::W).transpose()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     mesh: TexturedMeshActorView<'_>,
@@ -6547,6 +6589,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     m: &Metrics,
     base_z: i16,
     camera: u8,
+    camera_matrix: Option<&Matrix4>,
     style: ComposeStyle,
     x_fold: Option<ActorXFold>,
     order_counter: &mut u32,
@@ -6574,6 +6617,28 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let texture_key = mesh.texture.as_ref();
     let texture_key_ptr = str_ptr(texture_key);
     let texture_handle = texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
+    let mut sphere_rows = [[0.0; 4]; 3];
+    let mut additive_texture = 0;
+    let mut additive_uv = [1.0, 1.0, 0.0, 0.0];
+    if let Some(environment) = mesh.environment {
+        let placement = Matrix4::from_translation(Vector3::new(base_x, base_y, mesh.world_z))
+            * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+        let view = environment
+            .camera
+            .filter(|(projection, _)| camera_matrix == Some(projection))
+            .map_or_else(|| sphere_view(camera_matrix, m), |(_, view)| view);
+        let eye = view * placement * environment.transform;
+        sphere_rows = [
+            eye.row(0).to_array(),
+            eye.row(1).to_array(),
+            eye.row(2).to_array(),
+        ];
+        if let Some(key) = &environment.additive_texture {
+            additive_texture = texture_cache.texture_handle(texture_ctx, str_ptr(key), key);
+        }
+        let uv = environment.additive_uv;
+        additive_uv = [uv[2] - uv[0], uv[3] - uv[1], uv[0], uv[1]];
+    }
     let actor_blend = style.blend.unwrap_or(mesh.blend);
     let layer = base_z.saturating_add(mesh.z);
     let base_order = *order_counter;
@@ -6588,6 +6653,9 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             camera,
             TexturedMeshPayload {
                 instance: renderer::TexturedMeshInstanceRaw {
+                    sphere_rows,
+                    additive_texture,
+                    additive_uv,
                     cull_back: f32::from(mesh.cull_back),
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
@@ -6667,6 +6735,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             m,
             base_z,
             camera,
+            cameras.get(camera as usize),
             style,
             x_fold,
             order_counter,
@@ -8168,36 +8237,42 @@ fn skewed_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
         Arc::from(
             [
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [-0.5, 0.5, 0.0],
                     uv: [0.0, 0.0],
                     color: white,
                     tex_matrix_scale,
                 },
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [0.5, 0.5, 0.0],
                     uv: [1.0, 0.0],
                     color: white,
                     tex_matrix_scale,
                 },
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [0.5, -0.5, 0.0],
                     uv: [1.0, 1.0],
                     color: white,
                     tex_matrix_scale,
                 },
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [-0.5, 0.5, 0.0],
                     uv: [0.0, 0.0],
                     color: white,
                     tex_matrix_scale,
                 },
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [0.5, -0.5, 0.0],
                     uv: [1.0, 1.0],
                     color: white,
                     tex_matrix_scale,
                 },
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [-0.5, -0.5, 0.0],
                     uv: [0.0, 1.0],
                     color: white,
@@ -9266,6 +9341,7 @@ fn clip_textured_mesh_to_world_rect_with(
                     (p2, uv2, tri[2].color),
                 ]
                 .map(|(pos, uv, color)| renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [pos[0], pos[1], 0.0],
                     uv,
                     tex_matrix_scale: [1.0, 1.0],
@@ -9303,6 +9379,7 @@ fn clip_textured_mesh_to_world_rect_with(
         while i + 1 < clipped.len() {
             out.extend([base, clipped[i], clipped[i + 1]].map(|vertex| {
                 renderer::TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos: [vertex.pos[0], vertex.pos[1], 0.0],
                     uv: vertex.uv,
                     tex_matrix_scale: [1.0, 1.0],
@@ -9394,6 +9471,7 @@ fn clip_rotated_sprite_to_world_rect(
     while i + 1 < clipped.len() {
         for v in [base, clipped[i], clipped[i + 1]] {
             out.push(renderer::TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [v.pos[0], v.pos[1], 0.0],
                 uv: v.uv,
                 tex_matrix_scale: [1.0, 1.0],
@@ -10046,6 +10124,7 @@ mod tests {
                 instance,
                 vertices: deadlib_render_core::TexturedMeshVertices::Transient(vec![
                     TexturedMeshVertex {
+                        normal: [0.0; 4],
                         pos: [x, 0.0, 0.0],
                         ..TexturedMeshVertex::default()
                     },
@@ -10370,21 +10449,31 @@ mod tests {
     #[test]
     fn flat_draw_tail_matches_actor_render_frame() {
         let view_proj = Matrix4::from_translation(Vector3::new(3.0, 4.0, 5.0));
+        let eye = Matrix4::from_rotation_x(0.3) * Matrix4::from_scale(Vector3::new(0.9, -0.9, 1.0));
+        let environment = crate::actors::MeshEnvironment {
+            camera: Some((view_proj, eye)),
+            transform: Matrix4::from_rotation_y(0.7),
+            additive_texture: Some(Arc::from("reflection.png")),
+            additive_uv: [0.0, 0.0, 1.0, 1.0],
+        };
         let source = SpriteSource::static_texture("flat-note.png");
         let vertices: Arc<[TexturedMeshVertex]> = Arc::from([
             TexturedMeshVertex {
+                normal: [0.0, 0.0, 1.0, 6.0],
                 pos: [-1.0, -1.0, 0.0],
                 uv: [0.0, 0.0],
                 tex_matrix_scale: [1.0, 1.0],
                 color: [1.0; 4],
             },
             TexturedMeshVertex {
+                normal: [0.0, 0.0, 1.0, 6.0],
                 pos: [1.0, -1.0, 0.0],
                 uv: [1.0, 0.0],
                 tex_matrix_scale: [1.0, 1.0],
                 color: [1.0; 4],
             },
             TexturedMeshVertex {
+                normal: [0.0, 0.0, 1.0, 6.0],
                 pos: [0.0, 1.0, 0.0],
                 uv: [0.5, 1.0],
                 tex_matrix_scale: [1.0, 1.0],
@@ -10408,6 +10497,7 @@ mod tests {
             z: 8,
         };
         let mesh = FlatTexturedMesh {
+            environment: Some(environment.clone()),
             offset: [16.0, 20.0],
             world_z: 9.0,
             local_transform: Matrix4::from_rotation_z(0.25),
@@ -10467,6 +10557,7 @@ mod tests {
             effect: EffectState::default(),
         };
         let actor_mesh = Actor::TexturedMesh {
+            environment: Some(environment.clone()),
             align: [0.0, 0.0],
             offset: mesh.offset,
             world_z: mesh.world_z,
@@ -10535,6 +10626,26 @@ mod tests {
 
         // Both diffuse and glow passes retain culling through flat draws.
         assert_eq!(actual.tmesh_instances.len(), 4);
+        let expected_eye = eye
+            * Matrix4::from_translation(Vector3::new(16.0, 80.0, 9.0))
+            * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
+            * environment.transform;
+        for instance in &actual.tmesh_instances {
+            if instance.texture_mask > 0.5 {
+                assert_eq!(instance.sphere_rows, [[0.0; 4]; 3]);
+                assert_eq!(instance.additive_texture, 0);
+            } else {
+                assert_eq!(
+                    instance.sphere_rows,
+                    [
+                        expected_eye.row(0).to_array(),
+                        expected_eye.row(1).to_array(),
+                        expected_eye.row(2).to_array()
+                    ]
+                );
+                assert_ne!(instance.additive_texture, 0);
+            }
+        }
         assert!(actual.tmesh_instances.iter().all(|i| i.cull_back == 1.0));
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
@@ -11937,6 +12048,7 @@ mod tests {
     #[test]
     fn single_mask_textured_mesh_matches_independent_bounds_clipping() {
         let textured_mesh_vertex = |pos| TexturedMeshVertex {
+            normal: [0.0; 4],
             pos,
             ..TexturedMeshVertex::default()
         };
@@ -13514,6 +13626,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = Actor::TexturedMesh {
+            environment: None,
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
             world_z: 0.0,
@@ -13715,6 +13828,7 @@ mod tests {
         };
         for alpha in [0.0, 1.0] {
             let mesh = Actor::TexturedMesh {
+                environment: None,
                 align: [0.0; 2],
                 offset: [0.0; 2],
                 world_z: 0.0,
@@ -13900,6 +14014,7 @@ mod tests {
         };
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let actor = Actor::ReusableTexturedMesh {
+            environment: None,
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             world_z: 0.0,
@@ -13949,6 +14064,7 @@ mod tests {
         };
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let draws = [FlatDraw::TexturedMesh(FlatTexturedMesh {
+            environment: None,
             offset: [0.0, 0.0],
             world_z: 0.0,
             local_transform: Matrix4::IDENTITY,
@@ -14387,6 +14503,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = FlatTexturedMesh {
+            environment: None,
             offset: [0.0; 2],
             world_z: 0.0,
             local_transform: Matrix4::IDENTITY,
@@ -14495,6 +14612,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = Actor::TexturedMesh {
+            environment: None,
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             world_z: 0.0,

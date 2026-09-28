@@ -16,6 +16,7 @@ fn quad() -> Vec<renderer::TexturedMeshVertex> {
         [-4.0, 4.0],
     ]
     .map(|p| renderer::TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [p[0], p[1], 0.0],
         uv: [(p[0] + 4.0) / 8.0, (p[1] + 4.0) / 8.0],
         color: [0.25, 0.5, 0.75, 1.0],

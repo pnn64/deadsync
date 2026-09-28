@@ -160,6 +160,7 @@ pub(super) fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     object_count += 1;
                 }
                 ops.push(renderer::DrawOp::TexturedMesh(renderer::TexturedMeshRun {
+                    additive_texture: 0,
                     geometry,
                     instance_start,
                     instance_count: saturating_u32(tmesh_instances.len())

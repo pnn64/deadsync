@@ -183,21 +183,23 @@ const SPRITE_ATTRIBS: [(u32, &str); 12] = [
 
 const MESH_ATTRIBS: [(u32, &str); 2] = [(0, "a_pos"), (1, "a_color")];
 
-const TMESH_ATTRIBS: [(u32, &str); 14] = [
+const TMESH_ATTRIBS: [(u32, &str); 16] = [
     (0, "a_pos"),
     (1, "a_uv"),
     (2, "a_color"),
     (3, "a_tex_matrix_scale"),
-    (4, "i_model_col0"),
-    (5, "i_model_col1"),
-    (6, "i_model_col2"),
-    (7, "i_model_col3"),
-    (8, "i_tint"),
-    (9, "i_uv_scale"),
-    (10, "i_uv_offset"),
-    (11, "i_uv_tex_shift"),
-    (12, "i_texture_mask"),
-    (13, "i_cull_back"),
+    (4, "a_normal"),
+    (5, "i_model_col0"),
+    (6, "i_model_col1"),
+    (7, "i_model_col2"),
+    (8, "i_model_col3"),
+    (9, "i_tint"),
+    (10, "i_uv_params"),
+    (11, "i_flags"),
+    (12, "i_sphere_row0"),
+    (13, "i_sphere_row1"),
+    (14, "i_sphere_row2"),
+    (15, "i_additive_uv"),
 ];
 
 // A handle to one RGBA texture or three planar video textures on the GPU. The
@@ -271,6 +273,8 @@ struct LegacySpriteUniforms {
 
 #[derive(Clone, Copy)]
 struct LegacyTMeshUniforms {
+    sphere_rows: [UniformLocation; 3],
+    additive_uv: UniformLocation,
     model: UniformLocation,
     tint: UniformLocation,
     uv_scale: UniformLocation,
@@ -582,97 +586,16 @@ pub fn init(
         gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
         if let Some(instance_vbo) = instance_vbo {
-            // a_pos (location 0), a_uv (location 1), a_color (location 2), a_tex_matrix_scale (location 3)
-            let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-            gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_f32(
-                1,
-                2,
-                glow::FLOAT,
-                false,
-                stride,
-                (3 * std::mem::size_of::<f32>()) as i32,
-            );
-            gl.enable_vertex_attrib_array(2);
-            gl.vertex_attrib_pointer_f32(
-                2,
-                4,
-                glow::FLOAT,
-                false,
-                stride,
-                (5 * std::mem::size_of::<f32>()) as i32,
-            );
-            gl.enable_vertex_attrib_array(3);
-            gl.vertex_attrib_pointer_f32(
-                3,
-                2,
-                glow::FLOAT,
-                false,
-                stride,
-                (9 * std::mem::size_of::<f32>()) as i32,
-            );
-
-            // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
-            // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask/i_cull_back (9..13)
+            for index in 0..5 {
+                gl.enable_vertex_attrib_array(index);
+            }
+            bind_tmesh_vertices(&gl, mem::size_of::<TexturedMeshVertex>() as i32);
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
-            gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
-
-            let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-            let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-            let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
-            gl.enable_vertex_attrib_array(4);
-            gl.vertex_attrib_pointer_f32(4, 4, glow::FLOAT, false, inst_stride, 0);
-            gl.vertex_attrib_divisor(4, 1);
-            gl.enable_vertex_attrib_array(5);
-            gl.vertex_attrib_pointer_f32(5, 4, glow::FLOAT, false, inst_stride, col_size);
-            gl.vertex_attrib_divisor(5, 1);
-            gl.enable_vertex_attrib_array(6);
-            gl.vertex_attrib_pointer_f32(6, 4, glow::FLOAT, false, inst_stride, 2 * col_size);
-            gl.vertex_attrib_divisor(6, 1);
-            gl.enable_vertex_attrib_array(7);
-            gl.vertex_attrib_pointer_f32(7, 4, glow::FLOAT, false, inst_stride, 3 * col_size);
-            gl.vertex_attrib_divisor(7, 1);
-            gl.enable_vertex_attrib_array(8);
-            gl.vertex_attrib_pointer_f32(8, 4, glow::FLOAT, false, inst_stride, 4 * col_size);
-            gl.vertex_attrib_divisor(8, 1);
-            gl.enable_vertex_attrib_array(9);
-            gl.vertex_attrib_pointer_f32(9, 2, glow::FLOAT, false, inst_stride, 5 * col_size);
-            gl.vertex_attrib_divisor(9, 1);
-            gl.enable_vertex_attrib_array(10);
-            gl.vertex_attrib_pointer_f32(
-                10,
-                2,
-                glow::FLOAT,
-                false,
-                inst_stride,
-                5 * col_size + uv_size,
-            );
-            gl.vertex_attrib_divisor(10, 1);
-            gl.enable_vertex_attrib_array(11);
-            gl.vertex_attrib_pointer_f32(
-                11,
-                2,
-                glow::FLOAT,
-                false,
-                inst_stride,
-                5 * col_size + 2 * uv_size,
-            );
-            gl.vertex_attrib_divisor(11, 1);
-            gl.enable_vertex_attrib_array(12);
-            gl.vertex_attrib_pointer_f32(
-                12,
-                1,
-                glow::FLOAT,
-                false,
-                inst_stride,
-                5 * col_size + 3 * uv_size,
-            );
-            gl.vertex_attrib_divisor(12, 1);
-            gl.enable_vertex_attrib_array(13);
-            gl.vertex_attrib_pointer_f32(13, 1, glow::FLOAT, false, inst_stride, 108);
-            gl.vertex_attrib_divisor(13, 1);
+            for index in 5..16 {
+                gl.enable_vertex_attrib_array(index);
+                gl.vertex_attrib_divisor(index, 1);
+            }
+            bind_tmesh_instances(&gl, 0);
 
             gl.bind_vertex_array(None);
         }
@@ -721,6 +644,11 @@ pub fn init(
         gl.uniform_1_i32(Some(&texture_yuv_location), 0);
         gl.use_program(Some(tmesh_program));
         gl.uniform_1_i32(Some(&tmesh_texture_location), 0);
+        gl.uniform_1_i32(
+            gl.get_uniform_location(tmesh_program, "u_additive")
+                .as_ref(),
+            1,
+        );
         gl.use_program(None);
     }
 
@@ -1498,6 +1426,8 @@ fn draw_modern_offscreen_pass(
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(shared_vao));
                         last_prog = Some(0);
+                        // Mesh materials can replace the video U-plane binding.
+                        last_bound_tex = None;
                     }
                     if !state.base_instance
                         && last_sprite_instance_start != Some(run.instance_start)
@@ -1617,50 +1547,14 @@ fn draw_modern_offscreen_pass(
                             continue;
                         };
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
-                        for (location, size, offset) in [
-                            (0, 3, 0),
-                            (1, 2, 3 * mem::size_of::<f32>() as i32),
-                            (2, 4, 5 * mem::size_of::<f32>() as i32),
-                            (3, 2, 9 * mem::size_of::<f32>() as i32),
-                        ] {
-                            gl.vertex_attrib_pointer_f32(
-                                location,
-                                size,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                offset,
-                            );
-                        }
+                        bind_tmesh_vertices(gl, stride);
                     }
                     if !state.base_instance && last_tmesh_instance_start != Some(run.instance_start)
                     {
                         let stride = mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-                        let col = (4 * mem::size_of::<f32>()) as i32;
-                        let uv = (2 * mem::size_of::<f32>()) as i32;
                         let base = run.instance_start as i32 * stride;
                         gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
-                        for (location, size, offset) in [
-                            (4, 4, 0),
-                            (5, 4, col),
-                            (6, 4, 2 * col),
-                            (7, 4, 3 * col),
-                            (8, 4, 4 * col),
-                            (9, 2, 5 * col),
-                            (10, 2, 5 * col + uv),
-                            (11, 2, 5 * col + 2 * uv),
-                            (12, 1, 5 * col + 3 * uv),
-                            (13, 1, 108),
-                        ] {
-                            gl.vertex_attrib_pointer_f32(
-                                location,
-                                size,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                base + offset,
-                            );
-                        }
+                        bind_tmesh_instances(gl, base);
                         last_tmesh_instance_start = Some(run.instance_start);
                     }
                     if last_cameras[2].update_required(run.camera) {
@@ -1681,6 +1575,11 @@ fn draw_modern_offscreen_pass(
                         last_bound_tex = Some(primary);
                     }
                     apply_render_target_filter(gl, texture, run.texture_handle);
+                    let additive =
+                        resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                    gl.active_texture(glow::TEXTURE1);
+                    gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                    gl.active_texture(glow::TEXTURE0);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     if state.base_instance {
@@ -1917,31 +1816,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(buffer));
-                    gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                    gl.vertex_attrib_pointer_f32(
-                        1,
-                        2,
-                        glow::FLOAT,
-                        false,
-                        stride,
-                        (3 * mem::size_of::<f32>()) as i32,
-                    );
-                    gl.vertex_attrib_pointer_f32(
-                        2,
-                        4,
-                        glow::FLOAT,
-                        false,
-                        stride,
-                        (5 * mem::size_of::<f32>()) as i32,
-                    );
-                    gl.vertex_attrib_pointer_f32(
-                        3,
-                        2,
-                        glow::FLOAT,
-                        false,
-                        stride,
-                        (9 * mem::size_of::<f32>()) as i32,
-                    );
+                    bind_tmesh_vertices(gl, stride);
                     let projection = camera(run.camera).to_cols_array_2d();
                     gl.uniform_matrix_4_f32_slice(
                         Some(&state.tmesh_mvp_location),
@@ -1950,6 +1825,11 @@ fn draw_legacy_offscreen_pass(
                     );
                     gl.bind_texture(glow::TEXTURE_2D, Some(texture.primary()));
                     apply_render_target_filter(gl, texture, run.texture_handle);
+                    let additive =
+                        resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                    gl.active_texture(glow::TEXTURE1);
+                    gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                    gl.active_texture(glow::TEXTURE0);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     let triangles = source.vertex_count() / 3;
@@ -2001,6 +1881,15 @@ fn draw_legacy_offscreen_pass(
                         );
                         gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
                         gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
+                        for (location, row) in
+                            tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
+                        {
+                            gl.uniform_4_f32_slice(Some(location), &row);
+                        }
+                        gl.uniform_4_f32_slice(
+                            Some(&tmesh_uniforms.additive_uv),
+                            &instance.additive_uv,
+                        );
                         gl.draw_arrays(glow::TRIANGLES, start, count);
                         vertices += u64::from(triangles);
                     }
@@ -2210,6 +2099,8 @@ pub fn draw(
                             gl.use_program(Some(state.program));
                             gl.bind_vertex_array(Some(shared_vao));
                             last_prog = Some(0);
+                            // Mesh materials can replace the video U-plane binding.
+                            last_bound_tex = None;
                         }
 
                         if !state.base_instance
@@ -2400,121 +2291,16 @@ pub fn draw(
                                 continue;
                             };
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-                            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                            gl.vertex_attrib_pointer_f32(
-                                1,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (3 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                2,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (5 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                3,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (9 * std::mem::size_of::<f32>()) as i32,
-                            );
+                            bind_tmesh_vertices(gl, stride);
                         }
 
                         if !state.base_instance
                             && last_tmesh_instance_start != Some(run.instance_start)
                         {
                             let inst_stride = std::mem::size_of::<TexturedMeshInstanceRaw>() as i32;
-                            let col_size = (4 * std::mem::size_of::<f32>()) as i32;
-                            let uv_size = (2 * std::mem::size_of::<f32>()) as i32;
                             let base = (run.instance_start as i32) * inst_stride;
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(tmesh_instance_vbo));
-                            gl.vertex_attrib_pointer_f32(
-                                4,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                5,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                6,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 2 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                7,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 3 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                8,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 4 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                9,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                10,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size + uv_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                11,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size + 2 * uv_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                12,
-                                1,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 5 * col_size + 3 * uv_size,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                13,
-                                1,
-                                glow::FLOAT,
-                                false,
-                                inst_stride,
-                                base + 108,
-                            );
+                            bind_tmesh_instances(gl, base);
                             last_tmesh_instance_start = Some(run.instance_start);
                         }
 
@@ -2537,6 +2323,11 @@ pub fn draw(
                             last_bound_tex = Some(primary);
                         }
                         apply_render_target_filter(gl, texture, run.texture_handle);
+                        let additive = resolved_texture(state, textures, run.additive_texture)
+                            .unwrap_or(texture);
+                        gl.active_texture(glow::TEXTURE1);
+                        gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                        gl.active_texture(glow::TEXTURE0);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2597,6 +2388,8 @@ pub fn draw(
                             gl.disable_vertex_attrib_array(2);
                             gl.disable_vertex_attrib_array(3);
                             last_prog = Some(0);
+                            // Mesh materials can replace the video U-plane binding.
+                            last_bound_tex = None;
                         }
 
                         if last_cameras[0].update_required(run.camera) {
@@ -2763,31 +2556,7 @@ pub fn draw(
                                 continue;
                             };
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
-                            gl.vertex_attrib_pointer_f32(0, 3, glow::FLOAT, false, stride, 0);
-                            gl.vertex_attrib_pointer_f32(
-                                1,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (3 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                2,
-                                4,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (5 * std::mem::size_of::<f32>()) as i32,
-                            );
-                            gl.vertex_attrib_pointer_f32(
-                                3,
-                                2,
-                                glow::FLOAT,
-                                false,
-                                stride,
-                                (9 * std::mem::size_of::<f32>()) as i32,
-                            );
+                            bind_tmesh_vertices(gl, stride);
                         }
 
                         if last_cameras[2].update_required(run.camera) {
@@ -2809,6 +2578,11 @@ pub fn draw(
                             last_bound_tex = Some(primary);
                         }
                         apply_render_target_filter(gl, texture, run.texture_handle);
+                        let additive = resolved_texture(state, textures, run.additive_texture)
+                            .unwrap_or(texture);
+                        gl.active_texture(glow::TEXTURE1);
+                        gl.bind_texture(glow::TEXTURE_2D, Some(additive.primary()));
+                        gl.active_texture(glow::TEXTURE0);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2868,6 +2642,15 @@ pub fn draw(
                                 instance.texture_mask,
                             );
                             gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
+                            for (location, row) in
+                                tmesh_uniforms.sphere_rows.iter().zip(instance.sphere_rows)
+                            {
+                                gl.uniform_4_f32_slice(Some(location), &row);
+                            }
+                            gl.uniform_4_f32_slice(
+                                Some(&tmesh_uniforms.additive_uv),
+                                &instance.additive_uv,
+                            );
                             gl.draw_arrays(glow::TRIANGLES, draw_start, draw_count);
                             vertices += u64::from(tri_count);
                         }
@@ -3353,6 +3136,33 @@ fn create_mesh_program(
     }
 }
 
+unsafe fn bind_tmesh_vertices(gl: &glow::Context, stride: i32) {
+    // SAFETY: caller has bound the mesh vertex buffer in the current context.
+    unsafe {
+        for (index, count, offset) in [(0, 3, 16), (1, 2, 28), (2, 4, 36), (3, 2, 52), (4, 4, 0)] {
+            gl.enable_vertex_attrib_array(index);
+            gl.vertex_attrib_pointer_f32(index, count, glow::FLOAT, false, stride, offset);
+        }
+    }
+}
+
+unsafe fn bind_tmesh_instances(gl: &glow::Context, base: i32) {
+    // SAFETY: caller has bound the mesh instance buffer in the current context.
+    unsafe {
+        let stride = mem::size_of::<TexturedMeshInstanceRaw>() as i32;
+        for index in 5..16 {
+            gl.vertex_attrib_pointer_f32(
+                index,
+                4,
+                glow::FLOAT,
+                false,
+                stride,
+                base + (index as i32 - 5) * 16,
+            );
+        }
+    }
+}
+
 fn create_tmesh_program(
     gl: &glow::Context,
     vert_src: &str,
@@ -3445,6 +3255,12 @@ fn legacy_tmesh_uniforms(
     program: glow::Program,
 ) -> Result<LegacyTMeshUniforms, String> {
     Ok(LegacyTMeshUniforms {
+        sphere_rows: [
+            uniform_location(gl, program, "i_sphere_row0")?,
+            uniform_location(gl, program, "i_sphere_row1")?,
+            uniform_location(gl, program, "i_sphere_row2")?,
+        ],
+        additive_uv: uniform_location(gl, program, "i_additive_uv")?,
         model: uniform_location(gl, program, "u_model")?,
         tint: uniform_location(gl, program, "u_tint")?,
         uv_scale: uniform_location(gl, program, "u_uv_scale")?,

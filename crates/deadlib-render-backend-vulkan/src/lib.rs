@@ -1041,7 +1041,7 @@ fn create_textured_mesh_pipeline(
             .name(main_name),
     ];
 
-    let (binding_descriptions, attribute_descriptions) = vertex_input_descriptions_tmesh();
+    let (binding_descriptions, attribute_descriptions) = textured_mesh_vertex_input();
     let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::default()
         .vertex_binding_descriptions(&binding_descriptions)
         .vertex_attribute_descriptions(&attribute_descriptions);
@@ -1072,8 +1072,9 @@ fn create_textured_mesh_pipeline(
 
     let push_constant_range = projection_push_constant_range();
 
+    let material_layouts = [set_layout, set_layout];
     let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default()
-        .set_layouts(std::slice::from_ref(&set_layout))
+        .set_layouts(&material_layouts)
         .push_constant_ranges(std::slice::from_ref(&push_constant_range));
 
     // SAFETY: The descriptor set layout and push-constant range are valid for this pipeline, and
@@ -2548,6 +2549,17 @@ fn record_render_pass(
                             &[],
                         );
                     }
+                    let additive = resolved_texture(state, textures, run.additive_texture)
+                        .map(|texture| texture_descriptor_set(texture, run.additive_texture, true))
+                        .unwrap_or(set);
+                    device.cmd_bind_descriptor_sets(
+                        cmd,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        textured_mesh_pipeline_layout,
+                        1,
+                        &[additive],
+                        &[],
+                    );
                     let first_vertex = if source.buffer_key().is_some() {
                         0
                     } else {
@@ -3158,6 +3170,17 @@ pub fn draw(
                             &[],
                         );
                     }
+                    let additive = resolved_texture(state, textures, run.additive_texture)
+                        .map(|texture| texture_descriptor_set(texture, run.additive_texture, true))
+                        .unwrap_or(set);
+                    device.cmd_bind_descriptor_sets(
+                        cmd,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        state.textured_mesh_pipeline_layout,
+                        1,
+                        &[additive],
+                        &[],
+                    );
 
                     let first_vertex = if source.buffer_key().is_some() {
                         0
@@ -4004,110 +4027,40 @@ fn vertex_input_descriptions_mesh() -> (
 }
 
 #[inline(always)]
-fn vertex_input_descriptions_tmesh() -> (
+fn textured_mesh_vertex_input() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 14],
+    [vk::VertexInputAttributeDescription; 16],
 ) {
-    let b0 = vk::VertexInputBindingDescription::default()
-        .binding(0)
-        .stride(std::mem::size_of::<TexturedMeshVertex>() as u32)
-        .input_rate(vk::VertexInputRate::VERTEX);
-    let b1 = vk::VertexInputBindingDescription::default()
-        .binding(1)
-        .stride(std::mem::size_of::<TexturedMeshInstanceGpu>() as u32)
-        .input_rate(vk::VertexInputRate::INSTANCE);
-
-    let a_pos = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(0)
-        .format(vk::Format::R32G32B32_SFLOAT)
-        .offset(0);
-    let a_uv = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(1)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(12);
-    let a_color = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(2)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(20);
-    let a_tex_matrix_scale = vk::VertexInputAttributeDescription::default()
-        .binding(0)
-        .location(3)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(36);
-    let a_model0 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(4)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(0);
-    let a_model1 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(5)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(16);
-    let a_model2 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(6)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(32);
-    let a_model3 = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(7)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(48);
-    let a_tint = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(8)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(64);
-    let a_uv_scale = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(9)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(80);
-    let a_uv_offset = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(10)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(88);
-    let a_uv_tex_shift = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(11)
-        .format(vk::Format::R32G32_SFLOAT)
-        .offset(96);
-    let a_texture_mask = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(12)
-        .format(vk::Format::R32_SFLOAT)
-        .offset(104);
-
-    let a_cull_back = vk::VertexInputAttributeDescription::default()
-        .binding(1)
-        .location(13)
-        .format(vk::Format::R32_SFLOAT)
-        .offset(108);
-
-    (
-        [b0, b1],
-        [
-            a_pos,
-            a_uv,
-            a_color,
-            a_tex_matrix_scale,
-            a_model0,
-            a_model1,
-            a_model2,
-            a_model3,
-            a_tint,
-            a_uv_scale,
-            a_uv_offset,
-            a_uv_tex_shift,
-            a_texture_mask,
-            a_cull_back,
-        ],
-    )
+    let bindings = [
+        vk::VertexInputBindingDescription::default()
+            .binding(0)
+            .stride(mem::size_of::<TexturedMeshVertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX),
+        vk::VertexInputBindingDescription::default()
+            .binding(1)
+            .stride(mem::size_of::<TexturedMeshInstanceGpu>() as u32)
+            .input_rate(vk::VertexInputRate::INSTANCE),
+    ];
+    let attributes = std::array::from_fn(|location| {
+        let (binding, offset, format) = match location {
+            0 => (0, 16, vk::Format::R32G32B32_SFLOAT),
+            1 => (0, 28, vk::Format::R32G32_SFLOAT),
+            2 => (0, 36, vk::Format::R32G32B32A32_SFLOAT),
+            3 => (0, 52, vk::Format::R32G32_SFLOAT),
+            4 => (0, 0, vk::Format::R32G32B32A32_SFLOAT),
+            _ => (
+                1,
+                (location as u32 - 5) * 16,
+                vk::Format::R32G32B32A32_SFLOAT,
+            ),
+        };
+        vk::VertexInputAttributeDescription::default()
+            .location(location as u32)
+            .binding(binding)
+            .offset(offset)
+            .format(format)
+    });
+    (bindings, attributes)
 }
 
 fn begin_single_time_commands(

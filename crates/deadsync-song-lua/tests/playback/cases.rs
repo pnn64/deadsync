@@ -3598,6 +3598,7 @@ fn song_lua_capture_style_shares_mesh_vertices_and_composes_tint() {
 #[test]
 fn song_lua_capture_style_tints_textured_mesh() {
     let actor = Actor::TexturedMesh {
+        environment: None,
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
         world_z: 0.0,
@@ -5290,18 +5291,21 @@ fn song_lua_model_builds_textured_mesh_layers() {
                 texture_key: Arc::from(texture_key.as_str()),
                 vertices: Arc::from(vec![
                     TexturedMeshVertex {
+                        normal: [0.0; 4],
                         pos: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                         tex_matrix_scale: [1.0, 1.0],
                         color: [1.0, 1.0, 1.0, 1.0],
                     },
                     TexturedMeshVertex {
+                        normal: [0.0; 4],
                         pos: [16.0, 0.0, 0.0],
                         uv: [1.0, 0.0],
                         tex_matrix_scale: [1.0, 1.0],
                         color: [1.0, 1.0, 1.0, 1.0],
                     },
                     TexturedMeshVertex {
+                        normal: [0.0; 4],
                         pos: [0.0, 16.0, 0.0],
                         uv: [0.0, 1.0],
                         tex_matrix_scale: [1.0, 1.0],

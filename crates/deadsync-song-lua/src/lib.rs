@@ -1815,6 +1815,8 @@ impl SongLuaOverlayModelDraw {
 #[derive(Debug, Clone)]
 pub struct SongLuaOverlayModelLayer<Vertex> {
     pub texture_key: Arc<str>,
+    /// Secondary GL_ADD stage: atlas key and (UV rectangle, frame-end seconds).
+    pub additive: Option<(Arc<str>, Arc<[([f32; 4], f32)]>)>,
     pub vertices: Arc<[Vertex]>,
     pub model_size: [f32; 2],
     pub uv_scale: [f32; 2],
@@ -1839,6 +1841,7 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
     ) -> Self {
         Self {
             texture_key,
+            additive: None,
             vertices,
             model_size,
             uv_scale,

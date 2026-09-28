@@ -131,6 +131,7 @@ fn variants() -> Vec<Actor> {
             z: -12,
         },
         Actor::TexturedMesh {
+            environment: None,
             align: [0.5; 2],
             offset: [112.0, 7.0],
             world_z: 19.0,
@@ -153,6 +154,7 @@ fn variants() -> Vec<Actor> {
             z: i16::MAX,
         },
         Actor::ReusableTexturedMesh {
+            environment: None,
             align: [0.25; 2],
             offset: [113.0, 8.0],
             world_z: 29.0,

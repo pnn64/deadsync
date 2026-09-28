@@ -7,6 +7,7 @@ mod baseline;
 
 fn vertices(depths: [f32; 3]) -> [TexturedMeshVertex; 3] {
     std::array::from_fn(|i| TexturedMeshVertex {
+        normal: [0.0; 4],
         pos: [
             [-0.7, -0.6, depths[0]],
             [0.8, -0.4, depths[1]],

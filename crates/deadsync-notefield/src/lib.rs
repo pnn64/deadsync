@@ -156,7 +156,7 @@ pub(crate) use placement::{
     combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets, player_metric_y,
 };
 #[cfg(test)]
-use placement::{default_column_x, hud_layout_ys, hud_y, notefield_view_proj, zmod_layout_ys};
+use placement::{default_column_x, hud_layout_ys, hud_y, notefield_camera, zmod_layout_ys};
 pub(crate) use receptors::{
     ReceptorDrawRequest, ReceptorPress, compose_receptor_draws, hold_indicator_column_x,
     receptor_row_center,
@@ -227,7 +227,7 @@ mod tests {
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
         judgment_tilt_rotation_deg, lane_note_transform_cache, mine_hides_after_resolution,
         mine_part, mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_x_extra,
-        note_x_offset, notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
+        note_x_offset, notefield_camera, offset_center, player_metric_y, push_transform_parts,
         quantize_centi_i32, quantize_centi_u32, quantize_step, receptor_row_center, rgba8,
         scale_effect_size, scale_hold_part, scale_sprite_to_arrow, share_actor_range,
         signed_effect_active, sm_scale, smoothstep01, song_time_ns_delta_seconds,
@@ -3341,13 +3341,22 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_rejects_invalid_screen_sizes() {
-        assert!(notefield_view_proj(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false).is_none());
-        assert!(notefield_view_proj(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false).is_none());
+        assert!(
+            notefield_camera(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+                .map(|(projection, _)| projection)
+                .is_none()
+        );
+        assert!(
+            notefield_camera(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false)
+                .map(|(projection, _)| projection)
+                .is_none()
+        );
     }
 
     #[test]
     fn notefield_view_proj_returns_finite_matrix_for_flat_field() {
-        let matrix = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+            .map(|(projection, _)| projection)
             .expect("valid notefield projection");
 
         assert!(matrix.to_cols_array().into_iter().all(f32::is_finite));
@@ -3355,7 +3364,8 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_maps_centered_world_coords_to_clip_space() {
-        let matrix = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+            .map(|(projection, _)| projection)
             .expect("valid notefield projection");
         let center = matrix.project_point3(glam::Vec3::ZERO);
         let top_right = matrix.project_point3(glam::Vec3::new(320.0, 240.0, 0.0));
@@ -3368,11 +3378,14 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_changes_with_tilt_skew_and_reverse() {
-        let flat = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let flat = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+            .map(|(projection, _)| projection)
             .expect("flat projection");
-        let tilted = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false)
+        let tilted = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false)
+            .map(|(projection, _)| projection)
             .expect("tilted projection");
-        let reverse = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true)
+        let reverse = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true)
+            .map(|(projection, _)| projection)
             .expect("reverse projection");
 
         assert_ne!(flat.to_cols_array(), tilted.to_cols_array());

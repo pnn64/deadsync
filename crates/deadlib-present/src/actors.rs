@@ -410,6 +410,7 @@ pub enum Actor {
 
     /// Textured mesh actor (model-style triangles with UVs)
     TexturedMesh {
+        environment: Option<MeshEnvironment>,
         align: [f32; 2],
         offset: [f32; 2],
         world_z: f32,
@@ -437,6 +438,7 @@ pub enum Actor {
     /// Dynamic textured mesh backed by storage retained by its owner across frames.
     /// The owner must not mutate the buffer while any cloned actor is live.
     ReusableTexturedMesh {
+        environment: Option<MeshEnvironment>,
         align: [f32; 2],
         offset: [f32; 2],
         world_z: f32,
@@ -578,8 +580,19 @@ pub enum FlatMeshVertices {
     Reusable(Arc<Vec<TexturedMeshVertex>>),
 }
 
+/// Material texture stages and an affine transform before model projection.
+#[derive(Clone, Debug)]
+pub struct MeshEnvironment {
+    /// Matching world-to-clip and world-to-eye cameras, before model projection.
+    pub camera: Option<(Matrix4, Matrix4)>,
+    pub transform: Matrix4,
+    pub additive_texture: Option<Arc<str>>,
+    pub additive_uv: [f32; 4],
+}
+
 #[derive(Clone, Debug)]
 pub struct FlatTexturedMesh {
+    pub environment: Option<MeshEnvironment>,
     pub offset: [f32; 2],
     pub world_z: f32,
     pub local_transform: Matrix4,

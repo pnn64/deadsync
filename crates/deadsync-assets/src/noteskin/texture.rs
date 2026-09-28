@@ -164,6 +164,9 @@ fn next_slot_id() -> u64 {
 
 #[derive(Debug)]
 pub struct SpriteSlot {
+    pub sphere_mapped: bool,
+    pub model_animation_length: f32,
+    pub model_additive: Option<Arc<SpriteSlot>>,
     stable_id: u64,
     pub def: SpriteDefinition,
     pub(crate) base_rot_sin_cos: [f32; 2],
@@ -195,6 +198,9 @@ pub struct SpriteSlot {
 impl Clone for SpriteSlot {
     fn clone(&self) -> Self {
         Self {
+            sphere_mapped: self.sphere_mapped,
+            model_animation_length: self.model_animation_length,
+            model_additive: self.model_additive.clone(),
             stable_id: next_slot_id(),
             def: self.def.clone(),
             base_rot_sin_cos: self.base_rot_sin_cos,
@@ -457,6 +463,24 @@ impl NoteskinSlot for SpriteSlot {
         self.model.as_deref()
     }
 
+    fn model_seconds_from_phase(&self, phase: f32) -> f32 {
+        phase * self.model_animation_length
+    }
+
+    fn model_texture_mode(&self) -> u8 {
+        u8::from(self.sphere_mapped)
+            | self
+                .model_additive
+                .as_ref()
+                .map_or(0, |slot| 4 | (u8::from(slot.sphere_mapped) << 1))
+    }
+
+    fn model_additive(&self, seconds: f32) -> Option<(Arc<str>, [f32; 4])> {
+        let slot = self.model_additive.as_ref()?;
+        let frame = slot.frame_index(seconds, 0.0);
+        Some((slot.texture_key_shared(), slot.uv_for_frame_at(frame, 0.0)))
+    }
+
     fn model_cull_back(&self) -> bool {
         !self.sprite_mesh
     }
@@ -568,6 +592,12 @@ pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
     for vertex in model.vertices.iter().copied() {
         let vertex = model_vertex_for_sprite(&slot.def, vertex);
         vertices.push(TexturedMeshVertex {
+            normal: [
+                vertex.normal[0],
+                vertex.normal[1],
+                vertex.normal[2],
+                f32::from(slot.model_texture_mode()),
+            ],
             pos: vertex.pos,
             uv: vertex.uv,
             color: [1.0; 4],
@@ -580,6 +610,9 @@ pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
 #[must_use]
 pub fn test_model_slot() -> SpriteSlot {
     SpriteSlot {
+        sphere_mapped: false,
+        model_animation_length: 1.0,
+        model_additive: None,
         stable_id: next_slot_id(),
         def: SpriteDefinition::default(),
         base_rot_sin_cos: [0.0, 1.0],
@@ -609,6 +642,7 @@ pub fn test_model_slot() -> SpriteSlot {
         note_color_translate: false,
         model: Some(Arc::new(ModelMesh {
             vertices: Arc::from([ModelVertex {
+                normal: [0.0, 0.0, 1.0],
                 pos: [0.0, 0.0, 0.0],
                 uv: [0.0, 0.0],
                 tex_matrix_scale: [1.0, 1.0],
@@ -718,6 +752,23 @@ pub fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
 }
 
 pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
+    slot.sphere_mapped = plan.sphere_mapped;
+    slot.model_animation_length = plan.animation_length;
+    slot.model_additive = plan.additive.and_then(|texture| {
+        let mut additive = itg_slot_from_path_all_frames(&texture.texture_path, None, false)?;
+        additive.sphere_mapped = texture.sphere_mapped;
+        additive.model = plan.model.clone();
+        if let Some(animation) = texture.animation {
+            match model_animation_source(&animation) {
+                Ok(source) => additive.source = source,
+                Err(error) => warn!(
+                    "Model additive texture '{}': {error}",
+                    animation.path.display()
+                ),
+            }
+        }
+        Some(Arc::new(additive))
+    });
     if let Some(animation) = plan.texture_animation {
         match model_animation_source(&animation) {
             Ok(source) => slot.source = source,
@@ -896,6 +947,9 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     let def = plan.def;
     let source = source_from_plan(plan.source, &def);
     SpriteSlot {
+        sphere_mapped: false,
+        model_animation_length: 1.0,
+        model_additive: None,
         stable_id: next_slot_id(),
         def,
         base_rot_sin_cos: [0.0, 1.0],
@@ -1460,6 +1514,74 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
 #[cfg(test)]
 mod contract_tests {
     use super::*;
+
+    #[test]
+    fn model_material_loads_independent_secondary_animation() {
+        let root = std::env::temp_dir().join(format!("deadsync-material-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for (name, color) in [
+            ("base.png", [128, 128, 128, 255]),
+            ("a.png", [255, 0, 0, 255]),
+            ("b.png", [0, 255, 0, 255]),
+        ] {
+            image::RgbaImage::from_pixel(8, 8, image::Rgba(color))
+                .save(root.join(name))
+                .unwrap();
+        }
+        std::fs::write(
+            root.join("reflection sphere.ini"),
+            "[AnimatedTexture]\nFrame0000=a.png\nDelay0000=0.2\nFrame0001=b.png\nDelay0001=0.3\n",
+        )
+        .unwrap();
+        let model = root.join("model.txt");
+        std::fs::write(
+            &model,
+            r#"// MilkShape 3D ASCII
+Meshes: 1
+"shell" 0 0
+3
+0 -1 -1 0 0 0 -1
+0 1 -1 0 1 0 -1
+0 0 1 0 0 1 -1
+1
+0 0 2
+1
+0 0 1 2 0 0 0 1
+Materials: 1
+"material"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"base.png"
+"reflection sphere.ini"
+"#,
+        )
+        .unwrap();
+        let slots = load_itg_model_slots_from_path(&model).unwrap();
+        assert_eq!(slots.len(), 1);
+        let slot = slots[0].clone();
+        assert!(!slot.sphere_mapped);
+        assert_eq!(slot.model_texture_mode(), 6);
+        assert_eq!(slot.model_animation_length, 1.0);
+        assert!(
+            build_model_geometry(&slot)
+                .iter()
+                .all(|vertex| vertex.normal == [0.0, 0.0, 1.0, 6.0])
+        );
+        let (key, first) = slot.model_additive(0.1).unwrap();
+        let (_, second) = slot.model_additive(0.3).unwrap();
+        assert!(key.ends_with("#model-frames"));
+        assert_eq!(first, [0.0, 0.0, 0.5, 1.0]);
+        assert_eq!(second, [0.5, 0.0, 1.0, 1.0]);
+        assert_eq!(slot.model_additive(0.6).unwrap().1, first);
+        // The primary texture's one-second cycle does not override the
+        // secondary texture's independent half-second frame sequence.
+        assert_eq!(slot.texture_key_shared(), slots[0].texture_key_shared());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn noteskin_actor_source_uses_arena_ownership() {

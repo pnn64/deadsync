@@ -24,6 +24,7 @@ impl TweenType {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelVertex {
+    pub normal: [f32; 3],
     pub pos: [f32; 3],
     pub uv: [f32; 2],
     pub tex_matrix_scale: [f32; 2],
@@ -84,6 +85,8 @@ pub fn model_texture_uv_params_cached(
 
 #[derive(Debug, Clone, Copy)]
 pub struct ModelDrawState {
+    /// Material animation clock, separate from transform/effect clocks.
+    pub texture_seconds: f32,
     pub pos: [f32; 3],
     pub rot: [f32; 3],
     pub zoom: [f32; 3],
@@ -99,6 +102,7 @@ pub struct ModelDrawState {
 impl Default for ModelDrawState {
     fn default() -> Self {
         Self {
+            texture_seconds: 0.0,
             pos: [0.0, 0.0, 0.0],
             rot: [0.0, 0.0, 0.0],
             zoom: [1.0, 1.0, 1.0],
@@ -362,7 +366,10 @@ fn model_draw_at_impl(
                 | ModelEffectMode::Wag
         )
     {
-        return sanitize_model_draw(base_draw);
+        return sanitize_model_draw(ModelDrawState {
+            texture_seconds: time,
+            ..base_draw
+        });
     }
 
     let mut out = base_draw;
@@ -475,6 +482,7 @@ fn model_draw_at_impl(
         }
     }
 
+    out.texture_seconds = time;
     sanitize_model_draw(out)
 }
 

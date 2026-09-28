@@ -564,7 +564,14 @@ fn compose_flat_mine_slot<S, F, Z>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw,
+            draw: deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child() {
+                    draw.texture_seconds
+                } else {
+                    slot.model_seconds_from_phase(request.mine_uv_phase)
+                },
+                ..draw
+            },
             model_center: request.center,
             sprite_center: request.center,
             size,
@@ -1333,6 +1340,7 @@ mod tests {
             Self {
                 model: Some(ModelMesh {
                     vertices: Arc::from([ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],
                         uv: [0.0, 0.0],
                         tex_matrix_scale: [1.0, 1.0],

@@ -912,6 +912,13 @@ fn draw_inner(
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
+                let additive =
+                    resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                encoder.set_fragment_texture(1, Some(additive.images.primary()));
+                encoder.set_fragment_sampler_state(
+                    1,
+                    Some(texture_sampler(additive, run.additive_texture, true)),
+                );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
                         let Some(index) = cached_tmesh_index(buffer_key) else {
@@ -1600,6 +1607,13 @@ fn record_offscreen_pass(
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
+                let additive =
+                    resolved_texture(state, textures, run.additive_texture).unwrap_or(texture);
+                encoder.set_fragment_texture(1, Some(additive.images.primary()));
+                encoder.set_fragment_sampler_state(
+                    1,
+                    Some(texture_sampler(additive, run.additive_texture, true)),
+                );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
                         let Some(index) = cached_tmesh_index(buffer_key) else {

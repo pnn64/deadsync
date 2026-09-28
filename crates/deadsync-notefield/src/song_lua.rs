@@ -447,12 +447,14 @@ mod tests {
             * Matrix4::from_scale(Vector3::new(2.0, 4.0, 6.0));
         let texture: Arc<str> = Arc::from("fold-texture");
         let textured_vertices: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: [8.0, 9.0, 10.0],
             uv: [0.2, 0.6],
             color: [0.9, 0.8, 0.7, 0.6],
             tex_matrix_scale: [1.25, 0.75],
         }]);
         let textured_mesh = Actor::TexturedMesh {
+            environment: None,
             align: [0.1, 0.9],
             offset: [140.0, 23.0],
             world_z: 3.5,
@@ -475,6 +477,7 @@ mod tests {
             z: -12,
         };
         let Actor::TexturedMesh {
+            environment: None,
             align,
             offset,
             world_z,

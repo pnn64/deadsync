@@ -76,6 +76,7 @@ pub struct MeshRun {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TexturedMeshRun {
+    pub additive_texture: TextureHandle,
     pub geometry: u32,
     pub instance_start: u32,
     pub instance_count: u32,
@@ -385,6 +386,7 @@ mod tests {
 
     fn vertex(x: f32) -> TexturedMeshVertex {
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: [x, 0.0, 0.0],
             ..TexturedMeshVertex::default()
         }

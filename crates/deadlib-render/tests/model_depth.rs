@@ -27,6 +27,7 @@ fn quad(radius: f32, z: f32) -> TexturedMeshGeometry {
                 [-radius, radius, z],
             ]
             .map(|pos| TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos,
                 uv: [0.5; 2],
                 color: [1.0; 4],
@@ -56,6 +57,7 @@ fn model_frame() -> RenderFrame {
         ops: (0..3)
             .map(|i| {
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    additive_texture: 0,
                     geometry: i,
                     instance_start: i,
                     instance_count: 1,
@@ -150,6 +152,7 @@ fn model_depth_isolation() {
         instance.model_col3[2] = -0.8;
         overlay.tmesh_instances.push(instance);
         overlay.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+            additive_texture: 0,
             geometry: 1,
             instance_start: 3,
             instance_count: 1,

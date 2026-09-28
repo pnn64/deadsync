@@ -42,6 +42,7 @@ pub struct ItgTextureAnimation {
 
 #[derive(Debug, Clone)]
 pub struct ItgResolvedModelTexture {
+    pub sphere_mapped: bool,
     pub texture_path: PathBuf,
     pub animation: Option<ItgTextureAnimation>,
     pub tex: ItgModelTexturePath,
@@ -50,6 +51,7 @@ pub struct ItgResolvedModelTexture {
 impl ItgResolvedModelTexture {
     fn from_path(texture_path: PathBuf) -> Self {
         Self {
+            sphere_mapped: texture_path.to_string_lossy().contains("sphere"),
             texture_path,
             animation: None,
             tex: ItgModelTexturePath::default(),
@@ -254,6 +256,7 @@ fn itg_resolve_animated_texture_ini(
         cycle_seconds += delay;
     }
     Some(ItgResolvedModelTexture {
+        sphere_mapped: path.to_string_lossy().contains("sphere"),
         // Repeated references to one image need no atlas. Keep its full UV
         // domain for scrolling materials instead of adding duplicate tiles.
         animation: (frames.iter().any(|frame| frame.path != texture_path)
@@ -292,6 +295,8 @@ fn itg_animated_texture_key_str(key: &[u8; 9]) -> &str {
 pub struct ItgResolvedModelLayer {
     pub mesh: Arc<ModelMesh>,
     pub texture: ItgResolvedModelTexture,
+    pub additive: Option<ItgResolvedModelTexture>,
+    pub animation_length: f32,
     pub flags: ItgModelMaterialFlags,
     /// Shared vertex binding; unbound and mixed-bone meshes have no rigid bone.
     pub bone_index: Option<u8>,
@@ -318,6 +323,9 @@ pub struct ItgModelAutoRot {
 
 #[derive(Debug, Clone)]
 pub struct ItgModelSlotPlan {
+    pub sphere_mapped: bool,
+    pub additive: Option<ItgResolvedModelTexture>,
+    pub animation_length: f32,
     pub texture_animation: Option<ItgTextureAnimation>,
     pub model: Option<Arc<ModelMesh>>,
     pub model_draw: ModelDrawState,
@@ -350,6 +358,9 @@ impl ItgModelSlotPlan {
             (true, tex.uv_velocity)
         };
         Self {
+            sphere_mapped: layer.texture.sphere_mapped,
+            additive: layer.additive,
+            animation_length: layer.animation_length,
             texture_animation: layer.texture.animation,
             model: Some(layer.mesh),
             model_draw,
@@ -377,6 +388,9 @@ impl ItgModelSlotPlan {
     ) -> Self {
         let tex = texture.tex;
         Self {
+            sphere_mapped: texture.sphere_mapped,
+            additive: None,
+            animation_length: tex.uv_cycle_seconds.unwrap_or(1.0),
             texture_animation: texture.animation,
             model,
             model_draw,
@@ -706,6 +720,7 @@ pub fn itg_parse_milkshape_model_layers(
                 }
             }
             mesh_vertices.push(ModelVertex {
+                normal: [0.0, 0.0, 1.0],
                 pos: [x, y, z],
                 uv: [u, v],
                 tex_matrix_scale: [
@@ -716,8 +731,20 @@ pub fn itg_parse_milkshape_model_layers(
         }
 
         let normal_count = lines.next()?.trim().parse::<usize>().ok()?;
+        let mut normals = Vec::with_capacity(normal_count);
         for _ in 0..normal_count {
-            let _ = lines.next()?;
+            let mut parts = lines.next()?.split_whitespace();
+            let normal = [
+                parts.next()?.parse::<f32>().ok()?,
+                parts.next()?.parse::<f32>().ok()?,
+                parts.next()?.parse::<f32>().ok()?,
+            ];
+            let length = normal.iter().map(|x| x * x).sum::<f32>().sqrt();
+            normals.push(if length.is_finite() && length > 0.0 {
+                normal.map(|x| x / length)
+            } else {
+                [0.0; 3]
+            });
         }
 
         let triangle_count = lines.next()?.trim().parse::<usize>().ok()?;
@@ -730,6 +757,7 @@ pub fn itg_parse_milkshape_model_layers(
             f32::NEG_INFINITY,
             f32::NEG_INFINITY,
         ];
+        let mut triangles = Vec::with_capacity(triangle_count);
         for _ in 0..triangle_count {
             let line = lines.next()?;
             let mut parts = line.split_whitespace();
@@ -738,16 +766,23 @@ pub fn itg_parse_milkshape_model_layers(
             let i1 = parts.next()?.parse::<usize>().ok()?;
             let i2 = parts.next()?.parse::<usize>().ok()?;
 
-            let Some(v0) = mesh_vertices.get(i0).copied() else {
+            let normal_indices = [
+                parts.next()?.parse::<usize>().ok()?,
+                parts.next()?.parse::<usize>().ok()?,
+                parts.next()?.parse::<usize>().ok()?,
+            ];
+            let indices = [i0, i1, i2];
+            if indices.iter().any(|&i| i >= mesh_vertices.len()) {
                 continue;
-            };
-            let Some(v1) = mesh_vertices.get(i1).copied() else {
-                continue;
-            };
-            let Some(v2) = mesh_vertices.get(i2).copied() else {
-                continue;
-            };
-            for vtx in [v0, v1, v2] {
+            }
+            for (&index, &normal) in indices.iter().zip(&normal_indices) {
+                // Empty normal tables are tolerated for legacy flat fixtures.
+                mesh_vertices[index].normal = *normals.get(normal).unwrap_or(&[0.0; 3]);
+            }
+            triangles.push(indices);
+        }
+        for indices in triangles {
+            for vtx in indices.map(|index| mesh_vertices[index]) {
                 bounds[0] = bounds[0].min(vtx.pos[0]);
                 bounds[1] = bounds[1].min(vtx.pos[1]);
                 bounds[2] = bounds[2].min(vtx.pos[2]);
@@ -805,8 +840,8 @@ pub fn itg_parse_milkshape_model_layers(
         let _shininess = lines.next()?;
         let _transparency = lines.next()?;
         let texture_line = lines.next()?.trim().to_string();
-        let _alpha_map = lines.next()?;
-        material_textures.push((texture_line, itg_parse_model_material_flags(name)));
+        let additive = lines.next()?.trim().to_string();
+        material_textures.push((texture_line, additive, itg_parse_model_material_flags(name)));
     }
 
     let fallback_texture = std::cell::OnceCell::new();
@@ -821,14 +856,25 @@ pub fn itg_parse_milkshape_model_layers(
     } else {
         [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
     };
+    let animation_length = material_textures
+        .iter()
+        .filter_map(|(raw, _, _)| itg_resolve_model_material_texture(data, materials_path, raw))
+        .map(|texture| texture.tex.uv_cycle_seconds.unwrap_or(1.0))
+        .fold(0.0f32, f32::max);
     let mut layers = Vec::with_capacity(meshes.len());
     for mesh in meshes {
         let texture_with_flags = if mesh.material_index >= 0 {
             material_textures
                 .get(mesh.material_index as usize)
-                .and_then(|(raw, flags)| {
-                    itg_resolve_model_material_texture(data, materials_path, raw)
-                        .map(|resolved| (resolved, *flags))
+                .and_then(|(raw, _, flags)| {
+                    (if raw.trim().trim_matches('"').is_empty() {
+                        Some(ItgResolvedModelTexture::from_path(PathBuf::from(
+                            MODEL_WHITE_TEXTURE,
+                        )))
+                    } else {
+                        itg_resolve_model_material_texture(data, materials_path, raw)
+                    })
+                    .map(|resolved| (resolved, *flags))
                 })
         } else if mesh.material_index == -1 {
             Some((
@@ -852,7 +898,13 @@ pub fn itg_parse_milkshape_model_layers(
         } else {
             mesh.bounds
         };
+        let additive = usize::try_from(mesh.material_index)
+            .ok()
+            .and_then(|index| material_textures.get(index))
+            .and_then(|(_, raw, _)| itg_resolve_model_material_texture(data, materials_path, raw));
         layers.push(ItgResolvedModelLayer {
+            animation_length,
+            additive,
             mesh: Arc::new(ModelMesh {
                 vertices: mesh.vertices.into(),
                 bounds,
@@ -928,6 +980,7 @@ mod tests {
     fn test_mesh() -> Arc<ModelMesh> {
         Arc::new(ModelMesh {
             vertices: Arc::from([ModelVertex {
+                normal: [0.0, 0.0, 1.0],
                 pos: [0.0, 0.0, 0.0],
                 uv: [0.0, 0.0],
                 tex_matrix_scale: [1.0, 1.0],
@@ -967,8 +1020,11 @@ mod tests {
     #[test]
     fn model_slot_plan_from_layer_honors_nomove_flags() {
         let layer = ItgResolvedModelLayer {
+            animation_length: 1.0,
+            additive: None,
             mesh: test_mesh(),
             texture: ItgResolvedModelTexture {
+                sphere_mapped: false,
                 texture_path: PathBuf::from("tap.png"),
                 animation: None,
                 tex: ItgModelTexturePath {
@@ -997,6 +1053,78 @@ mod tests {
     }
 
     #[test]
+    fn material_texgen_preserves_normals_and_both_texture_stages() {
+        let root = temp_model_root("material-stages");
+        fs::write(root.join("base.png"), []).unwrap();
+        fs::write(root.join("reflection.png"), []).unwrap();
+        fs::write(root.join("second.png"), []).unwrap();
+        fs::write(root.join("shine sphere.ini"), "[AnimatedTexture]\nFrame0000=reflection.png\nDelay0000=0.2\nFrame0001=second.png\nDelay0001=0.3\n").unwrap();
+        let path = root.join("model.txt");
+        let source = r#"// MilkShape 3D ASCII
+Meshes: 1
+"shell" 0 0
+3
+0 -1 -1 0 0 0 -1
+0 1 -1 0 1 0 -1
+0 0 1 0 0 1 -1
+2
+0 0 3
+2 0 0
+2
+0 0 1 2 0 0 0 1
+0 0 1 2 1 1 1 1
+Materials: 1
+"reflective"
+0 0 0 1
+1 1 1 1
+0 0 0 1
+0 0 0 1
+0
+1
+"base.png"
+"shine sphere.ini"
+"#;
+        fs::write(&path, source).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            name: "fixture".into(),
+            overrides: vec![],
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let layers = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+        assert_eq!(layers.len(), 1);
+        let layer = &layers[0];
+        assert!(!layer.texture.sphere_mapped);
+        let additive = layer.additive.as_ref().unwrap();
+        assert!(
+            additive.sphere_mapped,
+            "the INI name selects texgen, not its frame names"
+        );
+        assert_eq!(additive.animation.as_ref().unwrap().frames.len(), 2);
+        assert_eq!(additive.tex.uv_cycle_seconds, Some(0.5));
+        assert_eq!(
+            layer.animation_length, 1.0,
+            "only diffuse materials set Model animation length"
+        );
+        // ITG deflates normals into indexed vertices: the last assignment wins.
+        assert!(
+            layer
+                .mesh
+                .vertices
+                .iter()
+                .all(|vertex| vertex.normal == [1.0, 0.0, 0.0])
+        );
+        fs::write(&path, source.replace("\"base.png\"", "\"\"")).unwrap();
+        let layers = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+        assert_eq!(
+            layers[0].texture.texture_path,
+            Path::new(MODEL_WHITE_TEXTURE)
+        );
+        assert!(layers[0].additive.is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn model_slot_plan_carries_auto_rot_and_texture_motion() {
         let auto_rot = ItgModelAutoRot {
             total_frames: 120.0,
@@ -1006,6 +1134,7 @@ mod tests {
             }]),
         };
         let texture = ItgResolvedModelTexture {
+            sphere_mapped: false,
             texture_path: PathBuf::from("tap.png"),
             animation: None,
             tex: ItgModelTexturePath {

@@ -42,6 +42,7 @@ fn render_fixture() -> RenderFrame {
                 camera: 0,
             }),
             DrawOp::TexturedMesh(TexturedMeshRun {
+                additive_texture: 0,
                 geometry: 0,
                 instance_start: 0,
                 instance_count: 1,
@@ -191,6 +192,7 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
         true,
     ));
     split.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+        additive_texture: 0,
         geometry: 0,
         instance_start: 1,
         instance_count: 1,

@@ -119,6 +119,15 @@ where
         frame,
         sprite_source,
     );
+    // Keep the affine eye camera for sphere mapping; perspective flattening
+    // and clip-depth compression must never change the material's normals.
+    for draw in flat_draws.iter_mut() {
+        if let FlatDraw::TexturedMesh(mesh) = draw
+            && let Some(environment) = &mut mesh.environment
+        {
+            environment.camera = camera_cache.eye_camera();
+        }
+    }
     if request.capture_requests.note_field {
         actors.extend(flat_draws.drain(..).map(actor_from_flat_draw));
     }
@@ -736,7 +745,14 @@ fn compose_field_contents<S, F>(
                 model_cache,
                 NoteLayerRequest {
                     slot: head_slot,
-                    draw,
+                    draw: deadsync_noteskin::ModelDrawState {
+                        texture_seconds: if head_slot.actor_frame_child() {
+                            draw.texture_seconds
+                        } else {
+                            head_slot.model_seconds_from_phase(hold_part_phase)
+                        },
+                        ..draw
+                    },
                     model_center,
                     sprite_center: offset_center(
                         head_center,
@@ -809,7 +825,14 @@ fn compose_field_contents<S, F>(
                 model_cache,
                 NoteLayerRequest {
                     slot: note_slot,
-                    draw,
+                    draw: deadsync_noteskin::ModelDrawState {
+                        texture_seconds: if note_slot.actor_frame_child() {
+                            draw.texture_seconds
+                        } else {
+                            note_slot.model_seconds_from_phase(hold_part_phase)
+                        },
+                        ..draw
+                    },
                     model_center: head_center,
                     sprite_center: head_center,
                     size,
@@ -1210,7 +1233,14 @@ fn compose_visible_notes<S, F>(
                         model_cache,
                         NoteLayerRequest {
                             slot: note_slot,
-                            draw,
+                            draw: deadsync_noteskin::ModelDrawState {
+                                texture_seconds: if note_slot.actor_frame_child() {
+                                    draw.texture_seconds
+                                } else {
+                                    note_slot.model_seconds_from_phase(phase)
+                                },
+                                ..draw
+                            },
                             model_center: center,
                             sprite_center: center,
                             size,
@@ -1295,7 +1325,14 @@ fn compose_flat_noteskin_layer<S, F>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw,
+            draw: deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child() {
+                    draw.texture_seconds
+                } else {
+                    slot.model_seconds_from_phase(phase)
+                },
+                ..draw
+            },
             model_center: model_center(model, center, local_offset, rotation_sin_cos),
             sprite_center: offset_center(center, local_offset, rotation_sin_cos),
             size,
@@ -1353,7 +1390,14 @@ fn compose_flat_single_slot<S, F>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw,
+            draw: deadsync_noteskin::ModelDrawState {
+                texture_seconds: if slot.actor_frame_child() {
+                    draw.texture_seconds
+                } else {
+                    slot.model_seconds_from_phase(phase)
+                },
+                ..draw
+            },
             model_center: center,
             sprite_center: center,
             size,
@@ -1689,6 +1733,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
         },
         FlatDraw::TexturedMesh(mesh) => {
             let make_actor = |vertices| Actor::TexturedMesh {
+                environment: mesh.environment.clone(),
                 align: [0.0, 0.0],
                 offset: mesh.offset,
                 world_z: mesh.world_z,
@@ -1713,6 +1758,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             match mesh.vertices {
                 FlatMeshVertices::Shared(vertices) => make_actor(vertices),
                 FlatMeshVertices::Reusable(vertices) => Actor::ReusableTexturedMesh {
+                    environment: mesh.environment.clone(),
                     align: [0.0, 0.0],
                     offset: mesh.offset,
                     world_z: mesh.world_z,
@@ -1999,6 +2045,7 @@ mod note_layer_tests {
                 bounds: [-32.0, -32.0, 0.0, 32.0, 32.0, 0.0],
                 vertices: [[-32.0, 32.0, 0.0], [-32.0, -32.0, 0.0], [32.0, -32.0, 0.0]]
                     .map(|pos| deadsync_noteskin::ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
                         pos,
                         uv: [0.0; 2],
                         tex_matrix_scale: [1.0; 2],
@@ -2146,6 +2193,12 @@ mod camera_wrap_tests {
     fn capture_preserves_reusable_hold_mesh_storage() {
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let actor = actor_from_flat_draw(FlatDraw::TexturedMesh(FlatTexturedMesh {
+            environment: Some(deadlib_present::actors::MeshEnvironment {
+                camera: None,
+                transform: Mat4::from_rotation_y(0.5),
+                additive_texture: Some(Arc::from("reflection")),
+                additive_uv: [0.0, 0.0, 1.0, 1.0],
+            }),
             offset: [12.0, 34.0],
             world_z: 5.0,
             local_transform: Mat4::IDENTITY,
@@ -2167,6 +2220,7 @@ mod camera_wrap_tests {
 
         let Actor::ReusableTexturedMesh {
             vertices: captured,
+            environment,
             depth_test,
             ..
         } = actor
@@ -2174,6 +2228,13 @@ mod camera_wrap_tests {
             panic!("hold capture should retain reusable mesh ownership");
         };
         assert!(depth_test);
+        assert_eq!(
+            environment
+                .expect("capture must preserve material")
+                .additive_texture
+                .as_deref(),
+            Some("reflection")
+        );
         assert!(Arc::ptr_eq(&captured, &vertices));
     }
 

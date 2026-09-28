@@ -215,11 +215,12 @@ pub struct NotefieldCameraCacheStats {
 /// changes rebuild one bounded matrix synchronously, while stable frames copy
 /// the retained matrix. Screen destruction releases the two inline entries.
 /// Counters expose hits and rebuilds; worst-case miss work is one call to
-/// [`notefield_view_proj`].
+/// [`notefield_camera`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NotefieldCameraCache {
     key: Option<NotefieldCameraKey>,
     camera: Option<Matrix4>,
+    view: Option<Matrix4>,
     stats: NotefieldCameraCacheStats,
 }
 
@@ -248,7 +249,7 @@ impl NotefieldCameraCache {
             self.stats.hits = self.stats.hits.saturating_add(1);
             return self.camera;
         }
-        let camera = notefield_view_proj(
+        let camera = notefield_camera(
             screen_w,
             screen_h,
             playfield_center_x,
@@ -258,9 +259,14 @@ impl NotefieldCameraCache {
             reverse,
         );
         self.key = Some(key);
-        self.camera = camera;
+        self.camera = camera.map(|(projection, _)| projection);
+        self.view = camera.map(|(_, view)| view);
         self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
-        camera
+        self.camera
+    }
+
+    pub(crate) fn eye_camera(&self) -> Option<(Matrix4, Matrix4)> {
+        self.camera.zip(self.view)
     }
 
     #[must_use]
@@ -275,7 +281,7 @@ impl NotefieldCameraCache {
     }
 }
 
-pub(crate) fn notefield_view_proj(
+pub(crate) fn notefield_camera(
     screen_w: f32,
     screen_h: f32,
     playfield_center_x: f32,
@@ -283,7 +289,7 @@ pub(crate) fn notefield_view_proj(
     tilt: f32,
     skew: f32,
     reverse: bool,
-) -> Option<Matrix4> {
+) -> Option<(Matrix4, Matrix4)> {
     if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
         return None;
     }
@@ -348,7 +354,8 @@ pub(crate) fn notefield_view_proj(
         * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
-    Some((proj * view) * world_to_screen * field)
+    let eye = view * world_to_screen * field;
+    Some((proj * eye, eye))
 }
 
 pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {
@@ -670,7 +677,7 @@ mod tests {
     use super::{
         FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
         LayoutMiniIndicatorPosition, NotefieldCameraCache, ZmodLayoutParams, field_layout,
-        notefield_view_proj,
+        notefield_camera,
     };
     use deadsync_core::input::MAX_COLS;
     use deadsync_theme::{
@@ -686,7 +693,8 @@ mod tests {
     #[test]
     fn field_camera_cache_reuses_exact_inputs() {
         let mut cache = NotefieldCameraCache::default();
-        let expected = notefield_view_proj(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
+        let expected = notefield_camera(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false)
+            .map(|(projection, _)| projection);
 
         let first = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
         let second = cache.resolve(640.0, 480.0, 213.5, 240.0, 0.35, -0.2, false);
@@ -716,7 +724,8 @@ mod tests {
             let resolved =
                 cache.resolve(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
             let expected =
-                notefield_view_proj(screen_w, screen_h, center_x, center_y, tilt, skew, reverse);
+                notefield_camera(screen_w, screen_h, center_x, center_y, tilt, skew, reverse)
+                    .map(|(projection, _)| projection);
             assert_eq!(matrix_bits(resolved), matrix_bits(expected));
             assert_eq!(cache.stats().rebuilds, index as u64 + 1);
             assert_eq!(cache.stats().hits, 0);

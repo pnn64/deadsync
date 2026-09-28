@@ -6570,6 +6570,7 @@ fn append_song_lua_actor_multi_vertex_textured_mesh(
             skew,
         );
         out.push(TexturedMeshVertex {
+            normal: [0.0; 4],
             pos: [pos[0], pos[1], 0.0],
             uv: vertex.uv,
             tex_matrix_scale: [1.0, 1.0],
@@ -6642,21 +6643,57 @@ fn append_song_lua_model_actors(
             layer.uv_tex_shift[0] + shift[0],
             layer.uv_tex_shift[1] + shift[1],
         ];
+        let local_transform = song_lua_model_local_transform(
+            layer.model_size,
+            layer.draw,
+            x_scale,
+            y_scale,
+            actor_scale,
+            effect_scale,
+            effect_rot,
+            [state.skew_x, state.skew_y],
+        );
+        let environment = layer
+            .vertices
+            .first()
+            .filter(|vertex| vertex.normal[3] != 0.0)
+            .map(|_| {
+                let (additive_texture, mut additive_uv) = layer.additive.as_ref().map_or(
+                    (None, [0.0, 0.0, 1.0, 1.0]),
+                    |(key, frames)| {
+                        let duration = frames.last().map_or(1.0, |frame| frame.1).max(f32::EPSILON);
+                        let time = total_elapsed.rem_euclid(duration);
+                        let frame = frames
+                            .partition_point(|frame| frame.1 <= time)
+                            .min(frames.len().saturating_sub(1));
+                        (
+                            Some(Arc::clone(key)),
+                            frames
+                                .get(frame)
+                                .map_or([0.0, 0.0, 1.0, 1.0], |frame| frame.0),
+                        )
+                    },
+                );
+                for axis in 0..2 {
+                    let shift = uv_tex_shift[axis] / layer.uv_scale[axis].max(f32::EPSILON);
+                    let delta = shift * (additive_uv[axis + 2] - additive_uv[axis]);
+                    additive_uv[axis] += delta;
+                    additive_uv[axis + 2] += delta;
+                }
+                deadlib_present::actors::MeshEnvironment {
+                    camera: None,
+                    transform: local_transform,
+                    additive_texture,
+                    additive_uv,
+                }
+            });
         let actor = Actor::TexturedMesh {
+            environment,
             align: [0.0, 0.0],
             offset,
             world_z: song_lua_biased_world_z(state, effect_offset[2]),
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            local_transform: song_lua_model_local_transform(
-                layer.model_size,
-                layer.draw,
-                x_scale,
-                y_scale,
-                actor_scale,
-                effect_scale,
-                effect_rot,
-                [state.skew_x, state.skew_y],
-            ),
+            local_transform,
             texture: Arc::clone(&layer.texture_key),
             tint: song_lua_capture_tint(layer.draw.tint, tint),
             glow: [1.0, 1.0, 1.0, 0.0],
@@ -7763,6 +7800,7 @@ fn song_lua_projected_mesh_actor_from_grid(
 ) -> Actor {
     if let Some(scratch) = scratch {
         return Actor::ReusableTexturedMesh {
+            environment: None,
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             world_z: params.world_z,
@@ -7793,6 +7831,7 @@ fn song_lua_projected_mesh_actor_from_grid(
     );
     append_projected_mesh_vertices(grid, width, height, edge_fade, &mut vertices);
     Actor::TexturedMesh {
+        environment: None,
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
         world_z: params.world_z,
@@ -7854,6 +7893,7 @@ fn song_lua_flat_skewed_overlay_actor(
             let color_x = song_lua_projected_color_coord(x, edge_fade[0], edge_fade[1]);
             let color_y = song_lua_projected_color_coord(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [point.x, point.y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
@@ -7929,6 +7969,7 @@ fn song_lua_projected_overlay_actor(
             let color_x = song_lua_projected_color_coord(x, edge_fade[0], edge_fade[1]);
             let color_y = song_lua_projected_color_coord(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
+                normal: [0.0; 4],
                 pos: [local_x, local_y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
@@ -8682,6 +8723,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         );
                     });
                     Actor::ReusableTexturedMesh {
+                        environment: None,
                         align: [0.0, 0.0],
                         offset: [
                             effect_offset[0].mul_add(x_scale, state.x * x_scale),
@@ -8717,6 +8759,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         [state.skew_x, state.skew_y],
                     );
                     Actor::TexturedMesh {
+                        environment: None,
                         align: [0.0, 0.0],
                         offset: [
                             effect_offset[0].mul_add(x_scale, state.x * x_scale),
@@ -9467,6 +9510,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 .map(|scratch| scratch.update_textured_glow(vertices.as_ref()));
             let actor = if let Some(vertices) = prewarmed_static_vertices {
                 Actor::TexturedMesh {
+                    environment: None,
                     align: *align,
                     offset: *offset,
                     world_z: *world_z,
@@ -9490,6 +9534,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 }
             } else if let Some(vertices) = glow_vertices {
                 Actor::ReusableTexturedMesh {
+                    environment: None,
                     align: *align,
                     offset: *offset,
                     world_z: *world_z,
@@ -9517,6 +9562,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
                 }
                 Actor::TexturedMesh {
+                    environment: None,
                     align: *align,
                     offset: *offset,
                     world_z: *world_z,
@@ -9573,6 +9619,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 |scratch| scratch.update_textured_glow(vertices),
             );
             Some(Actor::ReusableTexturedMesh {
+                environment: None,
                 align: *align,
                 offset: *offset,
                 world_z: *world_z,

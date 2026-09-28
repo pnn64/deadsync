@@ -947,6 +947,10 @@ fn prepare_objects(
                             > tmesh_triangles
                                 .capacity()
                                 .saturating_sub(tmesh_triangles.len())
+                        || geometry
+                            .vertices
+                            .first()
+                            .is_some_and(|vertex| vertex.normal[3] != 0.0)
                     {
                         prepared.push(PreparedObject::DirectTexturedMesh {
                             geometry: run.geometry,
@@ -1252,6 +1256,27 @@ fn draw_prepared<'a>(
             let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
                 return 0;
             };
+            if geometry
+                .vertices
+                .first()
+                .is_some_and(|vertex| vertex.normal[3] != 0.0)
+            {
+                let additive = textures.software_texture(instance.additive_texture);
+                return rasterize_environment(
+                    mvp,
+                    geometry.vertices.as_ref(),
+                    *instance,
+                    *blend,
+                    tex,
+                    additive,
+                    width,
+                    height,
+                    stripe_y_start,
+                    stripe_y_end,
+                    buffer,
+                    if *depth_test { depth } else { &mut [] },
+                );
+            }
             rasterize_textured_mesh_triangles(
                 mvp,
                 geometry.vertices.as_ref(),
@@ -1400,6 +1425,7 @@ struct ScreenVertexColor {
 
 #[derive(Clone, Copy)]
 struct ScreenVertexTexColor {
+    inv_w: f32,
     z: f32,
     x: f32,
     y: f32,
@@ -1717,6 +1743,7 @@ fn project_tmesh_polygon(
     let (clipped, len) = clip_tmesh_near(triangle);
     let polygon = &clipped[..len];
     let mut projected = [ScreenVertexTexColor {
+        inv_w: 1.0,
         z: 0.0,
         x: 0.0,
         y: 0.0,
@@ -1734,6 +1761,7 @@ fn project_tmesh_polygon(
             return None;
         }
         projected[i] = ScreenVertexTexColor {
+            inv_w: vertex.clip.w.recip(),
             z: (vertex.clip.z / vertex.clip.w + 1.0) * 0.5,
             x: f32::midpoint(ndc_x, 1.0) * width as f32,
             y: ((1.0 - ndc_y) * 0.5) * height as f32,
@@ -2000,6 +2028,157 @@ fn rasterize_mesh_triangles(
     }
 
     verts_drawn
+}
+
+// Environment coordinates are generated at vertices, then perspective-correctly
+// interpolated. Stack triangles also preserve clipping without transient buffers.
+#[allow(clippy::too_many_arguments)]
+fn rasterize_environment(
+    mvp: &Matrix4,
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    instance: deadlib_render_core::TexturedMeshInstanceRaw,
+    blend: BlendMode,
+    primary: &Texture,
+    additive: Option<&Texture>,
+    width: usize,
+    height: usize,
+    stripe_y_start: usize,
+    stripe_y_end: usize,
+    buffer: &mut [u32],
+    depth: &mut [f32],
+) -> u32 {
+    let mut count = 0;
+    for triangle in vertices.as_chunks::<3>().0 {
+        let mut first = *triangle;
+        let mut second = *triangle;
+        for i in 0..3 {
+            let uv = deadlib_render_core::textured_mesh_uvs(triangle[i], instance);
+            first[i].uv = uv[0];
+            second[i].uv = uv[1];
+        }
+        let Some((p, len)) = project_tmesh_polygon(
+            mvp,
+            instance.tint,
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            &first,
+            width,
+            height,
+            instance.cull_back > 0.5,
+        ) else {
+            continue;
+        };
+        let Some((q, _)) = project_tmesh_polygon(
+            mvp,
+            instance.tint,
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            &second,
+            width,
+            height,
+            instance.cull_back > 0.5,
+        ) else {
+            continue;
+        };
+        count += 3;
+        for i in 1..len.saturating_sub(1) {
+            let p = [p[0], p[i], p[i + 1]];
+            let q = [q[0], q[i], q[i + 1]];
+            let Some(setup) = triangle_setup(p.map(|v| v.x), p.map(|v| v.y), width, height) else {
+                continue;
+            };
+            let Some((min_x, max_x, min_y, max_y, start)) =
+                setup.stripe_bounds(stripe_y_start, stripe_y_end)
+            else {
+                continue;
+            };
+            let sample = |texture: &Texture, uv: [f32; 2]| {
+                let sampler = SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..texture.sampler
+                };
+                let image = &texture.image;
+                if sampler.filter == SamplerFilter::Linear {
+                    sample_tex_linear::<false>(
+                        image.as_raw(),
+                        image.width() as usize,
+                        image.height() as usize,
+                        uv[0],
+                        uv[1],
+                        sampler,
+                    )
+                } else {
+                    sample_tex_nearest::<false>(
+                        image.as_raw(),
+                        image.width() as usize,
+                        image.height() as usize,
+                        uv[0],
+                        uv[1],
+                        sampler,
+                    )
+                }
+                .unwrap_or([0.0; 4])
+            };
+            for y in min_y..=max_y {
+                for x in min_x..=max_x {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+                    let a = edge_function(p[1].x, p[1].y, p[2].x, p[2].y, px, py) * setup.inv_denom;
+                    let b = edge_function(p[2].x, p[2].y, p[0].x, p[0].y, px, py) * setup.inv_denom;
+                    let c = 1.0 - a - b;
+                    if a < 0.0 || b < 0.0 || c < 0.0 {
+                        continue;
+                    }
+                    let z = a * p[0].z + b * p[1].z + c * p[2].z;
+                    let sum = a * p[0].inv_w + b * p[1].inv_w + c * p[2].inv_w;
+                    let w = [
+                        a * p[0].inv_w / sum,
+                        b * p[1].inv_w / sum,
+                        c * p[2].inv_w / sum,
+                    ];
+                    let uv = |v: &[ScreenVertexTexColor; 3]| {
+                        [
+                            w[0] * v[0].u + w[1] * v[1].u + w[2] * v[2].u,
+                            w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
+                        ]
+                    };
+                    let texel = sample(primary, uv(&p));
+                    let tint: [f32; 4] = std::array::from_fn(|i| {
+                        w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
+                    });
+                    let mut color: [f32; 4] = std::array::from_fn(|i| texel[i] * tint[i]);
+                    if instance.texture_mask > 0.5 {
+                        color[..3].copy_from_slice(&tint[..3]);
+                    } else if triangle[0].normal[3] as u8 & 4 != 0 {
+                        let reflection = sample(additive.unwrap_or(primary), uv(&q));
+                        for i in 0..3 {
+                            color[i] = (color[i] + reflection[i]).min(1.0);
+                        }
+                        color[3] *= reflection[3];
+                    }
+                    if color[3] <= 1.0 / 256.0 {
+                        continue;
+                    }
+                    let index = (y - start) as usize * width + x as usize;
+                    if !depth.is_empty() {
+                        if !(0.0..=1.0).contains(&z) || z > depth[index] {
+                            continue;
+                        }
+                        depth[index] = z;
+                    }
+                    buffer[index] = match blend {
+                        BlendMode::Add => {
+                            blend_add(buffer[index], color[0], color[1], color[2], color[3])
+                        }
+                        _ => blend_src_over(buffer[index], color[0], color[1], color[2], color[3]),
+                    };
+                }
+            }
+        }
+    }
+    count
 }
 
 fn rasterize_textured_mesh_triangles(
@@ -3239,6 +3418,110 @@ mod tests {
         lookups: AtomicUsize,
     }
 
+    #[test]
+    fn sphere_material_rotation_and_alpha_match_gl_stages() {
+        let texture = |image| Texture {
+            image,
+            sampler: SamplerDesc::default(),
+            opaque: false,
+            yuv420: false,
+        };
+        let gradient = texture(RgbaImage::from_fn(128, 128, |x, y| {
+            image::Rgba([(x * 2) as u8, (y * 2) as u8, 0, 255])
+        }));
+        let base = texture(RgbaImage::from_pixel(1, 1, image::Rgba([40, 60, 80, 128])));
+        let reflection = texture(RgbaImage::from_pixel(1, 1, image::Rgba([80, 40, 20, 128])));
+        let vertices = [
+            [-0.8, -0.8, 0.0],
+            [0.8, -0.8, 0.0],
+            [0.8, 0.8, 0.0],
+            [-0.8, -0.8, 0.0],
+            [0.8, 0.8, 0.0],
+            [-0.8, 0.8, 0.0],
+        ]
+        .map(|pos| deadlib_render_core::TexturedMeshVertex {
+            pos,
+            normal: [0.0, 0.0, 1.0, 1.0],
+            color: [1.0; 4],
+            uv: [0.1, 0.2],
+            ..Default::default()
+        });
+        let mut instance = TexturedMeshInstanceRaw::new(
+            Matrix4::IDENTITY,
+            [1.0; 4],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            false,
+        );
+        let mut pixels = vec![0; 64 * 64];
+        for (angle, expected) in [
+            (0.0_f32, [127, 127, 0]),
+            (45.0, [218, 127, 0]),
+            (-45.0, [37, 127, 0]),
+        ] {
+            let mut eye = Matrix4::from_rotation_y(angle.to_radians());
+            eye.w_axis.z = -1000.0;
+            instance.sphere_rows = [
+                eye.row(0).to_array(),
+                eye.row(1).to_array(),
+                eye.row(2).to_array(),
+            ];
+            pixels.fill(0xff14_283c);
+            rasterize_environment(
+                &Matrix4::IDENTITY,
+                &vertices,
+                instance,
+                BlendMode::Alpha,
+                &gradient,
+                None,
+                64,
+                64,
+                0,
+                64,
+                &mut pixels,
+                &mut [],
+            );
+            let actual = pixels[32 * 64 + 32];
+            for (i, expected) in expected.into_iter().enumerate() {
+                assert!(
+                    (((actual >> (16 - i * 8)) & 255) as u8).abs_diff(expected) <= 3,
+                    "{angle}: {actual:08x}"
+                );
+            }
+        }
+        let vertices = vertices.map(|mut v| {
+            v.normal[3] = 6.0;
+            v
+        });
+        instance.tint = [0.5, 0.75, 1.0, 0.5];
+        for (mask, expected) in [(0.0, [30, 46, 65]), (1.0, [47, 78, 109])] {
+            instance.texture_mask = mask;
+            pixels.fill(0xff14_283c);
+            rasterize_environment(
+                &Matrix4::IDENTITY,
+                &vertices,
+                instance,
+                BlendMode::Alpha,
+                &base,
+                Some(&reflection),
+                64,
+                64,
+                0,
+                64,
+                &mut pixels,
+                &mut [],
+            );
+            let actual = pixels[32 * 64 + 32];
+            for (i, expected) in expected.into_iter().enumerate() {
+                assert!(
+                    (((actual >> (16 - i * 8)) & 255) as u8).abs_diff(expected) <= 3,
+                    "mask={mask}: {actual:08x}"
+                );
+            }
+        }
+    }
+
     impl TextureLookup for TestTextures {
         fn software_texture(&self, handle: TextureHandle) -> Option<&Texture> {
             self.lookups.fetch_add(1, Ordering::Relaxed);
@@ -3634,6 +3917,7 @@ mod tests {
                         [-r, r, z],
                     ]
                     .map(|pos| TexturedMeshVertex {
+                        normal: [0.0; 4],
                         pos,
                         uv: [0.5; 2],
                         color: [1.0; 4],
@@ -3667,6 +3951,7 @@ mod tests {
             ops: (0..3)
                 .map(|i| {
                     DrawOp::TexturedMesh(TexturedMeshRun {
+                        additive_texture: 0,
                         geometry: i,
                         instance_start: i,
                         instance_count: 1,
@@ -3697,6 +3982,7 @@ mod tests {
             frame.ops.truncate(3);
             if overlay {
                 frame.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+                    additive_texture: 0,
                     geometry: 1,
                     instance_start: 3,
                     instance_count: 1,
@@ -3781,6 +4067,7 @@ mod tests {
             vertices: TexturedMeshVertices::Shared(Arc::from(
                 [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]].map(|[x, y]| {
                     TexturedMeshVertex {
+                        normal: [0.0; 4],
                         pos: [x, y, 0.0],
                         uv: [0.5; 2],
                         color: [1.0; 4],
@@ -3791,6 +4078,7 @@ mod tests {
         };
         let run = |geometry, instance_start, depth_test, clear_depth| {
             DrawOp::TexturedMesh(TexturedMeshRun {
+                additive_texture: 0,
                 geometry,
                 instance_start,
                 instance_count: 1,
@@ -3907,6 +4195,7 @@ mod tests {
         ] {
             for pos in points {
                 vertices.push(TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos,
                     uv,
                     color: [1.0; 4],
@@ -4491,6 +4780,7 @@ mod tests {
                     camera: 0,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    additive_texture: 0,
                     geometry: 0,
                     instance_start: 0,
                     instance_count: 1,
@@ -4501,6 +4791,7 @@ mod tests {
                     clear_depth: false,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    additive_texture: 0,
                     geometry: 0,
                     instance_start: 1,
                     instance_count: 1,
@@ -4523,6 +4814,7 @@ mod tests {
 
     fn textured_vertex(pos: [f32; 3], uv: [f32; 2]) -> TexturedMeshVertex {
         TexturedMeshVertex {
+            normal: [0.0; 4],
             pos,
             uv,
             color: [0.9, 0.8, 0.7, 0.85],

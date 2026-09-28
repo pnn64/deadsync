@@ -104,6 +104,9 @@ struct TexturedMeshInstanceRaw {
     uv_tex_shift: [f32; 2],
     texture_mask: f32,
     cull_back: f32,
+    sphere_rows: [[f32; 4]; 3],
+    additive_uv: [f32; 4],
+    additive_texture: TextureHandle,
 }
 
 struct PipelineSet {
@@ -1581,6 +1584,13 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         Some(texture_bind_group(tex, run.texture_handle, false)),
                         &[],
                     );
+                    // Sprites share the mesh layout to retain immediate camera
+                    // data. Wgpu requires its unused material group to be bound.
+                    pass.set_bind_group(
+                        texture_group + 1,
+                        Some(texture_bind_group(tex, run.texture_handle, false)),
+                        &[],
+                    );
                 }
                 pass.draw_indexed(
                     0..state.index_count,
@@ -1678,6 +1688,13 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         &[],
                     );
                 }
+                let additive =
+                    resolved_texture(state, textures, run.additive_texture).unwrap_or(tex);
+                pass.set_bind_group(
+                    texture_group + 1,
+                    Some(texture_bind_group(additive, run.additive_texture, true)),
+                    &[],
+                );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
                         let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
@@ -2970,7 +2987,7 @@ fn build_texture_pipeline_layout(
 ) -> wgpu::PipelineLayout {
     match proj {
         ProjState::Immediates => {
-            let layouts = [Some(bind_layout)];
+            let layouts = [Some(bind_layout), Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -2978,7 +2995,7 @@ fn build_texture_pipeline_layout(
             })
         }
         ProjState::Uniform { layout, .. } => {
-            let layouts = [Some(layout), Some(bind_layout)];
+            let layouts = [Some(layout), Some(bind_layout), Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wgpu pipeline layout"),
                 bind_group_layouts: &layouts,
@@ -3498,24 +3515,19 @@ const MESH_ATTRS: [wgpu::VertexAttribute; 2] = wgpu::vertex_attr_array![
     1 => Float32x4, // color
 ];
 
-const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
-    0 => Float32x3, // pos
-    1 => Float32x2, // uv
+const TMESH_ATTRS: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+    4 => Float32x4, // normal and texture generation modes
+    0 => Float32x3, // position
+    1 => Float32x2, // texture coordinates
     2 => Float32x4, // color
-    3 => Float32x2, // tex-matrix scale
+    3 => Float32x2, // texture-matrix scale
 ];
 
-const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
-    4 => Float32x4, // model column 0
-    5 => Float32x4, // model column 1
-    6 => Float32x4, // model column 2
-    7 => Float32x4, // model column 3
-    8 => Float32x4, // tint
-    9 => Float32x2, // uv scale
-    10 => Float32x2, // uv offset
-    11 => Float32x2, // uv texture-matrix shift
-    12 => Float32, // texture alpha-mask mode
-    13 => Float32, // backface culling
+// Pack adjacent UV/control fields to stay within the 16-attribute device limit.
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
+    5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4,
+    9 => Float32x4, 10 => Float32x4, 11 => Float32x4,
+    12 => Float32x4, 13 => Float32x4, 14 => Float32x4, 15 => Float32x4,
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
@@ -3807,6 +3819,7 @@ mod tests {
         ] {
             for pos in points {
                 vertices.push(TexturedMeshVertex {
+                    normal: [0.0; 4],
                     pos,
                     uv,
                     color: [1.0; 4],
@@ -3833,6 +3846,7 @@ mod tests {
                 cache_key: 0,
             }],
             ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+                additive_texture: 0,
                 texture_handle: 1,
                 blend: BlendMode::Alpha,
                 camera: 0,
