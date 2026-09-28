@@ -1257,6 +1257,151 @@ Bones: 0
     }
 
     #[test]
+    fn named_explosion_fades_survive_cache_reload() {
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("named-explosion-fades");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    if Var "Element" == "Explosion" then
+        return LoadActor(NOTESKIN:GetPath("", "Fallback Explosion"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "plain.png"))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Fallback Explosion.lua"),
+            r#"
+return Def.ActorFrame {
+    NOTESKIN:LoadActor("Down", "Tap Glow") .. {
+        InitCommand=cmd(diffusealpha,0);
+        DimGlowCommand=NOTESKIN:GetMetricA("Glow", "FadeCommand");
+        W1Command=function(self) self:diffuse(1,0.5,0,1):playcommand("DimGlow") end;
+        W2Command=function(self) self:diffuse(0,1,0.5,1):playcommand("DimGlow") end;
+        W3Command=function(self) self:diffuse(0.5,0,1,1):playcommand("DimGlow") end;
+        JudgmentCommand=function(self) self:finishtweening() end;
+    };
+    NOTESKIN:LoadActor("Down", "Tap Particle Base") .. {
+        InitCommand=cmd(diffusealpha,0);
+        GenericCommand=NOTESKIN:GetMetricA("Particle", "DimCommand");
+        W1Command=cmd(playcommand,"Generic");
+        W2Command=cmd(playcommand,"Generic");
+        JudgmentCommand=function(self) self:finishtweening():rotationz(math.random() * 360) end;
+        BrightCommand=cmd(visible,true);
+        DimCommand=cmd(visible,true);
+    };
+    NOTESKIN:LoadActor("Down", "Tap Particle Extra") .. {
+        InitCommand=cmd(diffusealpha,0);
+        GenericCommand=NOTESKIN:GetMetricA("Particle", "BrightCommand");
+        W1Command=cmd(playcommand,"Generic");
+        JudgmentCommand=function(self) self:finishtweening():rotationz(math.random() * 360) end;
+        BrightCommand=cmd(visible,true);
+        DimCommand=cmd(visible,true);
+    };
+}
+"#,
+        )
+        .unwrap();
+        fs::write(root.join("metrics.ini"), "\
+[Glow]\n\
+FadeCommand=finishtweening;zoom,1.1;diffusealpha,1;sleep,0.1;decelerate,0.2;diffusealpha,0;zoom,1.4\n\
+[Particle]\n\
+DimCommand=blend,'BlendMode_Add';diffusealpha,0.6;zoom,0.75;decelerate,0.25;zoom,1.25;linear,0.06;diffusealpha,0\n\
+BrightCommand=blend,'BlendMode_Add';diffusealpha,1;zoom,0.75;decelerate,0.25;zoom,1.5;linear,0.06;diffusealpha,0\n").unwrap();
+        for name in [
+            "plain",
+            "Down Tap Glow",
+            "Down Tap Particle Base",
+            "Down Tap Particle Extra",
+        ] {
+            write_noteskin_png(&root.join(format!("{name}.png")));
+        }
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "named-explosion-fixture".into(),
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        for parts in [
+            None,
+            Some(SkinParts::default().with(SkinPart::TapExplosions)),
+        ] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &style,
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for col in 0..4 {
+                for bright in [false, true] {
+                    for (grade, alphas) in [
+                        ("W1", [1.0, 0.6, 1.0]),
+                        ("W2", [1.0, 0.6, 0.0]),
+                        ("W3", [1.0, 0.0, 0.0]),
+                    ] {
+                        let explosion = skin
+                            .tap_explosion_for_col_with_bright(col, grade, bright)
+                            .unwrap();
+                        assert_eq!(explosion.layers.len(), 3);
+                        for (index, layer) in explosion.layers.iter().enumerate() {
+                            let animation = &layer.animation;
+                            let initial = animation.state_at_seeded(0.0, 0.0, 17);
+                            assert!(
+                                (initial.diffuse[3] - alphas[index]).abs() < 1e-6,
+                                "{grade}, layer {index}: {initial:?}"
+                            );
+                            if alphas[index] == 0.0 {
+                                continue;
+                            }
+                            let duration = if index == 0 { 0.3 } else { 0.31 };
+                            assert!((animation.duration() - duration).abs() < 1e-6);
+                            assert!(animation.state_at(0.05).diffuse[3] > 0.0);
+                            let (time, alpha) = if index == 0 {
+                                (0.2, 0.25)
+                            } else {
+                                (0.28, alphas[index] * 0.5)
+                            };
+                            assert!((animation.state_at(time).diffuse[3] - alpha).abs() < 1e-6);
+                            assert!(animation.state_at(0.32).diffuse[3] < 1e-6);
+                            if index > 0 {
+                                assert!(animation.blend_add);
+                                assert!((initial.zoom - 0.75).abs() < 1e-6);
+                                assert!(animation.state_at(0.2).zoom > 1.0);
+                                assert_eq!(
+                                    animation.state_at_seeded(0.2, 0.2, 17).rotation_z,
+                                    initial.rotation_z
+                                );
+                                assert_ne!(
+                                    animation.state_at_seeded(0.0, 0.0, 18).rotation_z,
+                                    initial.rotation_z
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn explosion_aliases_keep_metric_animation_after_cache_reload() {
         use deadsync_noteskin::{
             compiled, compiler,

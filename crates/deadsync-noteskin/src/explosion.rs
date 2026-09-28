@@ -5,7 +5,7 @@ use crate::script::{
     parse_script_number, parse_script_sleep, parse_script_tween, split_script_token,
     tween_type_from_script_tween,
 };
-use arrayvec::ArrayString;
+use arrayvec::{ArrayString, ArrayVec};
 use log::warn;
 use std::collections::HashMap;
 
@@ -965,6 +965,23 @@ pub(crate) fn parse_itg_tap_explosion_animation_commands(
     sequence[len] = command.trim();
     len += 1;
 
+    if sequence[..len].iter().any(|command| {
+        command
+            .as_bytes()
+            .windows(11)
+            .any(|word| word.eq_ignore_ascii_case(b"playcommand"))
+    }) {
+        let mut expanded = String::new();
+        let mut stack = ArrayVec::new();
+        let mut remaining = 4096;
+        for command in &sequence[..len] {
+            if !expand_explosion_cmd(commands, command, &mut stack, &mut remaining, &mut expanded) {
+                break;
+            }
+        }
+        return parse_explosion_animation_parts([expanded.as_str()]);
+    }
+
     if sequence[..len]
         .iter()
         .all(|command| !command.contains("self:"))
@@ -973,6 +990,60 @@ pub(crate) fn parse_itg_tap_explosion_animation_commands(
     } else {
         parse_explosion_animation(&sequence[..len].join(";"))
     }
+}
+
+// Actor::playcommand runs the target immediately on the same actor. Inline its
+// setters into the current tween rather than treating the call as a boundary.
+// This runs at skin load; bound both recursion and expansion of untrusted scripts.
+fn expand_explosion_cmd<'a>(
+    commands: &'a HashMap<String, String>,
+    script: &str,
+    stack: &mut ArrayVec<&'a str, 16>,
+    remaining: &mut usize,
+    output: &mut String,
+) -> bool {
+    let script = normalized_script_command(script);
+    for raw in script
+        .split(';')
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    {
+        if *remaining == 0 || output.len().saturating_add(raw.len() + 1) > 256 * 1024 {
+            warn!("Noteskin explosion command expansion exceeds its size limit");
+            return false;
+        }
+        *remaining -= 1;
+        if let Some(token) = split_script_token(raw)
+            && token.command() == ScriptCommand::PlayCommand
+        {
+            let Some(name) = token.args().first() else {
+                continue;
+            };
+            let key = format!(
+                "{}command",
+                name.trim().trim_matches(['\'', '"']).to_ascii_lowercase()
+            );
+            let Some((key, command)) = commands.get_key_value(&key) else {
+                continue;
+            };
+            if stack.is_full() || stack.contains(&key.as_str()) {
+                warn!("Recursive noteskin explosion command '{key}' skipped");
+                continue;
+            }
+            stack.push(key);
+            let complete = expand_explosion_cmd(commands, command, stack, remaining, output);
+            stack.pop();
+            if !complete {
+                return false;
+            }
+        } else {
+            if !output.is_empty() {
+                output.push(';');
+            }
+            output.push_str(raw);
+        }
+    }
+    true
 }
 
 pub fn itg_explosion_wrapper<'a, T>(
@@ -1415,6 +1486,78 @@ mod tests {
 
         assert_eq!(state.diffuse, [1.0, 1.0, 1.0, 1.0]);
         assert!(state.glow.iter().all(|c| *c >= 0.0 && *c <= 1.0));
+    }
+
+    #[test]
+    fn named_commands_preserve_pending_tweens() {
+        let commands = HashMap::from([
+            ("initcommand".into(), "diffusealpha,0".into()),
+            ("judgmentcommand".into(), "finishtweening".into()),
+            ("dimcommand".into(), "visible,true".into()),
+            (
+                "flashcommand".into(),
+                "diffusealpha,1;linear,0.4;playcommand,'Fade'".into(),
+            ),
+            (
+                "fadecommand".into(),
+                "function(self) self:diffusealpha(0):zoom(2) end".into(),
+            ),
+        ]);
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "playcommand,\"Flash\"",
+        );
+        assert_eq!(animation.segments.len(), 1);
+        assert!((animation.duration() - 0.4).abs() < 1e-6);
+        for (time, alpha, zoom) in [(0.0, 1.0, 1.0), (0.2, 0.5, 1.5), (0.4, 0.0, 2.0)] {
+            let state = animation.state_at(time);
+            assert!((state.diffuse[3] - alpha).abs() < 1e-6, "{time}: {state:?}");
+            assert!((state.zoom - zoom).abs() < 1e-6, "{time}: {state:?}");
+        }
+    }
+
+    #[test]
+    fn missing_command_keeps_pending_tween() {
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &HashMap::new(),
+            ItgTapExplosionMode::Dim,
+            "diffusealpha,1;linear,0.4;playcommand,'Missing';diffusealpha,0",
+        );
+        assert!((animation.state_at(0.2).diffuse[3] - 0.5).abs() < 1e-6);
+        assert_eq!(animation.segments.len(), 1);
+    }
+
+    #[test]
+    fn recursive_commands_are_bounded() {
+        let commands = HashMap::from([(
+            "loopcommand".into(),
+            "playcommand,'Loop';diffusealpha,0".into(),
+        )]);
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "diffusealpha,1;linear,0.4;playcommand,'Loop'",
+        );
+        assert!((animation.state_at(0.2).diffuse[3] - 0.5).abs() < 1e-6);
+
+        // Acyclic calls can also grow exponentially; cap total expanded work.
+        let mut commands = HashMap::new();
+        for depth in 0..14 {
+            commands.insert(
+                format!("c{depth}command"),
+                format!("playcommand,'C{}';playcommand,'C{}'", depth + 1, depth + 1),
+            );
+        }
+        commands.insert("c14command".into(), "linear,0.01;diffusealpha,0".into());
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "playcommand,'C0'",
+        );
+        assert!(!animation.segments.is_empty());
+        assert!(animation.segments.len() < 4096);
+        assert!(animation.duration().is_finite());
     }
 
     #[test]
