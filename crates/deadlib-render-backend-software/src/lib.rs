@@ -48,7 +48,8 @@ pub struct State {
     prepared_tmesh_triangles: Vec<PreparedTriangle<ScreenVertexTexColor>>,
     stripe_bins: StripeBins,
     // Sized at window creation/resize, split with pixel stripes for exclusive
-    // worker access, reused each frame, and freed with the renderer.
+    // worker access, reused each frame, and freed with the renderer. Stripes
+    // are reset only when a depth-tested draw reaches them.
     depth: Vec<f32>,
     offscreen_targets: Vec<OffscreenTarget>,
 }
@@ -591,7 +592,6 @@ fn draw_offscreen_targets(
         let initialized = targets[index].initialized;
         let mut pixels = std::mem::take(&mut targets[index].pixels);
         let mut depth = std::mem::take(&mut targets[index].depth);
-        depth.fill(1.0);
         if !pass.preserve || !initialized {
             pixels.fill(if pass.alpha { 0 } else { 0xff00_0000 });
         }
@@ -737,7 +737,6 @@ pub fn draw(
                 .zip(state.depth.par_chunks_mut(w * SOFTWARE_ROW_CHUNK))
                 .enumerate()
                 .map(|(chunk_index, (stripe, depth))| {
-                    depth.fill(1.0);
                     stripe.fill(clear);
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
@@ -761,7 +760,6 @@ pub fn draw(
         })
     } else {
         buffer.fill(clear);
-        state.depth.fill(1.0);
         let depth = &mut state.depth;
         draw_rows(
             software_frame,
@@ -1015,6 +1013,8 @@ fn draw_rows(
 ) -> u32 {
     let mut vertices_drawn = fixed_vertices;
     let mut texture_cache = None;
+    // `depth` still holds a previous pass; it is reset before its first use.
+    let mut depth_reset = true;
     if let Some(items) = stripe_items {
         for &item in items {
             let (object, triangle) = if item.is_whole() {
@@ -1027,6 +1027,9 @@ fn draw_rows(
                 (mesh_triangles[triangle].object as usize, Some(triangle))
             };
             let prepared = &prepared_objects[object];
+            if !apply_depth_reset(prepared, depth, &mut depth_reset) {
+                continue;
+            }
             if let Some(triangle) = triangle {
                 draw_prepared_triangle(
                     prepared,
@@ -1061,6 +1064,9 @@ fn draw_rows(
         }
     } else {
         for prepared in prepared_objects {
+            if !apply_depth_reset(prepared, depth, &mut depth_reset) {
+                continue;
+            }
             vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
                 prepared,
                 false,
@@ -1081,6 +1087,31 @@ fn draw_rows(
     vertices_drawn
 }
 
+/// Defers depth resets to the next depth-tested draw in these rows. Only those
+/// draws read or write depth, so rows they never reach skip the fill. Returns
+/// false for reset markers, which draw nothing.
+#[inline(always)]
+fn apply_depth_reset(prepared: &PreparedObject, depth: &mut [f32], pending: &mut bool) -> bool {
+    match prepared {
+        PreparedObject::ClearDepth => {
+            *pending = true;
+            false
+        }
+        PreparedObject::TexturedMesh {
+            depth_test: true, ..
+        }
+        | PreparedObject::DirectTexturedMesh {
+            depth_test: true, ..
+        } => {
+            if std::mem::take(pending) {
+                depth.fill(1.0);
+            }
+            true
+        }
+        _ => true,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_prepared<'a>(
     prepared: &PreparedObject,
@@ -1099,10 +1130,8 @@ fn draw_prepared<'a>(
     depth: &mut [f32],
 ) -> u32 {
     match prepared {
-        PreparedObject::ClearDepth => {
-            depth.fill(1.0);
-            0
-        }
+        // `draw_rows` applies resets before dispatching depth-tested draws.
+        PreparedObject::ClearDepth => 0,
         PreparedObject::Sprite {
             vertices,
             rows,
@@ -3707,7 +3736,8 @@ mod tests {
                     {
                         let start = stripe_index * SOFTWARE_ROW_CHUNK;
                         let end = start + stripe.len() / WIDTH;
-                        let mut depth = vec![1.0; stripe.len()];
+                        // Stale depth nearer than every model; rows reset it first.
+                        let mut depth = vec![0.0; stripe.len()];
                         draw_rows(
                             (&frame).into(),
                             &prepared,
@@ -3737,6 +3767,131 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn depth_resets_skip_rows_without_depth_draws() {
+        let textures = TestTextures {
+            texture: create_texture(
+                &RgbaImage::from_pixel(1, 1, Rgba([255; 4])),
+                SamplerDesc::default(),
+            )
+            .unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let quad = |[x0, y0, x1, y1]: [f32; 4]| TexturedMeshGeometry {
+            cache_key: 0,
+            vertices: TexturedMeshVertices::Shared(Arc::from(
+                [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]].map(|[x, y]| {
+                    TexturedMeshVertex {
+                        pos: [x, y, 0.0],
+                        uv: [0.5; 2],
+                        color: [1.0; 4],
+                        tex_matrix_scale: [1.0; 2],
+                    }
+                }),
+            )),
+        };
+        let run = |geometry, instance_start, depth_test, clear_depth_after| {
+            DrawOp::TexturedMesh(TexturedMeshRun {
+                geometry,
+                instance_start,
+                instance_count: 1,
+                texture_handle: TEXTURE_HANDLE,
+                blend: BlendMode::Alpha,
+                camera: 0,
+                depth_test,
+                clear_depth: false,
+                clear_depth_after,
+            })
+        };
+        // A near green model in the first stripe requests a reset, a full-screen
+        // blue quad ignores depth, and a farther red model must pass the reset.
+        let frame = RenderFrame {
+            clear_color: [0.0; 4],
+            render_targets: vec![],
+            cameras: vec![],
+            sprite_instances: vec![],
+            mesh_vertices: vec![],
+            tmesh_geometries: vec![quad([-0.5, 0.5, 0.5, 0.9]), quad([-1.0, -1.0, 1.0, 1.0])],
+            tmesh_instances: [
+                ([1.0, 0.0, 0.0, 1.0], 0.2),
+                ([0.0, 0.0, 1.0, 1.0], 0.0),
+                ([0.0, 1.0, 0.0, 1.0], -0.4),
+            ]
+            .map(|(tint, z)| {
+                TexturedMeshInstanceRaw::new(
+                    Matrix4::from_translation(Vec3::new(0.0, 0.0, z)),
+                    tint,
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                )
+            })
+            .to_vec(),
+            ops: vec![
+                run(0, 2, true, true),
+                run(1, 1, false, false),
+                run(0, 0, true, false),
+            ],
+        };
+        for staged in [false, true] {
+            let mut prepared = Vec::new();
+            let mut mesh = Vec::with_capacity(16);
+            let mut tmesh = Vec::with_capacity(16);
+            let fixed = prepare_objects(
+                (&frame).into(),
+                Matrix4::IDENTITY,
+                &textures,
+                WIDTH,
+                HEIGHT,
+                &mut prepared,
+                &mut mesh,
+                &mut tmesh,
+                staged,
+            );
+            let mut bins = StripeBins::warmed();
+            bins.build(&prepared, &mesh, &tmesh, HEIGHT);
+            let mut pixels = vec![0; WIDTH * HEIGHT];
+            // Stale depth rejects both models unless their rows are reset.
+            let mut depth = vec![0.25; WIDTH * HEIGHT];
+            for (stripe_index, (stripe, depth)) in pixels
+                .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
+                .zip(depth.chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK))
+                .enumerate()
+            {
+                let start = stripe_index * SOFTWARE_ROW_CHUNK;
+                draw_rows(
+                    (&frame).into(),
+                    &prepared,
+                    Some(bins.stripe(stripe_index)),
+                    &mesh,
+                    &tmesh,
+                    &textures,
+                    WIDTH,
+                    HEIGHT,
+                    start,
+                    start + stripe.len() / WIDTH,
+                    stripe,
+                    fixed,
+                    depth,
+                );
+            }
+            let (inside, outside) = (12 * WIDTH + WIDTH / 2, 12 * WIDTH + 4);
+            assert_eq!(pixels[inside] & 0xffffff, 0xff0000, "staged={staged}");
+            assert_eq!(pixels[outside] & 0xffffff, 0x0000ff, "staged={staged}");
+            assert!((depth[inside] - 0.6).abs() < 1e-5, "staged={staged}");
+            assert_eq!(depth[outside], 1.0, "staged={staged}");
+            // Whole-object direct meshes visit every stripe; staged triangles
+            // reach only the first, so the others never touch depth.
+            let untouched = &depth[SOFTWARE_ROW_CHUNK * WIDTH..];
+            assert_eq!(
+                untouched.iter().all(|&z| z == 0.25),
+                staged,
+                "staged={staged}"
+            );
         }
     }
 
