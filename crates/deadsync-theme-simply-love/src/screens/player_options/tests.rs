@@ -2080,6 +2080,7 @@ pub(super) mod tests {
             vertices: Arc::from(
                 [[-32.0, -24.0, 0.0], [32.0, -24.0, 0.0], [0.0, 24.0, 0.0]].map(|pos| {
                     ModelVertex {
+                        normal: [0.0; 3],
                         pos,
                         uv: [0.0; 2],
                         tex_matrix_scale: [1.0; 2],

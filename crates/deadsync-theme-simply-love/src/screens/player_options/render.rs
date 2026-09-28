@@ -2071,6 +2071,7 @@ mod tests {
             vertices: Arc::from(
                 [[-24.0, -12.0, 0.0], [24.0, -12.0, 0.0], [0.0, 30.0, 90.0]].map(|pos| {
                     ModelVertex {
+                        normal: [0.0; 3],
                         pos,
                         uv: [0.0; 2],
                         tex_matrix_scale: [1.0; 2],
