@@ -183,7 +183,7 @@ const SPRITE_ATTRIBS: [(u32, &str); 12] = [
 
 const MESH_ATTRIBS: [(u32, &str); 2] = [(0, "a_pos"), (1, "a_color")];
 
-const TMESH_ATTRIBS: [(u32, &str); 13] = [
+const TMESH_ATTRIBS: [(u32, &str); 14] = [
     (0, "a_pos"),
     (1, "a_uv"),
     (2, "a_color"),
@@ -197,6 +197,7 @@ const TMESH_ATTRIBS: [(u32, &str); 13] = [
     (10, "i_uv_offset"),
     (11, "i_uv_tex_shift"),
     (12, "i_texture_mask"),
+    (13, "i_cull_back"),
 ];
 
 // A handle to one RGBA texture or three planar video textures on the GPU. The
@@ -276,6 +277,7 @@ struct LegacyTMeshUniforms {
     uv_offset: UniformLocation,
     uv_tex_shift: UniformLocation,
     texture_mask: UniformLocation,
+    cull_back: UniformLocation,
 }
 
 pub struct State {
@@ -613,7 +615,7 @@ pub fn init(
             );
 
             // i_model_col0..i_model_col3 (locations 4..7), i_tint (8),
-            // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask (9..12)
+            // i_uv_scale/i_uv_offset/i_uv_tex_shift/i_texture_mask/i_cull_back (9..13)
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_vbo));
             gl.buffer_data_size(glow::ARRAY_BUFFER, 0, glow::DYNAMIC_DRAW);
 
@@ -668,6 +670,9 @@ pub fn init(
                 5 * col_size + 3 * uv_size,
             );
             gl.vertex_attrib_divisor(12, 1);
+            gl.enable_vertex_attrib_array(13);
+            gl.vertex_attrib_pointer_f32(13, 1, glow::FLOAT, false, inst_stride, 108);
+            gl.vertex_attrib_divisor(13, 1);
 
             gl.bind_vertex_array(None);
         }
@@ -1642,6 +1647,7 @@ fn draw_modern_offscreen_pass(
                             (10, 2, 5 * col + uv),
                             (11, 2, 5 * col + 2 * uv),
                             (12, 1, 5 * col + 3 * uv),
+                            (13, 1, 108),
                         ] {
                             gl.vertex_attrib_pointer_f32(
                                 location,
@@ -1988,6 +1994,7 @@ fn draw_legacy_offscreen_pass(
                             instance.uv_tex_shift[1],
                         );
                         gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
+                        gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
                         gl.draw_arrays(glow::TRIANGLES, start, count);
                         vertices += u64::from(triangles);
                     }
@@ -2050,6 +2057,8 @@ pub fn draw(
                 .gl
                 .viewport(0, 0, target.width as i32, target.height as i32);
             state.gl.color_mask(true, true, true, true);
+            // Offscreen cameras invert Y to match top-down texture storage.
+            state.gl.front_face(glow::CW);
             let mut clear = glow::DEPTH_BUFFER_BIT;
             if !target_frame.preserve || !target.initialized {
                 state
@@ -2074,6 +2083,7 @@ pub fn draw(
         // passes changed them on this same current context.
         unsafe {
             state.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            state.gl.front_face(glow::CCW);
             state.gl.viewport(0, 0, width as i32, height as i32);
         }
     }
@@ -2488,6 +2498,14 @@ pub fn draw(
                                 inst_stride,
                                 base + 5 * col_size + 3 * uv_size,
                             );
+                            gl.vertex_attrib_pointer_f32(
+                                13,
+                                1,
+                                glow::FLOAT,
+                                false,
+                                inst_stride,
+                                base + 108,
+                            );
                             last_tmesh_instance_start = Some(run.instance_start);
                         }
 
@@ -2837,6 +2855,7 @@ pub fn draw(
                                 Some(&tmesh_uniforms.texture_mask),
                                 instance.texture_mask,
                             );
+                            gl.uniform_1_f32(Some(&tmesh_uniforms.cull_back), instance.cull_back);
                             gl.draw_arrays(glow::TRIANGLES, draw_start, draw_count);
                             vertices += u64::from(tri_count);
                         }
@@ -3420,6 +3439,7 @@ fn legacy_tmesh_uniforms(
         uv_offset: uniform_location(gl, program, "u_uv_offset")?,
         uv_tex_shift: uniform_location(gl, program, "u_uv_tex_shift")?,
         texture_mask: uniform_location(gl, program, "u_texture_mask")?,
+        cull_back: uniform_location(gl, program, "u_cull_back")?,
     })
 }
 

@@ -5968,6 +5968,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             uv_offset: mesh.uv_offset,
                             uv_tex_shift: mesh.uv_tex_shift,
                             depth_test: mesh.depth_test,
+                            cull_back: mesh.cull_back,
                             visible: true,
                             blend: mesh.blend,
                             z: mesh.z,
@@ -6343,6 +6344,7 @@ struct TexturedMeshActorView<'a> {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     depth_test: bool,
+    cull_back: bool,
     visible: bool,
     blend: BlendMode,
     z: i16,
@@ -6389,6 +6391,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         uv_offset,
         uv_tex_shift,
         depth_test,
+        cull_back,
         visible,
         blend,
         z,
@@ -6407,6 +6410,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             uv_offset,
             uv_tex_shift,
             depth_test,
+            cull_back,
             visible,
             blend,
             z,
@@ -6426,6 +6430,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             uv_offset,
             uv_tex_shift,
             depth_test,
+            cull_back,
             visible,
             blend,
             z,
@@ -6444,6 +6449,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             *uv_offset,
             *uv_tex_shift,
             *depth_test,
+            *cull_back,
             *visible,
             *blend,
             *z,
@@ -6472,6 +6478,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         uv_offset,
         uv_tex_shift,
         depth_test,
+        cull_back,
         visible,
         blend,
         z,
@@ -6525,14 +6532,17 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             actor_blend,
             camera,
             TexturedMeshPayload {
-                instance: renderer::TexturedMeshInstanceRaw::new(
-                    transform,
-                    mul_rgba(mesh.tint, style.tint),
-                    mesh.uv_scale,
-                    mesh.uv_offset,
-                    mesh.uv_tex_shift,
-                    false,
-                ),
+                instance: renderer::TexturedMeshInstanceRaw {
+                    cull_back: f32::from(mesh.cull_back),
+                    ..renderer::TexturedMeshInstanceRaw::new(
+                        transform,
+                        mul_rgba(mesh.tint, style.tint),
+                        mesh.uv_scale,
+                        mesh.uv_offset,
+                        mesh.uv_tex_shift,
+                        false,
+                    )
+                },
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
@@ -6549,14 +6559,17 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             actor_blend,
             camera,
             TexturedMeshPayload {
-                instance: renderer::TexturedMeshInstanceRaw::new(
-                    transform,
-                    mul_rgba(mesh.glow, style.tint),
-                    mesh.uv_scale,
-                    mesh.uv_offset,
-                    mesh.uv_tex_shift,
-                    true,
-                ),
+                instance: renderer::TexturedMeshInstanceRaw {
+                    cull_back: f32::from(mesh.cull_back),
+                    ..renderer::TexturedMeshInstanceRaw::new(
+                        transform,
+                        mul_rgba(mesh.glow, style.tint),
+                        mesh.uv_scale,
+                        mesh.uv_offset,
+                        mesh.uv_tex_shift,
+                        true,
+                    )
+                },
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
@@ -10333,6 +10346,7 @@ mod tests {
             uv_offset: [0.1, 0.2],
             uv_tex_shift: [0.3, 0.4],
             depth_test: false,
+            cull_back: true,
             blend: BlendMode::Add,
             z: 9,
         };
@@ -10391,6 +10405,7 @@ mod tests {
             uv_offset: mesh.uv_offset,
             uv_tex_shift: mesh.uv_tex_shift,
             depth_test: mesh.depth_test,
+            cull_back: mesh.cull_back,
             visible: true,
             blend: mesh.blend,
             z: mesh.z,
@@ -10440,6 +10455,9 @@ mod tests {
             );
         assert_test_frames_equal(&expected, &actual);
 
+        // Both diffuse and glow passes retain culling through flat draws.
+        assert_eq!(actual.tmesh_instances.len(), 4);
+        assert!(actual.tmesh_instances.iter().all(|i| i.cull_back == 1.0));
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
         let tint = [0.7, 0.8, 0.9, 0.6];
@@ -13420,6 +13438,7 @@ mod tests {
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: false,
+            cull_back: false,
             visible: true,
             blend: BlendMode::Alpha,
             z: 5,
@@ -13618,6 +13637,7 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            cull_back: true,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -13630,7 +13650,8 @@ mod tests {
             0.0,
         );
 
-        let (_, _, geometry) = tmesh_draw(&render, 0);
+        let (_, instance, geometry) = tmesh_draw(&render, 0);
+        assert_eq!(instance.cull_back, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -13661,6 +13682,7 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            cull_back: true,
             blend: BlendMode::Alpha,
             z: 0,
         })];
@@ -13680,7 +13702,8 @@ mod tests {
                 &resources,
             );
 
-        let (_, _, geometry) = tmesh_draw(&render, 0);
+        let (_, instance, geometry) = tmesh_draw(&render, 0);
+        assert_eq!(instance.cull_back, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14095,6 +14118,7 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: false,
+            cull_back: false,
             blend: BlendMode::Alpha,
             z: 10,
         };
@@ -14202,6 +14226,7 @@ mod tests {
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: false,
+            cull_back: false,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,

@@ -353,6 +353,9 @@ pub struct TexturedMeshInstanceRaw {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub texture_mask: f32,
+    /// Cull clockwise faces in clip space, independently of depth testing.
+    #[serde(default)]
+    pub cull_back: f32,
 }
 
 impl TexturedMeshInstanceRaw {
@@ -396,6 +399,7 @@ impl TexturedMeshInstanceRaw {
             uv_offset,
             uv_tex_shift,
             texture_mask: f32::from(u8::from(texture_mask)),
+            cull_back: 0.0,
         }
     }
 

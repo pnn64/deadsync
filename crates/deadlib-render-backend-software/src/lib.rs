@@ -947,6 +947,7 @@ fn prepare_objects(
                             geometry.vertices.as_ref(),
                             width,
                             height,
+                            instance.cull_back > 0.5,
                         )
                     else {
                         continue;
@@ -1199,6 +1200,7 @@ fn draw_prepared<'a>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                instance.cull_back > 0.5,
             )
         }
     }
@@ -1601,6 +1603,7 @@ fn project_tmesh_polygon(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
+    cull_back: bool,
 ) -> Option<([ScreenVertexTexColor; 4], usize)> {
     debug_assert_eq!(vertices.len(), 3);
     let mut triangle = [ClipVertexTexColor {
@@ -1661,6 +1664,13 @@ fn project_tmesh_polygon(
             color: vertex.color,
         };
     }
+    if cull_back && polygon.len() >= 3 {
+        let [a, b, c] = [projected[0], projected[1], projected[2]];
+        // Screen Y points down, so a CCW clip-space face has negative area.
+        if (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0.0 {
+            return None;
+        }
+    }
     Some((projected, polygon.len()))
 }
 
@@ -1676,6 +1686,7 @@ fn prepare_tmesh_triangles(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
+    cull_back: bool,
 ) -> Option<(u32, u32, u32, ScreenRows)> {
     if vertices.is_empty() || width == 0 || height == 0 {
         return None;
@@ -1694,6 +1705,7 @@ fn prepare_tmesh_triangles(
             chunk,
             width,
             height,
+            cull_back,
         ) else {
             continue;
         };
@@ -1926,6 +1938,7 @@ fn rasterize_textured_mesh_triangles(
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+    cull_back: bool,
 ) -> u32 {
     if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return 0;
@@ -1947,6 +1960,7 @@ fn rasterize_textured_mesh_triangles(
             chunk,
             width,
             height,
+            cull_back,
         ) else {
             continue;
         };
@@ -3490,6 +3504,126 @@ mod tests {
     }
 
     #[test]
+    fn backfaces_do_not_cover_textured_front() {
+        // A green front and a white rear, authored last, reproduce a closed
+        // model without depending on any installed noteskin or its texture.
+        let mut vertices = Vec::new();
+        for (points, uv) in [
+            (
+                [[-0.8, -0.8, 0.2], [0.8, -0.8, 0.2], [0.0, 0.8, 0.2]],
+                [0.25, 0.5],
+            ),
+            (
+                [[-0.8, -0.8, -0.2], [0.0, 0.8, -0.2], [0.8, -0.8, -0.2]],
+                [0.75, 0.5],
+            ),
+        ] {
+            for pos in points {
+                vertices.push(TexturedMeshVertex {
+                    pos,
+                    uv,
+                    color: [1.0; 4],
+                    tex_matrix_scale: [1.0; 2],
+                });
+            }
+        }
+        let image = RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                Rgba([0, 255, 0, 255])
+            } else {
+                Rgba([255; 4])
+            }
+        });
+        let sampler = SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+            mipmaps: false,
+        };
+        for (mvp, expected) in [
+            (Matrix4::IDENTITY, 0x00ff00),
+            (
+                Matrix4::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                0x00ff00,
+            ),
+            (Matrix4::from_rotation_y(std::f32::consts::PI), 0xffffff),
+        ] {
+            for cull in [false, true] {
+                let mut direct = vec![0; WIDTH * HEIGHT];
+                rasterize_textured_mesh_triangles(
+                    &mvp,
+                    &vertices,
+                    [1.0; 4],
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                    BlendMode::Alpha,
+                    &image,
+                    sampler,
+                    true,
+                    WIDTH,
+                    HEIGHT,
+                    0,
+                    HEIGHT,
+                    &mut direct,
+                    cull,
+                );
+                let mut prepared = Vec::with_capacity(4);
+                prepare_tmesh_triangles(
+                    &mut prepared,
+                    0,
+                    &mvp,
+                    [1.0; 4],
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    &vertices,
+                    WIDTH,
+                    HEIGHT,
+                    cull,
+                )
+                .unwrap();
+                let mut retained = vec![0; WIDTH * HEIGHT];
+                rasterize_prepared_tmesh(
+                    &prepared,
+                    false,
+                    BlendMode::Alpha,
+                    &image,
+                    sampler,
+                    true,
+                    0,
+                    HEIGHT,
+                    &mut retained,
+                    WIDTH,
+                );
+                assert_eq!(retained, direct, "staged and direct culling must agree");
+                assert_eq!(
+                    direct[HEIGHT / 2 * WIDTH + WIDTH / 2] & 0xffffff,
+                    if cull { expected } else { 0xffffff }
+                );
+                assert_eq!(prepared.len(), if cull { 1 } else { 2 });
+            }
+        }
+        // Clipping preserves the facing test; it must not depend on any
+        // triangle being wholly in front of the homogeneous near plane.
+        vertices[2].pos[2] = -2.0;
+        assert!(
+            project_tmesh_polygon(
+                &Matrix4::IDENTITY,
+                [1.0; 4],
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                &vertices[..3],
+                WIDTH,
+                HEIGHT,
+                true
+            )
+            .is_some()
+        );
+    }
+
+    #[test]
     fn visible_textured_mesh_projects_without_changing_vertices() {
         let vertices = [
             textured_vertex([-0.5, -0.5, 0.0], [0.0, 1.0]),
@@ -3505,6 +3639,7 @@ mod tests {
             &vertices,
             WIDTH,
             HEIGHT,
+            false,
         )
         .expect("fully visible triangle projects");
 
@@ -3548,6 +3683,7 @@ mod tests {
             &vertices,
             WIDTH,
             HEIGHT,
+            false,
         )
         .expect("crossing triangle projects after clipping");
         assert_eq!(start, 0);
@@ -3590,6 +3726,7 @@ mod tests {
                 0,
                 HEIGHT,
                 &mut direct,
+                false,
             ),
             3
         );

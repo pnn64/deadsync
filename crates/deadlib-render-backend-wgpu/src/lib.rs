@@ -103,6 +103,7 @@ struct TexturedMeshInstanceRaw {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     texture_mask: f32,
+    cull_back: f32,
 }
 
 struct PipelineSet {
@@ -3444,7 +3445,7 @@ const TMESH_ATTRS: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
     3 => Float32x2, // tex-matrix scale
 ];
 
-const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
+const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
     4 => Float32x4, // model column 0
     5 => Float32x4, // model column 1
     6 => Float32x4, // model column 2
@@ -3454,6 +3455,7 @@ const TMESH_INSTANCE_ATTRS: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array
     10 => Float32x2, // uv offset
     11 => Float32x2, // uv texture-matrix shift
     12 => Float32, // texture alpha-mask mode
+    13 => Float32, // backface culling
 ];
 
 const INSTANCE_ATTRS: [wgpu::VertexAttribute; 10] = wgpu::vertex_attr_array![
@@ -3675,6 +3677,135 @@ mod tests {
             )
             .validate(&module)
             .expect("shader validates");
+        }
+    }
+
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires a Vulkan device and a window system"]
+    fn textured_backfaces_are_culled() {
+        use super::{
+            Api, PresentModePolicy, SamplerDesc, Texture, TextureLookup, Window, capture_frame,
+            create_texture, draw, init, request_screenshot,
+        };
+        use deadlib_render_core::{
+            BlendMode, DrawOp, RenderFrame, TexturedMeshGeometry, TexturedMeshInstanceRaw,
+            TexturedMeshRun, TexturedMeshVertex, TexturedMeshVertices,
+        };
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        struct Textures(Texture);
+        impl TextureLookup for Textures {
+            fn wgpu_texture(&self, _: deadlib_render_core::TextureHandle) -> Option<&Texture> {
+                Some(&self.0)
+            }
+        }
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("test event loop");
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(winit::dpi::PhysicalSize::new(64, 64)),
+            )
+            .expect("hidden test window");
+        let mut state = init(
+            Api::Vulkan,
+            Arc::new(window),
+            Matrix4::IDENTITY,
+            false,
+            PresentModePolicy::Immediate,
+            false,
+        )
+        .expect("wgpu backend");
+        let image = image::RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                image::Rgba([0, 255, 0, 255])
+            } else {
+                image::Rgba([255; 4])
+            }
+        });
+        let textures = Textures(
+            create_texture(&mut state, &image, SamplerDesc::default()).expect("fixture texture"),
+        );
+        let mut vertices = Vec::new();
+        for (points, uv) in [
+            (
+                [[-0.8, -0.8, 0.2], [0.8, -0.8, 0.2], [0.0, 0.8, 0.2]],
+                [0.25, 0.5],
+            ),
+            (
+                [[-0.8, -0.8, -0.2], [0.0, 0.8, -0.2], [0.8, -0.8, -0.2]],
+                [0.75, 0.5],
+            ),
+        ] {
+            for pos in points {
+                vertices.push(TexturedMeshVertex {
+                    pos,
+                    uv,
+                    color: [1.0; 4],
+                    tex_matrix_scale: [1.0; 2],
+                });
+            }
+        }
+        let mut frame = RenderFrame {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            render_targets: Vec::new(),
+            cameras: Vec::new(),
+            sprite_instances: Vec::new(),
+            mesh_vertices: Vec::new(),
+            tmesh_instances: vec![TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                [1.0; 4],
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                false,
+            )],
+            tmesh_geometries: vec![TexturedMeshGeometry {
+                vertices: TexturedMeshVertices::Shared(vertices.into()),
+                cache_key: 0,
+            }],
+            ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+                texture_handle: 1,
+                blend: BlendMode::Alpha,
+                camera: 0,
+                geometry: 0,
+                instance_start: 0,
+                instance_count: 1,
+                depth_test: false,
+            })],
+        };
+        for (transform, expected) in [
+            (Matrix4::IDENTITY, [0, 255, 0]),
+            (
+                Matrix4::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                [0, 255, 0],
+            ),
+            (Matrix4::from_rotation_y(std::f32::consts::PI), [255; 3]),
+        ] {
+            for cull in [false, true] {
+                let mut instance = TexturedMeshInstanceRaw::new(
+                    transform, [1.0; 4], [1.0; 2], [0.0; 2], [0.0; 2], false,
+                );
+                instance.cull_back = f32::from(cull);
+                frame.tmesh_instances[0] = instance;
+                request_screenshot(&mut state);
+                draw(&mut state, &frame, &textures, false).expect("render fixture");
+                let captured = capture_frame(&mut state).expect("read fixture pixels");
+                assert_eq!(
+                    captured
+                        .get_pixel(captured.width() / 2, captured.height() / 2)
+                        .0[..3],
+                    if cull { expected } else { [255; 3] }
+                );
+            }
         }
     }
 

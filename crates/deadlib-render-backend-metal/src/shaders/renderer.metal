@@ -159,6 +159,7 @@ struct TexturedMeshInstance {
     packed_float2 uv_offset;
     packed_float2 uv_tex_shift;
     float texture_mask;
+    float cull_back;
 };
 
 struct TexturedMeshOut {
@@ -166,6 +167,7 @@ struct TexturedMeshOut {
     float2 uv;
     float4 color;
     float texture_mask;
+    float cull_back;
 };
 
 vertex TexturedMeshOut textured_mesh_vertex(
@@ -190,14 +192,17 @@ vertex TexturedMeshOut textured_mesh_vertex(
         + float2(inst.uv_tex_shift) * (float2(vertex_data.tex_matrix_scale) - float2(1.0));
     out.color = float4(vertex_data.color) * float4(inst.tint);
     out.texture_mask = inst.texture_mask;
+    out.cull_back = inst.cull_back;
     return out;
 }
 
 fragment float4 textured_mesh_fragment(
     TexturedMeshOut in [[stage_in]],
+    bool front [[front_facing]],
     texture2d<float> tex [[texture(0)]],
     sampler tex_sampler [[sampler(0)]])
 {
+    if (in.cull_back > 0.5 && !front) discard_fragment();
     float4 texel = tex.sample(tex_sampler, in.uv);
     float4 color = texel * in.color;
     if (in.texture_mask > 0.5) {

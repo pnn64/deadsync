@@ -3837,7 +3837,7 @@ fn vertex_input_descriptions_mesh() -> (
 #[inline(always)]
 fn vertex_input_descriptions_tmesh() -> (
     [vk::VertexInputBindingDescription; 2],
-    [vk::VertexInputAttributeDescription; 13],
+    [vk::VertexInputAttributeDescription; 14],
 ) {
     let b0 = vk::VertexInputBindingDescription::default()
         .binding(0)
@@ -3914,6 +3914,12 @@ fn vertex_input_descriptions_tmesh() -> (
         .format(vk::Format::R32_SFLOAT)
         .offset(104);
 
+    let a_cull_back = vk::VertexInputAttributeDescription::default()
+        .binding(1)
+        .location(13)
+        .format(vk::Format::R32_SFLOAT)
+        .offset(108);
+
     (
         [b0, b1],
         [
@@ -3930,6 +3936,7 @@ fn vertex_input_descriptions_tmesh() -> (
             a_uv_offset,
             a_uv_tex_shift,
             a_texture_mask,
+            a_cull_back,
         ],
     )
 }

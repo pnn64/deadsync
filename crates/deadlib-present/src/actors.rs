@@ -424,6 +424,7 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        cull_back: bool,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -446,6 +447,7 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        cull_back: bool,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -582,6 +584,7 @@ pub struct FlatTexturedMesh {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub depth_test: bool,
+    pub cull_back: bool,
     pub blend: BlendMode,
     pub z: i16,
 }

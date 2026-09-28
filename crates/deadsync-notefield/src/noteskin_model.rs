@@ -502,6 +502,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         depth_test,
+        cull_back: slot.model_cull_back(),
         visible: true,
         blend,
         z,
@@ -535,6 +536,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         depth_test: false,
+        cull_back: slot.model_cull_back(),
         blend,
         z,
     }
@@ -1148,6 +1150,7 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
+            cull_back,
             visible,
             blend,
             z,
@@ -1191,6 +1194,7 @@ mod tests {
         assert_eq!(uv_offset, [0.1, 0.2]);
         assert_eq!(uv_tex_shift, [0.125, 0.25]);
         assert!(!depth_test);
+        assert!(cull_back);
         assert!(visible);
         assert_eq!(blend, BlendMode::Add);
         assert_eq!(z, 47);

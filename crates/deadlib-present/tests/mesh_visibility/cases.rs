@@ -44,6 +44,7 @@ fn mesh<'a>(
         uv_offset: [0.1, 0.2],
         uv_tex_shift: [0.2, 0.3],
         depth_test: true,
+        cull_back: false,
         visible: true,
         blend: BlendMode::Add,
         z: 11,

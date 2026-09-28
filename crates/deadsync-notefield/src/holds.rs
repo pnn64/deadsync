@@ -1847,6 +1847,7 @@ pub(crate) const fn hold_strip_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        cull_back: false,
         blend,
         z,
     })
@@ -1871,6 +1872,7 @@ pub(crate) const fn hold_strip_glow_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        cull_back: false,
         blend: BlendMode::Alpha,
         z,
     })
@@ -1896,6 +1898,7 @@ const fn hold_reusable_strip_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        cull_back: false,
         blend,
         z,
     })
@@ -1920,6 +1923,7 @@ const fn hold_reusable_strip_glow_draw(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test,
+        cull_back: false,
         blend: BlendMode::Alpha,
         z,
     })
@@ -2409,6 +2413,7 @@ mod tests {
                 draw,
                 FlatDraw::TexturedMesh(FlatTexturedMesh {
                     depth_test: true,
+                    cull_back: false,
                     vertices: FlatMeshVertices::Reusable(vertices),
                     ..
                 }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))

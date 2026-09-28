@@ -4,8 +4,10 @@ varying vec4 v_color;
 
 uniform sampler2D u_texture;
 uniform float u_texture_mask;
+uniform float u_cull_back;
 
 void main() {
+    if (u_cull_back > 0.5 && !gl_FrontFacing) discard;
     vec2 uv = fract(v_uv);
     vec4 s = texture2D(u_texture, uv);
     gl_FragColor = s * v_color;

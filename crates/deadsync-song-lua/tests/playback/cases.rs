@@ -3612,6 +3612,7 @@ fn song_lua_capture_style_tints_textured_mesh() {
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test: false,
+        cull_back: false,
         visible: true,
         blend: BlendMode::Alpha,
         z: 3,

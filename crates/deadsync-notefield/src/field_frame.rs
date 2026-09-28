@@ -1703,6 +1703,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 uv_offset: mesh.uv_offset,
                 uv_tex_shift: mesh.uv_tex_shift,
                 depth_test: mesh.depth_test,
+                cull_back: false,
                 visible: true,
                 blend: mesh.blend,
                 z: mesh.z,
@@ -1724,6 +1725,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                     uv_offset: mesh.uv_offset,
                     uv_tex_shift: mesh.uv_tex_shift,
                     depth_test: mesh.depth_test,
+                    cull_back: false,
                     visible: true,
                     blend: mesh.blend,
                     z: mesh.z,
@@ -2152,6 +2154,7 @@ mod camera_wrap_tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            cull_back: false,
             blend: BlendMode::Alpha,
             z: 140,
         }));

@@ -2,11 +2,13 @@
 in vec2 v_uv;
 in vec4 v_color;
 flat in float v_texture_mask;
+flat in float v_cull_back;
 out vec4 FragColor;
 
 uniform sampler2D u_texture;
 
 void main() {
+    if (v_cull_back > 0.5 && !gl_FrontFacing) discard;
     vec2 uv = fract(v_uv);
     vec4 s = texture(u_texture, uv);
     FragColor = s * v_color;

@@ -701,6 +701,7 @@ return Def.ActorFrame { children = {
                 assert!(fill.actor_frame_child && fill.sprite_mesh);
                 assert!(!fill.uv_uses_phase());
                 assert!(!<SpriteSlot as NoteskinSlot>::uv_uses_phase(fill));
+                assert!(!<SpriteSlot as NoteskinSlot>::model_cull_back(fill));
                 assert_eq!(fill.source.frame_count(), 1);
                 assert_eq!(fill.logical_size(), [8.0; 2]);
                 let uv = fill.uv_for_frame_at(0, 0.25);

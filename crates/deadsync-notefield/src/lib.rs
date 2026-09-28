@@ -3983,6 +3983,7 @@ mod tests {
                 glow: [1.0, 1.0, 1.0, 0.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
+                cull_back: false,
                 ..
             })
         ));
@@ -3998,6 +3999,7 @@ mod tests {
                 glow: [1.0, 1.0, 1.0, 1.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
+                cull_back: false,
                 ..
             })
         ));

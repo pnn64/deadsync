@@ -12,10 +12,12 @@ layout (location = 9) in vec2 i_uv_scale;
 layout (location = 10) in vec2 i_uv_offset;
 layout (location = 11) in vec2 i_uv_tex_shift;
 layout (location = 12) in float i_texture_mask;
+layout(location = 13) in float i_cull_back;
 
 out vec2 v_uv;
 out vec4 v_color;
 flat out float v_texture_mask;
+flat out float v_cull_back;
 
 uniform mat4 u_model_view_proj;
 
@@ -25,5 +27,6 @@ void main() {
          + i_uv_tex_shift * (a_tex_matrix_scale - vec2(1.0, 1.0));
     v_color = a_color * i_tint;
     v_texture_mask = i_texture_mask;
+    v_cull_back = i_cull_back;
     gl_Position = u_model_view_proj * model * vec4(a_pos, 1.0);
 }

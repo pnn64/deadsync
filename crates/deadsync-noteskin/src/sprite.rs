@@ -134,6 +134,10 @@ pub trait NoteskinSlot: Sized {
 
     fn texture_key_shared(&self) -> Arc<str>;
     fn model(&self) -> Option<&ModelMesh>;
+    /// ITG Models cull backfaces; sprite cutouts retain two-sided drawing.
+    fn model_cull_back(&self) -> bool {
+        true
+    }
     fn base_rot_sin_cos(&self) -> [f32; 2];
 
     /// MilkShape materials use note animation phase; sprites use elapsed time,

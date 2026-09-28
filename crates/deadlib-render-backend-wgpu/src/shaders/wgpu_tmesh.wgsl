@@ -21,6 +21,7 @@ struct VertexIn {
     @location(10) uv_offset: vec2<f32>,
     @location(11) uv_tex_shift: vec2<f32>,
     @location(12) texture_mask: f32,
+    @location(13) cull_back: f32,
 };
 
 struct VertexOut {
@@ -28,6 +29,7 @@ struct VertexOut {
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
     @location(2) texture_mask: f32,
+    @location(3) @interpolate(flat) cull_back: f32,
 };
 
 @vertex
@@ -47,11 +49,13 @@ fn vs_main(input: VertexIn) -> VertexOut {
         + input.uv_tex_shift * (input.tex_matrix_scale - vec2<f32>(1.0, 1.0));
     out.color = input.color * input.tint;
     out.texture_mask = input.texture_mask;
+    out.cull_back = input.cull_back;
     return out;
 }
 
 @fragment
-fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
+fn fs_main(input: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    if input.cull_back > 0.5 && !front { discard; }
     let texel = textureSample(u_texture, u_sampler, input.uv);
     var color = texel * input.color;
     if input.texture_mask > 0.5 {

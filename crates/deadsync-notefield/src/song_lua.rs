@@ -467,6 +467,7 @@ mod tests {
             uv_offset: [0.15, 0.25],
             uv_tex_shift: [0.35, 0.45],
             depth_test: true,
+            cull_back: true,
             visible: false,
             blend: BlendMode::Multiply,
             z: -12,
@@ -486,6 +487,7 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
+            cull_back,
             visible,
             blend,
             z,
@@ -509,6 +511,7 @@ mod tests {
         assert_eq!(uv_offset, [0.15, 0.25]);
         assert_eq!(uv_tex_shift, [0.35, 0.45]);
         assert!(depth_test);
+        assert!(cull_back);
         assert!(!visible);
         assert_eq!(blend, BlendMode::Multiply);
         assert_eq!(z, -12);

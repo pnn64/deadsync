@@ -457,6 +457,10 @@ impl NoteskinSlot for SpriteSlot {
         self.model.as_deref()
     }
 
+    fn model_cull_back(&self) -> bool {
+        !self.sprite_mesh
+    }
+
     #[inline(always)]
     fn base_rot_sin_cos(&self) -> [f32; 2] {
         Self::base_rot_sin_cos(self)
