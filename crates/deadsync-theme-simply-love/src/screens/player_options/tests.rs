@@ -2206,6 +2206,42 @@ pub(super) mod tests {
                 assert_preview_bounds(&actors, "model-fixture", size);
             }
         }
+        for angle in [30.0, 75.0, 150.0, 270.0] {
+            let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
+            for slot in Arc::make_mut(&mut skin.mine_layers[0]) {
+                slot.model_draw.rot[2] = angle;
+            }
+            for size in [18.0, 32.0] {
+                let mut actors = Vec::new();
+                assert!(render::draw_live_preview(
+                    &mut actors,
+                    &state,
+                    "model-fixture",
+                    8,
+                    [100.0; 2],
+                    size,
+                    1.0,
+                    102,
+                ));
+                assert_eq!(actors.len(), 5);
+                for actor in &actors {
+                    let Actor::TexturedMesh {
+                        offset,
+                        local_transform,
+                        ..
+                    } = actor
+                    else {
+                        panic!("mine model layer");
+                    };
+                    assert_eq!(*offset, [100.0; 2], "mine pivot at {angle} degrees");
+                    assert_eq!(
+                        local_transform.project_point3(glam::Vec3::ZERO),
+                        glam::Vec3::ZERO
+                    );
+                }
+                assert_preview_bounds(&actors, "rotating-mine", size);
+            }
+        }
         let skin = Arc::make_mut(state.noteskin.cache.get_mut("model-fixture").unwrap());
         let mut receptors = mine_layers.to_vec();
         for slot in &mut receptors {
@@ -2566,7 +2602,7 @@ pub(super) mod tests {
                     ..
                 } => {
                     for v in vertices.iter() {
-                        let p = local_transform.transform_point3(glam::Vec3::from(v.pos));
+                        let p = local_transform.project_point3(glam::Vec3::from(v.pos));
                         inside(p.x + offset[0], p.y + offset[1]);
                     }
                 }

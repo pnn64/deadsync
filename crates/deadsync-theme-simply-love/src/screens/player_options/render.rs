@@ -1352,6 +1352,7 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
             &mut actors[first..],
             [center, rc.current_row_y],
             [width, 32.0],
+            !matches!(rc.row.id, RowId::MineSkin | RowId::SkinMineSize),
         );
         if primary_player_idx == P2 {
             break;
@@ -1507,12 +1508,14 @@ pub(super) fn draw_live_preview(
     // Leave room for tap-explosion zoom commands inside the fixed icon bounds.
     let target = if part == 6 { size * 0.9 } else { size };
     draw_skin_part(actors, state, skin, part, center, target, alpha, z);
-    fit_preview(&mut actors[first..], center, [size, size]);
+    fit_preview(&mut actors[first..], center, [size, size], part != 8);
     true
 }
 
 /// Fit the complete animated geometry, including rotated sprites and model transforms.
-fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2]) {
+/// Mines retain their authored pivot; recentering asymmetric rotating geometry
+/// on its bounding box makes the stationary center drift around that pivot.
+fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2], recenter: bool) {
     use deadlib_present::actors::SizeSpec;
     let mut min = glam::Vec2::splat(f32::INFINITY);
     let mut max = glam::Vec2::splat(f32::NEG_INFINITY);
@@ -1542,7 +1545,7 @@ fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2]) {
             } => {
                 for vertex in vertices.iter() {
                     let p = local_transform
-                        .transform_point3(glam::Vec3::from(vertex.pos))
+                        .project_point3(glam::Vec3::from(vertex.pos))
                         .truncate()
                         + glam::Vec2::from(*offset);
                     min = min.min(p);
@@ -1555,9 +1558,13 @@ fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2]) {
     if !min.is_finite() || !max.is_finite() {
         return;
     }
-    let extent = (max - min).max(glam::Vec2::splat(1.0));
+    let origin = if recenter {
+        (min + max) * 0.5
+    } else {
+        glam::Vec2::from(center)
+    };
+    let extent = ((max - origin).max(origin - min) * 2.0).max(glam::Vec2::splat(1.0));
     let scale = (limit[0] / extent.x).min(limit[1] / extent.y).min(1.0);
-    let origin = (min + max) * 0.5;
     for actor in actors {
         match actor {
             Actor::Sprite {
@@ -1968,7 +1975,7 @@ mod tests {
             align(0.5, 0.5): xy(180.0, 220.0):
             setsize(1000.0, 50.0): zoom(4.0): rotationz(90.0)
         )];
-        fit_preview(&mut actors, [100.0, 100.0], [32.0, 32.0]);
+        fit_preview(&mut actors, [100.0, 100.0], [32.0, 32.0], true);
         let Actor::Sprite {
             offset,
             size: [SizeSpec::Px(width), SizeSpec::Px(_)],
@@ -1981,6 +1988,75 @@ mod tests {
         assert_eq!(*offset, [100.0, 100.0]);
         assert!((width * scale[0] - 32.0).abs() < 0.001);
         assert_eq!(scale[0], scale[1], "fit keeps the original aspect ratio");
+    }
+
+    #[test]
+    fn mine_preview_keeps_pivot() {
+        use deadsync_assets::noteskin::{ModelMesh, ModelVertex, test_model_slot};
+        use std::sync::Arc;
+
+        let mut slot = test_model_slot();
+        slot.model = Some(Arc::new(ModelMesh {
+            vertices: Arc::from(
+                [[-24.0, -12.0, 0.0], [24.0, -12.0, 0.0], [0.0, 30.0, 90.0]].map(|pos| {
+                    ModelVertex {
+                        pos,
+                        uv: [0.0; 2],
+                        tex_matrix_scale: [1.0; 2],
+                    }
+                }),
+            ),
+            bounds: [-24.0, -12.0, 0.0, 24.0, 30.0, 90.0],
+        }));
+        let center = [100.0, 120.0];
+        for rotation in [0.0, 30.0, 75.0, 150.0, 270.0] {
+            let mut draw = slot.model_draw;
+            draw.rot[2] = rotation;
+            let mut actors = Vec::new();
+            super::draw_preview_slot(
+                &mut actors,
+                &slot,
+                draw,
+                center,
+                [48.0, 42.0],
+                [0.0, 0.0, 1.0, 1.0],
+                0.0,
+                [1.0; 4],
+                deadlib_render_core::BlendMode::Alpha,
+                0,
+            );
+            actors.push(act!(sprite("test/core"):
+                align(0.5, 0.5): xy(center[0], center[1]): setsize(8.0, 8.0)
+            ));
+            // A picker fit followed by the options row's second fit must keep
+            // the pivot fixed even though the rotating bounds are asymmetric.
+            fit_preview(&mut actors, center, [18.0; 2], false);
+            fit_preview(&mut actors, center, [40.0, 32.0], false);
+            let Actor::TexturedMesh {
+                offset,
+                vertices,
+                local_transform,
+                ..
+            } = &actors[0]
+            else {
+                panic!("model preview");
+            };
+            assert_eq!(*offset, center);
+            assert_eq!(
+                local_transform.project_point3(glam::Vec3::ZERO),
+                glam::Vec3::ZERO
+            );
+            for vertex in vertices.iter() {
+                // Measure the projected geometry, including perspective W.
+                let p = *local_transform * glam::Vec3::from(vertex.pos).extend(1.0);
+                assert!((p.x / p.w).abs() <= 9.001, "rotation {rotation}");
+                assert!((p.y / p.w).abs() <= 9.001, "rotation {rotation}");
+            }
+            let Actor::Sprite { offset, .. } = &actors[1] else {
+                panic!("stationary core")
+            };
+            assert_eq!(*offset, center);
+        }
     }
 
     #[test]
