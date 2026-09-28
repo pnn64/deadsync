@@ -5,8 +5,8 @@ pub use self::texture::{
     SpriteSlot, SpriteSource, build_model_geometry, load_itg_model_slots_from_path, test_model_slot,
 };
 use self::texture::{
-    apply_model_slot_plan, itg_apply_frame_override, itg_apply_note_animation,
-    itg_apply_state_properties_from_commands, itg_slot_from_path, itg_slot_from_path_all_frames,
+    apply_model_slot_plan, itg_apply_frame_override, itg_apply_state_properties_from_commands,
+    itg_note_animation_source, itg_slot_from_path, itg_slot_from_path_all_frames,
     itg_slot_from_path_animated, itg_slot_from_path_with_frame, mine_fill_slots,
 };
 #[cfg(test)]
@@ -410,13 +410,22 @@ fn animate_layer_groups(
         // Atlas skins share one layer set across quants; Var("Color") skins
         // have distinct sets. Animate each set without replacing its neighbors.
         for shared in group.chunk_by_mut(Arc::ptr_eq) {
-            let mut layers = shared[0].as_ref().to_vec();
-            for slot in &mut layers {
-                itg_apply_note_animation(slot, animation, translate, beat_based);
+            let (layers, rest) = shared.split_first_mut().expect("nonempty layer group");
+            let mut changed = false;
+            for index in 0..layers.len() {
+                if let Some(source) =
+                    itg_note_animation_source(&layers[index], animation, translate, beat_based)
+                {
+                    // Keep no-op groups intact and copy shared slots only when
+                    // their source changes. Unique color variants stay in place.
+                    Arc::make_mut(layers)[index].source = source;
+                    changed = true;
+                }
             }
-            let layers = Arc::<[SpriteSlot]>::from(layers);
-            for entry in shared {
-                *entry = Arc::clone(&layers);
+            if changed {
+                for entry in rest {
+                    *entry = Arc::clone(layers);
+                }
             }
         }
     }

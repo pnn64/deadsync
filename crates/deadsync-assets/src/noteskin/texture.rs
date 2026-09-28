@@ -36,6 +36,10 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
+#[cfg(test)]
+#[path = "../../tests/layer_animation/mod.rs"]
+mod layer_animation;
+
 #[derive(Debug)]
 pub enum SpriteSource {
     Atlas {
@@ -1022,26 +1026,26 @@ pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<Sprite
     .map(slot_from_plan)
 }
 
-pub(super) fn itg_apply_note_animation(
-    slot: &mut SpriteSlot,
+pub(super) fn itg_note_animation_source(
+    slot: &SpriteSlot,
     animation: NotePartAnimation,
     translate: NotePartTextureTranslate,
     beat_based: bool,
-) {
+) -> Option<Arc<SpriteSource>> {
     if slot.model.is_some() || matches!(slot.source.as_ref(), SpriteSource::Animated { .. }) {
-        return;
+        return None;
     }
     let key = slot.texture_key();
     let (grid_x, grid_y) = assets::sprite_sheet_dims(key);
     let (grid_x, grid_y) = (grid_x.max(1) as usize, grid_y.max(1) as usize);
     if grid_x.saturating_mul(grid_y) <= 1 {
-        return;
+        return None;
     }
 
     let color_x = translate.note_color_spacing[0].abs() > f32::EPSILON;
     let color_y = translate.note_color_spacing[1].abs() > f32::EPSILON;
     if color_x && color_y {
-        return;
+        return None;
     }
     let frame_w = slot.def.size[0].abs().max(1);
     let frame_h = slot.def.size[1].abs().max(1);
@@ -1054,15 +1058,15 @@ pub(super) fn itg_apply_note_animation(
         (true, true) => unreachable!(),
     };
     if frame_indices.len() <= 1 {
-        return;
+        return None;
     }
 
     let tex_dims = match slot.source.as_ref() {
         SpriteSource::Atlas { tex_dims, .. } => *tex_dims,
-        SpriteSource::Animated { .. } => return,
+        SpriteSource::Animated { .. } => return None,
     };
     let frames_per_cycle = frame_indices.len() as f32 / animation.length.max(1e-6);
-    slot.source = source_from_plan(
+    Some(source_from_plan(
         SpriteSourcePlan::Animated {
             texture_key: key.to_string(),
             tex_dims,
@@ -1078,7 +1082,7 @@ pub(super) fn itg_apply_note_animation(
             frame_durations: None,
         },
         &slot.def,
-    );
+    ))
 }
 
 pub fn itg_slot_from_path_animated(
