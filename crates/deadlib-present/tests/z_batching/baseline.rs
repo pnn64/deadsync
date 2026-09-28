@@ -115,6 +115,8 @@ pub(super) fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    clear_depth,
+                    clear_depth_after,
                 } = builder.textured_meshes[item.payload_index as usize]
                     .take()
                     .expect("draw item references live textured-mesh payload");
@@ -166,6 +168,8 @@ pub(super) fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     texture_handle,
                     camera,
                     depth_test,
+                    clear_depth,
+                    clear_depth_after,
                 }));
                 if TRACK_SPRITE_RUNS {
                     previous_sprite = None;

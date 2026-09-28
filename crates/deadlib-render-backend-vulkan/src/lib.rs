@@ -163,12 +163,67 @@ struct CachedTMeshGeom {
     vertex_count: u32,
 }
 
+// Render-thread-owned depth images live with their swapchain/target dimensions.
+// Allocated at backend creation or resize, reused each frame, and freed after
+// the device is idle. No gameplay cache misses, pruning, or image allocation.
+struct DepthTarget {
+    device: Arc<Device>,
+    image: TextureImage,
+}
+
+impl Drop for DepthTarget {
+    fn drop(&mut self) {
+        // SAFETY: this target exclusively owns the image; its owner retires
+        // framebuffers and waits for in-flight GPU use before dropping it.
+        unsafe {
+            self.device.destroy_image_view(self.image.view, None);
+            self.device.destroy_image(self.image.image, None);
+            self.device.free_memory(self.image.memory, None);
+        }
+    }
+}
+
+fn create_depth_target(state: &State, width: u32, height: u32) -> Result<DepthTarget, vk::Result> {
+    let (image, memory) = create_image(
+        state,
+        width,
+        height,
+        vk::Format::D32_SFLOAT,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+    let mut target = DepthTarget {
+        device: Arc::clone(state.device.as_ref().unwrap()),
+        image: TextureImage {
+            image,
+            memory,
+            view: vk::ImageView::null(),
+        },
+    };
+    let info = vk::ImageViewCreateInfo::default()
+        .image(image)
+        .view_type(vk::ImageViewType::TYPE_2D)
+        .format(vk::Format::D32_SFLOAT)
+        .subresource_range(vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::DEPTH,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        });
+    // SAFETY: the image is owned by target and was allocated on the same device.
+    target.image.view = unsafe { target.device.create_image_view(&info, None)? };
+    Ok(target)
+}
+
 struct OffscreenTarget {
     handle: TextureHandle,
     width: u32,
     height: u32,
     texture: Texture,
     framebuffer: vk::Framebuffer,
+    _depth: DepthTarget,
     initialized: bool,
 }
 
@@ -233,6 +288,7 @@ struct SwapchainResources {
     _images: Vec<vk::Image>,
     image_views: Vec<vk::ImageView>,
     framebuffers: Vec<vk::Framebuffer>,
+    depths: Vec<DepthTarget>,
     extent: vk::Extent2D,
     format: vk::SurfaceFormatKHR,
     present_mode: vk::PresentModeKHR,
@@ -323,8 +379,10 @@ pub struct State {
     opaque_mesh_pipeline: vk::Pipeline,
     textured_mesh_pipeline_layout: vk::PipelineLayout,
     textured_mesh_pipeline: vk::Pipeline,
+    depth_textured_mesh: PipelinePair,
     opaque_textured_mesh_pipeline_layout: vk::PipelineLayout,
     opaque_textured_mesh_pipeline: vk::Pipeline,
+    opaque_depth_textured_mesh: PipelinePair,
     vertex_buffer: Option<BufferResource>,
     index_buffer: Option<BufferResource>,
     descriptor_set_layout: vk::DescriptorSetLayout,
@@ -410,7 +468,7 @@ pub fn init(
     let command_pool = create_command_pool(device.as_ref().unwrap(), queue_family_index)?;
 
     let initial_size = window.inner_size();
-    let mut swapchain_resources = create_swapchain(
+    let swapchain_resources = create_swapchain(
         &instance,
         device.as_ref().unwrap(),
         pdevice,
@@ -432,11 +490,6 @@ pub fn init(
         device.as_ref().unwrap(),
         swapchain_resources.format.format,
         true,
-    )?;
-    recreate_framebuffers(
-        device.as_ref().unwrap(),
-        &mut swapchain_resources,
-        render_pass,
     )?;
 
     let descriptor_set_layout = create_descriptor_set_layout(device.as_ref().unwrap())?;
@@ -514,6 +567,15 @@ pub fn init(
         descriptor_set_layout,
         BlendMode::Alpha,
         true,
+        false,
+    )?;
+    let depth_textured_mesh = create_textured_mesh_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+        true,
+        true,
     )?;
     let PipelinePair {
         layout: opaque_textured_mesh_pipeline_layout,
@@ -524,6 +586,15 @@ pub fn init(
         descriptor_set_layout,
         BlendMode::Alpha,
         false,
+        false,
+    )?;
+    let opaque_depth_textured_mesh = create_textured_mesh_pipeline(
+        device.as_ref().unwrap(),
+        render_pass,
+        descriptor_set_layout,
+        BlendMode::Alpha,
+        false,
+        true,
     )?;
 
     let command_buffers =
@@ -571,8 +642,10 @@ pub fn init(
         opaque_mesh_pipeline,
         textured_mesh_pipeline_layout,
         textured_mesh_pipeline,
+        depth_textured_mesh,
         opaque_textured_mesh_pipeline_layout,
         opaque_textured_mesh_pipeline,
+        opaque_depth_textured_mesh,
         vertex_buffer: None,
         index_buffer: None,
         descriptor_set_layout,
@@ -622,6 +695,7 @@ pub fn init(
         screenshot_requested: false,
         captured_frame: None,
     };
+    recreate_framebuffers(&mut state)?;
 
     // Static unit quad buffers
     let vertices: [[f32; 4]; 4] = [
@@ -814,6 +888,7 @@ fn create_sprite_pipeline(
     // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
+    let depth_state = vk::PipelineDepthStencilStateCreateInfo::default();
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -821,6 +896,7 @@ fn create_sprite_pipeline(
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterizer)
         .multisample_state(&multisampling)
+        .depth_stencil_state(&depth_state)
         .color_blend_state(&color_blending)
         .dynamic_state(&dynamic_state)
         .layout(layout)
@@ -907,6 +983,7 @@ fn create_mesh_pipeline(
     // for the mesh shaders.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
+    let depth_state = vk::PipelineDepthStencilStateCreateInfo::default();
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -914,6 +991,7 @@ fn create_mesh_pipeline(
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterizer)
         .multisample_state(&multisampling)
+        .depth_stencil_state(&depth_state)
         .color_blend_state(&color_blending)
         .dynamic_state(&dynamic_state)
         .layout(layout)
@@ -944,6 +1022,7 @@ fn create_textured_mesh_pipeline(
     set_layout: vk::DescriptorSetLayout,
     mode: BlendMode,
     write_alpha: bool,
+    use_depth: bool,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.vert.spv"));
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.frag.spv"));
@@ -1001,6 +1080,10 @@ fn create_textured_mesh_pipeline(
     // the create info borrows only stack data for the duration of the call.
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
+    let depth_state = vk::PipelineDepthStencilStateCreateInfo::default()
+        .depth_test_enable(use_depth)
+        .depth_write_enable(use_depth)
+        .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL);
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -1008,6 +1091,7 @@ fn create_textured_mesh_pipeline(
         .viewport_state(&viewport_state)
         .rasterization_state(&rasterizer)
         .multisample_state(&multisampling)
+        .depth_stencil_state(&depth_state)
         .color_blend_state(&color_blending)
         .dynamic_state(&dynamic_state)
         .layout(layout)
@@ -2180,6 +2264,15 @@ fn record_render_pass(
             float32: clear_color,
         },
     };
+    let clear_values = [
+        clear_value,
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
     let rp_info = vk::RenderPassBeginInfo::default()
         .render_pass(render_pass)
         .framebuffer(framebuffer)
@@ -2187,7 +2280,7 @@ fn record_render_pass(
             offset: vk::Offset2D::default(),
             extent,
         })
-        .clear_values(std::slice::from_ref(&clear_value));
+        .clear_values(&clear_values);
     // SAFETY: the command buffer is recording; all render resources and ring
     // slices referenced here stay live through queue submission and its fence.
     unsafe {
@@ -2225,8 +2318,30 @@ fn record_render_pass(
         let mut descriptor = DescriptorBindingCache::default();
         let mut last_camera = CameraUploadCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+        let mut last_depth = false;
         let mut vertices_drawn = 0u64;
+        let mut clear_after = false;
         for op in pass.ops {
+            let reset_depth =
+                clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
+            clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
+            if reset_depth {
+                let clear = vk::ClearAttachment::default()
+                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                    .clear_value(vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    });
+                let rect = vk::ClearRect::default()
+                    .rect(vk::Rect2D {
+                        offset: vk::Offset2D::default(),
+                        extent: extent,
+                    })
+                    .layer_count(1);
+                device.cmd_clear_attachments(cmd, &[clear], &[rect]);
+            }
             match *op {
                 DrawOp::Sprite(run) => {
                     let Some(texture) = resolved_texture(state, textures, run.texture_handle)
@@ -2371,11 +2486,21 @@ fn record_render_pass(
                     else {
                         continue;
                     };
-                    if !matches!(bound, Bound::TexturedMesh) {
+                    if !matches!(bound, Bound::TexturedMesh) || last_depth != run.depth_test {
+                        last_depth = run.depth_test;
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            textured_mesh_pipeline,
+                            if run.depth_test {
+                                (if write_alpha {
+                                    &state.depth_textured_mesh
+                                } else {
+                                    &state.opaque_depth_textured_mesh
+                                })
+                                .pipe
+                            } else {
+                                textured_mesh_pipeline
+                            },
                         );
                         if bindings.instance_required(InstanceBinding::TexturedMesh) {
                             device.cmd_bind_vertex_buffers(
@@ -2778,6 +2903,15 @@ pub fn draw(
                 float32: [c[0], c[1], c[2], c[3]],
             },
         };
+        let clear_values = [
+            clear_value,
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
         let rp_info = vk::RenderPassBeginInfo::default()
             .render_pass(state.render_pass)
             .framebuffer(state.swapchain_resources.framebuffers[image_index as usize])
@@ -2785,7 +2919,7 @@ pub fn draw(
                 offset: vk::Offset2D::default(),
                 extent: state.swapchain_resources.extent,
             })
-            .clear_values(std::slice::from_ref(&clear_value));
+            .clear_values(&clear_values);
         device.cmd_begin_render_pass(cmd, &rp_info, vk::SubpassContents::INLINE);
 
         let vp = vk::Viewport {
@@ -2817,8 +2951,30 @@ pub fn draw(
         // projection remains compatible when only the pipeline kind changes.
         let mut last_camera = CameraUploadCache::default();
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+        let mut last_depth = false;
         let mut vertices_drawn = 0u64;
+        let mut clear_after = false;
         for op in &frame.ops {
+            let reset_depth =
+                clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
+            clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
+            if reset_depth {
+                let clear = vk::ClearAttachment::default()
+                    .aspect_mask(vk::ImageAspectFlags::DEPTH)
+                    .clear_value(vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    });
+                let rect = vk::ClearRect::default()
+                    .rect(vk::Rect2D {
+                        offset: vk::Offset2D::default(),
+                        extent: state.swapchain_resources.extent,
+                    })
+                    .layer_count(1);
+                device.cmd_clear_attachments(cmd, &[clear], &[rect]);
+            }
             match op {
                 DrawOp::Sprite(run) => {
                     let Some(texture) = resolved_texture(state, textures, run.texture_handle)
@@ -2941,7 +3097,8 @@ pub fn draw(
                     device.cmd_draw(cmd, draw.vertex_count, 1, first_vertex, 0);
                     vertices_drawn += u64::from(draw.vertex_count);
                 }
-                DrawOp::TexturedMesh(draw) => {
+                DrawOp::TexturedMesh(run) => {
+                    let draw = run;
                     let Some(source) = state.uploads.source(draw.geometry) else {
                         continue;
                     };
@@ -2950,11 +3107,16 @@ pub fn draw(
                     else {
                         continue;
                     };
-                    if !matches!(bound, Bound::TexturedMesh) {
+                    if !matches!(bound, Bound::TexturedMesh) || last_depth != run.depth_test {
+                        last_depth = run.depth_test;
                         device.cmd_bind_pipeline(
                             cmd,
                             vk::PipelineBindPoint::GRAPHICS,
-                            state.textured_mesh_pipeline,
+                            if run.depth_test {
+                                (&state.depth_textured_mesh).pipe
+                            } else {
+                                state.textured_mesh_pipeline
+                            },
                         );
                         if bindings.instance_required(InstanceBinding::TexturedMesh) {
                             let inst = state.tmesh_instance_ring.as_ref().unwrap().buffer;
@@ -3441,6 +3603,21 @@ pub fn cleanup(state: &mut State) {
             .as_ref()
             .unwrap()
             .destroy_pipeline_layout(state.textured_mesh_pipeline_layout, None);
+        for pipeline in [
+            &state.depth_textured_mesh,
+            &state.opaque_depth_textured_mesh,
+        ] {
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .destroy_pipeline(pipeline.pipe, None);
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .destroy_pipeline_layout(pipeline.layout, None);
+        }
         state
             .device
             .as_ref()
@@ -5077,6 +5254,7 @@ fn create_swapchain(
         _images: images,
         image_views,
         framebuffers: vec![],
+        depths: Vec::new(),
         extent,
         format,
         present_mode,
@@ -5084,27 +5262,31 @@ fn create_swapchain(
     })
 }
 
-fn recreate_framebuffers(
-    device: &Device,
-    swapchain_resources: &mut SwapchainResources,
-    render_pass: vk::RenderPass,
-) -> Result<(), vk::Result> {
-    swapchain_resources.framebuffers = swapchain_resources
-        .image_views
-        .iter()
-        .map(|view| {
-            let attachments = [*view];
-            let create_info = vk::FramebufferCreateInfo::default()
-                .render_pass(render_pass)
-                .attachments(&attachments)
-                .width(swapchain_resources.extent.width)
-                .height(swapchain_resources.extent.height)
-                .layers(1);
-            // SAFETY: The framebuffer create info references the live render pass and image view
-            // for this swapchain image, and all borrowed data lives through the call.
-            unsafe { device.create_framebuffer(&create_info, None) }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+fn recreate_framebuffers(state: &mut State) -> Result<(), vk::Result> {
+    let extent = state.swapchain_resources.extent;
+    for index in 0..state.swapchain_resources.image_views.len() {
+        let depth = create_depth_target(state, extent.width, extent.height)?;
+        let attachments = [
+            state.swapchain_resources.image_views[index],
+            depth.image.view,
+        ];
+        let info = vk::FramebufferCreateInfo::default()
+            .render_pass(state.render_pass)
+            .attachments(&attachments)
+            .width(extent.width)
+            .height(extent.height)
+            .layers(1);
+        // SAFETY: both owned image views and the compatible render pass are live.
+        let framebuffer = unsafe {
+            state
+                .device
+                .as_ref()
+                .unwrap()
+                .create_framebuffer(&info, None)?
+        };
+        state.swapchain_resources.depths.push(depth);
+        state.swapchain_resources.framebuffers.push(framebuffer);
+    }
     Ok(())
 }
 
@@ -5121,22 +5303,47 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
     let color_attachment_ref = vk::AttachmentReference::default()
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+    let depth_attachment = vk::AttachmentDescription::default()
+        .format(vk::Format::D32_SFLOAT)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    let attachments = [color_attachment, depth_attachment];
+    let depth_ref = vk::AttachmentReference::default()
+        .attachment(1)
+        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     let subpass = vk::SubpassDescription::default()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(std::slice::from_ref(&color_attachment_ref));
+        .color_attachments(std::slice::from_ref(&color_attachment_ref))
+        .depth_stencil_attachment(&depth_ref);
     let dependency = vk::SubpassDependency::default()
         .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE);
+        .src_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+        )
+        .src_access_mask(vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+        .dst_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+        )
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+        );
     let create_info = vk::RenderPassCreateInfo::default()
-        .attachments(std::slice::from_ref(&color_attachment))
+        .attachments(&attachments)
         .subpasses(std::slice::from_ref(&subpass))
         .dependencies(std::slice::from_ref(&dependency));
     // SAFETY: The render-pass create info references only stack data for the duration of the
-    // call and describes a single-color-attachment pass compatible with the swapchain format.
+    // call and describes color/depth attachments compatible with the swapchain format.
     unsafe { device.create_render_pass(&create_info, None) }
 }
 
@@ -5165,30 +5372,63 @@ fn create_offscreen_render_pass(
     let color_attachment_ref = vk::AttachmentReference::default()
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+    let depth_attachment = vk::AttachmentDescription::default()
+        .format(vk::Format::D32_SFLOAT)
+        .samples(vk::SampleCountFlags::TYPE_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    let attachments = [color_attachment, depth_attachment];
+    let depth_ref = vk::AttachmentReference::default()
+        .attachment(1)
+        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     let subpass = vk::SubpassDescription::default()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(std::slice::from_ref(&color_attachment_ref));
+        .color_attachments(std::slice::from_ref(&color_attachment_ref))
+        .depth_stencil_attachment(&depth_ref);
     let dependencies = [
         vk::SubpassDependency::default()
             .src_subpass(vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .src_access_mask(vk::AccessFlags::SHADER_READ)
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE),
+            .src_stage_mask(
+                vk::PipelineStageFlags::FRAGMENT_SHADER
+                    | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            )
+            .src_access_mask(
+                vk::AccessFlags::SHADER_READ | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
+            .dst_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                    | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            )
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            ),
         vk::SubpassDependency::default()
             .src_subpass(0)
             .dst_subpass(vk::SUBPASS_EXTERNAL)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .src_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS
+                    | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            )
+            .src_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            )
             .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
             .dst_access_mask(vk::AccessFlags::SHADER_READ),
     ];
     let create_info = vk::RenderPassCreateInfo::default()
-        .attachments(std::slice::from_ref(&color_attachment))
+        .attachments(&attachments)
         .subpasses(std::slice::from_ref(&subpass))
         .dependencies(&dependencies);
-    // SAFETY: the create info contains one attachment and one subpass and all
+    // SAFETY: the create info contains color/depth attachments and one subpass and all
     // borrowed arrays remain alive for the duration of the driver call.
     unsafe { device.create_render_pass(&create_info, None) }
 }
@@ -5256,7 +5496,8 @@ fn create_offscreen_target(
         pool,
         nearest_sets: Some(nearest_sets),
     };
-    let attachments = [view];
+    let depth = create_depth_target(state, width, height)?;
+    let attachments = [view, depth.image.view];
     let framebuffer_info = vk::FramebufferCreateInfo::default()
         .render_pass(state.offscreen_clear_pass)
         .attachments(&attachments)
@@ -5272,6 +5513,7 @@ fn create_offscreen_target(
         height,
         texture,
         framebuffer,
+        _depth: depth,
         initialized: false,
     })
 }
@@ -5394,6 +5636,7 @@ fn cleanup_swapchain_and_dependents(state: &mut State) {
                 .unwrap()
                 .destroy_framebuffer(framebuffer, None);
         }
+        state.swapchain_resources.depths.clear();
         for &view in &state.swapchain_resources.image_views {
             state
                 .device
@@ -5410,7 +5653,7 @@ fn cleanup_swapchain_and_dependents(state: &mut State) {
 
 fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Error>> {
     debug!("Recreating swapchain...");
-    let device = state.device.as_ref().unwrap();
+    let device = Arc::clone(state.device.as_ref().unwrap());
 
     // Some platforms (notably under certain compositors or when minimized)
     // can temporarily report a surface with all extents set to zero. In that
@@ -5452,7 +5695,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     let new_resources = create_swapchain(
         &state.instance,
-        device,
+        &device,
         state.pdevice,
         state.surface,
         &state.surface_loader,
@@ -5464,7 +5707,7 @@ fn recreate_swapchain_and_dependents(state: &mut State) -> Result<(), Box<dyn Er
 
     let old = std::mem::replace(&mut state.swapchain_resources, new_resources);
 
-    recreate_framebuffers(device, &mut state.swapchain_resources, state.render_pass)?;
+    recreate_framebuffers(state)?;
 
     // SAFETY: The device is idle, so the old swapchain image views/framebuffers/swapchain are no
     // longer referenced by in-flight work and can be destroyed here.

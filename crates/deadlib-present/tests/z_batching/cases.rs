@@ -144,6 +144,8 @@ fn fixture(kind: &str, count: usize) -> Fixture {
                         textured.clone()
                     }),
                     geom_cache_key: 0,
+                    clear_depth: false,
+                    clear_depth_after: false,
                     depth_test: kind == "tmesh_depth"
                         || (kind == "tmesh_depth_boundary" && i % 2 == 1)
                         || (kind == "mixed" && i % 7 == 0),

@@ -423,6 +423,17 @@ fn model_draw_transform(model_size: [f32; 2], affine: Matrix4) -> Matrix4 {
     )
 }
 
+/// Restore model Z without changing its existing perspective or screen position.
+/// The caller brackets each mine's meshes with depth clears.
+pub fn noteskin_model_depth(model: &ModelMesh, transform: &mut Matrix4) {
+    let size = model.size();
+    let focal = (size[0].max(size[1]) * 6.0).max(180.0);
+    transform.x_axis.z = -transform.x_axis.w * focal;
+    transform.y_axis.z = -transform.y_axis.w * focal;
+    transform.z_axis.z = -transform.z_axis.w * focal;
+    transform.w_axis.z = (1.0 - transform.w_axis.w) * focal;
+}
+
 #[inline(always)]
 fn model_affine_transform(
     model: &ModelMesh,
@@ -502,6 +513,8 @@ fn actor_from_vertices<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         depth_test,
+        clear_depth: false,
+        clear_depth_after: false,
         cull_back: slot.model_cull_back(),
         visible: true,
         blend,
@@ -536,6 +549,8 @@ fn flat_from_vertices<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         depth_test: false,
+        clear_depth: false,
+        clear_depth_after: false,
         cull_back: slot.model_cull_back(),
         blend,
         z,

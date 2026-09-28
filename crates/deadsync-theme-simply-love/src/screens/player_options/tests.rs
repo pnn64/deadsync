@@ -2070,16 +2070,10 @@ pub(super) mod tests {
         );
     }
 
-    #[test]
-    fn model_previews_preserve_layers_and_quants() {
-        use super::super::render;
-        use deadlib_present::actors::Actor;
-        use deadlib_render_core::BlendMode;
+    fn model_preview_skin() -> deadsync_assets::noteskin::Noteskin {
         use deadsync_assets::noteskin::{
             ModelMesh, ModelVertex, Noteskin, SpriteSource, test_model_slot,
         };
-        ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
         // A triangle shared by materials with different texture dimensions.
         // Every layer must occupy the same screen coordinates after fitting.
         let model = Arc::new(ModelMesh {
@@ -2117,7 +2111,7 @@ pub(super) mod tests {
                 slot
             })
             .collect();
-        let skin = Noteskin {
+        Noteskin {
             notes: vec![layers[0].clone()],
             note_layers: vec![Arc::clone(&layers)],
             lift_note_layers: vec![Arc::from(&layers[..3])],
@@ -2147,7 +2141,258 @@ pub(super) mod tests {
             custom_parts: Default::default(),
             part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
             note_display_metrics: Default::default(),
+        }
+    }
+
+    fn mine_depth_skin() -> deadsync_assets::noteskin::Noteskin {
+        use deadsync_assets::noteskin::{ModelMesh, ModelVertex};
+        let mut skin = model_preview_skin();
+        // Pixel-space geometry: a raised black prong, submitted before its body.
+        // Unit-depth quads miss the default menu camera's clipping regression.
+        let layers = [
+            ([-5.0, 12.0, 5.0, 30.0], 7.0),
+            ([-24.0, -24.0, 24.0, 24.0], 3.0),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, ([left, bottom, right, top], depth))| {
+            let mut slot = skin.mine_layers[0][index].clone();
+            slot.model_draw.tint = if index == 0 {
+                [0.0, 0.0, 0.0, 1.0]
+            } else {
+                [1.0, 0.0, 0.0, 1.0]
+            };
+            slot.model = Some(Arc::new(ModelMesh {
+                vertices: [
+                    [left, bottom],
+                    [right, bottom],
+                    [right, top],
+                    [left, bottom],
+                    [right, top],
+                    [left, top],
+                ]
+                .map(|[x, y]| ModelVertex {
+                    pos: [x, y, depth],
+                    uv: [0.5; 2],
+                    tex_matrix_scale: [1.0; 2],
+                })
+                .into(),
+                bounds: [-32.0, -32.0, -8.0, 32.0, 32.0, 8.0],
+            }));
+            slot
+        })
+        .collect::<Vec<_>>();
+        skin.mine_layers = vec![layers.into()];
+        skin
+    }
+
+    #[test]
+    fn mine_preview_depth_fits_camera() {
+        use deadlib_present::{actors::Actor, space::Metrics};
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        state
+            .noteskin
+            .cache
+            .insert("depth-fixture".into(), Arc::new(mine_depth_skin()));
+        let projection = Metrics::centered(200.0, 200.0).projection();
+        for size in [18.0, 32.0, 64.0, 128.0] {
+            for angle in [0.0, 30.0, 90.0, 270.0] {
+                let skin = Arc::make_mut(state.noteskin.cache.get_mut("depth-fixture").unwrap());
+                for slot in Arc::make_mut(&mut skin.mine_layers[0]) {
+                    slot.model_draw.rot[2] = angle;
+                }
+                let mut actors = Vec::new();
+                assert!(super::super::render::draw_live_preview(
+                    &mut actors,
+                    &state,
+                    "depth-fixture",
+                    8,
+                    [100.0; 2],
+                    size,
+                    1.0,
+                    102,
+                ));
+                assert_preview_bounds(&actors, "depth-fixture", size);
+                let mut depths = Vec::new();
+                for actor in &actors {
+                    let Actor::TexturedMesh {
+                        vertices,
+                        local_transform,
+                        ..
+                    } = actor
+                    else {
+                        panic!("mine mesh");
+                    };
+                    for vertex in vertices.iter() {
+                        let p = projection
+                            * *local_transform
+                            * glam::Vec3::from(vertex.pos).extend(1.0);
+                        assert!(
+                            p.z.abs() <= p.w,
+                            "size={size}, angle={angle}: clipped depth {p:?}"
+                        );
+                    }
+                    depths.push(
+                        (projection * *local_transform)
+                            .project_point3(glam::Vec3::from(vertices[0].pos))
+                            .z,
+                    );
+                }
+                assert!(
+                    depths[0] < depths[1],
+                    "the prong must stay closer than the body"
+                );
+            }
+        }
+    }
+
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires graphics devices and a window system"]
+    fn mine_preview_depth_pixels() {
+        use deadlib_present::{
+            actors::Actor,
+            compose, font,
+            space::Metrics,
+            texture::{TextureContext, TextureMeta},
         };
+        use deadlib_render::{BackendType, PresentModePolicy, SamplerDesc, TextureHandleMap};
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        struct WhiteTexture;
+        impl TextureContext for WhiteTexture {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _: &str) -> Option<TextureMeta> {
+                Some(TextureMeta { w: 64, h: 64 })
+            }
+            fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, _: &str) -> u64 {
+                1
+            }
+        }
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        state
+            .noteskin
+            .cache
+            .insert("depth-fixture".into(), Arc::new(mine_depth_skin()));
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let metrics = Metrics::centered(200.0, 200.0);
+        for kind in [
+            BackendType::VulkanWgpu,
+            BackendType::OpenGL,
+            BackendType::Vulkan,
+        ] {
+            #[expect(deprecated, reason = "hidden GPU fixture needs no event dispatch")]
+            let window = Arc::new(
+                event_loop
+                    .create_window(
+                        winit::window::Window::default_attributes()
+                            .with_visible(false)
+                            .with_inner_size(winit::dpi::PhysicalSize::new(400, 400)),
+                    )
+                    .unwrap(),
+            );
+            let mut backend = deadlib_render::create_backend(
+                kind,
+                window,
+                metrics.projection(),
+                false,
+                PresentModePolicy::Immediate,
+                false,
+                true,
+            )
+            .unwrap();
+            let mut textures = TextureHandleMap::default();
+            textures.insert(
+                1,
+                backend
+                    .create_texture(
+                        &image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+                        SamplerDesc::default(),
+                    )
+                    .unwrap(),
+            );
+            for size in [18.0, 32.0, 64.0, 128.0] {
+                for angle in [0.0, 30.0, 90.0, 270.0] {
+                    let skin =
+                        Arc::make_mut(state.noteskin.cache.get_mut("depth-fixture").unwrap());
+                    for slot in Arc::make_mut(&mut skin.mine_layers[0]) {
+                        slot.model_draw.rot[2] = angle;
+                    }
+                    let mut actors = Vec::new();
+                    assert!(super::super::render::draw_live_preview(
+                        &mut actors,
+                        &state,
+                        "depth-fixture",
+                        8,
+                        [100.0; 2],
+                        size,
+                        1.0,
+                        102
+                    ));
+                    let frame = compose::build_screen_with_texture_context(
+                        &actors,
+                        [0.3, 0.3, 0.3, 1.0],
+                        &metrics,
+                        &font::FontMap::default(),
+                        0.0,
+                        &WhiteTexture,
+                    );
+                    backend.request_screenshot();
+                    backend.draw(&frame, &textures, false).unwrap();
+                    let image = backend.capture_frame().unwrap();
+                    for (index, point, expected) in [
+                        (0, [0.0, 20.0, 7.0], [0, 0, 0]),
+                        (0, [0.0, 28.0, 7.0], [0, 0, 0]),
+                        (1, [0.0, 0.0, 3.0], [255, 0, 0]),
+                    ] {
+                        let Actor::TexturedMesh {
+                            offset,
+                            local_transform,
+                            ..
+                        } = &actors[index]
+                        else {
+                            panic!("mine mesh");
+                        };
+                        let pos = local_transform.project_point3(glam::Vec3::from(point));
+                        let x = ((pos.x + offset[0]) * image.width() as f32 / 200.0) as u32;
+                        let y = ((pos.y + offset[1]) * image.height() as f32 / 200.0) as u32;
+                        assert_eq!(
+                            image.get_pixel(x, y).0[..3],
+                            expected,
+                            "{kind}: size={size}, angle={angle}, sample={point:?}"
+                        );
+                    }
+                }
+            }
+            drop(textures);
+            backend.cleanup();
+        }
+    }
+
+    #[test]
+    fn model_previews_preserve_layers_and_quants() {
+        use super::super::render;
+        use deadlib_present::actors::Actor;
+        use deadlib_render_core::BlendMode;
+        use deadsync_assets::noteskin::{SpriteSource, test_model_slot};
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let skin = model_preview_skin();
+        let layers = Arc::clone(&skin.note_layers[0]);
+        let mine_layers = Arc::clone(&skin.mine_layers[0]);
         let textures = super::super::noteskins::preview_textures(&skin, 8);
         assert_eq!(textures.len(), 5);
         for (index, (key, model)) in textures.iter().enumerate() {
@@ -2224,16 +2469,22 @@ pub(super) mod tests {
                     102,
                 ));
                 assert_eq!(actors.len(), 5);
-                for actor in &actors {
+                for (index, actor) in actors.iter().enumerate() {
                     let Actor::TexturedMesh {
                         offset,
                         local_transform,
+                        depth_test,
+                        clear_depth,
+                        clear_depth_after,
                         ..
                     } = actor
                     else {
                         panic!("mine model layer");
                     };
                     assert_eq!(*offset, [100.0; 2], "mine pivot at {angle} degrees");
+                    assert!(*depth_test);
+                    assert_eq!(*clear_depth, index == 0);
+                    assert_eq!(*clear_depth_after, index + 1 == actors.len());
                     assert_eq!(
                         local_transform.project_point3(glam::Vec3::ZERO),
                         glam::Vec3::ZERO

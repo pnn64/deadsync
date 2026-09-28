@@ -47,6 +47,9 @@ pub struct State {
     prepared_mesh_triangles: Vec<PreparedTriangle<ScreenVertexColor>>,
     prepared_tmesh_triangles: Vec<PreparedTriangle<ScreenVertexTexColor>>,
     stripe_bins: StripeBins,
+    // Sized at window creation/resize, split with pixel stripes for exclusive
+    // worker access, reused each frame, and freed with the renderer.
+    depth: Vec<f32>,
     offscreen_targets: Vec<OffscreenTarget>,
 }
 
@@ -63,6 +66,7 @@ struct OffscreenTarget {
     height: u32,
     texture: Texture,
     pixels: Vec<u32>,
+    depth: Vec<f32>,
     initialized: bool,
 }
 
@@ -114,6 +118,7 @@ struct WorkerPool {
 /// renderer-owned vectors retain their session high-water capacities, while
 /// entries are cleared and rebuilt without allocation on warmed frames.
 enum PreparedObject {
+    ClearDepth,
     Sprite {
         vertices: [ScreenVertex; 4],
         rows: ScreenRows,
@@ -141,6 +146,7 @@ enum PreparedObject {
         rows: ScreenRows,
         texture_mask: bool,
         blend: BlendMode,
+        depth_test: bool,
         texture_handle: TextureHandle,
     },
     DirectTexturedMesh {
@@ -148,6 +154,7 @@ enum PreparedObject {
         instance: u32,
         mvp: Matrix4,
         blend: BlendMode,
+        depth_test: bool,
         texture_handle: TextureHandle,
     },
 }
@@ -159,10 +166,12 @@ impl PreparedObject {
             Self::Sprite { rows, .. }
             | Self::Mesh { rows, .. }
             | Self::TexturedMesh { rows, .. } => *rows,
-            Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => ScreenRows {
-                start: 0,
-                end: height as u32,
-            },
+            Self::ClearDepth | Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => {
+                ScreenRows {
+                    start: 0,
+                    end: height as u32,
+                }
+            }
         }
     }
 }
@@ -394,6 +403,7 @@ pub fn init(
         prepared_mesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
         prepared_tmesh_triangles: Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3),
         stripe_bins: StripeBins::warmed(),
+        depth: vec![1.0; window_size.width as usize * window_size.height as usize],
         offscreen_targets: Vec::with_capacity(4),
     })
 }
@@ -522,6 +532,7 @@ fn create_offscreen_target(handle: TextureHandle, width: u32, height: u32) -> Of
             yuv420: false,
         },
         pixels: vec![0; len],
+        depth: vec![1.0; len],
         initialized: false,
     }
 }
@@ -579,6 +590,8 @@ fn draw_offscreen_targets(
         let height = pass.height.max(1) as usize;
         let initialized = targets[index].initialized;
         let mut pixels = std::mem::take(&mut targets[index].pixels);
+        let mut depth = std::mem::take(&mut targets[index].depth);
+        depth.fill(1.0);
         if !pass.preserve || !initialized {
             pixels.fill(if pass.alpha { 0 } else { 0xff00_0000 });
         }
@@ -611,8 +624,10 @@ fn draw_offscreen_targets(
             height,
             &mut pixels,
             fixed_vertices,
+            &mut depth,
         ));
         targets[index].pixels = pixels;
+        targets[index].depth = depth;
         targets[index].initialized = true;
         if pass.alpha {
             copy_target_pixels::<true>(&mut targets[index]);
@@ -719,8 +734,10 @@ pub fn draw(
         worker_pool.install(|| {
             pixels
                 .par_chunks_mut(w * SOFTWARE_ROW_CHUNK)
+                .zip(state.depth.par_chunks_mut(w * SOFTWARE_ROW_CHUNK))
                 .enumerate()
-                .map(|(chunk_index, stripe)| {
+                .map(|(chunk_index, (stripe, depth))| {
+                    depth.fill(1.0);
                     stripe.fill(clear);
                     let y_start = chunk_index * SOFTWARE_ROW_CHUNK;
                     let y_end = y_start + stripe.len() / w;
@@ -737,12 +754,15 @@ pub fn draw(
                         y_end,
                         stripe,
                         fixed_vertices,
+                        depth,
                     )
                 })
                 .reduce(|| 0, u32::saturating_add)
         })
     } else {
         buffer.fill(clear);
+        state.depth.fill(1.0);
+        let depth = &mut state.depth;
         draw_rows(
             software_frame,
             prepared_objects,
@@ -756,6 +776,7 @@ pub fn draw(
             h,
             &mut buffer,
             fixed_vertices,
+            depth,
         )
     };
     let backend_record_us = elapsed_us_since(backend_record_started);
@@ -811,7 +832,13 @@ fn prepare_objects(
     tmesh_triangles.clear();
     let mut fixed_vertices = 0u32;
 
+    let mut clear_after = false;
     for op in frame.ops {
+        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
+        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
+        if reset_depth {
+            prepared.push(PreparedObject::ClearDepth);
+        }
         match *op {
             DrawOp::Sprite(run) => {
                 if textures.software_texture(run.texture_handle).is_none() {
@@ -931,6 +958,7 @@ fn prepare_objects(
                             instance: instance_index,
                             mvp,
                             blend: run.blend,
+                            depth_test: run.depth_test,
                             texture_handle: run.texture_handle,
                         });
                         continue;
@@ -959,6 +987,7 @@ fn prepare_objects(
                         rows,
                         texture_mask: instance.texture_mask != 0.0,
                         blend: run.blend,
+                        depth_test: run.depth_test,
                         texture_handle: run.texture_handle,
                     });
                 }
@@ -981,6 +1010,8 @@ fn draw_rows(
     stripe_y_end: usize,
     buffer: &mut [u32],
     fixed_vertices: u32,
+
+    depth: &mut [f32],
 ) -> u32 {
     let mut vertices_drawn = fixed_vertices;
     let mut texture_cache = None;
@@ -1008,6 +1039,7 @@ fn draw_rows(
                     stripe_y_end,
                     buffer,
                     width,
+                    depth,
                 );
             } else {
                 vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
@@ -1023,6 +1055,7 @@ fn draw_rows(
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
+                    depth,
                 ));
             }
         }
@@ -1041,6 +1074,7 @@ fn draw_rows(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             ));
         }
     }
@@ -1061,8 +1095,14 @@ fn draw_prepared<'a>(
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+
+    depth: &mut [f32],
 ) -> u32 {
     match prepared {
+        PreparedObject::ClearDepth => {
+            depth.fill(1.0);
+            0
+        }
         PreparedObject::Sprite {
             vertices,
             rows,
@@ -1143,6 +1183,7 @@ fn draw_prepared<'a>(
             rows,
             texture_mask,
             blend,
+            depth_test,
             texture_handle,
             ..
         } => {
@@ -1163,6 +1204,7 @@ fn draw_prepared<'a>(
                     stripe_y_end,
                     buffer,
                     width,
+                    if *depth_test { depth } else { &mut [] },
                 );
             }
             0
@@ -1172,6 +1214,7 @@ fn draw_prepared<'a>(
             instance,
             mvp,
             blend,
+            depth_test,
             texture_handle,
         } => {
             let Some(geometry) = frame.tmesh_geometries.get(*geometry as usize) else {
@@ -1201,6 +1244,7 @@ fn draw_prepared<'a>(
                 stripe_y_end,
                 buffer,
                 instance.cull_back > 0.5,
+                if *depth_test { depth } else { &mut [] },
             )
         }
     }
@@ -1218,6 +1262,8 @@ fn draw_prepared_triangle<'a>(
     stripe_y_end: usize,
     buffer: &mut [u32],
     width: usize,
+
+    depth: &mut [f32],
 ) {
     match prepared {
         PreparedObject::Mesh { blend, .. } => {
@@ -1235,6 +1281,7 @@ fn draw_prepared_triangle<'a>(
         PreparedObject::TexturedMesh {
             texture_mask,
             blend,
+            depth_test,
             texture_handle,
             ..
         } => {
@@ -1257,6 +1304,7 @@ fn draw_prepared_triangle<'a>(
                 stripe_y_end,
                 buffer,
                 width,
+                if *depth_test { depth } else { &mut [] },
             );
         }
         _ => debug_assert!(false, "whole objects must use whole-object stripe items"),
@@ -1283,6 +1331,7 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     let window_size = PhysicalSize::new(width, height);
     state.surface_resize_pending |= state.window_size != window_size;
     state.window_size = window_size;
+    state.depth.resize(width as usize * height as usize, 1.0);
 }
 
 pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
@@ -1325,6 +1374,7 @@ struct ScreenVertexColor {
 
 #[derive(Clone, Copy)]
 struct ScreenVertexTexColor {
+    z: f32,
     x: f32,
     y: f32,
     u: f32,
@@ -1641,6 +1691,7 @@ fn project_tmesh_polygon(
     let (clipped, len) = clip_tmesh_near(triangle);
     let polygon = &clipped[..len];
     let mut projected = [ScreenVertexTexColor {
+        z: 0.0,
         x: 0.0,
         y: 0.0,
         u: 0.0,
@@ -1657,6 +1708,7 @@ fn project_tmesh_polygon(
             return None;
         }
         projected[i] = ScreenVertexTexColor {
+            z: (vertex.clip.z / vertex.clip.w + 1.0) * 0.5,
             x: f32::midpoint(ndc_x, 1.0) * width as f32,
             y: ((1.0 - ndc_y) * 0.5) * height as f32,
             u: vertex.u,
@@ -1839,6 +1891,8 @@ fn rasterize_prepared_tmesh(
     stripe_y_end: usize,
     buffer: &mut [u32],
     width: usize,
+
+    depth: &mut [f32],
 ) {
     let sampler = SamplerDesc {
         wrap: SamplerWrap::Repeat,
@@ -1857,6 +1911,7 @@ fn rasterize_prepared_tmesh(
             stripe_y_end,
             buffer,
             width,
+            depth,
         );
     }
 }
@@ -1939,6 +1994,8 @@ fn rasterize_textured_mesh_triangles(
     stripe_y_end: usize,
     buffer: &mut [u32],
     cull_back: bool,
+
+    depth: &mut [f32],
 ) -> u32 {
     if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return 0;
@@ -1980,6 +2037,7 @@ fn rasterize_textured_mesh_triangles(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             );
         }
     }
@@ -2161,6 +2219,8 @@ fn rasterize_triangle_tex_color(
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+
+    depth: &mut [f32],
 ) {
     let Some(setup) = triangle_setup_in_rows(
         [v0.x, v1.x, v2.x],
@@ -2184,6 +2244,7 @@ fn rasterize_triangle_tex_color(
         stripe_y_end,
         buffer,
         width,
+        depth,
     );
 }
 
@@ -2201,6 +2262,8 @@ fn rasterize_triangle_tex_color_prepared(
     stripe_y_end: usize,
     buffer: &mut [u32],
     width: usize,
+
+    depth: &mut [f32],
 ) {
     let [v0, v1, v2] = vertices;
     match (texture_mask, opaque) {
@@ -2216,6 +2279,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
         (false, true) => rasterize_triangle_tex_color_mode::<false, true>(
             v0,
@@ -2229,6 +2293,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
         (true, false) => rasterize_triangle_tex_color_mode::<true, false>(
             v0,
@@ -2242,6 +2307,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
         (true, true) => rasterize_triangle_tex_color_mode::<true, true>(
             v0,
@@ -2255,6 +2321,7 @@ fn rasterize_triangle_tex_color_prepared(
             stripe_y_end,
             buffer,
             width,
+            depth,
         ),
     }
 }
@@ -2273,6 +2340,8 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
     stripe_y_end: usize,
     buffer: &mut [u32],
     width: usize,
+
+    depth: &mut [f32],
 ) {
     match (sampler.filter, matches!(blend, BlendMode::Add)) {
         (SamplerFilter::Nearest, true) => {
@@ -2287,6 +2356,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             );
         }
         (SamplerFilter::Nearest, false) => {
@@ -2301,6 +2371,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             );
         }
         (SamplerFilter::Linear, true) => {
@@ -2315,6 +2386,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             );
         }
         (SamplerFilter::Linear, false) => {
@@ -2329,6 +2401,7 @@ fn rasterize_triangle_tex_color_mode<const MASK: bool, const OPAQUE: bool>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
+                depth,
             );
         }
     }
@@ -2871,6 +2944,8 @@ fn rasterize_triangle_tex_color_impl<
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
+
+    depth: &mut [f32],
 ) {
     let Some((min_x, max_x, min_y, max_y, stripe_start)) =
         setup.stripe_bounds(stripe_y_start, stripe_y_end)
@@ -2933,6 +3008,13 @@ fn rasterize_triangle_tex_color_impl<
             }
 
             let dst_idx = row * width + x as usize;
+            if !depth.is_empty() {
+                let z = v2.z.mul_add(w2, v0.z.mul_add(w0, v1.z * w1));
+                if !(0.0..=1.0).contains(&z) || z > depth[dst_idx] || sa <= 1.0 / 256.0 {
+                    continue;
+                }
+                depth[dst_idx] = z;
+            }
             buffer[dst_idx] = if ADD {
                 blend_add(buffer[dst_idx], sr, sg, sb, sa)
             } else {
@@ -3504,6 +3586,161 @@ mod tests {
     }
 
     #[test]
+    fn model_depth_groups() {
+        let textures = TestTextures {
+            texture: create_texture(
+                &RgbaImage::from_pixel(1, 1, Rgba([255; 4])),
+                SamplerDesc::default(),
+            )
+            .unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let geometries =
+            [(0.5, 0.4), (0.8, 0.0), (0.15, -0.4)].map(|(r, z)| TexturedMeshGeometry {
+                cache_key: 0,
+                vertices: TexturedMeshVertices::Shared(Arc::from(
+                    [
+                        [-r, -r, z],
+                        [r, -r, z],
+                        [r, r, z],
+                        [-r, -r, z],
+                        [r, r, z],
+                        [-r, r, z],
+                    ]
+                    .map(|pos| TexturedMeshVertex {
+                        pos,
+                        uv: [0.5; 2],
+                        color: [1.0; 4],
+                        tex_matrix_scale: [1.0; 2],
+                    }),
+                )),
+            });
+        let mut frame = RenderFrame {
+            clear_color: [0.0; 4],
+            render_targets: vec![],
+            cameras: vec![],
+            sprite_instances: vec![],
+            mesh_vertices: vec![],
+            tmesh_geometries: geometries.to_vec(),
+            tmesh_instances: [
+                [0.0, 1.0, 0.0, 1.0],
+                [1.0, 0.0, 0.0, 1.0],
+                [0.0, 0.0, 1.0, 1.0],
+            ]
+            .map(|tint| {
+                TexturedMeshInstanceRaw::new(
+                    Matrix4::IDENTITY,
+                    tint,
+                    [1.0; 2],
+                    [0.0; 2],
+                    [0.0; 2],
+                    false,
+                )
+            })
+            .to_vec(),
+            ops: (0..3)
+                .map(|i| {
+                    DrawOp::TexturedMesh(TexturedMeshRun {
+                        geometry: i,
+                        instance_start: i,
+                        instance_count: 1,
+                        texture_handle: TEXTURE_HANDLE,
+                        blend: BlendMode::Alpha,
+                        camera: 0,
+                        depth_test: true,
+                        clear_depth: i != 1,
+                        clear_depth_after: i != 0,
+                    })
+                })
+                .collect(),
+        };
+        // Positive Z is nearer. The green foreground comes first in authored order;
+        // the blue foreground belongs to a later note despite being farther away.
+        let projection = Matrix4::from_scale(Vec3::new(1.0, 1.0, -1.0));
+        let mut overlay = TexturedMeshInstanceRaw::new(
+            Matrix4::IDENTITY,
+            [1.0, 1.0, 0.0, 1.0],
+            [1.0; 2],
+            [0.0; 2],
+            [0.0; 2],
+            false,
+        );
+        overlay.model_col3[2] = -0.8;
+        frame.tmesh_instances.push(overlay);
+        for (transparent, overlay) in [(false, false), (true, false), (false, true)] {
+            frame.ops.truncate(3);
+            if overlay {
+                frame.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+                    geometry: 1,
+                    instance_start: 3,
+                    instance_count: 1,
+                    texture_handle: TEXTURE_HANDLE,
+                    blend: BlendMode::Alpha,
+                    camera: 0,
+                    depth_test: true,
+                    clear_depth: false,
+                    clear_depth_after: false,
+                }));
+            }
+            frame.tmesh_instances[0].tint[3] = if transparent { 0.0 } else { 1.0 };
+            for staged in [false, true] {
+                let mut prepared = Vec::new();
+                let mut mesh = Vec::with_capacity(16);
+                let mut tmesh = Vec::with_capacity(16);
+                let fixed = prepare_objects(
+                    (&frame).into(),
+                    projection,
+                    &textures,
+                    WIDTH,
+                    HEIGHT,
+                    &mut prepared,
+                    &mut mesh,
+                    &mut tmesh,
+                    staged,
+                );
+                let mut bins = StripeBins::warmed();
+                bins.build(&prepared, &mesh, &tmesh, HEIGHT);
+                for indexed in [false, true] {
+                    let mut pixels = vec![0; WIDTH * HEIGHT];
+                    for (stripe_index, stripe) in
+                        pixels.chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK).enumerate()
+                    {
+                        let start = stripe_index * SOFTWARE_ROW_CHUNK;
+                        let end = start + stripe.len() / WIDTH;
+                        let mut depth = vec![1.0; stripe.len()];
+                        draw_rows(
+                            (&frame).into(),
+                            &prepared,
+                            indexed.then(|| bins.stripe(stripe_index)),
+                            &mesh,
+                            &tmesh,
+                            &textures,
+                            WIDTH,
+                            HEIGHT,
+                            start,
+                            end,
+                            stripe,
+                            fixed,
+                            &mut depth,
+                        );
+                    }
+                    for (x, expected) in [
+                        (WIDTH / 3, if transparent { 0xff0000 } else { 0x00ff00 }),
+                        (WIDTH / 2, 0x0000ff),
+                        (WIDTH * 4 / 5, 0xff0000),
+                    ] {
+                        assert_eq!(
+                            pixels[HEIGHT / 2 * WIDTH + x] & 0xffffff,
+                            if overlay { 0xffff00 } else { expected },
+                            "staged={staged}, indexed={indexed}, transparent={transparent}, x={x}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn backfaces_do_not_cover_textured_front() {
         // A green front and a white rear, authored last, reproduce a closed
         // model without depending on any installed noteskin or its texture.
@@ -3567,6 +3804,7 @@ mod tests {
                     HEIGHT,
                     &mut direct,
                     cull,
+                    &mut [],
                 );
                 let mut prepared = Vec::with_capacity(4);
                 prepare_tmesh_triangles(
@@ -3595,6 +3833,7 @@ mod tests {
                     HEIGHT,
                     &mut retained,
                     WIDTH,
+                    &mut [],
                 );
                 assert_eq!(retained, direct, "staged and direct culling must agree");
                 assert_eq!(
@@ -3707,6 +3946,7 @@ mod tests {
             HEIGHT,
             &mut retained,
             WIDTH,
+            &mut [],
         );
         assert_eq!(
             rasterize_textured_mesh_triangles(
@@ -3727,6 +3967,7 @@ mod tests {
                 HEIGHT,
                 &mut direct,
                 false,
+                &mut [],
             ),
             3
         );
@@ -3963,6 +4204,7 @@ mod tests {
                     y_end,
                     stripe,
                     fixed_vertices,
+                    &mut [],
                 )
             })
             .sum()
@@ -4000,6 +4242,7 @@ mod tests {
                     y_end,
                     stripe,
                     fixed_vertices,
+                    &mut [],
                 )
             })
             .sum()
@@ -4105,6 +4348,8 @@ mod tests {
                     texture_handle: TEXTURE_HANDLE,
                     camera: 0,
                     depth_test: false,
+                    clear_depth: false,
+                    clear_depth_after: false,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
                     geometry: 0,
@@ -4114,6 +4359,8 @@ mod tests {
                     texture_handle: MISSING_TEXTURE_HANDLE,
                     camera: 0,
                     depth_test: false,
+                    clear_depth: false,
+                    clear_depth_after: false,
                 }),
                 DrawOp::Sprite(SpriteRun {
                     instance_start: 3,

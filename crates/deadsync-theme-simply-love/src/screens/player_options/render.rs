@@ -1607,6 +1607,8 @@ fn draw_mine_preview(
     };
     let phase = mine_ns.tap_mine_uv_phase(state.preview_time, state.preview_beat, 0.0);
     let translation = mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
+    let mine_start = actors.len();
+    let mut first_mesh = true;
     for slot in layers.iter() {
         let draw = slot.model_draw_at(state.preview_time, state.preview_beat);
         let frame = if slot.actor_frame_child {
@@ -1622,6 +1624,7 @@ fn draw_mine_preview(
         let uv = slot.uv_for_note_at(frame, uv_time, translation);
         let logical = slot.logical_size();
         let scale = target_height / logical[1].max(1.0);
+        let layer_start = actors.len();
         draw_preview_slot(
             actors,
             slot,
@@ -1634,6 +1637,49 @@ fn draw_mine_preview(
             BlendMode::Alpha,
             z,
         );
+        if slot.model_cull_back()
+            && let Some(model) = slot.model.as_ref()
+        {
+            for actor in &mut actors[layer_start..] {
+                if let Actor::TexturedMesh {
+                    local_transform,
+                    depth_test,
+                    clear_depth,
+                    tint,
+                    glow,
+                    ..
+                } = actor
+                {
+                    if tint[3] <= 0.0 && glow[3] <= 0.0001 {
+                        continue;
+                    }
+                    deadsync_notefield::noteskin_model_depth(model, local_transform);
+                    // ITG's menu camera spans +/-1000 model units; ours spans
+                    // +/-1. Normalize only Z, preserving perspective and XY.
+                    *local_transform =
+                        glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, 0.001)) * *local_transform;
+                    *depth_test = true;
+                    *clear_depth = first_mesh;
+                    first_mesh = false;
+                }
+            }
+        }
+    }
+    if let Some(clear) = actors[mine_start..]
+        .iter_mut()
+        .rev()
+        .find_map(|actor| match actor {
+            Actor::TexturedMesh {
+                depth_test: true,
+                tint,
+                glow,
+                clear_depth_after,
+                ..
+            } if tint[3] > 0.0 || glow[3] > 0.0001 => Some(clear_depth_after),
+            _ => None,
+        })
+    {
+        *clear = true;
     }
 }
 

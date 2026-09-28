@@ -53,6 +53,8 @@ pub(super) fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
+                clear_depth: mesh.clear_depth,
+                clear_depth_after: mesh.clear_depth_after,
             },
         );
     }
@@ -77,6 +79,8 @@ pub(super) fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
+                clear_depth: mesh.clear_depth,
+                clear_depth_after: mesh.clear_depth_after,
             },
         );
     }

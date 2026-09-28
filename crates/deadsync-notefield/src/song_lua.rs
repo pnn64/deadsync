@@ -467,6 +467,8 @@ mod tests {
             uv_offset: [0.15, 0.25],
             uv_tex_shift: [0.35, 0.45],
             depth_test: true,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: true,
             visible: false,
             blend: BlendMode::Multiply,
@@ -491,6 +493,8 @@ mod tests {
             visible,
             blend,
             z,
+            clear_depth: false,
+            clear_depth_after: false,
         } = song_lua_player_y_fold_actor(textured_mesh, 100.0, 60.0)
         else {
             panic!("fold should preserve the textured-mesh variant");

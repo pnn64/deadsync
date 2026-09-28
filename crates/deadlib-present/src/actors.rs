@@ -424,6 +424,10 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        /// Clear depth before this actor's first visible pass.
+        clear_depth: bool,
+        /// Clear depth after this actor's last visible pass.
+        clear_depth_after: bool,
         cull_back: bool,
         visible: bool,
         blend: BlendMode,
@@ -447,6 +451,10 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        /// Clear depth before this actor's first visible pass.
+        clear_depth: bool,
+        /// Clear depth after this actor's last visible pass.
+        clear_depth_after: bool,
         cull_back: bool,
         visible: bool,
         blend: BlendMode,
@@ -584,6 +592,10 @@ pub struct FlatTexturedMesh {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub depth_test: bool,
+    /// Clear depth before this draw to isolate a new model in painter order.
+    pub clear_depth: bool,
+    /// Clear depth after this draw so subsequent draws cannot inherit it.
+    pub clear_depth_after: bool,
     pub cull_back: bool,
     pub blend: BlendMode,
     pub z: i16,

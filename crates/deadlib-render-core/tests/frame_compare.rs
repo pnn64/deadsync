@@ -49,6 +49,8 @@ fn render_fixture() -> RenderFrame {
                 texture_handle: 8,
                 camera: 0,
                 depth_test: true,
+                clear_depth: false,
+                clear_depth_after: false,
             }),
         ],
     }
@@ -197,6 +199,8 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
         texture_handle: 8,
         camera: 0,
         depth_test: true,
+        clear_depth: false,
+        clear_depth_after: false,
     }));
     let mut joined = split.clone();
     let DrawOp::Mesh(run) = &mut joined.ops[1] else {

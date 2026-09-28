@@ -213,3 +213,9 @@ fragment float4 textured_mesh_fragment(
     }
     return color;
 }
+
+// Reset depth inside the current color pass without changing its color attachment.
+vertex float4 depth_clear_vertex(uint i [[vertex_id]]) {
+    const float2 p[3] = {float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0)};
+    return float4(p[i], 1.0, 1.0);
+}

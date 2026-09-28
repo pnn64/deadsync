@@ -438,6 +438,7 @@ pub struct State {
     tmesh_shader: wgpu::ShaderModule,
     tmesh_pipelines: PipelineSet,
     tmesh_depth_pipelines: PipelineSet,
+    depth_clear_pipeline: wgpu::RenderPipeline,
     alpha_tmesh_pipelines: PipelineSet,
     alpha_tmesh_depth_pipelines: PipelineSet,
     depth_texture: wgpu::Texture,
@@ -722,6 +723,8 @@ fn init(
         alpha_tmesh_depth_pipelines,
     ) = build_textured_mesh_pipeline_set(&device, &proj, &pipeline_layout, format);
 
+    let depth_clear_pipeline = build_depth_clear(&device, format);
+
     let vertex_data = [
         Vertex {
             pos: [-0.5, -0.5],
@@ -815,6 +818,7 @@ fn init(
         tmesh_shader,
         tmesh_pipelines,
         tmesh_depth_pipelines,
+        depth_clear_pipeline,
         alpha_tmesh_pipelines,
         alpha_tmesh_depth_pipelines,
         depth_texture,
@@ -1514,7 +1518,18 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     } else {
         &state.tmesh_depth_pipelines
     };
+    let mut clear_after = false;
     for op in data.ops {
+        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
+        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
+        if reset_depth {
+            pass.set_pipeline(&state.depth_clear_pipeline);
+            pass.draw(0..3, 0..1);
+            last_kind = None;
+            last_blend = None;
+            bindings = DrawBindingCache::default();
+            tmesh_buffer_cache.reset();
+        }
         match op {
             DrawOp::Sprite(run) => {
                 let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
@@ -2787,6 +2802,7 @@ fn reconfigure_surface(state: &mut State) {
         state.tmesh_shader = tmesh_shader;
         state.tmesh_pipelines = tmesh_pipelines;
         state.tmesh_depth_pipelines = tmesh_depth_pipelines;
+        state.depth_clear_pipeline = build_depth_clear(&state.device, state.config.format);
         state.alpha_tmesh_pipelines = alpha_tmesh_pipelines;
         state.alpha_tmesh_depth_pipelines = alpha_tmesh_depth_pipelines;
     }
@@ -3331,6 +3347,53 @@ fn build_mesh_pipeline(
     })
 }
 
+// One prebuilt, buffer-free triangle resets depth without splitting the color pass.
+fn build_depth_clear(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("model depth reset"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+            r#"
+            @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+                let p = array<vec2<f32>, 3>(vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+                return vec4(p[i], 1.0, 1.0);
+            }
+            @fragment fn fs_main() -> @location(0) vec4<f32> { return vec4(0.0); }
+        "#,
+        )),
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("model depth reset"),
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::empty(),
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Always),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: Default::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
 fn build_tmesh_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
@@ -3780,6 +3843,8 @@ mod tests {
                 instance_start: 0,
                 instance_count: 1,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             })],
         };
         for (transform, expected) in [

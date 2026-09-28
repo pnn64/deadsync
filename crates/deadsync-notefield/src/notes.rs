@@ -413,6 +413,7 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
     F: Fn(&S) -> SpriteSource,
     Z: Fn(&S) -> [f32; 2],
 {
+    let mine_start = draws.len();
     let frame_size = request.layers.get(1).map(size_for_slot);
     let use_gradient = if let (Some(frame_size), Some(fill_slot), Some(gradient_slot)) =
         (frame_size, request.layers.first(), request.gradient_slot)
@@ -451,6 +452,30 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             },
             sprite_source,
         );
+    }
+    if let Some(mesh) = draws[mine_start..].iter_mut().find_map(|draw| match draw {
+        FlatDraw::TexturedMesh(mesh)
+            if mesh.depth_test && (mesh.tint[3] > 0.0 || mesh.glow[3] > 0.0001) =>
+        {
+            Some(mesh)
+        }
+        _ => None,
+    }) {
+        mesh.clear_depth = true;
+    }
+    if let Some(mesh) = draws[mine_start..]
+        .iter_mut()
+        .rev()
+        .find_map(|draw| match draw {
+            FlatDraw::TexturedMesh(mesh)
+                if mesh.depth_test && (mesh.tint[3] > 0.0 || mesh.glow[3] > 0.0001) =>
+            {
+                Some(mesh)
+            }
+            _ => None,
+        })
+    {
+        mesh.clear_depth_after = true;
     }
 }
 
@@ -533,6 +558,7 @@ fn compose_flat_mine_slot<S, F, Z>(
         size[1] *= draw.zoom[1];
         tint = model_tint(tint, draw);
     }
+    let layer_start = draws.len();
     compose_flat_note_layer(
         draws,
         model_cache,
@@ -556,6 +582,16 @@ fn compose_flat_mine_slot<S, F, Z>(
         },
         sprite_source,
     );
+    if slot.model_cull_back()
+        && let Some(model) = slot.model()
+    {
+        for draw in &mut draws[layer_start..] {
+            if let FlatDraw::TexturedMesh(mesh) = draw {
+                crate::noteskin_model::noteskin_model_depth(model, &mut mesh.local_transform);
+                mesh.depth_test = true;
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1881,8 +1917,10 @@ mod tests {
             slot.draw.rot[2] = 30.0;
             slot.draw.tint[3] = 0.5;
         }
-        for hidden in [None, Some(2)] {
-            layers[2].draw.visible = hidden.is_none();
+        for hidden in [None, Some(0), Some(2)] {
+            for (i, slot) in layers.iter_mut().enumerate() {
+                slot.draw.visible = hidden != Some(i);
+            }
             let mut draws = Vec::new();
             compose_flat_mine_layers(
                 &mut draws,
@@ -1909,6 +1947,34 @@ mod tests {
                 })
                 .collect();
             assert_eq!(actual, expected);
+            for (i, draw) in draws.iter().enumerate() {
+                let FlatDraw::TexturedMesh(mesh) = draw else {
+                    unreachable!()
+                };
+                assert!(mesh.depth_test);
+                assert_eq!(mesh.clear_depth, i == 0);
+                assert_eq!(mesh.clear_depth_after, i + 1 == draws.len());
+                // The depth projection must retain front/back separation.
+                let front = mesh
+                    .local_transform
+                    .project_point3(glam::Vec3::new(0.0, 0.0, 1.0));
+                let back = mesh
+                    .local_transform
+                    .project_point3(glam::Vec3::new(0.0, 0.0, -1.0));
+                assert!(front.z > back.z);
+            }
+            let next_start = draws.len();
+            compose_flat_mine_layers(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                mine_request(&layers, None),
+                &|_| [64.0; 2],
+                &|slot| SpriteSource::Texture(slot.texture.clone()),
+            );
+            let FlatDraw::TexturedMesh(next) = &draws[next_start] else {
+                unreachable!()
+            };
+            assert!(next.clear_depth, "each mine starts a fresh depth buffer");
             for passes in draws.chunks_exact(2) {
                 let [
                     FlatDraw::TexturedMesh(diffuse),

@@ -41,7 +41,7 @@ const SHADER: &str = include_str!("shaders/renderer.metal");
 const _: () = assert!(mem::size_of::<SpriteInstanceRaw>() == 100);
 const _: () = assert!(mem::size_of::<MeshVertex>() == 24);
 const _: () = assert!(mem::size_of::<TexturedMeshVertex>() == 44);
-const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 108);
+const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 112);
 
 pub struct Texture {
     id: u64,
@@ -228,6 +228,8 @@ pub struct State {
     opaque_tmesh_pipelines: PipelineSet,
     depth_disabled: DepthStencilState,
     depth_enabled: DepthStencilState,
+    depth_clear: DepthStencilState,
+    depth_clear_pipeline: RenderPipelineState,
     depth: metal::Texture,
     render_pass: FramePass,
     offscreen_targets: Vec<OffscreenTarget>,
@@ -322,6 +324,25 @@ pub fn init(
         false,
     )?;
     let (depth_disabled, depth_enabled) = build_depth_states(&device);
+    let clear_desc = DepthStencilDescriptor::new();
+    clear_desc.set_depth_compare_function(MTLCompareFunction::Always);
+    clear_desc.set_depth_write_enabled(true);
+    let depth_clear = device.new_depth_stencil_state(&clear_desc);
+    let clear_pipeline_desc = RenderPipelineDescriptor::new();
+    let clear_vertex = library
+        .get_function("depth_clear_vertex", None)
+        .map_err(std::io::Error::other)?;
+    clear_pipeline_desc.set_vertex_function(Some(&clear_vertex));
+    clear_pipeline_desc.set_depth_attachment_pixel_format(DEPTH_FORMAT);
+    let clear_color = clear_pipeline_desc
+        .color_attachments()
+        .object_at(0)
+        .expect("color attachment");
+    clear_color.set_pixel_format(COLOR_FORMAT);
+    clear_color.set_write_mask(MTLColorWriteMask::empty());
+    let depth_clear_pipeline = device
+        .new_render_pipeline_state(&clear_pipeline_desc)
+        .map_err(std::io::Error::other)?;
     let depth = create_depth_target(&device, size.width, size.height);
     let render_pass = create_render_pass(&depth);
     let queue = device.new_command_queue_with_max_command_buffer_count(FRAMES_IN_FLIGHT as u64);
@@ -343,6 +364,8 @@ pub fn init(
         opaque_tmesh_pipelines,
         depth_disabled,
         depth_enabled,
+        depth_clear,
+        depth_clear_pipeline,
         depth,
         render_pass,
         offscreen_targets: Vec::new(),
@@ -708,7 +731,17 @@ fn draw_inner(
     let mut vertices_drawn = 0u32;
     let mut cache = EncoderCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
+    let mut clear_after = false;
     for op in &frame.ops {
+        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
+        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
+        if reset_depth {
+            encoder.set_render_pipeline_state(&state.depth_clear_pipeline);
+            encoder.set_depth_stencil_state(&state.depth_clear);
+            encoder.set_cull_mode(MTLCullMode::None);
+            encoder.draw_primitives(MTLPrimitiveType::Triangle, 0, 3);
+            cache = EncoderCache::default();
+        }
         match op {
             DrawOp::Sprite(run) => {
                 let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {
@@ -1396,7 +1429,17 @@ fn record_offscreen_pass(
     } else {
         &state.opaque_tmesh_pipelines
     };
+    let mut clear_after = false;
     for op in &frame.ops {
+        let reset_depth = clear_after || matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth);
+        clear_after = matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth_after);
+        if reset_depth {
+            encoder.set_render_pipeline_state(&state.depth_clear_pipeline);
+            encoder.set_depth_stencil_state(&state.depth_clear);
+            encoder.set_cull_mode(MTLCullMode::None);
+            encoder.draw_primitives(MTLPrimitiveType::Triangle, 0, 3);
+            cache = EncoderCache::default();
+        }
         match *op {
             DrawOp::Sprite(run) => {
                 let Some(texture) = resolved_texture(state, textures, run.texture_handle) else {

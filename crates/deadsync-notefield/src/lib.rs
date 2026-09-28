@@ -68,7 +68,7 @@ pub use notes::ScrollTravel;
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
-    noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
+    noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry, noteskin_model_depth,
 };
 pub use placement::{
     FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, NotefieldCameraCache,
@@ -3983,6 +3983,8 @@ mod tests {
                 glow: [1.0, 1.0, 1.0, 0.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
+                clear_depth: false,
+                clear_depth_after: false,
                 cull_back: false,
                 ..
             })
@@ -3999,6 +4001,8 @@ mod tests {
                 glow: [1.0, 1.0, 1.0, 1.0],
                 geom_cache_key: deadlib_render_core::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
+                clear_depth: false,
+                clear_depth_after: false,
                 cull_back: false,
                 ..
             })

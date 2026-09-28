@@ -38,6 +38,8 @@ fn mesh(vertices: renderer::TexturedMeshVertices, transform: Matrix4) -> Editabl
             vertices,
             geom_cache_key: 0,
             depth_test: true,
+            clear_depth: false,
+            clear_depth_after: false,
         },
         texture_handle: 17,
         blend: BlendMode::Add,
@@ -101,6 +103,8 @@ fn rotated_clip_keeps_recycled_storage_and_attributes() {
         vertices,
         geom_cache_key,
         depth_test,
+        clear_depth: _,
+        clear_depth_after: _,
     } = &obj.object_type
     else {
         panic!("rotated clipping produces textured triangles");
@@ -180,6 +184,8 @@ fn contained_and_rejected_meshes_keep_source_ownership() {
         let EditablePayload::TexturedMesh {
             vertices,
             depth_test,
+            clear_depth: _,
+            clear_depth_after: _,
             ..
         } = &obj.object_type
         else {
@@ -664,6 +670,8 @@ fn record_object(out: &mut String, obj: &EditableDraw, sprites: &[renderer::Spri
             vertices,
             geom_cache_key,
             depth_test,
+            clear_depth: _,
+            clear_depth_after: _,
         } => {
             writeln!(out, "mesh {instance:?} {geom_cache_key} {depth_test}").unwrap();
             for v in vertices.as_ref() {

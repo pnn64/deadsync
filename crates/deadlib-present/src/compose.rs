@@ -98,6 +98,8 @@ struct TexturedMeshPayload {
     vertices: renderer::TexturedMeshVertices,
     geom_cache_key: renderer::TMeshCacheKey,
     depth_test: bool,
+    clear_depth: bool,
+    clear_depth_after: bool,
 }
 
 #[derive(Default)]
@@ -253,6 +255,8 @@ impl FrameBuilder {
                 vertices,
                 geom_cache_key,
                 depth_test,
+                clear_depth,
+                clear_depth_after,
             } => self.push_textured_mesh(
                 texture_handle,
                 order,
@@ -264,6 +268,8 @@ impl FrameBuilder {
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    clear_depth,
+                    clear_depth_after,
                 },
             ),
         }
@@ -320,6 +326,8 @@ impl FrameBuilder {
                 vertices,
                 geom_cache_key,
                 depth_test,
+                clear_depth,
+                clear_depth_after,
             } => {
                 let slot = if old.kind == DrawKind::TexturedMesh {
                     debug_assert!(self.textured_meshes[old.payload_index as usize].is_none());
@@ -334,6 +342,8 @@ impl FrameBuilder {
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    clear_depth,
+                    clear_depth_after,
                 });
                 (DrawKind::TexturedMesh, slot)
             }
@@ -377,6 +387,8 @@ impl FrameBuilder {
                     vertices: payload.vertices.clone(),
                     geom_cache_key: payload.geom_cache_key,
                     depth_test: payload.depth_test,
+                    clear_depth: payload.clear_depth,
+                    clear_depth_after: payload.clear_depth_after,
                 }
             }
         };
@@ -412,6 +424,8 @@ impl FrameBuilder {
                     vertices: payload.vertices,
                     geom_cache_key: payload.geom_cache_key,
                     depth_test: payload.depth_test,
+                    clear_depth: payload.clear_depth,
+                    clear_depth_after: payload.clear_depth_after,
                 }
             }
         }
@@ -431,6 +445,8 @@ enum EditablePayload {
         vertices: renderer::TexturedMeshVertices,
         geom_cache_key: renderer::TMeshCacheKey,
         depth_test: bool,
+        clear_depth: bool,
+        clear_depth_after: bool,
     },
 }
 
@@ -1754,6 +1770,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
     let mut sprite_stats = SpriteGatherStats::default();
     let mut previous_sprite = None;
     let mut cursor = 0usize;
+    let mut pending_clear = false;
     while cursor < builder.items.len() {
         let item = builder.items[cursor];
         let texture_handle = item.texture_handle;
@@ -1859,13 +1876,19 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    clear_depth,
+                    clear_depth_after,
                 } = builder.textured_meshes[item.payload_index as usize]
                     .take()
                     .expect("draw item references live textured-mesh payload");
+                pending_clear |= clear_depth;
                 if vertices.is_empty() || texture_handle == renderer::INVALID_TEXTURE_HANDLE {
+                    pending_clear |= clear_depth_after;
                     cursor += 1;
                     continue;
                 }
+                let clear_depth = std::mem::take(&mut pending_clear);
+                let mut clear_depth_after = clear_depth_after;
                 let identity = tmesh_identity(&vertices, geom_cache_key);
                 let geometry = push_tmesh_geometry(
                     vertices,
@@ -1877,7 +1900,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 let instance_start = saturating_u32(tmesh_instances.len());
                 tmesh_instances.push(instance);
                 let mut object_count = 1usize;
-                while identity.is_some()
+                while !clear_depth_after
+                    && identity.is_some()
                     && let Some(next) = builder.items.get(cursor + object_count).copied()
                 {
                     if next.texture_handle != texture_handle
@@ -1891,13 +1915,15 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     let Some(payload) = builder.textured_meshes[next.payload_index as usize]
                         .as_ref()
                         .filter(|payload| {
-                            payload.depth_test == depth_test
+                            !payload.clear_depth
+                                && payload.depth_test == depth_test
                                 && tmesh_identity(&payload.vertices, payload.geom_cache_key)
                                     == identity
                         })
                     else {
                         break;
                     };
+                    clear_depth_after = payload.clear_depth_after;
                     tmesh_instances.push(payload.instance);
                     object_count += 1;
                 }
@@ -1910,6 +1936,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     texture_handle,
                     camera,
                     depth_test,
+                    clear_depth,
+                    clear_depth_after,
                 }));
                 if TRACK_SPRITE_RUNS {
                     previous_sprite = None;
@@ -5491,6 +5519,8 @@ fn push_shadow_objects_for_range(
                         vertices,
                         geom_cache_key: source.geom_cache_key,
                         depth_test: source.depth_test,
+                        clear_depth: source.clear_depth,
+                        clear_depth_after: source.clear_depth_after,
                     },
                 );
             }
@@ -5968,6 +5998,8 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             uv_offset: mesh.uv_offset,
                             uv_tex_shift: mesh.uv_tex_shift,
                             depth_test: mesh.depth_test,
+                            clear_depth: mesh.clear_depth,
+                            clear_depth_after: mesh.clear_depth_after,
                             cull_back: mesh.cull_back,
                             visible: true,
                             blend: mesh.blend,
@@ -6344,6 +6376,8 @@ struct TexturedMeshActorView<'a> {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     depth_test: bool,
+    clear_depth: bool,
+    clear_depth_after: bool,
     cull_back: bool,
     visible: bool,
     blend: BlendMode,
@@ -6391,6 +6425,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         uv_offset,
         uv_tex_shift,
         depth_test,
+        clear_depth,
+        clear_depth_after,
         cull_back,
         visible,
         blend,
@@ -6410,6 +6446,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             uv_offset,
             uv_tex_shift,
             depth_test,
+            clear_depth,
+            clear_depth_after,
             cull_back,
             visible,
             blend,
@@ -6430,6 +6468,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             uv_offset,
             uv_tex_shift,
             depth_test,
+            clear_depth,
+            clear_depth_after,
             cull_back,
             visible,
             blend,
@@ -6449,6 +6489,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             *uv_offset,
             *uv_tex_shift,
             *depth_test,
+            *clear_depth,
+            *clear_depth_after,
             *cull_back,
             *visible,
             *blend,
@@ -6478,6 +6520,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         uv_offset,
         uv_tex_shift,
         depth_test,
+        clear_depth,
+        clear_depth_after,
         cull_back,
         visible,
         blend,
@@ -6546,6 +6590,8 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
+                clear_depth: mesh.clear_depth,
+                clear_depth_after: mesh.clear_depth_after && mesh.glow[3] <= 0.0001,
             },
         );
     }
@@ -6573,6 +6619,8 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
+                clear_depth: mesh.clear_depth && mesh.tint[3] <= 0.0,
+                clear_depth_after: mesh.clear_depth_after,
             },
         );
     }
@@ -8014,6 +8062,8 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                     )),
                     geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                     depth_test: false,
+                    clear_depth: false,
+                    clear_depth_after: false,
                 },
             );
             finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
@@ -8287,6 +8337,8 @@ fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
                 vertices: renderer::TexturedMeshVertices::Reusable(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             },
         );
     }
@@ -8336,6 +8388,8 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                 vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             },
         );
     }
@@ -8388,6 +8442,8 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             },
         );
     }
@@ -9264,6 +9320,8 @@ fn clip_textured_mesh_to_world_rect_with(
             vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
+            clear_depth: false,
+            clear_depth_after: false,
         },
         sprite: None,
     })
@@ -9347,6 +9405,8 @@ fn clip_rotated_sprite_to_world_rect(
             vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
+            clear_depth: false,
+            clear_depth_after: false,
         },
         sprite: None,
     })
@@ -9550,6 +9610,8 @@ mod tests {
                     assert_eq!(expected_run.texture_handle, actual_run.texture_handle);
                     assert_eq!(expected_run.camera, actual_run.camera);
                     assert_eq!(expected_run.depth_test, actual_run.depth_test);
+                    assert_eq!(expected_run.clear_depth, actual_run.clear_depth);
+                    assert_eq!(expected_run.clear_depth_after, actual_run.clear_depth_after);
                     let expected_geometry =
                         &expected.tmesh_geometries[expected_run.geometry as usize];
                     let actual_geometry = &actual.tmesh_geometries[actual_run.geometry as usize];
@@ -9980,6 +10042,8 @@ mod tests {
                 ]),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             },
         };
         let mut builder = FrameBuilder::default();
@@ -10346,6 +10410,8 @@ mod tests {
             uv_offset: [0.1, 0.2],
             uv_tex_shift: [0.3, 0.4],
             depth_test: false,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: true,
             blend: BlendMode::Add,
             z: 9,
@@ -10405,6 +10471,8 @@ mod tests {
             uv_offset: mesh.uv_offset,
             uv_tex_shift: mesh.uv_tex_shift,
             depth_test: mesh.depth_test,
+            clear_depth: mesh.clear_depth,
+            clear_depth_after: mesh.clear_depth_after,
             cull_back: mesh.cull_back,
             visible: true,
             blend: mesh.blend,
@@ -11808,6 +11876,8 @@ mod tests {
                 vertices: deadlib_render_core::TexturedMeshVertices::Transient(source),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             },
             texture_handle: 0,
             blend: BlendMode::Alpha,
@@ -11881,6 +11951,8 @@ mod tests {
                 vertices: deadlib_render_core::TexturedMeshVertices::Shared(vertices),
                 geom_cache_key: 41,
                 depth_test: true,
+                clear_depth: false,
+                clear_depth_after: false,
             },
             texture_handle: 17,
             blend: BlendMode::Add,
@@ -11912,12 +11984,16 @@ mod tests {
                 vertices: actual_vertices,
                 geom_cache_key: actual_key,
                 depth_test: actual_depth,
+                clear_depth: actual_clear,
+                clear_depth_after: actual_clear_after,
             },
             EditablePayload::TexturedMesh {
                 instance: expected_instance,
                 vertices: expected_vertices,
                 geom_cache_key: expected_key,
                 depth_test: expected_depth,
+                clear_depth: expected_clear,
+                clear_depth_after: expected_clear_after,
             },
         ) = (&actual.object_type, &expected.object_type)
         else {
@@ -11927,6 +12003,8 @@ mod tests {
         assert_eq!(actual_vertices.as_ref(), expected_vertices.as_ref());
         assert_eq!(actual_key, expected_key);
         assert_eq!(actual_depth, expected_depth);
+        assert_eq!(actual_clear, expected_clear);
+        assert_eq!(actual_clear_after, expected_clear_after);
     }
 
     #[test]
@@ -13192,6 +13270,8 @@ mod tests {
                 vertices: deadlib_render_core::TexturedMeshVertices::Transient(source.clone()),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                clear_depth: false,
+                clear_depth_after: false,
             },
             texture_handle: 9,
             blend: BlendMode::Alpha,
@@ -13438,6 +13518,8 @@ mod tests {
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: false,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: false,
             visible: true,
             blend: BlendMode::Alpha,
@@ -13614,6 +13696,67 @@ mod tests {
     }
 
     #[test]
+    fn model_depth_resets() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        for alpha in [0.0, 1.0] {
+            let mesh = Actor::TexturedMesh {
+                align: [0.0; 2],
+                offset: [0.0; 2],
+                world_z: 0.0,
+                size: [SizeSpec::Px(0.0); 2],
+                local_transform: Matrix4::IDENTITY,
+                texture: Arc::from("depth-fixture"),
+                tint: [1.0, 1.0, 1.0, alpha],
+                glow: [1.0; 4],
+                vertices: Arc::from([TexturedMeshVertex::default(); 3]),
+                geom_cache_key: 0,
+                uv_scale: [1.0; 2],
+                uv_offset: [0.0; 2],
+                uv_tex_shift: [0.0; 2],
+                depth_test: true,
+                clear_depth: true,
+                clear_depth_after: true,
+                cull_back: true,
+                visible: true,
+                blend: BlendMode::Alpha,
+                z: 0,
+            };
+            let mut first = mesh.clone();
+            if let Actor::TexturedMesh {
+                clear_depth_after, ..
+            } = &mut first
+            {
+                *clear_depth_after = false;
+            }
+            let mut middle = mesh.clone();
+            if let Actor::TexturedMesh { clear_depth, .. } = &mut middle {
+                *clear_depth = false;
+            }
+            let render = build_screen(
+                &[first, middle, mesh],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+            );
+            let passes = if alpha > 0.0 { 2 } else { 1 };
+            assert_eq!(render.ops.len(), 2, "glow must not reset its diffuse depth");
+            for (i, op) in render.ops.iter().enumerate() {
+                let DrawOp::TexturedMesh(run) = op else {
+                    panic!("model run")
+                };
+                assert!(run.clear_depth && run.clear_depth_after && run.depth_test);
+                assert_eq!(run.instance_count, if i == 0 { 2 * passes } else { passes });
+            }
+        }
+    }
+
+    #[test]
     fn reusable_textured_mesh_preserves_shared_vec_storage() {
         let metrics = Metrics {
             left: 0.0,
@@ -13637,6 +13780,8 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: true,
             visible: true,
             blend: BlendMode::Alpha,
@@ -13682,6 +13827,8 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -14118,6 +14265,8 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: false,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: false,
             blend: BlendMode::Alpha,
             z: 10,
@@ -14226,6 +14375,8 @@ mod tests {
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: false,
+            clear_depth: false,
+            clear_depth_after: false,
             cull_back: false,
             visible: true,
             blend: BlendMode::Alpha,
