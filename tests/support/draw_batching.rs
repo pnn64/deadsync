@@ -102,6 +102,7 @@ pub fn fixture(kind: usize, blend: BlendMode, depth: bool, glow: bool) -> Render
                     instance_count: 1,
                     blend,
                     texture_handle: 7,
+                    additive_texture: 0,
                     camera,
                     depth_test: depth,
                     clear_depth: false,

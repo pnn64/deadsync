@@ -30,6 +30,7 @@ fn mesh<'a>(
     glow: f32,
 ) -> TexturedMeshActorView<'a> {
     TexturedMeshActorView {
+        environment: None,
         align: [0.5, 0.25],
         offset: [12.0, -7.0],
         world_z: 3.0,
@@ -60,37 +61,33 @@ fn compose<const OLD: bool>(
     cache: &mut TextureLookupCache,
     textures: &Textures,
 ) {
-    let build = if OLD {
-        baseline::build_textured_mesh_actor
-    } else {
-        build_textured_mesh_actor
+    let rect = SmRect {
+        x: 0.0,
+        y: 0.0,
+        w: 640.0,
+        h: 480.0,
     };
-    build(
-        mesh,
-        SmRect {
-            x: 0.0,
-            y: 0.0,
-            w: 640.0,
-            h: 480.0,
-        },
-        &Metrics {
-            left: 0.0,
-            right: 640.0,
-            bottom: 0.0,
-            top: 480.0,
-        },
-        7,
-        0,
-        ComposeStyle {
-            tint: [0.8, 0.7, 0.6, 0.5],
-            blend: None,
-        },
-        Some(ActorXFold::new(320.0, 0.8)),
-        order,
-        out,
-        cache,
-        textures,
-    );
+    let metrics = Metrics {
+        left: 0.0,
+        right: 640.0,
+        bottom: 0.0,
+        top: 480.0,
+    };
+    let style = ComposeStyle {
+        tint: [0.8, 0.7, 0.6, 0.5],
+        blend: None,
+    };
+    let fold = Some(ActorXFold::new(320.0, 0.8));
+    if OLD {
+        baseline::build_textured_mesh_actor(
+            mesh, rect, &metrics, 7, 0, style, fold, order, out, cache, textures,
+        );
+    } else {
+        // Meshes without an environment never read the camera matrix.
+        build_textured_mesh_actor(
+            mesh, rect, &metrics, 7, 0, None, style, fold, order, out, cache, textures,
+        );
+    }
 }
 
 #[test]
