@@ -2867,7 +2867,14 @@ return Def.ActorFrame {{
                 let press = skin.receptor_glow[col].as_ref().unwrap();
                 for (slot, texture) in [(base, "Target"), (idle, "Idle"), (press, "Press")] {
                     assert!(slot.texture_key().ends_with(&format!("Down {texture}.png")));
-                    assert_eq!(slot.def.rotation_deg, -rotation);
+                    assert_eq!(slot.def.rotation_deg, rotation);
+                    // Texture-down is (0,-1) in the renderer's y-up space.
+                    // ITG +90 must turn that tip left, and -90 right.
+                    let [sin, cos] = slot.base_rot_sin_cos();
+                    let expected = [[-1.0, 0.0], [0.0, -1.0], [0.0, 1.0], [1.0, 0.0]][col];
+                    for (actual, expected) in [sin, -cos].into_iter().zip(expected) {
+                        assert!((actual - expected).abs() < 1e-6);
+                    }
                 }
                 for (time, alpha) in [
                     (0.0, 0.0),

@@ -2144,6 +2144,56 @@ pub(super) mod tests {
         }
     }
 
+    #[test]
+    fn receptor_previews_face_their_columns() {
+        use deadlib_present::actors::Actor;
+        use deadsync_noteskin::runtime::ReceptorOverlay;
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        for (rotation, expected) in [
+            (90, [-1.0, 0.0]),
+            (0, [0.0, -1.0]),
+            (180, [0.0, 1.0]),
+            (-90, [1.0, 0.0]),
+        ] {
+            let mut skin = model_preview_skin();
+            let mut slot = skin.mine_layers[0][0].clone();
+            slot.model = None;
+            slot.set_rotation_deg(rotation);
+            slot.model_draw.tint = [1.0; 4];
+            skin.receptor_off = vec![slot.clone()];
+            skin.receptor_idle_glow_layers = vec![Some(slot.clone())];
+            skin.receptor_idle_glow = deadsync_noteskin::ReceptorIdleGlow::ActorEffect;
+            skin.receptor_overlays = vec![Arc::from([ReceptorOverlay {
+                slot,
+                reverse: Default::default(),
+            }])];
+            state
+                .noteskin
+                .cache
+                .insert("direction-fixture".into(), Arc::new(skin));
+            let mut actors = Vec::new();
+            assert!(super::super::render::draw_live_preview(
+                &mut actors,
+                &state,
+                "direction-fixture",
+                1,
+                [100.0; 2],
+                32.0,
+                1.0,
+                102
+            ));
+            assert_eq!(actors.len(), 3, "target, idle, and overlay");
+            for actor in actors {
+                let Actor::Sprite { rot_z_deg, .. } = actor else {
+                    panic!("receptor sprite");
+                };
+                let tip = glam::Mat2::from_angle(rot_z_deg.to_radians()) * glam::Vec2::NEG_Y;
+                assert!((tip - glam::Vec2::from(expected)).length() < 1e-6);
+            }
+        }
+    }
+
     fn mine_depth_skin() -> deadsync_assets::noteskin::Noteskin {
         use deadsync_assets::noteskin::{ModelMesh, ModelVertex};
         let mut skin = model_preview_skin();

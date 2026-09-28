@@ -1416,11 +1416,12 @@ pub fn itg_resolve_sprite_decl<T>(
         .get(actor::ITG_FRAME_ROTATION_Z)
         .and_then(|value| value.parse::<f32>().ok());
     if rotation_z.is_some() || frame_rotation.is_some() {
-        // SpriteDefinition stores the inverse of actor rotationz; retain the
-        // parent's rotation independently of the child's own Init/tweens.
+        // Loader and parent-frame rotations share ITG's y-down convention.
+        // Retain their sum apart from the child's Init/tweens; presentation
+        // converts the stored base rotation to y-up exactly once.
         apply_rotation(
             &mut slot,
-            rotation_z.unwrap_or(0) - frame_rotation.unwrap_or(0.0).round() as i32,
+            rotation_z.unwrap_or(0) + frame_rotation.unwrap_or(0.0).round() as i32,
         );
     }
     apply_state(&mut slot, &sprite.commands);
@@ -5183,7 +5184,7 @@ mod tests {
     }
 
     #[test]
-    fn resolved_sprite_decl_applies_rotation_before_state() {
+    fn resolved_sprite_decl_adds_frame_rotation_before_state() {
         let root = std::env::temp_dir().join(format!(
             "deadsync-resolved-sprite-decl-{}",
             std::process::id()
@@ -5203,7 +5204,10 @@ mod tests {
             frame_count: 1,
             frame_indices: None,
             frame_delays: None,
-            commands: HashMap::from([("initcommand".to_string(), "zoom,2".to_string())]),
+            commands: HashMap::from([
+                ("initcommand".to_string(), "zoom,2".to_string()),
+                (actor::ITG_FRAME_ROTATION_Z.to_string(), "30".to_string()),
+            ]),
         };
         let calls = std::cell::RefCell::new(Vec::new());
 
@@ -5235,10 +5239,10 @@ mod tests {
         .expect("resolved sprite");
 
         assert_eq!(resolved.element, "Tap Note");
-        assert_eq!(resolved.slot, 15);
+        assert_eq!(resolved.slot, 19);
         assert_eq!(
             calls.into_inner(),
-            ["rotate:90:5".to_string(), "state:zoom,2:14".to_string()]
+            ["rotate:120:5".to_string(), "state:zoom,2:17".to_string()]
         );
         assert_eq!(
             resolved.commands.get("initcommand").map(String::as_str),

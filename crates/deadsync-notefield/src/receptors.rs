@@ -861,6 +861,53 @@ mod tests {
     }
 
     #[test]
+    fn receptor_layers_face_their_columns() {
+        let pulse = pulse();
+        for (rotation, expected) in [
+            (90, [-1.0, 0.0]),
+            (0, [0.0, -1.0]),
+            (180, [0.0, 1.0]),
+            (-90, [1.0, 0.0]),
+        ] {
+            let mut slot = TestSlot::sprite("receptor");
+            slot.def.rotation_deg = rotation;
+            let mut overlay = TestSlot::sprite("overlay");
+            overlay.def.rotation_deg = rotation;
+            let overlays = [ReceptorOverlay {
+                slot: overlay,
+                reverse: Default::default(),
+            }];
+            let mut request = request(Some(&slot), None, &pulse);
+            request.idle_glow = ReceptorIdleGlow::ActorEffect;
+            request.idle_glow_alpha = 1.0;
+            request.idle_glow_slot = Some(&slot);
+            request.overlays = &overlays;
+            let mut draws = Vec::new();
+            compose_receptor_draws(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                || {
+                    Some(ReceptorPress {
+                        slot: &slot,
+                        reverse: None,
+                        visual: (1.0, 1.0),
+                    })
+                },
+                &texture_source,
+            );
+            assert_eq!(draws.len(), 4, "target, idle, press, and overlay");
+            for draw in draws {
+                let FlatDraw::Sprite(sprite) = draw else {
+                    panic!("receptor sprite");
+                };
+                let tip = glam::Mat2::from_angle(sprite.rot_z_deg.to_radians()) * glam::Vec2::NEG_Y;
+                assert!((tip - glam::Vec2::from(expected)).length() < 1e-6);
+            }
+        }
+    }
+
+    #[test]
     fn target_preserves_reverse_mirror_bop_and_authored_transform() {
         let mut target = TestSlot::sprite("target");
         target.def.rotation_deg = 30;
