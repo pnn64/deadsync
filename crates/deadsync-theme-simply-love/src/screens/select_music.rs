@@ -1275,7 +1275,8 @@ struct FolderStatsPackIndex {
 
 #[derive(Default)]
 struct FolderStatsPackSummaries {
-    by_side_chart: [[FxHashMap<String, score_data::FolderStatsSummary>; 2]; 2],
+    /// Indexed by side, then dance-single, dance-double, pump-single, pump-double.
+    by_side_chart: [[FxHashMap<String, score_data::FolderStatsSummary>; 4]; 2],
 }
 
 /// Screen-lifetime folder-stat index and summary cache.
@@ -2531,13 +2532,9 @@ fn build_folder_stats_summary(
     target_chart_type: &str,
     difficulty: &str,
 ) -> score_data::FolderStatsSummary {
-    let chart_type_index = if target_chart_type.eq_ignore_ascii_case("dance-single") {
-        Some(0)
-    } else if target_chart_type.eq_ignore_ascii_case("dance-double") {
-        Some(1)
-    } else {
-        None
-    };
+    let chart_type_index = ["dance-single", "dance-double", "pump-single", "pump-double"]
+        .iter()
+        .position(|chart_type| target_chart_type.eq_ignore_ascii_case(chart_type));
     let side_index = profile_data::player_side_index(side);
     if let Some(chart_type_index) = chart_type_index {
         let cached = {
@@ -15812,6 +15809,21 @@ mod tests {
         );
         assert_eq!(refreshed.count_charts, 1);
         assert_eq!(refreshed.passes, 0);
+
+        // Pump styles reuse their summaries instead of rescanning every frame.
+        for (index, chart_type) in [(2, "pump-single"), (3, "pump-double")] {
+            let pump = super::build_folder_stats_summary(
+                &state,
+                0,
+                profile_data::PlayerSide::P1,
+                chart_type,
+                "Hard",
+            );
+            assert_eq!(
+                state.folder_stats.summaries.borrow()[0].by_side_chart[0][index].get("Hard"),
+                Some(&pump)
+            );
+        }
     }
 
     fn test_running_sync_overlay() -> super::NullOrDieOverlayData {
