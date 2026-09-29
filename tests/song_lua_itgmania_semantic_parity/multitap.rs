@@ -387,7 +387,7 @@ pub(super) fn compare_multitap(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
     if !trace.actor_definitions.iter().any(|actor| {
         actor
@@ -397,7 +397,8 @@ pub(super) fn compare_multitap(
     }) {
         return;
     }
-    compare_zoom_hides(trace, compiled, gaps);
+    compare_zoom_hides(trace, compiled, parity);
+    parity.section("multitap writes");
     for (layer, compiled) in compiled.iter().enumerate() {
         let mut writes = Vec::new();
         for definition in &trace.actor_definitions {
@@ -414,7 +415,9 @@ pub(super) fn compare_multitap(
                 .iter()
                 .position(|actor| actor.name.as_deref() == Some(name))
             else {
-                gaps.push(format!("layer {layer} multitap actor missing: {name}"));
+                parity.check(false, || {
+                    format!("layer {layer} multitap actor missing: {name}")
+                });
                 continue;
             };
             for track in trace
@@ -463,8 +466,14 @@ pub(super) fn compare_multitap(
                     .map(str::to_owned)
                     .unwrap_or_else(|| args[0].to_string());
                 let actual = deadsync_song_lua::overlay_text_at(text, text_changes, *beat);
-                assert_eq!(actual.as_ref(), expected, "{name} text at beat {beat}");
                 checked += 1;
+                if actual.as_ref() != expected {
+                    record_failure(&mut failures, name, &track.operation, || {
+                        format!(
+                            "{name} at beat {beat:.6}: ITGmania {expected:?}, DeadSync {actual:?}"
+                        )
+                    });
+                }
                 continue;
             }
             if last_seconds != Some(*seconds) {
@@ -490,33 +499,37 @@ pub(super) fn compare_multitap(
             {
                 continue;
             }
-            let family = name
-                .split_once(|c: char| c.is_ascii_digit())
-                .map_or(name, |(prefix, _)| prefix)
-                .to_owned();
-            let entry = failures
-                .entry((family, track.operation.clone()))
-                .or_insert_with(|| {
-                    (
-                        0,
-                        format!(
-                            "{name} at beat {beat:.6}: ITGmania {expected:?}, DeadSync {actual:?}"
-                        ),
-                    )
-                });
-            entry.0 += 1;
+            record_failure(&mut failures, name, &track.operation, || {
+                format!("{name} at beat {beat:.6}: ITGmania {expected:?}, DeadSync {actual:?}")
+            });
         }
-        eprintln!(
-            "multitap operation audit: {checked} sampled writes checked, {} mismatching writes in {} actor/property groups",
-            failures.values().map(|entry| entry.0).sum::<usize>(),
-            failures.len()
+        parity.tally(checked, failures.values().map(|entry| entry.0).sum());
+        parity.gaps.extend(
+            failures
+                .into_iter()
+                .map(|((family, operation), (count, first))| {
+                    format!("{family} {operation}: {count} mismatching writes; first {first}")
+                }),
         );
-        for ((family, operation), (count, first)) in failures {
-            gaps.push(format!(
-                "{family} {operation}: {count} mismatching writes; first {first}"
-            ));
-        }
     }
+}
+
+/// Groups mismatching multitap writes by actor family and operation, keeping
+/// the first mismatch of each group as its example.
+fn record_failure(
+    failures: &mut BTreeMap<(String, String), (usize, String)>,
+    name: &str,
+    operation: &str,
+    first: impl FnOnce() -> String,
+) {
+    let family = name
+        .split_once(|c: char| c.is_ascii_digit())
+        .map_or(name, |(prefix, _)| prefix)
+        .to_owned();
+    failures
+        .entry((family, operation.to_owned()))
+        .or_insert_with(|| (0, first()))
+        .0 += 1;
 }
 
 #[test]
@@ -599,18 +612,27 @@ fn perspective_geometry_survives_noteskin_kind_change() {
         ..Default::default()
     };
     let context = SongLuaCompileContext::new(Path::new("."), "projection regression");
-    let mut gaps = Vec::new();
-    compare_projected_geometry(&trace, std::slice::from_ref(&compiled), &context, &mut gaps);
+    let mut parity = Parity::default();
+    compare_projected_geometry(
+        &trace,
+        std::slice::from_ref(&compiled),
+        &context,
+        &mut parity,
+    );
     assert!(
-        gaps.is_empty(),
-        "native perspective quad must match: {gaps:?}"
+        parity.gaps.is_empty(),
+        "native perspective quad must match: {:?}",
+        parity.gaps
     );
     compiled.overlays[2].initial_state.x += 12.0;
-    compare_projected_geometry(&trace, &[compiled], &context, &mut gaps);
+    compare_projected_geometry(&trace, &[compiled], &context, &mut parity);
     assert!(
-        gaps.iter()
+        parity
+            .gaps
+            .iter()
             .any(|gap| gap.contains("projected center differs")),
-        "a missing explosion drawable must not suppress the decoration mismatch: {gaps:?}"
+        "a missing explosion drawable must not suppress the decoration mismatch: {:?}",
+        parity.gaps
     );
 }
 
@@ -692,7 +714,8 @@ fn operation_values(
     Some(pair)
 }
 
-fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
+fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
+    parity.section("multitap zoom");
     let mut hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
         compiled
             .iter()
@@ -700,8 +723,6 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
             .map(|hide| (hide.player, hide.column, hide.start_beat, hide.end_beat)),
     );
     let mut checked = 0usize;
-    let mut hidden = 0usize;
-    let mut columns = 0usize;
     for actor in &trace.external_actors {
         let Some((prefix, _)) = actor.path.split_once("/GetZoomHandler/GetSpline") else {
             continue;
@@ -753,22 +774,26 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
             .flat_map(|layer| &layer.note_hides)
             .find(|hide| hide.player == player - 1 && hide.column == column - 1)
         {
-            assert_eq!(
-                hide.spline_size,
-                points.len(),
-                "preserve native spline endpoint"
-            );
-            assert_eq!(
-                hide.spline_beats_per_t, beats_per_t,
-                "preserve native beat spacing"
-            );
+            parity.check(hide.spline_size == points.len(), || {
+                format!(
+                    "P{player} column {column} zoom spline endpoint differs: ITGmania {}, DeadSync {}",
+                    points.len(),
+                    hide.spline_size
+                )
+            });
+            parity.check(hide.spline_beats_per_t == beats_per_t, || {
+                format!(
+                    "P{player} column {column} zoom spline beat spacing differs: ITGmania {beats_per_t}, DeadSync {}",
+                    hide.spline_beats_per_t
+                )
+            });
             hides[player - 1].set_zoom_spline(
                 column - 1,
                 hide.spline_beats_per_t,
                 hide.spline_size,
             );
         }
-        let mut differences = 0;
+        let (mut offset_reported, mut hiding_reported) = (false, false);
         for (index, (_, expected)) in points {
             let beat = (index - 1) as f32 * beats_per_t;
             let actual =
@@ -778,27 +803,20 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
             // Multiplying a high row by beats_per_t and dividing again can be
             // one float ULP off the knot; fractional samples have a separate
             // native CubicSpline fixture with a 2e-6 absolute comparison.
-            assert!(
+            parity.check_once(
                 (offset - expected_offset).abs() < 0.002,
-                "P{player} column {column} spline offset at beat {beat}: {offset}"
+                &mut offset_reported,
+                || format!("P{player} column {column} spline offset differs at beat {beat}: ITGmania {expected_offset}, DeadSync {offset}"),
             );
+            parity.check_once(actual == expected, &mut hiding_reported, || {
+                format!("P{player} column {column} note hiding differs at beat {beat:.6}: ITGmania {expected}, DeadSync {actual}")
+            });
             checked += 1;
-            hidden += usize::from(expected);
-            if actual != expected {
-                if differences == 0 {
-                    gaps.push(format!("P{player} column {column} note hiding differs at beat {beat:.6}: ITGmania {expected}, DeadSync {actual}"));
-                }
-                differences += 1;
-            }
         }
-        columns += 1;
     }
     assert!(
         checked > 0,
         "multitap zoom spline comparison must not be empty"
-    );
-    eprintln!(
-        "multitap zoom audit: {checked} final spline points in {columns} columns checked ({hidden} hidden)"
     );
 }
 

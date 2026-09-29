@@ -339,33 +339,6 @@ fn compose_entire_song(
     );
 }
 
-fn assert_complete_parity(
-    trace: &NativeTrace,
-    compiled: &[CompiledSongLua],
-    primary_index: usize,
-    context: &SongLuaCompileContext,
-) {
-    let mut gaps = Vec::new();
-    compare_compile_info(compiled, &mut gaps);
-    compare_layers(trace, compiled, &mut gaps);
-    compare_final_render_states(trace, compiled, &mut gaps);
-    compare_update_render_persistence(trace, compiled, &mut gaps);
-    compare_update_render_values(trace, compiled, context, &mut gaps);
-    compare_player_operation_ranges(trace, compiled, &mut gaps);
-    compare_column_splines(trace, compiled, context, &mut gaps);
-    multitap::compare_multitap(trace, compiled, context, &mut gaps);
-    compare_projected_geometry(trace, compiled, context, &mut gaps);
-    compare_projected_vibration_coverage(trace, compiled, context, &mut gaps);
-    compare_timeline(trace, &compiled[primary_index], &mut gaps);
-    compare_commands(trace, compiled, primary_index, &mut gaps);
-    assert!(
-        gaps.is_empty(),
-        "whole-song archive parity gaps ({}):\n- {}",
-        gaps.len(),
-        gaps.join("\n- ")
-    );
-}
-
 pub(super) fn hash_file(path: &Path) -> String {
     let mut file = File::open(path).expect("open archive for hashing");
     let mut hasher = Sha256::new();
@@ -433,6 +406,7 @@ fn whole_song_archives_compile_compose_and_match_native_trace() {
             &context,
             archive.manifest.runtime.update_hz,
         );
-        assert_complete_parity(&trace, &compiled, primary_index, &context);
+        compare_semantics(&trace, &compiled, primary_index, &context)
+            .assert_complete("whole-song archive");
     }
 }

@@ -1,0 +1,83 @@
+{
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 1,
+  "harness_version": "0.1.0",
+  "itgmania": {
+    "git_revision": "f1ab605d0b93cb04c8806a70c92164ae4b6d0368",
+    "git_dirty": "false",
+    "execution": "embedded_bundled_lua",
+    "launches_executable": false
+  },
+  "context": {
+    "players": [
+      "PLAYER_1",
+      "PLAYER_2"
+    ],
+    "preferred_difficulty": "Challenge",
+    "preferred_steps_type": "dance-single",
+    "screen": [
+      854,
+      480
+    ],
+    "beat_step": 0.25,
+    "max_events": 500000
+  },
+  "simfiles": [
+    {
+      "simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+      "fixture": "Gemini in Clockland/Gemini in Clockland.ssc.semantic.json",
+      "title": "Gemini in Clockland",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "fixture": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc.semantic.json",
+      "title": "[1115] [07] Spooky (Medium)",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+      "fixture": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc.semantic.json",
+      "title": "[4914] [10] Riddle",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+      "fixture": "[10] flip69 (DX) [Telperion]/flip69.ssc.semantic.json",
+      "title": "[5604] [10] flip69",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
+      "fixture": "[10] media offline (SM) [Snap]/media offline.ssc.semantic.json",
+      "title": "[4252] [10] media offline (Medium)",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+      "fixture": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.semantic.json",
+      "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+      "fixture": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc.semantic.json",
+      "title": "[5800] [11] KENPO SAITO",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+      "fixture": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc.semantic.json",
+      "title": "[6804] [12] Godspeed",
+      "lua_entries": 1,
+      "status": "ok"
+    }
+  ]
+}

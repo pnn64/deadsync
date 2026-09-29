@@ -43,6 +43,9 @@ mod runtime_modifiers;
 #[path = "song_lua_itgmania_semantic_parity/multitap.rs"]
 mod multitap;
 
+#[path = "song_lua_itgmania_semantic_parity/corpora.rs"]
+mod corpora;
+
 #[derive(Deserialize)]
 struct NativeTrace {
     #[serde(default)]
@@ -273,12 +276,101 @@ struct SemanticOracle {
 
 #[derive(Deserialize)]
 struct SemanticManifestEntry {
+    simfile: String,
     fixture: PathBuf,
     status: String,
     #[serde(default)]
     runtime_errors: usize,
     #[serde(default)]
     dropped_events: usize,
+}
+
+/// Every native-vs-DeadSync comparison, grouped by the comparator that made
+/// it, so a report states how many checks passed rather than only the gaps.
+#[derive(Default)]
+struct Parity {
+    sections: Vec<ParitySection>,
+    gaps: Vec<String>,
+}
+
+struct ParitySection {
+    name: &'static str,
+    checks: usize,
+    failed: usize,
+}
+
+impl Parity {
+    fn section(&mut self, name: &'static str) {
+        self.sections.push(ParitySection {
+            name,
+            checks: 0,
+            failed: 0,
+        });
+    }
+
+    fn check(&mut self, ok: bool, gap: impl FnOnce() -> String) {
+        self.check_once(ok, &mut false, gap);
+    }
+
+    /// Counts every comparison but describes only the first failure behind
+    /// `reported`, so dense per-frame samples do not flood the gap list.
+    fn check_once(&mut self, ok: bool, reported: &mut bool, gap: impl FnOnce() -> String) {
+        self.tally(1, usize::from(!ok));
+        if !ok && !std::mem::replace(reported, true) {
+            self.gaps.push(gap());
+        }
+    }
+
+    /// Records `checks` comparisons, `failed` of them mismatching, for
+    /// comparators that describe their failures in aggregated gap lines.
+    fn tally(&mut self, checks: usize, failed: usize) {
+        let section = self
+            .sections
+            .last_mut()
+            .expect("comparators open a parity section before checking");
+        section.checks += checks;
+        section.failed += failed;
+    }
+
+    fn checks(&self) -> usize {
+        self.sections.iter().map(|section| section.checks).sum()
+    }
+
+    fn passed(&self) -> usize {
+        self.sections
+            .iter()
+            .map(|section| section.checks - section.failed)
+            .sum()
+    }
+
+    fn summary(&self, title: &str) -> String {
+        let mut out = format!("{title}: {}", parity_status(self.passed(), self.checks()));
+        let sections = self.sections.iter().filter(|section| section.checks > 0);
+        let width = sections.clone().map(|section| section.name.len()).max();
+        for section in sections {
+            out.push_str(&format!(
+                "\n  {:width$}  {}",
+                section.name,
+                parity_status(section.checks - section.failed, section.checks),
+                width = width.unwrap_or_default()
+            ));
+        }
+        out
+    }
+
+    fn assert_complete(&self, title: &str) {
+        assert!(
+            self.gaps.is_empty(),
+            "{title} parity gaps ({}):\n- {}",
+            self.gaps.len(),
+            self.gaps.join("\n- ")
+        );
+    }
+}
+
+fn parity_status(passed: usize, checks: usize) -> String {
+    let verdict = if passed == checks { "ok" } else { "FAILED" };
+    format!("{passed}/{checks} {verdict}")
 }
 
 fn workspace_root() -> PathBuf {
@@ -518,22 +610,25 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
     }
 }
 
-fn compare_layers(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
+fn compare_layers(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
+    parity.section("layer order");
     let definitions = trace
         .actor_definitions
         .iter()
         .map(|definition| (definition.id.as_str(), definition))
         .collect::<HashMap<_, _>>();
-    if trace.roots.len() != compiled.len() {
-        gaps.push(format!(
+    parity.check(trace.roots.len() == compiled.len(), || {
+        format!(
             "root layer count differs: ITGmania has {}, DeadSync has {}",
             trace.roots.len(),
             compiled.len()
-        ));
-    }
+        )
+    });
     for (layer, (root_id, compiled)) in trace.roots.iter().zip(compiled).enumerate() {
         let Some(root) = definitions.get(root_id.as_str()).copied() else {
-            gaps.push(format!("native layer {layer} has no actor-definition root"));
+            parity.check(false, || {
+                format!("native layer {layer} has no actor-definition root")
+            });
             continue;
         };
         let mut native = Vec::new();
@@ -544,20 +639,20 @@ fn compare_layers(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &mut 
             .filter(|overlay| !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound"))
             .map(|overlay| (kind_name(&overlay.kind), overlay.name.as_deref()))
             .collect::<Vec<_>>();
-        if native != deadsync {
+        parity.check(native == deadsync, || {
             let first = native
                 .iter()
                 .zip(&deadsync)
                 .position(|(native, deadsync)| native != deadsync)
                 .unwrap_or_else(|| native.len().min(deadsync.len()));
-            gaps.push(format!(
+            format!(
                 "layer {layer} drawable order differs: ITGmania has {}, DeadSync has {}; first difference at {first}: {:?} vs {:?}",
                 native.len(),
                 deadsync.len(),
                 native.get(first),
                 deadsync.get(first)
-            ));
-        }
+            )
+        });
     }
 }
 
@@ -751,8 +846,9 @@ fn compiled_final_render_state(
 fn compare_final_render_states(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("final render");
     let definitions = trace
         .actor_definitions
         .iter()
@@ -779,17 +875,21 @@ fn compare_final_render_states(
         for (definition, overlay_index) in native.into_iter().zip(deadsync) {
             let expected = native_final_render_state(trace, definition);
             let actual = compiled_final_render_state(compiled, overlay_index);
-            if expected.wrote_alpha && (expected.alpha - actual.diffuse[3]).abs() > EPSILON {
-                gaps.push(format!(
-                    "layer {layer} final alpha differs for {}/{}: ITGmania {:.4}, DeadSync {:.4}",
-                    definition.id, definition.class, expected.alpha, actual.diffuse[3]
-                ));
+            if expected.wrote_alpha {
+                parity.check((expected.alpha - actual.diffuse[3]).abs() <= EPSILON, || {
+                    format!(
+                        "layer {layer} final alpha differs for {}/{}: ITGmania {:.4}, DeadSync {:.4}",
+                        definition.id, definition.class, expected.alpha, actual.diffuse[3]
+                    )
+                });
             }
-            if expected.wrote_visible && expected.visible != actual.visible {
-                gaps.push(format!(
-                    "layer {layer} final visibility differs for {}/{}: ITGmania {}, DeadSync {}",
-                    definition.id, definition.class, expected.visible, actual.visible
-                ));
+            if expected.wrote_visible {
+                parity.check(expected.visible == actual.visible, || {
+                    format!(
+                        "layer {layer} final visibility differs for {}/{}: ITGmania {}, DeadSync {}",
+                        definition.id, definition.class, expected.visible, actual.visible
+                    )
+                });
             }
         }
     }
@@ -935,8 +1035,9 @@ fn persistence_probes<T: Copy>(
 fn compare_update_render_persistence(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("render persistence");
     let definitions = trace
         .actor_definitions
         .iter()
@@ -970,12 +1071,12 @@ fn compare_update_render_persistence(
                 let Some(actual) = compiled_update_alpha_at(compiled, overlay_index, beat) else {
                     continue;
                 };
-                if (expected - actual).abs() > 0.03 {
-                    gaps.push(format!(
+                parity.check((expected - actual).abs() <= 0.03, || {
+                    format!(
                         "layer {layer} alpha persistence differs for {}/{} at beat {beat:.3}: ITGmania {expected:.4}, DeadSync {actual:.4}",
                         definition.id, definition.class
-                    ));
-                }
+                    )
+                });
             }
             for (beat, expected) in persistence_probes(
                 &visible_writes,
@@ -986,12 +1087,12 @@ fn compare_update_render_persistence(
                 else {
                     continue;
                 };
-                if expected != actual {
-                    gaps.push(format!(
+                parity.check(expected == actual, || {
+                    format!(
                         "layer {layer} visibility persistence differs for {}/{} at beat {beat:.3}: ITGmania {expected}, DeadSync {actual}",
                         definition.id, definition.class
-                    ));
-                }
+                    )
+                });
             }
         }
     }
@@ -1360,8 +1461,9 @@ fn compare_update_render_values(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("update values");
     let definitions = trace
         .actor_definitions
         .iter()
@@ -1402,11 +1504,13 @@ fn compare_update_render_values(
             }
         };
         if pairs.is_empty() && native_len != 0 {
-            gaps.push(format!(
-                "layer {layer} update comparison topology differs: ITGmania has {} non-root actors, DeadSync has {} overlays",
-                native_len,
-                compiled.overlays.len()
-            ));
+            parity.check(false, || {
+                format!(
+                    "layer {layer} update comparison topology differs: ITGmania has {} non-root actors, DeadSync has {} overlays",
+                    native_len,
+                    compiled.overlays.len()
+                )
+            });
             continue;
         }
         for (overlay_index, definition) in pairs {
@@ -1443,14 +1547,16 @@ fn compare_update_render_values(
                             overlay_state_render_value(&state, write.target)
                         });
                 let Some(actual) = actual else {
-                    gaps.push(format!(
-                        "layer {layer} missing {:?} state for {}/{} at beat {:.3}",
-                        write.target, definition.id, definition.class, write.beat
-                    ));
+                    parity.check(false, || {
+                        format!(
+                            "layer {layer} missing {:?} state for {}/{} at beat {:.3}",
+                            write.target, definition.id, definition.class, write.beat
+                        )
+                    });
                     continue;
                 };
-                if !render_value_matches(&write.value, &actual) {
-                    gaps.push(format!(
+                parity.check(render_value_matches(&write.value, &actual), || {
+                    format!(
                         "layer {layer} {:?} differs for {}/{} at beat {:.3}: ITGmania {:?}, DeadSync {:?}",
                         write.target,
                         definition.id,
@@ -1458,8 +1564,8 @@ fn compare_update_render_values(
                         write.beat,
                         write.value,
                         actual
-                    ));
-                }
+                    )
+                });
             }
         }
     }
@@ -1512,7 +1618,8 @@ fn starred_mods(value: &str) -> String {
         .join(", ")
 }
 
-fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Vec<String>) {
+fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
+    parity.section("timeline");
     let beat_epsilon = trace.fixture_context.beat_step + EPSILON;
     for track in &trace.timeline_tracks {
         for (_, beat, _, args, _) in &track.samples {
@@ -1536,14 +1643,15 @@ fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
                 if !has_listener {
                     continue;
                 }
-                if !compiled.messages.iter().any(|actual| {
+                let found = compiled.messages.iter().any(|actual| {
                     actual.message == message && (actual.beat - beat).abs() <= beat_epsilon
-                }) {
-                    gaps.push(format!(
+                });
+                parity.check(found, || {
+                    format!(
                         "missing message `{message}` near beat {beat:.3} (operation {})",
                         track.operation
-                    ));
-                }
+                    )
+                });
             } else if track.kind == "modifier" {
                 let Some(raw) = args.get(1).and_then(Value::as_str) else {
                     continue;
@@ -1552,15 +1660,16 @@ fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
                 if wanted.is_empty() {
                     continue;
                 }
-                if !compiled.beat_mods.iter().any(|actual| {
+                let found = compiled.beat_mods.iter().any(|actual| {
                     (actual.start - beat).abs() <= beat_epsilon
                         && starred_mods(&actual.mods) == wanted
-                }) {
-                    gaps.push(format!(
+                });
+                parity.check(found, || {
+                    format!(
                         "missing modifier `{wanted}` near beat {beat:.3} for {}",
                         track.actor.as_deref().unwrap_or("unknown player")
-                    ));
-                }
+                    )
+                });
             }
         }
     }
@@ -1981,8 +2090,9 @@ fn compare_commands(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     primary_index: usize,
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("message commands");
     let mut used = HashSet::new();
     let mut missing = HashMap::<String, Vec<(String, NativeTarget, ExpectedCommand)>>::new();
     for expected in trace_commands(trace) {
@@ -2023,6 +2133,7 @@ fn compare_commands(
                 && command_matches(&expected, &command.blocks)
         }) {
             used.insert(*key);
+            parity.check(true, String::new);
             continue;
         }
         let Some((_, actual)) = candidates
@@ -2036,12 +2147,14 @@ fn compare_commands(
             ));
             continue;
         };
-        gaps.push(format!(
-            "{}MessageCommand differs on {label}: ITGmania [{}], DeadSync [{}]",
-            expected.message,
-            expected_blocks_summary(&expected),
-            actual_blocks_summary(&actual.blocks)
-        ));
+        parity.check(false, || {
+            format!(
+                "{}MessageCommand differs on {label}: ITGmania [{}], DeadSync [{}]",
+                expected.message,
+                expected_blocks_summary(&expected),
+                actual_blocks_summary(&actual.blocks)
+            )
+        });
     }
     for (message, targets) in missing {
         let mut used_dynamic = HashSet::new();
@@ -2078,6 +2191,7 @@ fn compare_commands(
                 });
             if let Some((capture_index, target_index, _, _)) = candidate {
                 used_dynamic.insert((layer, capture_index, target_index));
+                parity.check(true, String::new);
             } else {
                 unmatched.push(label);
             }
@@ -2107,17 +2221,22 @@ fn compare_commands(
                 .filter(|capture| capture.message == message)
                 .map(|capture| capture.overlay_targets.len())
                 .sum::<usize>();
-            gaps.push(format!(
-                "stateful {message}MessageCommand differs: DeadSync captured {captured} actors, but {} ITGmania targets/properties did not match ({})",
-                unmatched.len(),
-                unmatched.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
-            ));
+            let mut reported = false;
+            for _ in &unmatched {
+                parity.check_once(false, &mut reported, || {
+                    format!(
+                        "stateful {message}MessageCommand differs: DeadSync captured {captured} actors, but {} ITGmania targets/properties did not match ({})",
+                        unmatched.len(),
+                        unmatched.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
+                    )
+                });
+            }
         } else {
-            gaps.extend(
-                unmatched
-                    .into_iter()
-                    .map(|target| format!("missing {message}MessageCommand effects on {target}")),
-            );
+            for target in &unmatched {
+                parity.check(false, || {
+                    format!("missing {message}MessageCommand effects on {target}")
+                });
+            }
         }
     }
 }
@@ -2195,8 +2314,9 @@ fn range_covers(actual: (f32, f32), expected: (f32, f32)) -> bool {
 fn compare_player_operation_ranges(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("player ranges");
     for track in &trace.operation_tracks {
         let Some(actor) = trace
             .external_actors
@@ -2247,14 +2367,14 @@ fn compare_player_operation_ranges(
                     .into_iter()
                     .all(|range| range_covers(range, expected))
             });
-        if !covered {
-            gaps.push(format!(
+        parity.check(covered, || {
+            format!(
                 "P{player} {} range differs: ITGmania [{native_min:.3}, {native_max:.3}], DeadSync [{:.3}, {:.3}]",
                 track.operation,
                 compiled_range.0,
                 compiled_range.1
-            ));
-        }
+            )
+        });
     }
 }
 
@@ -2346,8 +2466,9 @@ fn compare_column_splines(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("column splines");
     let timing = deadsync_rules::timing::TimingData::from_segments(
         0.0,
         0.0,
@@ -2411,7 +2532,7 @@ fn compare_column_splines(
             }
         }
         writes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
-        let mut reported = HashSet::new();
+        let mut reported = HashMap::<usize, bool>::new();
         for (index, &(column, seconds, _, beat, expected)) in writes.iter().enumerate() {
             // Compare state after the update. A later Disable can override a
             // SetPoint in the same frame; both cannot equal the rendered value.
@@ -2422,10 +2543,11 @@ fn compare_column_splines(
                 continue;
             }
             let actual = deadsync_gameplay::song_lua_column_y_offset(&windows, column, seconds);
-            if (!actual.is_finite() || (actual - expected).abs() > 0.03) && reported.insert(column)
-            {
-                gaps.push(format!("P{} column {} final spline y differs at beat {beat:.3}: ITGmania {expected:.3}, DeadSync {actual:.3}", player + 1, column + 1));
-            }
+            parity.check_once(
+                actual.is_finite() && (actual - expected).abs() <= 0.03,
+                reported.entry(column).or_default(),
+                || format!("P{} column {} final spline y differs at beat {beat:.3}: ITGmania {expected:.3}, DeadSync {actual:.3}", player + 1, column + 1),
+            );
         }
     }
 }
@@ -2698,8 +2820,9 @@ fn compare_projected_geometry(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("projected geometry");
     let drawable_map = projected_drawable_map(trace, compiled);
     let mut state_cache = HashMap::<(usize, u32, u32), Vec<SongLuaOverlayState>>::new();
     for track in &trace.projected_vertex_tracks {
@@ -2707,9 +2830,11 @@ fn compare_projected_geometry(
             continue;
         };
         let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
-            gaps.push(format!(
-                "projected geometry is untested for {definition_id}: no matching DeadSync actor"
-            ));
+            parity.check(false, || {
+                format!(
+                    "projected geometry is untested for {definition_id}: no matching DeadSync actor"
+                )
+            });
             continue;
         };
         let mut reported_visibility = false;
@@ -2731,10 +2856,9 @@ fn compare_projected_geometry(
                 continue;
             };
             let Some(native_alpha) = sample.get(3).and_then(|value| value_f32(Some(value))) else {
-                if !reported_nonfinite {
-                    gaps.push(format!("reference projected alpha is non-finite for {definition_id} at beat {beat:.3}"));
-                    reported_nonfinite = true;
-                }
+                parity.check_once(false, &mut reported_nonfinite, || {
+                    format!("reference projected alpha is non-finite for {definition_id} at beat {beat:.3}")
+                });
                 continue;
             };
             let states = state_cache
@@ -2770,23 +2894,23 @@ fn compare_projected_geometry(
                         native_visible == (state.visible && state.diffuse[3] > 0.000_001)
                     })
             };
-            if !visibility_matches && !reported_visibility {
-                gaps.push(format!(
+            parity.check_once(visibility_matches, &mut reported_visibility, || {
+                format!(
                     "projected visibility differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_visible}, DeadSync {actual_visible} (visible={}, alpha={:.3})",
                     track.actor, state.visible, state.diffuse[3]
-                ));
-                reported_visibility = true;
-            }
-            if native_visible
-                && actual_visible
-                && (native_alpha - state.diffuse[3]).abs() > 0.03
-                && !reported_alpha
-            {
-                gaps.push(format!(
-                    "projected alpha differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_alpha:.3}, DeadSync {:.3}",
-                    track.actor, state.diffuse[3]
-                ));
-                reported_alpha = true;
+                )
+            });
+            if native_visible && actual_visible {
+                parity.check_once(
+                    (native_alpha - state.diffuse[3]).abs() <= 0.03,
+                    &mut reported_alpha,
+                    || {
+                        format!(
+                            "projected alpha differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_alpha:.3}, DeadSync {:.3}",
+                            track.actor, state.diffuse[3]
+                        )
+                    },
+                );
             }
             if !native_visible || !actual_visible || state.stretch_rect.is_some() {
                 continue;
@@ -2807,42 +2931,43 @@ fn compare_projected_geometry(
                     overlay_index,
                     track.texture_size,
                 ) else {
-                    if !reported_bounds {
-                        gaps.push(format!("projected perspective geometry is untested for {definition_id}: missing camera or near-plane clipping at beat {beat:.3}"));
-                        reported_bounds = true;
-                    }
+                    parity.check_once(false, &mut reported_bounds, || {
+                        format!("projected perspective geometry is untested for {definition_id}: missing camera or near-plane clipping at beat {beat:.3}")
+                    });
                     continue;
                 };
                 vertices
             };
             let expected_bounds = vertex_bounds(&native_vertices);
             let actual_bounds = vertex_bounds(&actual_vertices);
-            if expected_bounds
-                .iter()
-                .zip(actual_bounds)
-                .any(|(expected, actual)| (expected - actual).abs() > 0.75)
-                && !reported_bounds
-            {
-                gaps.push(format!(
-                    "projected bounds differ for {} ({definition_id}) at beat {beat:.3}: ITGmania {expected_bounds:?}, DeadSync {actual_bounds:?}",
-                    track.texture
-                ));
-                reported_bounds = true;
-            }
+            parity.check_once(
+                expected_bounds
+                    .iter()
+                    .zip(actual_bounds)
+                    .all(|(expected, actual)| (expected - actual).abs() <= 0.75),
+                &mut reported_bounds,
+                || {
+                    format!(
+                        "projected bounds differ for {} ({definition_id}) at beat {beat:.3}: ITGmania {expected_bounds:?}, DeadSync {actual_bounds:?}",
+                        track.texture
+                    )
+                },
+            );
             let expected_center = vertex_center(&native_vertices);
             let actual_center = vertex_center(&actual_vertices);
-            if expected_center
-                .iter()
-                .zip(actual_center)
-                .any(|(expected, actual)| (expected - actual).abs() > 0.75)
-                && !reported_center
-            {
-                gaps.push(format!(
-                    "projected center differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {expected_center:?}, DeadSync {actual_center:?}",
-                    track.texture
-                ));
-                reported_center = true;
-            }
+            parity.check_once(
+                expected_center
+                    .iter()
+                    .zip(actual_center)
+                    .all(|(expected, actual)| (expected - actual).abs() <= 0.75),
+                &mut reported_center,
+                || {
+                    format!(
+                        "projected center differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {expected_center:?}, DeadSync {actual_center:?}",
+                        track.texture
+                    )
+                },
+            );
         }
     }
 }
@@ -2851,8 +2976,9 @@ fn compare_projected_vibration_coverage(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-    gaps: &mut Vec<String>,
+    parity: &mut Parity,
 ) {
+    parity.section("projected vibration");
     let drawable_map = projected_drawable_map(trace, compiled);
     for track in &trace.projected_vertex_tracks {
         let Some(definition_id) = track.definition_id.as_deref() else {
@@ -2919,50 +3045,73 @@ fn compare_projected_vibration_coverage(
                 }
                 current = overlay.parent_index;
             }
-            if native
-                .iter()
-                .zip(actual)
-                .any(|(expected, actual)| (expected - actual).abs() > 0.03)
-            {
-                gaps.push(format!(
-                    "projected vibration differs for {definition_id} at beat {beat:.3}: ITGmania {native:?}, DeadSync {actual:?}"
-                ));
+            parity.check(
+                native
+                    .iter()
+                    .zip(actual)
+                    .all(|(expected, actual)| (expected - actual).abs() <= 0.03),
+                || {
+                    format!(
+                        "projected vibration differs for {definition_id} at beat {beat:.3}: ITGmania {native:?}, DeadSync {actual:?}"
+                    )
+                },
+            );
+        }
+    }
+}
+
+/// One check per capture category and layer: DeadSync must have compiled the
+/// complete script without skipping anything it could not model.
+fn compare_compile_info(compiled: &[CompiledSongLua], parity: &mut Parity) {
+    parity.section("compile info");
+    for (layer, compiled) in compiled.iter().enumerate() {
+        let info = &compiled.info;
+        for (kind, details) in [
+            (
+                "unsupported function ease",
+                &info.unsupported_function_ease_captures,
+            ),
+            (
+                "unsupported function action",
+                &info.unsupported_function_action_captures,
+            ),
+            ("unsupported perframe", &info.unsupported_perframe_captures),
+            (
+                "skipped message command",
+                &info.skipped_message_command_captures,
+            ),
+        ] {
+            if details.is_empty() {
+                parity.check(true, String::new);
+            }
+            for detail in details {
+                parity.check(false, || format!("layer {layer} {kind}: {detail}"));
             }
         }
     }
 }
 
-fn compare_compile_info(compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
-    for (layer, compiled) in compiled.iter().enumerate() {
-        gaps.extend(
-            compiled
-                .info
-                .unsupported_function_ease_captures
-                .iter()
-                .map(|detail| format!("layer {layer} unsupported function ease: {detail}")),
-        );
-        gaps.extend(
-            compiled
-                .info
-                .unsupported_function_action_captures
-                .iter()
-                .map(|detail| format!("layer {layer} unsupported function action: {detail}")),
-        );
-        gaps.extend(
-            compiled
-                .info
-                .unsupported_perframe_captures
-                .iter()
-                .map(|detail| format!("layer {layer} unsupported perframe: {detail}")),
-        );
-        gaps.extend(
-            compiled
-                .info
-                .skipped_message_command_captures
-                .iter()
-                .map(|detail| format!("layer {layer} skipped message command: {detail}")),
-        );
-    }
+/// Runs every semantic comparator in report order.
+fn compare_semantics(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    primary_index: usize,
+    context: &SongLuaCompileContext,
+) -> Parity {
+    let mut parity = Parity::default();
+    compare_compile_info(compiled, &mut parity);
+    compare_layers(trace, compiled, &mut parity);
+    compare_final_render_states(trace, compiled, &mut parity);
+    compare_update_render_persistence(trace, compiled, &mut parity);
+    compare_update_render_values(trace, compiled, context, &mut parity);
+    compare_player_operation_ranges(trace, compiled, &mut parity);
+    compare_column_splines(trace, compiled, context, &mut parity);
+    multitap::compare_multitap(trace, compiled, context, &mut parity);
+    compare_projected_geometry(trace, compiled, context, &mut parity);
+    compare_projected_vibration_coverage(trace, compiled, context, &mut parity);
+    compare_timeline(trace, &compiled[primary_index], &mut parity);
+    compare_commands(trace, compiled, primary_index, &mut parity);
+    parity
 }
 
 #[test]
@@ -3020,25 +3169,9 @@ fn native_song_lua_semantics_match_deadsync() {
             .map(|layer| layer.info.skipped_message_command_captures.len())
             .sum::<usize>(),
     );
-    let mut gaps = Vec::new();
-    compare_compile_info(&compiled, &mut gaps);
-    compare_layers(&trace, &compiled, &mut gaps);
-    compare_final_render_states(&trace, &compiled, &mut gaps);
-    compare_update_render_persistence(&trace, &compiled, &mut gaps);
-    compare_update_render_values(&trace, &compiled, &context, &mut gaps);
-    compare_player_operation_ranges(&trace, &compiled, &mut gaps);
-    compare_column_splines(&trace, &compiled, &context, &mut gaps);
-    multitap::compare_multitap(&trace, &compiled, &context, &mut gaps);
-    compare_projected_geometry(&trace, &compiled, &context, &mut gaps);
-    compare_projected_vibration_coverage(&trace, &compiled, &context, &mut gaps);
-    compare_timeline(&trace, &compiled[primary_index], &mut gaps);
-    compare_commands(&trace, &compiled, primary_index, &mut gaps);
-    assert!(
-        gaps.is_empty(),
-        "song Lua semantic parity gaps ({}):\n- {}",
-        gaps.len(),
-        gaps.join("\n- ")
-    );
+    let parity = compare_semantics(&trace, &compiled, primary_index, &context);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("song Lua semantic");
 }
 
 #[test]
@@ -3067,14 +3200,9 @@ fn cuphead_stateful_fire_message_matches_itgmania() {
         .sum::<usize>();
     assert_eq!(affected, 28, "Cuphead Fire must retain all pooled targets");
 
-    let mut gaps = Vec::new();
-    compare_commands(&trace, &compiled, primary_index, &mut gaps);
-    assert!(
-        gaps.is_empty(),
-        "Cuphead message-command parity gaps ({}):\n- {}",
-        gaps.len(),
-        gaps.join("\n- ")
-    );
+    let mut parity = Parity::default();
+    compare_commands(&trace, &compiled, primary_index, &mut parity);
+    parity.assert_complete("Cuphead message-command");
 
     let native_beat = cuphead_flower_spawn_beat(&trace);
     let (layer, overlay_index) = trace
@@ -3616,9 +3744,10 @@ fn step_your_game_up_critical_render_states_match_itgmania() {
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(STEP_YOUR_GAME_UP_TRACE);
     let trace = read_trace_file(&trace_path);
     let (compiled, _, context) = compile_trace_song(&trace);
-    let mut gaps = Vec::new();
-    compare_update_render_values(&trace, &compiled, &context, &mut gaps);
-    let critical = gaps
+    let mut parity = Parity::default();
+    compare_update_render_values(&trace, &compiled, &context, &mut parity);
+    let critical = parity
+        .gaps
         .into_iter()
         .filter(|gap| {
             gap.contains("beat 53.500")

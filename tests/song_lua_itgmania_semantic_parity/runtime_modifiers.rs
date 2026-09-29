@@ -17,8 +17,46 @@ struct ModWrite {
     value: f32,
 }
 
-fn option_writes(trace: &NativeTrace) -> Vec<ModWrite> {
+/// Independent subset of PlayerOptions::FromOneModString: the last word is
+/// the option, `*speed` is approach speed (probes settle it), `no` is level 0,
+/// and a word starting with a digit or '-' is a percentage. Returns `None` for
+/// other syntax rather than silently claiming coverage.
+fn mod_string_level(words: &[&str]) -> Option<f32> {
+    let mut level = 1.0;
+    for word in &words[..words.len().saturating_sub(1)] {
+        if word
+            .strip_prefix('*')
+            .is_some_and(|speed| speed.parse::<f32>().is_ok())
+        {
+            continue;
+        }
+        level = match *word {
+            "no" => 0.0,
+            // Lua's positive infinity does not start with a digit, so native
+            // parsing leaves the level unchanged.
+            "inf" => level,
+            _ if word.starts_with(|c: char| c.is_ascii_digit() || c == '-') => {
+                // strtof stops before a trailing '%' as in "150% drunk", and
+                // StringToFloat turns a non-finite result into 0.
+                let value = word.strip_suffix('%').unwrap_or(word).parse::<f32>().ok()?;
+                if value.is_finite() {
+                    value / 100.0
+                } else {
+                    0.0
+                }
+            }
+            _ => return None,
+        };
+    }
+    Some(level)
+}
+
+/// Returns the recorded Song-level option writes and how often each write the
+/// reader does not cover (an unparsed `FromString` part or a non-numeric
+/// target) occurred.
+fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>) {
     let mut writes = Vec::new();
+    let mut unsupported = BTreeMap::<String, usize>::new();
     for track in &trace.timeline_tracks {
         let Some(player) = (0..2).find(|player| {
             track.actor.as_deref()
@@ -53,23 +91,14 @@ fn option_writes(trace: &NativeTrace) -> Vec<ModWrite> {
                     .first()
                     .and_then(Value::as_str)
                     .expect("modifier string");
-                // Independent subset of PlayerOptions::FromOneModString: numeric
-                // levels are percentages; a leading * token is approach speed.
-                // Fail on other syntax rather than silently claiming coverage.
                 for part in raw.split(',').filter(|part| !part.trim().is_empty()) {
+                    let part = part.trim().to_ascii_lowercase();
                     let words = part.split_whitespace().collect::<Vec<_>>();
-                    assert!(
-                        words.len() == 3 && words[0] == "*10000",
-                        "uncovered FromString: {part}"
-                    );
-                    let value = if words[1] == "inf" {
-                        // FromOneModString only parses a level starting with a
-                        // digit or '-'. Lua's positive infinity leaves level=1.
-                        1.0
-                    } else {
-                        words[1].parse::<f32>().expect("numeric modifier level") / 100.0
+                    let Some((value, key)) = mod_string_level(&words).zip(words.last()) else {
+                        *unsupported.entry(part.clone()).or_default() += 1;
+                        continue;
                     };
-                    let key = words[2].to_ascii_lowercase();
+                    let key = key.to_string();
                     match key.as_str() {
                         "hallway" | "distant" => {
                             push("tilt".into(), if key == "hallway" { -value } else { value });
@@ -79,8 +108,15 @@ fn option_writes(trace: &NativeTrace) -> Vec<ModWrite> {
                     }
                 }
             } else {
-                let value = value_f32(args.first()).expect("numeric PlayerOptions target");
-                push(operation.to_ascii_lowercase(), value);
+                match value_f32(args.first()) {
+                    Some(value) => push(operation.to_ascii_lowercase(), value),
+                    None => {
+                        let target = args.first().map_or_else(String::new, Value::to_string);
+                        *unsupported
+                            .entry(format!("{operation} {target}"))
+                            .or_default() += 1;
+                    }
+                }
             }
         }
     }
@@ -89,7 +125,7 @@ fn option_writes(trace: &NativeTrace) -> Vec<ModWrite> {
             .total_cmp(&b.second)
             .then(a.sequence.cmp(&b.sequence))
     });
-    writes
+    (writes, unsupported)
 }
 
 // Each arm maps native option units onto the public gameplay state consumed by
@@ -106,6 +142,7 @@ fn runtime_mod_value(
         ("movex", visual.move_x_cols),
         ("movey", visual.move_y_cols),
         ("tiny", visual.tiny_cols),
+        ("bumpy", visual.bumpy_cols),
     ] {
         if let Some(column) = key
             .strip_prefix(prefix)
@@ -122,18 +159,35 @@ fn runtime_mod_value(
         "drunk" => visual.drunk.unwrap_or(0.0),
         "tipsy" => visual.tipsy.unwrap_or(0.0),
         "dizzy" => visual.dizzy.unwrap_or(0.0),
+        "confusion" => visual.confusion.unwrap_or(0.0),
         "confusionoffset" => visual.confusion_offset.unwrap_or(0.0),
         "tiny" => visual.tiny.unwrap_or(0.0),
         "flip" => visual.flip.unwrap_or(0.0),
         "invert" => visual.invert.unwrap_or(0.0),
         "tornado" => visual.tornado.unwrap_or(0.0),
+        "bumpy" => visual.bumpy.unwrap_or(0.0),
+        "bumpyoffset" => visual.bumpy_offset.unwrap_or(0.0),
+        "bumpyperiod" => visual.bumpy_period.unwrap_or(0.0),
+        "pulseinner" => visual.pulse_inner.unwrap_or(0.0),
+        "pulseouter" => visual.pulse_outer.unwrap_or(0.0),
+        "pulseperiod" => visual.pulse_period.unwrap_or(0.0),
+        "pulseoffset" => visual.pulse_offset.unwrap_or(0.0),
+        "randomspeed" => visual.random_speed.unwrap_or(0.0),
         "brake" => runtime.accel[player].brake.unwrap_or(0.0),
         "boost" => runtime.accel[player].boost.unwrap_or(0.0),
+        "wave" => runtime.accel[player].wave.unwrap_or(0.0),
+        "expand" => runtime.accel[player].expand.unwrap_or(0.0),
+        "boomerang" => runtime.accel[player].boomerang.unwrap_or(0.0),
+        "hidden" => appearance.hidden,
+        "hiddenoffset" => appearance.hidden_offset,
         "stealth" => appearance.stealth,
         "sudden" => appearance.sudden,
         "suddenoffset" => appearance.sudden_offset,
+        "blink" => appearance.blink,
+        "randomvanish" => appearance.random_vanish,
         "dark" => runtime.visibility[player].dark.unwrap_or(0.0),
         "blind" => runtime.visibility[player].blind.unwrap_or(0.0),
+        "cover" => runtime.visibility[player].cover.unwrap_or(0.0),
         "reverse" => runtime.scroll[player].reverse.unwrap_or(0.0),
         "split" => runtime.scroll[player].split.unwrap_or(0.0),
         "alternate" => runtime.scroll[player].alternate.unwrap_or(0.0),
@@ -159,10 +213,13 @@ struct ModStats {
     worst: (f32, f32, f32),
 }
 
+/// Builds the production runtime for the compiled song and counts the ease
+/// targets it cannot evaluate.
 fn modifier_runtime(
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-) -> GameplayAttackRuntimeState {
+) -> (GameplayAttackRuntimeState, usize) {
+    let unsupported_eases = std::cell::Cell::new(0);
     let timing = deadsync_rules::timing::TimingData::from_segments(
         0.0,
         0.0,
@@ -194,12 +251,15 @@ fn modifier_runtime(
                         0.0,
                         &constants[player],
                     );
-                assert_eq!(unsupported, 0, "unsupported runtime ease target");
+                unsupported_eases.set(unsupported_eases.get() + unsupported);
                 eases
             })
             .collect()
     });
-    GameplayAttackRuntimeState::new(constants, eases)
+    (
+        GameplayAttackRuntimeState::new(constants, eases),
+        unsupported_eases.get(),
+    )
 }
 
 #[test]
@@ -215,7 +275,8 @@ fn sampled_mini_and_xmod_pulse_preserves_note_spacing() {
         &context,
     )
     .unwrap();
-    let mut runtime = modifier_runtime(&compiled, &context);
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0, "unsupported runtime ease target");
     let mut transform = SongLuaPlayerTransform::default();
     // Probe between the compiler's 60 Hz samples as well as on their edges.
     // ITGmania Player::Update uses zoom = 1 - Mini / 2; ArrowEffects::GetYOffset
@@ -263,7 +324,11 @@ fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
     );
     // The native trace records the same outQuad factor for Mini and XMod.
     // Check that relationship first, then probe DeadSync between its samples.
-    let writes = option_writes(&trace);
+    let (writes, unsupported) = option_writes(&trace);
+    assert!(
+        unsupported.is_empty(),
+        "uncovered FromString: {unsupported:?}"
+    );
     let mut native_samples = 0;
     for mini in writes.iter().filter(|write| {
         write.player == 0 && write.key == "mini" && (16.0..20.0).contains(&write.beat)
@@ -289,7 +354,8 @@ fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
     let seconds_per_beat = first_pulse.second / first_pulse.beat;
     trace.end_position.seconds = 21.0 * seconds_per_beat;
     let (compiled, _, context) = compile_trace_song(&trace);
-    let mut runtime = modifier_runtime(&compiled, &context);
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0, "unsupported runtime ease target");
     let mut transform = SongLuaPlayerTransform::default();
     let mut pulsed = [false; 4];
     for frame in 0..(trace.end_position.seconds * 180.0) as usize {
@@ -324,16 +390,33 @@ fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
     );
 }
 
-#[test]
-#[ignore = "full-song runtime modifier audit; select CO5M1C or Riddle DX with ITGMANIA_SONG_LUA_TRACE"]
-fn native_modifier_values_match_deadsync() {
-    crate::paths::init();
-    let trace = read_trace();
-    let (compiled, _, context) = compile_trace_song(&trace);
-    let mut runtime = modifier_runtime(&compiled, &context);
+/// One check per recorded player/option target at each native timestamp,
+/// reported per player/option pair.
+pub(super) fn compare_runtime_modifiers(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
+    parity.section("runtime modifiers");
+    let (writes, unsupported) = option_writes(trace);
+    for (part, count) in unsupported {
+        parity.tally(count, count);
+        parity
+            .gaps
+            .push(format!("uncovered option write `{part}`: {count} writes"));
+    }
+    if writes.is_empty() {
+        return;
+    }
+    let (mut runtime, unsupported) = modifier_runtime(compiled, context);
+    parity.tally(unsupported, unsupported);
+    if unsupported > 0 {
+        parity.gaps.push(format!(
+            "{unsupported} runtime ease targets are unsupported by DeadSync"
+        ));
+    }
     let mut transforms = [SongLuaPlayerTransform::default(); 2];
-    let writes = option_writes(&trace);
-    assert!(!writes.is_empty(), "fixture contains no modifier writes");
     let mut stats = BTreeMap::<(usize, &str), ModStats>::new();
     let mut uncovered = BTreeMap::<&str, usize>::new();
     let mut nonfinite = Vec::new();
@@ -382,30 +465,41 @@ fn native_modifier_values_match_deadsync() {
             }
         }
     }
-    let mut failures = 0;
     for ((player, key), entry) in &stats {
-        failures += entry.failures;
-        eprintln!(
-            "P{} {key}: {}/{} outside {EPSILON}; first={:?}; worst={:?}",
-            player + 1,
-            entry.failures,
-            entry.samples,
-            entry.first,
-            entry.worst
-        );
+        parity.tally(entry.samples, entry.failures);
+        if entry.failures > 0 {
+            parity.gaps.push(format!(
+                "P{} {key}: {}/{} modifier values outside {EPSILON}; first (beat, ITGmania, DeadSync)={:?}; worst={:?}",
+                player + 1,
+                entry.failures,
+                entry.samples,
+                entry.first,
+                entry.worst
+            ));
+        }
     }
-    eprintln!("Uncovered option writes: {uncovered:?}");
-    eprintln!("Non-finite reference targets (player, option, beat): {nonfinite:?}");
-    eprintln!(
-        "{}: {failures}/{} sampled modifier values differ across {} player/option pairs",
-        trace.title,
-        stats.values().map(|entry| entry.samples).sum::<usize>(),
-        stats.len()
-    );
-    assert_eq!(
-        failures, 0,
-        "runtime modifier differences (see per-option results)"
-    );
-    assert!(uncovered.is_empty(), "runtime option coverage incomplete");
-    assert!(nonfinite.is_empty(), "non-finite reference targets");
+    for (key, count) in uncovered {
+        parity.tally(count, count);
+        parity.gaps.push(format!(
+            "{key}: {count} modifier writes have no DeadSync runtime value"
+        ));
+    }
+    for (player, key, beat) in nonfinite {
+        parity.check(false, || {
+            format!("P{player} {key}: non-finite reference target at beat {beat:.3}")
+        });
+    }
+}
+
+#[test]
+#[ignore = "full-song runtime modifier audit; select CO5M1C or Riddle DX with ITGMANIA_SONG_LUA_TRACE"]
+fn native_modifier_values_match_deadsync() {
+    crate::paths::init();
+    let trace = read_trace();
+    let (compiled, _, context) = compile_trace_song(&trace);
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(parity.checks() > 0, "fixture contains no modifier writes");
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("runtime modifier");
 }

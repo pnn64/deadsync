@@ -1,0 +1,69 @@
+{
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 1,
+  "harness_version": "0.1.0",
+  "itgmania": {
+    "git_revision": "f1ab605d0b93cb04c8806a70c92164ae4b6d0368",
+    "git_dirty": "false",
+    "execution": "embedded_bundled_lua",
+    "launches_executable": false
+  },
+  "context": {
+    "players": [
+      "PLAYER_1",
+      "PLAYER_2"
+    ],
+    "preferred_difficulty": "Challenge",
+    "preferred_steps_type": "dance-single",
+    "screen": [
+      854,
+      480
+    ],
+    "beat_step": 0.25,
+    "max_events": 500000
+  },
+  "simfiles": [
+    {
+      "simfile": "7th Gear/7th Gear.ssc",
+      "fixture": "7th Gear/7th Gear.ssc.semantic.json",
+      "title": "7th Gear",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "BroGamer/BroGamer.ssc",
+      "fixture": "BroGamer/BroGamer.ssc.semantic.json",
+      "title": "BroGamer",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "fixture": "Cuphead [TaroNuke]/botanic.sm.semantic.json",
+      "title": "Botanic Panic",
+      "lua_entries": 2,
+      "status": "ok"
+    },
+    {
+      "simfile": "Slamurai/Slamurai.ssc",
+      "fixture": "Slamurai/Slamurai.ssc.semantic.json",
+      "title": "Slamurai",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+      "fixture": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json",
+      "title": "Step Your Game Up",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+      "fixture": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc.semantic.json",
+      "title": "[3752] [09] Who the Hell Is Edgar?",
+      "lua_entries": 1,
+      "status": "ok"
+    }
+  ]
+}
