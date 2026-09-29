@@ -66,6 +66,13 @@
       "status": "ok"
     },
     {
+      "simfile": "Apollo/Apollo.ssc",
+      "fixture": "Apollo/Apollo.ssc.semantic.json",
+      "title": "Apollo",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Bad Apple!!/Bad Apple!!.sm",
       "fixture": "Bad Apple!!/Bad Apple!!.sm.semantic.json",
       "title": "Bad Apple!!",
@@ -94,6 +101,13 @@
       "status": "ok"
     },
     {
+      "simfile": "Circles/Circles.ssc",
+      "fixture": "Circles/Circles.ssc.semantic.json",
+      "title": "Episode 15",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Cuphead [TaroNuke]/botanic.sm",
       "fixture": "Cuphead [TaroNuke]/botanic.sm.semantic.json",
       "title": "Botanic Panic",
@@ -104,6 +118,13 @@
       "simfile": "Delightful Day/Delightful Day.ssc",
       "fixture": "Delightful Day/Delightful Day.ssc.semantic.json",
       "title": "Delightful Day",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Do the Mario/DoTheMario.ssc",
+      "fixture": "Do the Mario/DoTheMario.ssc.semantic.json",
+      "title": "Do the mario",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -125,6 +146,13 @@
       "simfile": "I (Ai)/I (Ai).ssc",
       "fixture": "I (Ai)/I (Ai).ssc.semantic.json",
       "title": "I",
+      "lua_entries": 2,
+      "status": "ok"
+    },
+    {
+      "simfile": "Igaku/Igaku.ssc",
+      "fixture": "Igaku/Igaku.ssc.semantic.json",
+      "title": "\u00e3\u201a\u00a4\u00e3\u201a\u00ac\u00e3\u201a\u00af",
       "lua_entries": 2,
       "status": "ok"
     },
@@ -164,6 +192,13 @@
       "status": "ok"
     },
     {
+      "simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+      "fixture": "My Exes Bestfriend/ExBestFriend.ssc.semantic.json",
+      "title": "Episode 13",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
       "fixture": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc.semantic.json",
       "title": "Oshama Scramble!",
@@ -171,10 +206,24 @@
       "status": "ok"
     },
     {
+      "simfile": "Pale/Pale.ssc",
+      "fixture": "Pale/Pale.ssc.semantic.json",
+      "title": "Episode 17",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
       "fixture": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc.semantic.json",
       "title": "Rainbow Road",
       "lua_entries": 4,
+      "status": "ok"
+    },
+    {
+      "simfile": "Save Your Tears/SaveYourTears.ssc",
+      "fixture": "Save Your Tears/SaveYourTears.ssc.semantic.json",
+      "title": "Episode 01",
+      "lua_entries": 1,
       "status": "ok"
     },
     {
@@ -188,6 +237,13 @@
       "simfile": "Slamurai/Slamurai.ssc",
       "fixture": "Slamurai/Slamurai.ssc.semantic.json",
       "title": "Slamurai",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Someone Special - hubert/Someone Special.ssc",
+      "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json",
+      "title": "\uff33\uff4f\uff4d\uff45\uff4f\uff4e\uff45 \uff33\uff50\uff45\uff43\uff49\uff41\uff4c",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -269,6 +325,13 @@
       "status": "ok"
     },
     {
+      "simfile": "flowers/flowers.ssc",
+      "fixture": "flowers/flowers.ssc.semantic.json",
+      "title": "flowers",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "fof_guys/fof.ssc",
       "fixture": "fof_guys/fof.ssc.semantic.json",
       "title": "Fof Guys",
@@ -290,10 +353,38 @@
       "status": "ok"
     },
     {
+      "simfile": "mawaru4/mawaru4.sm",
+      "fixture": "mawaru4/mawaru4.sm.semantic.json",
+      "title": "MAWARU 4",
+      "lua_entries": 39,
+      "status": "ok"
+    },
+    {
       "simfile": "mawaru5/mawaru5.sm",
       "fixture": "mawaru5/mawaru5.sm.semantic.json",
       "title": "MAWARU FINALE",
       "lua_entries": 41,
+      "status": "ok"
+    },
+    {
+      "simfile": "mawaru6/mawaru6.sm",
+      "fixture": "mawaru6/mawaru6.sm.semantic.json",
+      "title": "MAWARU RIDES AGAIN",
+      "lua_entries": 2,
+      "status": "ok"
+    },
+    {
+      "simfile": "mawaru7/mawaru7.sm",
+      "fixture": "mawaru7/mawaru7.sm.semantic.json",
+      "title": "MAWARUCHI SURVIVER",
+      "lua_entries": 3,
+      "status": "ok"
+    },
+    {
+      "simfile": "mawaru8/mawaru8.sm",
+      "fixture": "mawaru8/mawaru8.sm.semantic.json",
+      "title": "MAWARU! SETSUGETSUKA!",
+      "lua_entries": 2,
       "status": "ok"
     },
     {

@@ -686,6 +686,31 @@ pub fn install_manager_globals(lua: &Lua, context: &SongLuaCompileContext) -> ml
 }
 
 pub fn install_screen_utility_globals(lua: &Lua) -> mlua::Result<()> {
+    // _fallback/Scripts/02 Actor.lua: background fit helpers used by song AFTs.
+    lua.load(
+        r#"
+        bg_fit_functions = {
+            BackgroundFitMode_CoverDistort = function(self, width, height)
+                self:zoomx(width / self:GetWidth())
+                self:zoomy(height / self:GetHeight())
+            end,
+            BackgroundFitMode_CoverPreserve = function(self, width, height)
+                self:zoom(math.max(width / self:GetWidth(), height / self:GetHeight()))
+            end,
+            BackgroundFitMode_FitInside = function(self, width, height)
+                self:zoom(math.min(width / self:GetWidth(), height / self:GetHeight()))
+            end,
+            BackgroundFitMode_FitInsideAvoidLetter = function(self, width, height)
+                self:zoom(height / self:GetHeight())
+            end,
+            BackgroundFitMode_FitInsideAvoidPillar = function(self, width, height)
+                self:zoom(width / self:GetWidth())
+            end,
+        }
+    "#,
+    )
+    .set_name("background fit helpers")
+    .exec()?;
     let globals = lua.globals();
     globals.set("SongUtil", create_song_util_table(lua)?)?;
     globals.set(
@@ -1177,7 +1202,43 @@ pub fn install_game_state_globals(
     let current_sort_order = lua.create_table()?;
     current_sort_order.raw_set(1, "SortOrder_Group")?;
     let gamestate = lua.create_table()?;
+    gamestate.set(
+        "PlayerIsUsingModifier",
+        lua.create_function({
+            let options = players.player_options.clone();
+            let song_options = song_options.clone();
+            move |lua, args: MultiValue| {
+                let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+                    return Ok(false);
+                };
+                let text = method_arg(&args, 1)
+                    .cloned()
+                    .and_then(read_string)
+                    .unwrap_or_default();
+                crate::song_tables::player_uses_modifiers(
+                    lua,
+                    &options[player],
+                    &song_options,
+                    &text,
+                )
+            }
+        })?,
+    )?;
     let game_env = lua.create_table()?;
+    globals.set(
+        "getenv",
+        lua.create_function({
+            let env = game_env.clone();
+            move |_, name: String| env.get::<Value>(name)
+        })?,
+    )?;
+    globals.set(
+        "setenv",
+        lua.create_function({
+            let env = game_env.clone();
+            move |_, (name, value): (String, Value)| env.set(name, value)
+        })?,
+    )?;
     gamestate.set(
         "Env",
         lua.create_function(move |_, _args: MultiValue| Ok(game_env.clone()))?,

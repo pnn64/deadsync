@@ -469,6 +469,81 @@ fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Re
     Ok(())
 }
 
+pub(crate) fn player_uses_modifiers(
+    lua: &Lua,
+    owner: &Table,
+    song_options: &Table,
+    text: &str,
+) -> mlua::Result<bool> {
+    // GameState::PlayerIsUsingModifier applies the string to copies and compares
+    // the resulting values. Queries must not write to the live options.
+    let requested = lua.create_table()?;
+    let mut rate = None;
+    let mut skin = None;
+    for token in text.split(',') {
+        let token = strip_player_option_prefix(token).trim();
+        let lower = token.to_ascii_lowercase();
+        if let Some(value) = lower
+            .strip_suffix("xmusic")
+            .and_then(|s| s.parse::<f32>().ok())
+        {
+            rate = Some(value);
+        } else {
+            let skins = lua.globals().get::<Table>("NOTESKIN")?;
+            if skins
+                .get::<Function>("DoesNoteSkinExist")?
+                .call::<bool>((skins, token))?
+            {
+                skin = Some(lower);
+            } else {
+                apply_player_option_token(lua, &requested, token)?;
+            }
+        }
+    }
+    if let Some(rate) = rate {
+        if song_options.raw_get::<f32>("__songlua_music_rate")? != rate {
+            return Ok(false);
+        }
+    }
+    if let Some(skin) = skin {
+        if !owner
+            .raw_get::<String>("__songlua_noteskin_name")?
+            .eq_ignore_ascii_case(&skin)
+        {
+            return Ok(false);
+        }
+    }
+    if let Some(mode) = requested.raw_get::<Option<String>>("__songlua_speedmod_active")? {
+        let key = format!("__songlua_speedmod_{mode}");
+        if owner
+            .raw_get::<Option<String>>("__songlua_speedmod_active")?
+            .as_deref()
+            != Some(&mode)
+            || owner.raw_get::<Value>(key.as_str())? != requested.raw_get::<Value>(key)?
+        {
+            return Ok(false);
+        }
+    }
+    let current = player_option_state(lua, owner)?;
+    for pair in player_option_state(lua, &requested)?.pairs::<String, Value>() {
+        let (key, expected) = pair?;
+        if !crate::player_options::SONG_LUA_PLAYER_OPTION_CAPABILITIES
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(&key))
+        {
+            continue; // Native FromString ignores unrecognized modifier names.
+        }
+        let actual = match current.raw_get::<Value>(key.as_str())? {
+            Value::Nil => default_player_option_value(lua, &key)?,
+            value => value,
+        };
+        if actual != expected {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Result<()> {
     let text = strip_player_option_prefix(raw);
     let speed = raw

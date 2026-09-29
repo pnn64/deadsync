@@ -4728,6 +4728,20 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
             })?,
         )?;
     }
+    actor.set(
+        "LoadFromCurrentSongBackground",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                let gamestate = lua.globals().get::<Table>("GAMESTATE")?;
+                let song = gamestate
+                    .get::<Function>("GetCurrentSong")?
+                    .call::<Value>(gamestate)?;
+                set_actor_texture_from_path_methods(&actor, Some(&song), &["GetBackgroundPath"])?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     for (name, path_methods) in [
         ("LoadFromSong", &["GetBannerPath"][..]),
         (
@@ -6707,6 +6721,30 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                     capture_immediate_vec5(lua, &actor, "effect_timing", timing)?;
                     capture_immediate_f32(lua, &actor, "effect_period", total)?;
                 }
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "effect_hold_at_full",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, (_self, hold): (Table, f32)| {
+                let period = actor
+                    .get::<Option<f32>>("__songlua_state_effect_period")?
+                    .unwrap_or(1.0);
+                let mut timing = actor
+                    .get::<Option<Table>>("__songlua_state_effect_timing")?
+                    .and_then(|value| table_vec5(&value))
+                    .unwrap_or([period / 2.0, 0.0, period / 2.0, 0.0, 0.0]);
+                timing[3] = hold;
+                if hold < 0.0 || timing.iter().sum::<f32>() <= 0.0 {
+                    return Err(mlua::Error::runtime(
+                        "effect timings must be nonnegative and not all zero",
+                    ));
+                }
+                capture_immediate_vec5(lua, &actor, "effect_timing", timing)?;
+                capture_immediate_f32(lua, &actor, "effect_period", timing.iter().sum())?;
                 Ok(actor.clone())
             }
         })?,

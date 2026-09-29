@@ -487,16 +487,30 @@ fn compile_trace_song_at(
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
     if trace.arrow_timing == "native" {
-        let chart_index = song
+        let candidates = song
             .charts
             .iter()
-            .position(|chart| {
+            .enumerate()
+            .filter(|(_, chart)| {
                 chart.chart_type == trace.steps_type
-                    && chart.description == trace.description
                     && chart
                         .difficulty
                         .eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
+            });
+        let chart_index = candidates
+            .clone()
+            .find(|(_, chart)| chart.description == trace.description)
+            .or_else(|| {
+                // DeadSync trims Unicode whitespace from descriptions; native
+                // ITGmania retains a trailing NBSP in Sharkmode. Keep exact
+                // matches first and never choose an ambiguous trimmed match.
+                let mut trimmed = candidates.filter(|(_, chart)| {
+                    chart.description.trim() == trace.description.trim()
+                });
+                let first = trimmed.next()?;
+                trimmed.next().is_none().then_some(first)
             })
+            .map(|(index, _)| index)
             .unwrap_or_else(|| {
                 panic!(
                     "DeadSync has no chart matching ITGmania's {} {} {:?}; its charts are {:?}",

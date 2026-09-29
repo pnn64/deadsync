@@ -90,6 +90,7 @@ mod lua_songs {
         let_me_hear_that => "(R5) Let Me Hear That/let me hear that.sm",
         waltz_capriccio => "(R6) Waltz Capriccio/waltz_capriccio.ssc",
         warp_zone => "(R10) Warp Zone/warp zone.ssc",
+        apollo => "Apollo/Apollo.ssc",
         bunny_house => "bunny-house/steps.sm",
         panopticon => "panopticon/panopticon.ssc",
         karachi => "Karachi/Jorts - Karachi.ssc",
@@ -116,7 +117,19 @@ mod lua_songs {
         kagetsu_no_yume => "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
         mawaru2 => "mawaru2/mawaru2.sm",
         mawaru3 => "mawaru3/mawaru3.sm",
+        mawaru4 => "mawaru4/mawaru4.sm",
         mawaru5 => "mawaru5/mawaru5.sm",
+        mawaru6 => "mawaru6/mawaru6.sm",
+        mawaru7 => "mawaru7/mawaru7.sm",
+        mawaru8 => "mawaru8/mawaru8.sm",
+        igaku => "Igaku/Igaku.ssc",
+        flowers => "flowers/flowers.ssc",
+        do_the_mario => "Do the Mario/DoTheMario.ssc",
+        circles => "Circles/Circles.ssc",
+        my_exes_bestfriend => "My Exes Bestfriend/ExBestFriend.ssc",
+        save_your_tears => "Save Your Tears/SaveYourTears.ssc",
+        pale => "Pale/Pale.ssc",
+        someone_special => "Someone Special - hubert/Someone Special.ssc",
     }
 }
 

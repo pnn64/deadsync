@@ -725,6 +725,9 @@ pub fn theme_metric_number_for_screen(
     human_player_count: usize,
     screen_height: f32,
 ) -> Option<f32> {
+    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("ScreenHeight") {
+        return Some(screen_height);
+    }
     if group.eq_ignore_ascii_case("Player") {
         if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
             return Some(THEME_RECEPTOR_Y_STD);
@@ -941,6 +944,9 @@ pub fn theme_metric_bool(value: mlua::Value) -> bool {
 
 pub fn theme_metric_names(group: &str) -> Vec<String> {
     let mut names = Vec::new();
+    if group.eq_ignore_ascii_case("Common") {
+        names.push("ScreenHeight".to_owned());
+    }
     if theme_line_names(group).is_some() {
         names.push("LineNames".to_string());
     }
@@ -18392,6 +18398,121 @@ return Def.ActorFrame{
                 .iter()
                 .all(|detail| !detail.contains("FireMessageCommand"))
         );
+    }
+
+    #[test]
+    fn compile_song_lua_queries_modifiers_without_changing_them() {
+        let song_dir = test_dir("modifier-queries");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local p = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+local function uses(text, player) return GAMESTATE:PlayerIsUsingModifier(player or PLAYER_1, text) end
+assert(uses('no reverse'))
+assert(not uses('reverse'))
+assert(p:Reverse() == 0)
+p:Reverse(0.5)
+assert(uses('*999 50% reverse'))
+assert(not uses('reverse'))
+assert(uses('reverse, no reverse, 50% reverse'))
+assert(uses('no reverse', PLAYER_2))
+assert(uses('unknown-modifier'))
+p:XMod(2)
+assert(uses('2x') and not uses('1x'))
+p:CMod(500)
+assert(uses('C500') and not uses('2x'))
+p:XMod(2)
+assert(uses('2x') and not uses('C500'))
+GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate(1.5)
+assert(uses('1.5xmusic') and not uses('1xmusic'))
+assert(p:Reverse() == 0.5 and p:XMod() == 2)
+return Def.ActorFrame{}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Modifier queries");
+        context.players[1].enabled = true;
+        test_compile_song_lua(&entry, &context).unwrap();
+    }
+
+    #[test]
+    fn compile_song_lua_supports_background_and_environment_helpers() {
+        let song_dir = test_dir("background-environment-helpers");
+        image::RgbaImage::new(100, 50)
+            .save(song_dir.join("background.png"))
+            .unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+assert(getenv('missing') == nil)
+setenv('missionmode', 'test')
+assert(GAMESTATE:Env().missionmode == 'test')
+GAMESTATE:Env().missionmode = false
+assert(getenv('missionmode') == false)
+setenv('missionmode', nil)
+assert(getenv('missionmode') == nil)
+assert(THEME:GetMetric('Common', 'ScreenHeight') == 720)
+assert(THEME:HasMetric('Common', 'ScreenHeight'))
+local file = RageFileUtil.CreateRageFile()
+assert(file:Open('must-not-write.txt', 2))
+assert(file:PutLine('test') == 2)
+file:Close()
+file:destroy()
+return Def.Sprite{OnCommand=function(self)
+    assert(self:LoadFromCurrentSongBackground() == self)
+    assert(self:GetWidth() == 100 and self:GetHeight() == 50)
+    bg_fit_functions.BackgroundFitMode_CoverDistort(self, 300, 100)
+    assert(self:GetZoomX() == 3 and self:GetZoomY() == 2)
+    bg_fit_functions.BackgroundFitMode_CoverPreserve(self, 300, 100)
+    assert(self:GetZoomX() == 3 and self:GetZoomY() == 3)
+    bg_fit_functions.BackgroundFitMode_FitInside(self, 300, 100)
+    assert(self:GetZoomX() == 2 and self:GetZoomY() == 2)
+    bg_fit_functions.BackgroundFitMode_FitInsideAvoidLetter(self, 300, 100)
+    assert(self:GetZoomX() == 2)
+    bg_fit_functions.BackgroundFitMode_FitInsideAvoidPillar(self, 300, 100)
+    assert(self:GetZoomX() == 3)
+end}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Background helpers");
+        context.screen_height = 720.0;
+        test_compile_song_lua(&entry, &context).unwrap();
+        assert!(!song_dir.join("must-not-write.txt").exists());
+    }
+
+    #[test]
+    fn compile_song_lua_preserves_effect_timing_when_holding_at_full() {
+        let song_dir = test_dir("effect-hold-at-full");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{OnCommand=function(self)
+        self:bob():effectperiod(2):effect_hold_at_full(3)
+    end},
+    Def.Quad{OnCommand=function(self)
+        self:bob():effecttiming(1, 2, 3, 4, 5):effect_hold_at_full(6)
+        assert(not pcall(function() self:effect_hold_at_full(-1) end))
+    end},
+}
+"#,
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Effect hold"),
+        )
+        .unwrap();
+        assert_eq!(
+            compiled.overlays[0].initial_state.effect_timing,
+            Some([1.0, 0.0, 1.0, 3.0, 0.0])
+        );
+        assert_eq!(compiled.overlays[0].initial_state.effect_period, 5.0);
+        assert_eq!(
+            compiled.overlays[1].initial_state.effect_timing,
+            Some([1.0, 2.0, 3.0, 6.0, 4.0])
+        );
+        assert_eq!(compiled.overlays[1].initial_state.effect_period, 16.0);
     }
 
     #[test]

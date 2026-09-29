@@ -246,3 +246,77 @@ fn lua_song_corpus_smoke_compiles_in_deadsync() {
 fn lua_song_corpus_fully_compiles_in_deadsync() {
     assert_corpus_compiles(None);
 }
+
+#[test]
+#[ignore = "full-song compile checks for charts without complete reference traces"]
+fn reported_song_lua_failures_compile() {
+    paths::init();
+    let root = workspace_root().join("lua-songs");
+    let filter = std::env::var("SONG_LUA_COMPILE_FILTER").unwrap_or_default();
+    let limit = std::env::var("SONG_LUA_COMPILE_SECONDS")
+        .ok()
+        .map(|value| value.parse::<f32>().expect("numeric compile duration"));
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for relative in [
+        "Apollo/Apollo.ssc",
+        "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+        "mawaru7/mawaru7.sm",
+        "mawaru8/mawaru8.sm",
+        "mawaru6/mawaru6.sm",
+        "mawaru4/mawaru4.sm",
+        "Igaku/Igaku.ssc",
+        "flowers/flowers.ssc",
+        "Do the Mario/DoTheMario.ssc",
+        "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+    ] {
+        if !relative.contains(&filter) {
+            continue;
+        }
+        let simfile = root.join(relative);
+        let song = parse_song(&simfile);
+        let entries = song
+            .background_lua_changes
+            .iter()
+            .map(|change| change.path.as_path())
+            .chain(
+                song.foreground_lua_changes
+                    .iter()
+                    .map(|change| change.path.as_path()),
+            )
+            .collect::<Vec<_>>();
+        assert!(!entries.is_empty(), "{relative} has no Lua entries");
+        let primary = song
+            .foreground_lua_changes
+            .iter()
+            .position(|change| change.start_beat <= 0.0)
+            .map_or(0, |index| song.background_lua_changes.len() + index);
+        let mut context = SongLuaCompileContext::new(
+            simfile.parent().expect("song directory"),
+            song.title.clone(),
+        );
+        context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
+        context.song_timing_bpms = deadsync_song_lua::parse_song_timing_bpms(&song.normalized_bpms);
+        context.music_length_seconds = limit.map_or(song.precise_last_second(), |limit| {
+            limit.min(song.precise_last_second())
+        });
+        context.video_renderers = "opengl,software".to_owned();
+        for player in &mut context.players {
+            player.enabled = true;
+            player.difficulty = SongLuaDifficulty::Challenge;
+        }
+        checked += 1;
+        match compile_song_lua_layers(&entries, primary, &context) {
+            Ok(compiled) => {
+                assert_eq!(compiled.len(), entries.len());
+                eprintln!("{relative}: COMPILED ({} layers)", compiled.len());
+            }
+            Err(error) => {
+                eprintln!("{relative}: FAILED: {error}");
+                failures.push(format!("{relative}: {error}"));
+            }
+        }
+    }
+    assert!(checked > 0, "no charts matched {filter:?}");
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}

@@ -50,8 +50,9 @@ fn parse_lua_cmd_call(source: &str, open: usize, out: &mut String) -> Result<usi
 }
 
 fn lua_cmd_function(body: &str, out: &mut String) -> Result<(), String> {
+    let body = lua_cmd_without_comments(body)?;
     out.push_str("function(self) ");
-    for command in lua_cmd_commands(body)? {
+    for command in lua_cmd_commands(&body)? {
         let command = command.trim();
         if command.is_empty() {
             continue;
@@ -73,6 +74,35 @@ fn lua_cmd_function(body: &str, out: &mut String) -> Result<(), String> {
     }
     out.push_str("return self end");
     Ok(())
+}
+
+fn lua_cmd_without_comments(body: &str) -> Result<String, String> {
+    let mut out = String::with_capacity(body.len());
+    let mut index = 0;
+    while index < body.len() {
+        if body[index..].starts_with("--") {
+            let end = lua_comment_end(body, index);
+            out.push(' ');
+            out.extend(body[index..end].chars().filter(|&ch| ch == '\n'));
+            index = end;
+            continue;
+        }
+        let end = if matches!(body.as_bytes()[index], b'\'' | b'"') {
+            lua_quoted_end(body, index)?
+        } else if let Some(open_end) = lua_long_bracket_end(body, index) {
+            lua_long_string_end(body, index, open_end)?
+        } else {
+            index
+                + body[index..]
+                    .chars()
+                    .next()
+                    .expect("character boundary")
+                    .len_utf8()
+        };
+        out.push_str(&body[index..end]);
+        index = end;
+    }
+    Ok(out)
 }
 
 fn lua_cmd_name(command: &str) -> Result<(&str, &str), String> {
@@ -224,6 +254,40 @@ mod tests {
         assert_eq!(
             preprocess_lua_cmd_syntax("return cmd(diffuse, 1, 0, 0, 1; zoom, 2)").unwrap(),
             "return function(self) self:diffuse(1, 0, 0, 1); self:zoom(2); return self end"
+        );
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_accepts_comments_between_commands_and_arguments() {
+        let source = r#"return cmd(
+            -- Disabled: x, 99; )
+            x, --[=[ ignored ; ) ]=] 12;
+            -- another command
+            settext, "--literal; )";
+            settext, [=[--long literal]=];
+            y, 34 -- trailing comment
+        )"#;
+        let lua = mlua::Lua::new();
+        let command = lua
+            .load(preprocess_lua_cmd_syntax(source).unwrap())
+            .eval::<mlua::Function>()
+            .unwrap();
+        let actor = lua
+            .load(
+                r#"return {
+            x = function(self, value) self.a = value end,
+            y = function(self, value) self.b = value end,
+            settext = function(self, value) self.label = (self.label or '') .. value end,
+        }"#,
+            )
+            .eval::<mlua::Table>()
+            .unwrap();
+        command.call::<mlua::Value>(actor.clone()).unwrap();
+        assert_eq!(actor.get::<i32>("a").unwrap(), 12);
+        assert_eq!(actor.get::<i32>("b").unwrap(), 34);
+        assert_eq!(
+            actor.get::<String>("label").unwrap(),
+            "--literal; )--long literal"
         );
     }
 

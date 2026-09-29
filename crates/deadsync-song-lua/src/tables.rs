@@ -2697,6 +2697,14 @@ fn create_rage_file_table(lua: &Lua) -> mlua::Result<Table> {
         })?,
     )?;
     file.set(
+        "PutLine",
+        lua.create_function(|lua, (_file, _line): (Table, String)| {
+            // Compilation records file writes as side effects, like Write.
+            note_song_lua_side_effect(lua)?;
+            Ok(2) // RageFileObj::PutLine returns the CRLF write's byte count.
+        })?,
+    )?;
+    file.set(
         "Read",
         lua.create_function(|_, _args: MultiValue| Ok(String::new()))?,
     )?;
