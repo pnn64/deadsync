@@ -83,6 +83,7 @@ mod lua_songs {
         brogamer => "BroGamer/BroGamer.ssc",
         step_your_game_up => "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
         slamurai => "Slamurai/Slamurai.ssc",
+        bank_account => "Bank Account/Bank Account.ssc",
     }
 }
 

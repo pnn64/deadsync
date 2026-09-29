@@ -31,6 +31,13 @@
       "status": "ok"
     },
     {
+      "simfile": "Bank Account/Bank Account.ssc",
+      "fixture": "Bank Account/Bank Account.ssc.semantic.json",
+      "title": "Bank Account",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "BroGamer/BroGamer.ssc",
       "fixture": "BroGamer/BroGamer.ssc.semantic.json",
       "title": "BroGamer",
