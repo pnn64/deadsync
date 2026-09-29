@@ -197,6 +197,8 @@ struct NativeTweenOperation {
 
 #[derive(Deserialize)]
 struct NativeOperationTrack {
+    /// Empty for calls on non-actor objects such as `SoundManager`.
+    #[serde(default)]
     actor: String,
     operation: String,
     samples: Vec<(u64, f32, f32, Vec<Value>)>,
@@ -495,7 +497,18 @@ fn compile_trace_song_at(
                         .difficulty
                         .eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
             })
-            .expect("reference chart timing");
+            .unwrap_or_else(|| {
+                panic!(
+                    "DeadSync has no chart matching ITGmania's {} {} {:?}; its charts are {:?}",
+                    trace.steps_type,
+                    trace.difficulty,
+                    trace.description,
+                    song.charts
+                        .iter()
+                        .map(|chart| (&chart.chart_type, &chart.difficulty, &chart.description))
+                        .collect::<Vec<_>>()
+                )
+            });
         let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
             &song,
             &[chart_index],
@@ -535,10 +548,22 @@ fn compile_trace_song_at(
         player_x
     };
     let enabled_players = trace.enabled_players.unwrap_or([true; 2]);
+    // The oracle ran the chart it recorded; older fixtures record none.
+    let difficulty = [
+        SongLuaDifficulty::Beginner,
+        SongLuaDifficulty::Easy,
+        SongLuaDifficulty::Medium,
+        SongLuaDifficulty::Hard,
+        SongLuaDifficulty::Challenge,
+        SongLuaDifficulty::Edit,
+    ]
+    .into_iter()
+    .find(|difficulty| difficulty.sm_name() == trace.difficulty)
+    .unwrap_or(SongLuaDifficulty::Challenge);
     context.players = [
         SongLuaPlayerContext {
             enabled: enabled_players[0],
-            difficulty: SongLuaDifficulty::Challenge,
+            difficulty,
             speedmod: SongLuaSpeedMod::X(1.0),
             screen_x: player_x[0],
             screen_y: context.screen_height * 0.5,
@@ -546,7 +571,7 @@ fn compile_trace_song_at(
         },
         SongLuaPlayerContext {
             enabled: enabled_players[1],
-            difficulty: SongLuaDifficulty::Challenge,
+            difficulty,
             speedmod: SongLuaSpeedMod::X(1.0),
             screen_x: player_x[1],
             screen_y: context.screen_height * 0.5,

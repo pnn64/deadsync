@@ -24,9 +24,51 @@
   },
   "simfiles": [
     {
+      "simfile": "(R10) Warp Zone/warp zone.ssc",
+      "fixture": "(R10) Warp Zone/warp zone.ssc.semantic.json",
+      "title": "Warp Zone",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "fixture": "(R5) Let Me Hear That/let me hear that.sm.semantic.json",
+      "title": "Let Me Hear That",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "fixture": "(R6) Waltz Capriccio/waltz_capriccio.ssc.semantic.json",
+      "title": "Waltz Capriccio",
+      "lua_entries": 2,
+      "status": "ok"
+    },
+    {
+      "simfile": "666/666.ssc",
+      "fixture": "666/666.ssc.semantic.json",
+      "title": "666",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "7th Gear/7th Gear.ssc",
       "fixture": "7th Gear/7th Gear.ssc.semantic.json",
       "title": "7th Gear",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "And Drugs/and drugs.ssc",
+      "fixture": "And Drugs/and drugs.ssc.semantic.json",
+      "title": "And Drugs\u2191\u2191",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Bad Apple!!/Bad Apple!!.sm",
+      "fixture": "Bad Apple!!/Bad Apple!!.sm.semantic.json",
+      "title": "Bad Apple!!",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -35,6 +77,13 @@
       "fixture": "Bank Account/Bank Account.ssc.semantic.json",
       "title": "Bank Account",
       "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Brain Power - [Cardboard Box]/Brain Power.ssc",
+      "fixture": "Brain Power - [Cardboard Box]/Brain Power.ssc.semantic.json",
+      "title": "Brain Power",
+      "lua_entries": 3,
       "status": "ok"
     },
     {
@@ -59,9 +108,79 @@
       "status": "ok"
     },
     {
+      "simfile": "Flying Castle/flying castle.ssc",
+      "fixture": "Flying Castle/flying castle.ssc.semantic.json",
+      "title": "Flying Castle",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Goodbye/Goodbye.ssc",
+      "fixture": "Goodbye/Goodbye.ssc.semantic.json",
+      "title": "Goodbye",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "I (Ai)/I (Ai).ssc",
+      "fixture": "I (Ai)/I (Ai).ssc.semantic.json",
+      "title": "I",
+      "lua_entries": 2,
+      "status": "ok"
+    },
+    {
+      "simfile": "Karachi/Jorts - Karachi.ssc",
+      "fixture": "Karachi/Jorts - Karachi.ssc.semantic.json",
+      "title": "Karachi",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "fixture": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc.semantic.json",
+      "title": "Lake of Lost Nostalgia",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Levels/levels-fakemines.ssc",
       "fixture": "Levels/levels-fakemines.ssc.semantic.json",
       "title": "Levels",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Macarena/Macarena.ssc",
+      "fixture": "Macarena/Macarena.ssc.semantic.json",
+      "title": "Macarena",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "fixture": "Megalovania SM5 [TaroNuke]/megalovania.ssc.semantic.json",
+      "title": "MEGALOVANIA",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+      "fixture": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc.semantic.json",
+      "title": "Oshama Scramble!",
+      "lua_entries": 2,
+      "status": "ok"
+    },
+    {
+      "simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "fixture": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc.semantic.json",
+      "title": "Rainbow Road",
+      "lua_entries": 4,
+      "status": "ok"
+    },
+    {
+      "simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "fixture": "Sharkmode [Ky_Dash]/Sharkmode.ssc.semantic.json",
+      "title": "Sharkmode",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -90,6 +209,97 @@
       "simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
       "fixture": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc.semantic.json",
       "title": "[3752] [09] Who the Hell Is Edgar?",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "fixture": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc.semantic.json",
+      "title": "[CRYSTAL_ACCESS]",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
+      "fixture": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc.semantic.json",
+      "title": "[FULL SONG] ChikuTaku",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
+      "fixture": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc.semantic.json",
+      "title": "[FULL SONG] \u82b1\u6708\u30ce\u5922",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "[TPE2] LALA/lala.ssc",
+      "fixture": "[TPE2] LALA/lala.ssc.semantic.json",
+      "title": "LALA",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "broadcast/broadcast.ssc",
+      "fixture": "broadcast/broadcast.ssc.semantic.json",
+      "title": "\u653e\u9001",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "bunny-house/steps.sm",
+      "fixture": "bunny-house/steps.sm.semantic.json",
+      "title": "Bunny House",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+      "fixture": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc.semantic.json",
+      "title": "\u200b#feelyourtouch e.d.e.n",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "finite/sta - Finite.sm",
+      "fixture": "finite/sta - Finite.sm.semantic.json",
+      "title": "finite",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "fof_guys/fof.ssc",
+      "fixture": "fof_guys/fof.ssc.semantic.json",
+      "title": "Fof Guys",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "mawaru2/mawaru2.sm",
+      "fixture": "mawaru2/mawaru2.sm.semantic.json",
+      "title": "MAWARU 2",
+      "lua_entries": 8,
+      "status": "ok"
+    },
+    {
+      "simfile": "mawaru3/mawaru3.sm",
+      "fixture": "mawaru3/mawaru3.sm.semantic.json",
+      "title": "MAWARU 3 ~SURViVOR~",
+      "lua_entries": 34,
+      "status": "ok"
+    },
+    {
+      "simfile": "mawaru5/mawaru5.sm",
+      "fixture": "mawaru5/mawaru5.sm.semantic.json",
+      "title": "MAWARU FINALE",
+      "lua_entries": 41,
+      "status": "ok"
+    },
+    {
+      "simfile": "panopticon/panopticon.ssc",
+      "fixture": "panopticon/panopticon.ssc.semantic.json",
+      "title": "Panopticon",
       "lua_entries": 1,
       "status": "ok"
     }

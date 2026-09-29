@@ -88,6 +88,14 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     value,
                 })
             };
+            // Hallway and Distant set perspective tilt and reset skew.
+            let mut set_option = |key: String, value: f32| match key.as_str() {
+                "hallway" | "distant" => {
+                    push("tilt".into(), if key == "hallway" { -value } else { value });
+                    push("skew".into(), 0.0);
+                }
+                _ => push(key, value),
+            };
             if operation == "FromString" {
                 let raw = args
                     .first()
@@ -100,18 +108,11 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                         *unsupported.entry(part.clone()).or_default() += 1;
                         continue;
                     };
-                    let key = key.to_string();
-                    match key.as_str() {
-                        "hallway" | "distant" => {
-                            push("tilt".into(), if key == "hallway" { -value } else { value });
-                            push("skew".into(), 0.0);
-                        }
-                        _ => push(key, value),
-                    }
+                    set_option(key.to_string(), value);
                 }
             } else {
                 match value_f32(args.first()) {
-                    Some(value) => push(operation.to_ascii_lowercase(), value),
+                    Some(value) => set_option(operation.to_ascii_lowercase(), value),
                     None => {
                         let target = args.first().map_or_else(String::new, Value::to_string);
                         *unsupported
