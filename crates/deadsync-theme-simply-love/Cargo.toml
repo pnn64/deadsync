@@ -34,7 +34,7 @@ deadsync-theme = { path = "../deadsync-theme" }
 deadsync-version = { path = "../deadsync-version" }
 bitflags = "2.13.2"
 chrono = "0.4.45"
-glam = "0.33.8"
+glam = "0.33.11"
 image = "0.25.10"
 log = "0.4.34"
 memchr = "2.8.3"

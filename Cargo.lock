@@ -478,9 +478,9 @@ dependencies = [
 
 [[package]]
 name = "btleplug"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbd99d9109865e385227c69c27dd97e090834a3c5b2ceb19172a7fcf17312cc7"
+checksum = "ea3b8e1364e25155f481cabb5a4fce097a73b84f3493ff1930c2c642d44fc858"
 dependencies = [
  "async-trait",
  "bitflags 2.13.2",
@@ -2418,9 +2418,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.33.10"
+version = "0.33.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "928452f9c953e142b2f0973e4bd5f34445fcaa8069556ea97a3c9d34d15a4cf8"
+checksum = "35b4e837a1d133645d1dcf283e146a4b9901e390a1c13545f959cfed3a72f24f"
 
 [[package]]
 name = "glow"
@@ -3128,9 +3128,9 @@ dependencies = [
 
 [[package]]
 name = "luajit-src"
-version = "210.7.3+1ee778a"
+version = "210.7.4+c6ffc14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "869665372263eb337b14f480cfb864b89f12eade4eb42cb415f71517b4a67572"
+checksum = "1db548b001f0b7da416daf0ffae963912bae6cad1799fa9f4eaba09da6dba837"
 dependencies = [
  "cc",
  "which",
