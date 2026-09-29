@@ -7943,6 +7943,34 @@ pub fn install_actor_parent_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
     Ok(())
 }
 
+fn compact_actor_children(actor: &Table) -> mlua::Result<()> {
+    let mut entries = smallvec::SmallVec::<[(i64, Value); 16]>::new();
+    let mut last_index = 0;
+    actor.for_each::<Value, Value>(|key, value| {
+        if let Value::Integer(index) = key
+            && index > 0
+        {
+            last_index = last_index.max(index);
+            entries.push((index, value));
+        }
+        Ok(())
+    })?;
+    if last_index == entries.len() as i64 {
+        return Ok(());
+    }
+    // LoadActor helpers can return nil inside an actor definition. ITGmania
+    // still loads children beyond those holes. Compact once at initialization
+    // so every subsequent sequence walk sees the complete tree in index order.
+    entries.sort_unstable_by_key(|(index, _)| *index);
+    for (index, _) in &entries {
+        actor.raw_set(*index, Value::Nil)?;
+    }
+    for (index, (_, value)) in entries.into_iter().enumerate() {
+        actor.raw_set(index + 1, value)?;
+    }
+    Ok(())
+}
+
 pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor
         .get::<Option<bool>>("__songlua_init_commands_ran")?
@@ -7950,6 +7978,7 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     {
         return Ok(());
     }
+    compact_actor_children(actor)?;
     run_actor_named_command(lua, actor, "InitCommand")?;
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {

@@ -14672,6 +14672,7 @@ return Def.ActorFrame{
         let song_dir = test_dir("shared-layer-globals");
         let background = song_dir.join("background.lua");
         let foreground = song_dir.join("foreground.lua");
+        fs::write(song_dir.join("helpers.lua"), "helper_loaded = true").unwrap();
         fs::write(
             &background,
             r#"
@@ -14705,8 +14706,11 @@ return Def.ActorFrame{
     MovePoleCommand=function(self)
         shared_poles[1]:x(123)
     end,
+    Def.Actor{},
+    LoadActor("helpers.lua"),
     Def.Actor{
         InitCommand=function(self)
+            assert(helper_loaded)
             shared_poles = {}
         end,
     },
@@ -14725,17 +14729,82 @@ return Def.ActorFrame{
         assert_eq!(compiled.len(), 2);
         assert_eq!(compiled[0].overlays.len(), 1);
         assert_eq!(compiled[0].overlays[0].name.as_deref(), Some("SharedPole"));
-        assert_eq!(compiled[0].overlays[0].initial_state.x, 123.0);
-        assert_eq!(compiled[0].overlays[0].message_commands.len(), 1);
-        assert_eq!(
-            compiled[0].overlays[0].message_commands[0].blocks[0]
-                .delta
-                .x,
-            Some(240.0)
-        );
-        assert_eq!(compiled[0].messages[0].beat, 4.0);
+        assert_eq!(compiled[0].overlays[0].initial_state.x, 0.0);
+        assert_eq!(compiled[0].overlays[0].message_commands.len(), 2);
+        let startup = compiled[0].overlays[0]
+            .message_commands
+            .iter()
+            .find(|command| command.message == "__songlua_queued_startup")
+            .unwrap();
+        assert_eq!(startup.blocks[0].delta.x, Some(123.0));
+        let movement = compiled[0]
+            .messages
+            .iter()
+            .find(|event| event.beat == 4.0)
+            .unwrap();
+        let command = compiled[0].overlays[0]
+            .message_commands
+            .iter()
+            .find(|command| command.message == movement.message)
+            .unwrap();
+        assert_eq!(command.blocks[0].delta.x, Some(240.0));
         assert!(compiled[1].overlays.is_empty());
-        assert_eq!(compiled[1].messages[0].beat, 4.0);
+        assert!(
+            compiled[1]
+                .messages
+                .iter()
+                .any(|event| { event.beat == movement.beat && event.message == movement.message })
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_loads_sparse_actor_children() {
+        let song_dir = test_dir("sparse-actor-children");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {{4, "Move", true}}
+local actor = Def.ActorFrame{}
+actor[2] = Def.Quad{
+    Name="First",
+    InitCommand=function(self) self:x(12) end,
+    OnCommand=function(self) self:y(34) end,
+    MoveMessageCommand=function(self) self:x(56) end,
+}
+actor[1000000] = Def.ActorFrame{
+    [3] = Def.Quad{
+        Name="Last",
+        InitCommand=function(self) self:x(78) end,
+        OnCommand=function(self) self:y(90) end,
+        MoveMessageCommand=function(self) self:x(123) end,
+    },
+}
+return actor
+"#,
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Sparse Actor Children"),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlays.len(), 2);
+        for (actor, (name, x, y, moved_x)) in compiled
+            .overlays
+            .iter()
+            .zip([("First", 12.0, 34.0, 56.0), ("Last", 78.0, 90.0, 123.0)])
+        {
+            assert_eq!(actor.name.as_deref(), Some(name));
+            assert_eq!(actor.initial_state.x, x);
+            assert_eq!(actor.initial_state.y, y);
+            let command = actor
+                .message_commands
+                .iter()
+                .find(|command| command.message == "Move")
+                .unwrap();
+            assert_eq!(command.blocks[0].delta.x, Some(moved_x));
+        }
     }
 
     #[test]

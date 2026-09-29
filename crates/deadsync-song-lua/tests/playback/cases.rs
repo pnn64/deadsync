@@ -5289,6 +5289,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
         kind: SongLuaOverlayKind::Model {
             layers: Arc::from(vec![SongLuaOverlayModelLayer {
                 texture_key: Arc::from(texture_key.as_str()),
+                additive: None,
                 vertices: Arc::from(vec![
                     TexturedMeshVertex {
                         normal: [0.0; 4],
