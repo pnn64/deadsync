@@ -1,5 +1,7 @@
 use mlua::{Function, Lua, Table, Value};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
+use std::rc::Rc;
 use std::time::Instant;
 
 use crate::{
@@ -129,6 +131,264 @@ pub struct SongLuaPerframePlayerState {
 }
 
 pub type SongLuaUpdateModState = BTreeMap<String, f32>;
+
+trait ModState {
+    fn entries(&self) -> impl Iterator<Item = (&str, &f32)>;
+    fn get(&self, key: &str) -> Option<&f32>;
+    fn is_empty(&self) -> bool;
+}
+
+impl ModState for SongLuaUpdateModState {
+    fn entries(&self) -> impl Iterator<Item = (&str, &f32)> {
+        self.iter().map(|(key, value)| (key.as_str(), value))
+    }
+
+    fn get(&self, key: &str) -> Option<&f32> {
+        BTreeMap::get(self, key)
+    }
+
+    fn is_empty(&self) -> bool {
+        BTreeMap::is_empty(self)
+    }
+}
+
+// Immutable frame snapshots share names for the lifetime of one compilation.
+// Sorted, compact storage preserves BTreeMap traversal and lookup semantics.
+#[derive(Clone, Default)]
+struct ModSnapshot(Box<[(Rc<str>, f32)]>);
+
+impl ModState for ModSnapshot {
+    fn entries(&self) -> impl Iterator<Item = (&str, &f32)> {
+        self.0.iter().map(|(key, value)| (key.as_ref(), value))
+    }
+
+    fn get(&self, key: &str) -> Option<&f32> {
+        self.0
+            .binary_search_by(|(name, _)| name.as_ref().cmp(key))
+            .ok()
+            .map(|index| &self.0[index].1)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+#[derive(Default)]
+struct ModSnapshotScratch {
+    names: FxHashSet<Rc<str>>,
+    lua_names: FxHashMap<usize, (mlua::LuaString, Rc<str>)>,
+    entries: Vec<(Rc<str>, f32)>,
+}
+
+fn snapshot_name_error(error: mlua::Error) -> mlua::Error {
+    // Borrow the name on success, but retain String's conversion diagnostics.
+    match error {
+        mlua::Error::FromLuaConversionError { from, to, message } if to == "string" => {
+            mlua::Error::FromLuaConversionError {
+                from,
+                to: "String".into(),
+                message,
+            }
+        }
+        error => error,
+    }
+}
+
+struct SnapshotName(mlua::LuaString);
+
+impl mlua::FromLua for SnapshotName {
+    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+        let name = mlua::LuaString::from_lua(value, lua).map_err(snapshot_name_error)?;
+        Ok(Self(name))
+    }
+}
+
+impl ModSnapshotScratch {
+    fn lua_name(&mut self, name: SnapshotName) -> mlua::Result<Rc<str>> {
+        let pointer = name.0.to_pointer() as usize;
+        if let Some((_, key)) = self.lua_names.get(&pointer) {
+            return Ok(Rc::clone(key));
+        }
+        let text = name.0.to_str()?;
+        let key = if let Some(key) = self.names.get(text.as_ref()) {
+            Rc::clone(key)
+        } else {
+            let key: Rc<str> = Rc::from(text.as_ref());
+            self.names.insert(Rc::clone(&key));
+            key
+        };
+        drop(text);
+        // Retain the Lua string so GC cannot recycle its pointer for a new name.
+        self.lua_names.insert(pointer, (name.0, Rc::clone(&key)));
+        Ok(key)
+    }
+
+    fn insert(&mut self, key: &str, value: f32) {
+        let name = if let Some(name) = self.names.get(key) {
+            Rc::clone(name)
+        } else {
+            let name: Rc<str> = Rc::from(key);
+            self.names.insert(Rc::clone(&name));
+            name
+        };
+        self.entries.push((name, value));
+    }
+
+    fn finish(&mut self) -> ModSnapshot {
+        self.entries.sort_by(|a, b| a.0.cmp(&b.0));
+        // Lua numeric keys can coerce to the same name as string keys.
+        // Keep the last iteration value, just as BTreeMap::insert did.
+        self.entries.dedup_by(|next, previous| {
+            if next.0 == previous.0 {
+                std::mem::swap(next, previous);
+                true
+            } else {
+                false
+            }
+        });
+        ModSnapshot(self.entries.as_slice().into())
+    }
+
+    fn override_value(&mut self, key: &str, value: f32) {
+        if let Some((_, previous)) = self
+            .entries
+            .iter_mut()
+            .rev()
+            .find(|(name, _)| &**name == key)
+        {
+            *previous = value;
+        } else {
+            self.insert(key, value);
+        }
+    }
+
+    fn sample(&mut self, table: &Table, reverse: Option<f32>) -> Result<ModSnapshot, String> {
+        self.entries.clear();
+        if let Some(state) = table
+            .raw_get::<Option<Table>>("__songlua_player_option_state")
+            .map_err(|err| err.to_string())?
+        {
+            state
+                .for_each::<SnapshotName, Value>(|key, value| {
+                    let key = self.lua_name(key)?;
+                    let value = match value {
+                        Value::Boolean(value) => f32::from(value),
+                        value => match read_f32(value) {
+                            Some(value) => value,
+                            None => return Ok(()),
+                        },
+                    };
+                    self.entries.push((key, value));
+                    Ok(())
+                })
+                .map_err(|err| err.to_string())?;
+        }
+        let active_speed = table
+            .raw_get::<Option<SnapshotName>>("__songlua_speedmod_active")
+            .map_err(|err| err.to_string())?;
+        let active_speed = active_speed
+            .map(|name| self.lua_name(name))
+            .transpose()
+            .map_err(|err| {
+                // raw_get<String> uses String's stack conversion diagnostics.
+                let err = match err {
+                    mlua::Error::FromLuaConversionError { from, message, .. } => {
+                        mlua::Error::FromLuaConversionError {
+                            from,
+                            to: "String".into(),
+                            message,
+                        }
+                    }
+                    err => err,
+                };
+                err.to_string()
+            })?;
+        for (key, state_key) in [
+            ("xmod", "__songlua_speedmod_xmod"),
+            ("cmod", "__songlua_speedmod_cmod"),
+            ("mmod", "__songlua_speedmod_mmod"),
+        ] {
+            if active_speed.as_deref().is_some_and(|active| active != key) {
+                continue;
+            }
+            if let Some(value) = table
+                .get::<Option<f32>>(state_key)
+                .map_err(|err| err.to_string())?
+            {
+                self.override_value(key, value);
+            }
+        }
+        if let Some(reverse) = reverse {
+            self.override_value("reverse", reverse);
+        }
+        Ok(self.finish())
+    }
+
+    fn speeds(&mut self, lua: &Lua, table: &Table) -> Result<ModSnapshot, String> {
+        self.entries.clear();
+        if let Some(table) = table
+            .raw_get::<Option<Table>>("__songlua_player_option_speeds")
+            .map_err(|err| err.to_string())?
+        {
+            // Convert the key before the speed, matching pairs<String, f32>.
+            table
+                .for_each::<SnapshotName, Value>(|key, value| {
+                    let key = self.lua_name(key)?;
+                    let value = <f32 as mlua::FromLua>::from_lua(value, lua)?;
+                    self.entries.push((key, value));
+                    Ok(())
+                })
+                .map_err(|err| err.to_string())?;
+        }
+        Ok(self.finish())
+    }
+
+    fn states(
+        &mut self,
+        lua: &Lua,
+        tables: &[Table; LUA_PLAYERS],
+    ) -> Result<[ModSnapshot; LUA_PLAYERS], String> {
+        let mut states = [
+            self.sample(&tables[0], None)?,
+            self.sample(&tables[1], None)?,
+        ];
+        // Read note columns after both option tables, preserving getter order.
+        for (state, reverse) in states
+            .iter_mut()
+            .zip(crate::read_note_column_position_reverse_percents(lua)?)
+        {
+            if let Some(reverse) = reverse {
+                if let Ok(index) = state
+                    .0
+                    .binary_search_by(|(key, _)| key.as_ref().cmp("reverse"))
+                {
+                    state.0[index].1 = reverse;
+                } else {
+                    self.entries.clear();
+                    self.entries.extend_from_slice(&state.0);
+                    self.insert("reverse", reverse);
+                    *state = self.finish();
+                }
+            }
+        }
+        Ok(states)
+    }
+
+    fn player_speeds(
+        &mut self,
+        lua: &Lua,
+        tables: &[Table; LUA_PLAYERS],
+    ) -> Result<[ModSnapshot; LUA_PLAYERS], String> {
+        Ok([self.speeds(lua, &tables[0])?, self.speeds(lua, &tables[1])?])
+    }
+}
+
+fn frame_buffer<T>(first: T, samples: usize) -> Vec<T> {
+    let mut buffer = Vec::with_capacity(samples);
+    buffer.push(first);
+    buffer
+}
 
 pub fn read_perframe_entries(table: Option<Table>) -> Result<Vec<SongLuaPerframeEntry>, String> {
     let Some(table) = table else {
@@ -416,6 +676,7 @@ pub fn current_update_mod_states(
     ])
 }
 
+#[cfg(test)]
 fn current_update_mod_speeds(
     tables: &[Table; LUA_PLAYERS],
 ) -> Result<[SongLuaUpdateModState; LUA_PLAYERS], String> {
@@ -434,6 +695,7 @@ fn current_update_mod_speeds(
     Ok(speeds)
 }
 
+#[cfg(test)]
 fn current_update_mod_states_with_note_columns(
     lua: &Lua,
     tables: &[Table; LUA_PLAYERS],
@@ -940,24 +1202,23 @@ pub fn push_update_mod_targets(
     );
 }
 
-fn push_update_mod_targets_with_key(
+fn push_update_mod_targets_with_key<S: ModState>(
     out: &mut Vec<SongLuaEaseWindow>,
     start: f32,
     end: f32,
-    from_players: &[SongLuaUpdateModState; LUA_PLAYERS],
-    to_players: &[SongLuaUpdateModState; LUA_PLAYERS],
-    baseline_players: &[SongLuaUpdateModState; LUA_PLAYERS],
-    speeds: &[SongLuaUpdateModState; LUA_PLAYERS],
+    from_players: &[S; LUA_PLAYERS],
+    to_players: &[S; LUA_PLAYERS],
+    baseline_players: &[S; LUA_PLAYERS],
+    speeds: &[S; LUA_PLAYERS],
     last_windows: &mut BTreeMap<(usize, String), usize>,
     lookup_key: &mut (usize, String),
     unit: SongLuaTimeUnit,
 ) {
-    if from_players.iter().all(BTreeMap::is_empty) {
+    if from_players.iter().all(ModState::is_empty) {
         return;
     }
     for player in 0..LUA_PLAYERS {
-        for (key, &from) in &from_players[player] {
-            let key = key.as_str();
+        for (key, &from) in from_players[player].entries() {
             // Classify without allocating the name of a coalesced speed target.
             let Some(mut target) = runtime_player_option_ease_target(key, "") else {
                 continue;
@@ -1117,6 +1378,7 @@ fn push_update_overlay_value(
     track_indices: &mut std::collections::HashMap<
         (usize, crate::SongLuaOverlayUpdateTarget),
         usize,
+        impl std::hash::BuildHasher,
     >,
     overlay_index: usize,
     target: crate::SongLuaOverlayUpdateTarget,
@@ -1458,6 +1720,7 @@ fn capture_update_overlay_samples<Kind>(
     track_indices: &mut std::collections::HashMap<
         (usize, crate::SongLuaOverlayUpdateTarget),
         usize,
+        impl std::hash::BuildHasher,
     >,
     beat: f32,
     next_beat: f32,
@@ -1668,7 +1931,11 @@ fn apply_scheduled_overlay_states<Kind>(
 #[cfg(test)]
 fn merge_completed_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
-    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, SongLuaOverlayUpdateTarget),
+        usize,
+        impl std::hash::BuildHasher,
+    >,
     baseline: &[SongLuaOverlayState],
     update_states: &mut [SongLuaOverlayState],
     to_states: &mut [SongLuaOverlayState],
@@ -1690,7 +1957,11 @@ fn merge_completed_scheduled_overlay_samples(
 #[allow(clippy::too_many_arguments)]
 fn merge_completed_scheduled_overlay_samples_into(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
-    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, SongLuaOverlayUpdateTarget),
+        usize,
+        impl std::hash::BuildHasher,
+    >,
     baseline: &[SongLuaOverlayState],
     update_states: &mut [SongLuaOverlayState],
     to_states: &mut [SongLuaOverlayState],
@@ -1752,7 +2023,11 @@ fn append_ordered_overlay_sample(
 
 fn merge_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
-    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, SongLuaOverlayUpdateTarget),
+        usize,
+        impl std::hash::BuildHasher,
+    >,
     baseline: &[SongLuaOverlayState],
     mut scheduled: Vec<SongLuaScheduledOverlaySample>,
 ) {
@@ -1761,7 +2036,11 @@ fn merge_scheduled_overlay_samples(
 
 fn merge_scheduled_overlay_samples_from_buffer(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
-    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, SongLuaOverlayUpdateTarget),
+        usize,
+        impl std::hash::BuildHasher,
+    >,
     baseline: &[SongLuaOverlayState],
     scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
 ) {
@@ -1943,12 +2222,17 @@ pub fn compile_update_functions<Kind>(
     restore_started_message_states(lua, overlays, &replay_overlays, started)?;
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
-    let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
+    let mut mod_scratch = ModSnapshotScratch::default();
+    let baseline_mods = mod_scratch.states(lua, &option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
-    let mut sample_beats = vec![start];
+    let replay = update_function_replay_beats(context, start, end);
+    let sample_count = replay.len();
+    let mut sample_beats = frame_buffer(start, sample_count);
     let rate = f64::from(song_music_rate(context));
-    let mut sample_seconds =
-        vec![(f64::from(song_elapsed_seconds_at(start, context)) * rate) as f32];
+    let mut sample_seconds = frame_buffer(
+        (f64::from(song_elapsed_seconds_at(start, context)) * rate) as f32,
+        sample_count,
+    );
     let fallback_bpms = [(0.0, song_display_bps(context) * 60.0)];
     let bpms = if context.song_timing_bpms.is_empty() {
         fallback_bpms.as_slice()
@@ -1962,12 +2246,16 @@ pub fn compile_update_functions<Kind>(
         .iter()
         .flatten()
         .all(|timing| timing.matches_bpm_clock(bpms));
-    let mut player_samples = vec![baseline_players];
-    let mut mod_samples = vec![baseline_mods.clone()];
-    let mut mod_speed_samples = vec![current_update_mod_speeds(&option_tables)?];
-    let mut column_samples = vec![baseline_columns];
+    let mut player_samples = frame_buffer(baseline_players, sample_count);
+    let mut mod_samples = frame_buffer(baseline_mods.clone(), sample_count);
+    let mut mod_speed_samples = frame_buffer(
+        mod_scratch.player_speeds(lua, &option_tables)?,
+        sample_count,
+    );
+    let mut column_samples = frame_buffer(baseline_columns, sample_count);
     let mut overlay_tracks = Vec::new();
-    let mut overlay_track_indices = std::collections::HashMap::new();
+    // Keys are compiler-owned actor indices and target enum discriminants.
+    let mut overlay_track_indices = FxHashMap::default();
     let mut scheduled_overlay_samples = Vec::new();
     let mut overlay_sample_scratch = OverlaySampleScratch::default();
     let mut current_overlays = replay_overlays.clone();
@@ -1989,7 +2277,6 @@ pub fn compile_update_functions<Kind>(
         &mut overlay_sample_scratch,
     )?;
 
-    let replay = update_function_replay_beats(context, start, end);
     let mut beat = start;
     let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
     let mut scheduled_states = baseline_overlays.clone();
@@ -2050,11 +2337,8 @@ pub fn compile_update_functions<Kind>(
         player_samples.push(next_players);
         player_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        mod_samples.push(current_update_mod_states_with_note_columns(
-            lua,
-            &option_tables,
-        )?);
-        mod_speed_samples.push(current_update_mod_speeds(&option_tables)?);
+        mod_samples.push(mod_scratch.states(lua, &option_tables)?);
+        mod_speed_samples.push(mod_scratch.player_speeds(lua, &option_tables)?);
         mod_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         column_samples.push(read_note_column_transform_samples(lua)?);
@@ -2118,7 +2402,7 @@ pub fn compile_update_functions<Kind>(
         // value again later must start a new window after the intervening mode.
         for player in 0..LUA_PLAYERS {
             for key in ["xmod", "cmod", "mmod"] {
-                if !from_mods[player].contains_key(key) {
+                if from_mods[player].get(key).is_none() {
                     last_mod_lookup_key.0 = player;
                     last_mod_lookup_key.1.clear();
                     last_mod_lookup_key.1.push_str(key);
@@ -2618,3 +2902,7 @@ mod completed_work_perf;
 #[cfg(test)]
 #[path = "../tests/perf/perframe_stream.rs"]
 mod perframe_stream_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/frame_sampling.rs"]
+mod frame_sampling_perf;
