@@ -2760,38 +2760,32 @@ fn native_screen_vertices(sample: &[Value]) -> Option<Vec<[f32; 2]>> {
         .collect()
 }
 
-fn compiled_screen_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -> [[f32; 2]; 4] {
-    let [width, height] = state.size.unwrap_or(texture_size);
-    let align_x = (0.5 - state.halign) * width;
-    let align_y = (0.5 - state.valign) * height;
-    let [scale_x, scale_y] = overlay_state_axis_scale(state);
-    let (sin, cos) = state.rot_z_deg.to_radians().sin_cos();
-    [
-        [-width * 0.5, -height * 0.5],
-        [width * 0.5, -height * 0.5],
-        [width * 0.5, height * 0.5],
-        [-width * 0.5, height * 0.5],
-    ]
-    .map(|[x, y]| {
-        let scaled_x = (x + align_x) * scale_x;
-        let scaled_y = (y + align_y) * scale_y;
-        let skewed_y = state.skew_y.mul_add(scaled_x, scaled_y);
-        let skewed_x = state.skew_x.mul_add(skewed_y, scaled_x);
-        [
-            skewed_x.mul_add(cos, -skewed_y * sin) + state.x,
-            skewed_x.mul_add(sin, skewed_y * cos) + state.y,
-        ]
-    })
+fn compiled_world_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -> [[f32; 4]; 4] {
+    use deadsync_song_lua::playback::actor_conformance as actor;
+    let size = state.size.unwrap_or(texture_size);
+    let [sx, sy] = overlay_state_axis_scale(state);
+    let matrix = actor::sprite_matrix(
+        [state.x, state.y, state.z],
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+        [0.0; 3],
+        [sx, sy, deadsync_song_lua::overlay_state_z_scale(state)],
+        [1.0; 3],
+        size,
+        [state.halign, state.valign],
+        [state.skew_x, state.skew_y],
+    );
+    [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+        .map(|[x, y]| actor::project_world(matrix, [x * size[0], y * size[1], 0.0, 1.0]))
 }
 
 fn compiled_perspective_vertices(
     compiled: &CompiledSongLua,
     states: &[SongLuaOverlayState],
     index: usize,
+    state: SongLuaOverlayState,
     texture_size: [f32; 2],
 ) -> Option<[[f32; 2]; 4]> {
     use deadsync_song_lua::playback::actor_conformance as actor;
-    let state = states[index];
     let mut parent = compiled.overlays[index].parent_index;
     let camera = loop {
         let index = parent?;
@@ -2811,22 +2805,13 @@ fn compiled_perspective_vertices(
         camera.fov?,
         camera.vanishpoint.unwrap_or(screen.map(|axis| axis * 0.5)),
     );
-    let size = state.size.unwrap_or(texture_size);
-    let [sx, sy] = overlay_state_axis_scale(state);
-    let matrix = actor::sprite_matrix(
-        [state.x, state.y, state.z],
-        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
-        [0.0; 3],
-        [sx, sy, deadsync_song_lua::overlay_state_z_scale(state)],
-        [1.0; 3],
-        size,
-        [state.halign, state.valign],
-        [state.skew_x, state.skew_y],
-    );
-    let matrix = actor::multiply_matrices(projection, matrix);
-    let corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
-        .map(|[x, y]| actor::project_world(matrix, [x * size[0], y * size[1], 0.0, 1.0]));
-    if corners.iter().any(|corner| corner[3] <= 0.0) {
+    let corners = compiled_world_vertices(state, texture_size)
+        .map(|world| actor::project_world(projection, world));
+    // The reference records projected corners before GPU clipping, including
+    // negative W. Only an undefined perspective divide prevents comparison.
+    if corners.iter().any(|corner| {
+        corner.iter().any(|axis| !axis.is_finite()) || corner[3].abs() <= f32::EPSILON
+    }) {
         return None;
     }
     Some(corners.map(|[x, y, _, w]| {
@@ -2857,6 +2842,141 @@ fn vertex_center(vertices: &[[f32; 2]]) -> [f32; 2] {
         .fold([0.0, 0.0], |[x, y], vertex| [x + vertex[0], y + vertex[1]]);
     let count = vertices.len().max(1) as f32;
     [sum[0] / count, sum[1] / count]
+}
+
+#[test]
+fn projected_spin_matches_native_draws() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-actors/effects-vibration.json");
+    let native: Value = serde_json::from_slice(&fs::read(path).expect("native effect fixture"))
+        .expect("valid native effect fixture");
+    let samples = native["samples"]
+        .as_array()
+        .expect("native samples")
+        .iter()
+        .map(|sample| {
+            let spin = sample["actors"]
+                .as_array()
+                .expect("native actors")
+                .iter()
+                .find(|actor| actor["name"] == "spin")
+                .expect("native spin actor");
+            let vertices = spin["draws"][0]["vertices"]
+                .as_array()
+                .expect("native vertices")
+                .iter()
+                .map(|vertex| serde_json::json!([vertex["screen"][0], vertex["screen"][1]]))
+                .collect::<Vec<_>>();
+            serde_json::json!([sample["beat"], sample["time"], true, 1.0, [], [], vertices])
+        })
+        .collect::<Vec<_>>();
+    let trace: NativeTrace = serde_json::from_value(serde_json::json!({
+        "oracle": "itgmania_native_actor_conformance", "title": "spin", "style": "single",
+        "simfile": "", "roots": ["root"], "runtime_actors": [],
+        "actor_definitions": [
+            {"id": "root", "class": "ActorFrame", "children": [{"layer_index": 1, "definition_id": "spin"}]},
+            {"id": "spin", "class": "Quad", "name": "spin"}
+        ],
+        "timeline_tracks": [], "tween_tracks": [], "end_position": {"seconds": 1.0},
+        "display": {"width": 640, "height": 480, "logical_width": 640, "logical_height": 480},
+        "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 1.0,
+        "projected_vertex_tracks": [{"actor": "spin", "definition_id": "spin", "texture": "",
+            "texture_size": [64, 64], "camera_actor": "orthographic-screen", "sample_layout": [], "samples": samples}]
+    })).expect("native draw adapter");
+    let mut compiled = CompiledSongLua {
+        screen_width: 640.0,
+        screen_height: 480.0,
+        overlays: vec![
+            deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrame,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            },
+            deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: Some("spin".to_owned()),
+                parent_index: Some(0),
+                initial_state: SongLuaOverlayState {
+                    x: 380.0,
+                    y: 280.0,
+                    effect_mode: EffectMode::Spin,
+                    effect_magnitude: [30.0, 60.0, 90.0],
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            },
+        ],
+        ..CompiledSongLua::default()
+    };
+    let context = SongLuaCompileContext::new("", "spin");
+    let mut parity = Parity::default();
+    compare_projected_geometry(
+        &trace,
+        std::slice::from_ref(&compiled),
+        &context,
+        &mut parity,
+    );
+    parity.assert_complete("native spin draws");
+    assert!(parity.checks() > 4, "exercise nonzero effect times");
+    compiled.overlays[1].initial_state.effect_mode = EffectMode::None;
+    let mut stationary = Parity::default();
+    compare_projected_geometry(&trace, &[compiled], &context, &mut stationary);
+    assert!(
+        !stationary.gaps.is_empty(),
+        "stationary geometry must fail the native spin audit"
+    );
+}
+
+#[test]
+fn projected_corners_keep_negative_w() {
+    let camera = SongLuaOverlayState {
+        fov: Some(90.0),
+        ..SongLuaOverlayState::default()
+    };
+    let sprite = SongLuaOverlayState {
+        x: 320.0,
+        y: 240.0,
+        z: 321.0,
+        ..SongLuaOverlayState::default()
+    };
+    let compiled = CompiledSongLua {
+        screen_width: 640.0,
+        screen_height: 480.0,
+        overlays: vec![
+            deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::ActorFrame,
+                name: None,
+                parent_index: None,
+                initial_state: camera,
+                message_commands: Vec::new(),
+            },
+            deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: Some(0),
+                initial_state: sprite,
+                message_commands: Vec::new(),
+            },
+        ],
+        ..CompiledSongLua::default()
+    };
+    let vertices =
+        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2])
+            .expect("negative W is a defined perspective divide");
+    assert!(vertices.iter().flatten().all(|axis| axis.is_finite()));
+    assert!(
+        vertex_center(&vertices)
+            .iter()
+            .zip([320.0, 240.0])
+            .all(|(actual, expected)| (actual - expected).abs() <= 0.01)
+    );
+    let singular = SongLuaOverlayState { z: 320.0, ..sprite };
+    assert!(
+        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2])
+            .is_none()
+    );
 }
 
 fn compare_projected_geometry(
@@ -2909,9 +3029,17 @@ fn compare_projected_geometry(
                 .or_insert_with(|| {
                     compiled_overlay_states_at(&compiled[layer], context, beat, seconds)
                 });
-            let Some(state) = states.get(overlay_index).copied() else {
+            let Some(mut state) = states.get(overlay_index).copied() else {
                 continue;
             };
+            // Gameplay applies spin after composing the actor's local state.
+            // Compare the rendered rotation, rather than its stationary base.
+            if state.effect_mode == EffectMode::Spin {
+                let effect = deadsync_song_lua::playback::actor_conformance::effect_sample(
+                    state, seconds, beat,
+                );
+                [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
+            }
             let actual_visible = state.visible && state.diffuse[3] > 0.000_001;
             let visibility_matches = native_visible == actual_visible || {
                 let probe_beat = (beat
@@ -2965,17 +3093,18 @@ fn compare_projected_geometry(
                 continue;
             }
             let actual_vertices = if track.camera_actor == "orthographic-screen" {
-                compiled_screen_vertices(state, track.texture_size)
+                compiled_world_vertices(state, track.texture_size).map(|[x, y, _, _]| [x, y])
             } else {
                 let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
                 let Some(vertices) = compiled_perspective_vertices(
                     &compiled[layer],
                     states,
                     overlay_index,
+                    state,
                     track.texture_size,
                 ) else {
                     parity.check_once(false, &mut reported_bounds, || {
-                        format!("projected perspective geometry is untested for {definition_id}: missing camera or near-plane clipping at beat {beat:.3}")
+                        format!("projected perspective geometry is untested for {definition_id}: missing camera or undefined perspective divide at beat {beat:.3}")
                     });
                     continue;
                 };
