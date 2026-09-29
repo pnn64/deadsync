@@ -1718,6 +1718,20 @@ fn value_f32(value: Option<&Value>) -> Option<f32> {
     value.and_then(Value::as_f64).map(|value| value as f32)
 }
 
+fn projected_alpha(value: &Value) -> Option<f32> {
+    value_f32(Some(value)).or_else(|| {
+        if value.get("type")?.as_str()? != "number" {
+            return None;
+        }
+        match value.get("value")?.as_str()? {
+            "infinity" => Some(f32::INFINITY),
+            "-infinity" => Some(f32::NEG_INFINITY),
+            "nan" => Some(f32::NAN),
+            _ => None,
+        }
+    })
+}
+
 fn value_u32(value: Option<&Value>) -> Option<u32> {
     value
         .and_then(Value::as_u64)
@@ -3018,7 +3032,7 @@ fn compare_projected_geometry(
             let Some(native_visible) = sample.get(2).and_then(Value::as_bool) else {
                 continue;
             };
-            let Some(native_alpha) = sample.get(3).and_then(|value| value_f32(Some(value))) else {
+            let Some(native_alpha) = sample.get(3).and_then(projected_alpha) else {
                 parity.check_once(false, &mut reported_nonfinite, || {
                     format!("reference projected alpha is non-finite for {definition_id} at beat {beat:.3}")
                 });
@@ -3073,7 +3087,8 @@ fn compare_projected_geometry(
             });
             if native_visible && actual_visible {
                 parity.check_once(
-                    (native_alpha - state.diffuse[3]).abs() <= 0.03,
+                    native_alpha == state.diffuse[3]
+                        || (native_alpha - state.diffuse[3]).abs() <= 0.03,
                     &mut reported_alpha,
                     || {
                         format!(
@@ -3628,6 +3643,13 @@ fn itl_unlock_fixture_contexts() {
         [480.0, 480.0],
         "use a frame, not the full sprite sheet"
     );
+    let infinities = sprite
+        .samples
+        .iter()
+        .filter_map(|sample| sample.get(3).and_then(projected_alpha))
+        .filter(|alpha| alpha.is_infinite())
+        .collect::<Vec<_>>();
+    assert_eq!(infinities, [f32::INFINITY, f32::NEG_INFINITY]);
     let visible = sprite
         .samples
         .iter()

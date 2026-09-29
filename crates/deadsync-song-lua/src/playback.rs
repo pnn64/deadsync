@@ -5128,32 +5128,6 @@ fn song_lua_overlay_apply_blocks_cached(
     *block_state
 }
 
-fn song_lua_overlay_update_value_lerp(
-    from: &crate::SongLuaOverlayUpdateValue,
-    to: &crate::SongLuaOverlayUpdateValue,
-    t: f32,
-) -> crate::SongLuaOverlayUpdateValue {
-    use crate::SongLuaOverlayUpdateValue as Value;
-    let t = t.clamp(0.0, 1.0);
-    match (from, to) {
-        (Value::F32(from), Value::F32(to)) => Value::F32((to - from).mul_add(t, *from)),
-        (Value::Vec2(from), Value::Vec2(to)) => Value::Vec2(std::array::from_fn(|i| {
-            (to[i] - from[i]).mul_add(t, from[i])
-        })),
-        (Value::Vec3(from), Value::Vec3(to)) => Value::Vec3(std::array::from_fn(|i| {
-            (to[i] - from[i]).mul_add(t, from[i])
-        })),
-        (Value::Vec4(from), Value::Vec4(to)) => Value::Vec4(std::array::from_fn(|i| {
-            (to[i] - from[i]).mul_add(t, from[i])
-        })),
-        (Value::Vec5(from), Value::Vec5(to)) => Value::Vec5(std::array::from_fn(|i| {
-            (to[i] - from[i]).mul_add(t, from[i])
-        })),
-        _ if t >= 1.0 - f32::EPSILON => to.clone(),
-        _ => from.clone(),
-    }
-}
-
 #[derive(Clone, Copy)]
 struct SongLuaOverlayUpdateSnap {
     start_second: f32,
@@ -5358,7 +5332,7 @@ fn apply_song_lua_overlay_runtime_updates_for(
         {
             t = snap.t;
         }
-        let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
+        let value = from.value.lerp(&to.value, t);
         apply_song_lua_overlay_update_value(current, track.target, &value);
         if track.target == crate::SongLuaOverlayUpdateTarget::SpriteStateIndex {
             current.sprite_animation_epoch = Some(if t >= 1.0 - f32::EPSILON {

@@ -4394,6 +4394,41 @@ pub enum SongLuaOverlayUpdateValue {
     TextGlowMode(SongLuaTextGlowMode),
 }
 
+impl SongLuaOverlayUpdateValue {
+    #[must_use]
+    pub fn lerp(&self, to: &Self, t: f32) -> Self {
+        let t = t.clamp(0.0, 1.0);
+        let mix = |from: f32, to: f32| {
+            if from.is_finite() && to.is_finite() {
+                (to - from).mul_add(t, from)
+            } else if t >= 1.0 {
+                to
+            } else {
+                // Non-finite setters are frame targets. Hold the last sample
+                // until the next one instead of creating NaN from infinity.
+                from
+            }
+        };
+        match (self, to) {
+            (Self::F32(from), Self::F32(to)) => Self::F32(mix(*from, *to)),
+            (Self::Vec2(from), Self::Vec2(to)) => {
+                Self::Vec2(std::array::from_fn(|i| mix(from[i], to[i])))
+            }
+            (Self::Vec3(from), Self::Vec3(to)) => {
+                Self::Vec3(std::array::from_fn(|i| mix(from[i], to[i])))
+            }
+            (Self::Vec4(from), Self::Vec4(to)) => {
+                Self::Vec4(std::array::from_fn(|i| mix(from[i], to[i])))
+            }
+            (Self::Vec5(from), Self::Vec5(to)) => {
+                Self::Vec5(std::array::from_fn(|i| mix(from[i], to[i])))
+            }
+            _ if t >= 1.0 - f32::EPSILON => to.clone(),
+            _ => self.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayUpdateSample {
     pub beat: f32,
@@ -18592,6 +18627,92 @@ return Def.ActorFrame{
         assert!(matches!(perspective.kind, SongLuaOverlayKind::ActorFrame));
         assert_eq!(perspective.initial_state.fov, Some(120.0));
         assert_eq!(perspective.initial_state.vanishpoint, Some([400.0, 120.0]));
+    }
+
+    #[test]
+    fn updates_hold_infinity() {
+        use SongLuaOverlayUpdateValue as Value;
+        let finite = Value::Vec4([0.2, 0.4, 0.6, 0.3]);
+        for alpha in [f32::INFINITY, f32::NEG_INFINITY] {
+            let infinite = Value::Vec4([0.2, 0.4, 0.6, alpha]);
+            for t in [0.0, 0.5, 1.0 - f32::EPSILON] {
+                assert_eq!(finite.lerp(&infinite, t), finite);
+                assert_eq!(infinite.lerp(&finite, t), infinite);
+                assert_eq!(infinite.lerp(&infinite, t), infinite);
+            }
+            assert_eq!(finite.lerp(&infinite, 1.0), infinite);
+            assert_eq!(infinite.lerp(&finite, 1.0), finite);
+        }
+        // Finite scalar/vector interpolation and discrete values retain their
+        // existing behavior, including the endpoint threshold for flags.
+        for (from, to, expected) in [
+            (Value::F32(0.0), Value::F32(1.0), Value::F32(0.5)),
+            (
+                Value::Vec2([0.0; 2]),
+                Value::Vec2([1.0; 2]),
+                Value::Vec2([0.5; 2]),
+            ),
+            (
+                Value::Vec3([0.0; 3]),
+                Value::Vec3([1.0; 3]),
+                Value::Vec3([0.5; 3]),
+            ),
+            (
+                Value::Vec4([0.0; 4]),
+                Value::Vec4([1.0; 4]),
+                Value::Vec4([0.5; 4]),
+            ),
+            (
+                Value::Vec5([0.0; 5]),
+                Value::Vec5([1.0; 5]),
+                Value::Vec5([0.5; 5]),
+            ),
+        ] {
+            assert_eq!(from.lerp(&to, 0.5), expected);
+        }
+        assert_eq!(
+            Value::Bool(false).lerp(&Value::Bool(true), 0.5),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            Value::Bool(false).lerp(&Value::Bool(true), 1.0 - f32::EPSILON),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_preserves_infinite_alpha() {
+        let song_dir = test_dir("infinite-alpha");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local root = Def.ActorFrame{}
+for index, alpha in ipairs{math.huge, -math.huge} do
+    root[index] = Def.Quad{
+        InitCommand=function(self)
+            self:diffuse(0.2, 0.4, 0.6, 0.8):diffusealpha(alpha)
+            assert(self:GetDiffuseAlpha() == alpha)
+        end,
+    }
+end
+return root
+"#,
+        )
+        .expect("write infinite alpha fixture");
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Infinite alpha"),
+        )
+        .expect("compile infinite alpha fixture");
+        for (overlay, alpha) in compiled
+            .overlays
+            .iter()
+            .zip([f32::INFINITY, f32::NEG_INFINITY])
+        {
+            assert_eq!(overlay.initial_state.diffuse, [0.2, 0.4, 0.6, alpha]);
+        }
+        assert_eq!(compiled.overlays.len(), 2);
     }
 
     #[test]

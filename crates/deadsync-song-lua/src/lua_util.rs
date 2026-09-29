@@ -5188,7 +5188,13 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         lua.create_function({
             let actor = actor.clone();
             move |lua, (_self, alpha): (Option<Value>, Option<Value>)| {
-                if let Some(alpha) = alpha.and_then(read_f32) {
+                // Actor::SetDiffuseAlpha retains infinities. Keep the raw
+                // value for getters and captured state; rendering clamps it.
+                let alpha = alpha.and_then(|value| match value {
+                    Value::Number(value) if value.is_infinite() => Some(value as f32),
+                    value => read_f32(value),
+                });
+                if let Some(alpha) = alpha {
                     let mut diffuse = actor_diffuse(&actor)?;
                     diffuse[3] = alpha;
                     capture_block_set_color(lua, &actor, diffuse)?;

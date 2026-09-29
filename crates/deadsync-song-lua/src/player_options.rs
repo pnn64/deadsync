@@ -287,7 +287,9 @@ pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     let text = text.trim();
     let raw = text.trim_end_matches('%');
     let value = raw.parse::<f32>().ok()?;
-    Some(value / 100.0)
+    // PlayerOptions::FromOneModString uses StringToFloat, which turns
+    // non-finite numeric strings (for example Lua's `-inf`) into zero.
+    Some(if value.is_finite() { value / 100.0 } else { 0.0 })
 }
 
 #[must_use]
@@ -503,6 +505,9 @@ mod tests {
         assert_eq!(parse_player_option_amount("50%"), Some(0.5));
         assert_eq!(parse_player_option_amount("-25%"), Some(-0.25));
         assert_eq!(parse_player_option_amount("1.5"), Some(0.015));
+        assert_eq!(parse_player_option_amount("-inf"), Some(0.0));
+        assert_eq!(parse_player_option_amount("-nan"), Some(0.0));
+        assert_eq!(parse_player_option_amount("1e999"), Some(0.0));
         assert_eq!(parse_player_option_amount("Mini"), None);
     }
 
