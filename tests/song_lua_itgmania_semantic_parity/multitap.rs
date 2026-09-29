@@ -4,6 +4,62 @@ use std::collections::BTreeMap;
 const EDGAR_TRACE: &str = "tests/fixtures/itgmania-song-lua/[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc.semantic.json";
 
 #[test]
+fn multitap_fixtures_pin_noteskin() {
+    // Placeholder captures returned NoteSkin() == 0 and zero metrics. They
+    // fabricated white countdowns and Sprite arrows instead of native models.
+    for path in [
+        FLIP69_TRACE,
+        EDGAR_TRACE,
+        "tests/fixtures/itgmania-song-lua-selected/feelyourtouch e.d.e.n/feelyourtouch eden.ssc.semantic.json",
+    ] {
+        let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path));
+        let noteskin = trace
+            .noteskin_reference
+            .as_ref()
+            .expect("native noteskin capture");
+        assert_eq!(noteskin.skin, "cyber", "{path}");
+        assert!(noteskin.files.iter().any(|file| {
+            file.path == Path::new("dance/cyber/Down Tap Note.lua") && file.sha256.len() == 64
+        }));
+        for (name, class) in [
+            ("MultitapArrowP1_1", "Model"),
+            ("MultitapExplosionP1_1", "ActorFrame"),
+        ] {
+            let actor = trace
+                .actor_definitions
+                .iter()
+                .find(|actor| actor.name.as_deref() == Some(name))
+                .expect(name);
+            assert_eq!(actor.class, class, "{path}: {name}");
+        }
+        assert!(
+            trace.operation_tracks.iter().any(|track| {
+                track.operation == "Model.texturetranslate"
+                    && track
+                        .samples
+                        .iter()
+                        .any(|sample| value_f32(sample.3.first()).is_some_and(|x| x > 0.0))
+            }),
+            "{path}: native rhythm texture spacing"
+        );
+        assert!(
+            trace.operation_tracks.iter().any(|track| {
+                track.operation.ends_with(".effectcolor1")
+                    && track.samples.iter().any(|sample| {
+                        let color = sample.3.first().and_then(Value::as_array);
+                        color.is_some_and(|color| {
+                            value_f32(color.get(1))
+                                .is_some_and(|green| (green - 97.0 / 255.0).abs() < EPSILON)
+                                && value_f32(color.get(2)) == Some(0.0)
+                        })
+                    })
+            }),
+            "{path}: native quantization pulse colors"
+        );
+    }
+}
+
+#[test]
 fn edgar_countdown_onsets_and_hit_commands() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
