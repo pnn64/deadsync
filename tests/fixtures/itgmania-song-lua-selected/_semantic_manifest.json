@@ -52,6 +52,13 @@
       "status": "ok"
     },
     {
+      "simfile": "Delightful Day/Delightful Day.ssc",
+      "fixture": "Delightful Day/Delightful Day.ssc.semantic.json",
+      "title": "Delightful Day",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Levels/levels-fakemines.ssc",
       "fixture": "Levels/levels-fakemines.ssc.semantic.json",
       "title": "Levels",
@@ -70,6 +77,13 @@
       "fixture": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json",
       "title": "Step Your Game Up",
       "lua_entries": 1,
+      "status": "ok"
+    },
+    {
+      "simfile": "Ultimate taste/Ultimate taste.ssc",
+      "fixture": "Ultimate taste/Ultimate taste.ssc.semantic.json",
+      "title": "Ultimate taste",
+      "lua_entries": 2,
       "status": "ok"
     },
     {

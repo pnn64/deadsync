@@ -85,6 +85,8 @@ mod lua_songs {
         slamurai => "Slamurai/Slamurai.ssc",
         bank_account => "Bank Account/Bank Account.ssc",
         levels => "Levels/levels-fakemines.ssc",
+        ultimate_taste => "Ultimate taste/Ultimate taste.ssc",
+        delightful_day => "Delightful Day/Delightful Day.ssc",
     }
 }
 
