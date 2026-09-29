@@ -31,66 +31,6 @@ use crate::{
 
 const COMPILE_LAYER_KEY: &str = "__songlua_compile_layer";
 
-fn push_unique_table(tables: &mut Vec<Table>, table: Table) {
-    if tables
-        .iter()
-        .all(|current| current.to_pointer() != table.to_pointer())
-    {
-        tables.push(table);
-    }
-}
-
-fn clear_sequence_tables(tables: &[Table]) -> Result<(), String> {
-    for table in tables {
-        for index in 1..=table.raw_len() {
-            table
-                .raw_set(index, Value::Nil)
-                .map_err(|err| err.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-fn table_entries_are_strings_at(table: &Table, field: usize) -> Result<bool, String> {
-    for index in 1..=table.raw_len() {
-        let Value::Table(entry) = table
-            .raw_get::<Value>(index)
-            .map_err(|err| err.to_string())?
-        else {
-            return Ok(false);
-        };
-        if !matches!(
-            entry
-                .raw_get::<Value>(field)
-                .map_err(|err| err.to_string())?,
-            Value::String(_)
-        ) {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
-fn table_entries_are_strings_or_functions_at(table: &Table, field: usize) -> Result<bool, String> {
-    for index in 1..=table.raw_len() {
-        let Value::Table(entry) = table
-            .raw_get::<Value>(index)
-            .map_err(|err| err.to_string())?
-        else {
-            return Ok(false);
-        };
-        if !matches!(
-            entry
-                .raw_get::<Value>(field)
-                .map_err(|err| err.to_string())?,
-            Value::String(_) | Value::Function(_)
-        ) {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
 type DefaultCompiledSongLua<NoteskinSlot, ModelVertex> = CompiledSongLua<
     SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
 >;
@@ -495,14 +435,9 @@ where
         compile_timer.push_stage("prefix_actions");
     }
 
-    let global_mod_start = out.beat_mods.len();
     let global_mods = globals
         .get::<Option<Table>>("mods")
         .map_err(|err| err.to_string())?;
-    out.beat_mods.extend(read_mod_windows(
-        global_mods.clone(),
-        SongLuaTimeUnit::Beat,
-    )?);
     let runtime_mod_tables = read_update_function_tables(&lua, &root, &["mods"])?;
     let update_reads_global_mods =
         update_tree_reads_global(&lua, &root, "mods").map_err(|err| err.to_string())?;
@@ -515,6 +450,10 @@ where
     // Recurring Lua owns stateful starts and the easing function body. Capture
     // its actual writes instead of duplicating them with endpoint-based eases.
     if !global_mods_are_runtime {
+        out.beat_mods.extend(read_mod_windows(
+            global_mods.clone(),
+            SongLuaTimeUnit::Beat,
+        )?);
         let (runtime_eases, runtime_overlay_eases) = read_runtime_mod_eases(
             global_mods.clone(),
             &host.easing_names,
@@ -523,28 +462,6 @@ where
         )?;
         out.eases.extend(runtime_eases);
         out.overlay_eases.extend(runtime_overlay_eases);
-    }
-    let mut runtime_exact_tables = Vec::new();
-    if global_mods_are_runtime
-        && let Some(global) = global_mods.as_ref()
-        && table_entries_are_strings_at(global, 3)?
-    {
-        push_unique_table(&mut runtime_exact_tables, global.clone());
-    }
-    for table in &runtime_mod_tables {
-        if global_mods
-            .as_ref()
-            .is_some_and(|global| global.to_pointer() == table.to_pointer())
-        {
-            continue;
-        }
-        out.beat_mods.extend(read_mod_windows(
-            Some(table.clone()),
-            SongLuaTimeUnit::Beat,
-        )?);
-        if table_entries_are_strings_at(table, 3)? {
-            push_unique_table(&mut runtime_exact_tables, table.clone());
-        }
     }
     out.time_mods.extend(read_mod_windows(
         globals
@@ -568,14 +485,6 @@ where
             &host.easing_names,
             &mut overlays,
         )?;
-    let global_function_eases_need_sampling =
-        !global_overlay_eases.is_empty() || !global_column_offsets.is_empty();
-    let global_mod_eases_are_exact = global_info.unsupported_function_eases == 0
-        && !global_function_eases_need_sampling
-        && match global_mod_eases.as_ref() {
-            Some(table) => table_entries_are_strings_or_functions_at(table, 5)?,
-            None => false,
-        };
     merge_compile_info(&mut out.info, global_info);
     let runtime_mod_ease_tables = read_update_function_tables(&lua, &root, &["mods_ease"])?;
     let update_reads_global_mod_eases =
@@ -586,21 +495,15 @@ where
             .any(|runtime| runtime.to_pointer() == global.to_pointer())
             || (update_reads_global_mod_eases && initialized_global_mod_eases.is_some())
     });
-    if global_mod_eases_are_runtime && !global_column_offsets.is_empty() {
-        // Column callbacks and later actions share mutable spline state. Replay
-        // their mod tables together so the final write in each update wins.
-        out.beat_mods.truncate(global_mod_start);
-        runtime_exact_tables.clear();
-    } else {
-        out.eases.extend(global_eases);
+    // Column callbacks and actions share mutable spline state; their sampled
+    // writes already capture the final value from each update.
+    if !global_mod_eases_are_runtime || global_column_offsets.is_empty() {
+        out.eases.extend(global_eases.into_iter().filter(|ease| {
+            !global_mod_eases_are_runtime
+                || !matches!(ease.target, crate::SongLuaEaseTarget::Mod(_))
+        }));
         out.overlay_eases.extend(global_overlay_eases);
         out.column_offsets.extend(global_column_offsets);
-    }
-    if global_mod_eases_are_runtime
-        && let Some(global) = global_mod_eases.as_ref()
-        && global_mod_eases_are_exact
-    {
-        push_unique_table(&mut runtime_exact_tables, global.clone());
     }
     for table in &runtime_mod_ease_tables {
         if global_mod_eases
@@ -616,17 +519,14 @@ where
             &host.easing_names,
             &mut overlays,
         )?;
-        out.eases.extend(eases);
-        let function_eases_need_sampling = !overlay_eases.is_empty();
+        out.eases.extend(
+            eases
+                .into_iter()
+                .filter(|ease| !matches!(ease.target, crate::SongLuaEaseTarget::Mod(_))),
+        );
         out.overlay_eases.extend(overlay_eases);
         out.column_offsets.extend(column_offsets);
-        let table_is_exact = info.unsupported_function_eases == 0
-            && !function_eases_need_sampling
-            && table_entries_are_strings_or_functions_at(table, 5)?;
         merge_compile_info(&mut out.info, info);
-        if table_is_exact {
-            push_unique_table(&mut runtime_exact_tables, table.clone());
-        }
     }
     compile_timer.push_stage("global_eases");
     let mut xero_node_tables = read_update_function_nested_tables(&lua, &root, &["nodes"])?;
@@ -782,10 +682,8 @@ where
             Vec::new(),
         ),
         None => {
-            // These tables have already been compiled at their authored beat.
-            // Leaving them in the chart's recurring update handler would also
-            // sample them one frame early and duplicate every resulting mod.
-            clear_sequence_tables(&runtime_exact_tables)?;
+            // Run the reader intact: its parser, easing parameters and write
+            // order determine the targets actually sent to PlayerOptions.
             compile_update_functions(
                 &lua,
                 &root,

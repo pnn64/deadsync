@@ -96,7 +96,9 @@ fn lua_stream_mod_tokens_preserve_state_speeds_precedence_and_partial_errors() {
             }
         }
         for text in [
-            "*2 50% Drunk, no mines, 0% NoMines, -0% reverse",
+            // The frozen parser misread `no <mod>` as one enabled name.
+            // Native reset semantics are checked separately below.
+            "*2 50% Drunk, nomines, 0% NoMines, -0% reverse",
             "C400, 1.5x, CA250, 70% TINY, *-3 25% No Holds",
             "inf mini, -inf moveX1, NaN MoveY2, *NaN 99% Mini",
             " , %$éあ, éR-éV-éR-S-é, +3E2 X",
@@ -111,6 +113,21 @@ fn lua_stream_mod_tokens_preserve_state_speeds_precedence_and_partial_errors() {
             assert_eq!(snapshot(&owners[0]), snapshot(&owners[1]), "{text}");
         }
     }
+}
+
+#[test]
+fn native_no_modifier_resets_value_and_approach() {
+    let lua = Lua::new();
+    let owner = lua.create_table().unwrap();
+    apply_player_options_string(&lua, &owner, "50% Beat, 75% Dark1, 50% Mini").unwrap();
+    apply_player_options_string(&lua, &owner, "*1000 no beat, *2 NO Dark1, no Mini").unwrap();
+    let state = player_option_state(&lua, &owner).unwrap();
+    let speeds = player_option_speeds(&lua, &owner).unwrap();
+    for (key, speed) in [("beat", 1000.0), ("dark1", 2.0), ("mini", 1.0)] {
+        assert_eq!(state.get::<f32>(key).unwrap(), 0.0);
+        assert_eq!(speeds.get::<f32>(key).unwrap(), speed);
+    }
+    assert!(state.get::<Option<f32>>("nobeat").unwrap().is_none());
 }
 
 #[test]

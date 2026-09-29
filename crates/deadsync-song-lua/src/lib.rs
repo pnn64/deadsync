@@ -8477,7 +8477,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_does_not_resample_exact_runtime_mod_tables() {
+    fn compile_song_lua_replays_runtime_mod_tables() {
         let song_dir = test_dir("exact-runtime-mod-tables");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -8513,24 +8513,46 @@ return Def.ActorFrame{
         .unwrap();
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Exact Runtime Mod Tables");
+        context.song_timing_bpms = vec![(0.0, 120.0)];
         context.music_length_seconds = 4.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        let mini_eases = compiled
-            .eases
-            .iter()
-            .filter(|ease| matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "mini"))
-            .collect::<Vec<_>>();
-
-        assert_eq!(compiled.beat_mods.len(), 1);
-        assert_eq!(mini_eases.len(), 1);
-        assert_eq!(mini_eases[0].start, 4.0);
-        assert!(!compiled.eases.iter().any(|ease| {
-            matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "flip")
-        }));
+        let timing = deadsync_rules::timing::TimingData::from_segments(
+            0.0,
+            0.0,
+            &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        let (windows, unsupported) = crate::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.0,
+            &[],
+        );
+        assert_eq!(unsupported, 0);
+        let mut runtime = deadsync_gameplay::GameplayAttackRuntimeState::new(
+            [Vec::new(), Vec::new()],
+            [windows, Vec::new()],
+        );
+        for (second, mini) in [(1.0, 0.0), (2.5, 50.0), (3.5, 100.0)] {
+            let _ = runtime.refresh_player(
+                0,
+                second,
+                1_000_000.0,
+                deadsync_gameplay::AppearanceEffects::default(),
+                deadsync_gameplay::AttackBaseEffects::default,
+                deadsync_gameplay::SongLuaPlayerTransform::default(),
+            );
+            assert_eq!(runtime.visual[0].flip, Some(0.5));
+            assert!((runtime.mini_percent[0].unwrap_or(0.0) - mini).abs() < 0.0001);
+        }
     }
 
     #[test]
-    fn compile_song_lua_does_not_resample_mixed_exact_mod_eases() {
+    fn compile_song_lua_replays_mixed_runtime_mod_eases() {
         let song_dir = test_dir("mixed-exact-runtime-mod-eases");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -8574,24 +8596,50 @@ return Def.ActorFrame{
         .unwrap();
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Mixed Exact Mod Eases");
+        context.song_timing_bpms = vec![(0.0, 120.0)];
         context.music_length_seconds = 10.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        let dizzy = compiled
-            .eases
-            .iter()
-            .filter(|ease| matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "dizzy"))
-            .collect::<Vec<_>>();
-        let rotation = compiled
-            .eases
-            .iter()
-            .filter(|ease| ease.target == SongLuaEaseTarget::PlayerRotationX)
-            .collect::<Vec<_>>();
-
-        assert_eq!(compiled.beat_mods.len(), 1);
-        assert_eq!(dizzy.len(), 1);
-        assert_eq!((dizzy[0].start, dizzy[0].limit), (2.0, 2.0));
-        assert_eq!(rotation.len(), 1);
-        assert_eq!((rotation[0].start, rotation[0].limit), (6.0, 2.0));
+        let timing = deadsync_rules::timing::TimingData::from_segments(
+            0.0,
+            0.0,
+            &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        let (windows, unsupported) = crate::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.0,
+            &[],
+        );
+        assert_eq!(unsupported, 0);
+        let mut runtime = deadsync_gameplay::GameplayAttackRuntimeState::new(
+            [Vec::new(), Vec::new()],
+            [windows, Vec::new()],
+        );
+        let mut transform = deadsync_gameplay::SongLuaPlayerTransform::default();
+        for (second, dizzy, rotation) in [
+            (1.5, 2.5, 0.0),
+            (2.5, 0.0, 0.0),
+            (3.5, 0.0, 45.0),
+            (4.5, 0.0, 90.0),
+        ] {
+            if let Some(next) = runtime.refresh_player(
+                0,
+                second,
+                1_000_000.0,
+                deadsync_gameplay::AppearanceEffects::default(),
+                deadsync_gameplay::AttackBaseEffects::default,
+                transform,
+            ) {
+                transform = next;
+            }
+            assert!((runtime.visual[0].dizzy.unwrap_or(0.0) - dizzy).abs() < 0.0001);
+            assert!((transform.rotation_x - rotation).abs() < 0.0001);
+        }
     }
 
     #[test]

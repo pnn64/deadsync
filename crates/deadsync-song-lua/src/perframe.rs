@@ -384,11 +384,19 @@ pub fn player_option_sample(table: &Table) -> Result<SongLuaUpdateModState, Stri
             out.insert(key, value);
         }
     }
+    let active_speed = table
+        .raw_get::<Option<String>>("__songlua_speedmod_active")
+        .map_err(|err| err.to_string())?;
     for (key, state_key) in [
         ("xmod", "__songlua_speedmod_xmod"),
         ("cmod", "__songlua_speedmod_cmod"),
         ("mmod", "__songlua_speedmod_mmod"),
     ] {
+        // The host retains previous values, but only the last selected
+        // speed mode may drive playback.
+        if active_speed.as_deref().is_some_and(|active| active != key) {
+            continue;
+        }
         if let Some(value) = table
             .get::<Option<f32>>(state_key)
             .map_err(|err| err.to_string())?
@@ -2086,6 +2094,52 @@ pub fn compile_update_functions<Kind>(
     for index in 0..sample_beats.len() {
         let seg_start = sample_beats[index];
         let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
+        // Preserve the last sampled target even when the song ends between
+        // reference frames; the gameplay window builder retains its tail.
+        let from_mods = &mod_samples[index];
+        let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
+        let (mod_start, mod_end, mod_unit) = if use_mod_clock {
+            (
+                sample_seconds[index],
+                sample_seconds
+                    .get(index + 1)
+                    .copied()
+                    .unwrap_or_else(|| sample_seconds[index].next_up()),
+                SongLuaTimeUnit::BeatClock,
+            )
+        } else {
+            (
+                seg_start,
+                seg_end.max(seg_start.next_up()),
+                SongLuaTimeUnit::Beat,
+            )
+        };
+        // Dropping a speed mode ends its coalescing run. Selecting the same
+        // value again later must start a new window after the intervening mode.
+        for player in 0..LUA_PLAYERS {
+            for key in ["xmod", "cmod", "mmod"] {
+                if !from_mods[player].contains_key(key) {
+                    last_mod_lookup_key.0 = player;
+                    last_mod_lookup_key.1.clear();
+                    last_mod_lookup_key.1.push_str(key);
+                    last_mod_windows.remove(&last_mod_lookup_key);
+                }
+            }
+        }
+        push_update_mod_targets_with_key(
+            &mut eases,
+            mod_start,
+            mod_end,
+            from_mods,
+            to_mods,
+            &baseline_mods,
+            &mod_speed_samples[index],
+            &mut last_mod_windows,
+            &mut last_mod_lookup_key,
+            // Keep the update clock: narrowing to a beat and converting back
+            // can move a step target past its own frame's timestamp.
+            mod_unit,
+        );
         if seg_end <= seg_start {
             continue;
         }
@@ -2101,34 +2155,6 @@ pub fn compile_update_functions<Kind>(
             &from_players,
             &to_players,
             &baseline_players,
-        );
-        let from_mods = &mod_samples[index];
-        let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
-        let (mod_start, mod_end, mod_unit) = if use_mod_clock {
-            (
-                sample_seconds[index],
-                sample_seconds
-                    .get(index + 1)
-                    .copied()
-                    .unwrap_or((seconds * rate) as f32),
-                SongLuaTimeUnit::BeatClock,
-            )
-        } else {
-            (seg_start, seg_end, SongLuaTimeUnit::Beat)
-        };
-        push_update_mod_targets_with_key(
-            &mut eases,
-            mod_start,
-            mod_end,
-            from_mods,
-            to_mods,
-            &baseline_mods,
-            &mod_speed_samples[index],
-            &mut last_mod_windows,
-            &mut last_mod_lookup_key,
-            // Keep the update clock: narrowing to a beat and converting back
-            // can move a step target past its own frame's timestamp.
-            mod_unit,
         );
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);

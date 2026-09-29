@@ -199,7 +199,16 @@ fn runtime_mod_value(
         "mini" => runtime.mini_percent[player].unwrap_or(0.0) / 100.0,
         "xmod" => match runtime.scroll_speed[player] {
             Some(deadsync_rules::scroll::ScrollSpeedSetting::XMod(value)) => value,
+            Some(deadsync_rules::scroll::ScrollSpeedSetting::MMod(_)) => 1.0,
             None => 1.0,
+            _ => return None,
+        },
+        "cmod" => match runtime.scroll_speed[player] {
+            Some(deadsync_rules::scroll::ScrollSpeedSetting::CMod(value)) => value,
+            _ => return None,
+        },
+        "mmod" => match runtime.scroll_speed[player] {
+            Some(deadsync_rules::scroll::ScrollSpeedSetting::MMod(value)) => value,
             _ => return None,
         },
         _ => return None,
@@ -261,6 +270,117 @@ fn modifier_runtime(
         GameplayAttackRuntimeState::new(constants, eases),
         unsupported_eases.get(),
     )
+}
+
+#[test]
+fn runtime_reader_preserves_order_and_easing_body() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Runtime reader");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 3.0;
+    let compiled = compile_song_lua_layers(
+        &[directory.join("runtime-mod-reader.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile runtime reader");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, drunk, tipsy) in [
+        (0.25, 0.1, 0.0),
+        (0.5, 0.1, 0.05),
+        (0.75, 0.0, 0.1125),
+        (1.0, 0.0, 0.3),
+        (1.5, 0.0, 1.05),
+        (2.0, 0.0, 1.05),
+    ] {
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        for (key, expected) in [("drunk", drunk), ("tipsy", tipsy)] {
+            let actual = runtime_mod_value(&runtime, 0, key).expect("supported modifier");
+            assert!(
+                (actual - expected).abs() < 0.000001,
+                "{key} at {second}: {actual} != {expected}"
+            );
+        }
+    }
+}
+
+#[test]
+fn sampled_modifiers_keep_final_partial_frame() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Final modifier frame");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 1.137;
+    let compiled = compile_song_lua_layers(
+        &[directory.join("runtime-mod-reader.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile final modifier frame");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for second in [1.137, 1.5] {
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        let tipsy = runtime_mod_value(&runtime, 0, "tipsy").expect("supported modifier");
+        // The reader evaluates ((beat - 1) / 2)^2 + 0.05 at the exact song end.
+        assert!((tipsy - 0.455769).abs() < 0.000001, "{second}: {tipsy}");
+    }
+}
+
+#[test]
+fn sampled_speed_modes_reactivate_previous_values() {
+    use deadsync_rules::scroll::ScrollSpeedSetting::{CMod, MMod, XMod};
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Speed modes");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 3.0;
+    let compiled = compile_song_lua_layers(
+        &[directory.join("speed-mode-switch.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile speed switches");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.25, XMod(2.0)),
+        (0.5, CMod(300.0)),
+        (0.75, CMod(300.0)),
+        (1.0, XMod(2.0)),
+        (1.5, MMod(600.0)),
+        (2.0, XMod(2.0)),
+    ] {
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(
+            runtime.scroll_speed[0],
+            Some(expected),
+            "speed mode at {second}"
+        );
+    }
 }
 
 #[test]
@@ -630,8 +750,12 @@ pub(super) fn compare_runtime_modifiers(
     while cursor < writes.len() {
         let second = writes[cursor].second;
         let mut last_writes = BTreeMap::new();
+        let mut last_speed = [None; 2];
         while cursor < writes.len() && writes[cursor].second == second {
             let write = &writes[cursor];
+            if matches!(write.key.as_str(), "xmod" | "cmod" | "mmod") {
+                last_speed[write.player] = Some(write);
+            }
             last_writes.insert((write.player, write.key.as_str()), write);
             cursor += 1;
         }
@@ -651,6 +775,35 @@ pub(super) fn compare_runtime_modifiers(
             }
         }
         for (key, write) in last_writes {
+            // Native XMod/CMod/MMod setters select one shared speed mode.
+            // Observe each recorded option after the frame's final setter,
+            // including nil getters for modes superseded in that same frame.
+            let expected = if matches!(write.key.as_str(), "xmod" | "cmod" | "mmod") {
+                let last = last_speed[write.player].expect("recorded speed write");
+                if write.key == last.key {
+                    Some(last.value)
+                } else if write.key == "xmod" && last.key == "mmod" {
+                    Some(1.0)
+                } else {
+                    None
+                }
+            } else {
+                Some(write.value)
+            };
+            let Some(expected) = expected else {
+                parity.check(
+                    runtime_mod_value(&runtime, write.player, &write.key).is_none(),
+                    || {
+                        format!(
+                            "P{} {} remains active after a different speed setter at beat {}",
+                            write.player + 1,
+                            write.key,
+                            write.beat
+                        )
+                    },
+                );
+                continue;
+            };
             if !write.value.is_finite() {
                 nonfinite.push((write.player + 1, write.key.as_str(), write.beat));
                 continue;
@@ -661,13 +814,13 @@ pub(super) fn compare_runtime_modifiers(
             };
             let entry = stats.entry(key).or_default();
             entry.samples += 1;
-            let difference = (actual - write.value).abs();
+            let difference = (actual - expected).abs();
             if difference > (entry.worst.1 - entry.worst.2).abs() {
-                entry.worst = (write.beat, write.value, actual);
+                entry.worst = (write.beat, expected, actual);
             }
             if difference > EPSILON || !actual.is_finite() {
                 entry.failures += 1;
-                entry.first.get_or_insert((write.beat, write.value, actual));
+                entry.first.get_or_insert((write.beat, expected, actual));
             }
         }
     }

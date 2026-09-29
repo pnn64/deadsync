@@ -486,7 +486,11 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
     }
 
     let (head, tail) = split_first_word(text);
-    let (amount, name) = if head.eq_ignore_ascii_case("inf") && !tail.is_empty() {
+    let (amount, name) = if head.eq_ignore_ascii_case("no") && !tail.is_empty() {
+        // PlayerOptions::FromOneModString treats `no` as a zero level,
+        // including when preceded by an approach speed such as `*1000`.
+        (Some(0.0), tail)
+    } else if head.eq_ignore_ascii_case("inf") && !tail.is_empty() {
         // PlayerOptions::FromOneModString only recognizes levels beginning
         // with a digit or '-'; positive Lua infinity leaves the default 1.
         (Some(1.0), tail)

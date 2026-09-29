@@ -3546,21 +3546,8 @@ fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
         compiled, &timing, 0, 0.0, &constants,
     );
     assert_eq!(unsupported, 0);
-    assert!(
-        constants
-            .iter()
-            .any(|window| window.visual.dizzy == Some(0.0)),
-        "BroGamer's baseline `no dizzy` mod was not compiled: {constants:#?}",
-    );
-    let first_gap_second = timing.get_time_for_beat(37.0);
-    assert!(
-        eases.iter().all(|window| {
-            window.target != deadsync_gameplay::SongLuaEaseMaskTarget::VisualDizzy
-                || window.start_second >= first_gap_second
-                || window.sustain_end_second <= first_gap_second
-        }),
-        "BroGamer's first dizzy ease leaked past beat 37",
-    );
+    // Resets may be sampled targets rather than constant windows. Check the
+    // resulting gameplay state at quiet and active native checkpoints below.
     let mut runtime = deadsync_gameplay::GameplayAttackRuntimeState::new(
         [constants, Vec::new()],
         [eases, Vec::new()],
