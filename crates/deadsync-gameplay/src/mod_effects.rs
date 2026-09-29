@@ -278,6 +278,7 @@ impl AppearanceOverrides {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct VisibilityOverrides {
     pub dark: Option<f32>,
+    pub dark_cols: [Option<f32>; MAX_COLS],
     pub blind: Option<f32>,
     pub cover: Option<f32>,
 }
@@ -285,8 +286,11 @@ pub struct VisibilityOverrides {
 impl VisibilityOverrides {
     #[inline(always)]
     #[must_use]
-    pub const fn any(self) -> bool {
-        self.dark.is_some() || self.blind.is_some() || self.cover.is_some()
+    pub fn any(self) -> bool {
+        self.dark.is_some()
+            || self.blind.is_some()
+            || self.cover.is_some()
+            || self.dark_cols.iter().any(Option::is_some)
     }
 }
 
@@ -838,6 +842,7 @@ pub fn approach_appearance_effects(
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VisibilityEffects {
     pub dark: f32,
+    pub dark_cols: [f32; MAX_COLS],
     pub blind: f32,
     pub cover: f32,
 }

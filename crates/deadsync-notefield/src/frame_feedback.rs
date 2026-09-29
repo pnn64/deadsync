@@ -216,7 +216,10 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let mut lane_rotations = [0.0; MAX_COLS];
     let mut lane_centers = [[0.0; 2]; MAX_COLS];
     let mut lane_zooms = [0.0; MAX_COLS];
-    let targets_enabled = !options.hide_targets && prepared.receptor_alpha > f32::EPSILON;
+    let targets_enabled = !options.hide_targets
+        && prepared.receptor_alphas[..num_cols]
+            .iter()
+            .any(|alpha| *alpha > f32::EPSILON);
     let lane_work_mask = feedback_lane_work_mask(
         num_cols,
         targets_enabled,
@@ -301,7 +304,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 })
             })
         };
-        let targets_visible = !hidden && targets_enabled;
+        let receptor_alpha = prepared.receptor_alphas[local_col];
+        let targets_visible = !hidden && targets_enabled && receptor_alpha > f32::EPSILON;
         let target_slot = targets_visible.then(|| &receptor.receptor_off[local_col]);
         let target_reverse = targets_visible
             .then(|| receptor.receptor_off_reverse.get(local_col).copied())
@@ -367,7 +371,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     beat: current_beat,
                     idle_glow_alpha,
                     press_visual: lane.receptor_press_visual,
-                    receptor_alpha: prepared.receptor_alpha,
+                    receptor_alpha,
                     field_zoom,
                     rotation_y_deg: 0.0,
                     pulse_color,
@@ -1458,6 +1462,86 @@ mod tests {
     }
 
     #[test]
+    fn dark_columns_combine_with_global_dark_before_clamping() {
+        let mut ns = noteskin();
+        ns.receptor_idle_glow = ReceptorIdleGlow::ActorEffect;
+        ns.receptor_idle_glow_layers =
+            vec![Some(TestSlot::new("idle0")), Some(TestSlot::new("idle1"))];
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let notes = [note(0), note(1)];
+        let hold = active_hold(0);
+        let taps = [tap(), tap()];
+        let mut frame = spline_feedback(&taps);
+        frame.lanes[0].active_hold = Some(&hold);
+        for lane in &mut frame.lanes[..2] {
+            lane.receptor_press_visual = Some((1.0, 1.0));
+        }
+        // Include negative levels and global values above 1: clamping either
+        // component first would lose ITGmania's cancellation behavior.
+        for (dark, columns, alphas) in [
+            (0.25, [0.25, -0.5], [0.5, 1.0]),
+            (1.5, [-1.0, -0.75], [0.5, 0.25]),
+            (0.0, [1.0, 0.0], [0.0, 1.0]),
+            (1.0, [0.0, 1.0], [0.0, 0.0]),
+        ] {
+            // P2 uses player-local column indices, even with a global offset.
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P2, 1, 2, 2, 4);
+            request.visual.visibility.dark = dark;
+            request.visual.visibility.dark_cols[..2].copy_from_slice(&columns);
+            let prepared = prepare_notefield(&request).unwrap();
+            let mut draws = Vec::new();
+            compose_notefield_feedback(
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            let alpha_for = |key| {
+                draws.iter().find_map(|draw| match draw {
+                    FlatDraw::Sprite(sprite) if sprite.source.texture_key() == Some(key) => {
+                        Some(sprite.tint[3])
+                    }
+                    _ => None,
+                })
+            };
+            for (keys, alpha) in [
+                ["target0", "idle0", "press0"],
+                ["target1", "idle1", "press1"],
+            ]
+            .into_iter()
+            .zip(alphas)
+            {
+                for key in keys {
+                    assert_eq!(
+                        alpha_for(key),
+                        (alpha > 0.0).then_some(alpha),
+                        "{key}, global={dark}, columns={columns:?}"
+                    );
+                }
+            }
+            assert_eq!(
+                alpha_for("hold0"),
+                Some(1.0),
+                "dark must preserve hold feedback"
+            );
+            assert_eq!(
+                alpha_for("tap0"),
+                Some(2.0 / 3.0),
+                "dark must preserve tap feedback"
+            );
+            assert_eq!(
+                alpha_for("tap1"),
+                Some(2.0 / 3.0),
+                "dark must preserve tap feedback"
+            );
+        }
+    }
+
+    #[test]
     fn receptor_beat_effects_preserve_lane_tints_and_delay_boundaries() {
         let mut ns = noteskin();
         ns.receptor_pulse = ReceptorPulse {
@@ -1509,16 +1593,21 @@ mod tests {
                 );
                 let mut expected = Vec::new();
                 if !hide_targets {
-                    for (target_key, idle_key) in [("target0", "idle0"), ("target1", "idle1")] {
+                    for (local_col, (target_key, idle_key)) in
+                        [("target0", "idle0"), ("target1", "idle1")]
+                            .into_iter()
+                            .enumerate()
+                    {
                         let color = ns.receptor_pulse.color_for_beat(beat);
-                        let alpha = color[3] * 1.0 * prepared.receptor_alpha;
+                        let alpha = color[3] * 1.0 * prepared.receptor_alphas[local_col];
                         if alpha > f32::EPSILON {
                             expected.push((
                                 target_key,
                                 [color[0], color[1], color[2], alpha].map(f32::to_bits),
                             ));
                         }
-                        let alpha = idle.alpha(beat, in_delay) * 1.0 * prepared.receptor_alpha;
+                        let alpha =
+                            idle.alpha(beat, in_delay) * 1.0 * prepared.receptor_alphas[local_col];
                         if idle.is_visible() && alpha > f32::EPSILON {
                             expected.push((idle_key, [1.0, 1.0, 1.0, alpha].map(f32::to_bits)));
                         }

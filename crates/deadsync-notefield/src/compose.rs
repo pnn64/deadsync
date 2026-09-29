@@ -261,7 +261,7 @@ pub struct PreparedNotefield<'a, S> {
     pub current_beat: f32,
     pub is_in_delay: bool,
     pub mini: f32,
-    pub receptor_alpha: f32,
+    pub receptor_alphas: [f32; MAX_COLS],
     pub blind_active: bool,
     pub column_x_offsets: [f32; MAX_COLS],
     pub column_zooms: [f32; MAX_COLS],
@@ -324,7 +324,12 @@ pub fn prepare_notefield<'a, S>(
         current_beat: request.chart.visible_beat,
         is_in_delay: request.chart.is_in_delay,
         mini,
-        receptor_alpha: (1.0 - request.visual.visibility.dark).clamp(0.0, 1.0),
+        // ITGmania adds global and column Dark before clamping receptor opacity.
+        receptor_alphas: request
+            .visual
+            .visibility
+            .dark_cols
+            .map(|dark| (1.0 - request.visual.visibility.dark - dark).clamp(0.0, 1.0)),
         blind_active: request.visual.visibility.blind > f32::EPSILON,
         column_x_offsets,
         column_zooms,

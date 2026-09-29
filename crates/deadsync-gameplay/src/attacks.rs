@@ -357,6 +357,7 @@ pub struct ParsedAttackMods {
     pub appearance: AppearanceOverrides,
     pub appearance_speed: AppearanceOverrides,
     pub visibility: VisibilityOverrides,
+    pub dark_col_speed: [Option<f32>; MAX_COLS],
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
@@ -379,6 +380,7 @@ impl Default for ParsedAttackMods {
             appearance: AppearanceOverrides::default(),
             appearance_speed: AppearanceOverrides::default(),
             visibility: VisibilityOverrides::default(),
+            dark_col_speed: [None; MAX_COLS],
             scroll: ScrollOverrides::default(),
             scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
@@ -466,6 +468,7 @@ pub struct AttackMaskWindow {
     pub appearance: AppearanceOverrides,
     pub appearance_speed: AppearanceOverrides,
     pub visibility: VisibilityOverrides,
+    pub dark_col_speed: [Option<f32>; MAX_COLS],
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
@@ -501,6 +504,7 @@ pub fn build_song_lua_constant_attack_mask_window(
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
+        dark_col_speed: mods.dark_col_speed,
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
@@ -530,6 +534,7 @@ pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWi
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
+        dark_col_speed: mods.dark_col_speed,
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
@@ -577,6 +582,7 @@ pub enum SongLuaEaseMaskTarget {
     AppearanceBlink,
     AppearanceRandomVanish,
     VisibilityDark,
+    VisibilityDarkColumn(usize),
     VisibilityBlind,
     VisibilityCover,
     ScrollReverse,
@@ -1657,6 +1663,14 @@ fn append_song_lua_ease_targets_key(
         );
     };
 
+    if let Some(col) = mod_column_suffix(key, "dark") {
+        push(
+            SongLuaEaseMaskTarget::VisibilityDarkColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
     if let Some(col) = mod_column_suffix(key, "bumpy") {
         push(
             SongLuaEaseMaskTarget::VisualBumpyColumn(col),
@@ -2289,6 +2303,11 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = value,
         SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = value,
         SongLuaEaseMaskTarget::VisibilityDark => visibility.dark = Some(value),
+        SongLuaEaseMaskTarget::VisibilityDarkColumn(col) => {
+            if let Some(dark) = visibility.dark_cols.get_mut(col) {
+                *dark = Some(value);
+            }
+        }
         SongLuaEaseMaskTarget::VisibilityBlind => visibility.blind = Some(value),
         SongLuaEaseMaskTarget::VisibilityCover => visibility.cover = Some(value),
         SongLuaEaseMaskTarget::ScrollReverse => scroll.reverse = Some(value),
@@ -2370,6 +2389,7 @@ fn attack_mask_window_from_values(
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
+        dark_col_speed: mods.dark_col_speed,
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
@@ -2477,6 +2497,11 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AppearanceBlink => window.appearance.blink.is_some(),
         SongLuaEaseMaskTarget::AppearanceRandomVanish => window.appearance.random_vanish.is_some(),
         SongLuaEaseMaskTarget::VisibilityDark => window.visibility.dark.is_some(),
+        SongLuaEaseMaskTarget::VisibilityDarkColumn(col) => window
+            .visibility
+            .dark_cols
+            .get(col)
+            .is_some_and(Option::is_some),
         SongLuaEaseMaskTarget::VisibilityBlind => window.visibility.blind.is_some(),
         SongLuaEaseMaskTarget::VisibilityCover => window.visibility.cover.is_some(),
         SongLuaEaseMaskTarget::ScrollReverse => window.scroll.reverse.is_some(),
@@ -3736,6 +3761,7 @@ pub struct ActiveAttackMaskValues {
     pub appearance_target: AppearanceEffects,
     pub appearance_speed: AppearanceEffects,
     pub visibility: VisibilityOverrides,
+    pub dark_col_speed: [Option<f32>; MAX_COLS],
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
@@ -3757,6 +3783,7 @@ impl ActiveAttackMaskValues {
             appearance_target: base_appearance,
             appearance_speed: AppearanceEffects::approach_speeds(),
             visibility: VisibilityOverrides::default(),
+            dark_col_speed: [None; MAX_COLS],
             scroll: ScrollOverrides::default(),
             scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
@@ -4394,6 +4421,9 @@ fn apply_song_lua_approach_targets(
             player,
         );
         match window.target {
+            SongLuaEaseMaskTarget::VisibilityDarkColumn(col) if col < MAX_COLS => {
+                attack.dark_col_speed[col] = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
             SongLuaEaseMaskTarget::VisualDizzy => attack.visual_speed.dizzy = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
@@ -4511,6 +4541,12 @@ pub fn apply_active_attack_mask_window(
 
     if let Some(v) = window.visibility.dark {
         values.visibility.dark = Some(v);
+    }
+    for col in 0..MAX_COLS {
+        if let Some(value) = window.visibility.dark_cols[col] {
+            values.visibility.dark_cols[col] = Some(value);
+            values.dark_col_speed[col] = window.dark_col_speed[col];
+        }
     }
     if let Some(v) = window.visibility.blind {
         values.visibility.blind = Some(v);
@@ -4720,6 +4756,15 @@ fn refresh_active_attack_player_full(
         input.delta_time,
     );
     attack.visual = state.active_attack_visual;
+
+    approach_attack_cols(
+        &mut state.active_attack_visibility.dark_cols,
+        attack.visibility.dark_cols,
+        [0.0; MAX_COLS],
+        attack.dark_col_speed,
+        input.delta_time,
+    );
+    attack.visibility.dark_cols = state.active_attack_visibility.dark_cols;
 
     let base_scroll = if attack.clear_all {
         ScrollEffects::default()
@@ -5180,7 +5225,7 @@ pub fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
         return None;
     }
     let col = suffix.parse::<usize>().ok()?;
-    (1..=MAX_COLS).contains(&col).then_some(col - 1)
+    col.checked_sub(1).filter(|&col| col < MAX_COLS)
 }
 
 #[inline(always)]
@@ -5268,6 +5313,15 @@ fn apply_runtime_mod(
     percent_value: Option<f32>,
     approach_speed: f32,
 ) {
+    if let Some(col) = mod_column_suffix(key, "dark") {
+        set_approached_mod(
+            &mut out.visibility.dark_cols[col],
+            &mut out.dark_col_speed[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
     if let Some(col) = mod_column_suffix(key, "bumpy") {
         set_approached_mod(
             &mut out.visual.bumpy_cols[col],
@@ -5869,6 +5923,9 @@ pub fn merge_attack_visibility_effects(
 ) -> VisibilityEffects {
     VisibilityEffects {
         dark: merge_attack_value(base.dark, attack.dark),
+        dark_cols: std::array::from_fn(|col| {
+            merge_attack_value(base.dark_cols[col], attack.dark_cols[col])
+        }),
         blind: merge_attack_value(base.blind, attack.blind),
         cover: merge_attack_value(base.cover, attack.cover),
     }

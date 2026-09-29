@@ -143,6 +143,7 @@ fn runtime_mod_value(
         ("movey", visual.move_y_cols),
         ("tiny", visual.tiny_cols),
         ("bumpy", visual.bumpy_cols),
+        ("dark", runtime.visibility[player].dark_cols),
     ] {
         if let Some(column) = key
             .strip_prefix(prefix)
@@ -260,6 +261,50 @@ fn modifier_runtime(
         GameplayAttackRuntimeState::new(constants, eases),
         unsupported_eases.get(),
     )
+}
+
+#[test]
+fn sampled_dark_columns_keep_method_and_string_values() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Column dark");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 3.0;
+    let compiled =
+        compile_song_lua_layers(&[directory.join("column-dark.lua").as_path()], 0, &context)
+            .unwrap();
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0, "unsupported runtime ease target");
+    for (second, expected) in [
+        (0.25, [1.0, -0.5, 0.25, 0.0]),
+        (1.25, [0.0, 0.5, -0.25, 1.5]),
+        (2.25, [1.0, -0.5, 0.25, 0.0]),
+    ] {
+        for player in 0..2 {
+            let _ = runtime.refresh_player(
+                player,
+                second,
+                0.25,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        assert_eq!(runtime_mod_value(&runtime, 0, "dark"), Some(0.25));
+        for (key, expected) in ["dark1", "dark2", "dark3", "dark4"]
+            .into_iter()
+            .zip(expected)
+        {
+            let actual = runtime_mod_value(&runtime, 0, key).unwrap();
+            assert!(
+                (actual - expected).abs() < 0.00001,
+                "{key} at {second}s: {actual}"
+            );
+        }
+        assert_eq!(runtime_mod_value(&runtime, 1, "dark1"), Some(0.75));
+        assert_eq!(runtime_mod_value(&runtime, 1, "dark2"), Some(0.0));
+        assert_eq!(runtime_mod_value(&runtime, 1, "dark"), Some(0.0));
+    }
 }
 
 #[test]

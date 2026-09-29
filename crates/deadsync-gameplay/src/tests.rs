@@ -1674,11 +1674,17 @@ mod tests {
         let visibility = merge_attack_visibility_effects(
             VisibilityEffects {
                 dark: 0.1,
+                dark_cols: [0.25; MAX_COLS],
                 blind: 0.2,
                 cover: 0.3,
             },
             VisibilityOverrides {
                 dark: Some(1.0),
+                dark_cols: std::array::from_fn(|col| match col {
+                    0 => Some(-0.5),
+                    1 => Some(f32::NAN),
+                    _ => None,
+                }),
                 blind: Some(f32::NAN),
                 cover: None,
             },
@@ -1686,6 +1692,8 @@ mod tests {
         assert_near(visibility.dark, 1.0);
         assert_near(visibility.blind, 0.2);
         assert_near(visibility.cover, 0.3);
+        assert_near(visibility.dark_cols[0], -0.5);
+        assert_eq!(&visibility.dark_cols[1..], &[0.25; MAX_COLS - 1]);
     }
 
     #[test]
@@ -2602,6 +2610,7 @@ mod tests {
                     dark: Some(1.0),
                     blind: Some(0.5),
                     cover: Some(0.25),
+                    ..VisibilityOverrides::default()
                 },
                 active_attack_scroll: ScrollOverrides {
                     reverse: Some(1.0),
@@ -3443,6 +3452,78 @@ mod tests {
         assert_eq!(mods.visual.tiny_cols[1], Some(2.5));
         assert_eq!(mods.visual.bumpy_period, Some(-1.25));
         assert_eq!(mods.visual.pulse_outer, Some(1.0));
+    }
+
+    #[test]
+    fn dark_columns_preserve_signed_levels_and_validate_indices() {
+        let mods = parse_song_lua_runtime_mods(
+            "25 dark,*2 -50 dark1,150 dark4,*3 no dark10,100 dark0,100 dark11",
+        );
+        assert_eq!(mods.visibility.dark, Some(0.25));
+        assert_eq!(mods.visibility.dark_cols[0], Some(-0.5));
+        assert_eq!(mods.visibility.dark_cols[3], Some(1.5));
+        assert_eq!(mods.visibility.dark_cols[9], Some(0.0));
+        assert_eq!(mods.visibility.dark_cols[1], None);
+        assert_eq!(mods.dark_col_speed[0], Some(2.0));
+        assert_eq!(mods.dark_col_speed[3], Some(1.0));
+        assert_eq!(mods.dark_col_speed[9], Some(3.0));
+        assert!(!parse_song_lua_runtime_mods("dark0,dark11").has_runtime_mask_effect());
+        let mods = parse_attack_mods("dark1,clearall,*2 75% dark4");
+        assert_eq!(mods.visibility.dark_cols[0], None);
+        assert_eq!(mods.visibility.dark_cols[3], Some(0.75));
+        assert!(mods.has_runtime_mask_effect());
+        assert!(build_course_modifier_mask_window("dark4").is_some());
+    }
+
+    #[test]
+    fn dark_columns_approach_ease_and_reset_independently() {
+        let constants = vec![
+            attack_mask_window(
+                0.0,
+                1.0,
+                parse_song_lua_runtime_mods("25 dark,*2 100 dark1,*1 -50 dark2,*4 150 dark10"),
+            ),
+            attack_mask_window(
+                1.0,
+                2.0,
+                parse_song_lua_runtime_mods("no dark1,no dark2,no dark10"),
+            ),
+        ];
+        let mut eases = Vec::new();
+        assert!(append_song_lua_ease_targets(
+            &mut eases, 0.0, 1.0, 2.0, "Dark4", 0.0, 100.0, None, None, None,
+        ));
+        let mut runtime =
+            GameplayAttackRuntimeState::new([constants, Vec::new()], [eases, Vec::new()]);
+        for (now, expected) in [
+            (0.25, [0.5, -0.25, 0.25, 1.0]),
+            (0.5, [1.0, -0.5, 0.5, 1.5]),
+            (1.25, [0.75, -0.25, 1.0, 1.25]),
+        ] {
+            let _ = runtime.refresh_player(
+                0,
+                now,
+                0.25,
+                AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (col, expected) in [0, 1, 3, 9].into_iter().zip(expected) {
+                assert_near(runtime.visibility[0].dark_cols[col].unwrap(), expected);
+            }
+            assert_eq!(runtime.visibility[0].dark_cols[2], None);
+            assert!(!runtime.visibility[1].any(), "P1 dark must not affect P2");
+            assert_eq!(runtime.visibility[0].dark, (now < 1.0).then_some(0.25));
+        }
+        let _ = runtime.refresh_player(
+            0,
+            2.5,
+            0.25,
+            AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert!(!runtime.visibility[0].any(), "expired columns must reset");
     }
 
     #[test]
@@ -7544,6 +7625,24 @@ mod tests {
 
         song_lua_extend_ease_tails(&mut windows, &[constant]);
 
+        assert_near(windows[0].sustain_end_second, 3.0);
+        assert_eq!(windows[1].sustain_end_second, f32::MAX);
+    }
+
+    #[test]
+    fn dark_column_ease_tail_stops_only_at_same_column() {
+        let mut windows = [1, 2].map(|col| {
+            song_lua_ease_mask_window(
+                SongLuaEaseMaskTarget::VisibilityDarkColumn(col),
+                0.0,
+                1.0,
+                1.0,
+                0.0,
+                1.0,
+            )
+        });
+        let constant = attack_mask_window(3.0, 6.0, parse_song_lua_runtime_mods("dark,dark2"));
+        song_lua_extend_ease_tails(&mut windows, &[constant]);
         assert_near(windows[0].sustain_end_second, 3.0);
         assert_eq!(windows[1].sustain_end_second, f32::MAX);
     }

@@ -882,6 +882,7 @@ fn runtime_mod_column_key(key: &str, prefix: &str) -> bool {
 #[must_use]
 pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
     if runtime_mod_column_key(key, "bumpy")
+        || runtime_mod_column_key(key, "dark")
         || runtime_mod_column_key(key, "tiny")
         || runtime_mod_column_key(key, "movex")
         || runtime_mod_column_key(key, "movey")
