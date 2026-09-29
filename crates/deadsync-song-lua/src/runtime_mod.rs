@@ -586,6 +586,7 @@ fn runtime_mod_entry_hash(entry: &RuntimeModEaseEntry, state: &RandomState) -> u
     match entry.unit {
         SongLuaTimeUnit::Beat => 0u8,
         SongLuaTimeUnit::Second => 1,
+        SongLuaTimeUnit::BeatClock => 2,
     }
     .hash(&mut hash);
     entry.start.to_bits().hash(&mut hash);
@@ -779,6 +780,7 @@ fn runtime_overlay_capture_key_hash(key: &RuntimeOverlayCaptureKey) -> u64 {
     match key.unit {
         SongLuaTimeUnit::Beat => 0u8,
         SongLuaTimeUnit::Second => 1,
+        SongLuaTimeUnit::BeatClock => 2,
     }
     .hash(&mut hash);
     key.start.hash(&mut hash);

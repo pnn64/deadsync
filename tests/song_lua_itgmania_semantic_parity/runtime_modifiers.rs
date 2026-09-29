@@ -264,6 +264,167 @@ fn modifier_runtime(
 }
 
 #[test]
+fn prefix_reader_writes_override_raw_ease_endpoints() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Prefix reader");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua_layers(
+        &[directory.join("prefix-mod-reader.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile prefix reader");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [(0.25, 0.025), (0.5, 0.0), (0.75, 0.0)] {
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime_mod_value(&runtime, 0, "centered"), Some(expected));
+    }
+}
+
+#[test]
+fn sampled_modifiers_change_on_the_recorded_frame() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    for (change_bpm, rate, offset) in [
+        (false, 1.0, 0.0),
+        (true, 1.0, 0.0),
+        (false, 1.5, 0.0),
+        (false, 1.0, -0.125),
+        (true, 2.0, 0.125),
+    ] {
+        let mut context = SongLuaCompileContext::new(&directory, "Sample clock");
+        context.song_timing_bpms = vec![(0.0, 140.0)];
+        if change_bpm {
+            context.song_timing_bpms.push((7.0, 180.0));
+        }
+        context.music_length_seconds = 61.0;
+        context.song_music_rate = rate;
+        let timing = deadsync_rules::timing::TimingData::from_segments(
+            offset,
+            0.0,
+            &deadsync_rules::timing::TimingSegments {
+                bpms: context.song_timing_bpms.clone(),
+                ..Default::default()
+            },
+            &[],
+        );
+        context.player_timing[0] = Some(timing.clone());
+        let compiled =
+            compile_song_lua_layers(&[directory.join("sample-clock.lua").as_path()], 0, &context)
+                .expect("compile sample clock");
+        let (windows, unsupported) =
+            deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+                &compiled[0],
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
+        let mut runtime =
+            GameplayAttackRuntimeState::new([Vec::new(), Vec::new()], [windows, Vec::new()]);
+        assert_eq!(unsupported, 0);
+        for frame in [1, 115, 116, 179, 180, 181, 3600] {
+            let second = (f64::from(frame) / 60.0 * f64::from(rate)) as f32 + offset;
+            for (probe, sampled_frame) in [(second.next_down(), frame - 1), (second, frame)] {
+                let seconds = f64::from(sampled_frame) / 60.0 * f64::from(rate);
+                let beat = if change_bpm && seconds > 3.0 {
+                    7.0 + (seconds - 3.0) * 3.0
+                } else {
+                    seconds * 140.0 / 60.0
+                };
+                let _ = runtime.refresh_player(
+                    0,
+                    probe,
+                    1_000_000.0,
+                    deadsync_gameplay::AppearanceEffects::default(),
+                    AttackBaseEffects::default,
+                    SongLuaPlayerTransform::default(),
+                );
+                let actual = runtime_mod_value(&runtime, 0, "tiny").expect("tiny value");
+                assert!(
+                    (actual - (beat / 100.0) as f32).abs() < 0.000001,
+                    "BPM change={change_bpm}, rate={rate}, offset={offset}, frame={sampled_frame}: {actual}, beat={beat}, probe={probe}"
+                );
+                assert_eq!(
+                    runtime_mod_value(&runtime, 0, "flip"),
+                    Some(if beat >= 140.0 { -0.25 } else { 0.0 })
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn sampled_modifiers_keep_stops_and_split_chart_timing() {
+    use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    for (chart_bpm, stops, second, expected) in [
+        (
+            120.0,
+            vec![StopSegment {
+                beat: 2.0,
+                duration: 0.5,
+            }],
+            1.25,
+            0.02,
+        ),
+        (180.0, Vec::new(), 2.0, 0.06),
+    ] {
+        let mut context = SongLuaCompileContext::new(&directory, "Chart clock");
+        context.song_timing_bpms = vec![(0.0, 120.0)];
+        context.music_length_seconds = 4.0;
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, chart_bpm)],
+                stops,
+                ..Default::default()
+            },
+            &[],
+        );
+        context.player_timing[0] = Some(timing.clone());
+        let compiled =
+            compile_song_lua_layers(&[directory.join("sample-clock.lua").as_path()], 0, &context)
+                .expect("compile chart clock");
+        let (windows, unsupported) =
+            deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+                &compiled[0],
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
+        assert_eq!(unsupported, 0);
+        let mut runtime =
+            GameplayAttackRuntimeState::new([Vec::new(), Vec::new()], [windows, Vec::new()]);
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert!(
+            (runtime_mod_value(&runtime, 0, "tiny").expect("tiny value") - expected).abs()
+                < 0.000001
+        );
+    }
+}
+
+#[test]
 fn sampled_dark_columns_keep_method_and_string_values() {
     crate::paths::init();
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");

@@ -9,6 +9,7 @@ pub const fn song_lua_runtime_time_unit(
     match unit {
         crate::SongLuaTimeUnit::Beat => deadsync_gameplay::SongLuaRuntimeTimeUnit::Beat,
         crate::SongLuaTimeUnit::Second => deadsync_gameplay::SongLuaRuntimeTimeUnit::Second,
+        crate::SongLuaTimeUnit::BeatClock => deadsync_gameplay::SongLuaRuntimeTimeUnit::BeatClock,
     }
 }
 

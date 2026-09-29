@@ -31,6 +31,7 @@ mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
+mod syntax;
 mod tables;
 mod theme_colors;
 mod timing;
@@ -1499,6 +1500,8 @@ pub fn overlay_ease_cmp(
 pub enum SongLuaTimeUnit {
     Beat,
     Second,
+    /// Sampled music seconds relative to beat zero on a matching BPM clock.
+    BeatClock,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

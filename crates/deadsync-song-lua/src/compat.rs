@@ -12,11 +12,11 @@ use crate::{
     current_gamestate_value, current_song_value, current_steps_value, deduplicate_lua_table,
     install_theme_color_helpers, json_to_lua_value, lua_binary_to_hex, lua_table_to_string,
     lua_to_json_value, make_color_table, map_lua_table, note_song_lua_side_effect,
-    parse_chart_info, path_basename, preprocess_lua_cmd_syntax, read_color_call, read_color_value,
-    read_f32, read_string, retarget_loader_env, rotate_lua_table, seconds_to_hhmmss,
-    set_string_method, song_lua_is_minimum_product_version, song_lua_is_product_version,
-    stringify_lua_table, strip_sprite_hints, timing_window_arg_index, timing_window_seconds,
-    truthy, worst_judgment_from_offsets,
+    parse_chart_info, path_basename, read_color_call, read_color_value, read_f32, read_string,
+    retarget_loader_env, rotate_lua_table, seconds_to_hhmmss, set_string_method,
+    song_lua_is_minimum_product_version, song_lua_is_product_version, stringify_lua_table,
+    strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
+    worst_judgment_from_offsets,
 };
 
 #[derive(Clone, Copy)]
@@ -33,6 +33,7 @@ pub fn install_stdlib_compat(
     song_dir: &Path,
     callbacks: SongLuaCompatCallbacks,
 ) -> mlua::Result<()> {
+    crate::syntax::install_concat(lua)?;
     let globals = lua.globals();
     let table: Table = globals.get("table")?;
     table.set(
@@ -491,7 +492,7 @@ pub fn install_stdlib_compat(
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
-            let code = preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
+            let code = crate::syntax::preprocess_source(&code).map_err(mlua::Error::external)?;
             let mut chunk = lua.load(&code);
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);

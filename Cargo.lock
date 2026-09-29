@@ -457,6 +457,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "borsh"
+version = "1.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "553c5d846a6ba5150c65e3b1b8ec073bcf1abc20f9b7220de384a4443ea4e20a"
+dependencies = [
+ "bytes",
+ "cfg_aliases",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -504,6 +514,12 @@ name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+
+[[package]]
+name = "bytecount"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
 
 [[package]]
 name = "bytemuck"
@@ -771,7 +787,7 @@ dependencies = [
  "cookie",
  "document-features",
  "idna",
- "indexmap",
+ "indexmap 2.14.2",
  "log",
  "serde",
  "serde_derive",
@@ -1296,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1619"
+version = "0.5.1620"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1735,6 +1751,7 @@ dependencies = [
  "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-simfile",
+ "full_moon",
  "glam",
  "image",
  "log",
@@ -1759,7 +1776,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1619"
+version = "0.5.1620"
 dependencies = [
  "bitflags 2.13.2",
  "chrono",
@@ -1827,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1619"
+version = "0.5.1620"
 dependencies = [
  "log",
  "semver",
@@ -1871,6 +1888,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 dependencies = [
  "powerfmt",
+]
+
+[[package]]
+name = "derive_more"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -2199,6 +2237,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
+name = "full_moon"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a083d6f598bbe9d70e694f2a5cf78f0354678a8c13528da2df6467b089586404"
+dependencies = [
+ "bytecount",
+ "cfg-if",
+ "derive_more",
+ "full_moon_derive",
+ "paste",
+ "smol_str 0.3.2",
+]
+
+[[package]]
+name = "full_moon_derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99b4bd12ce56927d1dc5478d21528ea8c4b93ca85ff8f8043b6a5351a2a3c6f7"
+dependencies = [
+ "indexmap 1.9.3",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2464,6 +2528,12 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+
+[[package]]
+name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
@@ -2712,6 +2782,16 @@ name = "imgref"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
+
+[[package]]
+name = "indexmap"
+version = "1.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
+dependencies = [
+ "autocfg",
+ "hashbrown 0.12.3",
+]
 
 [[package]]
 name = "indexmap"
@@ -3201,7 +3281,7 @@ dependencies = [
  "codespan-reporting",
  "half",
  "hashbrown 0.17.1",
- "indexmap",
+ "indexmap 2.14.2",
  "libm",
  "log",
  "naga-types",
@@ -3220,7 +3300,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "590afbf58a6f4f62873cd5cff4468061844bafa1cdf399cc954537c22d768d49"
 dependencies = [
  "hashbrown 0.17.1",
- "indexmap",
+ "indexmap 2.14.2",
  "rustc-hash 1.1.0",
  "thiserror 2.0.21",
 ]
@@ -4779,7 +4859,7 @@ version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
- "indexmap",
+ "indexmap 2.14.2",
  "itoa",
  "memchr",
  "serde",
@@ -4950,6 +5030,16 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "smol_str"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9676b89cd56310a87b93dec47b11af744f34d5fc9f367b829474eec0a891350d"
+dependencies = [
+ "borsh",
  "serde",
 ]
 
@@ -5137,6 +5227,17 @@ dependencies = [
  "regex-lite",
  "smallvec",
  "symphonia-core",
+]
+
+[[package]]
+name = "syn"
+version = "1.0.109"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -5397,7 +5498,7 @@ version = "0.25.15+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1340ea94a5856333492c9064b02c778b191dd2c853778d9609debdcdfea3a614"
 dependencies = [
- "indexmap",
+ "indexmap 2.14.2",
  "toml_datetime",
  "toml_parser",
  "winnow",
@@ -5507,6 +5608,12 @@ name = "unicode-width"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
 name = "untrusted"
@@ -5912,7 +6019,7 @@ dependencies = [
  "cfg_aliases",
  "document-features",
  "hashbrown 0.17.1",
- "indexmap",
+ "indexmap 2.14.2",
  "log",
  "naga",
  "naga-types",
@@ -6304,7 +6411,7 @@ dependencies = [
  "rustix 0.38.44",
  "sctk-adwaita",
  "smithay-client-toolkit 0.19.2",
- "smol_str",
+ "smol_str 0.2.2",
  "tracing",
  "unicode-segmentation",
  "wasm-bindgen",
@@ -6558,7 +6665,7 @@ checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
 dependencies = [
  "crc32fast",
  "flate2",
- "indexmap",
+ "indexmap 2.14.2",
  "memchr",
  "typed-path",
 ]

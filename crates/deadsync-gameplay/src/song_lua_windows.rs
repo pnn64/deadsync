@@ -21,15 +21,9 @@ impl SongLuaCompilePlayStyleLike for GameplayInputPlayStyle {
     #[inline(always)]
     fn as_song_lua_compile_play_style(self) -> SongLuaCompilePlayStyle {
         match self {
-            Self::Single | Self::PumpSingle => {
-                SongLuaCompilePlayStyle::Single
-            }
-            Self::Versus | Self::PumpVersus => {
-                SongLuaCompilePlayStyle::Versus
-            }
-            Self::Double | Self::PumpDouble => {
-                SongLuaCompilePlayStyle::Double
-            }
+            Self::Single | Self::PumpSingle => SongLuaCompilePlayStyle::Single,
+            Self::Versus | Self::PumpVersus => SongLuaCompilePlayStyle::Versus,
+            Self::Double | Self::PumpDouble => SongLuaCompilePlayStyle::Double,
         }
     }
 }
@@ -38,6 +32,8 @@ impl SongLuaCompilePlayStyleLike for GameplayInputPlayStyle {
 pub enum SongLuaRuntimeTimeUnit {
     Beat,
     Second,
+    /// Music seconds on the BPM clock, anchored at the player's beat zero.
+    BeatClock,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,6 +161,7 @@ pub fn song_lua_time_to_second(
     match unit {
         SongLuaRuntimeTimeUnit::Beat => timing_player.get_time_for_beat_exact(value),
         SongLuaRuntimeTimeUnit::Second => value - global_offset_seconds,
+        SongLuaRuntimeTimeUnit::BeatClock => value + timing_player.get_time_for_beat_exact(0.0),
     }
 }
 

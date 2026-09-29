@@ -928,6 +928,7 @@ pub fn push_update_mod_targets(
         speeds,
         last_windows,
         &mut (0, String::new()),
+        SongLuaTimeUnit::Beat,
     );
 }
 
@@ -941,6 +942,7 @@ fn push_update_mod_targets_with_key(
     speeds: &[SongLuaUpdateModState; LUA_PLAYERS],
     last_windows: &mut BTreeMap<(usize, String), usize>,
     lookup_key: &mut (usize, String),
+    unit: SongLuaTimeUnit,
 ) {
     if from_players.iter().all(BTreeMap::is_empty) {
         return;
@@ -981,7 +983,7 @@ fn push_update_mod_targets_with_key(
                 // at the authored speed. Never tween toward a future write.
                 out.push(SongLuaEaseWindow {
                     approach_speed: Some(speed),
-                    unit: SongLuaTimeUnit::Beat,
+                    unit,
                     start,
                     limit: end - start,
                     span_mode: SongLuaSpanMode::Len,
@@ -1001,6 +1003,7 @@ fn push_update_mod_targets_with_key(
             if let SongLuaEaseTarget::Mod(name) = &mut target {
                 *name = key.to_owned();
             }
+            let first = out.len();
             push_perframe_player_target(
                 out,
                 start,
@@ -1012,6 +1015,9 @@ fn push_update_mod_targets_with_key(
                 target,
                 player,
             );
+            for window in &mut out[first..] {
+                window.unit = unit;
+            }
         }
     }
 }
@@ -1932,6 +1938,22 @@ pub fn compile_update_functions<Kind>(
     let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
     let mut sample_beats = vec![start];
+    let rate = f64::from(song_music_rate(context));
+    let mut sample_seconds =
+        vec![(f64::from(song_elapsed_seconds_at(start, context)) * rate) as f32];
+    let fallback_bpms = [(0.0, song_display_bps(context) * 60.0)];
+    let bpms = if context.song_timing_bpms.is_empty() {
+        fallback_bpms.as_slice()
+    } else {
+        &context.song_timing_bpms
+    };
+    // Pauses, warps and split chart timing need the player's beat conversion.
+    // A matching continuous clock can retain the exact sampled frame instead.
+    let use_mod_clock = context
+        .player_timing
+        .iter()
+        .flatten()
+        .all(|timing| timing.matches_bpm_clock(bpms));
     let mut player_samples = vec![baseline_players];
     let mut mod_samples = vec![baseline_mods.clone()];
     let mut mod_speed_samples = vec![current_update_mod_speeds(&option_tables)?];
@@ -2016,6 +2038,7 @@ pub fn compile_update_functions<Kind>(
         }
         transform_masks = next_masks;
         sample_beats.push(next_beat);
+        sample_seconds.push((seconds * rate) as f32);
         player_samples.push(next_players);
         player_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
@@ -2081,16 +2104,31 @@ pub fn compile_update_functions<Kind>(
         );
         let from_mods = &mod_samples[index];
         let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
+        let (mod_start, mod_end, mod_unit) = if use_mod_clock {
+            (
+                sample_seconds[index],
+                sample_seconds
+                    .get(index + 1)
+                    .copied()
+                    .unwrap_or((seconds * rate) as f32),
+                SongLuaTimeUnit::BeatClock,
+            )
+        } else {
+            (seg_start, seg_end, SongLuaTimeUnit::Beat)
+        };
         push_update_mod_targets_with_key(
             &mut eases,
-            seg_start,
-            seg_end,
+            mod_start,
+            mod_end,
             from_mods,
             to_mods,
             &baseline_mods,
             &mod_speed_samples[index],
             &mut last_mod_windows,
             &mut last_mod_lookup_key,
+            // Keep the update clock: narrowing to a beat and converting back
+            // can move a step target past its own frame's timestamp.
+            mod_unit,
         );
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);

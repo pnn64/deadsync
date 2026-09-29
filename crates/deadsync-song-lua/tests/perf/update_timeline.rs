@@ -345,6 +345,7 @@ fn mod_windows_match_parent_across_state_changes_and_stale_indices() {
                 &speeds,
                 &mut new_index,
                 &mut lookup,
+                SongLuaTimeUnit::Beat,
             );
             push_update_mod_targets(
                 &mut public,
@@ -382,6 +383,7 @@ fn unchanged_mod_windows_extend_without_heap_churn_after_warmup() {
         &speeds,
         &mut index,
         &mut lookup,
+        SongLuaTimeUnit::Beat,
     );
     assert_eq!(out.len(), 64);
     crate::perf::assert_no_churn(|| {
@@ -396,6 +398,7 @@ fn unchanged_mod_windows_extend_without_heap_churn_after_warmup() {
                 &speeds,
                 &mut index,
                 &mut lookup,
+                SongLuaTimeUnit::Beat,
             );
         }
     });
@@ -624,6 +627,7 @@ fn mod_batch(
                 speeds,
                 &mut index,
                 &mut lookup,
+                SongLuaTimeUnit::Beat,
             );
         }
     }
@@ -693,6 +697,7 @@ fn update_timeline_bench() {
             &speeds,
             &mut new_index,
             &mut lookup,
+            SongLuaTimeUnit::Beat,
         );
         measure_pair(
             &format!("mods_warm_{count}"),
@@ -722,6 +727,7 @@ fn update_timeline_bench() {
                     &speeds,
                     &mut new_index,
                     &mut lookup,
+                    SongLuaTimeUnit::Beat,
                 );
                 black_box(&new);
             },

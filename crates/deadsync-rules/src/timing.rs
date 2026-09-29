@@ -925,6 +925,20 @@ impl TimingData {
         timing_ns_to_seconds(time.saturating_sub(self.global_offset_ns))
     }
 
+    /// Whether this beat map shares a continuous BPM-only clock. Offsets may
+    /// differ: callers anchor that clock at this map's time for beat zero.
+    #[must_use]
+    pub fn matches_bpm_clock(&self, bpms: &[(f32, f32)]) -> bool {
+        self.stops.is_empty()
+            && self.delays.is_empty()
+            && self.warps.is_empty()
+            && self
+                .beat_to_time
+                .iter()
+                .map(|point| (point.beat, point.bpm))
+                .eq(bpms.iter().copied())
+    }
+
     #[must_use]
     pub fn get_time_for_beat_ns(&self, target_beat: f32) -> i64 {
         self.get_time_for_beat_internal_ns(target_beat)

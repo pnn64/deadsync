@@ -2426,6 +2426,10 @@ fn apply_compiled_ease(
             song_elapsed_seconds_at(end, context),
         ),
         SongLuaTimeUnit::Second => (ease.start, end),
+        SongLuaTimeUnit::BeatClock => {
+            let rate = deadsync_song_lua::song_music_rate(context);
+            (ease.start / rate, end / rate)
+        }
     };
     if seconds < start {
         return;

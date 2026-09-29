@@ -467,7 +467,14 @@ where
             &host.easing_names,
             &mut overlays,
         )?;
-        out.eases.extend(eases);
+        // A chart's recurring prefix reader can transform modifier strings
+        // before writing PlayerOptions. Its sampled writes are authoritative;
+        // raw table endpoints would bypass that reader and overwrite them.
+        let prefix_is_runtime = update_tree_reads_global(&lua, &root, "prefix_globals")
+            .map_err(|err| err.to_string())?;
+        out.eases.extend(eases.into_iter().filter(|ease| {
+            !prefix_is_runtime || !matches!(ease.target, crate::SongLuaEaseTarget::Mod(_))
+        }));
         out.overlay_eases.extend(overlay_eases);
         out.column_offsets.extend(column_offsets);
         merge_compile_info(&mut out.info, info);

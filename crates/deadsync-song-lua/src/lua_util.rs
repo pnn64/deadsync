@@ -38,9 +38,9 @@ use crate::{
     overlay_text_align_label, parse_color_text, parse_overlay_blend_mode,
     parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
     parse_overlay_text_glow_mode, parse_sprite_sheet_dims, player_child_proxy_name,
-    player_index_from_value, player_number_name, preprocess_lua_cmd_syntax,
-    push_unique_compile_detail, read_actions_with_function_capture, read_boolish, read_f32,
-    read_f64, read_i32_value, read_song_lua_broadcasts, read_string, read_u32_value,
+    player_index_from_value, player_number_name, push_unique_compile_detail,
+    read_actions_with_function_capture, read_boolish, read_f32, read_f64, read_i32_value,
+    read_song_lua_broadcasts, read_string, read_u32_value,
     record_unsupported_function_action_capture, register_loader_env, resolve_load_actor_path,
     resolve_script_path, rolling_numbers_format, scale_to_rect_plan, set_compile_song_runtime_beat,
     set_compile_song_runtime_values, set_string_method, song_lua_halign_value,
@@ -567,7 +567,7 @@ pub(crate) fn load_script_file_with_env(
     environment: Option<Table>,
 ) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
-    let source = preprocess_lua_cmd_syntax(&source).map_err(mlua::Error::external)?;
+    let source = crate::syntax::preprocess_source(&source).map_err(mlua::Error::external)?;
     let environment = match environment {
         Some(environment) => environment,
         None => initial_chunk_environment(lua, path)?,
