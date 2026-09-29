@@ -52,6 +52,13 @@
       "status": "ok"
     },
     {
+      "simfile": "Levels/levels-fakemines.ssc",
+      "fixture": "Levels/levels-fakemines.ssc.semantic.json",
+      "title": "Levels",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Slamurai/Slamurai.ssc",
       "fixture": "Slamurai/Slamurai.ssc.semantic.json",
       "title": "Slamurai",

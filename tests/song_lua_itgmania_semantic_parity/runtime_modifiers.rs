@@ -38,11 +38,13 @@ fn mod_string_level(words: &[&str]) -> Option<f32> {
             _ if word.starts_with(|c: char| c.is_ascii_digit() || c == '-') => {
                 // strtof stops before a trailing '%' as in "150% drunk", and
                 // StringToFloat turns a non-finite result into 0.
-                let value = word.strip_suffix('%').unwrap_or(word).parse::<f32>().ok()?;
-                if value.is_finite() {
-                    value / 100.0
-                } else {
-                    0.0
+                let text = word.strip_suffix('%').unwrap_or(word);
+                match text.parse::<f32>() {
+                    Ok(value) if value.is_finite() => value / 100.0,
+                    Ok(_) => 0.0,
+                    // strtof also reads C spellings of NaN such as "-nan(ind)".
+                    Err(_) if text.contains("nan") => 0.0,
+                    Err(_) => return None,
                 }
             }
             _ => return None,

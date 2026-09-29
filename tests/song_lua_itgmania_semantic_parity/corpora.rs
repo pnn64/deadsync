@@ -84,6 +84,7 @@ mod lua_songs {
         step_your_game_up => "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
         slamurai => "Slamurai/Slamurai.ssc",
         bank_account => "Bank Account/Bank Account.ssc",
+        levels => "Levels/levels-fakemines.ssc",
     }
 }
 

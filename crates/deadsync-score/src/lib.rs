@@ -3311,9 +3311,9 @@ const LUA_SCORE_SUBMIT_ALLOWLIST: &[&str] = &[
     "a147dd828cd08fc7", // Riddle (DX)
     "0ea0735edbc2405f", // flip69 (DX)
     "e443862891fe809a", // KENPO SAITO (DX)
-    // "f95bc209c6f2cbfe", // Levels (SM)
-    // "b50d0c3916e75b84", // Levels (SH)
-    // "f41a24722a37758f", // Levels (SX)
+    "f95bc209c6f2cbfe", // Levels (SM)
+    "b50d0c3916e75b84", // Levels (SH)
+    "f41a24722a37758f", // Levels (SX)
     "3a6b2cedcc3fdca3", // Gemini in Clockland (SX)
 ];
 
