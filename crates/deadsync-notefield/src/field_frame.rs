@@ -1,4 +1,4 @@
-use crate::transforms::visual_note_rotation_y;
+use crate::transforms::{visual_note_rotation_x, visual_note_rotation_y};
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
@@ -710,7 +710,7 @@ fn compose_field_contents<S, F>(
         let head_slot = head_slot.and_then(|slot| {
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(slot, elapsed, current_beat),
-                note_rotation_y,
+                [0.0, note_rotation_y],
             );
             if !draw.visible {
                 return None;
@@ -803,6 +803,7 @@ fn compose_field_contents<S, F>(
                     hold_head_translation,
                     elapsed,
                     current_beat,
+                    0.0,
                     note_rotation_y,
                     flat_tap_face_rotation_y,
                     hold_head_rot,
@@ -830,7 +831,7 @@ fn compose_field_contents<S, F>(
             let size = scale_sprite_to_arrow(note_slot.size(), hold_head_target_arrow_px);
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(note_slot, elapsed, current_beat),
-                note_rotation_y,
+                [0.0, note_rotation_y],
             );
             let rotation = -note_slot.sprite_def().rotation_deg as f32;
             compose_flat_note_layer(
@@ -1057,6 +1058,7 @@ fn compose_visible_notes<S, F>(
                     let scale = effect_zoom * request.options.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
+                let note_rotation_x = visual_note_rotation_x(adjusted_travel, visual.roll);
                 let note_rotation_y = visual_note_rotation_y(adjusted_travel, visual.twirl);
                 let flat_tap_face_rotation_y = note_rotation_y;
                 let note_rotation_z = prepared.column_rotations_deg[local_col]
@@ -1088,6 +1090,7 @@ fn compose_visible_notes<S, F>(
                             display_time_s: note_display_time,
                             current_beat,
                             uv_translation: mine_translation,
+                            rotation_x_deg: note_rotation_x,
                             rotation_y_deg: note_rotation_y,
                             note_rotation_z_deg: note_rotation_z,
                             alpha: note_alpha,
@@ -1139,6 +1142,7 @@ fn compose_visible_notes<S, F>(
                                 translation,
                                 elapsed,
                                 current_beat,
+                                note_rotation_x,
                                 note_rotation_y,
                                 flat_tap_face_rotation_y,
                                 note_rotation_z,
@@ -1167,6 +1171,7 @@ fn compose_visible_notes<S, F>(
                             translation,
                             elapsed,
                             current_beat,
+                            note_rotation_x,
                             note_rotation_y,
                             flat_tap_face_rotation_y,
                             note_rotation_z,
@@ -1208,6 +1213,7 @@ fn compose_visible_notes<S, F>(
                             translation,
                             elapsed,
                             current_beat,
+                            note_rotation_x,
                             note_rotation_y,
                             flat_tap_face_rotation_y,
                             note_rotation_z,
@@ -1235,7 +1241,7 @@ fn compose_visible_notes<S, F>(
                     let center = [column_center_x, y_pos];
                     let draw = song_lua_note_model_draw(
                         model_cache.draw_at(note_slot, elapsed, current_beat),
-                        note_rotation_y,
+                        [note_rotation_x, note_rotation_y],
                     );
                     let rotation = -note_slot.sprite_def().rotation_deg as f32;
                     compose_flat_note_layer(
@@ -1284,6 +1290,7 @@ fn compose_flat_noteskin_layer<S, F>(
     translation: [f32; 2],
     elapsed: f32,
     current_beat: f32,
+    rotation_x_deg: f32,
     rotation_y_deg: f32,
     face_rotation_y_deg: f32,
     rotation_z_deg: f32,
@@ -1299,7 +1306,7 @@ fn compose_flat_noteskin_layer<S, F>(
 {
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, elapsed, current_beat),
-        rotation_y_deg,
+        [rotation_x_deg, rotation_y_deg],
     );
     if !draw.visible {
         return;
@@ -1372,6 +1379,7 @@ fn compose_flat_single_slot<S, F>(
     translation: [f32; 2],
     elapsed: f32,
     current_beat: f32,
+    rotation_x_deg: f32,
     rotation_y_deg: f32,
     face_rotation_y_deg: f32,
     rotation_z_deg: f32,
@@ -1392,7 +1400,7 @@ fn compose_flat_single_slot<S, F>(
     let size = note_slot_base_size(slot, model, scale);
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, elapsed, current_beat),
-        rotation_y_deg,
+        [rotation_x_deg, rotation_y_deg],
     );
     let rotation = -slot.sprite_def().rotation_deg as f32;
     compose_flat_note_layer(
@@ -1744,7 +1752,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             blend: sprite.blend,
             mask_source: false,
             mask_dest: false,
-            rot_x_deg: 0.0,
+            rot_x_deg: sprite.rot_x_deg,
             rot_y_deg: sprite.rot_y_deg,
             rot_z_deg: sprite.rot_z_deg,
             skew: [0.0, 0.0],
@@ -2011,6 +2019,7 @@ mod note_layer_tests {
                 3.0,
                 4.0,
                 0.0,
+                0.0,
                 13.0,
                 5.0,
                 [1.0; 4],
@@ -2099,6 +2108,7 @@ mod note_layer_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
             [1.0; 4],
             0.0,
             140,
@@ -2168,6 +2178,7 @@ mod camera_wrap_tests {
             flip_y: false,
             fade: [0.1, 0.2, 0.3, 0.4],
             blend: BlendMode::Add,
+            rot_x_deg: 0.0,
             rot_y_deg: 11.0,
             rot_z_deg: 22.0,
             z: 140,

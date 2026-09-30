@@ -4,9 +4,15 @@ use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 
 #[inline(always)]
 #[must_use]
-pub fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
-    if rotation_y_deg.abs() > f32::EPSILON {
-        draw.rot[1] += rotation_y_deg;
+pub fn song_lua_note_model_draw(
+    mut draw: ModelDrawState,
+    rotation_xy_deg: [f32; 2],
+) -> ModelDrawState {
+    if rotation_xy_deg[0] != 0.0 && rotation_xy_deg[0].is_finite() {
+        draw.rot[0] += rotation_xy_deg[0];
+    }
+    if rotation_xy_deg[1].abs() > f32::EPSILON {
+        draw.rot[1] += rotation_xy_deg[1];
     }
     draw
 }

@@ -208,7 +208,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
     if let Some(slot) = request.hold_slot {
         let draw = song_lua_note_model_draw(
             model_cache.draw_at(slot, request.elapsed, request.beat),
-            request.rotation_y_deg,
+            [0.0, request.rotation_y_deg],
         );
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [
@@ -472,6 +472,7 @@ fn append_receptor_sprite<S, F>(
         flip_y: draw.zoom[1] < 0.0,
         fade: [0.0; 4],
         blend: draw.blend,
+        rot_x_deg: 0.0,
         rot_y_deg: draw.rotation_y_deg,
         rot_z_deg: draw.rotation_z_deg,
         z: draw.z,

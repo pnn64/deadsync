@@ -517,6 +517,16 @@ pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
     -deg
 }
 
+// ArrowEffects::GetRotationX for non-cap notes uses travel before Reverse,
+// Tipsy, and MoveY. Hold heads/tails use zero X rotation at their call sites.
+pub(crate) fn visual_note_rotation_x(y_offset: f32, roll: f32) -> f32 {
+    if roll == 0.0 || !roll.is_finite() {
+        0.0
+    } else {
+        roll * y_offset / 2.0
+    }
+}
+
 // ArrowEffects::GetRotationY uses the pre-reverse, post-acceleration Y offset.
 pub(crate) fn visual_note_rotation_y(y_offset: f32, twirl: f32) -> f32 {
     if twirl == 0.0 || !twirl.is_finite() {

@@ -580,6 +580,7 @@ fn append_quad(
         flip_y: false,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: 0.0,
         z,
@@ -940,6 +941,7 @@ mod tests {
                 flip_y,
                 fade,
                 blend,
+                rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
                 z: actual_z,
@@ -955,6 +957,7 @@ mod tests {
                 assert!(!*flip_y);
                 assert_eq!(*fade, [0.0; 4]);
                 assert_eq!(*blend, BlendMode::Alpha);
+                assert_eq!(*rot_x_deg, 0.0);
                 assert_eq!(*rot_y_deg, 0.0);
                 assert_eq!(*rot_z_deg, 0.0);
                 assert_eq!(*actual_z, z);

@@ -558,6 +558,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualDrunkOffset,
     VisualDizzy,
     VisualTwirl,
+    VisualRoll,
     VisualParabolaX,
     VisualParabolaZ,
     VisualConfusion,
@@ -1736,6 +1737,7 @@ fn append_song_lua_ease_targets_key(
         "drunkoffset" => push(SongLuaEaseMaskTarget::VisualDrunkOffset, pct_from, pct_to),
         "dizzy" => push(SongLuaEaseMaskTarget::VisualDizzy, pct_from, pct_to),
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
+        "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
         "parabolaz" => push(SongLuaEaseMaskTarget::VisualParabolaZ, pct_from, pct_to),
         "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
@@ -2285,6 +2287,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualDrunkOffset => visual.drunk_offset = Some(value),
         SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
+        SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
@@ -2496,6 +2499,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualDrunkOffset => window.visual.drunk_offset.is_some(),
         SongLuaEaseMaskTarget::VisualDizzy => window.visual.dizzy.is_some(),
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
+        SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
@@ -3704,6 +3708,7 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.drunk_offset, visual.drunk_offset);
     mark_active_target(&mut targets.dizzy, visual.dizzy);
     mark_active_target(&mut targets.twirl, visual.twirl);
+    mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
     mark_active_target(&mut targets.parabola_z, visual.parabola_z);
     mark_active_target(&mut targets.confusion, visual.confusion);
@@ -4497,6 +4502,7 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualDizzy => attack.visual_speed.dizzy = Some(speed),
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
+            SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaZ => attack.visual_speed.parabola_z = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
@@ -5012,6 +5018,15 @@ fn apply_active_visual_window(
         window.visual.twirl,
         window.visual_speed.twirl,
         active_targets.visual.twirl,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.roll,
+        &mut values.visual_speed.roll,
+        window.visual.roll,
+        window.visual_speed.roll,
+        active_targets.visual.roll,
         active_clear_all,
         persisted,
     );
@@ -5645,6 +5660,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "roll" => set_approached_mod(
+            &mut out.visual.roll,
+            &mut out.visual_speed.roll,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "parabolax" => set_approached_mod(
             &mut out.visual.parabola_x,
             &mut out.visual_speed.parabola_x,
@@ -6122,6 +6143,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         drunk_offset: merge_attack_value(base.drunk_offset, attack.drunk_offset),
         dizzy: merge_attack_value(base.dizzy, attack.dizzy),
         twirl: merge_attack_value(base.twirl, attack.twirl),
+        roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
         parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),
         confusion: merge_attack_value(base.confusion, attack.confusion),

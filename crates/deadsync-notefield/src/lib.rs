@@ -537,6 +537,7 @@ mod tests {
                 flip_y,
                 fade,
                 blend,
+                rot_x_deg,
                 rot_y_deg,
                 rot_z_deg,
                 z,
@@ -552,6 +553,7 @@ mod tests {
                 assert!(!*flip_y);
                 assert_eq!(*fade, [0.0; 4]);
                 assert_eq!(*blend, BlendMode::Alpha);
+                assert_eq!(*rot_x_deg, 0.0);
                 assert_eq!(*rot_y_deg, 0.0);
                 assert_eq!(*rot_z_deg, 0.0);
                 assert_eq!(*z, 80);
@@ -1528,6 +1530,27 @@ mod tests {
             0.0
         );
         assert!(!visual_hold_body_needs_z_buffer(invalid));
+    }
+
+    #[test]
+    fn roll_uses_native_angles_and_preserves_authored_model_rotation() {
+        use super::transforms::visual_note_rotation_x;
+        for (travel, amount, expected) in [
+            (-128.0, -2.5, 160.0),
+            (128.0, -2.5, -160.0),
+            (64.0, 15.0, 480.0),
+            (0.0, 15.0, 0.0),
+            (512.0, 0.000000025, 0.0000064),
+        ] {
+            assert_eq!(visual_note_rotation_x(travel, amount), expected);
+        }
+        assert_eq!(visual_note_rotation_x(128.0, f32::NAN), 0.0);
+        let draw = deadsync_noteskin::ModelDrawState {
+            rot: [7.0, -5.0, 13.0],
+            ..deadsync_noteskin::ModelDrawState::default()
+        };
+        let combined = super::song_lua_note_model_draw(draw, [-160.0, 32.0]);
+        assert_eq!(combined.rot, [-153.0, 27.0, 13.0]);
     }
 
     #[test]

@@ -143,6 +143,7 @@ fn append_explosion_draw<S, F>(
         flip_y: flip,
         fade: [0.0; 4],
         blend: draw.blend,
+        rot_x_deg: 0.0,
         rot_y_deg: draw.rotation_y_deg,
         rot_z_deg: draw.rotation_z_deg,
         z: draw.z,

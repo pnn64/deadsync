@@ -568,6 +568,7 @@ pub struct FlatSprite {
     pub flip_y: bool,
     pub fade: [f32; 4],
     pub blend: BlendMode,
+    pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
     pub z: i16,

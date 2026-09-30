@@ -555,6 +555,7 @@ fn append_column_quad(
             [0.0, 0.0, 0.0, fade]
         },
         blend: deadlib_render_core::BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: 0.0,
         z,

@@ -542,6 +542,7 @@ fn compose_hold_sprite<S, F>(
         flip_y: v0 > v1,
         fade: [0.0; 4],
         blend: BlendMode::Alpha,
+        rot_x_deg: 0.0,
         rot_y_deg: pass.rotation_y_deg,
         rot_z_deg: pass.rotation_z_deg,
         z: pass.diffuse_z,

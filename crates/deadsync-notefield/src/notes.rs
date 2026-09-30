@@ -53,6 +53,7 @@ pub(crate) struct MineLayerRequest<'a, S> {
     pub display_time_s: f32,
     pub current_beat: f32,
     pub uv_translation: [f32; 2],
+    pub rotation_x_deg: f32,
     pub rotation_y_deg: f32,
     pub note_rotation_z_deg: f32,
     pub alpha: f32,
@@ -337,6 +338,7 @@ where
         flip_y: slot.sprite_def().mirror_v,
         fade: request.draw.fade,
         blend: request.blend,
+        rot_x_deg: request.draw.rot[0],
         rot_y_deg: request.rotation_y_deg,
         rot_z_deg: request.sprite_rotation_z_deg,
         z: request.z,
@@ -500,7 +502,10 @@ fn compose_flat_mine_gradient<S, F>(
         model_cache,
         NoteLayerRequest {
             slot,
-            draw: ModelDrawState::default(),
+            draw: ModelDrawState {
+                rot: [request.rotation_x_deg, 0.0, 0.0],
+                ..ModelDrawState::default()
+            },
             model_center: request.center,
             sprite_center: request.center,
             size,
@@ -533,7 +538,7 @@ fn compose_flat_mine_slot<S, F, Z>(
 {
     let draw = song_lua_note_model_draw(
         model_cache.draw_at(slot, request.display_time_s, request.current_beat),
-        request.rotation_y_deg,
+        [request.rotation_x_deg, request.rotation_y_deg],
     );
     if !draw.visible {
         return;
@@ -1626,6 +1631,7 @@ mod tests {
             display_time_s: 3.0,
             current_beat: 4.0,
             uv_translation: [0.1, 0.2],
+            rotation_x_deg: 0.0,
             rotation_y_deg: 12.0,
             note_rotation_z_deg: 5.0,
             alpha: 0.8,

@@ -2318,6 +2318,7 @@ mod tests {
                     request.chart.lane_hold_indices = &lanes;
                     request.chart.note_itg_rows = &[408];
                     request.visual.current_display_beat = beat;
+                    request.visual.visual.roll = 15.0;
                     let prepared = prepare_notefield(&request).unwrap();
                     let mut active = active_hold(0);
                     active.note_type = note_type;
@@ -2349,6 +2350,7 @@ mod tests {
                     }).collect();
                     assert_eq!(heads.len(), if layered { 2 } else { 1 });
                     for head in heads {
+                        assert_eq!(head.rot_x_deg, 0.0, "Roll must exclude hold heads");
                         assert_eq!(
                             head.uv_rect,
                             if mixed && !explicit {
@@ -2736,6 +2738,107 @@ mod tests {
                     assert_eq!(
                         checked, [true; 2],
                         "{kind:?}, direction {direction}, Twirl {twirl}"
+                    );
+                }
+            }
+        }
+    }
+    #[test]
+    fn roll_rotates_composed_taps_and_mines_without_rotating_receptors() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|index| {
+                TestSlot::new(if index < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(1).expect("index")],
+        ];
+        for kind in [NoteType::Tap, NoteType::Mine] {
+            let mut notes = [note(0), note(1)];
+            for (index, note) in notes.iter_mut().enumerate() {
+                note.note_type = kind;
+                note.beat = 2.0 + index as f32;
+                note.row_index =
+                    usize::try_from(deadsync_core::timing::beat_to_note_row(note.beat))
+                        .expect("positive fixture beat");
+            }
+            let rows = [96, 144];
+            for direction in [-1.0, 1.0] {
+                for roll in [-2.5, 2.5] {
+                    let mut request =
+                        request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.note_itg_rows = &rows;
+                    request.geometry.column_dirs.fill(direction);
+                    request.visual.visual.roll = roll;
+                    request.visual.accel.wave = 0.5;
+                    request.visual.visual.move_y_cols = [0.5; MAX_COLS];
+                    let prepared = prepare_notefield(&request).expect("prepared field");
+                    let frame = NotefieldFieldFrameView {
+                        feedback: spline_feedback(&[]),
+                        completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(),
+                        &mut draws,
+                        &mut Vec::new(),
+                        &mut ModelMeshCache::default(),
+                        &mut HoldMeshScratch::default(),
+                        &mut CapturedActorScratch::with_capacities(32, 0),
+                        &mut NotefieldCameraCache::default(),
+                        &request,
+                        &prepared,
+                        &frame,
+                        &source,
+                    );
+                    let mut checked = [false; 2];
+                    for draw in &draws {
+                        let FlatDraw::Sprite(sprite) = draw else {
+                            continue;
+                        };
+                        let SpriteSource::TextureHandle { key, .. } = &sprite.source else {
+                            continue;
+                        };
+                        if let Some(col) = ["note0", "note1"]
+                            .iter()
+                            .position(|name| *name == key.as_ref())
+                        {
+                            let y_offset =
+                                (sprite.center[1] - prepared.field.column_receptor_ys[col] - 32.0)
+                                    / prepared.field.column_dirs[col];
+                            assert!((sprite.rot_x_deg - roll * y_offset / 2.0).abs() < 0.0001);
+                            assert!(sprite.rot_x_deg.abs() > 1.0);
+                            let deadlib_present::actors::Actor::Sprite { rot_x_deg, .. } =
+                                crate::actor_from_flat_draw(draw.clone())
+                            else {
+                                panic!("proxy capture must retain the sprite")
+                            };
+                            assert_eq!(rot_x_deg, sprite.rot_x_deg);
+                            checked[col] = true;
+                        } else if key.starts_with("target") {
+                            assert_eq!(sprite.rot_x_deg, 0.0);
+                        }
+                    }
+                    assert_eq!(
+                        checked, [true; 2],
+                        "{kind:?}, direction {direction}, Roll {roll}"
                     );
                 }
             }

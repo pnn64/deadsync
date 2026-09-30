@@ -3475,6 +3475,30 @@ mod tests {
     }
 
     #[test]
+    fn roll_uses_native_amount_approach_and_reset() {
+        let mods = parse_attack_mods("*2 -250% roll");
+        assert_eq!(mods.visual.roll, Some(-2.5));
+        assert_eq!(mods.visual_speed.roll, Some(2.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        assert_near(current.roll.expect("active Roll"), -0.5);
+        assert_near(
+            merge_attack_visual_effects(VisualEffects::default(), current).roll,
+            -0.5,
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 0.5);
+        assert!(!current.any());
+        assert_eq!(parse_attack_mods("no roll").visual.roll, Some(0.0));
+    }
+
+    #[test]
     fn course_modifier_window_persists_for_the_whole_song() {
         let window = build_course_modifier_mask_window("C650,30% reverse,25% mini")
             .expect("course modifier window");

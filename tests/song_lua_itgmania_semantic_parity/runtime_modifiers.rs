@@ -218,6 +218,7 @@ fn runtime_mod_value(
         "tipsyspeed" => visual.tipsy_speed.unwrap_or(0.0),
         "dizzy" => visual.dizzy.unwrap_or(0.0),
         "twirl" => visual.twirl.unwrap_or(0.0),
+        "roll" => visual.roll.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
         "parabolaz" => visual.parabola_z.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
@@ -665,6 +666,54 @@ end}
         );
         assert_eq!(runtime_mod_value(&runtime, 0, "twirl"), Some(expected));
         assert_eq!(runtime_mod_value(&runtime, 1, "twirl"), Some(0.0));
+    }
+}
+
+#[test]
+fn roll_survives_lua_methods_strings_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create Roll fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    options:FromString('*2 -250% roll')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:Roll(7, 4)
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write Roll fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Roll");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile Roll fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime_mod_value(&runtime, 0, "roll"), Some(expected));
+        assert_eq!(runtime_mod_value(&runtime, 1, "roll"), Some(0.0));
     }
 }
 

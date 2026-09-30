@@ -227,6 +227,7 @@ fn append_sprite(
         flip_y: zoom[1].is_sign_negative(),
         fade: [0.0; 4],
         blend: BlendMode::Add,
+        rot_x_deg: 0.0,
         rot_y_deg: 0.0,
         rot_z_deg: rotation_deg,
         z,
