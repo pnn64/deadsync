@@ -210,8 +210,7 @@ fn compose_field_contents<S, F>(
     let col_end = col_start + num_cols;
     let field_zoom = prepared.field_zoom;
     let scroll_speed = prepared.scroll_speed;
-    let draw_distance_before_targets = request.geometry.draw_distance_before_targets;
-    let draw_distance_after_targets = request.geometry.draw_distance_after_targets;
+    let draw_range = prepared.draw_range;
     let current_beat = prepared.current_beat;
     let field = prepared.field;
     let playfield_center_x = field.playfield_center_x;
@@ -337,7 +336,11 @@ fn compose_field_contents<S, F>(
             lane_transform_caches[local_col],
         )
     };
-    let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
+    let visible_row_range = if field_zoom > 0.0 {
+        crate::note_placement::expand_range(travel.visible_row_range())
+    } else {
+        None
+    };
     let cue_visible_row_range = measure_cue_range_search_enabled(
         options.frame_features.measure_cues,
         scroll_speed,
@@ -398,6 +401,10 @@ fn compose_field_contents<S, F>(
         sprite_source,
     );
 
+    // Receptors and feedback remain visible when a signed draw range is empty.
+    if draw_range.bounds().is_none() {
+        return;
+    }
     let mut visible_note_bounds = [(0, 0); MAX_COLS];
     let mut visible_hold_bounds = [(0, 0); MAX_COLS];
     for local_col in 0..num_cols {
@@ -503,6 +510,19 @@ fn compose_field_contents<S, F>(
             travel.adjusted_note_for_row(head_travel_offset, head_note_row, local_col);
         let tail_adjusted_travel =
             travel.adjusted_note(tail_travel_offset, hold.end_beat, local_col);
+        // NoteDisplay::DrawHoldsInRange includes holds crossing the range or
+        // the Boomerang peak even when neither endpoint is visible.
+        let (_, head_before_peak) = travel.adjusted_with_peak(head_travel_offset);
+        let (_, tail_before_peak) = travel.adjusted_with_peak(tail_travel_offset);
+        if !draw_range.hold_visible(
+            head_adjusted_travel,
+            tail_adjusted_travel,
+            head_before_peak,
+            tail_before_peak,
+        ) {
+            return;
+        }
+        let draw_bounds = draw_range.lane_bounds(lane_receptor_y, dir, lane_offset);
         let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y) + lane_offset;
         let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y) + lane_offset;
         let note_display = ns.note_display_metrics;
@@ -536,7 +556,7 @@ fn compose_field_contents<S, F>(
             head_y,
             tail_y,
             receptor_y: receptor_draw_y,
-            screen_height: request.geometry.screen_height,
+            draw_bounds,
             field_zoom,
             lane_reverse,
             engaged,
@@ -662,7 +682,7 @@ fn compose_field_contents<S, F>(
                 rotation_y_deg: 0.0,
                 twirl: visual.twirl,
                 depth_test: hold_depth_test,
-                screen_height: request.geometry.screen_height,
+                draw_bounds,
                 body_z: crate::style::HOLD_BODY_Z,
                 cap_z: crate::style::HOLD_CAP_Z,
                 glow_z: crate::style::HOLD_GLOW_Z,
@@ -675,10 +695,7 @@ fn compose_field_contents<S, F>(
             return;
         }
         let head_draw_y = head_anchor_y;
-        let head_draw_delta = (head_draw_y - receptor_draw_y) * dir;
-        if head_draw_delta < -draw_distance_after_targets
-            || head_draw_delta > draw_distance_before_targets
-        {
+        if !draw_range.contains(head_anchor_adjusted_travel) {
             return;
         }
         let (head_alpha, head_glow) =
@@ -1021,9 +1038,7 @@ fn compose_visible_notes<S, F>(
                     note_row,
                     local_col,
                 );
-                if adjusted_travel < -request.geometry.draw_distance_after_targets
-                    || adjusted_travel > request.geometry.draw_distance_before_targets
-                {
+                if !prepared.draw_range.contains(adjusted_travel) {
                     return;
                 }
                 let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(

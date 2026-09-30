@@ -4459,16 +4459,31 @@ mod tests {
 
     #[test]
     fn collapsed_hold_draw_span_still_draws_caps() {
-        assert_eq!(hold_draw_span(120.0, 120.0, 480.0), Some((120.0, 120.0)));
+        assert_eq!(
+            hold_draw_span(120.0, 120.0, [-400.0, 880.0]),
+            Some((120.0, 120.0))
+        );
     }
 
     #[test]
-    fn hold_draw_span_uses_legacy_overscan_window() {
-        assert_eq!(hold_draw_span(-300.0, -250.0, 480.0), None);
-        assert_eq!(hold_draw_span(700.0, 720.0, 480.0), None);
-        assert_eq!(hold_draw_span(-450.0, 100.0, 480.0), Some((-400.0, 100.0)));
-        assert_eq!(hold_draw_span(100.0, 920.0, 480.0), Some((100.0, 880.0)));
-        assert_eq!(hold_draw_span(f32::NAN, 120.0, 480.0), None);
+    fn hold_draw_span_uses_supplied_draw_limits() {
+        assert_eq!(
+            hold_draw_span(-300.0, -250.0, [-400.0, 880.0]),
+            Some((-300.0, -250.0))
+        );
+        assert_eq!(
+            hold_draw_span(700.0, 720.0, [-400.0, 880.0]),
+            Some((700.0, 720.0))
+        );
+        assert_eq!(
+            hold_draw_span(-450.0, 100.0, [-400.0, 880.0]),
+            Some((-400.0, 100.0))
+        );
+        assert_eq!(
+            hold_draw_span(100.0, 920.0, [-400.0, 880.0]),
+            Some((100.0, 880.0))
+        );
+        assert_eq!(hold_draw_span(f32::NAN, 120.0, [-400.0, 880.0]), None);
     }
 
     #[test]

@@ -231,6 +231,8 @@ fn runtime_mod_value(
         "twirl" => visual.twirl.unwrap_or(0.0),
         "roll" => visual.roll.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "drawsize" => visual.draw_size.unwrap_or(0.0),
+        "drawsizeback" => visual.draw_size_back.unwrap_or(0.0),
         "square" => visual.square.unwrap_or(0.0),
         "squareoffset" => visual.square_offset.unwrap_or(0.0),
         "squareperiod" => visual.square_period.unwrap_or(0.0),
@@ -856,6 +858,78 @@ end}
         );
         assert_eq!(runtime_mod_value(&runtime, 0, "xmode"), Some(expected));
         assert_eq!(runtime_mod_value(&runtime, 1, "xmode"), Some(0.0));
+    }
+}
+
+#[test]
+fn draw_size_survives_lua_methods_strings_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create DrawSize fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    local value, speed = options:DrawSize()
+    assert(value == 0 and speed == 1 and select('#', options:DrawSize()) == 2)
+    local old, old_speed = options:DrawSize(3, 2)
+    assert(old == 0 and old_speed == 1)
+    local back, back_speed = options:DrawSizeBack(-1.5, 4)
+    assert(back == 0 and back_speed == 1)
+    assert(options:DrawSize() == 3 and select(2, options:DrawSize()) == 2)
+    assert(options:DrawSizeBack() == -1.5 and select(2, options:DrawSizeBack()) == 4)
+    other:DrawSize(-0.5, 2, true):DrawSizeBack(0.75, 3, true)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:FromString('*2 -150% drawsize,*4 300% drawsizeback')
+            assert(options:DrawSize() == -1.5 and select(2, options:DrawSize()) == 2)
+            assert(options:DrawSizeBack() == 3 and select(2, options:DrawSizeBack()) == 4)
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write DrawSize fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "DrawSize");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile DrawSize fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, dt, expected) in [
+        (0.25, 0.25, [0.5, -1.0]),
+        (0.5, 1_000_000.0, [-1.5, 3.0]),
+        (1.0, 1_000_000.0, [0.0; 2]),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                dt,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        for (key, value) in ["drawsize", "drawsizeback"].into_iter().zip(expected) {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some(value),
+                "{key} at {second}"
+            );
+        }
+        assert_eq!(runtime_mod_value(&runtime, 1, "drawsize"), Some(-0.5));
+        assert_eq!(runtime_mod_value(&runtime, 1, "drawsizeback"), Some(0.75));
     }
 }
 

@@ -560,6 +560,8 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualDrawSize,
+    VisualDrawSizeBack,
     VisualSquare,
     VisualSquareOffset,
     VisualSquarePeriod,
@@ -1746,6 +1748,8 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "drawsize" => push(SongLuaEaseMaskTarget::VisualDrawSize, pct_from, pct_to),
+        "drawsizeback" => push(SongLuaEaseMaskTarget::VisualDrawSizeBack, pct_from, pct_to),
         "square" => push(SongLuaEaseMaskTarget::VisualSquare, pct_from, pct_to),
         "squareoffset" => push(SongLuaEaseMaskTarget::VisualSquareOffset, pct_from, pct_to),
         "squareperiod" => push(SongLuaEaseMaskTarget::VisualSquarePeriod, pct_from, pct_to),
@@ -2305,6 +2309,8 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualDrawSize => visual.draw_size = Some(value),
+        SongLuaEaseMaskTarget::VisualDrawSizeBack => visual.draw_size_back = Some(value),
         SongLuaEaseMaskTarget::VisualSquare => visual.square = Some(value),
         SongLuaEaseMaskTarget::VisualSquareOffset => visual.square_offset = Some(value),
         SongLuaEaseMaskTarget::VisualSquarePeriod => visual.square_period = Some(value),
@@ -2524,6 +2530,8 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualDrawSize => window.visual.draw_size.is_some(),
+        SongLuaEaseMaskTarget::VisualDrawSizeBack => window.visual.draw_size_back.is_some(),
         SongLuaEaseMaskTarget::VisualSquare => window.visual.square.is_some(),
         SongLuaEaseMaskTarget::VisualSquareOffset => window.visual.square_offset.is_some(),
         SongLuaEaseMaskTarget::VisualSquarePeriod => window.visual.square_period.is_some(),
@@ -3740,6 +3748,8 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.draw_size, visual.draw_size);
+    mark_active_target(&mut targets.draw_size_back, visual.draw_size_back);
     mark_active_target(&mut targets.square, visual.square);
     mark_active_target(&mut targets.square_offset, visual.square_offset);
     mark_active_target(&mut targets.square_period, visual.square_period);
@@ -4541,6 +4551,10 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualDrawSize => attack.visual_speed.draw_size = Some(speed),
+            SongLuaEaseMaskTarget::VisualDrawSizeBack => {
+                attack.visual_speed.draw_size_back = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualSquare => attack.visual_speed.square = Some(speed),
             SongLuaEaseMaskTarget::VisualSquareOffset => {
                 attack.visual_speed.square_offset = Some(speed)
@@ -5088,6 +5102,24 @@ fn apply_active_visual_window(
         window.visual.parabola_x,
         window.visual_speed.parabola_x,
         active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.draw_size,
+        &mut values.visual_speed.draw_size,
+        window.visual.draw_size,
+        window.visual_speed.draw_size,
+        active_targets.visual.draw_size,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.draw_size_back,
+        &mut values.visual_speed.draw_size_back,
+        window.visual.draw_size_back,
+        window.visual_speed.draw_size_back,
+        active_targets.visual.draw_size_back,
         active_clear_all,
         persisted,
     );
@@ -5787,6 +5819,18 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "drawsize" => set_approached_mod(
+            &mut out.visual.draw_size,
+            &mut out.visual_speed.draw_size,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drawsizeback" => set_approached_mod(
+            &mut out.visual.draw_size_back,
+            &mut out.visual_speed.draw_size_back,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "square" => set_approached_mod(
             &mut out.visual.square,
             &mut out.visual_speed.square,
@@ -6304,6 +6348,8 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        draw_size: merge_attack_value(base.draw_size, attack.draw_size),
+        draw_size_back: merge_attack_value(base.draw_size_back, attack.draw_size_back),
         square: merge_attack_value(base.square, attack.square),
         square_offset: merge_attack_value(base.square_offset, attack.square_offset),
         square_period: merge_attack_value(base.square_period, attack.square_period),

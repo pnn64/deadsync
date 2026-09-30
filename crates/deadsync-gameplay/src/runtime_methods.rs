@@ -38,7 +38,7 @@ where
                     .set_column_scroll_dir(col, 2.0f32.mul_add(-reverse, 1.0));
             }
         }
-        for (player, scroll) in scrolls.into_iter().enumerate().take(self.setup.num_players) {
+        for player in 0..self.setup.num_players {
             let scroll_speed = self.effective_scroll_speed_for_player(player);
             let reference_bpm = self.display.notefield_motion.scroll_reference_bpm();
             let mut dynamic_speed =
@@ -64,12 +64,6 @@ where
                 .draw_scale_for_tilt_with_visual_mask(perspective.tilt, visual_mask, mini_percent);
             let draw_distance_before =
                 draw_distance_before_targets(self.setup.viewport.height(), draw_scale);
-            let draw_distance_after = draw_distance_after_targets(
-                self.setup.viewport.height(),
-                draw_scale,
-                scroll.centered,
-            );
-
             let mut travel_time = scroll_speed.travel_time_seconds(
                 draw_distance_before,
                 current_bpm,
@@ -83,8 +77,6 @@ where
                 player,
                 dynamic_speed,
                 field_zoom,
-                draw_distance_before,
-                draw_distance_after,
                 travel_time,
             );
         }

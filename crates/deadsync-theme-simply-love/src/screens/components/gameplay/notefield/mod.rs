@@ -11,7 +11,7 @@ use deadsync_gameplay::{
     draw_distance_after_targets, draw_distance_before_targets,
     effective_mini_value_with_visual_mask, gameplay_error_bar_trim_max_window_ix,
     hold_explosion_enabled_for_options, perspective_effects_from_profile,
-    player_draw_scale_for_tilt_with_visual_mask, scroll_effects_from_flags,
+    scroll_effects_from_flags,
 };
 use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
@@ -702,34 +702,21 @@ pub(crate) fn compose_frame(
     } else {
         profile.mini_percent as f32
     };
-    let (field_zoom, draw_distance_before, draw_distance_after) = if apply_attacks {
-        (
-            state.field_zoom_for_player(player_idx),
-            state.notefield_draw_distance_before_targets(player_idx),
-            state.notefield_draw_distance_after_targets(player_idx),
-        )
+    let field_zoom = if apply_attacks {
+        state.field_zoom_for_player(player_idx)
     } else {
         let visual_mask = profile.visual_effects_active_mask.bits();
         let runtime_profile = &state.profiles()[player_idx];
         let mini =
             effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
-        let mut field_zoom = mini.mul_add(-0.5, 1.0);
-        if field_zoom.abs() < 0.01 {
-            field_zoom = 0.01;
-        }
-        let draw_scale = player_draw_scale_for_tilt_with_visual_mask(
-            perspective.tilt,
-            runtime_profile,
-            visual_mask,
-            mini_percent,
-        );
-        let viewport_height = state.setup.viewport.height();
-        (
-            field_zoom,
-            draw_distance_before_targets(viewport_height, draw_scale),
-            draw_distance_after_targets(viewport_height, draw_scale, scroll.centered),
-        )
+        let zoom = mini.mul_add(-0.5, 1.0);
+        if zoom.abs() < 0.01 { 0.01 } else { zoom }
     };
+    // Canonical composition applies current DrawSize, Tilt, Mini, and the
+    // Centered/Boomerang extension to these unscaled theme metrics.
+    let viewport_height = state.setup.viewport.height();
+    let draw_distance_before = draw_distance_before_targets(viewport_height, 1.0);
+    let draw_distance_after = draw_distance_after_targets(viewport_height, 1.0, 0.0);
     let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
     let player_col_start = player_idx.saturating_mul(state.cols_per_player());
     let column_dirs = from_fn(|local_col| {

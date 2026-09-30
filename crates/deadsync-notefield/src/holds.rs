@@ -36,7 +36,7 @@ pub(crate) struct HoldEntryPlanRequest<'a, T> {
     pub head_y: f32,
     pub tail_y: f32,
     pub receptor_y: f32,
-    pub screen_height: f32,
+    pub draw_bounds: [f32; 2],
     pub field_zoom: f32,
     pub lane_reverse: bool,
     pub engaged: bool,
@@ -119,7 +119,7 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub rotation_y_deg: f32,
     pub twirl: f32,
     pub depth_test: bool,
-    pub screen_height: f32,
+    pub draw_bounds: [f32; 2],
     pub body_z: i16,
     pub cap_z: i16,
     pub glow_z: i16,
@@ -419,7 +419,7 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
         body_flipped,
         y_head,
         y_tail,
-        draw_span: hold_draw_span(y_head, y_tail, request.screen_height),
+        draw_span: hold_draw_span(y_head, y_tail, request.draw_bounds),
         diffuse: [color_scale, color_scale, color_scale, 1.0],
         head_anchor_y,
         head_anchor_travel,
@@ -1263,14 +1263,11 @@ fn compose_top_cap<S, F, P>(
     let Some(slot) = request.top_cap_slot else {
         return;
     };
-    if request.y_head <= -400.0 || request.y_head >= request.screen_height + 400.0 {
-        return;
-    }
 
     let cap_size = scale_hold_part(slot.source_size(), request.target_arrow_px);
     let cap_width = cap_size[0];
     let mut cap_height = cap_size[1];
-    let cap_top = request.y_head - cap_height;
+    let mut cap_top = request.y_head - cap_height;
     let mut cap_bottom = request.y_head;
     let mut uv_trim = None;
     if cap_height > f32::EPSILON && request.y_tail < cap_bottom {
@@ -1287,6 +1284,14 @@ fn compose_top_cap<S, F, P>(
         return;
     }
 
+    let original_top = cap_top;
+    let original_bottom = cap_bottom;
+    cap_top = cap_top.max(request.draw_bounds[0]);
+    cap_bottom = cap_bottom.min(request.draw_bounds[1]);
+    cap_height = cap_bottom - cap_top;
+    if cap_height <= f32::EPSILON {
+        return;
+    }
     let center_y = f32::midpoint(cap_top, cap_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
@@ -1309,10 +1314,14 @@ fn compose_top_cap<S, F, P>(
         slot.uv_for_note_at(frame, uv_elapsed, request.top_cap_uv_translation),
         request.body_flipped,
     );
-    let [u0, v0, u1, mut v1] = uv;
+    let [u0, mut v0, u1, mut v1] = uv;
     if let Some(trim) = uv_trim {
         v1 = (v1 - v0).mul_add(trim, v1);
     }
+    let span = v1 - v0;
+    let start = v0;
+    v0 = start + span * ((cap_top - original_top) / (original_bottom - original_top));
+    v1 = start + span * ((cap_bottom - original_top) / (original_bottom - original_top));
     let top = sample_path(cap_top);
     let bottom = sample_path(cap_bottom);
     let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
@@ -1577,26 +1586,27 @@ fn compose_bottom_cap<S, F, P>(
         return;
     };
     let tail_position = request.y_tail + 1.0;
-    if tail_position <= -400.0 || tail_position >= request.screen_height + 400.0 {
-        return;
-    }
 
     let cap_size = scale_hold_part(slot.source_size(), request.target_arrow_px);
     let cap_width = cap_size[0];
     let cap_span = cap_size[1];
-    let Some((raw_top, draw_bottom)) =
+    let Some((raw_top, mut draw_bottom)) =
         hold_tail_cap_bounds(tail_position, cap_span, rendered.top, rendered.bottom)
     else {
         return;
     };
-    if cap_span <= f32::EPSILON {
+    if !(cap_span > f32::EPSILON) {
         return;
     }
-    let draw_top = if request.y_head > raw_top {
+    let mut draw_top = if request.y_head > raw_top {
         request.y_head.min(draw_bottom)
     } else {
         raw_top
     };
+    let original_top = draw_top;
+    let original_bottom = draw_bottom;
+    draw_top = draw_top.max(request.draw_bounds[0]);
+    draw_bottom = draw_bottom.min(request.draw_bounds[1]);
     let draw_height = draw_bottom - draw_top;
     if !(draw_height > f32::EPSILON) {
         return;
@@ -1624,15 +1634,19 @@ fn compose_bottom_cap<S, F, P>(
         request.body_flipped,
     );
     let [u0, base_v0, u1, base_v1] = uv;
-    let Some((v0, v1)) = bottom_cap_uv_window(
+    let Some((mut v0, mut v1)) = bottom_cap_uv_window(
         base_v0,
         base_v1,
-        draw_height,
+        original_bottom - original_top,
         cap_span,
         request.lane_reverse && request.top_anchor_reverse,
     ) else {
         return;
     };
+    let span = v1 - v0;
+    let start = v0;
+    v0 = start + span * ((draw_top - original_top) / (original_bottom - original_top));
+    v1 = start + span * ((draw_bottom - original_top) / (original_bottom - original_top));
     let top = sample_path(draw_top);
     let bottom = sample_path(draw_bottom);
     let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
@@ -1837,20 +1851,15 @@ pub(crate) fn hold_body_bottom_for_tail_cap(body_bottom: f32, y_tail: f32, cap_h
     }
 }
 
-pub(crate) fn hold_draw_span(y_head: f32, y_tail: f32, screen_height: f32) -> Option<(f32, f32)> {
-    if ![y_head, y_tail, screen_height]
+pub(crate) fn hold_draw_span(y_head: f32, y_tail: f32, bounds: [f32; 2]) -> Option<(f32, f32)> {
+    if ![y_head, y_tail, bounds[0], bounds[1]]
         .iter()
         .all(|v| v.is_finite())
     {
         return None;
     }
-    let mut top = y_head.min(y_tail);
-    let mut bottom = y_head.max(y_tail);
-    if bottom < -200.0 || top > screen_height + 200.0 {
-        return None;
-    }
-    top = top.max(-400.0);
-    bottom = bottom.min(screen_height + 400.0);
+    let top = y_head.min(y_tail).max(bounds[0]);
+    let bottom = y_head.max(y_tail).min(bounds[1]);
     (bottom >= top).then_some((top, bottom))
 }
 
@@ -2284,7 +2293,7 @@ mod tests {
             rotation_y_deg: 0.0,
             twirl: 0.0,
             depth_test: false,
-            screen_height: 480.0,
+            draw_bounds: [-400.0, 880.0],
             body_z: 110,
             cap_z: 110,
             glow_z: 111,
@@ -2297,6 +2306,71 @@ mod tests {
             center_x: 32.0,
             world_z: y * 0.1,
             arrow_px: 64.0,
+        }
+    }
+
+    #[test]
+    fn draw_limits_clip_caps_without_sliding_their_textures() {
+        for (top, bounds, native_uv) in [
+            (true, [60.0, 90.0], [0.425, 0.70625]),
+            (false, [180.0, 210.0], [0.340625, 0.621875]),
+        ] {
+            for flipped in [false, true] {
+                for mesh in [false, true] {
+                    let slot = TestSlot::sprite("cap");
+                    let mut request =
+                        body_cap_request(None, top.then_some(&slot), (!top).then_some(&slot));
+                    request.draw_bounds = bounds;
+                    request.body_flipped = flipped;
+                    request.use_legacy_sprites = !mesh;
+                    request.appearance = NoteAlphaParams::default();
+                    request.appearance_cache =
+                        crate::transforms::note_appearance_cache(9.0, 0.0, request.appearance);
+                    let mut draws = Vec::new();
+                    compose_hold_body_caps(
+                        &mut draws,
+                        &mut HoldMeshScratch::default(),
+                        request,
+                        &straight_path,
+                        &test_source,
+                    );
+                    assert_eq!(draws.len(), 1);
+                    let expected_uv: [f32; 2] = if flipped {
+                        [1.0 - native_uv[0], 1.0 - native_uv[1]]
+                    } else {
+                        native_uv
+                    };
+                    match &draws[0] {
+                        FlatDraw::Sprite(s) => {
+                            assert_eq!(s.center[1], (bounds[0] + bounds[1]) * 0.5);
+                            assert_eq!(s.size[1], bounds[1] - bounds[0]);
+                            assert_eq!(s.flip_y, flipped);
+                            for (actual, expected) in
+                                [s.uv_rect[1], s.uv_rect[3]].into_iter().zip([
+                                    expected_uv[0].min(expected_uv[1]),
+                                    expected_uv[0].max(expected_uv[1]),
+                                ])
+                            {
+                                assert!((actual - expected).abs() < 0.000001);
+                            }
+                        }
+                        FlatDraw::TexturedMesh(m) => {
+                            let vertices = match &m.vertices {
+                                FlatMeshVertices::Shared(v) => v.as_ref(),
+                                FlatMeshVertices::Reusable(v) => v.as_slice(),
+                            };
+                            for v in vertices {
+                                assert!(v.pos[1] >= bounds[0] && v.pos[1] <= bounds[1]);
+                                let t = (v.pos[1] - bounds[0]) / (bounds[1] - bounds[0]);
+                                let expected =
+                                    expected_uv[0] + t * (expected_uv[1] - expected_uv[0]);
+                                assert!((v.uv[1] - expected).abs() < 0.000001);
+                            }
+                        }
+                        _ => panic!("hold caps emit sprites or textured meshes"),
+                    }
+                }
+            }
         }
     }
 
@@ -2798,7 +2872,7 @@ mod tests {
         request.use_legacy_sprites = false;
         request.y_tail = 620.0;
         request.draw_span = Some((100.0, 620.0));
-        request.screen_height = 720.0;
+        request.draw_bounds = [-400.0, 1120.0];
         let mut scratch = HoldMeshScratch::with_columns(1);
         scratch.begin_frame();
         let sample = |y: f32| HoldPathSample {
@@ -3726,7 +3800,7 @@ mod tests {
             head_y: 100.0,
             tail_y: 220.0,
             receptor_y: 80.0,
-            screen_height: 480.0,
+            draw_bounds: [-400.0, 880.0],
             field_zoom: 1.0,
             lane_reverse: false,
             engaged: false,

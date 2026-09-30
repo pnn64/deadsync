@@ -426,9 +426,17 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
     let name = name.to_ascii_lowercase();
     if matches!(
         name.as_str(),
-        "incoming" | "space" | "hallway" | "distant" | "overhead" | "tilt" | "skew"
+        "incoming"
+            | "space"
+            | "hallway"
+            | "distant"
+            | "overhead"
+            | "tilt"
+            | "skew"
+            | "drawsize"
+            | "drawsizeback"
     ) {
-        return create_perspective_method(lua, &owner, name);
+        return create_native_option(lua, &owner, name);
     }
     let key = lua.create_string(&name)?;
     let boolean = player_option_uses_bool(&name);
@@ -481,7 +489,7 @@ fn set_perspective_angle(state: &Table, key: &str, value: f32) -> mlua::Result<b
     Ok(true)
 }
 
-fn perspective_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Result<[Value; 2]> {
+fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Result<[Value; 2]> {
     let tilt = state.get::<Option<f32>>("tilt")?.unwrap_or(0.0);
     let skew = state.get::<Option<f32>>("skew")?.unwrap_or(0.0);
     let (value, speed_key) = match key {
@@ -492,6 +500,7 @@ fn perspective_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Resul
         "distant" if skew == 0.0 && tilt > 0.0 => (tilt, "tilt"),
         "tilt" => (tilt, "tilt"),
         "skew" => (skew, "skew"),
+        "drawsize" | "drawsizeback" => (state.get::<Option<f32>>(key)?.unwrap_or(0.0), key),
         _ => return Ok([Value::Nil, Value::Nil]),
     };
     Ok([
@@ -502,7 +511,7 @@ fn perspective_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Resul
     ])
 }
 
-fn create_perspective_method(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
+fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
         let state = player_option_state(lua, &owner)?;
@@ -510,7 +519,7 @@ fn create_perspective_method(lua: &Lua, owner: &Table, key: String) -> mlua::Res
         // OptionsBinding returns the values from before the setter, unless the
         // final argument is true and requests chaining. Inactive aliases return
         // nil, nil; Overhead has a single boolean result.
-        let previous = perspective_previous(&state, &speeds, &key)?;
+        let previous = native_option_previous(&state, &speeds, &key)?;
         if key == "overhead" {
             if method_arg(&args, 0)
                 .is_some_and(|v| !matches!(v, Value::Nil | Value::Boolean(false)))
@@ -530,7 +539,7 @@ fn create_perspective_method(lua: &Lua, owner: &Table, key: String) -> mlua::Res
                     "Arg must be greater than or equal to zero.",
                 ));
             }
-            if matches!(key.as_str(), "tilt" | "skew") {
+            if matches!(key.as_str(), "tilt" | "skew" | "drawsize" | "drawsizeback") {
                 speeds.set(key.as_str(), speed)?;
             } else {
                 speeds.set("tilt", speed)?;

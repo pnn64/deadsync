@@ -408,7 +408,12 @@ where
     }
 
     #[inline(always)]
-    pub const fn set_last_mine_judgment(&mut self, player_idx: usize, column: usize, result: MineResult) {
+    pub const fn set_last_mine_judgment(
+        &mut self,
+        player_idx: usize,
+        column: usize,
+        result: MineResult,
+    ) {
         set_player_last_mine_judgment(
             &mut self.players_runtime.players[player_idx],
             result,
@@ -581,7 +586,10 @@ where
             None
         };
         let rate = self.display.density_graph.life_update_rate;
-        self.display.density_graph.life_next_update_elapsed = rate.mul_add(catch_up_steps as f32, self.display.density_graph.life_next_update_elapsed);
+        self.display.density_graph.life_next_update_elapsed = rate.mul_add(
+            catch_up_steps as f32,
+            self.display.density_graph.life_next_update_elapsed,
+        );
 
         if let Some(x) = density_graph_life_sample_x(
             current_music_time,
@@ -827,7 +835,11 @@ where
     }
 
     #[inline(always)]
-    pub const fn set_end_times(&mut self, notes_end_time_ns: SongTimeNs, music_end_time_ns: SongTimeNs) {
+    pub const fn set_end_times(
+        &mut self,
+        notes_end_time_ns: SongTimeNs,
+        music_end_time_ns: SongTimeNs,
+    ) {
         self.clock
             .end_timing
             .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
@@ -1563,20 +1575,6 @@ where
     }
 
     #[inline(always)]
-    pub fn notefield_draw_distance_before_targets(&self, player_idx: usize) -> f32 {
-        self.display
-            .notefield_motion
-            .draw_distance_before_targets(player_idx)
-    }
-
-    #[inline(always)]
-    pub fn notefield_draw_distance_after_targets(&self, player_idx: usize) -> f32 {
-        self.display
-            .notefield_motion
-            .draw_distance_after_targets(player_idx)
-    }
-
-    #[inline(always)]
     pub fn notefield_column_scroll_dir(&self, col: usize) -> f32 {
         self.display.notefield_motion.column_scroll_dir(col)
     }
@@ -1806,10 +1804,7 @@ where
         if player_idx >= self.setup.num_players {
             return judgment::ExScoreData::default();
         }
-        self.ex_score_data_from_inputs(
-            player_idx,
-            self.live_ex_score_inputs(player_idx),
-        )
+        self.ex_score_data_from_inputs(player_idx, self.live_ex_score_inputs(player_idx))
     }
 
     pub fn display_scored_ex_score_data(
@@ -2317,7 +2312,11 @@ where
     }
 
     #[inline(always)]
-    pub const fn set_receptor_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+    pub const fn set_receptor_glow_timers(
+        &mut self,
+        col: usize,
+        timers: GameplayReceptorGlowTimers,
+    ) {
         self.display.receptor_feedback.set_glow_timers(col, timers);
     }
 

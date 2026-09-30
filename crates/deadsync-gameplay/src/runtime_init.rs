@@ -68,14 +68,16 @@ fn build_gameplay_lane_mine_indices(
     let mut mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS] = std::array::from_fn(|player| {
         Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
     });
-    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
-        std::array::from_fn(|player| {
-            Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
-        });
+    let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] = std::array::from_fn(|player| {
+        Vec::with_capacity(mines_total.get(player).copied().unwrap_or(0) as usize)
+    });
 
     let mut covered_end = 0usize;
     for &(start, end) in note_ranges.iter().take(num_players.min(MAX_PLAYERS)) {
-        debug_assert_eq!(start, covered_end, "gameplay player ranges must be contiguous");
+        debug_assert_eq!(
+            start, covered_end,
+            "gameplay player ranges must be contiguous"
+        );
         debug_assert!(end >= start && end <= notes.len());
         covered_end = end;
     }
@@ -516,8 +518,7 @@ where
         score_missed_holds_rolls[1] = score_missed_holds_rolls[0];
         note_ranges[1] = note_ranges[0];
     }
-    let note_count_stats =
-        build_note_count_stats_for_players(&notes, &note_ranges, num_players);
+    let note_count_stats = build_note_count_stats_for_players(&notes, &note_ranges, num_players);
     // Cached chart rows are u32 and gameplay transforms preserve that domain.
     // Prove the compact note/row index space once before any retained index is
     // constructed; live paths may then convert only at slice boundaries.
@@ -540,17 +541,16 @@ where
     for note in &notes {
         let player = player_index_for_column(num_players, cols_per_player, note.column);
         let timing_player = &timing_players[player];
-        note_time_cache_ns.push(timing_player.get_time_for_beat_ns_cached(
-            note.beat,
-            &mut head_time_caches[player],
-        ));
-        let displayed_head = timing_player
-            .get_displayed_beat_cached(note.beat, &mut head_display_caches[player]);
+        note_time_cache_ns.push(
+            timing_player.get_time_for_beat_ns_cached(note.beat, &mut head_time_caches[player]),
+        );
+        let displayed_head =
+            timing_player.get_displayed_beat_cached(note.beat, &mut head_display_caches[player]);
         if let Some(hold) = note.hold.as_ref() {
-            hold_end_time_cache_ns.push(timing_player.get_time_for_beat_ns_cached(
-                hold.end_beat,
-                &mut tail_time_caches[player],
-            ));
+            hold_end_time_cache_ns.push(
+                timing_player
+                    .get_time_for_beat_ns_cached(hold.end_beat, &mut tail_time_caches[player]),
+            );
             note_displayed_beat_cache.push([
                 displayed_head,
                 timing_player
@@ -584,14 +584,13 @@ where
 
     log::debug!("Parsed {} notes from chart data.", notes.len());
 
-    let (row_entries, row_entry_ranges, note_row_entry_indices) =
-        build_gameplay_row_indices(
-            &notes,
-            &note_ranges,
-            &note_time_cache_ns,
-            num_players,
-            notes.len() / 2,
-        );
+    let (row_entries, row_entry_ranges, note_row_entry_indices) = build_gameplay_row_indices(
+        &notes,
+        &note_ranges,
+        &note_time_cache_ns,
+        num_players,
+        notes.len() / 2,
+    );
     let cache_build_ms = cache_build_started.elapsed().as_secs_f64() * 1000.0;
 
     let timing_prep_started = Instant::now();
@@ -664,22 +663,6 @@ where
         }
         draw_distance_before_targets(viewport.height(), initial_draw_scale[player])
     });
-    let draw_distance_after_targets: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return draw_distance_after_targets(viewport.height(), 1.0, 0.0);
-        }
-        let centered_percent = if player_profiles[player].scroll_effects().centered > 0.5 {
-            1.0
-        } else {
-            0.0
-        };
-        draw_distance_after_targets(
-            viewport.height(),
-            initial_draw_scale[player],
-            centered_percent,
-        )
-    });
-
     let travel_time: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         let mut tt = scroll_speed[player].travel_time_seconds(
             draw_distance_before_targets[player],
@@ -1042,11 +1025,8 @@ where
             caps,
         )
     });
-    let assist_clap_rows = build_assist_clap_rows_with_capacity(
-        &notes,
-        note_ranges[0],
-        note_count_stats[0].len(),
-    );
+    let assist_clap_rows =
+        build_assist_clap_rows_with_capacity(&notes, note_ranges[0], note_count_stats[0].len());
     let song_offset_seconds = song.offset;
     let base_attack_appearance = std::array::from_fn(|player| {
         if player < num_players {
@@ -1173,8 +1153,6 @@ where
                 field_zoom,
                 pixels_per_second,
                 travel_time,
-                draw_distance_before_targets,
-                draw_distance_after_targets,
                 reverse_scroll,
                 column_scroll_dirs,
             ),

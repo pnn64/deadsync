@@ -1212,8 +1212,6 @@ mod runtime_regression_tests {
         );
         assert!((state.field_zoom_for_player(0) - 0.75).abs() <= f32::EPSILON);
         assert!(state.display.notefield_motion.scroll_pixels_per_second(0) > 0.0);
-        assert!(state.notefield_draw_distance_before_targets(0) > 0.0);
-        assert!(state.notefield_draw_distance_after_targets(0) > 0.0);
     }
 
     #[test]

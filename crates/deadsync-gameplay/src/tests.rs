@@ -3425,6 +3425,39 @@ mod tests {
     }
 
     #[test]
+    fn draw_size_keeps_signed_units_independent_speeds_and_reset() {
+        let mods = parse_attack_mods("*2 300% drawsize,*4 -150% drawsizeback");
+        assert_eq!(
+            [mods.visual.draw_size, mods.visual.draw_size_back],
+            [Some(3.0), Some(-1.5)]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.draw_size,
+                mods.visual_speed.draw_size_back
+            ],
+            [Some(2.0), Some(4.0)]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!([merged.draw_size, merged.draw_size_back], [0.5, -1.0]);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods("no drawsize,no drawsizeback");
+        assert_eq!(
+            [cleared.visual.draw_size, cleared.visual.draw_size_back],
+            [Some(0.0); 2]
+        );
+    }
+
+    #[test]
     fn square_family_keeps_native_units_speeds_and_reset() {
         let mods = parse_attack_mods(
             "*2 -250% square,*4 3200% squareoffset,*6 -100% squareperiod,\
@@ -10706,7 +10739,7 @@ mod tests {
 
         state.set_reverse_scroll(1, true);
         state.set_column_scroll_dir(2, -1.0);
-        state.set_player_motion(1, 420.0, 0.75, 1000.0, 240.0, 2.5);
+        state.set_player_motion(1, 420.0, 0.75, 2.5);
         state.set_reverse_scroll(MAX_PLAYERS, true);
         state.set_column_scroll_dir(MAX_COLS, -1.0);
 
@@ -10714,8 +10747,6 @@ mod tests {
         assert_near(state.column_scroll_dir(2), -1.0);
         assert_near(state.scroll_pixels_per_second(1), 420.0);
         assert_near(state.field_zoom(1), 0.75);
-        assert_near(state.draw_distance_before_targets(1), 1000.0);
-        assert_near(state.draw_distance_after_targets(1), 240.0);
         assert_near(state.scroll_travel_time(1), 2.5);
         assert!(!state.reverse_scroll(MAX_PLAYERS));
         assert_near(state.column_scroll_dir(MAX_COLS), 1.0);
@@ -10729,8 +10760,6 @@ mod tests {
             [0.5, 0.75],
             [420.0, 840.0],
             [1.25, 2.5],
-            [900.0, 1000.0],
-            [120.0, 240.0],
             [false, true],
             {
                 let mut dirs = [1.0; MAX_COLS];
@@ -10745,8 +10774,6 @@ mod tests {
         assert_near(configured.column_scroll_dir(2), -1.0);
         assert_near(configured.scroll_pixels_per_second(1), 840.0);
         assert_near(configured.field_zoom(1), 0.75);
-        assert_near(configured.draw_distance_before_targets(1), 1000.0);
-        assert_near(configured.draw_distance_after_targets(1), 240.0);
         assert_near(configured.scroll_travel_time(1), 2.5);
         assert!(!configured.reverse_scroll(MAX_PLAYERS));
         assert_near(configured.column_scroll_dir(MAX_COLS), 1.0);

@@ -1,4 +1,4 @@
-﻿#[inline(always)]
+#[inline(always)]
 const fn build_quantization_table() -> [u8; 48] {
     let mut table = [QUANT_192ND; 48];
     let mut row = 0usize;
@@ -473,8 +473,6 @@ pub struct GameplayNotefieldMotionState {
     field_zoom: [f32; MAX_PLAYERS],
     scroll_pixels_per_second: [f32; MAX_PLAYERS],
     scroll_travel_time: [f32; MAX_PLAYERS],
-    draw_distance_before_targets: [f32; MAX_PLAYERS],
-    draw_distance_after_targets: [f32; MAX_PLAYERS],
     reverse_scroll: [bool; MAX_PLAYERS],
     column_scroll_dirs: [f32; MAX_COLS],
     refresh_bpm_bits: u32,
@@ -489,8 +487,6 @@ impl Default for GameplayNotefieldMotionState {
             field_zoom: [1.0; MAX_PLAYERS],
             scroll_pixels_per_second: [0.0; MAX_PLAYERS],
             scroll_travel_time: [0.0; MAX_PLAYERS],
-            draw_distance_before_targets: [0.0; MAX_PLAYERS],
-            draw_distance_after_targets: [0.0; MAX_PLAYERS],
             reverse_scroll: [false; MAX_PLAYERS],
             column_scroll_dirs: [1.0; MAX_COLS],
             refresh_bpm_bits: 0,
@@ -500,7 +496,6 @@ impl Default for GameplayNotefieldMotionState {
 }
 
 impl GameplayNotefieldMotionState {
-    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     #[must_use]
     pub const fn new(
@@ -509,8 +504,6 @@ impl GameplayNotefieldMotionState {
         field_zoom: [f32; MAX_PLAYERS],
         scroll_pixels_per_second: [f32; MAX_PLAYERS],
         scroll_travel_time: [f32; MAX_PLAYERS],
-        draw_distance_before_targets: [f32; MAX_PLAYERS],
-        draw_distance_after_targets: [f32; MAX_PLAYERS],
         reverse_scroll: [bool; MAX_PLAYERS],
         column_scroll_dirs: [f32; MAX_COLS],
     ) -> Self {
@@ -520,8 +513,6 @@ impl GameplayNotefieldMotionState {
             field_zoom,
             scroll_pixels_per_second,
             scroll_travel_time,
-            draw_distance_before_targets,
-            draw_distance_after_targets,
             reverse_scroll,
             column_scroll_dirs,
             refresh_bpm_bits: 0,
@@ -581,24 +572,6 @@ impl GameplayNotefieldMotionState {
 
     #[inline(always)]
     #[must_use]
-    pub fn draw_distance_before_targets(&self, player: usize) -> f32 {
-        self.draw_distance_before_targets
-            .get(player)
-            .copied()
-            .unwrap_or(0.0)
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub fn draw_distance_after_targets(&self, player: usize) -> f32 {
-        self.draw_distance_after_targets
-            .get(player)
-            .copied()
-            .unwrap_or(0.0)
-    }
-
-    #[inline(always)]
-    #[must_use]
     pub fn reverse_scroll(&self, player: usize) -> bool {
         self.reverse_scroll.get(player).copied().unwrap_or(false)
     }
@@ -635,8 +608,6 @@ impl GameplayNotefieldMotionState {
         player: usize,
         scroll_pixels_per_second: f32,
         field_zoom: f32,
-        draw_distance_before_targets: f32,
-        draw_distance_after_targets: f32,
         scroll_travel_time: f32,
     ) {
         if player >= MAX_PLAYERS {
@@ -644,8 +615,6 @@ impl GameplayNotefieldMotionState {
         }
         self.scroll_pixels_per_second[player] = scroll_pixels_per_second;
         self.field_zoom[player] = field_zoom;
-        self.draw_distance_before_targets[player] = draw_distance_before_targets;
-        self.draw_distance_after_targets[player] = draw_distance_after_targets;
         self.scroll_travel_time[player] = scroll_travel_time;
     }
 }
@@ -684,4 +653,3 @@ pub fn collect_ready_replay_edges(
     }
     event_count
 }
-

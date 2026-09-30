@@ -2558,6 +2558,343 @@ mod tests {
     }
 
     #[test]
+    fn draw_size_matches_native_pixel_ranges() {
+        use crate::compose::NoteDrawRange;
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+        request.geometry.draw_distance_before_targets = 720.0;
+        request.geometry.draw_distance_after_targets = 130.0;
+        // These constants come from the verbatim checked-out C++
+        // NoteField::CalcPixelsBeforeAndAfterTargets, compiled with MSVC.
+        for (size, back, tilt, mini, centered, boomerang, expected) in [
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, [-130.0, 720.0]),
+            (1.0, -1.0, 0.0, 0.0, 0.0, 0.0, [0.0, 1440.0]),
+            (-0.75, 0.5, 0.0, 0.0, 0.0, 0.0, [-195.0, 180.0]),
+            (-1.0, -1.0, 0.0, 0.0, 0.0, 0.0, [0.0, 0.0]),
+            (-1.2, -1.5, 0.0, 0.0, 0.0, 0.0, [65.0, -144.0]),
+            (0.0, -1.0, 0.0, 0.0, 1.0, 1.0, [-240.0, 720.0]),
+            (0.333, -0.37, -1.5, 0.8, 0.5, 0.75, [-541.0, 3023.0]),
+            (-0.4, -1.0, 2.0, -0.5, -1.0, 1.5, [1080.0, 1296.0]),
+            (0.25, -1.0, 0.0, 0.0, 0.003, 1.0, [0.0, 900.0]),
+            (0.25, -1.0, 0.0, 0.0, -0.003, 1.0, [0.0, 900.0]),
+            (-2.0, -3.0, 1.0, -2.0, 1.0, 1.0, [90.0, -3240.0]),
+            (
+                0.12345,
+                -0.6789,
+                0.4321,
+                0.3456,
+                0.2345,
+                0.789,
+                [-140.0, 1323.0],
+            ),
+        ] {
+            request.visual.visual.draw_size = size;
+            request.visual.visual.draw_size_back = back;
+            request.visual.perspective.tilt = tilt;
+            request.visual.mini_percent = mini * 100.0;
+            request.visual.scroll.centered = centered;
+            request.visual.accel.boomerang = boomerang;
+            for zoom in [-0.5, 0.5, 1.0, 1.5] {
+                let prepared = prepare_notefield(&request).expect("prepare native range");
+                let range = NoteDrawRange::new(request.geometry, request.visual, mini, zoom);
+                let valid = expected[0] <= expected[1];
+                assert_eq!(
+                    range.bounds(),
+                    valid.then(|| {
+                        let a = expected[0] * zoom;
+                        let b = expected[1] * zoom;
+                        [a.min(b), a.max(b)]
+                    })
+                );
+                for travel in [
+                    expected[0] - 0.01,
+                    expected[0],
+                    expected[1],
+                    expected[1] + 0.01,
+                ] {
+                    let visible = expected[0] <= travel && travel <= expected[1];
+                    assert_eq!(range.contains(travel * zoom), visible);
+                    assert_eq!(prepared.draw_range.contains(travel), visible);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn draw_range_keeps_native_hold_direction_and_boomerang_peak() {
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+        request.geometry.draw_distance_before_targets = 256.0;
+        request.geometry.draw_distance_after_targets = 128.0;
+        for zoom in [-0.5, 0.5, 1.0, 1.5] {
+            request.geometry.field_zoom = zoom;
+            let prepared = prepare_notefield(&request).expect("prepare hold range");
+            // NoteDisplay::DrawHoldsInRange uses the directed original span,
+            // and independently keeps a hold straddling the Boomerang peak.
+            for (head, tail, head_peak, tail_peak, visible) in [
+                (512.0, 768.0, true, true, false),
+                (-192.0, -160.0, true, true, false),
+                (-192.0, 320.0, true, true, true),
+                (320.0, -192.0, false, false, false),
+                (-192.0, -160.0, true, false, true),
+                (256.0, 400.0, false, false, true),
+                (-160.0, -128.0, true, true, true),
+            ] {
+                assert_eq!(
+                    prepared.draw_range.hold_visible(
+                        head * zoom,
+                        tail * zoom,
+                        head_peak,
+                        tail_peak
+                    ),
+                    visible
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn draw_size_culls_composed_taps_and_mines_before_lane_transforms() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("note"))
+            .collect();
+        ns.mine_layers = (0..2).map(|_| vec![TestSlot::new("note")].into()).collect();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let index = deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index");
+        let lanes = [vec![index], vec![]];
+        // Expected masks correspond to native travels -192,-128,-64,0,64,128,256,320.
+        for (size, back, visible) in [
+            (0.0, 0.0, [false, true, true, true, true, true, true, false]),
+            (
+                -0.5,
+                0.0,
+                [false, true, true, true, true, true, false, false],
+            ),
+            (1.0, 0.0, [false, true, true, true, true, true, true, true]),
+            (
+                0.0,
+                -1.0,
+                [false, false, false, true, true, true, true, false],
+            ),
+            (
+                -1.0,
+                -1.0,
+                [false, false, false, true, false, false, false, false],
+            ),
+            (-1.5, -1.5, [false; 8]),
+        ] {
+            for note_type in [NoteType::Tap, NoteType::Mine] {
+                for dir in [-1.0, 1.0] {
+                    for zoom in [0.5, 1.0, 1.5] {
+                        for (beat, visible) in [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 13.0]
+                            .into_iter()
+                            .zip(visible)
+                        {
+                            let mut n = note(0);
+                            n.beat = beat;
+                            n.note_type = note_type;
+                            let notes = [n];
+                            let rows = [deadsync_core::timing::beat_to_note_row(beat)];
+                            let mut request = request(
+                                &ns,
+                                &timing,
+                                &notes,
+                                &hides,
+                                FieldPlacement::P1,
+                                0,
+                                1,
+                                2,
+                                2,
+                            );
+                            request.geometry.field_zoom = zoom;
+                            request.geometry.column_dirs = [dir; MAX_COLS];
+                            request.geometry.draw_distance_before_targets = 256.0;
+                            request.geometry.draw_distance_after_targets = 128.0;
+                            request.chart.visible_beat = 8.0;
+                            request.chart.search_beat = 8.0;
+                            request.chart.lane_note_row_indices = &lanes;
+                            request.chart.note_itg_rows = &rows;
+                            request.visual.visual.draw_size = size;
+                            request.visual.visual.draw_size_back = back;
+                            request.visual.visual.move_y_cols[0] = 2.0;
+                            request.visual.visual.tiny = 0.5;
+                            request.visual.visual.tipsy = 0.75;
+                            let prepared =
+                                prepare_notefield(&request).expect("prepare DrawSize field");
+                            let frame = NotefieldFieldFrameView {
+                                feedback: spline_feedback(&[]),
+                                completed_rows: Default::default(),
+                            };
+                            let mut draws = Vec::new();
+                            compose_notefield_field(
+                                &mut Vec::new(),
+                                &mut draws,
+                                &mut Vec::new(),
+                                &mut ModelMeshCache::default(),
+                                &mut HoldMeshScratch::default(),
+                                &mut CapturedActorScratch::with_capacities(32, 0),
+                                &mut NotefieldCameraCache::default(),
+                                &request,
+                                &prepared,
+                                &frame,
+                                &source,
+                            );
+                            let keys = sprite_keys(&draws);
+                            assert_eq!(
+                                keys.contains(&"note"),
+                                visible,
+                                "{note_type:?}, beat {beat}, size {size}, back {back}, zoom {zoom}, dir {dir}"
+                            );
+                            assert!(
+                                keys.contains(&"target0"),
+                                "draw range leaves receptors visible"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn draw_size_clips_composed_hold_and_roll_geometry() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("head"))
+            .collect();
+        ns.hold_columns[0].head_inactive = Some(TestSlot::new("head"));
+        ns.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+        ns.hold_columns[0].topcap_inactive = Some(TestSlot::new("top"));
+        ns.hold_columns[0].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let index = deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index");
+        let lanes = [vec![index], vec![]];
+        for kind in [NoteType::Hold, NoteType::Roll] {
+            for (head, tail) in [(5.0, 14.0), (6.5, 10.0), (5.0, 5.5)] {
+                for dir in [-1.0, 1.0] {
+                    for zoom in [0.5, 1.0, 1.5] {
+                        for (size, back, low, high) in [
+                            (0.0, 0.0, -128.0, 256.0),
+                            (-0.5, -1.0, 0.0, 128.0),
+                            (1.0, 1.0, -256.0, 512.0),
+                        ] {
+                            let mut n = note(0);
+                            n.note_type = kind;
+                            n.beat = head;
+                            n.row_index = deadsync_core::timing::beat_to_note_row(head) as usize;
+                            n.hold = Some(HoldData {
+                                end_row_index: (tail * 48.0) as usize,
+                                end_beat: tail,
+                                result: None,
+                                life: 1.0,
+                                let_go_started_at: None,
+                                let_go_starting_life: 1.0,
+                                last_held_row_index: n.row_index,
+                                last_held_beat: head,
+                            });
+                            let notes = [n];
+                            let rows = [deadsync_core::timing::beat_to_note_row(head)];
+                            let mut request = request(
+                                &ns,
+                                &timing,
+                                &notes,
+                                &hides,
+                                FieldPlacement::P1,
+                                0,
+                                1,
+                                2,
+                                2,
+                            );
+                            request.geometry.field_zoom = zoom;
+                            request.geometry.column_dirs = [dir; MAX_COLS];
+                            request.geometry.draw_distance_before_targets = 256.0;
+                            request.geometry.draw_distance_after_targets = 128.0;
+                            request.chart.visible_beat = 8.0;
+                            request.chart.search_beat = 8.0;
+                            request.chart.lane_hold_indices = &lanes;
+                            request.chart.note_itg_rows = &rows;
+                            request.visual.visual.draw_size = size;
+                            request.visual.visual.draw_size_back = back;
+                            request.visual.visual.move_y_cols[0] = 0.5;
+                            request.visual.visual.square_z = 0.25;
+                            let prepared = prepare_notefield(&request).expect("prepare hold range");
+                            let frame = NotefieldFieldFrameView {
+                                feedback: spline_feedback(&[]),
+                                completed_rows: Default::default(),
+                            };
+                            let mut draws = Vec::new();
+                            compose_notefield_field(
+                                &mut Vec::new(),
+                                &mut draws,
+                                &mut Vec::new(),
+                                &mut ModelMeshCache::default(),
+                                &mut HoldMeshScratch::default(),
+                                &mut CapturedActorScratch::with_capacities(128, 0),
+                                &mut NotefieldCameraCache::default(),
+                                &request,
+                                &prepared,
+                                &frame,
+                                &source,
+                            );
+                            let endpoints = [
+                                prepared.field.column_receptor_ys[0] + dir * low * zoom + 32.0,
+                                prepared.field.column_receptor_ys[0] + dir * high * zoom + 32.0,
+                            ];
+                            let bounds = [
+                                endpoints[0].min(endpoints[1]),
+                                endpoints[0].max(endpoints[1]),
+                            ];
+                            let mut vertices = 0;
+                            for draw in &draws {
+                                let FlatDraw::TexturedMesh(mesh) = draw else {
+                                    continue;
+                                };
+                                let v = match &mesh.vertices {
+                                    FlatMeshVertices::Shared(v) => v.as_ref(),
+                                    FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                };
+                                for vertex in v {
+                                    assert!(
+                                        vertex.pos[1] >= bounds[0] - 0.001
+                                            && vertex.pos[1] <= bounds[1] + 0.001,
+                                        "{kind:?} {head}..{tail} size {size} back {back} dir {dir} zoom {zoom}: {} outside {bounds:?}",
+                                        vertex.pos[1]
+                                    );
+                                }
+                                vertices += v.len();
+                            }
+                            assert_eq!(
+                                vertices > 0,
+                                tail > 6.0 || back == 1.0,
+                                "hold range intersection"
+                            );
+                            assert!(sprite_keys(&draws).contains(&"target0"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn lane_stealth_hides_only_its_notes_in_composed_field() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,

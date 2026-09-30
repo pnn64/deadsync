@@ -47,12 +47,20 @@ fn option_metadata_matches_parent_for_unchanged_options() {
     }
     let mut names: Vec<String> = SONG_LUA_PLAYER_OPTION_CAPABILITIES
         .iter()
-        // Perspective now follows native shared state and return values. The
-        // source tests and native oracle probe cover those changed semantics.
+        // Perspective and draw sizes now follow native return values and
+        // speeds. Source tests and native probes cover the changed semantics.
         .filter(|name| {
             !matches!(
                 **name,
-                "Incoming" | "Space" | "Hallway" | "Distant" | "Overhead" | "Tilt" | "Skew"
+                "Incoming"
+                    | "Space"
+                    | "Hallway"
+                    | "Distant"
+                    | "Overhead"
+                    | "Tilt"
+                    | "Skew"
+                    | "DrawSize"
+                    | "DrawSizeBack"
             )
         })
         .map(|name| name.to_string())

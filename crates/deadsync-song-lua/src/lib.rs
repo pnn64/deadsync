@@ -15590,7 +15590,7 @@ return Def.ActorFrame{
             end
         end
         local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
-        po:CAMod(640, 9e9, true):DrawSize(0.25, 9e9):DizzyHolds(true):StealthPastReceptors(true)
+        po:CAMod(640, 9e9, true):DrawSize(0.25, 9e9, true):DizzyHolds(true):StealthPastReceptors(true)
         local direct = string.format(
             "%s:%.0f:%.2f:%s:%s",
             tostring(po:CMod()),

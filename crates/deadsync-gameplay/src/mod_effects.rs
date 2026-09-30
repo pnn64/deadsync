@@ -174,6 +174,8 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub draw_size: Option<f32>,
+    pub draw_size_back: Option<f32>,
     pub square: Option<f32>,
     pub square_offset: Option<f32>,
     pub square_period: Option<f32>,
@@ -218,6 +220,8 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            draw_size: None,
+            draw_size_back: None,
             square: None,
             square_offset: None,
             square_period: None,
@@ -264,6 +268,8 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.draw_size.is_some()
+            || self.draw_size_back.is_some()
             || self.square.is_some()
             || self.square_offset.is_some()
             || self.square_period.is_some()
@@ -414,6 +420,8 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub draw_size: f32,
+    pub draw_size_back: f32,
     pub square: f32,
     pub square_offset: f32,
     pub square_period: f32,
@@ -466,6 +474,8 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            draw_size: 0.0,
+            draw_size_back: 0.0,
             square: 0.0,
             square_offset: 0.0,
             square_period: 0.0,
@@ -580,6 +590,8 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.draw_size, base.draw_size, step);
+    approach_optional_visual(&mut visual.draw_size_back, base.draw_size_back, step);
     approach_optional_visual(&mut visual.square, base.square, step);
     approach_optional_visual(&mut visual.square_offset, base.square_offset, step);
     approach_optional_visual(&mut visual.square_period, base.square_period, step);
@@ -698,6 +710,22 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.draw_size,
+        target.draw_size,
+        base.draw_size,
+        speed.draw_size,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.draw_size_back,
+        target.draw_size_back,
+        base.draw_size_back,
+        speed.draw_size_back,
         delta_time,
         1.0,
     );

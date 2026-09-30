@@ -39,6 +39,7 @@ pub struct NotefieldGeometry {
     pub screen_center_y: f32,
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
+    /// Unscaled theme draw metrics; the back distance is a positive magnitude.
     pub draw_distance_before_targets: f32,
     pub draw_distance_after_targets: f32,
     pub column_dirs: [f32; MAX_COLS],
@@ -251,6 +252,73 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub travel: ScrollTravel<'a>,
 }
 
+/// Native NoteField limits are measured before its outer zoom and Reverse.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NoteDrawRange {
+    after: f32,
+    before: f32,
+    zoom: f32,
+}
+
+impl NoteDrawRange {
+    pub(crate) fn new(
+        geometry: NotefieldGeometry,
+        visual: NotefieldVisualState,
+        mini: f32,
+        zoom: f32,
+    ) -> Self {
+        // NoteField::CalcPixelsBeforeAndAfterTargets: signed, unrestricted
+        // amounts, a separately truncated Centered/Boomerang extension, and
+        // whole-pixel truncation only after Tilt and Mini scale the range.
+        let scale = (1.0 + 0.5 * visual.perspective.tilt.abs()) * (1.0 + mini.abs());
+        let centered_boomerang = visual.scroll.centered * visual.accel.boomerang;
+        let extension = (centered_boomerang * (-geometry.screen_height / 2.0)) as i32;
+        let after = -(geometry.draw_distance_after_targets as i32 as f32)
+            * (1.0 + visual.visual.draw_size_back)
+            + extension as f32;
+        let before =
+            geometry.draw_distance_before_targets as i32 as f32 * (1.0 + visual.visual.draw_size);
+        Self {
+            after: (after * scale) as i32 as f32,
+            before: (before * scale) as i32 as f32,
+            zoom,
+        }
+    }
+
+    pub(crate) fn contains(self, travel: f32) -> bool {
+        let native_travel = travel / self.zoom;
+        self.after <= native_travel && native_travel <= self.before
+    }
+
+    pub(crate) fn hold_visible(
+        self,
+        head: f32,
+        tail: f32,
+        head_peak: bool,
+        tail_peak: bool,
+    ) -> bool {
+        self.contains(head)
+            || self.contains(tail)
+            || (head / self.zoom <= self.after && self.before <= tail / self.zoom)
+            || (head_peak && !tail_peak)
+    }
+
+    pub(crate) fn bounds(self) -> Option<[f32; 2]> {
+        if self.after > self.before || !self.zoom.is_finite() || self.zoom == 0.0 {
+            return None;
+        }
+        let a = self.after * self.zoom;
+        let b = self.before * self.zoom;
+        Some([a.min(b), a.max(b)])
+    }
+
+    pub(crate) fn lane_bounds(self, receptor_y: f32, dir: f32, offset: f32) -> [f32; 2] {
+        let a = receptor_y + self.after * self.zoom * dir + offset;
+        let b = receptor_y + self.before * self.zoom * dir + offset;
+        [a.min(b), a.max(b)]
+    }
+}
+
 /// Purely prepared composition state consumed by actor emission.
 pub struct PreparedNotefield<'a, S> {
     pub frame_plan: NotefieldFramePlan,
@@ -261,6 +329,7 @@ pub struct PreparedNotefield<'a, S> {
     pub current_beat: f32,
     pub is_in_delay: bool,
     pub mini: f32,
+    pub(crate) draw_range: NoteDrawRange,
     pub receptor_alphas: [f32; MAX_COLS],
     pub blind_active: bool,
     pub column_x_offsets: [f32; MAX_COLS],
@@ -314,7 +383,15 @@ pub fn prepare_notefield<'a, S>(
         request.geometry.screen_height,
         request.visual.perspective.tilt,
     );
-    let notes = prepare_notes(request, frame_plan, field_zoom, scroll_speed, effect_height)?;
+    let draw_range = NoteDrawRange::new(request.geometry, request.visual, mini, field_zoom);
+    let notes = prepare_notes(
+        request,
+        frame_plan,
+        field_zoom,
+        scroll_speed,
+        effect_height,
+        draw_range,
+    )?;
     Some(PreparedNotefield {
         frame_plan,
         field,
@@ -324,6 +401,7 @@ pub fn prepare_notefield<'a, S>(
         current_beat: request.chart.visible_beat,
         is_in_delay: request.chart.is_in_delay,
         mini,
+        draw_range,
         // ITGmania adds global and column Dark before clamping receptor opacity.
         receptor_alphas: request
             .visual
@@ -389,6 +467,7 @@ fn prepare_notes<'a, S>(
     field_zoom: f32,
     scroll_speed: ScrollSpeedSetting,
     effect_height: f32,
+    draw_range: NoteDrawRange,
 ) -> Option<Option<PreparedNotefieldNotes<'a, S>>> {
     let Some(base) = request.noteskin.base else {
         return Some(None);
@@ -443,6 +522,7 @@ fn prepare_notes<'a, S>(
         mine.note_display_metrics.part_animation[NoteAnimPart::Mine as usize],
         mine.part_animation_is_beat_based[NoteAnimPart::Mine as usize],
     );
+    let [after, before] = draw_range.bounds().unwrap_or([0.0; 2]);
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -461,8 +541,8 @@ fn prepare_notes<'a, S>(
         scroll_reference_bpm: request.chart.scroll_reference_bpm,
         music_rate: request.chart.music_rate,
         edit_beat_spacing: request.view.edit_beat_bars,
-        draw_distance_after_targets: request.geometry.draw_distance_after_targets,
-        draw_distance_before_targets: request.geometry.draw_distance_before_targets,
+        draw_distance_after_targets: -after,
+        draw_distance_before_targets: before,
         field_zoom,
         elapsed_screen_s: request.visual.elapsed_screen_s,
         effect_height,
