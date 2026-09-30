@@ -1,11 +1,11 @@
 use crate::{
-    BumpyFrameCache, ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement,
-    HudLayoutOffsets, HudLayoutParams, LayoutMiniIndicatorPosition, NotePartPhaseCache,
+    ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
+    HudLayoutParams, LayoutMiniIndicatorPosition, NoteDepthFrameCache, NotePartPhaseCache,
     NotefieldFrameFeatures, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
     ScrollTravel, ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride,
-    ZmodLayoutParams, beat_factor, bumpy_frame_cache, compute_active_note_geometry,
-    compute_tornado_lane_caches, effective_mini_value, field_effect_height, field_layout,
-    fill_lane_col_offsets, fill_move_col_extras, note_part_phase_cache, notefield_frame_plan,
+    ZmodLayoutParams, beat_factor, compute_active_note_geometry, compute_tornado_lane_caches,
+    effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
+    fill_move_col_extras, note_depth_frame_cache, note_part_phase_cache, notefield_frame_plan,
     scroll_travel, song_time_ns_to_seconds, tiny_spacing_scale,
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
@@ -243,7 +243,7 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_lane_caches: [TornadoLaneCache; MAX_COLS],
     pub(crate) move_x_offsets: [f32; MAX_COLS],
-    pub(crate) bumpy_frame_cache: BumpyFrameCache,
+    pub(crate) note_depth_frame_cache: NoteDepthFrameCache,
     pub(crate) tiny_spacing_scale: f32,
     pub(crate) part_phase_caches: [NotePartPhaseCache; NOTE_ANIM_PART_COUNT],
     pub(crate) mine_phase_cache: NotePartPhaseCache,
@@ -502,9 +502,11 @@ fn prepare_notes<'a, S>(
         &request.visual.visual.move_x_cols,
         &mut move_x_offsets[..num_cols],
     );
-    let bumpy_frame_cache = bumpy_frame_cache(
+    let note_depth_frame_cache = note_depth_frame_cache(
         request.visual.visual.bumpy_offset,
         request.visual.visual.bumpy_period,
+        request.arrow_effect_time_s,
+        request.geometry.screen_height,
     );
     let tiny_spacing_scale = tiny_spacing_scale(request.visual.visual.tiny);
     let mine = request.noteskin.mine.unwrap_or(base);
@@ -568,7 +570,7 @@ fn prepare_notes<'a, S>(
         tornado_bounds,
         tornado_lane_caches,
         move_x_offsets,
-        bumpy_frame_cache,
+        note_depth_frame_cache,
         tiny_spacing_scale,
         part_phase_caches,
         mine_phase_cache,

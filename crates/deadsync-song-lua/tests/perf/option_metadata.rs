@@ -47,7 +47,7 @@ fn option_metadata_matches_parent_for_unchanged_options() {
     }
     let mut names: Vec<String> = SONG_LUA_PLAYER_OPTION_CAPABILITIES
         .iter()
-        // Perspective and draw sizes now follow native return values and
+        // Perspective, draw sizes and Drunk variants follow native returns and
         // speeds. Source tests and native probes cover the changed semantics.
         .filter(|name| {
             !matches!(
@@ -61,6 +61,19 @@ fn option_metadata_matches_parent_for_unchanged_options() {
                     | "Skew"
                     | "DrawSize"
                     | "DrawSizeBack"
+                    | "DrunkZ"
+                    | "DrunkZOffset"
+                    | "DrunkZSpeed"
+                    | "DrunkZPeriod"
+                    | "TanDrunk"
+                    | "TanDrunkOffset"
+                    | "TanDrunkSpeed"
+                    | "TanDrunkPeriod"
+                    | "TanDrunkZ"
+                    | "TanDrunkZOffset"
+                    | "TanDrunkZSpeed"
+                    | "TanDrunkZPeriod"
+                    | "Cosecant"
             )
         })
         .map(|name| name.to_string())

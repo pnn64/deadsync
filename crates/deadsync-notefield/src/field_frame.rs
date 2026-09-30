@@ -279,6 +279,11 @@ fn compose_field_contents<S, F>(
         drunk_offset: visual.drunk_offset,
         drunk_speed: visual.drunk_speed,
         drunk_period: visual.drunk_period,
+        cosecant: visual.cosecant,
+        tan_drunk: visual.tan_drunk,
+        tan_drunk_offset: visual.tan_drunk_offset,
+        tan_drunk_speed: visual.tan_drunk_speed,
+        tan_drunk_period: visual.tan_drunk_period,
         flip: visual.flip,
         invert: visual.invert,
         beat: visual.beat,
@@ -332,7 +337,7 @@ fn compose_field_contents<S, F>(
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
         note_world_z_cached(
             travel_offset,
-            note_inputs.bumpy_frame_cache,
+            note_inputs.note_depth_frame_cache,
             lane_transform_caches[local_col],
         )
     };
@@ -1069,8 +1074,11 @@ fn compose_visible_notes<S, F>(
                     };
                 let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
                 let transform_cache = lane_transform_caches[local_col];
-                let world_z =
-                    note_world_z_cached(adjusted_travel, notes.bumpy_frame_cache, transform_cache);
+                let world_z = note_world_z_cached(
+                    adjusted_travel,
+                    notes.note_depth_frame_cache,
+                    transform_cache,
+                );
                 let effect_zoom = prepared.column_zooms[local_col]
                     * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache);
                 let note_scale = field_zoom * effect_zoom;
@@ -1629,6 +1637,9 @@ fn hold_lane_frame(
             && visual.parabola_z == 0.0
             && visual.square == 0.0
             && visual.square_z == 0.0
+            && visual.drunk_z == 0.0
+            && visual.tan_drunk == 0.0
+            && visual.tan_drunk_z == 0.0
             && visual_use_legacy_hold_sprites(
                 effect_params.bumpy,
                 visual.drunk,
@@ -1647,12 +1658,15 @@ mod hold_lane_frame_cache_tests {
     fn travel_mods_select_hold_meshes_even_below_epsilon() {
         for (amount, axis) in [-2.5, 2.5, 0.000000025]
             .into_iter()
-            .flat_map(|amount| [(amount, 0), (amount, 1), (amount, 2)])
+            .flat_map(|amount| (0..6).map(move |axis| (amount, axis)))
         {
             let visual = VisualEffects {
                 xmode: if axis == 0 { amount } else { 0.0 },
                 square: if axis == 1 { amount } else { 0.0 },
                 square_z: if axis == 2 { amount } else { 0.0 },
+                drunk_z: if axis == 3 { amount } else { 0.0 },
+                tan_drunk: if axis == 4 { amount } else { 0.0 },
+                tan_drunk_z: if axis == 5 { amount } else { 0.0 },
                 ..VisualEffects::default()
             };
             let params = VisualEffectParams::default();

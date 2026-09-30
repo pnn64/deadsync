@@ -2822,7 +2822,7 @@ mod tests {
                         ),
                         world_z: crate::note_world_z_cached(
                             travel,
-                            crate::bumpy_frame_cache(0.0, 0.0),
+                            crate::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
                             z_cache,
                         ),
                         arrow_px: 64.0,

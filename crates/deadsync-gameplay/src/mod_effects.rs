@@ -166,6 +166,7 @@ impl AccelOverrides {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisualOverrides {
+    pub cosecant: Option<bool>,
     pub drunk: Option<f32>,
     pub drunk_offset: Option<f32>,
     pub drunk_speed: Option<f32>,
@@ -174,6 +175,18 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub drunk_z: Option<f32>,
+    pub drunk_z_offset: Option<f32>,
+    pub drunk_z_speed: Option<f32>,
+    pub drunk_z_period: Option<f32>,
+    pub tan_drunk: Option<f32>,
+    pub tan_drunk_offset: Option<f32>,
+    pub tan_drunk_speed: Option<f32>,
+    pub tan_drunk_period: Option<f32>,
+    pub tan_drunk_z: Option<f32>,
+    pub tan_drunk_z_offset: Option<f32>,
+    pub tan_drunk_z_speed: Option<f32>,
+    pub tan_drunk_z_period: Option<f32>,
     pub draw_size: Option<f32>,
     pub draw_size_back: Option<f32>,
     pub square: Option<f32>,
@@ -212,6 +225,7 @@ pub struct VisualOverrides {
 impl Default for VisualOverrides {
     fn default() -> Self {
         Self {
+            cosecant: None,
             drunk: None,
             drunk_offset: None,
             drunk_speed: None,
@@ -220,6 +234,18 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            drunk_z: None,
+            drunk_z_offset: None,
+            drunk_z_speed: None,
+            drunk_z_period: None,
+            tan_drunk: None,
+            tan_drunk_offset: None,
+            tan_drunk_speed: None,
+            tan_drunk_period: None,
+            tan_drunk_z: None,
+            tan_drunk_z_offset: None,
+            tan_drunk_z_speed: None,
+            tan_drunk_z_period: None,
             draw_size: None,
             draw_size_back: None,
             square: None,
@@ -260,7 +286,8 @@ impl Default for VisualOverrides {
 impl VisualOverrides {
     #[inline(always)]
     pub fn any(self) -> bool {
-        self.drunk.is_some()
+        self.cosecant.is_some()
+            || self.drunk.is_some()
             || self.drunk_offset.is_some()
             || self.drunk_speed.is_some()
             || self.drunk_period.is_some()
@@ -268,6 +295,18 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.drunk_z.is_some()
+            || self.drunk_z_offset.is_some()
+            || self.drunk_z_speed.is_some()
+            || self.drunk_z_period.is_some()
+            || self.tan_drunk.is_some()
+            || self.tan_drunk_offset.is_some()
+            || self.tan_drunk_speed.is_some()
+            || self.tan_drunk_period.is_some()
+            || self.tan_drunk_z.is_some()
+            || self.tan_drunk_z_offset.is_some()
+            || self.tan_drunk_z_speed.is_some()
+            || self.tan_drunk_z_period.is_some()
             || self.draw_size.is_some()
             || self.draw_size_back.is_some()
             || self.square.is_some()
@@ -412,6 +451,7 @@ impl AccelEffects {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VisualEffects {
+    pub cosecant: bool,
     pub drunk: f32,
     pub drunk_offset: f32,
     pub drunk_speed: f32,
@@ -420,6 +460,18 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub drunk_z: f32,
+    pub drunk_z_offset: f32,
+    pub drunk_z_speed: f32,
+    pub drunk_z_period: f32,
+    pub tan_drunk: f32,
+    pub tan_drunk_offset: f32,
+    pub tan_drunk_speed: f32,
+    pub tan_drunk_period: f32,
+    pub tan_drunk_z: f32,
+    pub tan_drunk_z_offset: f32,
+    pub tan_drunk_z_speed: f32,
+    pub tan_drunk_z_period: f32,
     pub draw_size: f32,
     pub draw_size_back: f32,
     pub square: f32,
@@ -466,6 +518,7 @@ impl VisualEffects {
     #[must_use]
     pub fn from_mask_bits(mask: u16) -> Self {
         Self {
+            cosecant: false,
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
             drunk_offset: 0.0,
             drunk_speed: 0.0,
@@ -474,6 +527,18 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            drunk_z: 0.0,
+            drunk_z_offset: 0.0,
+            drunk_z_speed: 0.0,
+            drunk_z_period: 0.0,
+            tan_drunk: 0.0,
+            tan_drunk_offset: 0.0,
+            tan_drunk_speed: 0.0,
+            tan_drunk_period: 0.0,
+            tan_drunk_z: 0.0,
+            tan_drunk_z_offset: 0.0,
+            tan_drunk_z_speed: 0.0,
+            tan_drunk_z_period: 0.0,
             draw_size: 0.0,
             draw_size_back: 0.0,
             square: 0.0,
@@ -581,6 +646,7 @@ pub fn approach_visual_overrides_to_base(
     base: VisualEffects,
     delta_time: f32,
 ) {
+    visual.cosecant = None;
     let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
     approach_optional_visual(&mut visual.drunk, base.drunk, step);
     approach_optional_visual(&mut visual.drunk_offset, base.drunk_offset, step);
@@ -590,6 +656,26 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.drunk_z, base.drunk_z, step);
+    approach_optional_visual(&mut visual.drunk_z_offset, base.drunk_z_offset, step);
+    approach_optional_visual(&mut visual.drunk_z_speed, base.drunk_z_speed, step);
+    approach_optional_visual(&mut visual.drunk_z_period, base.drunk_z_period, step);
+    approach_optional_visual(&mut visual.tan_drunk, base.tan_drunk, step);
+    approach_optional_visual(&mut visual.tan_drunk_offset, base.tan_drunk_offset, step);
+    approach_optional_visual(&mut visual.tan_drunk_speed, base.tan_drunk_speed, step);
+    approach_optional_visual(&mut visual.tan_drunk_period, base.tan_drunk_period, step);
+    approach_optional_visual(&mut visual.tan_drunk_z, base.tan_drunk_z, step);
+    approach_optional_visual(
+        &mut visual.tan_drunk_z_offset,
+        base.tan_drunk_z_offset,
+        step,
+    );
+    approach_optional_visual(&mut visual.tan_drunk_z_speed, base.tan_drunk_z_speed, step);
+    approach_optional_visual(
+        &mut visual.tan_drunk_z_period,
+        base.tan_drunk_z_period,
+        step,
+    );
     approach_optional_visual(&mut visual.draw_size, base.draw_size, step);
     approach_optional_visual(&mut visual.draw_size_back, base.draw_size_back, step);
     approach_optional_visual(&mut visual.square, base.square, step);
@@ -649,6 +735,7 @@ pub fn approach_visual_overrides_to_target(
     base: VisualEffects,
     delta_time: f32,
 ) {
+    current.cosecant = target.cosecant;
     approach_attack_value(
         &mut current.drunk,
         target.drunk,
@@ -710,6 +797,102 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_z,
+        target.drunk_z,
+        base.drunk_z,
+        speed.drunk_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_z_offset,
+        target.drunk_z_offset,
+        base.drunk_z_offset,
+        speed.drunk_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_z_speed,
+        target.drunk_z_speed,
+        base.drunk_z_speed,
+        speed.drunk_z_speed,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_z_period,
+        target.drunk_z_period,
+        base.drunk_z_period,
+        speed.drunk_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk,
+        target.tan_drunk,
+        base.tan_drunk,
+        speed.tan_drunk,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_offset,
+        target.tan_drunk_offset,
+        base.tan_drunk_offset,
+        speed.tan_drunk_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_speed,
+        target.tan_drunk_speed,
+        base.tan_drunk_speed,
+        speed.tan_drunk_speed,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_period,
+        target.tan_drunk_period,
+        base.tan_drunk_period,
+        speed.tan_drunk_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_z,
+        target.tan_drunk_z,
+        base.tan_drunk_z,
+        speed.tan_drunk_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_z_offset,
+        target.tan_drunk_z_offset,
+        base.tan_drunk_z_offset,
+        speed.tan_drunk_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_z_speed,
+        target.tan_drunk_z_speed,
+        base.tan_drunk_z_speed,
+        speed.tan_drunk_z_speed,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_drunk_z_period,
+        target.tan_drunk_z_period,
+        base.tan_drunk_z_period,
+        speed.tan_drunk_z_period,
         delta_time,
         1.0,
     );

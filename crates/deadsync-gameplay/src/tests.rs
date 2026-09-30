@@ -3458,6 +3458,144 @@ mod tests {
     }
 
     #[test]
+    fn drunk_variants_keep_native_units_speeds_and_boolean_reset() {
+        let mods = parse_attack_mods(
+            "*2 -25% drunkz,*4 -50% drunkzoffset,*6 -75% drunkzspeed,*8 -100% drunkzperiod,*10 -125% tandrunk,*12 -150% tandrunkoffset,*14 -175% tandrunkspeed,*16 -200% tandrunkperiod,*18 -225% tandrunkz,*20 -250% tandrunkzoffset,*22 -275% tandrunkzspeed,*24 -300% tandrunkzperiod,cosecant",
+        );
+        assert_eq!(
+            [
+                mods.visual.drunk_z,
+                mods.visual.drunk_z_offset,
+                mods.visual.drunk_z_speed,
+                mods.visual.drunk_z_period,
+                mods.visual.tan_drunk,
+                mods.visual.tan_drunk_offset,
+                mods.visual.tan_drunk_speed,
+                mods.visual.tan_drunk_period,
+                mods.visual.tan_drunk_z,
+                mods.visual.tan_drunk_z_offset,
+                mods.visual.tan_drunk_z_speed,
+                mods.visual.tan_drunk_z_period
+            ],
+            [
+                Some(-1.0 / 4.0),
+                Some(-2.0 / 4.0),
+                Some(-3.0 / 4.0),
+                Some(-4.0 / 4.0),
+                Some(-5.0 / 4.0),
+                Some(-6.0 / 4.0),
+                Some(-7.0 / 4.0),
+                Some(-8.0 / 4.0),
+                Some(-9.0 / 4.0),
+                Some(-10.0 / 4.0),
+                Some(-11.0 / 4.0),
+                Some(-12.0 / 4.0)
+            ]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.drunk_z,
+                mods.visual_speed.drunk_z_offset,
+                mods.visual_speed.drunk_z_speed,
+                mods.visual_speed.drunk_z_period,
+                mods.visual_speed.tan_drunk,
+                mods.visual_speed.tan_drunk_offset,
+                mods.visual_speed.tan_drunk_speed,
+                mods.visual_speed.tan_drunk_period,
+                mods.visual_speed.tan_drunk_z,
+                mods.visual_speed.tan_drunk_z_offset,
+                mods.visual_speed.tan_drunk_z_speed,
+                mods.visual_speed.tan_drunk_z_period
+            ],
+            [
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0),
+                Some(14.0),
+                Some(16.0),
+                Some(18.0),
+                Some(20.0),
+                Some(22.0),
+                Some(24.0)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.0625,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.drunk_z,
+                merged.drunk_z_offset,
+                merged.drunk_z_speed,
+                merged.drunk_z_period,
+                merged.tan_drunk,
+                merged.tan_drunk_offset,
+                merged.tan_drunk_speed,
+                merged.tan_drunk_period,
+                merged.tan_drunk_z,
+                merged.tan_drunk_z_offset,
+                merged.tan_drunk_z_speed,
+                merged.tan_drunk_z_period
+            ],
+            [
+                -1.0 / 8.0,
+                -2.0 / 8.0,
+                -3.0 / 8.0,
+                -4.0 / 8.0,
+                -5.0 / 8.0,
+                -6.0 / 8.0,
+                -7.0 / 8.0,
+                -8.0 / 8.0,
+                -9.0 / 8.0,
+                -10.0 / 8.0,
+                -11.0 / 8.0,
+                -12.0 / 8.0
+            ]
+        );
+        assert!(merged.cosecant);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no drunkz,no drunkzoffset,no drunkzspeed,no drunkzperiod,no tandrunk,no tandrunkoffset,no tandrunkspeed,no tandrunkperiod,no tandrunkz,no tandrunkzoffset,no tandrunkzspeed,no tandrunkzperiod,no cosecant",
+        );
+        assert_eq!(
+            [
+                cleared.visual.drunk_z,
+                cleared.visual.drunk_z_offset,
+                cleared.visual.drunk_z_speed,
+                cleared.visual.drunk_z_period,
+                cleared.visual.tan_drunk,
+                cleared.visual.tan_drunk_offset,
+                cleared.visual.tan_drunk_speed,
+                cleared.visual.tan_drunk_period,
+                cleared.visual.tan_drunk_z,
+                cleared.visual.tan_drunk_z_offset,
+                cleared.visual.tan_drunk_z_speed,
+                cleared.visual.tan_drunk_z_period
+            ],
+            [Some(0.0); 12]
+        );
+        assert_eq!(cleared.visual.cosecant, Some(false));
+        assert_eq!(
+            parse_attack_mods("50% cosecant").visual.cosecant,
+            Some(false)
+        );
+        assert_eq!(
+            parse_attack_mods("51% cosecant").visual.cosecant,
+            Some(true)
+        );
+    }
+
+    #[test]
     fn square_family_keeps_native_units_speeds_and_reset() {
         let mods = parse_attack_mods(
             "*2 -250% square,*4 3200% squareoffset,*6 -100% squareperiod,\

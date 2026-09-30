@@ -206,7 +206,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         },
     );
 
-    let receptor_draw_start = draws.len();
     let receptor = notes.receptor;
     let tap_explosion = notes.tap_explosion;
     let col_offsets = notes.col_offsets;
@@ -217,6 +216,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let mut lane_rotations = [0.0; MAX_COLS];
     let mut lane_centers = [[0.0; 2]; MAX_COLS];
     let mut lane_zooms = [0.0; MAX_COLS];
+    let mut lane_depths = [0.0; MAX_COLS];
     let targets_enabled = !options.hide_targets
         && prepared.receptor_alphas[..num_cols]
             .iter()
@@ -246,6 +246,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     };
 
     for draw_index in 0..num_cols {
+        let lane_draw_start = draws.len();
         let local_col = column_draw_col(num_cols, draw_index);
         let receptor_y = field.column_receptor_ys[local_col];
         if lane_work_mask & (1 << local_col) == 0 {
@@ -253,6 +254,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         }
         let lane = frame.lanes[local_col];
         let effect = gameplay_visual_effect_params(&visual, local_col);
+        lane_depths[local_col] = crate::note_world_z_cached(
+            0.0,
+            notes.note_depth_frame_cache,
+            crate::lane_note_transform_cache(current_beat, effect),
+        );
         let base_zoom = visual_arrow_effect_zoom(0.0, effect);
         lane_base_zooms[local_col] = base_zoom;
         let effect_zoom = (base_zoom
@@ -285,6 +291,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 drunk_offset: visual.drunk_offset,
                 drunk_speed: visual.drunk_speed,
                 drunk_period: visual.drunk_period,
+                cosecant: visual.cosecant,
+                tan_drunk: visual.tan_drunk,
+                tan_drunk_offset: visual.tan_drunk_offset,
+                tan_drunk_speed: visual.tan_drunk_speed,
+                tan_drunk_period: visual.tan_drunk_period,
                 flip: visual.flip,
                 invert: visual.invert,
                 beat: visual.beat,
@@ -426,12 +437,15 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 );
             }
         }
+        // Native receptor/ghost transforms sample depth at zero travel.
+        shift_feedback_depth(&mut draws[lane_draw_start..], lane_depths[local_col]);
     }
 
     // Tap explosions are independent of the concrete "Hide Combo
     // Explosions" option, which applies only to combo milestone art.
     if let (Some(tap_explosion), Some(tap_explosions)) = (tap_explosion, frame.tap_explosions) {
         for draw_index in 0..num_cols {
+            let lane_draw_start = draws.len();
             let local_col = column_draw_col(num_cols, draw_index);
             let Some(active) = tap_explosions.get(local_col) else {
                 continue;
@@ -473,6 +487,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 },
                 sprite_source,
             );
+            // Native receptor/ghost transforms sample depth at zero travel.
+            shift_feedback_depth(&mut draws[lane_draw_start..], lane_depths[local_col]);
         }
     }
 
@@ -481,6 +497,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         frame.mine_explosions,
     ) {
         for draw_index in 0..num_cols {
+            let lane_draw_start = draws.len();
             let local_col = column_draw_col(num_cols, draw_index);
             let Some(active) = mine_explosions.get(local_col) else {
                 continue;
@@ -507,24 +524,21 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 },
                 sprite_source,
             );
+            // Native receptor/ghost transforms sample depth at zero travel.
+            shift_feedback_depth(&mut draws[lane_draw_start..], lane_depths[local_col]);
         }
     }
-    // NoteColumnRenderer::UpdateReceptorGhostStuff samples GetXYZPos at
-    // zero travel. Receptors and their live explosions share this depth;
-    // the column HUD emitted before receptor_draw_start keeps its own depth.
-    let row_z = crate::transforms::square_wave_offset(
-        0.0,
-        visual.square_z,
-        visual.square_z_offset,
-        visual.square_z_period,
-    );
-    if row_z != 0.0 {
-        for draw in &mut draws[receptor_draw_start..] {
-            match draw {
-                FlatDraw::Sprite(sprite) => sprite.world_z += row_z,
-                FlatDraw::TexturedMesh(mesh) => mesh.world_z += row_z,
-                FlatDraw::PreparedU32(_) | FlatDraw::PreparedInline(_) => {}
-            }
+}
+
+fn shift_feedback_depth(draws: &mut [FlatDraw], z: f32) {
+    if z == 0.0 {
+        return;
+    }
+    for draw in draws {
+        match draw {
+            FlatDraw::Sprite(sprite) => sprite.world_z += z,
+            FlatDraw::TexturedMesh(mesh) => mesh.world_z += z,
+            FlatDraw::PreparedU32(_) | FlatDraw::PreparedInline(_) => {}
         }
     }
 }
@@ -2964,6 +2978,299 @@ mod tests {
                     "Stealth leaves receptors visible"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn drunk_variants_move_composed_notes_and_hold_meshes() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|i| TestSlot::new(format!("note{}", i / deadsync_noteskin::NUM_QUANTIZATIONS)))
+            .collect();
+        ns.mine_layers = (0..2)
+            .map(|i| vec![TestSlot::new(format!("note{i}"))].into())
+            .collect();
+        for col in 0..2 {
+            ns.hold_columns[col].head_inactive = Some(TestSlot::new(format!("note{col}")));
+            ns.hold_columns[col].body_inactive = Some(TestSlot::new(format!("body{col}")));
+            ns.hold_columns[col].topcap_inactive = Some(TestSlot::new(format!("top{col}")));
+            ns.hold_columns[col].bottomcap_inactive = Some(TestSlot::new(format!("bottom{col}")));
+        }
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(1).expect("index")],
+        ];
+        for placement in [FieldPlacement::P1, FieldPlacement::P2] {
+            for kind in [
+                NoteType::Tap,
+                NoteType::Mine,
+                NoteType::Hold,
+                NoteType::Roll,
+            ] {
+                let notes: Vec<_> = (0..2)
+                    .map(|col| {
+                        let mut n = note(col);
+                        n.note_type = kind;
+                        n.beat = 2.0 + col as f32;
+                        n.row_index = 96 + col * 48;
+                        if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                            n.hold = Some(HoldData {
+                                end_row_index: n.row_index + 48,
+                                end_beat: n.beat + 1.0,
+                                result: None,
+                                life: 1.0,
+                                let_go_started_at: None,
+                                let_go_starting_life: 1.0,
+                                last_held_row_index: n.row_index,
+                                last_held_beat: n.beat,
+                            });
+                        }
+                        n
+                    })
+                    .collect();
+                for direction in [-1.0, 1.0] {
+                    for amount in [-0.75, 0.75] {
+                        for cosecant in [false, true] {
+                            let mut request =
+                                request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
+                            request.geometry.column_dirs.fill(direction);
+                            request.chart.lane_note_row_indices = &lanes;
+                            request.chart.lane_hold_indices = &lanes;
+                            request.chart.note_itg_rows = &[96, 144];
+                            request.arrow_effect_time_s = 1.25;
+                            request.visual.visual = VisualEffects {
+                                tan_drunk: amount,
+                                tan_drunk_offset: 0.75,
+                                tan_drunk_speed: -0.5,
+                                tan_drunk_period: -0.25,
+                                drunk_z: amount,
+                                drunk_z_offset: -0.5,
+                                drunk_z_speed: 0.5,
+                                drunk_z_period: 0.25,
+                                tan_drunk_z: -amount / 2.0,
+                                tan_drunk_z_offset: 0.25,
+                                tan_drunk_z_speed: -0.5,
+                                tan_drunk_z_period: -0.5,
+                                cosecant,
+                                tiny: 1.0,
+                                tipsy: 0.25,
+                                move_y_cols: [0.5; MAX_COLS],
+                                ..VisualEffects::default()
+                            };
+                            request.visual.accel.wave = 0.5;
+                            let prepared = prepare_notefield(&request).expect("prepared field");
+                            let frame = NotefieldFieldFrameView {
+                                feedback: spline_feedback(&[]),
+                                completed_rows: Default::default(),
+                            };
+                            let mut draws = Vec::new();
+                            let mut scratch = HoldMeshScratch::with_columns(2);
+                            compose_notefield_field(
+                                &mut Vec::new(),
+                                &mut draws,
+                                &mut Vec::new(),
+                                &mut ModelMeshCache::default(),
+                                &mut scratch,
+                                &mut CapturedActorScratch::with_capacities(32, 0),
+                                &mut NotefieldCameraCache::default(),
+                                &request,
+                                &prepared,
+                                &frame,
+                                &source,
+                            );
+                            let positions = sprite_positions(&draws);
+                            let mut meshes = [0; 2];
+                            for col in 0..2 {
+                                let receptor = positions
+                                    .iter()
+                                    .find(|(key, _)| *key == format!("target{col}"))
+                                    .expect("receptor")
+                                    .1;
+                                let wave = |angle: f32| {
+                                    if cosecant {
+                                        1.0 / angle.sin()
+                                    } else {
+                                        angle.tan()
+                                    }
+                                };
+                                let x_at = |travel: f32| {
+                                    amount
+                                        * (wave(0.625 + col as f32 * 0.35 + travel * 7.5 / 480.0)
+                                            * 32.0)
+                                };
+                                let z_at = |travel: f32| {
+                                    amount
+                                        * ((1.875 + col as f32 * 0.1 + travel * 12.5 / 480.0).cos()
+                                            * 32.0)
+                                        - amount / 2.0
+                                            * (wave(
+                                                0.625 + col as f32 * 0.25 + travel * 5.0 / 480.0,
+                                            ) * 32.0)
+                                };
+                                let x_at_y = |y: f32| {
+                                    receptor[0]
+                                        + (x_at((y - receptor[1]) / direction) - x_at(0.0)) * 0.5
+                                };
+                                let expected_row_x = prepared.field.playfield_center_x
+                                    + prepared.column_x_offsets[col]
+                                    + (prepared
+                                        .notes
+                                        .as_ref()
+                                        .expect("prepared notes")
+                                        .col_offsets[col]
+                                        + x_at(0.0))
+                                        * 0.5;
+                                assert!((receptor[0] - expected_row_x).abs() < 0.0001);
+                                let arrow = positions
+                                    .iter()
+                                    .find(|(key, _)| *key == format!("note{col}"))
+                                    .expect("arrow")
+                                    .1;
+                                assert!((arrow[0] - x_at_y(arrow[1])).abs() < 0.001);
+                                for draw in &draws {
+                                    if let FlatDraw::Sprite(sprite) = draw {
+                                        if let SpriteSource::TextureHandle { key, .. } =
+                                            &sprite.source
+                                        {
+                                            if [format!("target{col}"), format!("note{col}")]
+                                                .contains(&key.to_string())
+                                            {
+                                                let expected_z = z_at(
+                                                    (sprite.center[1] - receptor[1]) / direction,
+                                                );
+                                                assert!(
+                                                    (sprite.world_z - expected_z).abs() < 0.001,
+                                                    "{placement:?}, {kind:?}, col {col}"
+                                                );
+                                            }
+                                        }
+                                    }
+                                    let FlatDraw::TexturedMesh(mesh) = draw else {
+                                        continue;
+                                    };
+                                    if ![
+                                        format!("body{col}"),
+                                        format!("top{col}"),
+                                        format!("bottom{col}"),
+                                    ]
+                                    .contains(&mesh.texture.to_string())
+                                    {
+                                        continue;
+                                    }
+                                    meshes[col] += 1;
+                                    assert!(
+                                        !mesh.depth_test,
+                                        "DrunkZ alone does not request native depth testing"
+                                    );
+                                    let vertices = match &mesh.vertices {
+                                        FlatMeshVertices::Shared(v) => v.as_ref(),
+                                        FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                    };
+                                    for quad in vertices.chunks_exact(6) {
+                                        for (left, right) in
+                                            [(&quad[0], &quad[1]), (&quad[5], &quad[4])]
+                                        {
+                                            let x = (left.pos[0] + right.pos[0]) * 0.5;
+                                            let expected_x = x_at_y(left.pos[1]);
+                                            assert!(
+                                                (x - expected_x).abs()
+                                                    < 0.002 * expected_x.abs().max(1.0)
+                                            );
+                                            let expected_z =
+                                                z_at((left.pos[1] - receptor[1]) / direction);
+                                            assert!(
+                                                (left.pos[2] - expected_z).abs()
+                                                    < 0.001 * expected_z.abs().max(1.0)
+                                            );
+                                            assert_eq!(right.pos[2], left.pos[2]);
+                                        }
+                                    }
+                                }
+                            }
+                            if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                                assert!(meshes.into_iter().all(|n| n >= 3), "body and both caps");
+                            }
+                            assert_eq!(scratch.stats().capacity_grows, 0);
+                            assert_eq!(scratch.stats().saturated_pairs, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn drunk_z_moves_each_receptor_and_its_live_explosions() {
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0), note(1)];
+        let hides = SongLuaNoteHideWindows::default();
+        let holds = [active_hold(0), active_hold(1)];
+        let taps = [tap(), tap()];
+        let mines = [mine(), mine()];
+        let mut feedback = spline_feedback(&taps);
+        feedback.lanes[0].active_hold = Some(&holds[0]);
+        feedback.lanes[1].active_hold = Some(&holds[1]);
+        feedback.mine_explosions = Some(&mines);
+        let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+        request.arrow_effect_time_s = 1.25;
+        request.visual.visual.drunk_z = 0.75;
+        request.visual.visual.drunk_z_offset = -0.5;
+        request.visual.visual.drunk_z_speed = 0.5;
+        let prepared = prepare_notefield(&request).expect("prepared field");
+        let mut draws = Vec::new();
+        compose_notefield_feedback(
+            &mut draws,
+            &mut Vec::new(),
+            &mut ModelMeshCache::default(),
+            &request,
+            &prepared,
+            &feedback,
+            &source,
+        );
+        let mut checked = [0; 2];
+        let mut mine_depths = Vec::new();
+        for draw in draws {
+            let FlatDraw::Sprite(sprite) = draw else {
+                continue;
+            };
+            let SpriteSource::TextureHandle { key, .. } = &sprite.source else {
+                continue;
+            };
+            if key.as_ref() == "mine" {
+                mine_depths.push(sprite.world_z);
+            }
+            for col in 0..2 {
+                if [
+                    format!("target{col}"),
+                    format!("hold{col}"),
+                    format!("tap{col}"),
+                ]
+                .contains(&key.to_string())
+                {
+                    assert!(
+                        (sprite.world_z - 24.0 * (1.875 + col as f32 * 0.1).cos()).abs() < 0.00002
+                    );
+                    checked[col] += 1;
+                }
+            }
+        }
+        assert_eq!(checked, [3, 3]);
+        assert_eq!(mine_depths.len(), 2);
+        mine_depths.sort_by(f32::total_cmp);
+        let mut expected = [24.0 * 1.875f32.cos(), 24.0 * 1.975f32.cos()];
+        expected.sort_by(f32::total_cmp);
+        for (actual, expected) in mine_depths.into_iter().zip(expected) {
+            assert!((actual - expected).abs() < 0.00002);
         }
     }
 

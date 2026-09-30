@@ -435,6 +435,19 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
             | "skew"
             | "drawsize"
             | "drawsizeback"
+            | "drunkz"
+            | "drunkzoffset"
+            | "drunkzspeed"
+            | "drunkzperiod"
+            | "tandrunk"
+            | "tandrunkoffset"
+            | "tandrunkspeed"
+            | "tandrunkperiod"
+            | "tandrunkz"
+            | "tandrunkzoffset"
+            | "tandrunkzspeed"
+            | "tandrunkzperiod"
+            | "cosecant"
     ) {
         return create_native_option(lua, &owner, name);
     }
@@ -490,6 +503,15 @@ fn set_perspective_angle(state: &Table, key: &str, value: f32) -> mlua::Result<b
 }
 
 fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Result<[Value; 2]> {
+    if !matches!(
+        key,
+        "overhead" | "incoming" | "space" | "hallway" | "distant" | "tilt" | "skew"
+    ) {
+        return Ok([
+            Value::Number(f64::from(state.get::<Option<f32>>(key)?.unwrap_or(0.0))),
+            Value::Number(f64::from(speeds.get::<Option<f32>>(key)?.unwrap_or(1.0))),
+        ]);
+    }
     let tilt = state.get::<Option<f32>>("tilt")?.unwrap_or(0.0);
     let skew = state.get::<Option<f32>>("skew")?.unwrap_or(0.0);
     let (value, speed_key) = match key {
@@ -500,7 +522,6 @@ fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Res
         "distant" if skew == 0.0 && tilt > 0.0 => (tilt, "tilt"),
         "tilt" => (tilt, "tilt"),
         "skew" => (skew, "skew"),
-        "drawsize" | "drawsizeback" => (state.get::<Option<f32>>(key)?.unwrap_or(0.0), key),
         _ => return Ok([Value::Nil, Value::Nil]),
     };
     Ok([
@@ -515,6 +536,19 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
         let state = player_option_state(lua, &owner)?;
+        if key == "cosecant" {
+            let previous = state.get::<Option<bool>>("cosecant")?.unwrap_or(false);
+            if let Some(Value::Boolean(value)) = method_arg(&args, 0) {
+                state.set("cosecant", *value)?;
+            }
+            // BOOL_INTERFACE chains on a boolean second argument, even false.
+            let result = if matches!(method_arg(&args, 1), Some(Value::Boolean(_))) {
+                Value::Table(owner.clone())
+            } else {
+                Value::Boolean(previous)
+            };
+            return Ok(MultiValue::from_iter([result]));
+        }
         let speeds = player_option_speeds(lua, &owner)?;
         // OptionsBinding returns the values from before the setter, unless the
         // final argument is true and requests chaining. Inactive aliases return
@@ -539,11 +573,14 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
                     "Arg must be greater than or equal to zero.",
                 ));
             }
-            if matches!(key.as_str(), "tilt" | "skew" | "drawsize" | "drawsizeback") {
-                speeds.set(key.as_str(), speed)?;
-            } else {
+            if matches!(
+                key.as_str(),
+                "incoming" | "space" | "hallway" | "distant" | "overhead"
+            ) {
                 speeds.set("tilt", speed)?;
                 speeds.set("skew", speed)?;
+            } else {
+                speeds.set(key.as_str(), speed)?;
             }
         }
         if matches!(args.back(), Some(Value::Boolean(true))) {

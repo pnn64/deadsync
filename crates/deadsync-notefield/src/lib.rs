@@ -162,13 +162,14 @@ pub(crate) use receptors::{
     receptor_row_center,
 };
 pub(crate) use transforms::{
-    AccelYParams, BumpyFrameCache, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache,
-    NoteXParams, TornadoLaneCache, VisualEffectParams, appearance_note_alpha_glow_cached,
-    beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
-    fill_gameplay_lane_effects, fill_move_col_extras, fill_static_note_x_offsets,
-    gameplay_visual_effect_params, lane_note_transform_cache, note_appearance_cache,
-    note_world_z_cached, note_x_offset, note_x_offset_cached, smoothstep01, tiny_spacing_scale,
-    visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
+    AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache,
+    NoteDepthFrameCache, NoteXParams, TornadoLaneCache, VisualEffectParams,
+    appearance_note_alpha_glow_cached, beat_factor, compute_active_note_geometry,
+    compute_tornado_lane_caches, fill_gameplay_lane_effects, fill_move_col_extras,
+    fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
+    note_appearance_cache, note_depth_frame_cache, note_world_z_cached, note_x_offset,
+    note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom,
+    visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
     visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
@@ -295,7 +296,7 @@ mod tests {
     fn cached_bumpy_z(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
         note_world_z_cached(
             y,
-            super::bumpy_frame_cache(offset, period),
+            super::note_depth_frame_cache(offset, period, 0.0, 480.0),
             lane_note_transform_cache(
                 0.0,
                 VisualEffectParams {
@@ -1543,6 +1544,250 @@ mod tests {
     }
 
     #[test]
+    fn drunk_variants_match_compiled_native_vectors() {
+        // CalculateDrunkAngle and SelectTanType were copied verbatim from
+        // the unchanged local ArrowEffects.cpp and compiled with MSVC.
+        let cols = [
+            -96.0, -32.0, 32.0, 96.0, -96.0, -32.0, 32.0, 96.0, -96.0, -32.0, 32.0, 96.0, -96.0,
+            -32.0, 32.0, 96.0,
+        ];
+        for (col, travel, time, height, amount, offset, speed, period, cos, tan, csc) in [
+            (
+                0,
+                0f32,
+                0f32,
+                480f32,
+                1f32,
+                0f32,
+                0f32,
+                0f32,
+                32f32,
+                0f32,
+                f32::INFINITY,
+            ),
+            (
+                1,
+                64f32,
+                0.25f32,
+                480f32,
+                1f32,
+                0f32,
+                0.5f32,
+                0f32,
+                -10.59725f32,
+                -91.176384f32,
+                33.9136391f32,
+            ),
+            (
+                3,
+                192f32,
+                1.25f32,
+                480f32,
+                -0.75f32,
+                0.5f32,
+                -1f32,
+                -0.25f32,
+                17.4223747f32,
+                -22.7381954f32,
+                34.8955765f32,
+            ),
+            (
+                2,
+                -128f32,
+                -0.5f32,
+                480f32,
+                2f32,
+                -1f32,
+                -2f32,
+                -1f32,
+                56.1652832f32,
+                34.9633598f32,
+                133.493088f32,
+            ),
+            (
+                7,
+                384f32,
+                2.5f32,
+                720f32,
+                0.5f32,
+                2f32,
+                2f32,
+                1.5f32,
+                15.9210091f32,
+                -1.59579444f32,
+                -161.217575f32,
+            ),
+            (
+                15,
+                -96f32,
+                7.5f32,
+                1080f32,
+                -2f32,
+                -0.75f32,
+                -0.25f32,
+                -2f32,
+                -35.6120415f32,
+                -95.566597f32,
+                -77.0259247f32,
+            ),
+            (
+                0,
+                32f32,
+                4f32,
+                480f32,
+                1f32,
+                0f32,
+                -1f32,
+                0f32,
+                25.1483917f32,
+                25.1789742f32,
+                51.74897f32,
+            ),
+            (
+                3,
+                256f32,
+                9f32,
+                480f32,
+                0.25f32,
+                50f32,
+                0.25f32,
+                -0.25f32,
+                -2.3404963f32,
+                -26.1482067f32,
+                8.36604309f32,
+            ),
+            (
+                1,
+                0f32,
+                0f32,
+                480f32,
+                2.50000003e-08f32,
+                0f32,
+                0f32,
+                0f32,
+                7.8405327e-07f32,
+                1.62168021e-07f32,
+                4.02679188e-06f32,
+            ),
+            (
+                2,
+                128f32,
+                1f32,
+                480f32,
+                1f32,
+                0.300000012f32,
+                1f32,
+                0.75f32,
+                19.8041382f32,
+                40.6146317f32,
+                40.7391052f32,
+            ),
+        ] {
+            for (tangent, cosecant, expected) in
+                [(false, false, cos), (true, false, tan), (true, true, csc)]
+            {
+                let params = NoteXParams {
+                    screen_height: height,
+                    drunk: if tangent { 0.0 } else { amount },
+                    drunk_offset: offset,
+                    drunk_speed: speed,
+                    drunk_period: period,
+                    tan_drunk: if tangent { amount } else { 0.0 },
+                    tan_drunk_offset: offset,
+                    tan_drunk_speed: speed,
+                    tan_drunk_period: period,
+                    cosecant,
+                    ..NoteXParams::default()
+                };
+                let z_params = VisualEffectParams {
+                    local_col: col,
+                    cosecant,
+                    drunk_z: if tangent { 0.0 } else { amount },
+                    drunk_z_offset: offset,
+                    drunk_z_speed: speed,
+                    drunk_z_period: period,
+                    tan_drunk_z: if tangent { amount } else { 0.0 },
+                    tan_drunk_z_offset: offset,
+                    tan_drunk_z_speed: speed,
+                    tan_drunk_z_period: period,
+                    tiny: 1.0,
+                    ..VisualEffectParams::default()
+                };
+                let z = note_world_z_cached(
+                    travel,
+                    super::note_depth_frame_cache(0.0, 0.0, time, height),
+                    lane_note_transform_cache(0.0, z_params),
+                );
+                let x = note_x_offset(
+                    col,
+                    travel,
+                    0.0,
+                    time,
+                    &cols,
+                    &[0.0; 16],
+                    &[TornadoBounds::default(); 16],
+                    &[0.5; 16],
+                    params,
+                    1.0,
+                );
+                let cached = super::note_x_offset_cached(
+                    col,
+                    travel,
+                    0.0,
+                    time,
+                    &cols,
+                    &[0.0; 16],
+                    &[TornadoBounds::default(); 16],
+                    &[],
+                    &[32.0; 16],
+                    params,
+                    0.5,
+                );
+                if expected.is_infinite() {
+                    assert!(z.is_infinite() && x.is_infinite() && cached.is_infinite());
+                } else {
+                    assert!(
+                        (z - expected).abs() <= 0.00002,
+                        "col {col}, tangent {tangent}, cosecant {cosecant}: {z} != {expected}"
+                    );
+                    let expected_x = (cols[col] + expected) * 0.5 + 32.0;
+                    assert!((x - expected_x).abs() <= 0.00002);
+                    assert_eq!(x, cached);
+                }
+                // Native NeedZBuffer deliberately omits DrunkZ/TanDrunkZ.
+                assert!(!visual_hold_body_needs_z_buffer(z_params));
+            }
+        }
+        let params = VisualEffectParams {
+            cosecant: true,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            note_world_z_cached(
+                0.0,
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, params)
+            ),
+            0.0
+        );
+        let params = NoteXParams {
+            tan_drunk: 0.000000025,
+            screen_height: 480.0,
+            ..NoteXParams::default()
+        };
+        assert!(!super::fill_static_note_x_offsets(
+            1,
+            &cols[..1],
+            &[0.0],
+            &[TornadoBounds::default()],
+            &[0.0],
+            params,
+            1.0,
+            &mut [0.0]
+        ));
+    }
+
+    #[test]
     fn square_matches_native_ragesquare_vectors_and_tiny_order() {
         // Expected values were obtained by linking the checked-out ITGmania
         // RageMath.cpp and calling RageSquare, including its receptor hack.
@@ -1607,7 +1852,7 @@ mod tests {
             assert_eq!(
                 note_world_z_cached(
                     travel,
-                    super::bumpy_frame_cache(0.0, 0.0),
+                    super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
                     lane_note_transform_cache(0.0, z_params),
                 ),
                 expected
@@ -1647,7 +1892,7 @@ mod tests {
         assert_eq!(
             note_world_z_cached(
                 128.0,
-                super::bumpy_frame_cache(0.0, 0.0),
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
                 lane_note_transform_cache(0.0, params),
             ),
             cached_bumpy_z(128.0, 0.75, 0.0, 0.0) - 10.0 - 16.0
@@ -1702,7 +1947,7 @@ mod tests {
             assert_eq!(
                 note_world_z_cached(
                     travel,
-                    super::bumpy_frame_cache(0.0, 0.0),
+                    super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
                     lane_note_transform_cache(0.0, z_params)
                 ),
                 expected
@@ -1726,7 +1971,7 @@ mod tests {
         };
         let z = note_world_z_cached(
             128.0,
-            super::bumpy_frame_cache(0.0, 0.0),
+            super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
             lane_note_transform_cache(0.0, params),
         );
         assert_eq!(z, cached_bumpy_z(128.0, 0.75, 0.0, 0.0) - 10.0);
@@ -1737,7 +1982,7 @@ mod tests {
         assert_eq!(
             note_world_z_cached(
                 128.0,
-                super::bumpy_frame_cache(0.0, 0.0),
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
                 lane_note_transform_cache(0.0, invalid)
             ),
             0.0

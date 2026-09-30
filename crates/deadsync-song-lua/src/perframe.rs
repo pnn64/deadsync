@@ -1223,8 +1223,11 @@ fn push_update_mod_targets_with_key<S: ModState>(
             let Some(mut target) = runtime_player_option_ease_target(key, "") else {
                 continue;
             };
-            if let Some(speed) = speeds[player].get(key).copied() {
-                if !from.is_finite() || !speed.is_finite() {
+            let speed = speeds[player].get(key).copied();
+            // Cosecant has no native approach speed, but initial values and
+            // later writes are still step targets, never interpolated samples.
+            if speed.is_some() || key == "cosecant" {
+                if !from.is_finite() || speed.is_some_and(|speed| !speed.is_finite()) {
                     continue;
                 }
                 let value = update_mod_runtime_value(key, from);
@@ -1236,7 +1239,7 @@ fn push_update_mod_targets_with_key<S: ModState>(
                 if let Some(index) = last_windows.get_mut(lookup_key) {
                     if let Some(window) = out.get_mut(*index)
                         && window.to == value
-                        && window.approach_speed == Some(speed)
+                        && window.approach_speed == speed
                     {
                         window.limit = end - window.start;
                         continue;
@@ -1248,10 +1251,10 @@ fn push_update_mod_targets_with_key<S: ModState>(
                 if let SongLuaEaseTarget::Mod(name) = &mut target {
                     *name = key.to_owned();
                 }
-                // Song-level writes are step targets; Current approaches them
-                // at the authored speed. Never tween toward a future write.
+                // Current approaches float targets at the authored speed;
+                // booleans change immediately. Never tween toward a future write.
                 out.push(SongLuaEaseWindow {
-                    approach_speed: Some(speed),
+                    approach_speed: speed,
                     unit,
                     start,
                     limit: end - start,

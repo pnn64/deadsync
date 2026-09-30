@@ -11,7 +11,9 @@ pub(crate) struct TornadoLaneCache {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct BumpyFrameCache {
+pub(crate) struct NoteDepthFrameCache {
+    elapsed: f32,
+    screen_height: f32,
     offset: f32,
     divisor: f32,
 }
@@ -31,6 +33,16 @@ pub(crate) struct NoteAlphaParams {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct VisualEffectParams {
+    pub local_col: usize,
+    pub cosecant: bool,
+    pub drunk_z: f32,
+    pub drunk_z_offset: f32,
+    pub drunk_z_speed: f32,
+    pub drunk_z_period: f32,
+    pub tan_drunk_z: f32,
+    pub tan_drunk_z_offset: f32,
+    pub tan_drunk_z_speed: f32,
+    pub tan_drunk_z_period: f32,
     pub bumpy: f32,
     pub tiny: f32,
     pub pulse_inner: f32,
@@ -50,6 +62,10 @@ pub(crate) struct VisualEffectParams {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LaneNoteTransformCache {
+    local_col: usize,
+    cosecant: bool,
+    drunk_z: DrunkWaveParams,
+    tan_drunk_z: DrunkWaveParams,
     bumpy_amplitude: f32,
     parabola_z: f32,
     square_z: f32,
@@ -161,6 +177,11 @@ enum AccelYPath {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct NoteXParams {
+    pub cosecant: bool,
+    pub tan_drunk: f32,
+    pub tan_drunk_offset: f32,
+    pub tan_drunk_speed: f32,
+    pub tan_drunk_period: f32,
     pub screen_height: f32,
     pub flip: f32,
     pub invert: f32,
@@ -326,10 +347,17 @@ pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParam
         path,
     }
 }
-pub(crate) fn bumpy_frame_cache(offset: f32, period: f32) -> BumpyFrameCache {
+pub(crate) fn note_depth_frame_cache(
+    offset: f32,
+    period: f32,
+    elapsed: f32,
+    screen_height: f32,
+) -> NoteDepthFrameCache {
     let offset = if offset.is_finite() { offset } else { 0.0 };
     let period = if period.is_finite() { period } else { 0.0 };
-    BumpyFrameCache {
+    NoteDepthFrameCache {
+        elapsed,
+        screen_height,
         offset,
         divisor: mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR)),
     }
@@ -536,7 +564,7 @@ pub(crate) fn square_wave_offset(y: f32, amount: f32, offset: f32, period: f32) 
 
 pub(crate) fn note_world_z_cached(
     y: f32,
-    frame_cache: BumpyFrameCache,
+    frame_cache: NoteDepthFrameCache,
     lane_cache: LaneNoteTransformCache,
 ) -> f32 {
     let mut z = 0.0;
@@ -548,6 +576,24 @@ pub(crate) fn note_world_z_cached(
     if lane_cache.parabola_z != 0.0 {
         z += lane_cache.parabola_z * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    z += drunk_wave_offset(
+        lane_cache.local_col,
+        y,
+        frame_cache.elapsed,
+        frame_cache.screen_height,
+        lane_cache.drunk_z,
+        false,
+        false,
+    );
+    z += drunk_wave_offset(
+        lane_cache.local_col,
+        y,
+        frame_cache.elapsed,
+        frame_cache.screen_height,
+        lane_cache.tan_drunk_z,
+        true,
+        lane_cache.cosecant,
+    );
     z += square_wave_offset(
         y,
         lane_cache.square_z,
@@ -694,6 +740,20 @@ pub(crate) fn lane_note_transform_cache(
         None
     };
     LaneNoteTransformCache {
+        local_col: params.local_col,
+        cosecant: params.cosecant,
+        drunk_z: DrunkWaveParams {
+            amount: params.drunk_z,
+            offset: params.drunk_z_offset,
+            speed: params.drunk_z_speed,
+            period: params.drunk_z_period,
+        },
+        tan_drunk_z: DrunkWaveParams {
+            amount: params.tan_drunk_z,
+            offset: params.tan_drunk_z_offset,
+            speed: params.tan_drunk_z_speed,
+            period: params.tan_drunk_z_period,
+        },
         bumpy_amplitude,
         parabola_z: if params.parabola_z.is_finite() {
             params.parabola_z
@@ -820,6 +880,16 @@ pub(crate) fn gameplay_visual_effect_params(
             dizzy: visual.dizzy,
             twirl: visual.twirl,
             parabola_z: visual.parabola_z,
+            local_col,
+            cosecant: visual.cosecant,
+            drunk_z: visual.drunk_z,
+            drunk_z_offset: visual.drunk_z_offset,
+            drunk_z_speed: visual.drunk_z_speed,
+            drunk_z_period: visual.drunk_z_period,
+            tan_drunk_z: visual.tan_drunk_z,
+            tan_drunk_z_offset: visual.tan_drunk_z_offset,
+            tan_drunk_z_speed: visual.tan_drunk_z_speed,
+            tan_drunk_z_period: visual.tan_drunk_z_period,
             square_z: visual.square_z,
             square_z_offset: visual.square_z_offset,
             square_z_period: visual.square_z_period,
@@ -983,17 +1053,74 @@ pub(crate) fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
     beat * shift
 }
 
-pub(crate) fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, params: NoteXParams) -> f32 {
-    if !signed_effect_active(params.drunk) {
+#[derive(Clone, Copy, Debug, Default)]
+struct DrunkWaveParams {
+    amount: f32,
+    offset: f32,
+    speed: f32,
+    period: f32,
+}
+
+// ArrowEffects::CalculateDrunkAngle/GetXPos/GetZPos. Both axes use the
+// fallback metrics 0.2, 10 and 0.5; travel precedes Reverse/Tipsy/MoveY.
+// Keep native IEEE behavior at tangent/cosecant poles; no amplitude clamp.
+fn drunk_wave_offset(
+    local_col: usize,
+    y: f32,
+    elapsed: f32,
+    screen_height: f32,
+    params: DrunkWaveParams,
+    tangent: bool,
+    cosecant: bool,
+) -> f32 {
+    if params.amount == 0.0 || !params.amount.is_finite() {
         return 0.0;
     }
-    let col = local_col as f32;
-    // ArrowEffects::CalculateDrunkAngle; option values are native percentage units.
-    let angle = elapsed * (1.0 + params.drunk_speed)
-        + col * (params.drunk_offset * DRUNK_COLUMN_FREQUENCY + DRUNK_COLUMN_FREQUENCY)
-        + y * (params.drunk_period * DRUNK_OFFSET_FREQUENCY + DRUNK_OFFSET_FREQUENCY)
-            / params.screen_height;
-    params.drunk * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE
+    let angle = elapsed * (1.0 + params.speed)
+        + local_col as f32 * (params.offset * DRUNK_COLUMN_FREQUENCY + DRUNK_COLUMN_FREQUENCY)
+        + y * (params.period * DRUNK_OFFSET_FREQUENCY + DRUNK_OFFSET_FREQUENCY) / screen_height;
+    let wave = if !tangent {
+        angle.cos()
+    } else if cosecant {
+        1.0 / angle.sin()
+    } else {
+        angle.tan()
+    };
+    params.amount * (wave * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE)
+}
+
+pub(crate) fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, params: NoteXParams) -> f32 {
+    drunk_wave_offset(
+        local_col,
+        y,
+        elapsed,
+        params.screen_height,
+        DrunkWaveParams {
+            amount: params.drunk,
+            offset: params.drunk_offset,
+            speed: params.drunk_speed,
+            period: params.drunk_period,
+        },
+        false,
+        false,
+    )
+}
+
+fn tan_drunk_x_extra(local_col: usize, y: f32, elapsed: f32, params: NoteXParams) -> f32 {
+    drunk_wave_offset(
+        local_col,
+        y,
+        elapsed,
+        params.screen_height,
+        DrunkWaveParams {
+            amount: params.tan_drunk,
+            offset: params.tan_drunk_offset,
+            speed: params.tan_drunk_speed,
+            period: params.tan_drunk_period,
+        },
+        true,
+        params.cosecant,
+    )
 }
 
 pub(crate) fn tornado_x_extra(
@@ -1061,8 +1188,11 @@ pub(crate) fn note_x_extra(
             params.tornado,
         );
     }
-    if signed_effect_active(params.drunk) {
+    if params.drunk != 0.0 {
         out += drunk_x_extra(local_col, y, elapsed, params);
+    }
+    if params.tan_drunk != 0.0 {
+        out += tan_drunk_x_extra(local_col, y, elapsed, params);
     }
     if signed_effect_active(params.flip) {
         let mirrored = col_offsets
@@ -1153,8 +1283,11 @@ pub(crate) fn note_x_offset_cached(
             },
         );
     }
-    if signed_effect_active(params.drunk) {
+    if params.drunk != 0.0 {
         extra += drunk_x_extra(local_col, y, elapsed, params);
+    }
+    if params.tan_drunk != 0.0 {
+        extra += tan_drunk_x_extra(local_col, y, elapsed, params);
     }
     if signed_effect_active(params.flip) {
         let mirrored = col_offsets
@@ -1199,7 +1332,8 @@ pub(crate) fn fill_static_note_x_offsets(
     out: &mut [f32],
 ) -> bool {
     if signed_effect_active(params.tornado)
-        || signed_effect_active(params.drunk)
+        || params.drunk != 0.0
+        || params.tan_drunk != 0.0
         || signed_effect_active(params.beat)
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
         || (params.xmode.is_finite() && params.xmode != 0.0)

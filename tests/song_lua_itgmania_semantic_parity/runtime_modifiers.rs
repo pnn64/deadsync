@@ -111,7 +111,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     push("tilt".into(), if key == "hallway" { -value } else { value });
                     push("skew".into(), 0.0);
                 }
-                "stealthpastreceptors" => push(key, f32::from(value > 0.5)),
+                "stealthpastreceptors" | "cosecant" => push(key, f32::from(value > 0.5)),
                 _ => push(key, value),
             };
             if operation == "FromString" {
@@ -157,7 +157,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                 }
                 let value = if operation == "Overhead" {
                     args.first().map(|_| 1.0)
-                } else if operation == "StealthPastReceptors" {
+                } else if matches!(operation, "StealthPastReceptors" | "Cosecant") {
                     args.first().and_then(Value::as_bool).map(f32::from)
                 } else {
                     value_f32(args.first())
@@ -231,6 +231,19 @@ fn runtime_mod_value(
         "twirl" => visual.twirl.unwrap_or(0.0),
         "roll" => visual.roll.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "drunkz" => visual.drunk_z.unwrap_or(0.0),
+        "drunkzoffset" => visual.drunk_z_offset.unwrap_or(0.0),
+        "drunkzspeed" => visual.drunk_z_speed.unwrap_or(0.0),
+        "drunkzperiod" => visual.drunk_z_period.unwrap_or(0.0),
+        "tandrunk" => visual.tan_drunk.unwrap_or(0.0),
+        "tandrunkoffset" => visual.tan_drunk_offset.unwrap_or(0.0),
+        "tandrunkspeed" => visual.tan_drunk_speed.unwrap_or(0.0),
+        "tandrunkperiod" => visual.tan_drunk_period.unwrap_or(0.0),
+        "tandrunkz" => visual.tan_drunk_z.unwrap_or(0.0),
+        "tandrunkzoffset" => visual.tan_drunk_z_offset.unwrap_or(0.0),
+        "tandrunkzspeed" => visual.tan_drunk_z_speed.unwrap_or(0.0),
+        "tandrunkzperiod" => visual.tan_drunk_z_period.unwrap_or(0.0),
+        "cosecant" => f32::from(visual.cosecant.unwrap_or(false)),
         "drawsize" => visual.draw_size.unwrap_or(0.0),
         "drawsizeback" => visual.draw_size_back.unwrap_or(0.0),
         "square" => visual.square.unwrap_or(0.0),
@@ -862,6 +875,94 @@ end}
 }
 
 #[test]
+fn drunk_variants_survive_lua_methods_strings_approach_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create Drunk fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(&entry, r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local names = {"DrunkZ","DrunkZOffset","DrunkZSpeed","DrunkZPeriod","TanDrunk","TanDrunkOffset","TanDrunkSpeed","TanDrunkPeriod","TanDrunkZ","TanDrunkZOffset","TanDrunkZSpeed","TanDrunkZPeriod"}
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    for i, name in ipairs(names) do
+        local amount, speed = options[name](options)
+        assert(amount == 0 and speed == 1 and select('#', options[name](options)) == 2)
+        assert(options[name](options, -i/4, i/2, true) == options)
+        amount, speed = options[name](options)
+        assert(amount == -i/4 and speed == i/2)
+        other:FromString('*9999 '..i * 12.5 ..'% '..string.lower(name))
+    end
+    assert(options:Cosecant(true) == false and options:Cosecant() == true)
+    assert(options:Cosecant(0) == true and options:Cosecant() == true)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            for i, name in ipairs(names) do options:FromString('*9999 '..i * 25 ..'% '..string.lower(name)) end
+            assert(options:Cosecant(false, false) == options and not options:Cosecant())
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#).expect("write Drunk fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Drunk variants");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile Drunk fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, dt, multiplier, csc) in [
+        (0.25, 0.25, -0.125, 1.0),
+        (0.5, 1_000_000.0, 0.25, 0.0),
+        (1.0, 1_000_000.0, 0.0, 0.0),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                dt,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        for (i, key) in [
+            "drunkz",
+            "drunkzoffset",
+            "drunkzspeed",
+            "drunkzperiod",
+            "tandrunk",
+            "tandrunkoffset",
+            "tandrunkspeed",
+            "tandrunkperiod",
+            "tandrunkz",
+            "tandrunkzoffset",
+            "tandrunkzspeed",
+            "tandrunkzperiod",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some((i + 1) as f32 * multiplier),
+                "{key} at {second}"
+            );
+            assert_eq!(
+                runtime_mod_value(&runtime, 1, key),
+                Some((i + 1) as f32 / 8.0)
+            );
+        }
+        assert_eq!(runtime_mod_value(&runtime, 0, "cosecant"), Some(csc));
+    }
+}
+
+#[test]
 fn draw_size_survives_lua_methods_strings_and_fresh_options() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create DrawSize fixture directory");
@@ -1022,10 +1123,10 @@ return Def.ActorFrame{OnCommand=function(self)
     self:SetUpdateFunction(function()
         local beat = GAMESTATE:GetSongBeat()
         if phase == 1 and beat >= 257 then
-            player:SetPlayerOptions('ModsLevel_Song', '*1 20% square,*0.25 50% squarez')
+            player:SetPlayerOptions('ModsLevel_Song', '*1 20% square,*0.25 50% squarez,*1 20% TanDrunk')
             phase = 2
         elseif phase == 2 and beat >= 260 then
-            player:SetPlayerOptions('ModsLevel_Song', 'no square,no squarez')
+            player:SetPlayerOptions('ModsLevel_Song', 'no square,no squarez,no TanDrunk')
             phase = 3
         end
     end)
@@ -1043,10 +1144,10 @@ end}
     // ITGmania's 60 Hz frame 5443 is the first to reach beat 257;
     // frame 5506 reaches 260. Probe each boundary without a tolerance.
     for (second, expected) in [
-        (((5443.0_f64 / 60.0) as f32).next_down(), [0.0, 0.0]),
-        ((5443.0_f64 / 60.0) as f32, [0.2, 0.5]),
-        (((5506.0_f64 / 60.0) as f32).next_down(), [0.2, 0.5]),
-        ((5506.0_f64 / 60.0) as f32, [0.0, 0.0]),
+        (((5443.0_f64 / 60.0) as f32).next_down(), [0.0, 0.0, 0.0]),
+        ((5443.0_f64 / 60.0) as f32, [0.2, 0.5, 0.2]),
+        (((5506.0_f64 / 60.0) as f32).next_down(), [0.2, 0.5, 0.2]),
+        ((5506.0_f64 / 60.0) as f32, [0.0, 0.0, 0.0]),
     ] {
         runtime.refresh_player(
             0,
@@ -1056,7 +1157,7 @@ end}
             AttackBaseEffects::default,
             SongLuaPlayerTransform::default(),
         );
-        for (key, value) in ["square", "squarez"].into_iter().zip(expected) {
+        for (key, value) in ["square", "squarez", "tandrunk"].into_iter().zip(expected) {
             assert_eq!(
                 runtime_mod_value(&runtime, 0, key),
                 Some(value),

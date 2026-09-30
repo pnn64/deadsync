@@ -552,6 +552,7 @@ pub enum SongLuaEaseMaskTarget {
     AccelWave,
     AccelExpand,
     AccelBoomerang,
+    VisualCosecant,
     VisualDrunk,
     VisualDrunkPeriod,
     VisualDrunkSpeed,
@@ -560,6 +561,18 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualDrunkZ,
+    VisualDrunkZOffset,
+    VisualDrunkZSpeed,
+    VisualDrunkZPeriod,
+    VisualTanDrunk,
+    VisualTanDrunkOffset,
+    VisualTanDrunkSpeed,
+    VisualTanDrunkPeriod,
+    VisualTanDrunkZ,
+    VisualTanDrunkZOffset,
+    VisualTanDrunkZSpeed,
+    VisualTanDrunkZPeriod,
     VisualDrawSize,
     VisualDrawSizeBack,
     VisualSquare,
@@ -1740,6 +1753,7 @@ fn append_song_lua_ease_targets_key(
         "wave" => push(SongLuaEaseMaskTarget::AccelWave, pct_from, pct_to),
         "expand" => push(SongLuaEaseMaskTarget::AccelExpand, pct_from, pct_to),
         "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
+        "cosecant" => push(SongLuaEaseMaskTarget::VisualCosecant, pct_from, pct_to),
         "drunk" => push(SongLuaEaseMaskTarget::VisualDrunk, pct_from, pct_to),
         "drunkperiod" => push(SongLuaEaseMaskTarget::VisualDrunkPeriod, pct_from, pct_to),
         "drunkspeed" => push(SongLuaEaseMaskTarget::VisualDrunkSpeed, pct_from, pct_to),
@@ -1748,6 +1762,38 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "drunkz" => push(SongLuaEaseMaskTarget::VisualDrunkZ, pct_from, pct_to),
+        "drunkzoffset" => push(SongLuaEaseMaskTarget::VisualDrunkZOffset, pct_from, pct_to),
+        "drunkzspeed" => push(SongLuaEaseMaskTarget::VisualDrunkZSpeed, pct_from, pct_to),
+        "drunkzperiod" => push(SongLuaEaseMaskTarget::VisualDrunkZPeriod, pct_from, pct_to),
+        "tandrunk" => push(SongLuaEaseMaskTarget::VisualTanDrunk, pct_from, pct_to),
+        "tandrunkoffset" => push(
+            SongLuaEaseMaskTarget::VisualTanDrunkOffset,
+            pct_from,
+            pct_to,
+        ),
+        "tandrunkspeed" => push(SongLuaEaseMaskTarget::VisualTanDrunkSpeed, pct_from, pct_to),
+        "tandrunkperiod" => push(
+            SongLuaEaseMaskTarget::VisualTanDrunkPeriod,
+            pct_from,
+            pct_to,
+        ),
+        "tandrunkz" => push(SongLuaEaseMaskTarget::VisualTanDrunkZ, pct_from, pct_to),
+        "tandrunkzoffset" => push(
+            SongLuaEaseMaskTarget::VisualTanDrunkZOffset,
+            pct_from,
+            pct_to,
+        ),
+        "tandrunkzspeed" => push(
+            SongLuaEaseMaskTarget::VisualTanDrunkZSpeed,
+            pct_from,
+            pct_to,
+        ),
+        "tandrunkzperiod" => push(
+            SongLuaEaseMaskTarget::VisualTanDrunkZPeriod,
+            pct_from,
+            pct_to,
+        ),
         "drawsize" => push(SongLuaEaseMaskTarget::VisualDrawSize, pct_from, pct_to),
         "drawsizeback" => push(SongLuaEaseMaskTarget::VisualDrawSizeBack, pct_from, pct_to),
         "square" => push(SongLuaEaseMaskTarget::VisualSquare, pct_from, pct_to),
@@ -2301,6 +2347,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AccelWave => accel.wave = Some(value),
         SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
         SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
+        SongLuaEaseMaskTarget::VisualCosecant => visual.cosecant = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkPeriod => visual.drunk_period = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkSpeed => visual.drunk_speed = Some(value),
@@ -2309,6 +2356,18 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkZ => visual.drunk_z = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkZOffset => visual.drunk_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkZSpeed => visual.drunk_z_speed = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkZPeriod => visual.drunk_z_period = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunk => visual.tan_drunk = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkOffset => visual.tan_drunk_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkSpeed => visual.tan_drunk_speed = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkPeriod => visual.tan_drunk_period = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkZ => visual.tan_drunk_z = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkZOffset => visual.tan_drunk_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkZSpeed => visual.tan_drunk_z_speed = Some(value),
+        SongLuaEaseMaskTarget::VisualTanDrunkZPeriod => visual.tan_drunk_z_period = Some(value),
         SongLuaEaseMaskTarget::VisualDrawSize => visual.draw_size = Some(value),
         SongLuaEaseMaskTarget::VisualDrawSizeBack => visual.draw_size_back = Some(value),
         SongLuaEaseMaskTarget::VisualSquare => visual.square = Some(value),
@@ -2522,6 +2581,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
         SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
+        SongLuaEaseMaskTarget::VisualCosecant => window.visual.cosecant.is_some(),
         SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkPeriod => window.visual.drunk_period.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkSpeed => window.visual.drunk_speed.is_some(),
@@ -2530,6 +2590,18 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkZ => window.visual.drunk_z.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkZOffset => window.visual.drunk_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkZSpeed => window.visual.drunk_z_speed.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkZPeriod => window.visual.drunk_z_period.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunk => window.visual.tan_drunk.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkOffset => window.visual.tan_drunk_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkSpeed => window.visual.tan_drunk_speed.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkPeriod => window.visual.tan_drunk_period.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkZ => window.visual.tan_drunk_z.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkZOffset => window.visual.tan_drunk_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkZSpeed => window.visual.tan_drunk_z_speed.is_some(),
+        SongLuaEaseMaskTarget::VisualTanDrunkZPeriod => window.visual.tan_drunk_z_period.is_some(),
         SongLuaEaseMaskTarget::VisualDrawSize => window.visual.draw_size.is_some(),
         SongLuaEaseMaskTarget::VisualDrawSizeBack => window.visual.draw_size_back.is_some(),
         SongLuaEaseMaskTarget::VisualSquare => window.visual.square.is_some(),
@@ -3740,6 +3812,9 @@ const fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
 }
 
 fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
+    if visual.cosecant.is_some() {
+        targets.cosecant = Some(false);
+    }
     mark_active_target(&mut targets.drunk, visual.drunk);
     mark_active_target(&mut targets.drunk_period, visual.drunk_period);
     mark_active_target(&mut targets.drunk_speed, visual.drunk_speed);
@@ -3748,6 +3823,18 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.drunk_z, visual.drunk_z);
+    mark_active_target(&mut targets.drunk_z_offset, visual.drunk_z_offset);
+    mark_active_target(&mut targets.drunk_z_speed, visual.drunk_z_speed);
+    mark_active_target(&mut targets.drunk_z_period, visual.drunk_z_period);
+    mark_active_target(&mut targets.tan_drunk, visual.tan_drunk);
+    mark_active_target(&mut targets.tan_drunk_offset, visual.tan_drunk_offset);
+    mark_active_target(&mut targets.tan_drunk_speed, visual.tan_drunk_speed);
+    mark_active_target(&mut targets.tan_drunk_period, visual.tan_drunk_period);
+    mark_active_target(&mut targets.tan_drunk_z, visual.tan_drunk_z);
+    mark_active_target(&mut targets.tan_drunk_z_offset, visual.tan_drunk_z_offset);
+    mark_active_target(&mut targets.tan_drunk_z_speed, visual.tan_drunk_z_speed);
+    mark_active_target(&mut targets.tan_drunk_z_period, visual.tan_drunk_z_period);
     mark_active_target(&mut targets.draw_size, visual.draw_size);
     mark_active_target(&mut targets.draw_size_back, visual.draw_size_back);
     mark_active_target(&mut targets.square, visual.square);
@@ -4537,6 +4624,7 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisibilityDarkColumn(col) if col < MAX_COLS => {
                 attack.dark_col_speed[col] = Some(speed)
             }
+            SongLuaEaseMaskTarget::VisualCosecant => {}
             SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
             SongLuaEaseMaskTarget::VisualDrunkPeriod => {
                 attack.visual_speed.drunk_period = Some(speed)
@@ -4551,6 +4639,36 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualDrunkZ => attack.visual_speed.drunk_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualDrunkZOffset => {
+                attack.visual_speed.drunk_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDrunkZSpeed => {
+                attack.visual_speed.drunk_z_speed = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDrunkZPeriod => {
+                attack.visual_speed.drunk_z_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanDrunk => attack.visual_speed.tan_drunk = Some(speed),
+            SongLuaEaseMaskTarget::VisualTanDrunkOffset => {
+                attack.visual_speed.tan_drunk_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanDrunkSpeed => {
+                attack.visual_speed.tan_drunk_speed = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanDrunkPeriod => {
+                attack.visual_speed.tan_drunk_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanDrunkZ => attack.visual_speed.tan_drunk_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualTanDrunkZOffset => {
+                attack.visual_speed.tan_drunk_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanDrunkZSpeed => {
+                attack.visual_speed.tan_drunk_z_speed = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanDrunkZPeriod => {
+                attack.visual_speed.tan_drunk_z_period = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualDrawSize => attack.visual_speed.draw_size = Some(speed),
             SongLuaEaseMaskTarget::VisualDrawSizeBack => {
                 attack.visual_speed.draw_size_back = Some(speed)
@@ -5033,6 +5151,11 @@ fn apply_active_visual_window(
     persisted: bool,
 ) {
     let active_clear_all = active_targets.clear_all;
+    if let Some(value) = window.visual.cosecant
+        && (!persisted || (!active_clear_all && active_targets.visual.cosecant.is_none()))
+    {
+        values.visual.cosecant = Some(value);
+    }
     apply_active_visual_target(
         &mut values.visual.drunk,
         &mut values.visual_speed.drunk,
@@ -5102,6 +5225,114 @@ fn apply_active_visual_window(
         window.visual.parabola_x,
         window.visual_speed.parabola_x,
         active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.drunk_z,
+        &mut values.visual_speed.drunk_z,
+        window.visual.drunk_z,
+        window.visual_speed.drunk_z,
+        active_targets.visual.drunk_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.drunk_z_offset,
+        &mut values.visual_speed.drunk_z_offset,
+        window.visual.drunk_z_offset,
+        window.visual_speed.drunk_z_offset,
+        active_targets.visual.drunk_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.drunk_z_speed,
+        &mut values.visual_speed.drunk_z_speed,
+        window.visual.drunk_z_speed,
+        window.visual_speed.drunk_z_speed,
+        active_targets.visual.drunk_z_speed,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.drunk_z_period,
+        &mut values.visual_speed.drunk_z_period,
+        window.visual.drunk_z_period,
+        window.visual_speed.drunk_z_period,
+        active_targets.visual.drunk_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk,
+        &mut values.visual_speed.tan_drunk,
+        window.visual.tan_drunk,
+        window.visual_speed.tan_drunk,
+        active_targets.visual.tan_drunk,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_offset,
+        &mut values.visual_speed.tan_drunk_offset,
+        window.visual.tan_drunk_offset,
+        window.visual_speed.tan_drunk_offset,
+        active_targets.visual.tan_drunk_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_speed,
+        &mut values.visual_speed.tan_drunk_speed,
+        window.visual.tan_drunk_speed,
+        window.visual_speed.tan_drunk_speed,
+        active_targets.visual.tan_drunk_speed,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_period,
+        &mut values.visual_speed.tan_drunk_period,
+        window.visual.tan_drunk_period,
+        window.visual_speed.tan_drunk_period,
+        active_targets.visual.tan_drunk_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_z,
+        &mut values.visual_speed.tan_drunk_z,
+        window.visual.tan_drunk_z,
+        window.visual_speed.tan_drunk_z,
+        active_targets.visual.tan_drunk_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_z_offset,
+        &mut values.visual_speed.tan_drunk_z_offset,
+        window.visual.tan_drunk_z_offset,
+        window.visual_speed.tan_drunk_z_offset,
+        active_targets.visual.tan_drunk_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_z_speed,
+        &mut values.visual_speed.tan_drunk_z_speed,
+        window.visual.tan_drunk_z_speed,
+        window.visual_speed.tan_drunk_z_speed,
+        active_targets.visual.tan_drunk_z_speed,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_drunk_z_period,
+        &mut values.visual_speed.tan_drunk_z_period,
+        window.visual.tan_drunk_z_period,
+        window.visual_speed.tan_drunk_z_period,
+        active_targets.visual.tan_drunk_z_period,
         active_clear_all,
         persisted,
     );
@@ -5771,6 +6002,7 @@ fn apply_runtime_mod(
         "wave" => out.accel.wave = attack_level(percent_value),
         "expand" => out.accel.expand = attack_level(percent_value),
         "boomerang" => out.accel.boomerang = attack_level(percent_value),
+        "cosecant" => out.visual.cosecant = attack_level(percent_value).map(|level| level > 0.5),
         "drunk" => set_approached_mod(
             &mut out.visual.drunk,
             &mut out.visual_speed.drunk,
@@ -5816,6 +6048,78 @@ fn apply_runtime_mod(
         "parabolax" => set_approached_mod(
             &mut out.visual.parabola_x,
             &mut out.visual_speed.parabola_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drunkz" => set_approached_mod(
+            &mut out.visual.drunk_z,
+            &mut out.visual_speed.drunk_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drunkzoffset" => set_approached_mod(
+            &mut out.visual.drunk_z_offset,
+            &mut out.visual_speed.drunk_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drunkzspeed" => set_approached_mod(
+            &mut out.visual.drunk_z_speed,
+            &mut out.visual_speed.drunk_z_speed,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drunkzperiod" => set_approached_mod(
+            &mut out.visual.drunk_z_period,
+            &mut out.visual_speed.drunk_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunk" => set_approached_mod(
+            &mut out.visual.tan_drunk,
+            &mut out.visual_speed.tan_drunk,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkoffset" => set_approached_mod(
+            &mut out.visual.tan_drunk_offset,
+            &mut out.visual_speed.tan_drunk_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkspeed" => set_approached_mod(
+            &mut out.visual.tan_drunk_speed,
+            &mut out.visual_speed.tan_drunk_speed,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkperiod" => set_approached_mod(
+            &mut out.visual.tan_drunk_period,
+            &mut out.visual_speed.tan_drunk_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkz" => set_approached_mod(
+            &mut out.visual.tan_drunk_z,
+            &mut out.visual_speed.tan_drunk_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkzoffset" => set_approached_mod(
+            &mut out.visual.tan_drunk_z_offset,
+            &mut out.visual_speed.tan_drunk_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkzspeed" => set_approached_mod(
+            &mut out.visual.tan_drunk_z_speed,
+            &mut out.visual_speed.tan_drunk_z_speed,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tandrunkzperiod" => set_approached_mod(
+            &mut out.visual.tan_drunk_z_period,
+            &mut out.visual_speed.tan_drunk_z_period,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -6340,6 +6644,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         }
     }
     VisualEffects {
+        cosecant: attack.cosecant.unwrap_or(base.cosecant),
         drunk: merge_attack_value(base.drunk, attack.drunk),
         drunk_period: merge_attack_value(base.drunk_period, attack.drunk_period),
         drunk_speed: merge_attack_value(base.drunk_speed, attack.drunk_speed),
@@ -6348,6 +6653,18 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        drunk_z: merge_attack_value(base.drunk_z, attack.drunk_z),
+        drunk_z_offset: merge_attack_value(base.drunk_z_offset, attack.drunk_z_offset),
+        drunk_z_speed: merge_attack_value(base.drunk_z_speed, attack.drunk_z_speed),
+        drunk_z_period: merge_attack_value(base.drunk_z_period, attack.drunk_z_period),
+        tan_drunk: merge_attack_value(base.tan_drunk, attack.tan_drunk),
+        tan_drunk_offset: merge_attack_value(base.tan_drunk_offset, attack.tan_drunk_offset),
+        tan_drunk_speed: merge_attack_value(base.tan_drunk_speed, attack.tan_drunk_speed),
+        tan_drunk_period: merge_attack_value(base.tan_drunk_period, attack.tan_drunk_period),
+        tan_drunk_z: merge_attack_value(base.tan_drunk_z, attack.tan_drunk_z),
+        tan_drunk_z_offset: merge_attack_value(base.tan_drunk_z_offset, attack.tan_drunk_z_offset),
+        tan_drunk_z_speed: merge_attack_value(base.tan_drunk_z_speed, attack.tan_drunk_z_speed),
+        tan_drunk_z_period: merge_attack_value(base.tan_drunk_z_period, attack.tan_drunk_z_period),
         draw_size: merge_attack_value(base.draw_size, attack.draw_size),
         draw_size_back: merge_attack_value(base.draw_size_back, attack.draw_size_back),
         square: merge_attack_value(base.square, attack.square),
