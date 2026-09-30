@@ -2126,6 +2126,31 @@ fn merge_scheduled_overlay_samples(
     merge_scheduled_overlay_samples_from_buffer(tracks, track_indices, baseline, &mut scheduled);
 }
 
+// The caller keeps samples in total_cmp order. Negative NaNs form a leading
+// prefix; include them in the search partition, then reject them as values.
+// Numeric comparison includes both signs of zero, matching the reverse scan.
+fn overlay_sample_at_or_before(
+    samples: &[SongLuaOverlayUpdateSample],
+    beat: f32,
+) -> Option<&SongLuaOverlayUpdateSample> {
+    let last = samples.last()?;
+    if last.beat <= beat {
+        return Some(last);
+    }
+    let earlier = &samples[..samples.len() - 1];
+    // Short reverse scans beat the binary-search setup. The last sample was
+    // already rejected, so neither path needs to compare it again.
+    if earlier.len() < 32 {
+        return earlier.iter().rev().find(|sample| sample.beat <= beat);
+    }
+    let end = earlier.partition_point(|sample| {
+        sample.beat <= beat || (sample.beat.is_nan() && sample.beat.is_sign_negative())
+    });
+    end.checked_sub(1)
+        .and_then(|index| earlier.get(index))
+        .filter(|sample| sample.beat <= beat)
+}
+
 fn merge_scheduled_overlay_samples_from_buffer(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<
@@ -2159,16 +2184,16 @@ fn merge_scheduled_overlay_samples_from_buffer(
                 index
             });
         let track = &mut tracks[track_index];
-        let current = track
-            .samples
-            .iter()
-            .rev()
-            .find(|current| current.beat <= sample.start_beat + f32::EPSILON)
-            .map(|current| current.value.clone())
-            .unwrap_or_else(|| {
-                overlay_state_update_value(&baseline[sample.overlay_index], sample.target)
-            });
         let has_start = sample.end_beat > sample.start_beat + f32::EPSILON;
+        // Step writes emit only their end value, so their start snapshot is
+        // unused. Clone or construct one only when an anchor will own it.
+        let current = has_start.then(|| {
+            overlay_sample_at_or_before(&track.samples, sample.start_beat + f32::EPSILON)
+                .map(|current| current.value.clone())
+                .unwrap_or_else(|| {
+                    overlay_state_update_value(&baseline[sample.overlay_index], sample.target)
+                })
+        });
         let first_beat = if has_start {
             sample.start_beat
         } else {
@@ -2181,7 +2206,7 @@ fn merge_scheduled_overlay_samples_from_buffer(
         if ordered {
             // The existing prefix is sorted and compacted. An ordered append
             // can only merge with its last sample, preserving last-write wins.
-            if has_start {
+            if let Some(current) = current {
                 append_ordered_overlay_sample(
                     &mut track.samples,
                     SongLuaOverlayUpdateSample {
@@ -2199,7 +2224,7 @@ fn merge_scheduled_overlay_samples_from_buffer(
             );
             continue;
         }
-        if has_start {
+        if let Some(current) = current {
             track.samples.push(SongLuaOverlayUpdateSample {
                 beat: sample.start_beat,
                 value: current,
@@ -2211,9 +2236,8 @@ fn merge_scheduled_overlay_samples_from_buffer(
         });
         sort_overlay_update_samples(&mut track.samples);
     }
-    for track in tracks {
-        sort_overlay_update_samples(&mut track.samples);
-    }
+    // Every track was canonicalized above. Ordered appends keep that order
+    // and compact ties; out-of-order appends canonicalize their track locally.
 }
 
 pub fn call_update_functions_at(
@@ -3011,3 +3035,7 @@ mod borrowed_tracks_perf;
 #[cfg(test)]
 #[path = "../tests/perf/capture_outputs.rs"]
 mod capture_outputs_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/scheduled_merge.rs"]
+mod scheduled_merge_perf;
