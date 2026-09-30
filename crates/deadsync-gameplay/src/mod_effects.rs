@@ -171,6 +171,7 @@ pub struct VisualOverrides {
     pub drunk_speed: Option<f32>,
     pub drunk_period: Option<f32>,
     pub dizzy: Option<f32>,
+    pub twirl: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
     pub confusion_offset_cols: [Option<f32>; MAX_COLS],
@@ -204,6 +205,7 @@ impl Default for VisualOverrides {
             drunk_speed: None,
             drunk_period: None,
             dizzy: None,
+            twirl: None,
             confusion: None,
             confusion_offset: None,
             confusion_offset_cols: [None; MAX_COLS],
@@ -239,6 +241,7 @@ impl VisualOverrides {
             || self.drunk_speed.is_some()
             || self.drunk_period.is_some()
             || self.dizzy.is_some()
+            || self.twirl.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
             || self.confusion_offset_cols.iter().any(Option::is_some)
@@ -378,6 +381,7 @@ pub struct VisualEffects {
     pub drunk_speed: f32,
     pub drunk_period: f32,
     pub dizzy: f32,
+    pub twirl: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
     pub confusion_offset_cols: [f32; MAX_COLS],
@@ -419,6 +423,7 @@ impl VisualEffects {
             drunk_speed: 0.0,
             drunk_period: 0.0,
             dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
+            twirl: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
             confusion_offset_cols: [0.0; MAX_COLS],
@@ -522,6 +527,7 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.drunk_speed, base.drunk_speed, step);
     approach_optional_visual(&mut visual.drunk_period, base.drunk_period, step);
     approach_optional_visual(&mut visual.dizzy, base.dizzy, step);
+    approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
     approach_optional_visual_cols(
@@ -608,6 +614,14 @@ pub fn approach_visual_overrides_to_target(
         target.dizzy,
         base.dizzy,
         speed.dizzy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.twirl,
+        target.twirl,
+        base.twirl,
+        speed.twirl,
         delta_time,
         1.0,
     );

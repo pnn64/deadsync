@@ -40,6 +40,7 @@ pub(crate) struct VisualEffectParams {
     pub confusion: f32,
     pub confusion_offset: f32,
     pub dizzy: f32,
+    pub twirl: f32,
     pub rotate_z: f32,
 }
 
@@ -508,8 +509,17 @@ pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
     -deg
 }
 
+// ArrowEffects::GetRotationY uses the pre-reverse, post-acceleration Y offset.
+pub(crate) fn visual_note_rotation_y(y_offset: f32, twirl: f32) -> f32 {
+    if twirl == 0.0 || !twirl.is_finite() {
+        0.0
+    } else {
+        twirl * y_offset / 2.0
+    }
+}
+
 pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> bool {
-    signed_effect_active(params.bumpy)
+    signed_effect_active(params.bumpy) || (params.twirl.is_finite() && params.twirl != 0.0)
 }
 
 pub(crate) fn visual_use_legacy_hold_sprites(
@@ -735,6 +745,7 @@ pub(crate) fn gameplay_visual_effect_params(
             confusion: visual.confusion,
             confusion_offset: visual.confusion_offset,
             dizzy: visual.dizzy,
+            twirl: visual.twirl,
             bumpy: visual.bumpy,
             rotate_z: 0.0,
         },

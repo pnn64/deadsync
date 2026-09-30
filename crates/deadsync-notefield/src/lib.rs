@@ -4168,15 +4168,15 @@ mod tests {
 
     #[test]
     fn hold_strip_row_3d_preserves_row_z() {
-        let row = hold_strip_row_3d([64.0, 128.0, 12.5], 8.0, 0.0, 1.0, 0.5, [1.0; 4]);
+        let row = hold_strip_row_3d([64.0, 128.0, 12.5], 8.0, 0.0, 0.0, 1.0, 0.5, [1.0; 4]);
         assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
         assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
     }
 
     #[test]
     fn hold_strip_quad_matches_legacy_triangle_order() {
-        let top = hold_strip_row_3d([0.0, 0.0, 0.0], 1.0, 0.0, 1.0, 0.0, [1.0; 4]);
-        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], 1.0, 0.0, 1.0, 1.0, [1.0; 4]);
+        let top = hold_strip_row_3d([0.0, 0.0, 0.0], 1.0, 0.0, 0.0, 1.0, 0.0, [1.0; 4]);
+        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], 1.0, 0.0, 0.0, 1.0, 1.0, [1.0; 4]);
         let quad = hold_strip_quad(top, bottom);
         assert_eq!(quad[0].pos, top[0].pos);
         assert_eq!(quad[1].pos, top[1].pos);

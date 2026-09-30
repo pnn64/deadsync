@@ -1,3 +1,4 @@
+use crate::transforms::visual_note_rotation_y;
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
@@ -246,9 +247,7 @@ fn compose_field_contents<S, F>(
             scale_sprite(slot.size())
         }
     };
-    let note_rotation_y = 0.0_f32;
     let prefer_sprite_note_path = false;
-    let flat_tap_face_rotation_y = 0.0_f32;
     let beat_push = note_inputs.beat_factor;
     let col_offsets = note_inputs.col_offsets;
     let invert_distances = note_inputs.invert_distances;
@@ -561,6 +560,8 @@ fn compose_field_contents<S, F>(
             tail_adjusted_travel,
         );
         let hold_parts = hold_plan.parts;
+        let note_rotation_y = visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl);
+        let flat_tap_face_rotation_y = note_rotation_y;
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
@@ -651,7 +652,8 @@ fn compose_field_contents<S, F>(
                 appearance: alpha_params[local_col],
                 appearance_cache: appearance_caches[local_col],
                 use_legacy_sprites: use_legacy_hold_sprites,
-                rotation_y_deg: note_rotation_y,
+                rotation_y_deg: 0.0,
+                twirl: visual.twirl,
                 depth_test: hold_depth_test,
                 screen_height: request.geometry.screen_height,
                 body_z: crate::style::HOLD_BODY_Z,
@@ -957,8 +959,6 @@ fn compose_visible_notes<S, F>(
     let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
     let draw_roll_same_row = ns.note_display_metrics.draw_roll_head_for_taps_on_same_row;
     let tap_same_row_means_hold = ns.note_display_metrics.tap_hold_roll_on_row_means_hold;
-    let note_rotation_y = 0.0_f32;
-    let flat_tap_face_rotation_y = 0.0_f32;
     let prefer_sprite_note_path = false;
 
     for local_col in 0..num_cols {
@@ -1059,6 +1059,8 @@ fn compose_visible_notes<S, F>(
                     let scale = effect_zoom * request.options.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
+                let note_rotation_y = visual_note_rotation_y(adjusted_travel, visual.twirl);
+                let flat_tap_face_rotation_y = note_rotation_y;
                 let note_rotation_z = prepared.column_rotations_deg[local_col]
                     + calc_note_rotation_z(note.beat, transform_cache);
 
@@ -1611,6 +1613,7 @@ fn note_x_offset(
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
     visual_hold_body_needs_z_buffer(VisualEffectParams {
         bumpy: visual.bumpy,
+        twirl: visual.twirl,
         ..VisualEffectParams::default()
     })
 }
@@ -1631,13 +1634,14 @@ fn hold_lane_frame(
         receptor_draw_y: receptor_y + move_y_offset + tipsy_y_offset,
         receptor_center_x,
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
-        use_legacy_sprites: visual_use_legacy_hold_sprites(
-            effect_params.bumpy,
-            visual.drunk,
-            visual.tornado,
-            visual.beat,
-            visual.pulse_outer,
-        ),
+        use_legacy_sprites: visual.twirl == 0.0
+            && visual_use_legacy_hold_sprites(
+                effect_params.bumpy,
+                visual.drunk,
+                visual.tornado,
+                visual.beat,
+                visual.pulse_outer,
+            ),
     }
 }
 
