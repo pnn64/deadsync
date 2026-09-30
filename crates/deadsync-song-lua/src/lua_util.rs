@@ -83,6 +83,10 @@ pub(super) mod update_dispatch_perf;
 #[path = "../tests/perf/frame_capture.rs"]
 mod frame_capture_perf;
 
+#[cfg(test)]
+#[path = "../tests/perf/state_names.rs"]
+mod state_names_perf;
+
 enum ActorScriptDir {
     Blank,
     Text(mlua::LuaString),
@@ -12176,9 +12180,10 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.valign = value;
     }
     if let Some(value) = actor
-        .get::<Option<String>>("__songlua_state_text_align")
+        .get::<Option<LuaFieldText<32>>>("__songlua_state_text_align")
         .map_err(|err| err.to_string())?
-        .as_deref()
+        .as_ref()
+        .map(LuaFieldText::as_str)
         .and_then(parse_overlay_text_align)
     {
         state.text_align = value;
@@ -12381,9 +12386,10 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.effect_magnitude = value;
     }
     if let Some(value) = actor
-        .get::<Option<String>>("__songlua_state_effect_clock")
+        .get::<Option<LuaFieldText<32>>>("__songlua_state_effect_clock")
         .map_err(|err| err.to_string())?
-        .as_deref()
+        .as_ref()
+        .map(LuaFieldText::as_str)
         .and_then(parse_overlay_effect_clock)
     {
         state.effect_clock = value;
@@ -12446,9 +12452,10 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.text_distortion = value;
     }
     if let Some(value) = actor
-        .get::<Option<String>>("__songlua_state_text_glow_mode")
+        .get::<Option<LuaFieldText<32>>>("__songlua_state_text_glow_mode")
         .map_err(|err| err.to_string())?
-        .as_deref()
+        .as_ref()
+        .map(LuaFieldText::as_str)
         .and_then(parse_overlay_text_glow_mode)
     {
         state.text_glow_mode = value;
@@ -12585,17 +12592,19 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.stretch_rect = Some(value);
     }
     if let Some(raw) = actor
-        .get::<Option<String>>("__songlua_state_blend")
+        .get::<Option<LuaFieldText<32>>>("__songlua_state_blend")
         .map_err(|err| err.to_string())?
-        .as_deref()
+        .as_ref()
+        .map(LuaFieldText::as_str)
         .and_then(parse_overlay_blend_mode)
     {
         state.blend = raw;
     }
     if let Some(raw) = actor
-        .get::<Option<String>>("__songlua_state_effect_mode")
+        .get::<Option<LuaFieldText<32>>>("__songlua_state_effect_mode")
         .map_err(|err| err.to_string())?
-        .as_deref()
+        .as_ref()
+        .map(LuaFieldText::as_str)
         .and_then(parse_overlay_effect_mode)
     {
         state.effect_mode = raw;

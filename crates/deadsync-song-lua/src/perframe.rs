@@ -1428,6 +1428,61 @@ fn push_update_overlay_value(
     track_index
 }
 
+#[allow(clippy::too_many_arguments)]
+fn push_captured_overlay_value(
+    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+    track_indices: &mut std::collections::HashMap<
+        (usize, SongLuaOverlayUpdateTarget),
+        usize,
+        impl std::hash::BuildHasher,
+    >,
+    overlay_index: usize,
+    target: SongLuaOverlayUpdateTarget,
+    beat: f32,
+    current: &SongLuaOverlayState,
+    next_beat: f32,
+    next: &SongLuaOverlayUpdateValue,
+) -> usize {
+    let key = (overlay_index, target);
+    let track_index = match track_indices.get(&key).copied() {
+        Some(index) => index,
+        None => {
+            let index = tracks.len();
+            track_indices.insert(key, index);
+            // The first write is a step. Its unused current value needs no
+            // snapshot, including when that value contains vertex colors.
+            tracks.push(SongLuaOverlayUpdateTrack {
+                overlay_index,
+                target,
+                samples: vec![SongLuaOverlayUpdateSample {
+                    beat: next_beat,
+                    value: next.clone(),
+                }],
+            });
+            return index;
+        }
+    };
+    if overlay_state_matches_update_value(current, target, next) {
+        return track_index;
+    }
+    let track = &mut tracks[track_index];
+    if track
+        .samples
+        .last()
+        .is_some_and(|sample| sample.beat < beat - f32::EPSILON)
+    {
+        track.samples.push(SongLuaOverlayUpdateSample {
+            beat,
+            value: overlay_state_update_value(current, target),
+        });
+    }
+    track.samples.push(SongLuaOverlayUpdateSample {
+        beat: next_beat,
+        value: next.clone(),
+    });
+    track_index
+}
+
 fn overlay_state_update_value(
     state: &SongLuaOverlayState,
     target: crate::SongLuaOverlayUpdateTarget,
@@ -1691,7 +1746,34 @@ fn append_scheduled_overlay_updates(
     let mut scheduled_values: [Option<&SongLuaOverlayUpdateValue>;
         SongLuaOverlayUpdateTarget::StretchRect as usize + 1] =
         [None; SongLuaOverlayUpdateTarget::StretchRect as usize + 1];
+    let mut previous_times: Option<((u32, u32), (f32, f32))> = None;
+    let reuse_times = scheduled.len() > 1;
     for update in scheduled {
+        let start_seconds = message_seconds + f64::from(update.delay_seconds);
+        let end_seconds = start_seconds + f64::from(update.duration_seconds);
+        let start = start_seconds as f32;
+        let end = end_seconds as f32;
+        let time_bits = (start.to_bits(), end.to_bits());
+        // Adjacent properties in one tween share their time bounds. Keep only
+        // the preceding pair, keyed by bits to retain signed zero and NaNs.
+        let (start_beat, end_beat) = if reuse_times {
+            match previous_times {
+                Some((bits, beats)) if bits == time_bits => beats,
+                _ => {
+                    let beats = (
+                        song_beat_at_elapsed_seconds(start, context),
+                        song_beat_at_elapsed_seconds(end, context),
+                    );
+                    previous_times = Some((time_bits, beats));
+                    beats
+                }
+            }
+        } else {
+            (
+                song_beat_at_elapsed_seconds(start, context),
+                song_beat_at_elapsed_seconds(end, context),
+            )
+        };
         let from = scheduled_values[update.target as usize]
             .cloned()
             .or_else(|| {
@@ -1703,20 +1785,10 @@ fn append_scheduled_overlay_updates(
         scheduled_samples.push(SongLuaScheduledOverlaySample {
             overlay_index,
             target: update.target,
-            start_seconds: message_seconds + f64::from(update.delay_seconds),
-            end_seconds: message_seconds
-                + f64::from(update.delay_seconds)
-                + f64::from(update.duration_seconds),
-            start_beat: song_beat_at_elapsed_seconds(
-                (message_seconds + f64::from(update.delay_seconds)) as f32,
-                context,
-            ),
-            end_beat: song_beat_at_elapsed_seconds(
-                (message_seconds
-                    + f64::from(update.delay_seconds)
-                    + f64::from(update.duration_seconds)) as f32,
-                context,
-            ),
+            start_seconds,
+            end_seconds,
+            start_beat,
+            end_beat,
             easing: update.easing.clone(),
             opt1: update.opt1,
             from,
@@ -1789,11 +1861,8 @@ fn capture_update_overlay_samples<Kind>(
                 }
             }
             for (target, next) in values {
-                let current = from_states
-                    .get(overlay_index)
-                    .map(|state| overlay_state_update_value(state, *target))
-                    .unwrap_or_else(|| overlay_state_update_value(baseline, *target));
-                let track_index = push_update_overlay_value(
+                let current = from_states.get(overlay_index).unwrap_or(baseline);
+                let track_index = push_captured_overlay_value(
                     tracks,
                     track_indices,
                     overlay_index,
@@ -1801,7 +1870,7 @@ fn capture_update_overlay_samples<Kind>(
                     beat,
                     current,
                     next_beat,
-                    next.clone(),
+                    next,
                 );
                 // Tracks only append. Mark unchanged writes too: they still
                 // take precedence over a restored message on this tick.
@@ -2938,3 +3007,7 @@ mod update_dispatch_compile_perf;
 #[cfg(test)]
 #[path = "../tests/perf/borrowed_tracks.rs"]
 mod borrowed_tracks_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/capture_outputs.rs"]
+mod capture_outputs_perf;
