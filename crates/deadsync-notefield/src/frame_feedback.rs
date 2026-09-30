@@ -2982,6 +2982,200 @@ mod tests {
     }
 
     #[test]
+    fn dizzy_holds_rotates_composed_heads_from_original_note_beat() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_rules::note::HoldData;
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+            vec![],
+        ];
+        // Keep the render-state and noteskin-path matrix together: each variation
+        // must preserve original-beat rotation while moving the held/let-go head.
+        for placement in [FieldPlacement::P1, FieldPlacement::P2] {
+            for kind in [NoteType::Hold, NoteType::Roll] {
+                for state in 0..3 {
+                    let beat = if state == 0 { 1.0 } else { 3.0 };
+                    let native_rotation = if state == 0 { -57.2957764 } else { 57.2957764 };
+                    let mut n = note(0);
+                    n.note_type = kind;
+                    n.beat = 2.0;
+                    n.row_index = 96;
+                    n.hold = Some(HoldData {
+                        end_row_index: 240,
+                        end_beat: 5.0,
+                        result: None,
+                        life: 1.0,
+                        let_go_started_at: (state == 2).then_some(0),
+                        let_go_starting_life: 1.0,
+                        last_held_row_index: if state == 2 { 144 } else { 96 },
+                        last_held_beat: if state == 2 { 3.0 } else { 2.0 },
+                    });
+                    let notes = [n];
+                    let mut held = active_hold(0);
+                    held.note_type = kind;
+                    for direction in [-1.0, 1.0] {
+                        for path in 0..3 {
+                            let mut ns = noteskin();
+                            ns.note_display_metrics.flip_head_and_tail_when_reverse = true;
+                            ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+                                .map(|_| TestSlot::new("head"))
+                                .collect();
+                            ns.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+                            ns.hold_columns[0].topcap_inactive = Some(TestSlot::new("top"));
+                            ns.hold_columns[0].bottomcap_inactive = Some(TestSlot::new("bottom"));
+                            if path == 0 {
+                                ns.hold_columns[0].head_inactive = Some(TestSlot::new("head"));
+                                ns.hold_columns[0].head_active = Some(TestSlot::new("head"));
+                            } else if path == 1 {
+                                ns.hold_columns[0].head_inactive_layers =
+                                    Some(Arc::from([TestSlot::new("head")]));
+                                ns.hold_columns[0].head_active_layers =
+                                    Some(Arc::from([TestSlot::new("head")]));
+                            }
+                            ns.roll_columns = ns.hold_columns.clone();
+                            let mut body_before = Vec::new();
+                            for enabled in [false, true] {
+                                let mut request =
+                                    request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
+                                request.geometry.column_dirs.fill(direction);
+                                request.chart.lane_note_row_indices = &lanes;
+                                request.chart.lane_hold_indices = &lanes;
+                                request.chart.note_itg_rows = &[96];
+                                request.chart.visible_beat = beat;
+                                request.chart.search_beat = beat;
+                                request.visual.current_display_beat = beat;
+                                request.visual.visual.dizzy = 1.0;
+                                request.visual.visual.dizzy_holds = enabled;
+                                let prepared = prepare_notefield(&request).expect("prepared field");
+                                let mut frame = NotefieldFieldFrameView {
+                                    feedback: spline_feedback(&[]),
+                                    completed_rows: Default::default(),
+                                };
+                                if state == 1 {
+                                    frame.feedback.lanes[0].active_hold = Some(&held);
+                                }
+                                let mut draws = Vec::new();
+                                let mut scratch = HoldMeshScratch::with_columns(2);
+                                compose_notefield_field(
+                                    &mut Vec::new(),
+                                    &mut draws,
+                                    &mut Vec::new(),
+                                    &mut ModelMeshCache::default(),
+                                    &mut scratch,
+                                    &mut CapturedActorScratch::with_capacities(32, 0),
+                                    &mut NotefieldCameraCache::default(),
+                                    &request,
+                                    &prepared,
+                                    &frame,
+                                    &source,
+                                );
+                                let mut head_count = 0;
+                                let mut body = Vec::new();
+                                for draw in &draws {
+                                    match draw {
+                                        FlatDraw::Sprite(sprite)
+                                            if sprite.source.texture_key() == Some("head") =>
+                                        {
+                                            head_count += 1;
+                                            let expected =
+                                                if enabled { native_rotation } else { 0.0 };
+                                            assert!(
+                                                (sprite.rot_z_deg - expected).abs() < 0.0001,
+                                                "{placement:?}, {kind:?}, state {state}, path {path}, {enabled}: {}",
+                                                sprite.rot_z_deg
+                                            );
+                                            if state == 1 {
+                                                let target = sprite_positions(&draws)
+                                                    .into_iter()
+                                                    .find(|(key, _)| *key == "target0")
+                                                    .expect("receptor")
+                                                    .1;
+                                                assert_eq!(
+                                                    sprite.center, target,
+                                                    "held head stays at receptor while rotating"
+                                                );
+                                            }
+                                        }
+                                        FlatDraw::Sprite(sprite)
+                                            if matches!(
+                                                sprite.source.texture_key(),
+                                                Some("body" | "top" | "bottom")
+                                            ) =>
+                                        {
+                                            let geometry = sprite
+                                                .center
+                                                .into_iter()
+                                                .chain(sprite.size)
+                                                .chain([
+                                                    sprite.world_z,
+                                                    sprite.rot_x_deg,
+                                                    sprite.rot_y_deg,
+                                                    sprite.rot_z_deg,
+                                                ])
+                                                .chain(sprite.tint)
+                                                .map(f32::to_bits)
+                                                .collect::<Vec<_>>();
+                                            body.push((
+                                                sprite
+                                                    .source
+                                                    .texture_key()
+                                                    .expect("body texture")
+                                                    .to_owned(),
+                                                geometry,
+                                            ));
+                                        }
+                                        FlatDraw::TexturedMesh(mesh)
+                                            if matches!(
+                                                mesh.texture.as_ref(),
+                                                "body" | "top" | "bottom"
+                                            ) =>
+                                        {
+                                            let vertices = match &mesh.vertices {
+                                                deadlib_present::actors::FlatMeshVertices::Shared(v) => v.as_ref(),
+                                                deadlib_present::actors::FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                            };
+                                            let geometry = mesh
+                                                .offset
+                                                .into_iter()
+                                                .chain([mesh.world_z])
+                                                .chain(mesh.tint)
+                                                .chain(vertices.iter().flat_map(|v| {
+                                                    v.pos.into_iter().chain(v.uv).chain(v.color)
+                                                }))
+                                                .map(f32::to_bits)
+                                                .collect::<Vec<_>>();
+                                            body.push((mesh.texture.to_string(), geometry));
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                assert_eq!(head_count, 1);
+                                assert!(!body.is_empty());
+                                if enabled {
+                                    assert_eq!(
+                                        body, body_before,
+                                        "DizzyHolds does not twist the body or its strip caps"
+                                    );
+                                } else {
+                                    body_before = body;
+                                }
+                                assert_eq!(scratch.stats().buffer_grows, 0);
+                                assert_eq!(scratch.stats().capacity_grows, 0);
+                                assert_eq!(scratch.stats().saturated_pairs, 0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn drunk_variants_move_composed_notes_and_hold_meshes() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,

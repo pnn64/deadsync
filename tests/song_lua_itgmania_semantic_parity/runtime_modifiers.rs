@@ -111,7 +111,9 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     push("tilt".into(), if key == "hallway" { -value } else { value });
                     push("skew".into(), 0.0);
                 }
-                "stealthpastreceptors" | "cosecant" => push(key, f32::from(value > 0.5)),
+                "stealthpastreceptors" | "cosecant" | "dizzyholds" => {
+                    push(key, f32::from(value > 0.5))
+                }
                 _ => push(key, value),
             };
             if operation == "FromString" {
@@ -157,8 +159,16 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                 }
                 let value = if operation == "Overhead" {
                     args.first().map(|_| 1.0)
-                } else if matches!(operation, "StealthPastReceptors" | "Cosecant") {
-                    args.first().and_then(Value::as_bool).map(f32::from)
+                } else if matches!(
+                    operation,
+                    "StealthPastReceptors" | "Cosecant" | "DizzyHolds"
+                ) {
+                    // BOOL_INTERFACE treats a non-boolean first argument as a
+                    // query. A chaining argument does not turn it into a write.
+                    let Some(value) = args.first().and_then(Value::as_bool) else {
+                        continue;
+                    };
+                    Some(f32::from(value))
                 } else {
                     value_f32(args.first())
                 };
@@ -243,6 +253,7 @@ fn runtime_mod_value(
         "tandrunkzoffset" => visual.tan_drunk_z_offset.unwrap_or(0.0),
         "tandrunkzspeed" => visual.tan_drunk_z_speed.unwrap_or(0.0),
         "tandrunkzperiod" => visual.tan_drunk_z_period.unwrap_or(0.0),
+        "dizzyholds" => f32::from(visual.dizzy_holds.unwrap_or(false)),
         "cosecant" => f32::from(visual.cosecant.unwrap_or(false)),
         "drawsize" => visual.draw_size.unwrap_or(0.0),
         "drawsizeback" => visual.draw_size_back.unwrap_or(0.0),
@@ -959,6 +970,131 @@ end}
             );
         }
         assert_eq!(runtime_mod_value(&runtime, 0, "cosecant"), Some(csc));
+    }
+}
+
+#[test]
+fn dizzy_holds_survives_lua_boolean_methods_strings_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create DizzyHolds fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    assert(options:DizzyHolds() == false and select('#', options:DizzyHolds()) == 1)
+    assert(options:DizzyHolds(true) == false and options:DizzyHolds() == true)
+    for _, invalid in ipairs({0, 1, 'false', 'true'}) do
+        assert(options:DizzyHolds(invalid) == true and options:DizzyHolds() == true)
+    end
+    assert(options:DizzyHolds(nil, false) == options)
+    assert(options:DizzyHolds(false, 0, true) == true and options:DizzyHolds() == false)
+    assert(options:DizzyHolds(true, true) == options)
+    other:FromString('*0 51% dizzyholds')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            assert(options:DizzyHolds(false, false) == options)
+            phase = 2
+        elseif phase == 2 and beat >= 1.5 then
+            options:FromString('*0 50% dizzyholds')
+            assert(options:DizzyHolds() == false)
+            options:FromString('*0 51% dizzyholds')
+            assert(options:DizzyHolds() == true)
+            phase = 3
+        elseif phase == 3 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            assert(options:DizzyHolds() == false)
+            phase = 4
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write DizzyHolds fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "DizzyHolds");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile DizzyHolds fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.25, 1.0),
+        (f32::from_bits(0.5f32.to_bits() - 1), 1.0),
+        (0.5, 0.0),
+        (0.75, 1.0),
+        (1.0, 0.0),
+        (1.25, 0.0),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                0.0,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        assert_eq!(
+            runtime_mod_value(&runtime, 0, "dizzyholds"),
+            Some(expected),
+            "{second}"
+        );
+        assert_eq!(
+            runtime_mod_value(&runtime, 1, "dizzyholds"),
+            Some(1.0),
+            "independent P2 at {second}"
+        );
+    }
+}
+
+#[test]
+fn boolean_option_queries_are_not_modifier_targets() {
+    let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
+    trace.timeline_tracks = ["DizzyHolds", "Cosecant", "StealthPastReceptors"]
+        .into_iter()
+        .map(|name| NativeTimelineTrack {
+            kind: "modifier".into(),
+            actor: Some("player-state:PLAYER_1/options:ModsLevel_Song".into()),
+            operation: format!("PlayerOptions.{name}"),
+            samples: [
+                serde_json::json!([true]),
+                serde_json::json!([false, false]),
+                serde_json::json!([0]),
+                serde_json::json!([1]),
+                serde_json::json!(["true"]),
+                serde_json::json!([null, false]),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(seq, args)| {
+                (
+                    seq as u64 + 1,
+                    Some(0.0),
+                    Some(0.0),
+                    args.as_array().expect("args").clone(),
+                    None,
+                )
+            })
+            .collect(),
+        })
+        .collect();
+    let (writes, unsupported) = option_writes(&trace);
+    assert!(unsupported.is_empty());
+    assert_eq!(writes.len(), 6);
+    for key in ["dizzyholds", "cosecant", "stealthpastreceptors"] {
+        let values = writes
+            .iter()
+            .filter(|write| write.key == key)
+            .map(|write| (write.sequence, write.value))
+            .collect::<Vec<_>>();
+        assert_eq!(values, [(1, 1.0), (2, 0.0)], "{key}");
     }
 }
 

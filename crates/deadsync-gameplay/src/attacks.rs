@@ -552,6 +552,7 @@ pub enum SongLuaEaseMaskTarget {
     AccelWave,
     AccelExpand,
     AccelBoomerang,
+    VisualDizzyHolds,
     VisualCosecant,
     VisualDrunk,
     VisualDrunkPeriod,
@@ -1753,6 +1754,7 @@ fn append_song_lua_ease_targets_key(
         "wave" => push(SongLuaEaseMaskTarget::AccelWave, pct_from, pct_to),
         "expand" => push(SongLuaEaseMaskTarget::AccelExpand, pct_from, pct_to),
         "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
+        "dizzyholds" => push(SongLuaEaseMaskTarget::VisualDizzyHolds, pct_from, pct_to),
         "cosecant" => push(SongLuaEaseMaskTarget::VisualCosecant, pct_from, pct_to),
         "drunk" => push(SongLuaEaseMaskTarget::VisualDrunk, pct_from, pct_to),
         "drunkperiod" => push(SongLuaEaseMaskTarget::VisualDrunkPeriod, pct_from, pct_to),
@@ -2347,6 +2349,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AccelWave => accel.wave = Some(value),
         SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
         SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
+        SongLuaEaseMaskTarget::VisualDizzyHolds => visual.dizzy_holds = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualCosecant => visual.cosecant = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkPeriod => visual.drunk_period = Some(value),
@@ -2581,6 +2584,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
         SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
+        SongLuaEaseMaskTarget::VisualDizzyHolds => window.visual.dizzy_holds.is_some(),
         SongLuaEaseMaskTarget::VisualCosecant => window.visual.cosecant.is_some(),
         SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkPeriod => window.visual.drunk_period.is_some(),
@@ -3812,6 +3816,9 @@ const fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
 }
 
 fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
+    if visual.dizzy_holds.is_some() {
+        targets.dizzy_holds = Some(false);
+    }
     if visual.cosecant.is_some() {
         targets.cosecant = Some(false);
     }
@@ -4624,7 +4631,7 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisibilityDarkColumn(col) if col < MAX_COLS => {
                 attack.dark_col_speed[col] = Some(speed)
             }
-            SongLuaEaseMaskTarget::VisualCosecant => {}
+            SongLuaEaseMaskTarget::VisualDizzyHolds | SongLuaEaseMaskTarget::VisualCosecant => {}
             SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
             SongLuaEaseMaskTarget::VisualDrunkPeriod => {
                 attack.visual_speed.drunk_period = Some(speed)
@@ -5151,6 +5158,11 @@ fn apply_active_visual_window(
     persisted: bool,
 ) {
     let active_clear_all = active_targets.clear_all;
+    if let Some(value) = window.visual.dizzy_holds
+        && (!persisted || (!active_clear_all && active_targets.visual.dizzy_holds.is_none()))
+    {
+        values.visual.dizzy_holds = Some(value);
+    }
     if let Some(value) = window.visual.cosecant
         && (!persisted || (!active_clear_all && active_targets.visual.cosecant.is_none()))
     {
@@ -6002,6 +6014,9 @@ fn apply_runtime_mod(
         "wave" => out.accel.wave = attack_level(percent_value),
         "expand" => out.accel.expand = attack_level(percent_value),
         "boomerang" => out.accel.boomerang = attack_level(percent_value),
+        "dizzyholds" => {
+            out.visual.dizzy_holds = attack_level(percent_value).map(|level| level > 0.5)
+        }
         "cosecant" => out.visual.cosecant = attack_level(percent_value).map(|level| level > 0.5),
         "drunk" => set_approached_mod(
             &mut out.visual.drunk,
@@ -6644,6 +6659,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         }
     }
     VisualEffects {
+        dizzy_holds: attack.dizzy_holds.unwrap_or(base.dizzy_holds),
         cosecant: attack.cosecant.unwrap_or(base.cosecant),
         drunk: merge_attack_value(base.drunk, attack.drunk),
         drunk_period: merge_attack_value(base.drunk_period, attack.drunk_period),

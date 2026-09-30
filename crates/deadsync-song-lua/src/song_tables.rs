@@ -447,6 +447,7 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
             | "tandrunkzoffset"
             | "tandrunkzspeed"
             | "tandrunkzperiod"
+            | "dizzyholds"
             | "cosecant"
     ) {
         return create_native_option(lua, &owner, name);
@@ -536,10 +537,10 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
         let state = player_option_state(lua, &owner)?;
-        if key == "cosecant" {
-            let previous = state.get::<Option<bool>>("cosecant")?.unwrap_or(false);
+        if matches!(key.as_str(), "cosecant" | "dizzyholds") {
+            let previous = state.get::<Option<bool>>(key.as_str())?.unwrap_or(false);
             if let Some(Value::Boolean(value)) = method_arg(&args, 0) {
-                state.set("cosecant", *value)?;
+                state.set(key.as_str(), *value)?;
             }
             // BOOL_INTERFACE chains on a boolean second argument, even false.
             let result = if matches!(method_arg(&args, 1), Some(Value::Boolean(_))) {

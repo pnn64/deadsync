@@ -166,6 +166,7 @@ impl AccelOverrides {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisualOverrides {
+    pub dizzy_holds: Option<bool>,
     pub cosecant: Option<bool>,
     pub drunk: Option<f32>,
     pub drunk_offset: Option<f32>,
@@ -225,6 +226,7 @@ pub struct VisualOverrides {
 impl Default for VisualOverrides {
     fn default() -> Self {
         Self {
+            dizzy_holds: None,
             cosecant: None,
             drunk: None,
             drunk_offset: None,
@@ -286,7 +288,8 @@ impl Default for VisualOverrides {
 impl VisualOverrides {
     #[inline(always)]
     pub fn any(self) -> bool {
-        self.cosecant.is_some()
+        self.dizzy_holds.is_some()
+            || self.cosecant.is_some()
             || self.drunk.is_some()
             || self.drunk_offset.is_some()
             || self.drunk_speed.is_some()
@@ -451,6 +454,7 @@ impl AccelEffects {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VisualEffects {
+    pub dizzy_holds: bool,
     pub cosecant: bool,
     pub drunk: f32,
     pub drunk_offset: f32,
@@ -518,6 +522,7 @@ impl VisualEffects {
     #[must_use]
     pub fn from_mask_bits(mask: u16) -> Self {
         Self {
+            dizzy_holds: false,
             cosecant: false,
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
             drunk_offset: 0.0,
@@ -646,6 +651,7 @@ pub fn approach_visual_overrides_to_base(
     base: VisualEffects,
     delta_time: f32,
 ) {
+    visual.dizzy_holds = None;
     visual.cosecant = None;
     let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
     approach_optional_visual(&mut visual.drunk, base.drunk, step);
@@ -735,6 +741,7 @@ pub fn approach_visual_overrides_to_target(
     base: VisualEffects,
     delta_time: f32,
 ) {
+    current.dizzy_holds = target.dizzy_holds;
     current.cosecant = target.cosecant;
     approach_attack_value(
         &mut current.drunk,

@@ -3774,6 +3774,109 @@ mod tests {
     }
 
     #[test]
+    fn dizzy_holds_is_immediate_and_respects_resets_and_persisted_targets() {
+        assert!(!VisualEffects::default().dizzy_holds);
+        for (text, expected) in [
+            ("*0 dizzyholds", true),
+            ("50% dizzyholds", false),
+            ("51% dizzyholds", true),
+            ("-100% dizzyholds", false),
+            ("no dizzyholds", false),
+        ] {
+            let mods = parse_attack_mods(text);
+            assert_eq!(mods.visual.dizzy_holds, Some(expected), "{text}");
+            assert!(mods.visual.any());
+            assert_eq!(mods.visual_speed.dizzy_holds, None);
+            let mut current = VisualOverrides::default();
+            approach_visual_overrides_to_target(
+                &mut current,
+                mods.visual,
+                mods.visual_speed,
+                VisualEffects::default(),
+                0.0,
+            );
+            assert_eq!(current.dizzy_holds, Some(expected));
+            assert_eq!(
+                merge_attack_visual_effects(VisualEffects::default(), current).dizzy_holds,
+                expected
+            );
+            approach_visual_overrides_to_base(
+                &mut current,
+                VisualEffects {
+                    dizzy_holds: true,
+                    ..Default::default()
+                },
+                0.0,
+            );
+            assert!(!current.any());
+            assert!(
+                merge_attack_visual_effects(
+                    VisualEffects {
+                        dizzy_holds: true,
+                        ..Default::default()
+                    },
+                    current
+                )
+                .dizzy_holds
+            );
+        }
+        let on = attack_mask_window(0.0, 1.0, parse_attack_mods("dizzyholds"));
+        let off = attack_mask_window(1.0, 2.0, parse_attack_mods("no dizzyholds"));
+        let targets = collect_active_attack_targets(&[off.clone()], 1.5);
+        assert_eq!(targets.visual.dizzy_holds, Some(false));
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        apply_active_attack_mask_window(&mut values, &off, targets, false, 0.0);
+        apply_active_attack_mask_window(&mut values, &on, targets, true, 0.0);
+        assert_eq!(
+            values.visual.dizzy_holds,
+            Some(false),
+            "persisted on cannot replace an active off"
+        );
+        let reset = attack_mask_window(2.0, 3.0, parse_attack_mods("clearall"));
+        apply_active_attack_mask_window(&mut values, &reset, Default::default(), false, 0.0);
+        assert_eq!(values.visual.dizzy_holds, None);
+    }
+
+    #[test]
+    fn dizzy_holds_eases_use_native_boolean_threshold() {
+        let mut windows = Vec::new();
+        assert_eq!(
+            append_song_lua_runtime_ease_window(
+                &mut windows,
+                1.0,
+                2.0,
+                3.0,
+                SongLuaRuntimeEaseTarget::Mod("dizzyholds"),
+                0.0,
+                100.0,
+                Some("linear"),
+                None,
+                None,
+            ),
+            SongLuaRuntimeEaseAppend::Appended
+        );
+        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::VisualDizzyHolds);
+        for (second, expected) in [
+            (1.0, false),
+            (1.5, false),
+            (1.51, true),
+            (2.0, true),
+            (2.5, true),
+        ] {
+            let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+            apply_song_lua_attack_eases(
+                &mut values,
+                &mut AppearanceEffects::default(),
+                &mut SongLuaPlayerTransformValues::default(),
+                &windows,
+                second,
+                0.0,
+            );
+            assert_eq!(values.visual.dizzy_holds, Some(expected), "{second}");
+        }
+    }
+
+    #[test]
     fn course_modifier_window_persists_for_the_whole_song() {
         let window = build_course_modifier_mask_window("C650,30% reverse,25% mini")
             .expect("course modifier window");

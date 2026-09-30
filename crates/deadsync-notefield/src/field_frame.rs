@@ -708,8 +708,10 @@ fn compose_field_contents<S, F>(
         if head_alpha <= f32::EPSILON && head_glow <= f32::EPSILON {
             return;
         }
-        let hold_head_rot =
-            column_rotations_deg[local_col] + visual_hold_head_rotation_z_cached(transform_cache);
+        // DrawHold passes the original note beat to GetRotationZ even while
+        // engaged or letting go; the advancing head beat controls travel only.
+        let hold_head_rot = column_rotations_deg[local_col]
+            + visual_hold_head_rotation_z_cached(note.beat, transform_cache);
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
         let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
             receptor_center_x

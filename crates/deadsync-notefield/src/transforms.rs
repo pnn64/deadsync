@@ -52,6 +52,7 @@ pub(crate) struct VisualEffectParams {
     pub confusion: f32,
     pub confusion_offset: f32,
     pub dizzy: f32,
+    pub dizzy_holds: bool,
     pub twirl: f32,
     pub parabola_z: f32,
     pub square_z: f32,
@@ -83,6 +84,7 @@ pub(crate) struct LaneNoteTransformCache {
     rotation_base_z: f32,
     song_beat: f32,
     dizzy: f32,
+    dizzy_holds: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -775,6 +777,7 @@ pub(crate) fn lane_note_transform_cache(
         rotation_base_z,
         song_beat,
         dizzy: params.dizzy,
+        dizzy_holds: params.dizzy_holds,
     }
 }
 
@@ -830,8 +833,13 @@ pub(crate) fn visual_note_rotation_z_cached(note_beat: f32, cache: LaneNoteTrans
     cache.rotation_base_z + wrapped * (-180.0 / std::f32::consts::PI)
 }
 
-pub(crate) fn visual_hold_head_rotation_z_cached(cache: LaneNoteTransformCache) -> f32 {
-    if cache.identity_rotation {
+pub(crate) fn visual_hold_head_rotation_z_cached(
+    note_beat: f32,
+    cache: LaneNoteTransformCache,
+) -> f32 {
+    if cache.dizzy_holds {
+        visual_note_rotation_z_cached(note_beat, cache)
+    } else if cache.identity_rotation {
         0.0
     } else {
         cache.rotation_base_z
@@ -878,6 +886,7 @@ pub(crate) fn gameplay_visual_effect_params(
             confusion: visual.confusion,
             confusion_offset: visual.confusion_offset,
             dizzy: visual.dizzy,
+            dizzy_holds: visual.dizzy_holds,
             twirl: visual.twirl,
             parabola_z: visual.parabola_z,
             local_col,

@@ -929,6 +929,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "tandrunkzoffset"
         | "tandrunkzspeed"
         | "tandrunkzperiod"
+        | "dizzyholds"
         | "cosecant"
         | "drawsize"
         | "drawsizeback"

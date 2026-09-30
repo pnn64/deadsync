@@ -315,7 +315,7 @@ mod tests {
     ) -> f32 {
         let cache = lane_note_transform_cache(song_beat, params);
         if is_hold_head {
-            visual_hold_head_rotation_z_cached(cache)
+            visual_hold_head_rotation_z_cached(note_beat, cache)
         } else {
             visual_note_rotation_z_cached(note_beat, cache)
         }
@@ -2459,11 +2459,122 @@ mod tests {
         let hold_rotation = cached_note_rotation(6.75, 3.5, true, params);
         let tap_rotation = cached_note_rotation(6.75, 3.5, false, params);
         let expected = visual_confusion_rotation_deg(3.5, params);
-        let cached = visual_hold_head_rotation_z_cached(lane_note_transform_cache(3.5, params));
+        let cached =
+            visual_hold_head_rotation_z_cached(6.75, lane_note_transform_cache(3.5, params));
 
         assert!((hold_rotation - expected).abs() <= 1e-6);
         assert_eq!(cached.to_bits(), hold_rotation.to_bits());
         assert!((tap_rotation - hold_rotation).abs() > 1.0);
+    }
+
+    #[test]
+    fn dizzy_holds_matches_native_rotation_goldens() {
+        // Verbatim GetRotationZ and ReceptorGetRotationZ compiled with MSVC.
+        // Native actor angles are negated for FlatDraw's Y-up coordinates.
+        for (note, song, dizzy, confusion, offset, column_offset, expected) in [
+            (
+                2f32,
+                1f32,
+                1f32,
+                0f32,
+                0f32,
+                0f32,
+                [0f32, 57.2957764f32, 57.2957764f32],
+            ),
+            (
+                2f32,
+                3f32,
+                1f32,
+                0f32,
+                0f32,
+                0f32,
+                [0f32, -57.2957764f32, -57.2957764f32],
+            ),
+            (
+                2f32,
+                1f32,
+                -0.5f32,
+                0f32,
+                0f32,
+                0f32,
+                [0f32, -28.6478882f32, -28.6478882f32],
+            ),
+            (
+                6.75f32,
+                3.5f32,
+                2f32,
+                0.25f32,
+                0.5f32,
+                -0.75f32,
+                [-64.4577484f32, -52.0351944f32, -52.0351944f32],
+            ),
+            (
+                1f32,
+                70f32,
+                -0.5f32,
+                -1.5f32,
+                -0.25f32,
+                1.25f32,
+                [313.352448f32, 490.056763f32, 490.056763f32],
+            ),
+            (
+                -9f32,
+                3f32,
+                1.25f32,
+                2f32,
+                1f32,
+                -2f32,
+                [-401.070435f32, -540.50708f32, -540.50708f32],
+            ),
+            (
+                100f32,
+                0f32,
+                -3.5f32,
+                -2f32,
+                0.75f32,
+                0.25f32,
+                [57.2957764f32, -196.226486f32, -196.226486f32],
+            ),
+            (
+                3f32,
+                3f32,
+                2f32,
+                0f32,
+                0.25f32,
+                0.5f32,
+                [42.9718323f32, 42.9718323f32, 42.9718323f32],
+            ),
+            (
+                2f32,
+                1f32,
+                0f32,
+                1.5f32,
+                0f32,
+                0f32,
+                [-85.9436646f32, -85.9436646f32, -85.9436646f32],
+            ),
+            (0f32, 0f32, 0f32, 0f32, 0f32, 0f32, [0f32, 0f32, 0f32]),
+        ] {
+            let mut visual = VisualEffects {
+                dizzy,
+                confusion,
+                confusion_offset: offset,
+                ..Default::default()
+            };
+            visual.confusion_offset_cols[9] = column_offset;
+            for enabled in [false, true] {
+                visual.dizzy_holds = enabled;
+                let params = super::gameplay_visual_effect_params(&visual, 9);
+                assert!((visual_confusion_rotation_deg(song, params) + expected[0]).abs() < 0.0001);
+                let tap = cached_note_rotation(note, song, false, params);
+                let head = cached_note_rotation(note, song, true, params);
+                assert!((tap + expected[1]).abs() < 0.0001, "tap {note}, {song}");
+                assert!(
+                    (head + expected[usize::from(enabled) * 2]).abs() < 0.0001,
+                    "head {note}, {song}, {enabled}"
+                );
+            }
+        }
     }
 
     #[test]

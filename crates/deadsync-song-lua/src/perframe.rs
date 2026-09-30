@@ -1224,9 +1224,9 @@ fn push_update_mod_targets_with_key<S: ModState>(
                 continue;
             };
             let speed = speeds[player].get(key).copied();
-            // Cosecant has no native approach speed, but initial values and
+            // These booleans have no native approach speed, but initial values and
             // later writes are still step targets, never interpolated samples.
-            if speed.is_some() || key == "cosecant" {
+            if speed.is_some() || matches!(key, "cosecant" | "dizzyholds") {
                 if !from.is_finite() || speed.is_some_and(|speed| !speed.is_finite()) {
                     continue;
                 }
