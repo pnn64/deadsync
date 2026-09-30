@@ -2906,3 +2906,7 @@ mod perframe_stream_perf;
 #[cfg(test)]
 #[path = "../tests/perf/frame_sampling.rs"]
 mod frame_sampling_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/update_dispatch_compile.rs"]
+mod update_dispatch_compile_perf;

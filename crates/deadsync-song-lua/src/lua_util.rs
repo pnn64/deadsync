@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::c_int;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::{
@@ -72,6 +73,60 @@ const UPDATE_QUEUE_ERROR_KEY: &str = "__songlua_update_queue_error_reported";
 #[cfg(test)]
 #[path = "../tests/perf/actor_state.rs"]
 mod actor_state_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/update_dispatch.rs"]
+pub(super) mod update_dispatch_perf;
+
+// Short, transient Lua fields stay on the stack. Keep String's coercions and
+// diagnostics, including the direct-stack UTF-8 error, for existing scripts.
+struct LuaFieldText<const N: usize>(smallvec::SmallVec<[u8; N]>)
+where
+    [u8; N]: smallvec::Array<Item = u8>;
+
+impl<const N: usize> LuaFieldText<N>
+where
+    [u8; N]: smallvec::Array<Item = u8>,
+{
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).expect("LuaFieldText contains validated UTF-8")
+    }
+}
+
+impl<const N: usize> mlua::FromLua for LuaFieldText<N>
+where
+    [u8; N]: smallvec::Array<Item = u8>,
+{
+    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+        let text = String::from_lua(value, lua)?;
+        Ok(Self(smallvec::SmallVec::from_vec(text.into_bytes())))
+    }
+
+    unsafe fn from_stack(index: c_int, lua: &mlua::state::RawLua) -> mlua::Result<Self> {
+        let state = lua.state();
+        // SAFETY: mlua supplies a live stack index for the duration of this
+        // conversion. Check its type before borrowing Lua's string storage,
+        // and copy all bytes into owned storage before returning.
+        unsafe {
+            if ffi::lua_type(state, index) == ffi::LUA_TSTRING {
+                let mut len = 0;
+                let data = ffi::lua_tolstring(state, index, &mut len);
+                let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+                let text = std::str::from_utf8(bytes).map_err(|err| {
+                    mlua::Error::FromLuaConversionError {
+                        from: "string",
+                        to: "String".into(),
+                        message: Some(err.to_string()),
+                    }
+                })?;
+                return Ok(Self(smallvec::SmallVec::from_slice(text.as_bytes())));
+            }
+            // Preserve mlua's number coercion and non-string errors.
+            let text = String::from_stack(index, lua)?;
+            Ok(Self(smallvec::SmallVec::from_vec(text.into_bytes())))
+        }
+    }
+}
 
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
@@ -8165,7 +8220,7 @@ enum SongLuaCompileUpdateJob {
 }
 
 struct SongLuaCompileUpdatePlan {
-    jobs: Vec<SongLuaCompileUpdateJob>,
+    jobs: Rc<[SongLuaCompileUpdateJob]>,
 }
 
 fn invalidate_compile_update_plan(lua: &Lua) {
@@ -8210,11 +8265,11 @@ fn collect_compile_update_jobs(
     Ok(())
 }
 
-fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Vec<SongLuaCompileUpdateJob>> {
+fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Rc<[SongLuaCompileUpdateJob]>> {
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
         collect_compile_update_jobs(lua, root, 1.0, &mut jobs)?;
-        lua.set_app_data(SongLuaCompileUpdatePlan { jobs });
+        lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
     }
     Ok(lua
         .app_data_ref::<SongLuaCompileUpdatePlan>()
@@ -8230,13 +8285,16 @@ pub fn run_actor_compile_update_functions_with_delta(
     let Value::Table(root) = root else {
         return Ok(());
     };
-    for job in compile_update_jobs(lua, root)? {
+    // Own one shared handle, without borrowing app data across callbacks:
+    // callbacks can invalidate the plan while this frame finishes its jobs.
+    let jobs = compile_update_jobs(lua, root)?;
+    for job in jobs.iter() {
         match job {
             SongLuaCompileUpdateJob::Recurring { actor, rate } => {
-                run_recurring_update(lua, &actor, delta_seconds * rate, true)?;
+                run_recurring_update(lua, actor, delta_seconds * rate, true)?;
             }
             SongLuaCompileUpdateJob::Callback { actor, rate } => {
-                run_update_callback(lua, &actor, delta_seconds * rate)?;
+                run_update_callback(lua, actor, delta_seconds * rate)?;
             }
         }
     }
@@ -8345,9 +8403,12 @@ fn run_recurring_update(
     delta_seconds: f64,
     enabled: bool,
 ) -> mlua::Result<()> {
-    let Some(command) = actor.get::<Option<String>>("__songlua_recurring_update_command")? else {
+    let Some(command) =
+        actor.get::<Option<LuaFieldText<128>>>("__songlua_recurring_update_command")?
+    else {
         return Ok(());
     };
+    let command = command.as_str();
     if !enabled {
         return Ok(());
     }
@@ -8355,8 +8416,8 @@ fn run_recurring_update(
         .get::<Option<f64>>("__songlua_recurring_update_interval")?
         .unwrap_or(0.0);
     if interval <= f64::EPSILON {
-        if let Err(err) = run_actor_named_command(lua, actor, &command) {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
+        if let Err(err) = run_actor_named_command(lua, actor, command) {
+            report_update_error(actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
         }
         return Ok(());
     }
@@ -8383,8 +8444,8 @@ fn run_recurring_update(
             }
         }
 
-        if let Err(err) = run_actor_named_command(lua, actor, &command) {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
+        if let Err(err) = run_actor_named_command(lua, actor, command) {
+            report_update_error(actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
         }
         runs += 1;
         interval = actor
@@ -8525,17 +8586,16 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
 
 pub fn actor_type_is(actor: &Table, expected: &str) -> mlua::Result<bool> {
     Ok(actor
-        .get::<Option<String>>("__songlua_actor_type")?
-        .as_deref()
-        .is_some_and(|kind| kind.eq_ignore_ascii_case(expected)))
+        .get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
+        .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case(expected)))
 }
 
 pub fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
     Ok(actor
-        .get::<Option<String>>("__songlua_actor_type")?
-        .as_deref()
+        .get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
         .is_some_and(|kind| {
-            kind.eq_ignore_ascii_case("BitmapText") || kind.eq_ignore_ascii_case("RollingNumbers")
+            kind.as_str().eq_ignore_ascii_case("BitmapText")
+                || kind.as_str().eq_ignore_ascii_case("RollingNumbers")
         }))
 }
 
