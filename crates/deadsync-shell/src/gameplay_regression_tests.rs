@@ -3722,6 +3722,138 @@ return Def.ActorFrame{
         );
     }
 
+    fn assert_proxy_note_draws(simfile: &Path, skin: &str, music_time: f32) {
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(640.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(640, 480);
+                space::set_overscan(0, 0, 0, 0);
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new(skin);
+                profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                let mut state = build_test_state(
+                    simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, music_time);
+                let player = &state.gameplay.song_lua_visuals().player_actors[0];
+                assert!(
+                    !player.initial_state.visible,
+                    "original Player should be hidden"
+                );
+                assert_eq!(
+                    player.initial_state.diffuse[3], 1.0,
+                    "UI fades must preserve Player alpha"
+                );
+                let assets = fixture_assets();
+                let mut note_handles = Vec::new();
+                state.noteskin_assets.noteskin[0]
+                    .as_ref()
+                    .expect("fixture noteskin")
+                    .for_each_slot(|slot| {
+                        note_handles.push(FIXTURE_TEXTURES.texture_handle(slot.texture_key()));
+                    });
+                let mut actors = Vec::with_capacity(512);
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                );
+                let frame = compose::build_passes(
+                    segments.segments(state.song_frame(), &actors),
+                    state.render_targets(),
+                    [0.0, 0.0, 0.0, 1.0],
+                    &metrics,
+                    assets.fonts(),
+                    10.0,
+                    &mut compose::TextLayoutCache::default(),
+                    &mut compose::ComposeScratch::default(),
+                    &FIXTURE_TEXTURES,
+                    Some(state.actor_resources()),
+                );
+                let note_instances: u32 = frame
+                    .ops
+                    .iter()
+                    .map(|op| match op {
+                        DrawOp::Sprite(run) if note_handles.contains(&run.texture_handle) => {
+                            run.instance_count
+                        }
+                        DrawOp::TexturedMesh(run) if note_handles.contains(&run.texture_handle) => {
+                            run.instance_count
+                        }
+                        _ => 0,
+                    })
+                    .sum();
+                assert!(
+                    note_instances > 4,
+                    "{skin} proxy emitted {note_instances} noteskin instances; expected four receptors and scrolling notes"
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn faded_screen_layers_preserve_player_proxy_draws() {
+        let simfile = write_fixture(
+            "queued-hidden-player",
+            generated_pipeline_song_lua_simfile(),
+        );
+        let lua_dir = simfile
+            .parent()
+            .expect("fixture song directory")
+            .join("lua");
+        fs::create_dir_all(&lua_dir).expect("create Lua fixture directory");
+        fs::write(
+            lua_dir.join("default.lua"),
+            r#"
+local player
+return Def.ActorFrame{
+    OnCommand=function(self)
+        player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        player:visible(false)
+        SCREENMAN:GetTopScreen():GetChild("Underlay"):visible(false)
+        for name, layer in pairs(SCREENMAN:GetTopScreen():GetChildren()) do
+            if name ~= "PlayerP1" and name ~= "PlayerP2" and name ~= "Underlay" then
+                layer:smooth(1.5):diffusealpha(0)
+            end
+        end
+    end,
+    Def.ActorProxy{
+        OnCommand=function(self) self:queuecommand("Set") end,
+        SetCommand=function(self) self:SetTarget(player) end,
+    },
+}
+"#,
+        )
+        .expect("write queued proxy fixture");
+        for skin in ["lambda", "cel"] {
+            assert_proxy_note_draws(&simfile, skin, 2.5);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires the local lua-songs reference corpus"]
+    fn delightful_day_player_proxy_draws_noteskin_instances() {
+        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../lua-songs/Delightful Day/Delightful Day.ssc");
+        for skin in ["lambda", "cel"] {
+            assert_proxy_note_draws(&simfile, skin, 15.0);
+        }
+    }
+
     #[test]
     fn root_player_proxy_uses_repeatable_direct_field_and_hud_segments() {
         let simfile = write_direct_player_proxy_fixture();

@@ -9283,12 +9283,6 @@ pub fn create_top_screen_table(
     for player_actor in &player_actors {
         player_actor.set("__songlua_parent", top_screen.clone())?;
     }
-    let nameless_children = create_actor_child_group(lua)?;
-    for (player_index, player_actor) in player_actors.iter().enumerate() {
-        if players[player_index].enabled {
-            nameless_children.raw_set(nameless_children.raw_len() + 1, player_actor.clone())?;
-        }
-    }
     for (player_index, life_meter) in life_meters.iter().enumerate() {
         life_meter.set("__songlua_parent", top_screen.clone())?;
         life_meter.set(
@@ -9297,7 +9291,8 @@ pub fn create_top_screen_table(
         )?;
     }
     let children = actor_children(lua, &top_screen)?;
-    children.set("", nameless_children)?;
+    // ScreenGameplay names each Player before adding it. An unnamed alias
+    // would expose the same players twice to GetChildren fade/hide loops.
     for (player_index, player_actor) in player_actors.iter().enumerate() {
         if players[player_index].enabled {
             children.set(top_screen_player_name(player_index), player_actor.clone())?;

@@ -929,6 +929,90 @@ fn compare_final_render_states(
     }
 }
 
+fn compare_player_proxy_sources(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    parity: &mut Parity,
+) {
+    parity.section("player proxy sources");
+    let drawables = projected_drawable_map(trace, compiled);
+    for track in &trace.player_render_tracks {
+        let proxies = track
+            .samples
+            .iter()
+            .flat_map(|sample| &sample.5)
+            .collect::<HashSet<_>>();
+        if proxies.is_empty() {
+            continue;
+        }
+        let Some(player) = track.player.checked_sub(1).filter(|&player| player < 2) else {
+            continue;
+        };
+        for proxy in proxies {
+            let definition = trace.actor_definitions.iter().find(|definition| {
+                definition.id == *proxy || definition.runtime_actors.contains(proxy)
+            });
+            let actual = definition
+                .and_then(|definition| drawables.get(&definition.id))
+                .map(|&(layer, index)| &compiled[layer].overlays[index].kind);
+            parity.check(
+                matches!(actual, Some(SongLuaOverlayKind::ActorProxy {
+                target: deadsync_assets::song_lua::SongLuaProxyTarget::Player { player_index }
+            }) if *player_index == player),
+                || {
+                    format!(
+                        "PlayerP{} proxy {proxy} has a different or missing target: {actual:?}",
+                        track.player
+                    )
+                },
+            );
+        }
+        let Some(actor) = trace
+            .external_actors
+            .iter()
+            .find(|actor| actor.path == track.path)
+        else {
+            continue;
+        };
+        let writes_alpha = |operation: &str| {
+            matches!(
+                operation
+                    .rsplit('.')
+                    .next()
+                    .unwrap_or(operation)
+                    .to_ascii_lowercase()
+                    .as_str(),
+                "diffuse" | "diffusealpha"
+            )
+        };
+        let changes_alpha = trace
+            .operation_tracks
+            .iter()
+            .any(|track| track.actor == actor.id && writes_alpha(&track.operation))
+            || trace
+                .tween_tracks
+                .iter()
+                .filter(|track| track.actor == actor.id)
+                .any(|track| {
+                    track
+                        .segments
+                        .iter()
+                        .flat_map(|segment| &segment.operations)
+                        .any(|operation| writes_alpha(&operation.operation))
+                });
+        // A native Player with no alpha writes stays opaque, even when its
+        // original is hidden. ActorProxy overrides visibility, not alpha.
+        if !changes_alpha {
+            for (layer, compiled) in compiled.iter().enumerate() {
+                let alpha = compiled.player_actors[player].initial_state.diffuse[3];
+                parity.check((alpha - 1.0).abs() <= EPSILON, || format!(
+                    "layer {layer} PlayerP{} proxy source alpha differs: ITGmania 1.000, DeadSync {alpha:.3}", track.player
+                ));
+            }
+        }
+    }
+}
+
 fn native_update_render_writes(
     trace: &NativeTrace,
     definition: &NativeDefinition,
@@ -3259,6 +3343,7 @@ fn compare_semantics(
     compare_compile_info(compiled, &mut parity);
     compare_layers(trace, compiled, &mut parity);
     compare_final_render_states(trace, compiled, &mut parity);
+    compare_player_proxy_sources(trace, compiled, &mut parity);
     compare_update_render_persistence(trace, compiled, &mut parity);
     compare_update_render_values(trace, compiled, context, &mut parity);
     compare_player_operation_ranges(trace, compiled, &mut parity);
@@ -3886,6 +3971,32 @@ fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
                     .any(|value| value.abs() > f64::from(EPSILON))
             }),
         "Cuphead fixture never records the cannongirl's inherited vibration"
+    );
+}
+
+#[test]
+fn delightful_day_player_proxy_sources_match_itgmania() {
+    crate::paths::init();
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "tests/fixtures/itgmania-song-lua-selected/Delightful Day/Delightful Day.ssc.semantic.json",
+    ));
+    let (compiled, _, _) = compile_trace_song(&trace);
+    let mut parity = Parity::default();
+    compare_player_proxy_sources(&trace, &compiled, &mut parity);
+    assert_eq!(
+        parity.checks(),
+        4,
+        "both players need a target and an opaque source"
+    );
+    parity.assert_complete("Delightful Day player proxy sources");
+    let mut faded = compiled;
+    faded[0].player_actors[0].initial_state.diffuse[3] = 0.0;
+    let mut regression = Parity::default();
+    compare_player_proxy_sources(&trace, &faded, &mut regression);
+    assert_eq!(
+        regression.gaps.len(),
+        1,
+        "the report must detect invisible proxy sources"
     );
 }
 

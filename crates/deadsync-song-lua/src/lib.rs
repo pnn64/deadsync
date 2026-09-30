@@ -16116,8 +16116,8 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_supports_nameless_player_group_and_tap_note_shim() {
-        let song_dir = test_dir("nameless-player-group-tap-note-shim");
+    fn compile_song_lua_supports_named_player_tap_note_shim() {
+        let song_dir = test_dir("named-player-tap-note-shim");
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
@@ -16125,9 +16125,8 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
-        local group = top:GetChild("")
-        local player = group[1]
-        local direct = top:GetChild("PlayerP1")
+        local player = top:GetChild("PlayerP1")
+        assert(top:GetChildren()[""] == nil)
         local nf = player:GetChild("NoteField")
         local seen = {}
         nf:set_did_tap_note_callback(function(col, score, bright)
@@ -16138,10 +16137,8 @@ return Def.ActorFrame{
             {
                 1,
                 string.format(
-                    "%d:%s:%s:%d:%s:%s:%s:%d:%s:%s",
-                    #group,
+                    "%s:%d:%s:%s:%s:%d:%s:%s",
                     player:GetName(),
-                    tostring(player == direct),
                     seen[1],
                     seen[2],
                     tostring(seen[3]),
@@ -16161,13 +16158,13 @@ return Def.ActorFrame{
 
         let compiled = test_compile_song_lua(
             &entry,
-            &SongLuaCompileContext::new(&song_dir, "Nameless Player Group Tap Note Shim"),
+            &SongLuaCompileContext::new(&song_dir, "Named Player Tap Note Shim"),
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2:PlayerP1:true:2:TapNoteScore_W1:true:true:2:TapNoteScore_W1:true"
+            "PlayerP1:2:TapNoteScore_W1:true:true:2:TapNoteScore_W1:true"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
