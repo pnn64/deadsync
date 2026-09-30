@@ -1938,7 +1938,7 @@ pub fn broadcast_song_lua_message(
         });
     let result = || {
         let registry = song_lua_actor_registry(lua)?;
-        let mut actors = Vec::with_capacity(registry.raw_len());
+        let mut actors = smallvec::SmallVec::<[Table; 32]>::with_capacity(registry.raw_len());
         for value in registry.sequence_values::<Value>() {
             let Value::Table(actor) = value? else {
                 continue;
@@ -1946,7 +1946,8 @@ pub fn broadcast_song_lua_message(
             actors.push(actor);
         }
         let params = normalize_broadcast_params(lua, message, params)?;
-        actors.into_iter().try_for_each(|actor| {
+        // Drain in place so consuming the snapshot does not move its inline buffer.
+        actors.drain(..).try_for_each(|actor| {
             run_actor_named_command_with_drain_and_params(
                 lua,
                 &actor,
@@ -1996,10 +1997,13 @@ fn normalize_judgment_params(lua: &Lua, params: &Table) -> mlua::Result<()> {
         }
     };
     if table_has_entries(&notes)? {
-        let entries = notes
-            .pairs::<Value, Value>()
-            .collect::<mlua::Result<Vec<_>>>()?;
-        for (key, value) in entries {
+        // Snapshot every pair before normalization can mutate the notes table.
+        let mut entries =
+            smallvec::SmallVec::<[(Value, Value); 16]>::with_capacity(notes.raw_len());
+        for entry in notes.pairs::<Value, Value>() {
+            entries.push(entry?);
+        }
+        for (key, value) in entries.drain(..) {
             let note = match value {
                 Value::Table(note) => normalize_tap_note_table(lua, params, note)?,
                 value => create_tap_note_table(lua, params, Some(value))?,
@@ -2334,17 +2338,18 @@ fn run_guarded_actor_command(
     }
     active.set(name, true)?;
     let recurring_cursor_key = "__songlua_recurring_update_start_cursor";
-    let recurring_exact_key = "__songlua_recurring_update_exact_interval";
+    // This long key is not interned by Lua; reuse it across all scope accesses.
+    let recurring_exact_key = lua.create_string("__songlua_recurring_update_exact_interval")?;
     let previous_recurring_state = {
         let previous_cursor = actor.get::<Value>(recurring_cursor_key)?;
-        let previous_exact = actor.get::<Value>(recurring_exact_key)?;
+        let previous_exact = actor.get::<Value>(&recurring_exact_key)?;
         actor.set(
             recurring_cursor_key,
             actor
                 .get::<Option<f32>>("__songlua_capture_cursor")?
                 .unwrap_or(0.0),
         )?;
-        actor.set(recurring_exact_key, 0.0_f64)?;
+        actor.set(&recurring_exact_key, 0.0_f64)?;
         (previous_cursor, previous_exact)
     };
     let result = call_actor_function(lua, actor, command, params)
@@ -2362,7 +2367,7 @@ fn run_guarded_actor_command(
             Ok(())
         });
     actor.set(recurring_cursor_key, previous_recurring_state.0)?;
-    actor.set(recurring_exact_key, previous_recurring_state.1)?;
+    actor.set(&recurring_exact_key, previous_recurring_state.1)?;
     active.set(name, Value::Nil)?;
     result
 }
@@ -14992,3 +14997,7 @@ mod text_arguments_perf;
 #[cfg(test)]
 #[path = "../tests/perf/upvalue_output.rs"]
 mod upvalue_output_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/broadcast_storage.rs"]
+mod broadcast_storage_perf;

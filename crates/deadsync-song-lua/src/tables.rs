@@ -76,12 +76,11 @@ pub fn create_single_value_array(lua: &Lua, value: Table) -> mlua::Result<Table>
 }
 
 pub fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> mlua::Result<()> {
-    let value = value.to_string();
+    // Lua strings are immutable: retain one value instead of rebuilding it.
+    let value = lua.create_string(value)?;
     table.set(
         name,
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&value)?))
-        })?,
+        lua.create_function(move |_, (): ()| Ok(Value::String(value.clone())))?,
     )
 }
 
