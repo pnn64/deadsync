@@ -174,6 +174,7 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub xmode: Option<f32>,
     pub parabola_z: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
@@ -211,6 +212,7 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            xmode: None,
             parabola_z: None,
             confusion: None,
             confusion_offset: None,
@@ -250,6 +252,7 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.xmode.is_some()
             || self.parabola_z.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
@@ -393,6 +396,7 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub xmode: f32,
     pub parabola_z: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
@@ -438,6 +442,7 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            xmode: 0.0,
             parabola_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
@@ -545,6 +550,7 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.xmode, base.xmode, step);
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
@@ -656,6 +662,14 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.xmode,
+        target.xmode,
+        base.xmode,
+        speed.xmode,
         delta_time,
         1.0,
     );

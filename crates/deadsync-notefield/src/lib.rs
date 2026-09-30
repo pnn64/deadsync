@@ -1442,6 +1442,107 @@ mod tests {
     }
 
     #[test]
+    fn xmode_matches_native_sides_travel_and_tiny_order() {
+        let columns = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+        // Native style cases, including floor(odd columns / 2).
+        for (p2, double, directions) in [
+            (false, false, &[1.0; 4][..]),
+            (true, false, &[-1.0; 4][..]),
+            (
+                false,
+                true,
+                &[1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0][..],
+            ),
+            (
+                true,
+                true,
+                &[1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0][..],
+            ),
+            (false, true, &[1.0, 1.0, -1.0, -1.0, -1.0][..]),
+        ] {
+            let n = directions.len();
+            for (amount, travel, native_shift) in [
+                (-2.5, 128.0, -320.0),
+                (-2.5, -128.0, 320.0),
+                (0.5, 64.0, 32.0),
+                (0.5, 0.0, 0.0),
+                (0.000000025, 512.0, 0.0000128),
+            ] {
+                let params = NoteXParams {
+                    xmode: amount,
+                    player_p2: p2,
+                    double_style: double,
+                    ..NoteXParams::default()
+                };
+                assert!(!super::fill_static_note_x_offsets(
+                    n,
+                    &columns[..n],
+                    &[0.0; 8],
+                    &[TornadoBounds::default(); 8],
+                    &[32.0; 8],
+                    params,
+                    0.5,
+                    &mut [0.0; 8],
+                ));
+                for (col, &direction) in directions.iter().enumerate() {
+                    let expected = (columns[col] + native_shift * direction) * 0.5 + 32.0;
+                    assert_eq!(
+                        note_x_offset(
+                            col,
+                            travel,
+                            0.0,
+                            0.0,
+                            &columns[..n],
+                            &[0.0; 8],
+                            &[TornadoBounds::default(); 8],
+                            &[0.5; 8],
+                            params,
+                            1.0,
+                        ),
+                        expected
+                    );
+                    assert_eq!(
+                        super::note_x_offset_cached(
+                            col,
+                            travel,
+                            0.0,
+                            0.0,
+                            &columns[..n],
+                            &[0.0; 8],
+                            &[TornadoBounds::default(); 8],
+                            &[],
+                            &[32.0; 8],
+                            params,
+                            0.5,
+                        ),
+                        expected
+                    );
+                }
+            }
+        }
+        for amount in [0.0, f32::NAN, f32::INFINITY] {
+            let params = NoteXParams {
+                xmode: amount,
+                ..NoteXParams::default()
+            };
+            assert_eq!(
+                note_x_extra(0, 128.0, 0.0, 0.0, &columns, &[], &[], params),
+                0.0
+            );
+            assert!(super::fill_static_note_x_offsets(
+                8,
+                &columns,
+                &[],
+                &[],
+                &[],
+                params,
+                1.0,
+                &mut [0.0; 8],
+            ));
+        }
+    }
+
+    #[test]
     fn parabola_matches_native_travel_coordinates_and_tiny_order() {
         // ArrowEffects GetXPos/GetZPos: amount * (fYOffset / 64)^2.
         // X scales with Tiny after summation; Z does not. Negative travel

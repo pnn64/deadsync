@@ -288,6 +288,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 invert: visual.invert,
                 beat: visual.beat,
                 parabola_x: visual.parabola_x,
+                xmode: visual.xmode,
+                player_p2: matches!(request.placement, crate::FieldPlacement::P2),
+                double_style: request.geometry.double_style,
             },
             notes.tiny_spacing_scale,
             lane_tipsy_offsets[local_col],
@@ -2547,6 +2550,180 @@ mod tests {
                     keys.contains(&"target0"),
                     "Stealth leaves receptors visible"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn xmode_moves_composed_notes_and_hold_meshes_with_native_sides() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|i| TestSlot::new(format!("note{}", i / deadsync_noteskin::NUM_QUANTIZATIONS)))
+            .collect();
+        ns.mine_layers = (0..2)
+            .map(|i| vec![TestSlot::new(format!("note{i}"))].into())
+            .collect();
+        for col in 0..2 {
+            ns.hold_columns[col].head_inactive = Some(TestSlot::new(format!("note{col}")));
+            ns.hold_columns[col].body_inactive = Some(TestSlot::new(format!("body{col}")));
+            ns.hold_columns[col].topcap_inactive = Some(TestSlot::new(format!("top{col}")));
+            ns.hold_columns[col].bottomcap_inactive = Some(TestSlot::new(format!("bottom{col}")));
+        }
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        // P2 can be the only field and still uses the native P2 direction.
+        for (placement, player_idx, players, double, signs) in [
+            (FieldPlacement::P1, 0, 1, false, [1.0, 1.0]),
+            (FieldPlacement::P2, 0, 1, false, [-1.0, -1.0]),
+            (FieldPlacement::P1, 0, 2, false, [1.0, 1.0]),
+            (FieldPlacement::P2, 1, 2, false, [-1.0, -1.0]),
+            (FieldPlacement::P1, 0, 1, true, [1.0, -1.0]),
+            (FieldPlacement::P2, 0, 1, true, [1.0, -1.0]),
+        ] {
+            let col_start = player_idx * 2;
+            let mut lanes = vec![vec![]; players * 2];
+            for col in 0..2 {
+                lanes[col_start + col]
+                    .push(deadsync_gameplay::ChartNoteIndex::try_from_usize(col).expect("index"));
+            }
+            for kind in [
+                NoteType::Tap,
+                NoteType::Mine,
+                NoteType::Hold,
+                NoteType::Roll,
+            ] {
+                let notes: Vec<_> = (0..2)
+                    .map(|col| {
+                        let mut n = note(col_start + col);
+                        n.note_type = kind;
+                        n.beat = 2.0 + col as f32;
+                        n.row_index = 96 + col * 48;
+                        if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                            n.hold = Some(HoldData {
+                                end_row_index: n.row_index + 48,
+                                end_beat: n.beat + 1.0,
+                                result: None,
+                                life: 1.0,
+                                let_go_started_at: None,
+                                let_go_starting_life: 1.0,
+                                last_held_row_index: n.row_index,
+                                last_held_beat: n.beat,
+                            });
+                        }
+                        n
+                    })
+                    .collect();
+                for direction in [-1.0, 1.0] {
+                    for amount in [-2.5, 2.5] {
+                        let mut request = request(
+                            &ns,
+                            &timing,
+                            &notes,
+                            &hides,
+                            placement,
+                            player_idx,
+                            players,
+                            2,
+                            players * 2,
+                        );
+                        request.geometry.double_style = double;
+                        request.geometry.single_style = !double;
+                        request.geometry.column_dirs.fill(direction);
+                        request.chart.lane_note_row_indices = &lanes;
+                        request.chart.lane_hold_indices = &lanes;
+                        request.chart.note_itg_rows = &[96, 144];
+                        request.visual.visual.xmode = amount;
+                        request.visual.visual.tiny = 1.0;
+                        request.visual.visual.tipsy = 0.25;
+                        request.visual.visual.move_y_cols = [0.5; MAX_COLS];
+                        request.visual.accel.wave = 0.5;
+                        let prepared = prepare_notefield(&request).expect("prepared field");
+                        let frame = NotefieldFieldFrameView {
+                            feedback: spline_feedback(&[]),
+                            completed_rows: Default::default(),
+                        };
+                        let mut draws = Vec::new();
+                        let mut scratch = HoldMeshScratch::with_columns(2);
+                        compose_notefield_field(
+                            &mut Vec::new(),
+                            &mut draws,
+                            &mut Vec::new(),
+                            &mut ModelMeshCache::default(),
+                            &mut scratch,
+                            &mut CapturedActorScratch::with_capacities(32, 0),
+                            &mut NotefieldCameraCache::default(),
+                            &request,
+                            &prepared,
+                            &frame,
+                            &source,
+                        );
+                        let positions = sprite_positions(&draws);
+                        let mut meshes = [0; 2];
+                        for col in 0..2 {
+                            let receptor = positions
+                                .iter()
+                                .find(|(key, _)| *key == format!("target{col}"))
+                                .expect("receptor")
+                                .1;
+                            let arrow = positions
+                                .iter()
+                                .find(|(key, _)| *key == format!("note{col}"))
+                                .expect("arrow")
+                                .1;
+                            let native_x = |y: f32| {
+                                receptor[0]
+                                    + amount * signs[col] * ((y - receptor[1]) / direction) * 0.5
+                            };
+                            assert!(
+                                (arrow[0] - native_x(arrow[1])).abs() < 0.0001,
+                                "{placement:?}, {kind:?}, direction {direction}, amount {amount}, col {col}"
+                            );
+                            for draw in &draws {
+                                let FlatDraw::TexturedMesh(mesh) = draw else {
+                                    continue;
+                                };
+                                if ![
+                                    format!("body{col}"),
+                                    format!("top{col}"),
+                                    format!("bottom{col}"),
+                                ]
+                                .contains(&mesh.texture.to_string())
+                                {
+                                    continue;
+                                }
+                                meshes[col] += 1;
+                                assert!(!mesh.depth_test);
+                                let vertices = match &mesh.vertices {
+                                    FlatMeshVertices::Shared(v) => v.as_ref(),
+                                    FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                };
+                                for quad in vertices.chunks_exact(6) {
+                                    for (left, right) in
+                                        [(&quad[0], &quad[1]), (&quad[5], &quad[4])]
+                                    {
+                                        let center = (left.pos[0] + right.pos[0]) * 0.5;
+                                        assert!((center - native_x(left.pos[1])).abs() < 0.0002);
+                                    }
+                                }
+                            }
+                        }
+                        if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                            assert!(
+                                meshes.into_iter().all(|count| count >= 3),
+                                "body and both caps must follow Xmode"
+                            );
+                        }
+                        assert_eq!(scratch.stats().capacity_grows, 0);
+                        assert_eq!(scratch.stats().saturated_pairs, 0);
+                    }
+                }
             }
         }
     }

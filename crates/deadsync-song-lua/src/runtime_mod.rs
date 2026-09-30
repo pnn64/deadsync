@@ -917,6 +917,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "twirl"
         | "roll"
         | "parabolax"
+        | "xmode"
         | "parabolaz"
         | "confusion"
         | "confusionoffset"

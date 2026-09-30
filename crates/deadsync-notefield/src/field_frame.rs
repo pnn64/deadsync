@@ -4,7 +4,7 @@ use crate::{
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
     MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFeedbackFrameView,
-    PreparedNotefield, PreparedNotefieldNotes, TornadoBounds, VisualEffectParams,
+    PreparedNotefield, PreparedNotefieldNotes, VisualEffectParams,
     appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
     compose_hold_body_caps, compose_measure_lines, compose_notefield_feedback,
     fill_gameplay_lane_effects, fill_static_note_x_offsets, for_each_lane_index,
@@ -273,6 +273,21 @@ fn compose_field_contents<S, F>(
         lane_transform_caches[local_col] =
             lane_note_transform_cache(current_beat, lane_effect_params[local_col]);
     }
+    let note_x_params = NoteXParams {
+        screen_height: request.geometry.screen_height,
+        tornado: visual.tornado,
+        drunk: visual.drunk,
+        drunk_offset: visual.drunk_offset,
+        drunk_speed: visual.drunk_speed,
+        drunk_period: visual.drunk_period,
+        flip: visual.flip,
+        invert: visual.invert,
+        beat: visual.beat,
+        parabola_x: visual.parabola_x,
+        xmode: visual.xmode,
+        player_p2: matches!(request.placement, crate::FieldPlacement::P2),
+        double_style: request.geometry.double_style,
+    };
     let mut static_note_x_offsets = [0.0; deadsync_core::input::MAX_COLS];
     let note_x_is_static = fill_static_note_x_offsets(
         num_cols,
@@ -280,18 +295,7 @@ fn compose_field_contents<S, F>(
         &invert_distances[..num_cols],
         &tornado_bounds[..num_cols],
         &note_inputs.move_x_offsets[..num_cols],
-        NoteXParams {
-            screen_height: request.geometry.screen_height,
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            drunk_offset: visual.drunk_offset,
-            drunk_speed: visual.drunk_speed,
-            drunk_period: visual.drunk_period,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-            parabola_x: visual.parabola_x,
-        },
+        note_x_params,
         note_inputs.tiny_spacing_scale,
         &mut static_note_x_offsets,
     );
@@ -302,18 +306,17 @@ fn compose_field_contents<S, F>(
             + if note_x_is_static {
                 static_note_x_offsets[local_col]
             } else {
-                note_x_offset(
-                    request.geometry.screen_height,
+                canonical_note_x_offset_cached(
                     local_col,
                     adjusted_travel,
-                    travel.arrow_effect_time_s(),
                     beat_push,
-                    visual,
+                    travel.arrow_effect_time_s(),
                     &col_offsets[..num_cols],
                     &invert_distances[..num_cols],
                     &tornado_bounds[..num_cols],
                     &note_inputs.tornado_lane_caches[..num_cols],
                     &note_inputs.move_x_offsets[..num_cols],
+                    note_x_params,
                     note_inputs.tiny_spacing_scale,
                 )
             }
@@ -904,6 +907,7 @@ fn compose_field_contents<S, F>(
         &visible_note_bounds[..num_cols],
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
+        note_x_params,
         note_x_is_static,
         &static_note_x_offsets[..num_cols],
         &appearance_caches[..num_cols],
@@ -938,6 +942,7 @@ fn compose_visible_notes<S, F>(
     visible_note_bounds: &[(usize, usize)],
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
+    note_x_params: NoteXParams,
     note_x_is_static: bool,
     static_note_x_offsets: &[f32],
     appearance_caches: &[crate::NoteAppearanceCache],
@@ -1030,18 +1035,17 @@ fn compose_visible_notes<S, F>(
                     + if note_x_is_static {
                         static_note_x_offsets[local_col]
                     } else {
-                        note_x_offset(
-                            request.geometry.screen_height,
+                        canonical_note_x_offset_cached(
                             local_col,
                             adjusted_travel,
-                            travel.arrow_effect_time_s(),
                             notes.beat_factor,
-                            visual,
+                            travel.arrow_effect_time_s(),
                             &notes.col_offsets[..num_cols],
                             &notes.invert_distances[..num_cols],
                             &notes.tornado_bounds[..num_cols],
                             &notes.tornado_lane_caches[..num_cols],
                             &notes.move_x_offsets[..num_cols],
+                            note_x_params,
                             notes.tiny_spacing_scale,
                         )
                     };
@@ -1574,48 +1578,6 @@ fn resolved_appearance<S>(
     appearance
 }
 
-#[allow(clippy::too_many_arguments)]
-#[inline(always)]
-fn note_x_offset(
-    screen_height: f32,
-    local_col: usize,
-    y: f32,
-    arrow_effect_time_s: f32,
-    beat_factor: f32,
-    visual: VisualEffects,
-    col_offsets: &[f32],
-    invert_distances: &[f32],
-    tornado_bounds: &[TornadoBounds],
-    tornado_lane_caches: &[crate::TornadoLaneCache],
-    move_x_offsets: &[f32],
-    tiny_spacing_scale: f32,
-) -> f32 {
-    canonical_note_x_offset_cached(
-        local_col,
-        y,
-        beat_factor,
-        arrow_effect_time_s,
-        col_offsets,
-        invert_distances,
-        tornado_bounds,
-        tornado_lane_caches,
-        move_x_offsets,
-        NoteXParams {
-            screen_height,
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            drunk_offset: visual.drunk_offset,
-            drunk_speed: visual.drunk_speed,
-            drunk_period: visual.drunk_period,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-            parabola_x: visual.parabola_x,
-        },
-        tiny_spacing_scale,
-    )
-}
-
 #[inline(always)]
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
     visual_hold_body_needs_z_buffer(VisualEffectParams {
@@ -1644,6 +1606,7 @@ fn hold_lane_frame(
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
         use_legacy_sprites: visual.twirl == 0.0
             && visual.parabola_x == 0.0
+            && visual.xmode == 0.0
             && visual.parabola_z == 0.0
             && visual_use_legacy_hold_sprites(
                 effect_params.bumpy,
@@ -1658,6 +1621,29 @@ fn hold_lane_frame(
 #[cfg(test)]
 mod hold_lane_frame_cache_tests {
     use super::*;
+
+    #[test]
+    fn xmode_selects_hold_meshes_even_below_epsilon() {
+        for amount in [-2.5, 2.5, 0.000000025] {
+            let visual = VisualEffects {
+                xmode: amount,
+                ..VisualEffects::default()
+            };
+            let params = VisualEffectParams::default();
+            let frame = hold_lane_frame(
+                240.0,
+                320.0,
+                64.0,
+                0.0,
+                0.0,
+                visual,
+                params,
+                lane_note_transform_cache(0.0, params),
+            );
+            assert!(!frame.use_legacy_sprites);
+            assert!(!hold_body_needs_z_buffer(&visual));
+        }
+    }
 
     #[test]
     fn prepared_lane_offset_preserves_hold_receptor_position() {

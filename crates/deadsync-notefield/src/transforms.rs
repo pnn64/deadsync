@@ -165,6 +165,9 @@ pub(crate) struct NoteXParams {
     pub drunk_period: f32,
     pub beat: f32,
     pub parabola_x: f32,
+    pub xmode: f32,
+    pub player_p2: bool,
+    pub double_style: bool,
 }
 
 pub(crate) fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
@@ -975,6 +978,20 @@ fn tornado_x_extra_cached(
     (adjusted - base_x) * tornado
 }
 
+// ArrowEffects::GetXPos: doubles split at floor(columns / 2); singles
+// use the native player number, including a lone P2 field.
+fn xmode_x_extra(local_col: usize, y: f32, num_cols: usize, params: NoteXParams) -> f32 {
+    if !params.xmode.is_finite() || params.xmode == 0.0 {
+        return 0.0;
+    }
+    let negative = if params.double_style {
+        local_col >= num_cols / 2
+    } else {
+        params.player_p2
+    };
+    params.xmode * if negative { -y } else { y }
+}
+
 pub(crate) fn note_x_extra(
     local_col: usize,
     y: f32,
@@ -1025,6 +1042,7 @@ pub(crate) fn note_x_extra(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    out += xmode_x_extra(local_col, y, col_offsets.len(), params);
     out
 }
 
@@ -1115,6 +1133,7 @@ pub(crate) fn note_x_offset_cached(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    extra += xmode_x_extra(local_col, y, col_offsets.len(), params);
     let base = base_x + extra;
     base * tiny_scale + move_x_cache.get(local_col).copied().unwrap_or(0.0)
 }
@@ -1133,6 +1152,7 @@ pub(crate) fn fill_static_note_x_offsets(
         || signed_effect_active(params.drunk)
         || signed_effect_active(params.beat)
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
+        || (params.xmode.is_finite() && params.xmode != 0.0)
     {
         return false;
     }
