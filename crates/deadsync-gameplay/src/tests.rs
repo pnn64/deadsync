@@ -3425,6 +3425,32 @@ mod tests {
     }
 
     #[test]
+    fn parabola_uses_signed_amounts_independent_speeds_and_reset() {
+        let mods = parse_attack_mods("*2 -250% parabolax,*4 600% parabolaz");
+        assert_eq!(mods.visual.parabola_x, Some(-2.5));
+        assert_eq!(mods.visual.parabola_z, Some(6.0));
+        assert_eq!(mods.visual_speed.parabola_x, Some(2.0));
+        assert_eq!(mods.visual_speed.parabola_z, Some(4.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_near(merged.parabola_x, -0.5);
+        assert_near(merged.parabola_z, 1.0);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods("no parabolax,no parabolaz");
+        assert_eq!(cleared.visual.parabola_x, Some(0.0));
+        assert_eq!(cleared.visual.parabola_z, Some(0.0));
+    }
+
+    #[test]
     fn twirl_uses_native_amount_approach_and_reset() {
         let mods = parse_attack_mods("*2 -250% twirl");
         assert_eq!(mods.visual.twirl, Some(-2.5));

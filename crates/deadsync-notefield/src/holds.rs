@@ -142,7 +142,7 @@ struct RenderedHoldBody {
 }
 
 const HOLD_BODY_BUFFER_VERTICES: usize = 2048;
-// Twirl samples cap strips every four pixels, as NoteDisplay does for bodies.
+// Curved caps use the same four/sixteen-pixel steps as NoteDisplay bodies.
 // Preallocate at song construction, including the same capacity as body strips.
 const HOLD_CAP_BUFFER_VERTICES: usize = HOLD_BODY_BUFFER_VERTICES;
 const HOLD_MESH_PAIRS_PER_FRAME: usize = MAX_COLS * 2;
@@ -251,8 +251,8 @@ impl HoldMeshBufferPool {
 /// work is bounded to one monotonic pass over the pool plus clearing two vectors
 /// per visible hold; empty diffuse/glow buffers are not shared with the renderer
 /// and retained capacity is not initialized. Each cap reserves 2,048 vertices
-/// and emits at most 341 quads. Twirl uses native four-pixel rows; oversized caps
-/// use wider rows to stay within that warm capacity and fixed work bound.
+/// and emits at most 341 quads. Curved caps use native four/sixteen-pixel rows;
+/// oversized caps use wider rows within that warm capacity and fixed work bound.
 pub struct HoldMeshScratch {
     bodies: HoldMeshBufferPool,
     caps: HoldMeshBufferPool,
@@ -1289,7 +1289,11 @@ fn compose_top_cap<S, F, P>(
     let center_y = f32::midpoint(cap_top, cap_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
-    if request.twirl == 0.0 && alpha <= f32::EPSILON && glow <= f32::EPSILON {
+    if request.use_legacy_sprites
+        && request.twirl == 0.0
+        && alpha <= f32::EPSILON
+        && glow <= f32::EPSILON
+    {
         return;
     }
     let frame = slot.frame_index_from_phase(request.top_cap_phase);
@@ -1435,17 +1439,23 @@ fn compose_cap_mesh<S, P>(
     let fill = |diffuse: &mut Vec<TexturedMeshVertex>, glow: &mut Vec<TexturedMeshVertex>| {
         let [u0, v0, u1, v1] = uv;
         let span = bottom_y - top_y;
-        let slices = if request.twirl == 0.0 {
-            1
+        let curved = request.twirl != 0.0 || !request.use_legacy_sprites;
+        let row_step = if request.depth_test {
+            4.0_f32
         } else {
-            (span / 4.0)
+            16.0_f32
+        };
+        let slices = if curved {
+            (span / row_step)
                 .ceil()
                 .clamp(1.0, (HOLD_CAP_BUFFER_VERTICES / 6) as f32) as usize
-        };
-        let step = if request.twirl == 0.0 {
-            span
         } else {
-            4.0_f32.max(span / slices as f32)
+            1
+        };
+        let step = if curved {
+            row_step.max(span / slices as f32)
+        } else {
+            span
         };
         let mut y = top_y;
         let mut row = top_row;
@@ -1594,7 +1604,11 @@ fn compose_bottom_cap<S, F, P>(
     let center_y = f32::midpoint(draw_top, draw_bottom);
     let center = sample_path(center_y);
     let (alpha, glow) = hold_alpha_glow(request, center);
-    if request.twirl == 0.0 && alpha <= f32::EPSILON && glow <= f32::EPSILON {
+    if request.use_legacy_sprites
+        && request.twirl == 0.0
+        && alpha <= f32::EPSILON
+        && glow <= f32::EPSILON
+    {
         return;
     }
     let frame = slot.frame_index_from_phase(request.bottom_cap_phase);
@@ -1622,7 +1636,6 @@ fn compose_bottom_cap<S, F, P>(
     let bottom = sample_path(draw_bottom);
     let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
         && !is_model
-        && (request.twirl != 0.0 || !request.lane_reverse)
         && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
@@ -2693,6 +2706,87 @@ mod tests {
                 }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))
             )
         }));
+    }
+
+    #[test]
+    fn parabola_curves_hold_body_and_caps_with_native_row_steps() {
+        let body = TestSlot::sprite("body");
+        let top = TestSlot::sprite("top");
+        let bottom = TestSlot::sprite("bottom");
+        for (x_amount, z_amount) in [(-2.5, 0.0), (0.0, 2.5), (2.5, -2.5)] {
+            for reverse in [false, true] {
+                let visual = deadsync_gameplay::VisualEffects {
+                    parabola_x: x_amount,
+                    parabola_z: z_amount,
+                    ..deadsync_gameplay::VisualEffects::default()
+                };
+                let z_params = crate::gameplay_visual_effect_params(&visual, 0);
+                let z_cache = crate::lane_note_transform_cache(0.0, z_params);
+                let mut request = body_cap_request(Some(&body), Some(&top), Some(&bottom));
+                request.use_legacy_sprites = false;
+                request.depth_test = crate::visual_hold_body_needs_z_buffer(z_params);
+                request.lane_reverse = reverse;
+                let sample = |y: f32| {
+                    let travel = if reverse { -y } else { y };
+                    HoldPathSample {
+                        adjusted_travel: travel,
+                        center_x: crate::note_x_offset(
+                            0,
+                            travel,
+                            0.0,
+                            0.0,
+                            &[32.0],
+                            &[0.0],
+                            &[crate::TornadoBounds::default()],
+                            &[],
+                            crate::NoteXParams {
+                                parabola_x: x_amount,
+                                ..crate::NoteXParams::default()
+                            },
+                            0.0,
+                        ),
+                        world_z: crate::note_world_z_cached(
+                            travel,
+                            crate::bumpy_frame_cache(0.0, 0.0),
+                            z_cache,
+                        ),
+                        arrow_px: 64.0,
+                    }
+                };
+                let mut scratch = HoldMeshScratch::with_columns(1);
+                let mut draws = Vec::new();
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+                let mut parts = Vec::new();
+                for draw in &draws {
+                    let FlatDraw::TexturedMesh(mesh) = draw else {
+                        panic!("curved hold must use mesh")
+                    };
+                    assert_eq!(mesh.depth_test, z_amount != 0.0);
+                    parts.push(mesh.texture.as_ref());
+                    let vertices = reusable_vertices(draw);
+                    for quad in vertices.chunks_exact(6) {
+                        assert!(
+                            quad[5].pos[1] - quad[0].pos[1]
+                                <= if request.depth_test { 4.001 } else { 16.001 }
+                        );
+                        for (left, right) in [(&quad[0], &quad[1]), (&quad[5], &quad[4])] {
+                            let y = left.pos[1];
+                            assert_eq!(right.pos[1], y);
+                            let square = (y / 64.0) * (y / 64.0);
+                            assert!((left.pos[0] - x_amount * square).abs() < 0.0001);
+                            assert!((right.pos[0] - (64.0 + x_amount * square)).abs() < 0.0001);
+                            assert!((left.pos[2] - z_amount * square).abs() < 0.0001);
+                            assert_eq!(left.pos[2], right.pos[2]);
+                        }
+                    }
+                }
+                for name in ["body", "top", "bottom"] {
+                    assert!(parts.contains(&name));
+                }
+                assert_eq!(scratch.stats().capacity_grows, 0);
+                assert_eq!(scratch.stats().saturated_pairs, 0);
+            }
+        }
     }
 
     #[test]

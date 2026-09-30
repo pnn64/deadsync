@@ -310,6 +310,7 @@ fn indicator_x(
             flip: request.visual.flip,
             invert: request.visual.invert,
             beat: request.visual.beat,
+            parabola_x: request.visual.parabola_x,
         },
         request.visual.tiny,
     )
@@ -842,6 +843,7 @@ mod tests {
             flip: request.visual.flip,
             invert: request.visual.invert,
             beat: request.visual.beat,
+            parabola_x: request.visual.parabola_x,
         };
         let expected = hold_indicator_column_x(
             request.playfield_center_x,

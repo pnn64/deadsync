@@ -287,6 +287,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 flip: visual.flip,
                 invert: visual.invert,
                 beat: visual.beat,
+                parabola_x: visual.parabola_x,
             },
             notes.tiny_spacing_scale,
             lane_tipsy_offsets[local_col],
@@ -2544,6 +2545,104 @@ mod tests {
                     keys.contains(&"target0"),
                     "Stealth leaves receptors visible"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn parabola_bends_composed_taps_and_mines_before_reverse_and_move_y() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|i| {
+                TestSlot::new(if i < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(1).expect("index")],
+        ];
+        for kind in [NoteType::Tap, NoteType::Mine] {
+            let mut notes = [note(0), note(1)];
+            for (index, note) in notes.iter_mut().enumerate() {
+                note.note_type = kind;
+                note.beat = 2.0 + index as f32;
+                note.row_index =
+                    usize::try_from(deadsync_core::timing::beat_to_note_row(note.beat))
+                        .expect("positive fixture beat");
+            }
+            for direction in [-1.0, 1.0] {
+                for amount in [-2.5, 2.5] {
+                    let mut request =
+                        request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.note_itg_rows = &[96, 144];
+                    request.geometry.column_dirs.fill(direction);
+                    request.visual.visual.parabola_x = amount;
+                    request.visual.visual.parabola_z = -amount;
+                    request.visual.visual.tiny = 1.0;
+                    request.visual.visual.move_y_cols = [0.5; MAX_COLS];
+                    request.visual.accel.wave = 0.5;
+                    let prepared = prepare_notefield(&request).expect("prepared field");
+                    let frame = NotefieldFieldFrameView {
+                        feedback: spline_feedback(&[]),
+                        completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(),
+                        &mut draws,
+                        &mut Vec::new(),
+                        &mut ModelMeshCache::default(),
+                        &mut HoldMeshScratch::default(),
+                        &mut CapturedActorScratch::with_capacities(32, 0),
+                        &mut NotefieldCameraCache::default(),
+                        &request,
+                        &prepared,
+                        &frame,
+                        &source,
+                    );
+                    let mut arrows = [None; 2];
+                    let mut receptors = [None; 2];
+                    for draw in &draws {
+                        let FlatDraw::Sprite(sprite) = draw else {
+                            continue;
+                        };
+                        let SpriteSource::TextureHandle { key, .. } = &sprite.source else {
+                            continue;
+                        };
+                        for col in 0..2 {
+                            if key.as_ref() == ["note0", "note1"][col] {
+                                arrows[col] = Some((sprite.center, sprite.world_z));
+                            } else if key.as_ref() == ["target0", "target1"][col] {
+                                receptors[col] = Some(sprite.center);
+                                assert_eq!(sprite.world_z, 0.0);
+                            }
+                        }
+                    }
+                    for col in 0..2 {
+                        let (arrow, z) = arrows[col].expect("visible arrow");
+                        let receptor = receptors[col].expect("visible receptor");
+                        let travel = (arrow[1] - receptor[1]) / direction;
+                        let curve = amount * (travel / 64.0) * (travel / 64.0);
+                        assert!((arrow[0] - receptor[0] - curve * 0.5).abs() < 0.0001);
+                        assert!((z + curve).abs() < 0.0001);
+                        assert!(curve.abs() > 0.5);
+                    }
+                }
             }
         }
     }

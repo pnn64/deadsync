@@ -41,12 +41,14 @@ pub(crate) struct VisualEffectParams {
     pub confusion_offset: f32,
     pub dizzy: f32,
     pub twirl: f32,
+    pub parabola_z: f32,
     pub rotate_z: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LaneNoteTransformCache {
     bumpy_amplitude: f32,
+    parabola_z: f32,
     tiny_zoom: f32,
     pulse_active: bool,
     pulse_constant: bool,
@@ -162,6 +164,7 @@ pub(crate) struct NoteXParams {
     pub drunk_speed: f32,
     pub drunk_period: f32,
     pub beat: f32,
+    pub parabola_x: f32,
 }
 
 pub(crate) fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
@@ -493,16 +496,21 @@ pub(crate) fn apply_accel_y_cached(
 ) -> f32 {
     apply_accel_y_with_peak_cached(raw_y, effect_height, screen_height, accel, cache).0
 }
-pub(crate) fn note_world_z_for_bumpy_cached(
+pub(crate) fn note_world_z_cached(
     y: f32,
     frame_cache: BumpyFrameCache,
     lane_cache: LaneNoteTransformCache,
 ) -> f32 {
-    if lane_cache.bumpy_amplitude == 0.0 {
-        return 0.0;
+    let mut z = 0.0;
+    if lane_cache.bumpy_amplitude != 0.0 {
+        let angle = 100.0f32.mul_add(frame_cache.offset, y) / frame_cache.divisor;
+        z += lane_cache.bumpy_amplitude * angle.sin();
     }
-    let angle = 100.0f32.mul_add(frame_cache.offset, y) / frame_cache.divisor;
-    lane_cache.bumpy_amplitude * angle.sin()
+    // ArrowEffects::GetZPos adds ParabolaZ after Bumpy, without Tiny scaling.
+    if lane_cache.parabola_z != 0.0 {
+        z += lane_cache.parabola_z * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
+    }
+    z
 }
 
 pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
@@ -519,7 +527,9 @@ pub(crate) fn visual_note_rotation_y(y_offset: f32, twirl: f32) -> f32 {
 }
 
 pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> bool {
-    signed_effect_active(params.bumpy) || (params.twirl.is_finite() && params.twirl != 0.0)
+    signed_effect_active(params.bumpy)
+        || (params.twirl.is_finite() && params.twirl != 0.0)
+        || (params.parabola_z.is_finite() && params.parabola_z != 0.0)
 }
 
 pub(crate) fn visual_use_legacy_hold_sprites(
@@ -630,6 +640,11 @@ pub(crate) fn lane_note_transform_cache(
     };
     LaneNoteTransformCache {
         bumpy_amplitude,
+        parabola_z: if params.parabola_z.is_finite() {
+            params.parabola_z
+        } else {
+            0.0
+        },
         tiny_zoom: visual_tiny_zoom(params),
         pulse_active,
         pulse_constant: pulse_active && pulse_outer == 0.0,
@@ -746,6 +761,7 @@ pub(crate) fn gameplay_visual_effect_params(
             confusion_offset: visual.confusion_offset,
             dizzy: visual.dizzy,
             twirl: visual.twirl,
+            parabola_z: visual.parabola_z,
             bumpy: visual.bumpy,
             rotate_z: 0.0,
         },
@@ -995,6 +1011,10 @@ pub(crate) fn note_x_extra(
     if signed_effect_active(params.beat) {
         out += beat_x_extra(y, beat_factor_value, params.beat);
     }
+    // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
+    if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
+        out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
+    }
     out
 }
 
@@ -1081,6 +1101,10 @@ pub(crate) fn note_x_offset_cached(
     if signed_effect_active(params.beat) {
         extra += beat_x_extra(y, beat_factor_value, params.beat);
     }
+    // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
+    if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
+        extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
+    }
     let base = base_x + extra;
     base * tiny_scale + move_x_cache.get(local_col).copied().unwrap_or(0.0)
 }
@@ -1098,6 +1122,7 @@ pub(crate) fn fill_static_note_x_offsets(
     if signed_effect_active(params.tornado)
         || signed_effect_active(params.drunk)
         || signed_effect_active(params.beat)
+        || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
     {
         return false;
     }

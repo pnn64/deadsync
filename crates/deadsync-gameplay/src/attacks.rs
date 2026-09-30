@@ -558,6 +558,8 @@ pub enum SongLuaEaseMaskTarget {
     VisualDrunkOffset,
     VisualDizzy,
     VisualTwirl,
+    VisualParabolaX,
+    VisualParabolaZ,
     VisualConfusion,
     VisualConfusionOffset,
     VisualConfusionOffsetColumn(usize),
@@ -1734,6 +1736,8 @@ fn append_song_lua_ease_targets_key(
         "drunkoffset" => push(SongLuaEaseMaskTarget::VisualDrunkOffset, pct_from, pct_to),
         "dizzy" => push(SongLuaEaseMaskTarget::VisualDizzy, pct_from, pct_to),
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
+        "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "parabolaz" => push(SongLuaEaseMaskTarget::VisualParabolaZ, pct_from, pct_to),
         "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
         "confusionoffset" => push(
             SongLuaEaseMaskTarget::VisualConfusionOffset,
@@ -2281,6 +2285,8 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualDrunkOffset => visual.drunk_offset = Some(value),
         SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
+        SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => {
@@ -2490,6 +2496,8 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualDrunkOffset => window.visual.drunk_offset.is_some(),
         SongLuaEaseMaskTarget::VisualDizzy => window.visual.dizzy.is_some(),
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
+        SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => window
@@ -3696,6 +3704,8 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.drunk_offset, visual.drunk_offset);
     mark_active_target(&mut targets.dizzy, visual.dizzy);
     mark_active_target(&mut targets.twirl, visual.twirl);
+    mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.parabola_z, visual.parabola_z);
     mark_active_target(&mut targets.confusion, visual.confusion);
     mark_active_target(&mut targets.confusion_offset, visual.confusion_offset);
     for (target, value) in targets
@@ -4487,6 +4497,8 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualDizzy => attack.visual_speed.dizzy = Some(speed),
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
+            SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualParabolaZ => attack.visual_speed.parabola_z = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusionOffset => {
                 attack.visual_speed.confusion_offset = Some(speed)
@@ -5000,6 +5012,24 @@ fn apply_active_visual_window(
         window.visual.twirl,
         window.visual_speed.twirl,
         active_targets.visual.twirl,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.parabola_x,
+        &mut values.visual_speed.parabola_x,
+        window.visual.parabola_x,
+        window.visual_speed.parabola_x,
+        active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.parabola_z,
+        &mut values.visual_speed.parabola_z,
+        window.visual.parabola_z,
+        window.visual_speed.parabola_z,
+        active_targets.visual.parabola_z,
         active_clear_all,
         persisted,
     );
@@ -5615,6 +5645,18 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "parabolax" => set_approached_mod(
+            &mut out.visual.parabola_x,
+            &mut out.visual_speed.parabola_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "parabolaz" => set_approached_mod(
+            &mut out.visual.parabola_z,
+            &mut out.visual_speed.parabola_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "confusion" => set_approached_mod(
             &mut out.visual.confusion,
             &mut out.visual_speed.confusion,
@@ -6080,6 +6122,8 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         drunk_offset: merge_attack_value(base.drunk_offset, attack.drunk_offset),
         dizzy: merge_attack_value(base.dizzy, attack.dizzy),
         twirl: merge_attack_value(base.twirl, attack.twirl),
+        parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),
         confusion: merge_attack_value(base.confusion, attack.confusion),
         confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
         confusion_offset_cols,

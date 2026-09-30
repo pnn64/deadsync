@@ -915,6 +915,8 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "tipsyspeed"
         | "dizzy"
         | "twirl"
+        | "parabolax"
+        | "parabolaz"
         | "confusion"
         | "confusionoffset"
         | "flip"

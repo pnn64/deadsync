@@ -167,11 +167,10 @@ pub(crate) use transforms::{
     beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
     fill_gameplay_lane_effects, fill_move_col_extras, fill_static_note_x_offsets,
     gameplay_visual_effect_params, lane_note_transform_cache, note_appearance_cache,
-    note_world_z_for_bumpy_cached, note_x_offset, note_x_offset_cached, smoothstep01,
-    tiny_spacing_scale, visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached,
-    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
-    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
-    visual_use_legacy_hold_sprites,
+    note_world_z_cached, note_x_offset, note_x_offset_cached, smoothstep01, tiny_spacing_scale,
+    visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
+    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
+    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
@@ -193,7 +192,7 @@ mod tests {
     use super::transforms::{
         accel_y_cache, appearance_note_actor_alpha_from_alpha, appearance_note_alpha_cached,
         appearance_note_glow_from_alpha, apply_accel_y_cached, apply_accel_y_with_peak_cached,
-        note_world_z_for_bumpy_cached, visual_note_rotation_z_cached,
+        note_world_z_cached, visual_note_rotation_z_cached,
     };
     use super::{
         AccelYParams, BrokenRunLookup, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
@@ -294,7 +293,7 @@ mod tests {
     }
 
     fn cached_bumpy_z(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
-        note_world_z_for_bumpy_cached(
+        note_world_z_cached(
             y,
             super::bumpy_frame_cache(offset, period),
             lane_note_transform_cache(
@@ -1438,6 +1437,97 @@ mod tests {
         let scaled = scale_effect_size([64.0, 64.0], 1.25, visual_arrow_effect_zoom(0.0, doubled));
         assert!(base[0].mul_add(-2.0, scaled[0]).abs() <= 1e-6);
         assert!(base[1].mul_add(-2.0, scaled[1]).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn parabola_matches_native_travel_coordinates_and_tiny_order() {
+        // ArrowEffects GetXPos/GetZPos: amount * (fYOffset / 64)^2.
+        // X scales with Tiny after summation; Z does not. Negative travel
+        // uses the same curve, and values smaller than epsilon stay active.
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        let inverse = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        for (amount, travel, expected) in [
+            (-2.5, -128.0, -10.0),
+            (-0.75, 128.0, -3.0),
+            (-0.5, 256.0, -8.0),
+            (0.5, -512.0, 32.0),
+            (1.0, 32.0, 0.25),
+            (2.5, 64.0, 2.5),
+            (1.0, 0.0, 0.0),
+            (0.000000025, 512.0, 0.0000016),
+        ] {
+            let x_params = NoteXParams {
+                parabola_x: amount,
+                ..NoteXParams::default()
+            };
+            let x = note_x_offset(
+                0, travel, 0.0, 0.0, &columns, &inverse, &tornado, &[0.5; 4], x_params, 1.0,
+            );
+            let cached = super::note_x_offset_cached(
+                0,
+                travel,
+                0.0,
+                0.0,
+                &columns,
+                &inverse,
+                &tornado,
+                &[],
+                &[32.0; 4],
+                x_params,
+                0.5,
+            );
+            assert_eq!(x, (-96.0 + expected) * 0.5 + 32.0);
+            assert_eq!(cached, x);
+            let z_params = VisualEffectParams {
+                parabola_z: amount,
+                tiny: 1.0,
+                ..VisualEffectParams::default()
+            };
+            assert_eq!(
+                note_world_z_cached(
+                    travel,
+                    super::bumpy_frame_cache(0.0, 0.0),
+                    lane_note_transform_cache(0.0, z_params)
+                ),
+                expected
+            );
+            assert!(visual_hold_body_needs_z_buffer(z_params));
+            assert!(!super::fill_static_note_x_offsets(
+                4,
+                &columns,
+                &inverse,
+                &tornado,
+                &[32.0; 4],
+                x_params,
+                0.5,
+                &mut [0.0; 4]
+            ));
+        }
+        let params = VisualEffectParams {
+            bumpy: 0.75,
+            parabola_z: -2.5,
+            ..VisualEffectParams::default()
+        };
+        let z = note_world_z_cached(
+            128.0,
+            super::bumpy_frame_cache(0.0, 0.0),
+            lane_note_transform_cache(0.0, params),
+        );
+        assert_eq!(z, cached_bumpy_z(128.0, 0.75, 0.0, 0.0) - 10.0);
+        let invalid = VisualEffectParams {
+            parabola_z: f32::NAN,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            note_world_z_cached(
+                128.0,
+                super::bumpy_frame_cache(0.0, 0.0),
+                lane_note_transform_cache(0.0, invalid)
+            ),
+            0.0
+        );
+        assert!(!visual_hold_body_needs_z_buffer(invalid));
     }
 
     #[test]

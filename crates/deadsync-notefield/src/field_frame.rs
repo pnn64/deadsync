@@ -12,11 +12,11 @@ use crate::{
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
     lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, mine_part,
     note_appearance_cache, note_part_phase_cached, note_part_uv_translation_for_quantization,
-    note_world_z_for_bumpy_cached, note_x_offset_cached as canonical_note_x_offset_cached,
-    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_part_for_note_type, tap_replacement_head, visual_arrow_effect_zoom_cached,
-    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    note_world_z_cached, note_x_offset_cached as canonical_note_x_offset_cached, offset_center,
+    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw, tap_part_for_note_type,
+    tap_replacement_head, visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
+    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
+    visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
     Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAlign, TextAttributes,
@@ -290,6 +290,7 @@ fn compose_field_contents<S, F>(
             flip: visual.flip,
             invert: visual.invert,
             beat: visual.beat,
+            parabola_x: visual.parabola_x,
         },
         note_inputs.tiny_spacing_scale,
         &mut static_note_x_offsets,
@@ -324,7 +325,7 @@ fn compose_field_contents<S, F>(
         )
     };
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        note_world_z_for_bumpy_cached(
+        note_world_z_cached(
             travel_offset,
             note_inputs.bumpy_frame_cache,
             lane_transform_caches[local_col],
@@ -1045,11 +1046,8 @@ fn compose_visible_notes<S, F>(
                     };
                 let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
                 let transform_cache = lane_transform_caches[local_col];
-                let world_z = note_world_z_for_bumpy_cached(
-                    adjusted_travel,
-                    notes.bumpy_frame_cache,
-                    transform_cache,
-                );
+                let world_z =
+                    note_world_z_cached(adjusted_travel, notes.bumpy_frame_cache, transform_cache);
                 let effect_zoom = prepared.column_zooms[local_col]
                     * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache);
                 let note_scale = field_zoom * effect_zoom;
@@ -1604,6 +1602,7 @@ fn note_x_offset(
             flip: visual.flip,
             invert: visual.invert,
             beat: visual.beat,
+            parabola_x: visual.parabola_x,
         },
         tiny_spacing_scale,
     )
@@ -1613,6 +1612,7 @@ fn note_x_offset(
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
     visual_hold_body_needs_z_buffer(VisualEffectParams {
         bumpy: visual.bumpy,
+        parabola_z: visual.parabola_z,
         twirl: visual.twirl,
         ..VisualEffectParams::default()
     })
@@ -1635,6 +1635,8 @@ fn hold_lane_frame(
         receptor_center_x,
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
         use_legacy_sprites: visual.twirl == 0.0
+            && visual.parabola_x == 0.0
+            && visual.parabola_z == 0.0
             && visual_use_legacy_hold_sprites(
                 effect_params.bumpy,
                 visual.drunk,
