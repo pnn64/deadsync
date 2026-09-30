@@ -215,22 +215,8 @@ impl CompiledActors {
         button: Option<&str>,
         color: Option<crate::Quantization>,
     ) -> Option<noteskin_actor::ItgLuaActorDecl> {
-        let key = actor_manifest_key(search_dirs, path)?;
-        if let Some(color) = color {
-            let color = color.color_name();
-            let file = button
-                .and_then(|button| self.find(&format!("{key}|{button}|color={color}")))
-                .or_else(|| self.find(&format!("{key}|color={color}")));
-            if let Some(file) = file {
-                return Some(file.decl.clone());
-            }
-        }
-        if let Some(button) = button {
-            if let Some(file) = self.find(&format!("{key}|{button}")) {
-                return Some(file.decl.clone());
-            }
-        }
-        self.find(&key).map(|file| file.decl.clone())
+        self.find_for_path(search_dirs, path, button, color)
+            .map(|file| file.decl.clone())
     }
 
     pub fn has_color_variants(&self) -> bool {
@@ -244,8 +230,65 @@ impl CompiledActors {
         search_dirs: &[PathBuf],
         path: &Path,
     ) -> Option<&noteskin_actor::ItgLuaActorDecl> {
-        let key = actor_manifest_key(search_dirs, path)?;
-        self.find(&key).map(|file| &file.decl)
+        self.find_for_path(search_dirs, path, None, None)
+            .map(|file| &file.decl)
+    }
+
+    fn find_for_path(
+        &self,
+        search_dirs: &[PathBuf],
+        path: &Path,
+        button: Option<&str>,
+        color: Option<crate::Quantization>,
+    ) -> Option<&CompiledActorFile> {
+        let dir = search_dirs.iter().find(|dir| path.starts_with(dir))?;
+        let game = dir.parent()?.file_name()?.to_str()?;
+        let skin = dir.file_name()?.to_str()?;
+        let filename = path.file_name()?.to_str()?;
+        let color = color.map(crate::Quantization::color_name);
+        let base_len = game.len() + 1 + skin.len() + 1 + filename.len();
+        let capacity = base_len
+            + button.map_or(0, |button| 1 + button.len())
+            + color.map_or(0, |color| "|color=".len() + color.len());
+        // Normal manifest keys stay inline. Reuse the same buffer for every
+        // fallback; unusually long user-supplied names may spill once.
+        let mut key = smallvec::SmallVec::<[u8; 256]>::with_capacity(capacity);
+        for part in [game, "/", skin, "/", filename] {
+            key.extend_from_slice(part.as_bytes());
+        }
+        let find = |key: &[u8]| {
+            self.files
+                .iter()
+                .find(|file| file.key.as_bytes().eq_ignore_ascii_case(key))
+        };
+        if let Some(color) = color {
+            if let Some(button) = button {
+                for part in ["|", button, "|color=", color] {
+                    key.extend_from_slice(part.as_bytes());
+                }
+                if let Some(file) = find(&key) {
+                    return Some(file);
+                }
+                key.truncate(base_len);
+            }
+            for part in ["|color=", color] {
+                key.extend_from_slice(part.as_bytes());
+            }
+            if let Some(file) = find(&key) {
+                return Some(file);
+            }
+            key.truncate(base_len);
+        }
+        if let Some(button) = button {
+            for part in ["|", button] {
+                key.extend_from_slice(part.as_bytes());
+            }
+            if let Some(file) = find(&key) {
+                return Some(file);
+            }
+            key.truncate(base_len);
+        }
+        find(&key)
     }
 }
 

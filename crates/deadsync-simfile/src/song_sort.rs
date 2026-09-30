@@ -79,14 +79,66 @@ pub fn song_artist_sort_key(song: &SongData) -> (String, String) {
     )
 }
 
-#[inline]
+// Keep the small dispatch in callers; the bulk loop stays out of line.
+#[inline(always)]
 fn cmp_ignore_ascii_case(left: &str, right: &str) -> Ordering {
-    left.bytes()
-        .map(|byte| byte.to_ascii_lowercase())
-        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+    let (left, right) = (left.as_bytes(), right.as_bytes());
+    let shared = left.len().min(right.len());
+    if shared == 0 {
+        return left.len().cmp(&right.len());
+    }
+    // An early difference should not pay for selecting the bulk path.
+    let order = left[0]
+        .to_ascii_lowercase()
+        .cmp(&right[0].to_ascii_lowercase());
+    if order != Ordering::Equal {
+        return order;
+    }
+    if shared < 32 {
+        return cmp_ignore_ascii_case_scalar(&left[1..], &right[1..]);
+    }
+    let order = cmp_ignore_ascii_case_scalar(&left[1..4], &right[1..4]);
+    if order != Ordering::Equal {
+        return order;
+    }
+    cmp_ignore_ascii_case_long(&left[4..], &right[4..])
 }
 
 #[inline]
+fn cmp_ignore_ascii_case_scalar(left: &[u8], right: &[u8]) -> Ordering {
+    // Equal bytes need no folding, even inside a short name or partial block.
+    for (&a, &b) in left.iter().zip(right) {
+        if a != b {
+            let order = a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase());
+            if order != Ordering::Equal {
+                return order;
+            }
+        }
+    }
+    left.len().cmp(&right.len())
+}
+
+// Keep the bulk path out of scalar callers' inline code and register budget.
+#[inline(never)]
+fn cmp_ignore_ascii_case_long(left: &[u8], right: &[u8]) -> Ordering {
+    // Identical byte blocks need no case folding. Differing blocks use the
+    // original ASCII rules, including unchanged non-ASCII bytes.
+    let shared = left.len().min(right.len());
+    let mut offset = 0;
+    while shared - offset >= 16 {
+        let (a, b) = (&left[offset..offset + 16], &right[offset..offset + 16]);
+        if a != b {
+            let order = cmp_ignore_ascii_case_scalar(a, b);
+            if order != Ordering::Equal {
+                return order;
+            }
+        }
+        offset += 16;
+    }
+    cmp_ignore_ascii_case_scalar(&left[offset..], &right[offset..])
+}
+
+#[inline(always)]
 #[must_use]
 pub fn song_title_cmp(left: &SongData, right: &SongData) -> Ordering {
     cmp_ignore_ascii_case(left.display_title(true), right.display_title(true))
@@ -729,6 +781,12 @@ mod tests {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/perf/library_sort.rs"
+        ));
+    }
+    mod library_compare_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/library_compare.rs"
         ));
     }
 }
