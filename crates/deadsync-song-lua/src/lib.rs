@@ -21827,3 +21827,5 @@ mod alignment_access_perf;
 mod lua_integration_perf;
 
 mod method_args;
+
+mod state_text;

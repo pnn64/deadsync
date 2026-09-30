@@ -1005,9 +1005,12 @@ fn set_state_string_getter(
         method,
         lua.create_function({
             let table = table.clone();
-            move |lua, _args: MultiValue| {
-                let value = table.get::<Option<String>>(key)?.unwrap_or_default();
-                Ok(Value::String(lua.create_string(&value)?))
+            move |lua, (): ()| {
+                let value = match table.get::<Option<crate::state_text::StateText>>(key)? {
+                    Some(text) => text.into_string(lua)?,
+                    None => lua.create_string("")?,
+                };
+                Ok(Value::String(value))
             }
         })?,
     )
@@ -1023,11 +1026,11 @@ fn set_state_string_setter(
         method,
         lua.create_function({
             let table = table.clone();
-            move |lua, args: MultiValue| {
-                let value = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_string)
-                    .unwrap_or_default();
+            move |lua, args: crate::state_text::StateTextArgs| {
+                let value = match args.0 {
+                    Some(text) => text,
+                    None => lua.create_string("")?,
+                };
                 table.set(key, value)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(table.clone())
@@ -2099,7 +2102,14 @@ pub fn create_split_table(lua: &Lua, text: &str, separator: &str) -> mlua::Resul
         }
         return Ok(table);
     }
-    let table = lua.create_table()?;
+    let capacity = if separator.len() == 1 {
+        // ASCII separators occupy one byte. memchr's count scans them in bulk,
+        // avoiding a second generic split traversal for long token lists.
+        memchr::memchr_iter(separator.as_bytes()[0], text.as_bytes()).count() + 1
+    } else {
+        text.split(separator).count()
+    };
+    let table = lua.create_table_with_capacity(capacity, 0)?;
     for (idx, value) in text.split(separator).enumerate() {
         table.raw_set(idx + 1, value)?;
     }
@@ -2128,7 +2138,15 @@ pub fn create_range_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
         return Ok(Value::Table(lua.create_table()?));
     }
 
-    let table = lua.create_table()?;
+    // This estimates storage only. Repeated f32 addition below still decides
+    // the exact values/count, including stalled increments and the 10,000 cap.
+    let capacity = if start.is_finite() && stop.is_finite() && step.is_finite() {
+        (((f64::from(stop) - f64::from(start)) / f64::from(step)).floor() + 1.0)
+            .clamp(0.0, 10_000.0) as usize
+    } else {
+        0
+    };
+    let table = lua.create_table_with_capacity(capacity, 0)?;
     let mut index = 1;
     let mut value = start;
     while (step > 0.0 && value <= stop + f32::EPSILON)
@@ -3152,3 +3170,11 @@ mod table_calls_perf;
 #[cfg(test)]
 #[path = "../tests/perf/state_call_args.rs"]
 mod state_call_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/state_text.rs"]
+mod state_text_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/sequence_capacity.rs"]
+mod sequence_capacity_perf;

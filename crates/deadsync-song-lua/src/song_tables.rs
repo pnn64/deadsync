@@ -407,24 +407,36 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
+    let key = lua.create_string(&name)?;
+    let boolean = player_option_uses_bool(&name);
+    let string = player_option_default_string(&name).is_some();
+    // Only immutable method metadata is captured. State and approach tables
+    // are resolved on every call, including after replacement by Lua code.
+    let default = default_player_option_value(lua, &name)?;
     lua.create_function(
         move |lua, (_self, value, speed): (Option<Value>, Option<Value>, Option<f32>)| {
             let state = player_option_state(lua, &owner)?;
             if let Some(value) = value {
-                state.set(
-                    name.as_str(),
-                    normalize_player_option_value(lua, &name, value)?,
-                )?;
+                let value = if boolean {
+                    Value::Boolean(read_boolish(value).unwrap_or(false))
+                } else if string {
+                    if matches!(value, Value::String(_)) {
+                        value
+                    } else {
+                        default.clone()
+                    }
+                } else {
+                    Value::Number(f64::from(read_f32(value).unwrap_or(0.0)))
+                };
+                state.set(&key, value)?;
                 let speeds = player_option_speeds(lua, &owner)?;
-                let speed = speed
-                    .or(speeds.get::<Option<f32>>(name.as_str())?)
-                    .unwrap_or(1.0);
-                speeds.set(name.as_str(), speed.max(0.0))?;
+                let speed = speed.or(speeds.get::<Option<f32>>(&key)?).unwrap_or(1.0);
+                speeds.set(&key, speed.max(0.0))?;
                 return Ok(Value::Table(owner.clone()));
             }
-            Ok(match state.get::<Option<Value>>(name.as_str())? {
+            Ok(match state.get::<Option<Value>>(&key)? {
                 Some(value) => value,
-                None => default_player_option_value(lua, &name)?,
+                None => default.clone(),
             })
         },
     )
@@ -1495,3 +1507,7 @@ mod speed_read_perf;
 #[cfg(test)]
 #[path = "../tests/perf/option_call_args.rs"]
 mod option_call_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/option_metadata.rs"]
+mod option_metadata_perf;
