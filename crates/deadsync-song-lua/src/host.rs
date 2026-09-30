@@ -179,17 +179,31 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
             globals_for_index.get::<Value>(key)
         })?,
     )?;
+    // Retain the six interned keys: identity classifies them without text copies.
+    let compile_keys = [
+        lua.create_string("prefix_globals")?,
+        lua.create_string("mods")?,
+        lua.create_string("mod_time")?,
+        lua.create_string("mods_ease")?,
+        lua.create_string("mod_perframes")?,
+        lua.create_string("mod_actions")?,
+    ]
+    .map(|key| {
+        let identity = key.to_pointer();
+        (key, identity)
+    });
     let proxy_for_newindex = proxy.clone();
     let globals_for_newindex = globals;
     mt.set(
         "__newindex",
         lua.create_function(move |_, (_self, key, value): (Table, Value, Value)| {
             let target: Table = proxy_for_newindex.get("__songlua_env_target")?;
-            target.set(key.clone(), value.clone())?;
-            if let Some(name) = read_string(key)
-                && is_compile_global_name(name.as_str())
-            {
-                globals_for_newindex.set(name, value)?;
+            target.set(&key, &value)?;
+            if let Value::String(name) = &key {
+                let identity = name.to_pointer();
+                if compile_keys.iter().any(|(_, key)| *key == identity) {
+                    globals_for_newindex.set(&key, &value)?;
+                }
             }
             Ok(())
         })?,
@@ -1881,3 +1895,7 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
 #[cfg(test)]
 #[path = "../tests/perf/percent_score.rs"]
 mod percent_score_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/env_write.rs"]
+mod env_write_perf;

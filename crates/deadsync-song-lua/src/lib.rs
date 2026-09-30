@@ -21825,3 +21825,5 @@ mod alignment_access_perf;
 #[cfg(test)]
 #[path = "../tests/perf/lua_integration.rs"]
 mod lua_integration_perf;
+
+mod method_args;

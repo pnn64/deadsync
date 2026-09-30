@@ -9,14 +9,15 @@ pub fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Tab
     table.set("__songlua_music_rate", music_rate.max(0.0))?;
     table.set(
         "MusicRate",
-        lua.create_function(move |_, args: MultiValue| {
-            let Some(owner) = args.front().and_then(|value| match value {
-                Value::Table(table) => Some(table.clone()),
-                _ => None,
-            }) else {
+        lua.create_function(move |_, mut args: crate::method_args::MethodArgs<2>| {
+            if !matches!(args.front(), Some(Value::Table(_))) {
+                return Ok(1.0_f32);
+            }
+            let rate = args.take_method_arg(0).and_then(read_f32);
+            let Some(Value::Table(owner)) = args.front() else {
                 return Ok(1.0_f32);
             };
-            if let Some(rate) = method_arg(&args, 0).cloned().and_then(read_f32) {
+            if let Some(rate) = rate {
                 owner.set("__songlua_music_rate", rate.max(0.0))?;
                 return Ok(rate.max(0.0));
             }
@@ -639,14 +640,14 @@ fn install_speedmod_state_method(
     .into_boxed_slice();
     table.set(
         name,
-        lua.create_function(move |lua, args: MultiValue| {
-            if let Some(value) = method_arg(&args, 0).cloned() {
+        lua.create_function(move |lua, mut args: crate::method_args::MethodArgs<3>| {
+            if let Some(value) = args.take_method_arg(0) {
                 if matches!(value, Value::Nil) {
                     set_player_speedmod_with_key(&owner, &key, &value_key, None)?;
                 } else if let Some(value) = read_f32(value) {
                     set_player_speedmod_with_key(&owner, &key, &value_key, Some(value))?;
                     if matches!(key.as_str(), "xmod" | "cmod" | "mmod") {
-                        let speed = method_arg(&args, 1).cloned().and_then(read_f32);
+                        let speed = args.take_method_arg(1).and_then(read_f32);
                         set_player_speed_approaches(lua, &owner, speed)?;
                     }
                 }
@@ -1490,3 +1491,7 @@ mod speed_access_perf;
 #[cfg(test)]
 #[path = "../tests/perf/speed_read.rs"]
 mod speed_read_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/option_call_args.rs"]
+mod option_call_args_perf;

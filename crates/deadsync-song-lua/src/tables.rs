@@ -1046,7 +1046,7 @@ fn set_state_number_getter(
         method,
         lua.create_function({
             let table = table.clone();
-            move |_, _args: MultiValue| Ok(table.get::<Option<f32>>(key)?.unwrap_or(0.0))
+            move |_, (): ()| Ok(table.get::<Option<f32>>(key)?.unwrap_or(0.0))
         })?,
     )
 }
@@ -1061,11 +1061,8 @@ fn set_state_number_setter(
         method,
         lua.create_function({
             let table = table.clone();
-            move |lua, args: MultiValue| {
-                let value = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_f32)
-                    .unwrap_or(0.0);
+            move |lua, mut args: crate::method_args::MethodArgs<2>| {
+                let value = args.take_method_arg(0).and_then(read_f32).unwrap_or(0.0);
                 table.set(key, value)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(table.clone())
@@ -1084,7 +1081,7 @@ fn set_state_bool_getter(
         method,
         lua.create_function({
             let table = table.clone();
-            move |_, _args: MultiValue| Ok(table.get::<Option<bool>>(key)?.unwrap_or(false))
+            move |_, (): ()| Ok(table.get::<Option<bool>>(key)?.unwrap_or(false))
         })?,
     )
 }
@@ -1099,9 +1096,9 @@ fn set_state_bool_setter(
         method,
         lua.create_function({
             let table = table.clone();
-            move |lua, args: MultiValue| {
-                let value = method_arg(&args, 0)
-                    .cloned()
+            move |lua, mut args: crate::method_args::MethodArgs<2>| {
+                let value = args
+                    .take_method_arg(0)
                     .and_then(read_boolish)
                     .unwrap_or(false);
                 table.set(key, value)?;
@@ -3151,3 +3148,7 @@ mod lazy_numbers_perf;
 #[cfg(test)]
 #[path = "../tests/perf/table_calls.rs"]
 mod table_calls_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/state_call_args.rs"]
+mod state_call_args_perf;
