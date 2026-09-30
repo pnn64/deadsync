@@ -22,7 +22,7 @@ fn fingerprint(value: Value) -> String {
 }
 
 #[test]
-fn option_metadata_matches_parent_all_capabilities_coercions_and_argument_shapes() {
+fn option_metadata_matches_parent_for_unchanged_options() {
     let lua = Lua::new();
     let foreign = lua.create_table().unwrap();
     let callback = lua.create_function(|_, ()| Ok(())).unwrap();
@@ -47,6 +47,14 @@ fn option_metadata_matches_parent_all_capabilities_coercions_and_argument_shapes
     }
     let mut names: Vec<String> = SONG_LUA_PLAYER_OPTION_CAPABILITIES
         .iter()
+        // Perspective now follows native shared state and return values. The
+        // source tests and native oracle probe cover those changed semantics.
+        .filter(|name| {
+            !matches!(
+                **name,
+                "Incoming" | "Space" | "Hallway" | "Distant" | "Overhead" | "Tilt" | "Skew"
+            )
+        })
         .map(|name| name.to_string())
         .collect();
     names.extend([

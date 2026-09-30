@@ -497,6 +497,12 @@ pub fn song_lua_compile_context(
         } else {
             deadsync_profile::NoteSkin::default().to_string()
         },
+        perspective: if player < num_players {
+            let (tilt, skew) = player_profiles[player].perspective.tilt_skew();
+            deadsync_gameplay::PerspectiveEffects { tilt, skew }
+        } else {
+            deadsync_gameplay::PerspectiveEffects::default()
+        },
         screen_x: song_lua_compile_player_screen_x(
             num_players,
             player,

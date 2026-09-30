@@ -101,9 +101,9 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     value,
                 })
             };
-            // Hallway and Distant set perspective tilt and reset skew.
+            // FromString Overhead always resets perspective, even at level zero.
             let mut set_option = |key: String, value: f32| match key.as_str() {
-                "overhead" if value > 0.5 => {
+                "overhead" => {
                     push("tilt".into(), 0.0);
                     push("skew".into(), 0.0);
                 }
@@ -146,7 +146,18 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     set_option(key.to_string(), value);
                 }
             } else {
-                let value = if operation == "StealthPastReceptors" {
+                // Overhead(false) changes approach speeds without writing an
+                // angle target. This target audit does not measure approach.
+                if operation == "Overhead"
+                    && args
+                        .first()
+                        .is_some_and(|v| v.is_null() || v == &Value::Bool(false))
+                {
+                    continue;
+                }
+                let value = if operation == "Overhead" {
+                    args.first().map(|_| 1.0)
+                } else if operation == "StealthPastReceptors" {
                     args.first().and_then(Value::as_bool).map(f32::from)
                 } else {
                     value_f32(args.first())
@@ -719,6 +730,82 @@ end}
 }
 
 #[test]
+fn perspective_aliases_compile_into_shared_gameplay_targets() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("perspective fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local o = player:GetPlayerOptions('ModsLevel_Song')
+local p2 = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    assert(o:Incoming() == 0.5 and o:Tilt() == -0.25)
+    assert(p2:Space() == -0.75)
+    o:FromString('*3 50% incoming')
+    p2:Space(-0.25, 4)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            o:Space(0.75, 5, true):Overhead(false, 9, true)
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            o:Hallway(0.5, 4)
+            phase = 3
+        elseif phase == 3 and beat >= 3 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 4
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write perspective fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Perspective");
+    context.players[0].perspective = deadsync_gameplay::PerspectiveEffects {
+        tilt: -0.25,
+        skew: 0.5,
+    };
+    context.players[1].perspective = deadsync_gameplay::PerspectiveEffects {
+        tilt: -0.75,
+        skew: -0.75,
+    };
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile perspective fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.25, [-0.5, 0.5]),
+        (0.5, [0.75, 0.75]),
+        (1.0, [-0.5, 0.0]),
+        (1.5, [0.0, 0.0]),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                1_000_000.0,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        for (key, value) in ["tilt", "skew"].into_iter().zip(expected) {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some(value),
+                "{key} at {second}"
+            );
+            assert_eq!(runtime_mod_value(&runtime, 1, key), Some(-0.25));
+        }
+    }
+}
+
+#[test]
 fn xmode_survives_lua_methods_strings_and_fresh_options() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create Xmode fixture directory");
@@ -1251,6 +1338,7 @@ pub(super) fn compare_runtime_modifiers(
     let mut uncovered = BTreeMap::<&str, usize>::new();
     let mut nonfinite = Vec::new();
     let mut cursor = 0;
+    let mut perspective = [[0.0; 2]; 2];
     while cursor < writes.len() {
         let second = writes[cursor].second;
         let mut last_writes = BTreeMap::new();
@@ -1259,6 +1347,13 @@ pub(super) fn compare_runtime_modifiers(
             let write = &writes[cursor];
             if matches!(write.key.as_str(), "xmod" | "cmod" | "mmod") {
                 last_speed[write.player] = Some(write);
+            }
+            match write.key.as_str() {
+                "incoming" => perspective[write.player] = [-write.value, write.value],
+                "space" => perspective[write.player] = [write.value; 2],
+                "tilt" => perspective[write.player][0] = write.value,
+                "skew" => perspective[write.player][1] = write.value,
+                _ => {}
             }
             last_writes.insert((write.player, write.key.as_str()), write);
             cursor += 1;
@@ -1291,6 +1386,10 @@ pub(super) fn compare_runtime_modifiers(
                 } else {
                     None
                 }
+            } else if write.key == "tilt" {
+                Some(perspective[write.player][0])
+            } else if write.key == "skew" {
+                Some(perspective[write.player][1])
             } else {
                 Some(write.value)
             };
@@ -1312,7 +1411,29 @@ pub(super) fn compare_runtime_modifiers(
                 nonfinite.push((write.player + 1, write.key.as_str(), write.beat));
                 continue;
             }
-            let Some(actual) = runtime_mod_value(&runtime, write.player, &write.key) else {
+            // Incoming and Space each count as one native call, but validate
+            // both shared angles after the frame's final perspective setter.
+            let (expected, actual) = if matches!(write.key.as_str(), "incoming" | "space") {
+                let angles = perspective[write.player];
+                let pairs = [
+                    (angles[0], runtime_mod_value(&runtime, write.player, "tilt")),
+                    (angles[1], runtime_mod_value(&runtime, write.player, "skew")),
+                ];
+                pairs
+                    .into_iter()
+                    .max_by(|a, b| {
+                        (a.0 - a.1.unwrap_or(f32::NAN))
+                            .abs()
+                            .total_cmp(&(b.0 - b.1.unwrap_or(f32::NAN)).abs())
+                    })
+                    .expect("two perspective angles")
+            } else {
+                (
+                    expected,
+                    runtime_mod_value(&runtime, write.player, &write.key),
+                )
+            };
+            let Some(actual) = actual else {
                 *uncovered.entry(&write.key).or_default() += 1;
                 continue;
             };

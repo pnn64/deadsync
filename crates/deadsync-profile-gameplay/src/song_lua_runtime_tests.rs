@@ -19,6 +19,60 @@ fn deadsync_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+#[test]
+fn saved_perspective_reaches_lua_for_each_player_side() {
+    use deadsync_gameplay::{GameplayInputPlayerSide, GameplaySession, GameplayViewport};
+    use deadsync_profile::{Perspective, Profile};
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &deadsync_root().join("tests/fixtures/song_lua/display-size.ssc"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 2.0,
+    )
+    .expect("small context chart");
+    let charts = [
+        Arc::new(song.charts[0].clone()),
+        Arc::new(song.charts[0].clone()),
+    ];
+    let timing = TimingData::default();
+    let profiles = [
+        Profile {
+            perspective: Perspective::Incoming,
+            ..Default::default()
+        },
+        Profile {
+            perspective: Perspective::Space,
+            ..Default::default()
+        },
+    ];
+    let speeds = [deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0); 2];
+    for (side, expected) in [
+        (GameplayInputPlayerSide::P1, (-1.0, 1.0)),
+        (GameplayInputPlayerSide::P2, (1.0, 1.0)),
+    ] {
+        let context = super::song_lua_play_context(
+            &song,
+            &charts,
+            [&timing; 2],
+            &profiles,
+            &speeds,
+            1.0,
+            GameplayViewport::new(854.0, 480.0),
+            (854, 480),
+            &GameplaySession {
+                player_side: side,
+                ..Default::default()
+            },
+            &Default::default(),
+            "opengl",
+        );
+        let perspective = context.players[0].perspective;
+        assert_eq!((perspective.tilt, perspective.skew), expected);
+        assert!(!context.players[1].enabled);
+        assert_eq!(context.players[1].perspective, Default::default());
+    }
+}
+
 fn test_song_lua_double_context(root: &Path, title: &str) -> SongLuaCompileContext {
     let mut context = SongLuaCompileContext::new(root, title);
     context.style_name = "double".to_string();

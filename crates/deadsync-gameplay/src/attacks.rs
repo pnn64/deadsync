@@ -1795,6 +1795,8 @@ fn append_song_lua_ease_targets_key(
         "alternate" => push(SongLuaEaseMaskTarget::ScrollAlternate, pct_from, pct_to),
         "cross" => push(SongLuaEaseMaskTarget::ScrollCross, pct_from, pct_to),
         "centered" => push(SongLuaEaseMaskTarget::ScrollCentered, pct_from, pct_to),
+        "tilt" => push(SongLuaEaseMaskTarget::PerspectiveTilt, pct_from, pct_to),
+        "skew" => push(SongLuaEaseMaskTarget::PerspectiveSkew, pct_from, pct_to),
         "incoming" => {
             push(SongLuaEaseMaskTarget::PerspectiveTilt, -pct_from, -pct_to);
             push(SongLuaEaseMaskTarget::PerspectiveSkew, pct_from, pct_to);
@@ -5849,6 +5851,8 @@ fn apply_runtime_mod(
         "dark" => out.visibility.dark = attack_level(percent_value),
         "blind" => out.visibility.blind = attack_level(percent_value),
         "cover" => out.visibility.cover = attack_level(percent_value),
+        "tilt" => out.perspective.tilt = attack_level(percent_value),
+        "skew" => out.perspective.skew = attack_level(percent_value),
         "overhead" => {
             out.perspective.tilt = Some(0.0);
             out.perspective.skew = Some(0.0);

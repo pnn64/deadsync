@@ -3590,6 +3590,30 @@ mod tests {
     }
 
     #[test]
+    fn perspective_targets_use_native_canonical_fields() {
+        for (alias, tilt, skew) in [
+            ("incoming", -0.5, 0.5),
+            ("space", 0.5, 0.5),
+            ("hallway", -0.5, 0.0),
+            ("distant", 0.5, 0.0),
+            ("overhead", 0.0, 0.0),
+        ] {
+            let native = parse_song_lua_runtime_mods(&format!("50% {alias}"));
+            let canonical = parse_song_lua_runtime_mods(&format!(
+                "{}% tilt,{}% skew",
+                tilt * 100.0,
+                skew * 100.0
+            ));
+            assert_eq!(native.perspective, canonical.perspective);
+            assert_eq!(canonical.perspective.tilt, Some(tilt));
+            assert_eq!(canonical.perspective.skew, Some(skew));
+        }
+        let canonical = parse_song_lua_runtime_mods("-250% tilt,75% skew");
+        assert_eq!(canonical.perspective.tilt, Some(-2.5));
+        assert_eq!(canonical.perspective.skew, Some(0.75));
+    }
+
+    #[test]
     fn attack_mod_parser_accepts_scroll_perspective_and_approach_prefixes() {
         let mods = parse_attack_mods(
             "C600,*1000 sudden,*1000 -125% suddenoffset,*2.4 150% hiddenoffset,\

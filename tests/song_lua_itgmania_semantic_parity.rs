@@ -3411,7 +3411,8 @@ fn native_song_lua_semantics_match_deadsync() {
             .map(|layer| layer.info.skipped_message_command_captures.len())
             .sum::<usize>(),
     );
-    let parity = compare_semantics(&trace, &compiled, primary_index, &context);
+    let mut parity = compare_semantics(&trace, &compiled, primary_index, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     eprintln!("{}", parity.summary(&trace.title));
     parity.assert_complete("song Lua semantic");
 }

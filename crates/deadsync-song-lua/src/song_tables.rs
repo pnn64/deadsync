@@ -253,6 +253,11 @@ pub fn create_steps_table(
 
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    if player.perspective.tilt != 0.0 || player.perspective.skew != 0.0 {
+        let state = player_option_state(lua, &table)?;
+        state.set("tilt", player.perspective.tilt)?;
+        state.set("skew", player.perspective.skew)?;
+    }
     table.set(
         "__songlua_reference_bpm",
         player.display_bpms[1].max(player.display_bpms[0]).max(1.0),
@@ -419,6 +424,12 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
+    if matches!(
+        name.as_str(),
+        "incoming" | "space" | "hallway" | "distant" | "overhead" | "tilt" | "skew"
+    ) {
+        return create_perspective_method(lua, &owner, name);
+    }
     let key = lua.create_string(&name)?;
     let boolean = player_option_uses_bool(&name);
     let string = player_option_default_string(&name).is_some();
@@ -452,6 +463,89 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
             })
         },
     )
+}
+
+// PlayerOptions perspective aliases share only these two native fields.
+// Keeping alias names out of the sampled state also makes write order explicit.
+fn set_perspective_angle(state: &Table, key: &str, value: f32) -> mlua::Result<bool> {
+    let (tilt, skew) = match key {
+        "incoming" => (-value, value),
+        "space" => (value, value),
+        "hallway" => (-value, 0.0),
+        "distant" => (value, 0.0),
+        "overhead" => (0.0, 0.0),
+        _ => return Ok(false),
+    };
+    state.set("tilt", tilt)?;
+    state.set("skew", skew)?;
+    Ok(true)
+}
+
+fn perspective_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Result<[Value; 2]> {
+    let tilt = state.get::<Option<f32>>("tilt")?.unwrap_or(0.0);
+    let skew = state.get::<Option<f32>>("skew")?.unwrap_or(0.0);
+    let (value, speed_key) = match key {
+        "overhead" => return Ok([Value::Boolean(tilt == 0.0 && skew == 0.0), Value::Nil]),
+        "incoming" if (skew > 0.0 && tilt < 0.0) || (skew < 0.0 && tilt > 0.0) => (skew, "skew"),
+        "space" if (skew > 0.0 && tilt > 0.0) || (skew < 0.0 && tilt < 0.0) => (skew, "skew"),
+        "hallway" if skew == 0.0 && tilt < 0.0 => (-tilt, "tilt"),
+        "distant" if skew == 0.0 && tilt > 0.0 => (tilt, "tilt"),
+        "tilt" => (tilt, "tilt"),
+        "skew" => (skew, "skew"),
+        _ => return Ok([Value::Nil, Value::Nil]),
+    };
+    Ok([
+        Value::Number(f64::from(value)),
+        Value::Number(f64::from(
+            speeds.get::<Option<f32>>(speed_key)?.unwrap_or(1.0),
+        )),
+    ])
+}
+
+fn create_perspective_method(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
+    let owner = owner.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let state = player_option_state(lua, &owner)?;
+        let speeds = player_option_speeds(lua, &owner)?;
+        // OptionsBinding returns the values from before the setter, unless the
+        // final argument is true and requests chaining. Inactive aliases return
+        // nil, nil; Overhead has a single boolean result.
+        let previous = perspective_previous(&state, &speeds, &key)?;
+        if key == "overhead" {
+            if method_arg(&args, 0)
+                .is_some_and(|v| !matches!(v, Value::Nil | Value::Boolean(false)))
+            {
+                set_perspective_angle(&state, &key, 0.0)?;
+            }
+        } else if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+            if !set_perspective_angle(&state, &key, value)? {
+                state.set(key.as_str(), value)?;
+            }
+        }
+        if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
+            // Native validates after setting the amount, preserving that write
+            // if a negative speed raises a Lua error.
+            if speed < 0.0 {
+                return Err(mlua::Error::runtime(
+                    "Arg must be greater than or equal to zero.",
+                ));
+            }
+            if matches!(key.as_str(), "tilt" | "skew") {
+                speeds.set(key.as_str(), speed)?;
+            } else {
+                speeds.set("tilt", speed)?;
+                speeds.set("skew", speed)?;
+            }
+        }
+        if matches!(args.back(), Some(Value::Boolean(true))) {
+            return Ok(MultiValue::from_iter([Value::Table(owner.clone())]));
+        }
+        Ok(MultiValue::from_iter(
+            previous
+                .into_iter()
+                .take(if key == "overhead" { 1 } else { 2 }),
+        ))
+    })
 }
 
 fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
@@ -604,6 +698,12 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
             return Ok(());
         }
         let state = player_option_state(lua, owner)?;
+        if set_perspective_angle(&state, key, amount.unwrap_or(1.0))? {
+            let speeds = player_option_speeds(lua, owner)?;
+            speeds.set("tilt", speed)?;
+            speeds.set("skew", speed)?;
+            return Ok(());
+        }
         let value = if player_option_uses_bool(key) {
             Value::Boolean(amount.unwrap_or(1.0) > 0.5)
         } else {
@@ -1459,6 +1559,114 @@ mod tests {
     use super::*;
 
     #[test]
+    fn perspective_aliases_read_shared_native_fields_and_speeds() {
+        let lua = Lua::new();
+        let options =
+            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
+        lua.globals()
+            .set("o", options.clone())
+            .expect("expose options");
+        lua.load(
+            r#"
+assert(o:Overhead() == true and select('#', o:Overhead()) == 1)
+for _, name in ipairs{'Incoming', 'Space', 'Hallway', 'Distant'} do
+    local value, speed = o[name](o)
+    assert(value == nil and speed == nil and select('#', o[name](o)) == 2)
+end
+o:FromString('*3 50% incoming')
+assert(o:Tilt() == -0.5 and o:Skew() == 0.5 and o:Overhead() == false)
+local value, speed = o:Incoming()
+assert(value == 0.5 and speed == 3)
+local old, oldspeed = o:Space(-0.25, 7)
+assert(old == nil and oldspeed == nil and o:Space() == -0.25)
+assert(o:Incoming() == nil and o:Tilt() == -0.25 and o:Skew() == -0.25)
+old, oldspeed = o:Space(0.75)
+assert(old == -0.25 and oldspeed == 7)
+o:Hallway(-0.75)
+assert(o:Hallway() == nil and o:Distant() == 0.75 and o:Skew() == 0)
+old, oldspeed = o:Tilt(-0.4, 2)
+assert(old == 0.75 and oldspeed == 7 and math.abs(o:Hallway() - 0.4) < 1e-6)
+old, oldspeed = o:Skew(0.6, 9)
+assert(old == 0 and oldspeed == 7)
+value, speed = o:Incoming()
+assert(math.abs(value - 0.6) < 1e-6 and speed == 9)
+assert(o:Space() == nil and o:Hallway() == nil and o:Distant() == nil)
+o:Incoming('-0.5', '4')
+assert(o:Incoming() == -0.5 and o:Tilt() == 0.5 and o:Skew() == -0.5)
+o:Distant(-0.25)
+assert(o:Hallway() == 0.25 and o:Distant() == nil)
+"#,
+        )
+        .exec()
+        .expect("native perspective aliases");
+        let state = player_option_state(&lua, &options).expect("state");
+        for alias in ["incoming", "space", "hallway", "distant", "overhead"] {
+            assert!(matches!(
+                state.raw_get::<Value>(alias).expect("alias state"),
+                Value::Nil
+            ));
+        }
+    }
+
+    #[test]
+    fn perspective_methods_keep_native_truthiness_chaining_and_error_order() {
+        let lua = Lua::new();
+        let options =
+            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
+        lua.globals().set("o", options).expect("expose options");
+        lua.load(
+            r#"
+assert(o:Space(0.5, 3, true) == o)
+assert(o:Overhead(false, 4, true) == o)
+assert(o:Tilt() == 0.5 and o:Skew() == 0.5)
+local value, speed = o:Space()
+assert(value == 0.5 and speed == 4)
+assert(o:Overhead(false, 6) == false and o:Overhead() == false)
+assert(select(2, o:Tilt()) == 6 and select(2, o:Skew()) == 6)
+assert(o:Overhead(0) == false and o:Overhead() == true)
+assert(o:Overhead(true) == o)
+assert(o:Space(0.75, 4, true):Incoming(-0.5, true) == o)
+value, speed = o:Incoming(nil, 11)
+assert(value == -0.5 and speed == 4)
+assert(o:Incoming() == -0.5 and select(2, o:Tilt()) == 11 and select(2, o:Skew()) == 11)
+assert(o:Hallway(true) == o and o:Incoming() == -0.5)
+assert(not pcall(o.Hallway, o, 0.75, -1))
+assert(o:Hallway() == 0.75 and select(2, o:Hallway()) == 11)
+assert(o:Overhead(nil, 8, true) == o and o:Hallway() == 0.75)
+assert(select(2, o:Tilt()) == 8 and select(2, o:Skew()) == 8)
+o:FromString('no overhead')
+assert(o:Overhead() == true)
+o:FromString('*3 50% incoming,*7 -25% space,*4 no distant')
+assert(o:Overhead() == true and select(2, o:Tilt()) == 4 and select(2, o:Skew()) == 4)
+"#,
+        )
+        .exec()
+        .expect("native perspective calls");
+    }
+
+    #[test]
+    fn perspective_getters_select_one_speed_correction_in_any_order() {
+        let lua = Lua::new();
+        let options =
+            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
+        lua.globals().set("o", options).expect("expose options");
+        lua.load(r#"
+-- Sharkmode queries all four aliases in a pairs loop. Only the active alias
+-- may be truthy; otherwise hash iteration changes the chosen correction.
+for _, order in ipairs{{'Hallway','Distant','Incoming','Space'}, {'Space','Incoming','Distant','Hallway'}} do
+    for _, active in ipairs(order) do
+        o[active](o, 0.5, 3)
+        local selected, count = nil, 0
+        for _, name in ipairs(order) do
+            if o[name](o) then selected = name; count = count + 1 end
+        end
+        assert(selected == active and count == 1)
+    end
+end
+"#).exec().expect("stable perspective selection");
+    }
+
+    #[test]
     fn state_options_replace_previous_targets() {
         let lua = Lua::new();
         let context = SongLuaCompileContext::new(Path::new("."), "Option assignment");
@@ -1472,12 +1680,14 @@ mod tests {
         lua.load(
             r#"
 local options = player:GetPlayerOptions("ModsLevel_Song")
-options:FromString("*7 50% Drunk, Shuffle, C500")
+options:FromString("*7 50% Drunk, Shuffle, C500, *2 75% Space")
 options:FromString("25% Mini")
 assert(options:Drunk() == 0.5 and options:Mini() == 0.25)
+assert(options:Space() == 0.75 and options:Overhead() == false)
 player:SetPlayerOptions("ModsLevel_Song", "*3 75% Reverse")
 assert(options == player:GetPlayerOptions("ModsLevel_Song"))
 assert(options:Drunk() == 0 and options:Mini() == 0 and not options:Shuffle())
+assert(options:Overhead() == true and options:Space() == nil)
 assert(options:XMod() == 1 and options:CMod() == nil and options:Reverse() == 0.75)
 player:SetPlayerOptions("ModsLevel_Song", "")
 assert(options:Reverse() == 0 and options:XMod() == 1)
@@ -1486,7 +1696,7 @@ assert(options:Reverse() == 0 and options:XMod() == 1)
         .exec()
         .expect("run native-style option assignment");
         let speeds = player_option_speeds(&lua, &options).expect("read approach speeds");
-        for key in ["drunk", "reverse", "xmod", "cmod", "mmod"] {
+        for key in ["drunk", "reverse", "xmod", "cmod", "mmod", "tilt", "skew"] {
             assert_eq!(speeds.raw_get::<f32>(key).expect("recorded approach"), 1.0);
         }
     }

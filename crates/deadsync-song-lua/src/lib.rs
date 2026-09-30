@@ -645,6 +645,7 @@ pub struct SongLuaPlayerContext {
     pub enabled: bool,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    pub perspective: deadsync_gameplay::PerspectiveEffects,
     pub display_bpms: [f32; 2],
     pub noteskin_name: String,
     pub screen_x: f32,
@@ -664,6 +665,7 @@ impl Default for SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            perspective: deadsync_gameplay::PerspectiveEffects::default(),
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
             screen_x: 320.0,
@@ -15475,7 +15477,7 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
         local initial = string.format("%.2f:%s:%s", po:XMod(), tostring(po:CMod()), tostring(po:NoMines()))
-        po:XMod(3.5, 9e9, true):Overhead(true, 9e9):Mini(0.15, 9e9, true)
+        po:XMod(3.5, 9e9, true):Overhead(true, 9e9, true):Mini(0.15, 9e9, true)
         local after_x = string.format("%.2f:%s:%.2f", po:XMod(), tostring(po:Overhead()), po:Mini())
         po:CMod(650, 1)
         local after_c = string.format("%s:%.0f:%s", tostring(po:XMod()), po:CMod(), tostring(po:MMod()))
@@ -15548,7 +15550,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "3.5:3.5:0.50:true:true|nil:650:false|nil:700:true:0.25:M700, Shuffle, 25% Tiny"
+            "3.5:3.5:0.50:true:true|nil:650:true|nil:700:true:0.25:M700, Shuffle, 25% Tiny"
         );
     }
 
