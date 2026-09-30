@@ -1839,8 +1839,12 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
     globals.set(
         "cmd",
         lua.create_function(move |lua, args: MultiValue| {
-            let command_name = args.front().cloned().and_then(read_string);
-            let command_args = args.into_iter().skip(1).collect::<Vec<_>>();
+            let mut command_args = args;
+            let command_name = command_args.pop_front().and_then(read_string);
+            if command_args.is_empty() {
+                // Do not retain the incoming name-only argument buffer.
+                command_args = MultiValue::new();
+            }
             lua.create_function(move |_, actor: Table| {
                 let Some(command_name) = command_name.as_deref() else {
                     return Ok(Value::Table(actor));
@@ -1848,12 +1852,9 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
                 let Value::Function(method) = actor.get::<Value>(command_name)? else {
                     return Ok(Value::Table(actor));
                 };
-                let mut call_args = MultiValue::new();
-                call_args.push_back(Value::Table(actor.clone()));
-                for arg in &command_args {
-                    call_args.push_back(arg.clone());
-                }
-                let _ = method.call::<Value>(call_args)?;
+                // mlua pushes the borrowed argument list directly onto its stack.
+                // The immutable captured list also supports reentrant commands.
+                let _ = method.call::<Value>((&actor, &command_args))?;
                 Ok(Value::Table(actor))
             })
         })?,

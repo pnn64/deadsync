@@ -11,14 +11,21 @@ pub fn json_to_lua_value(lua: &Lua, value: serde_json::Value) -> mlua::Result<Va
             .unwrap_or(Value::Nil),
         serde_json::Value::String(value) => Value::String(lua.create_string(value)?),
         serde_json::Value::Array(values) => {
-            let table = lua.create_table()?;
+            // Sparse arrays keep their original growth and Lua length behavior.
+            let capacity = if values.iter().all(|value| !value.is_null()) {
+                values.len()
+            } else {
+                0
+            };
+            let table = lua.create_table_with_capacity(capacity, 0)?;
             for (index, value) in values.into_iter().enumerate() {
                 table.raw_set(index + 1, json_to_lua_value(lua, value)?)?;
             }
             Value::Table(table)
         }
         serde_json::Value::Object(values) => {
-            let table = lua.create_table()?;
+            let capacity = values.values().filter(|value| !value.is_null()).count();
+            let table = lua.create_table_with_capacity(0, capacity)?;
             for (key, value) in values {
                 table.set(key, json_to_lua_value(lua, value)?)?;
             }

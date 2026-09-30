@@ -21821,3 +21821,7 @@ mod column_capture_perf;
 #[cfg(test)]
 #[path = "../tests/perf/alignment_access.rs"]
 mod alignment_access_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/lua_integration.rs"]
+mod lua_integration_perf;

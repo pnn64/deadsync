@@ -256,7 +256,7 @@ pub fn register_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua:
             envs
         }
     };
-    envs.set(loader_env_key(function), env.clone())
+    envs.set(loader_env_key(lua, function)?, env.clone())
 }
 
 pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
@@ -266,14 +266,21 @@ pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua:
     else {
         return Ok(());
     };
-    let Some(loader_env) = envs.get::<Option<Table>>(loader_env_key(function))? else {
+    let Some(loader_env) = envs.get::<Option<Table>>(loader_env_key(lua, function)?)? else {
         return Ok(());
     };
     loader_env.set("__songlua_env_target", env.clone())
 }
 
-fn loader_env_key(function: &Function) -> String {
-    format!("{:p}", function.to_pointer())
+fn loader_env_key(lua: &Lua, function: &Function) -> mlua::Result<mlua::LuaString> {
+    use std::io::Write;
+    // Pointer text keeps the existing registry keys, including the 0x prefix.
+    const CAPACITY: usize = 2 + 2 * std::mem::size_of::<usize>();
+    let mut buffer = [0_u8; CAPACITY];
+    let mut remaining = &mut buffer[..];
+    write!(remaining, "{:p}", function.to_pointer()).expect("pointer fits its hexadecimal width");
+    let len = CAPACITY - remaining.len();
+    lua.create_string(&buffer[..len])
 }
 
 pub fn call_with_script_dir<T>(
