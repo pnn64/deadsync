@@ -430,12 +430,7 @@ pub fn install_basic_globals(
     globals.set("pname", globals.get::<Function>("ToEnumShortString")?)?;
     globals.set(
         "FormatPercentScore",
-        lua.create_function(|lua, args: MultiValue| {
-            let value = args.front().cloned().and_then(read_f32).unwrap_or(0.0);
-            Ok(Value::String(
-                lua.create_string(format!("{:.2}%", value * 100.0))?,
-            ))
-        })?,
+        lua.create_function(format_percent_score)?,
     )?;
     globals.set(
         "clamp",
@@ -932,18 +927,27 @@ pub fn create_arrow_effects_table(
             let seconds = timing.get_time_for_beat_exact(beat);
             if let Some(options) = arrow_effects_player_options(&args)? {
                 if let Some(cmod) = arrow_effects_speedmod_value(&options, "CMod")? {
-                    return Ok((timing.get_time_for_beat(note) - seconds) * cmod / 60.0 / rate * 64.0);
+                    return Ok(
+                        (timing.get_time_for_beat(note) - seconds) * cmod / 60.0 / rate * 64.0,
+                    );
                 }
                 let speed = if arrow_effects_speedmod_value(&options, "XMod")?.is_some() {
                     speed
                 } else {
                     speed / rate
                 };
-                return Ok((timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
-                    * timing.get_speed_multiplier(beat, seconds) * 64.0 * speed);
+                return Ok(
+                    (timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
+                        * timing.get_speed_multiplier(beat, seconds)
+                        * 64.0
+                        * speed,
+                );
             }
-            Ok((timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
-                * timing.get_speed_multiplier(beat, seconds) * 64.0)
+            Ok(
+                (timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
+                    * timing.get_speed_multiplier(beat, seconds)
+                    * 64.0,
+            )
         })?,
     )?;
     table.set(
@@ -1860,3 +1864,19 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
 #[cfg(test)]
 #[path = "../tests/perf/value_clone.rs"]
 mod value_clone_perf;
+
+fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
+    use std::io::Write;
+    let value = args.front().cloned().and_then(read_f32).unwrap_or(0.0);
+    // Fixed precision f32 output, including its sign, percent suffix and
+    // non-finite spellings, fits in 64 bytes even at the largest magnitude.
+    let mut buffer = [0_u8; 64];
+    let mut remaining = &mut buffer[..];
+    write!(remaining, "{:.2}%", value * 100.0).expect("f32 percentage fits in 64 bytes");
+    let len = 64 - remaining.len();
+    Ok(Value::String(lua.create_string(&buffer[..len])?))
+}
+
+#[cfg(test)]
+#[path = "../tests/perf/percent_score.rs"]
+mod percent_score_perf;

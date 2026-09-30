@@ -1798,6 +1798,50 @@ fn append_scheduled_overlay_updates(
     }
 }
 
+fn apply_captured_final_values(
+    update_states: &mut [SongLuaOverlayState],
+    to_states: &mut [SongLuaOverlayState],
+    overlay_index: usize,
+    scheduled: &[crate::lua_util::SongLuaScheduledOverlayUpdate],
+    final_values: &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
+    restored_indices: &[usize],
+) {
+    // Small batches retain their original short scan. Wide batches reconcile
+    // target membership once, without heap storage or a branch per target.
+    if scheduled.len() < 16 || final_values.len() < 16 {
+        for (target, value) in final_values {
+            if scheduled.iter().any(|update| update.target == *target) {
+                continue;
+            }
+            if let Some(state) = update_states.get_mut(overlay_index) {
+                set_overlay_state_update_value(state, *target, value);
+            }
+            if restored_indices.binary_search(&overlay_index).is_err()
+                && let Some(state) = to_states.get_mut(overlay_index)
+            {
+                set_overlay_state_update_value(state, *target, value);
+            }
+        }
+        return;
+    }
+    const _: () = assert!((SongLuaOverlayUpdateTarget::StretchRect as usize) < 128);
+    let scheduled_targets = scheduled.iter().fold(0_u128, |mask, update| {
+        mask | (1_u128 << update.target as usize)
+    });
+    let restored = restored_indices.binary_search(&overlay_index).is_ok();
+    for (target, value) in final_values {
+        if scheduled_targets & (1_u128 << *target as usize) != 0 {
+            continue;
+        }
+        if let Some(state) = update_states.get_mut(overlay_index) {
+            set_overlay_state_update_value(state, *target, value);
+        }
+        if !restored && let Some(state) = to_states.get_mut(overlay_index) {
+            set_overlay_state_update_value(state, *target, value);
+        }
+    }
+}
+
 fn capture_update_overlay_samples<Kind>(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -1847,19 +1891,14 @@ fn capture_update_overlay_samples<Kind>(
             };
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
-            for (target, value) in final_values {
-                if scheduled.iter().any(|update| update.target == *target) {
-                    continue;
-                }
-                if let Some(state) = update_states.get_mut(overlay_index) {
-                    set_overlay_state_update_value(state, *target, value);
-                }
-                if restored_indices.binary_search(&overlay_index).is_err()
-                    && let Some(state) = to_states.get_mut(overlay_index)
-                {
-                    set_overlay_state_update_value(state, *target, value);
-                }
-            }
+            apply_captured_final_values(
+                update_states,
+                to_states,
+                overlay_index,
+                scheduled,
+                final_values,
+                restored_indices,
+            );
             for (target, next) in values {
                 let current = from_states.get(overlay_index).unwrap_or(baseline);
                 let track_index = push_captured_overlay_value(
@@ -1981,7 +2020,18 @@ fn lerp_scheduled_value(
     }
 }
 
-fn apply_scheduled_overlay_states<Kind>(
+#[inline(always)]
+fn scheduled_overlay_factor(sample: &SongLuaScheduledOverlaySample, seconds: f64) -> f32 {
+    let linear_factor = if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
+        1.0
+    } else {
+        ((seconds - sample.start_seconds) / (sample.end_seconds - sample.start_seconds))
+            .clamp(0.0, 1.0) as f32
+    };
+    crate::overlay_command_ease_factor(sample.easing.as_deref(), linear_factor, sample.opt1)
+}
+
+fn apply_scheduled_overlay_states_uncached<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     states: &mut [SongLuaOverlayState],
@@ -2003,6 +2053,73 @@ fn apply_scheduled_overlay_states<Kind>(
             linear_factor,
             sample.opt1,
         );
+        let Some(state) = states.get_mut(sample.overlay_index) else {
+            continue;
+        };
+        let value = lerp_scheduled_value(&sample.from, &sample.value, factor);
+        set_overlay_state_update_value(state, sample.target, &value);
+        if let Some(overlay) = overlays.get(sample.overlay_index) {
+            crate::lua_util::set_actor_overlay_update_getter_value(
+                lua,
+                &overlay.table,
+                sample.target,
+                &value,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn apply_scheduled_overlay_states<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    states: &mut [SongLuaOverlayState],
+    scheduled: &[SongLuaScheduledOverlaySample],
+    seconds: f64,
+) -> Result<(), String> {
+    // Probe the first pair once. Homogeneous scalar/unique-timing batches
+    // keep the original loop; grouped expensive tweens amortize the cache.
+    let reuse_factors = if let [first, second, ..] = scheduled {
+        matches!(first.easing.as_deref(), Some("spring" | "outElastic"))
+            && first.start_seconds.to_bits() == second.start_seconds.to_bits()
+            && first.end_seconds.to_bits() == second.end_seconds.to_bits()
+            && first.easing == second.easing
+            && (first.easing.as_deref() == Some("spring")
+                || first.opt1.map(f32::to_bits) == second.opt1.map(f32::to_bits))
+    } else {
+        false
+    };
+    if !reuse_factors {
+        return apply_scheduled_overlay_states_uncached(lua, overlays, states, scheduled, seconds);
+    }
+    let mut last_factor: Option<(&SongLuaScheduledOverlaySample, u8, f32)> = None;
+    for sample in scheduled {
+        if seconds + f64::EPSILON < sample.start_seconds {
+            continue;
+        }
+        // Spring/elastic curves use transcendental functions. Adjacent
+        // properties of one tween share their factor; keep only the last one.
+        let curve = match sample.easing.as_deref() {
+            Some("spring") => 1,
+            Some("outElastic") => 2,
+            _ => 0,
+        };
+        let factor = if curve != 0 {
+            if let Some((previous, previous_curve, factor)) = last_factor
+                && previous.start_seconds.to_bits() == sample.start_seconds.to_bits()
+                && previous.end_seconds.to_bits() == sample.end_seconds.to_bits()
+                && previous_curve == curve
+                && (curve == 1 || previous.opt1.map(f32::to_bits) == sample.opt1.map(f32::to_bits))
+            {
+                factor
+            } else {
+                let factor = scheduled_overlay_factor(sample, seconds);
+                last_factor = Some((sample, curve, factor));
+                factor
+            }
+        } else {
+            scheduled_overlay_factor(sample, seconds)
+        };
         let Some(state) = states.get_mut(sample.overlay_index) else {
             continue;
         };
@@ -3039,3 +3156,7 @@ mod capture_outputs_perf;
 #[cfg(test)]
 #[path = "../tests/perf/scheduled_merge.rs"]
 mod scheduled_merge_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/tween_replay.rs"]
+mod tween_replay_perf;
