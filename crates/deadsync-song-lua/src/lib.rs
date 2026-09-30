@@ -6902,7 +6902,7 @@ return Def.ActorFrame{}
     }
 
     #[test]
-    fn compile_song_lua_accepts_diffusecolor_alias() {
+    fn compile_song_lua_diffusecolor_preserves_alpha() {
         let song_dir = test_dir("diffusecolor-alias");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -6911,7 +6911,16 @@ return Def.ActorFrame{}
 return Def.ActorFrame{
     Def.Quad{
         OnCommand=function(self)
-            self:diffusecolor(0.85, 0.92, 0.99, 0.7)
+            self:diffusealpha(0.25):diffusecolor(0.85, 0.92, 0.99, 0.7)
+            assert(self:GetDiffuseAlpha() == 0.25)
+        end,
+        TintMessageCommand=function(self)
+            self:diffusecolor({0.5, 0.25, 0.125, 0.875})
+            assert(self:GetDiffuseAlpha() == 0.25)
+        end,
+        TweenMessageCommand=function(self)
+            self:linear(1):diffusecolor(0.125, 0.25, 0.5, 0)
+            assert(self:GetDiffuseAlpha() == 0.25)
         end,
     },
 }
@@ -6927,8 +6936,69 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         assert_eq!(
             compiled.overlays[0].initial_state.diffuse,
-            [0.85, 0.92, 0.99, 0.7]
+            [0.85, 0.92, 0.99, 0.25]
         );
+        for (message, expected, duration) in [
+            ("Tint", [0.5, 0.25, 0.125, 0.25], 0.0),
+            ("Tween", [0.125, 0.25, 0.5, 0.25], 1.0),
+        ] {
+            let command = compiled.overlays[0]
+                .message_commands
+                .iter()
+                .find(|command| command.message == message)
+                .expect("color command");
+            let block = command
+                .blocks
+                .iter()
+                .find(|block| block.delta.diffuse.is_some())
+                .expect("color block");
+            assert_eq!(block.delta.diffuse, Some(expected));
+            assert_eq!(block.duration, duration);
+        }
+    }
+
+    #[test]
+    fn compile_song_lua_update_diffusecolor_preserves_alpha() {
+        let song_dir = test_dir("update-diffusecolor");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local color = self:GetChild("color")
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            color:diffusecolor(beat / 8, 0.25, 0.125, beat)
+        end)
+    end,
+    Def.Quad{
+        Name="color",
+        InitCommand=function(self) self:diffusealpha(0.25) end,
+    },
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Diffuse Color");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.overlays[0].initial_state.diffuse[3], 0.25);
+        let tracks = compiled
+            .overlay_updates
+            .iter()
+            .filter(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse)
+            .collect::<Vec<_>>();
+        assert!(!tracks.is_empty());
+        for track in tracks {
+            assert!(!track.samples.is_empty());
+            for sample in &track.samples {
+                let SongLuaOverlayUpdateValue::Vec4(color) = sample.value else {
+                    panic!("expected sampled diffuse color");
+                };
+                assert_eq!(&color[1..], &[0.25, 0.125, 0.25]);
+            }
+        }
     }
 
     #[test]
@@ -11108,7 +11178,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "1.7778:1280:720:false:1.00:0.02"
+            "1.7778:1280:720:false:0.70:0.02"
         );
     }
 

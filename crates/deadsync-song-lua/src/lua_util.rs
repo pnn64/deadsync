@@ -7452,9 +7452,11 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let Some(color) = read_color_args(&args) else {
+                let Some(mut color) = read_color_args(&args) else {
                     return Ok(actor.clone());
                 };
+                // Actor::SetDiffuseColor replaces RGB without changing alpha.
+                color[3] = actor_diffuse(&actor)?[3];
                 capture_block_set_color(lua, &actor, color)?;
                 Ok(actor.clone())
             }

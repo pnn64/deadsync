@@ -1872,7 +1872,8 @@ fn prefsmgr_default_value_normalized(
             lua.create_string("BackgroundFitMode_CoverPreserve")?,
         ))
     } else if lower == "bgbrightness" {
-        Ok(Value::Number(1.0))
+        // Background.cpp's native preference defaults to 70% brightness.
+        Ok(Value::Number(0.7))
     } else if lower == "timingwindowscale" {
         Ok(Value::Number(1.0))
     } else if lower == "timingwindowadd" {
