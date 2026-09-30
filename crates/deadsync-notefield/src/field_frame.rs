@@ -284,6 +284,9 @@ fn compose_field_contents<S, F>(
         invert: visual.invert,
         beat: visual.beat,
         parabola_x: visual.parabola_x,
+        square: visual.square,
+        square_offset: visual.square_offset,
+        square_period: visual.square_period,
         xmode: visual.xmode,
         player_p2: matches!(request.placement, crate::FieldPlacement::P2),
         double_style: request.geometry.double_style,
@@ -1583,6 +1586,7 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
     visual_hold_body_needs_z_buffer(VisualEffectParams {
         bumpy: visual.bumpy,
         parabola_z: visual.parabola_z,
+        square_z: visual.square_z,
         twirl: visual.twirl,
         ..VisualEffectParams::default()
     })
@@ -1608,6 +1612,8 @@ fn hold_lane_frame(
             && visual.parabola_x == 0.0
             && visual.xmode == 0.0
             && visual.parabola_z == 0.0
+            && visual.square == 0.0
+            && visual.square_z == 0.0
             && visual_use_legacy_hold_sprites(
                 effect_params.bumpy,
                 visual.drunk,
@@ -1623,10 +1629,15 @@ mod hold_lane_frame_cache_tests {
     use super::*;
 
     #[test]
-    fn xmode_selects_hold_meshes_even_below_epsilon() {
-        for amount in [-2.5, 2.5, 0.000000025] {
+    fn travel_mods_select_hold_meshes_even_below_epsilon() {
+        for (amount, axis) in [-2.5, 2.5, 0.000000025]
+            .into_iter()
+            .flat_map(|amount| [(amount, 0), (amount, 1), (amount, 2)])
+        {
             let visual = VisualEffects {
-                xmode: amount,
+                xmode: if axis == 0 { amount } else { 0.0 },
+                square: if axis == 1 { amount } else { 0.0 },
+                square_z: if axis == 2 { amount } else { 0.0 },
                 ..VisualEffects::default()
             };
             let params = VisualEffectParams::default();
@@ -1641,7 +1652,7 @@ mod hold_lane_frame_cache_tests {
                 lane_note_transform_cache(0.0, params),
             );
             assert!(!frame.use_legacy_sprites);
-            assert!(!hold_body_needs_z_buffer(&visual));
+            assert_eq!(hold_body_needs_z_buffer(&visual), axis == 2);
         }
     }
 

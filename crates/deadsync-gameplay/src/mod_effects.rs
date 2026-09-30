@@ -174,6 +174,12 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub square: Option<f32>,
+    pub square_offset: Option<f32>,
+    pub square_period: Option<f32>,
+    pub square_z: Option<f32>,
+    pub square_z_offset: Option<f32>,
+    pub square_z_period: Option<f32>,
     pub xmode: Option<f32>,
     pub parabola_z: Option<f32>,
     pub confusion: Option<f32>,
@@ -212,6 +218,12 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            square: None,
+            square_offset: None,
+            square_period: None,
+            square_z: None,
+            square_z_offset: None,
+            square_z_period: None,
             xmode: None,
             parabola_z: None,
             confusion: None,
@@ -252,6 +264,12 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.square.is_some()
+            || self.square_offset.is_some()
+            || self.square_period.is_some()
+            || self.square_z.is_some()
+            || self.square_z_offset.is_some()
+            || self.square_z_period.is_some()
             || self.xmode.is_some()
             || self.parabola_z.is_some()
             || self.confusion.is_some()
@@ -396,6 +414,12 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub square: f32,
+    pub square_offset: f32,
+    pub square_period: f32,
+    pub square_z: f32,
+    pub square_z_offset: f32,
+    pub square_z_period: f32,
     pub xmode: f32,
     pub parabola_z: f32,
     pub confusion: f32,
@@ -442,6 +466,12 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            square: 0.0,
+            square_offset: 0.0,
+            square_period: 0.0,
+            square_z: 0.0,
+            square_z_offset: 0.0,
+            square_z_period: 0.0,
             xmode: 0.0,
             parabola_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
@@ -550,6 +580,12 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.square, base.square, step);
+    approach_optional_visual(&mut visual.square_offset, base.square_offset, step);
+    approach_optional_visual(&mut visual.square_period, base.square_period, step);
+    approach_optional_visual(&mut visual.square_z, base.square_z, step);
+    approach_optional_visual(&mut visual.square_z_offset, base.square_z_offset, step);
+    approach_optional_visual(&mut visual.square_z_period, base.square_z_period, step);
     approach_optional_visual(&mut visual.xmode, base.xmode, step);
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
@@ -662,6 +698,54 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.square,
+        target.square,
+        base.square,
+        speed.square,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.square_offset,
+        target.square_offset,
+        base.square_offset,
+        speed.square_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.square_period,
+        target.square_period,
+        base.square_period,
+        speed.square_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.square_z,
+        target.square_z,
+        base.square_z,
+        speed.square_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.square_z_offset,
+        target.square_z_offset,
+        base.square_z_offset,
+        speed.square_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.square_z_period,
+        target.square_z_period,
+        base.square_z_period,
+        speed.square_z_period,
         delta_time,
         1.0,
     );

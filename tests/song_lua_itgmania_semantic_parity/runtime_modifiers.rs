@@ -231,6 +231,12 @@ fn runtime_mod_value(
         "twirl" => visual.twirl.unwrap_or(0.0),
         "roll" => visual.roll.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "square" => visual.square.unwrap_or(0.0),
+        "squareoffset" => visual.square_offset.unwrap_or(0.0),
+        "squareperiod" => visual.square_period.unwrap_or(0.0),
+        "squarez" => visual.square_z.unwrap_or(0.0),
+        "squarezoffset" => visual.square_z_offset.unwrap_or(0.0),
+        "squarezperiod" => visual.square_z_period.unwrap_or(0.0),
         "xmode" => visual.xmode.unwrap_or(0.0),
         "parabolaz" => visual.parabola_z.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
@@ -850,6 +856,139 @@ end}
         );
         assert_eq!(runtime_mod_value(&runtime, 0, "xmode"), Some(expected));
         assert_eq!(runtime_mod_value(&runtime, 1, "xmode"), Some(0.0));
+    }
+}
+
+#[test]
+fn square_family_survives_lua_strings_approach_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create Square fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(&entry, r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    options:Square(-2.5, 2)
+    options:SquareOffset(32, 4)
+    options:SquarePeriod(-1, 6)
+    options:SquareZ(6, 8)
+    options:SquareZOffset(-64, 10)
+    options:SquareZPeriod(1, 12)
+    other:Square(0.75, 3)
+    other:SquareZ(-0.5, 2)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:FromString('*2 700% square,*4 -1600% squareoffset,*6 200% squareperiod,*8 -300% squarez,*10 6400% squarezoffset,*12 -100% squarezperiod')
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#).expect("write Square fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Square");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile Square fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, dt, expected) in [
+        (0.25, 0.25, [-0.5, 1.0, -1.0, 2.0, -2.5, 1.0]),
+        (0.5, 1_000_000.0, [7.0, -16.0, 2.0, -3.0, 64.0, -1.0]),
+        (1.0, 1_000_000.0, [0.0; 6]),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                dt,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        for (key, value) in [
+            "square",
+            "squareoffset",
+            "squareperiod",
+            "squarez",
+            "squarezoffset",
+            "squarezperiod",
+        ]
+        .into_iter()
+        .zip(expected)
+        {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some(value),
+                "{key} at {second}"
+            );
+        }
+        assert_eq!(runtime_mod_value(&runtime, 1, "square"), Some(0.75));
+        assert_eq!(runtime_mod_value(&runtime, 1, "squarez"), Some(-0.5));
+    }
+}
+
+#[test]
+fn square_fresh_options_start_on_native_frame() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create Square frame fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 257 then
+            player:SetPlayerOptions('ModsLevel_Song', '*1 20% square,*0.25 50% squarez')
+            phase = 2
+        elseif phase == 2 and beat >= 260 then
+            player:SetPlayerOptions('ModsLevel_Song', 'no square,no squarez')
+            phase = 3
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write Square frame fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Square frame");
+    context.song_timing_bpms = vec![(0.0, 170.0)];
+    context.music_length_seconds = 93.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Square frame fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    // ITGmania's 60 Hz frame 5443 is the first to reach beat 257;
+    // frame 5506 reaches 260. Probe each boundary without a tolerance.
+    for (second, expected) in [
+        (((5443.0_f64 / 60.0) as f32).next_down(), [0.0, 0.0]),
+        ((5443.0_f64 / 60.0) as f32, [0.2, 0.5]),
+        (((5506.0_f64 / 60.0) as f32).next_down(), [0.2, 0.5]),
+        ((5506.0_f64 / 60.0) as f32, [0.0, 0.0]),
+    ] {
+        runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        for (key, value) in ["square", "squarez"].into_iter().zip(expected) {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some(value),
+                "{key} at {second}"
+            );
+        }
     }
 }
 

@@ -206,6 +206,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         },
     );
 
+    let receptor_draw_start = draws.len();
     let receptor = notes.receptor;
     let tap_explosion = notes.tap_explosion;
     let col_offsets = notes.col_offsets;
@@ -288,6 +289,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 invert: visual.invert,
                 beat: visual.beat,
                 parabola_x: visual.parabola_x,
+                square: visual.square,
+                square_offset: visual.square_offset,
+                square_period: visual.square_period,
                 xmode: visual.xmode,
                 player_p2: matches!(request.placement, crate::FieldPlacement::P2),
                 double_style: request.geometry.double_style,
@@ -503,6 +507,24 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 },
                 sprite_source,
             );
+        }
+    }
+    // NoteColumnRenderer::UpdateReceptorGhostStuff samples GetXYZPos at
+    // zero travel. Receptors and their live explosions share this depth;
+    // the column HUD emitted before receptor_draw_start keeps its own depth.
+    let row_z = crate::transforms::square_wave_offset(
+        0.0,
+        visual.square_z,
+        visual.square_z_offset,
+        visual.square_z_period,
+    );
+    if row_z != 0.0 {
+        for draw in &mut draws[receptor_draw_start..] {
+            match draw {
+                FlatDraw::Sprite(sprite) => sprite.world_z += row_z,
+                FlatDraw::TexturedMesh(mesh) => mesh.world_z += row_z,
+                FlatDraw::PreparedU32(_) | FlatDraw::PreparedInline(_) => {}
+            }
         }
     }
 }
@@ -1641,6 +1663,60 @@ mod tests {
     }
 
     #[test]
+    fn square_z_moves_receptors_and_live_explosions_at_zero_travel() {
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let hides = SongLuaNoteHideWindows::default();
+        let hold = active_hold(0);
+        let taps = [tap(), None];
+        let mines = [mine(), None];
+        let mut feedback = spline_feedback(&taps);
+        feedback.lanes[0].active_hold = Some(&hold);
+        feedback.mine_explosions = Some(&mines);
+        // Native RageSquare vectors at the receptor, with independent X/Z phases.
+        for (offset, period, expected_z) in
+            [(0.0, 0.0, -32.0), (32.0, 0.0, 32.0), (64.0, 1.0, 32.0)]
+        {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.visual.visual.square = 0.5;
+            request.visual.visual.square_z = 1.0;
+            request.visual.visual.square_z_offset = offset;
+            request.visual.visual.square_z_period = period;
+            let prepared = prepare_notefield(&request).expect("prepared field");
+            let mut draws = Vec::new();
+            compose_notefield_feedback(
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &feedback,
+                &source,
+            );
+            for key in ["target0", "hold0", "tap0", "mine"] {
+                let sprite = draws
+                    .iter()
+                    .find_map(|draw| match draw {
+                        FlatDraw::Sprite(sprite)
+                            if matches!(&sprite.source,
+                        SpriteSource::TextureHandle { key: name, .. } if name.as_ref() == key) =>
+                        {
+                            Some(sprite)
+                        }
+                        _ => None,
+                    })
+                    .expect("rendered receptor or explosion");
+                assert_eq!(sprite.world_z, expected_z, "{key}");
+                assert_eq!(
+                    sprite.center[0],
+                    prepared.field.playfield_center_x - 32.0 - 16.0
+                );
+            }
+        }
+    }
+
+    #[test]
     fn riddle_note_and_feedback_rotation_match_native_vertices() {
         use deadlib_present::compose::{ActorSegment, ComposeScratch};
         struct Textures;
@@ -2555,7 +2631,7 @@ mod tests {
     }
 
     #[test]
-    fn xmode_moves_composed_notes_and_hold_meshes_with_native_sides() {
+    fn travel_mods_move_composed_notes_receptors_and_hold_meshes() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
             compose_notefield_field,
@@ -2579,14 +2655,17 @@ mod tests {
         let timing = TimingData::default();
         let hides = SongLuaNoteHideWindows::default();
         // P2 can be the only field and still uses the native P2 direction.
-        for (placement, player_idx, players, double, signs) in [
+        for ((placement, player_idx, players, double, signs), square) in [
             (FieldPlacement::P1, 0, 1, false, [1.0, 1.0]),
             (FieldPlacement::P2, 0, 1, false, [-1.0, -1.0]),
             (FieldPlacement::P1, 0, 2, false, [1.0, 1.0]),
             (FieldPlacement::P2, 1, 2, false, [-1.0, -1.0]),
             (FieldPlacement::P1, 0, 1, true, [1.0, -1.0]),
             (FieldPlacement::P2, 0, 1, true, [1.0, -1.0]),
-        ] {
+        ]
+        .into_iter()
+        .flat_map(|case| [(case, false), (case, true)])
+        {
             let col_start = player_idx * 2;
             let mut lanes = vec![vec![]; players * 2];
             for col in 0..2 {
@@ -2639,7 +2718,15 @@ mod tests {
                         request.chart.lane_note_row_indices = &lanes;
                         request.chart.lane_hold_indices = &lanes;
                         request.chart.note_itg_rows = &[96, 144];
-                        request.visual.visual.xmode = amount;
+                        if square {
+                            request.visual.visual.square = amount;
+                            request.visual.visual.square_period = 0.5;
+                            request.visual.visual.square_z = -amount;
+                            request.visual.visual.square_z_offset = 32.0;
+                            request.visual.visual.square_z_period = 1.0;
+                        } else {
+                            request.visual.visual.xmode = amount;
+                        }
                         request.visual.visual.tiny = 1.0;
                         request.visual.visual.tipsy = 0.25;
                         request.visual.visual.move_y_cols = [0.5; MAX_COLS];
@@ -2678,14 +2765,52 @@ mod tests {
                                 .expect("arrow")
                                 .1;
                             let native_x = |y: f32| {
-                                receptor[0]
-                                    + amount * signs[col] * ((y - receptor[1]) / direction) * 0.5
+                                let travel = (y - receptor[1]) / direction;
+                                let extra = if square {
+                                    crate::transforms::square_wave_offset(travel, amount, 0.0, 0.5)
+                                        - crate::transforms::square_wave_offset(
+                                            0.0, amount, 0.0, 0.5,
+                                        )
+                                } else {
+                                    amount * signs[col] * travel
+                                };
+                                receptor[0] + extra * 0.5
                             };
                             assert!(
                                 (arrow[0] - native_x(arrow[1])).abs() < 0.0001,
                                 "{placement:?}, {kind:?}, direction {direction}, amount {amount}, col {col}"
                             );
+                            let native_z = |y: f32| {
+                                if square {
+                                    crate::transforms::square_wave_offset(
+                                        (y - receptor[1]) / direction,
+                                        -amount,
+                                        32.0,
+                                        1.0,
+                                    )
+                                } else {
+                                    0.0
+                                }
+                            };
+                            let row_extra = if square { -amount * 32.0 } else { 0.0 };
+                            let expected_receptor_x = prepared.field.playfield_center_x
+                                + prepared.column_x_offsets[col]
+                                + (prepared.notes.as_ref().expect("prepared notes").col_offsets
+                                    [col]
+                                    + row_extra)
+                                    * 0.5;
+                            assert!((receptor[0] - expected_receptor_x).abs() < 0.0001);
                             for draw in &draws {
+                                if let FlatDraw::Sprite(sprite) = draw {
+                                    if let SpriteSource::TextureHandle { key, .. } = &sprite.source
+                                    {
+                                        if [format!("target{col}"), format!("note{col}")]
+                                            .contains(&key.to_string())
+                                        {
+                                            assert_eq!(sprite.world_z, native_z(sprite.center[1]));
+                                        }
+                                    }
+                                }
                                 let FlatDraw::TexturedMesh(mesh) = draw else {
                                     continue;
                                 };
@@ -2699,7 +2824,7 @@ mod tests {
                                     continue;
                                 }
                                 meshes[col] += 1;
-                                assert!(!mesh.depth_test);
+                                assert_eq!(mesh.depth_test, square);
                                 let vertices = match &mesh.vertices {
                                     FlatMeshVertices::Shared(v) => v.as_ref(),
                                     FlatMeshVertices::Reusable(v) => v.as_slice(),
@@ -2710,6 +2835,8 @@ mod tests {
                                     {
                                         let center = (left.pos[0] + right.pos[0]) * 0.5;
                                         assert!((center - native_x(left.pos[1])).abs() < 0.0002);
+                                        assert_eq!(left.pos[2], native_z(left.pos[1]));
+                                        assert_eq!(right.pos[2], left.pos[2]);
                                     }
                                 }
                             }
@@ -2717,7 +2844,7 @@ mod tests {
                         if matches!(kind, NoteType::Hold | NoteType::Roll) {
                             assert!(
                                 meshes.into_iter().all(|count| count >= 3),
-                                "body and both caps must follow Xmode"
+                                "body and both caps must follow travel modifiers"
                             );
                         }
                         assert_eq!(scratch.stats().capacity_grows, 0);

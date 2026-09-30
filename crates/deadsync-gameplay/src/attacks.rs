@@ -560,6 +560,12 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualSquare,
+    VisualSquareOffset,
+    VisualSquarePeriod,
+    VisualSquareZ,
+    VisualSquareZOffset,
+    VisualSquareZPeriod,
     VisualXmode,
     VisualParabolaZ,
     VisualConfusion,
@@ -1740,6 +1746,12 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "square" => push(SongLuaEaseMaskTarget::VisualSquare, pct_from, pct_to),
+        "squareoffset" => push(SongLuaEaseMaskTarget::VisualSquareOffset, pct_from, pct_to),
+        "squareperiod" => push(SongLuaEaseMaskTarget::VisualSquarePeriod, pct_from, pct_to),
+        "squarez" => push(SongLuaEaseMaskTarget::VisualSquareZ, pct_from, pct_to),
+        "squarezoffset" => push(SongLuaEaseMaskTarget::VisualSquareZOffset, pct_from, pct_to),
+        "squarezperiod" => push(SongLuaEaseMaskTarget::VisualSquareZPeriod, pct_from, pct_to),
         "xmode" => push(SongLuaEaseMaskTarget::VisualXmode, pct_from, pct_to),
         "parabolaz" => push(SongLuaEaseMaskTarget::VisualParabolaZ, pct_from, pct_to),
         "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
@@ -2293,6 +2305,12 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualSquare => visual.square = Some(value),
+        SongLuaEaseMaskTarget::VisualSquareOffset => visual.square_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualSquarePeriod => visual.square_period = Some(value),
+        SongLuaEaseMaskTarget::VisualSquareZ => visual.square_z = Some(value),
+        SongLuaEaseMaskTarget::VisualSquareZOffset => visual.square_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualSquareZPeriod => visual.square_z_period = Some(value),
         SongLuaEaseMaskTarget::VisualXmode => visual.xmode = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
@@ -2506,6 +2524,12 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualSquare => window.visual.square.is_some(),
+        SongLuaEaseMaskTarget::VisualSquareOffset => window.visual.square_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualSquarePeriod => window.visual.square_period.is_some(),
+        SongLuaEaseMaskTarget::VisualSquareZ => window.visual.square_z.is_some(),
+        SongLuaEaseMaskTarget::VisualSquareZOffset => window.visual.square_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualSquareZPeriod => window.visual.square_z_period.is_some(),
         SongLuaEaseMaskTarget::VisualXmode => window.visual.xmode.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
@@ -3716,6 +3740,12 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.square, visual.square);
+    mark_active_target(&mut targets.square_offset, visual.square_offset);
+    mark_active_target(&mut targets.square_period, visual.square_period);
+    mark_active_target(&mut targets.square_z, visual.square_z);
+    mark_active_target(&mut targets.square_z_offset, visual.square_z_offset);
+    mark_active_target(&mut targets.square_z_period, visual.square_z_period);
     mark_active_target(&mut targets.xmode, visual.xmode);
     mark_active_target(&mut targets.parabola_z, visual.parabola_z);
     mark_active_target(&mut targets.confusion, visual.confusion);
@@ -4511,6 +4541,20 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualSquare => attack.visual_speed.square = Some(speed),
+            SongLuaEaseMaskTarget::VisualSquareOffset => {
+                attack.visual_speed.square_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualSquarePeriod => {
+                attack.visual_speed.square_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualSquareZ => attack.visual_speed.square_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualSquareZOffset => {
+                attack.visual_speed.square_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualSquareZPeriod => {
+                attack.visual_speed.square_z_period = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualXmode => attack.visual_speed.xmode = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaZ => attack.visual_speed.parabola_z = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
@@ -5044,6 +5088,60 @@ fn apply_active_visual_window(
         window.visual.parabola_x,
         window.visual_speed.parabola_x,
         active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.square,
+        &mut values.visual_speed.square,
+        window.visual.square,
+        window.visual_speed.square,
+        active_targets.visual.square,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.square_offset,
+        &mut values.visual_speed.square_offset,
+        window.visual.square_offset,
+        window.visual_speed.square_offset,
+        active_targets.visual.square_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.square_period,
+        &mut values.visual_speed.square_period,
+        window.visual.square_period,
+        window.visual_speed.square_period,
+        active_targets.visual.square_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.square_z,
+        &mut values.visual_speed.square_z,
+        window.visual.square_z,
+        window.visual_speed.square_z,
+        active_targets.visual.square_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.square_z_offset,
+        &mut values.visual_speed.square_z_offset,
+        window.visual.square_z_offset,
+        window.visual_speed.square_z_offset,
+        active_targets.visual.square_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.square_z_period,
+        &mut values.visual_speed.square_z_period,
+        window.visual.square_z_period,
+        window.visual_speed.square_z_period,
+        active_targets.visual.square_z_period,
         active_clear_all,
         persisted,
     );
@@ -5689,6 +5787,42 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "square" => set_approached_mod(
+            &mut out.visual.square,
+            &mut out.visual_speed.square,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "squareoffset" => set_approached_mod(
+            &mut out.visual.square_offset,
+            &mut out.visual_speed.square_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "squareperiod" => set_approached_mod(
+            &mut out.visual.square_period,
+            &mut out.visual_speed.square_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "squarez" => set_approached_mod(
+            &mut out.visual.square_z,
+            &mut out.visual_speed.square_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "squarezoffset" => set_approached_mod(
+            &mut out.visual.square_z_offset,
+            &mut out.visual_speed.square_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "squarezperiod" => set_approached_mod(
+            &mut out.visual.square_z_period,
+            &mut out.visual_speed.square_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "xmode" => set_approached_mod(
             &mut out.visual.xmode,
             &mut out.visual_speed.xmode,
@@ -6170,6 +6304,12 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        square: merge_attack_value(base.square, attack.square),
+        square_offset: merge_attack_value(base.square_offset, attack.square_offset),
+        square_period: merge_attack_value(base.square_period, attack.square_period),
+        square_z: merge_attack_value(base.square_z, attack.square_z),
+        square_z_offset: merge_attack_value(base.square_z_offset, attack.square_z_offset),
+        square_z_period: merge_attack_value(base.square_z_period, attack.square_z_period),
         xmode: merge_attack_value(base.xmode, attack.xmode),
         parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),
         confusion: merge_attack_value(base.confusion, attack.confusion),

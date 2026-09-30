@@ -1543,6 +1543,118 @@ mod tests {
     }
 
     #[test]
+    fn square_matches_native_ragesquare_vectors_and_tiny_order() {
+        // Expected values were obtained by linking the checked-out ITGmania
+        // RageMath.cpp and calling RageSquare, including its receptor hack.
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        let inverse = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        for (amount, travel, offset, period, expected) in [
+            (1.0, 0.0, 0.0, 0.0, -32.0),
+            (1.0, 0.1, 0.0, 0.0, -32.0),
+            (1.0, 0.3, 0.0, 0.0, 32.0),
+            (1.0, 32.0, 0.0, 0.0, 32.0),
+            (1.0, 64.0, 0.0, 0.0, -32.0),
+            (1.0, 128.0, 0.0, 0.0, -32.0),
+            (1.0, 128.1, 0.0, 0.0, -32.0),
+            (1.0, 128.3, 0.0, 0.0, 32.0),
+            (1.0, -0.1, 0.0, 0.0, -32.0),
+            (1.0, -32.0, 0.0, 0.0, -32.0),
+            (1.0, -64.0, 0.0, 0.0, -32.0),
+            (1.0, -128.3, 0.0, 0.0, -32.0),
+            (-2.5, 32.0, 0.0, 0.0, -80.0),
+            (-2.5, 64.0, 0.0, 0.0, 80.0),
+            (0.5, 32.0, 32.0, 0.0, -16.0),
+            (0.5, 64.0, 0.0, 1.0, 16.0),
+            (0.5, 128.0, 0.0, 1.0, -16.0),
+            (0.5, -64.0, 0.0, -2.0, -16.0),
+            (0.5, 0.0, 0.0, -1.0, 16.0),
+            (0.5, 64.0, 0.0, -1.0, 16.0),
+        ] {
+            let params = NoteXParams {
+                square: amount,
+                square_offset: offset,
+                square_period: period,
+                ..NoteXParams::default()
+            };
+            let x = note_x_offset(
+                0, travel, 0.0, 0.0, &columns, &inverse, &tornado, &[0.5; 4], params, 1.0,
+            );
+            assert_eq!(x, (-96.0 + expected) * 0.5 + 32.0);
+            assert_eq!(
+                super::note_x_offset_cached(
+                    0,
+                    travel,
+                    0.0,
+                    0.0,
+                    &columns,
+                    &inverse,
+                    &tornado,
+                    &[],
+                    &[32.0; 4],
+                    params,
+                    0.5,
+                ),
+                x
+            );
+            let z_params = VisualEffectParams {
+                square_z: amount,
+                square_z_offset: offset,
+                square_z_period: period,
+                tiny: 1.0,
+                ..VisualEffectParams::default()
+            };
+            assert_eq!(
+                note_world_z_cached(
+                    travel,
+                    super::bumpy_frame_cache(0.0, 0.0),
+                    lane_note_transform_cache(0.0, z_params),
+                ),
+                expected
+            );
+            assert!(visual_hold_body_needs_z_buffer(z_params));
+        }
+        let params = NoteXParams {
+            square: 0.000000025,
+            ..NoteXParams::default()
+        };
+        assert!(!super::fill_static_note_x_offsets(
+            4,
+            &columns,
+            &inverse,
+            &tornado,
+            &[0.0; 4],
+            params,
+            1.0,
+            &mut [0.0; 4],
+        ));
+        assert!(visual_hold_body_needs_z_buffer(VisualEffectParams {
+            square_z: params.square,
+            ..VisualEffectParams::default()
+        }));
+        for amount in [0.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(
+                super::transforms::square_wave_offset(32.0, amount, 0.0, 0.0),
+                0.0
+            );
+        }
+        let params = VisualEffectParams {
+            bumpy: 0.75,
+            parabola_z: -2.5,
+            square_z: 0.5,
+            ..VisualEffectParams::default()
+        };
+        assert_eq!(
+            note_world_z_cached(
+                128.0,
+                super::bumpy_frame_cache(0.0, 0.0),
+                lane_note_transform_cache(0.0, params),
+            ),
+            cached_bumpy_z(128.0, 0.75, 0.0, 0.0) - 10.0 - 16.0
+        );
+    }
+
+    #[test]
     fn parabola_matches_native_travel_coordinates_and_tiny_order() {
         // ArrowEffects GetXPos/GetZPos: amount * (fYOffset / 64)^2.
         // X scales with Tiny after summation; Z does not. Negative travel

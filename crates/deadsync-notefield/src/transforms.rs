@@ -42,6 +42,9 @@ pub(crate) struct VisualEffectParams {
     pub dizzy: f32,
     pub twirl: f32,
     pub parabola_z: f32,
+    pub square_z: f32,
+    pub square_z_offset: f32,
+    pub square_z_period: f32,
     pub rotate_z: f32,
 }
 
@@ -49,6 +52,9 @@ pub(crate) struct VisualEffectParams {
 pub(crate) struct LaneNoteTransformCache {
     bumpy_amplitude: f32,
     parabola_z: f32,
+    square_z: f32,
+    square_z_offset: f32,
+    square_z_period: f32,
     tiny_zoom: f32,
     pulse_active: bool,
     pulse_constant: bool,
@@ -165,6 +171,9 @@ pub(crate) struct NoteXParams {
     pub drunk_period: f32,
     pub beat: f32,
     pub parabola_x: f32,
+    pub square: f32,
+    pub square_offset: f32,
+    pub square_period: f32,
     pub xmode: f32,
     pub player_p2: bool,
     pub double_style: bool,
@@ -499,6 +508,32 @@ pub(crate) fn apply_accel_y_cached(
 ) -> f32 {
     apply_accel_y_with_peak_cached(raw_y, effect_height, screen_height, accel, cache).0
 }
+// ArrowEffects::GetXPos/GetZPos and RageMath::RageSquare. The 0.01
+// transition prevents hold flicker at the receptor; negative fmod results
+// must be corrected before deciding the sign. A period of -1 deliberately
+// preserves native IEEE division: its non-finite phase selects +1.
+pub(crate) fn square_wave_offset(y: f32, amount: f32, offset: f32, period: f32) -> f32 {
+    if amount == 0.0 || !amount.is_finite() {
+        return 0.0;
+    }
+    let offset = if offset.is_finite() { offset } else { 0.0 };
+    let period = if period.is_finite() { period } else { 0.0 };
+    let angle = std::f32::consts::PI * (y + offset)
+        / (ARROW_EFFECT_PIXEL_SIZE + period * ARROW_EFFECT_PIXEL_SIZE);
+    let mut phase = angle % std::f32::consts::TAU;
+    if phase < 0.01 {
+        phase += std::f32::consts::TAU;
+    }
+    amount
+        * ARROW_EFFECT_PIXEL_SIZE
+        * 0.5
+        * if phase >= std::f32::consts::PI {
+            -1.0
+        } else {
+            1.0
+        }
+}
+
 pub(crate) fn note_world_z_cached(
     y: f32,
     frame_cache: BumpyFrameCache,
@@ -513,6 +548,12 @@ pub(crate) fn note_world_z_cached(
     if lane_cache.parabola_z != 0.0 {
         z += lane_cache.parabola_z * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    z += square_wave_offset(
+        y,
+        lane_cache.square_z,
+        lane_cache.square_z_offset,
+        lane_cache.square_z_period,
+    );
     z
 }
 
@@ -543,6 +584,7 @@ pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> boo
     signed_effect_active(params.bumpy)
         || (params.twirl.is_finite() && params.twirl != 0.0)
         || (params.parabola_z.is_finite() && params.parabola_z != 0.0)
+        || (params.square_z.is_finite() && params.square_z != 0.0)
 }
 
 pub(crate) fn visual_use_legacy_hold_sprites(
@@ -658,6 +700,9 @@ pub(crate) fn lane_note_transform_cache(
         } else {
             0.0
         },
+        square_z: params.square_z,
+        square_z_offset: params.square_z_offset,
+        square_z_period: params.square_z_period,
         tiny_zoom: visual_tiny_zoom(params),
         pulse_active,
         pulse_constant: pulse_active && pulse_outer == 0.0,
@@ -775,6 +820,9 @@ pub(crate) fn gameplay_visual_effect_params(
             dizzy: visual.dizzy,
             twirl: visual.twirl,
             parabola_z: visual.parabola_z,
+            square_z: visual.square_z,
+            square_z_offset: visual.square_z_offset,
+            square_z_period: visual.square_z_period,
             bumpy: visual.bumpy,
             rotate_z: 0.0,
         },
@@ -1042,6 +1090,7 @@ pub(crate) fn note_x_extra(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    out += square_wave_offset(y, params.square, params.square_offset, params.square_period);
     out += xmode_x_extra(local_col, y, col_offsets.len(), params);
     out
 }
@@ -1133,6 +1182,7 @@ pub(crate) fn note_x_offset_cached(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    extra += square_wave_offset(y, params.square, params.square_offset, params.square_period);
     extra += xmode_x_extra(local_col, y, col_offsets.len(), params);
     let base = base_x + extra;
     base * tiny_scale + move_x_cache.get(local_col).copied().unwrap_or(0.0)
@@ -1153,6 +1203,7 @@ pub(crate) fn fill_static_note_x_offsets(
         || signed_effect_active(params.beat)
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
         || (params.xmode.is_finite() && params.xmode != 0.0)
+        || (params.square.is_finite() && params.square != 0.0)
     {
         return false;
     }

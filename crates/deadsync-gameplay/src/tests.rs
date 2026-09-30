@@ -3425,6 +3425,86 @@ mod tests {
     }
 
     #[test]
+    fn square_family_keeps_native_units_speeds_and_reset() {
+        let mods = parse_attack_mods(
+            "*2 -250% square,*4 3200% squareoffset,*6 -100% squareperiod,\
+             *8 600% squarez,*10 -6400% squarezoffset,*12 100% squarezperiod",
+        );
+        assert_eq!(
+            [
+                mods.visual.square,
+                mods.visual.square_offset,
+                mods.visual.square_period,
+                mods.visual.square_z,
+                mods.visual.square_z_offset,
+                mods.visual.square_z_period,
+            ],
+            [
+                Some(-2.5),
+                Some(32.0),
+                Some(-1.0),
+                Some(6.0),
+                Some(-64.0),
+                Some(1.0)
+            ]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.square,
+                mods.visual_speed.square_offset,
+                mods.visual_speed.square_period,
+                mods.visual_speed.square_z,
+                mods.visual_speed.square_z_offset,
+                mods.visual_speed.square_z_period,
+            ],
+            [
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.square,
+                merged.square_offset,
+                merged.square_period,
+                merged.square_z,
+                merged.square_z_offset,
+                merged.square_z_period,
+            ],
+            [-0.5, 1.0, -1.0, 2.0, -2.5, 1.0]
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no square,no squareoffset,no squareperiod,no squarez,no squarezoffset,no squarezperiod",
+        );
+        assert_eq!(
+            [
+                cleared.visual.square,
+                cleared.visual.square_offset,
+                cleared.visual.square_period,
+                cleared.visual.square_z,
+                cleared.visual.square_z_offset,
+                cleared.visual.square_z_period,
+            ],
+            [Some(0.0); 6]
+        );
+    }
+
+    #[test]
     fn parabola_uses_signed_amounts_independent_speeds_and_reset() {
         let mods = parse_attack_mods("*2 -250% parabolax,*4 600% parabolaz");
         assert_eq!(mods.visual.parabola_x, Some(-2.5));
