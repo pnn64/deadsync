@@ -3341,6 +3341,46 @@ mod tests {
     }
 
     #[test]
+    fn motion_suboptions_keep_approach_speed_and_return_to_base() {
+        let mods = parse_attack_mods(
+            "*2 250% drunkoffset, *4 -50% drunkspeed, *3 -99% drunkperiod, \
+             *5 250% tipsyoffset, *6 -50% tipsyspeed",
+        );
+        assert_eq!(mods.visual.drunk_offset, Some(2.5));
+        assert_eq!(mods.visual.drunk_speed, Some(-0.5));
+        assert_eq!(mods.visual.drunk_period, Some(-0.99));
+        assert_eq!(mods.visual.tipsy_offset, Some(2.5));
+        assert_eq!(mods.visual.tipsy_speed, Some(-0.5));
+        assert_eq!(mods.visual_speed.drunk_offset, Some(2.0));
+        assert_eq!(mods.visual_speed.drunk_speed, Some(4.0));
+        assert_eq!(mods.visual_speed.drunk_period, Some(3.0));
+        assert_eq!(mods.visual_speed.tipsy_offset, Some(5.0));
+        assert_eq!(mods.visual_speed.tipsy_speed, Some(6.0));
+        assert!(mods.visual.any());
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.1,
+        );
+        assert_near(current.drunk_offset.unwrap(), 0.2);
+        assert_near(current.drunk_speed.unwrap(), -0.4);
+        assert_near(current.drunk_period.unwrap(), -0.3);
+        assert_near(current.tipsy_offset.unwrap(), 0.5);
+        assert_near(current.tipsy_speed.unwrap(), -0.5);
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_near(merged.drunk_offset, 0.2);
+        assert_near(merged.drunk_speed, -0.4);
+        assert_near(merged.drunk_period, -0.3);
+        assert_near(merged.tipsy_offset, 0.5);
+        assert_near(merged.tipsy_speed, -0.5);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+        assert!(!current.any());
+    }
+
+    #[test]
     fn course_modifier_window_persists_for_the_whole_song() {
         let window = build_course_modifier_mask_window("C650,30% reverse,25% mini")
             .expect("course modifier window");

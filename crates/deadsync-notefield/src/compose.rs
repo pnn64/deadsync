@@ -470,6 +470,8 @@ fn prepare_notes<'a, S>(
         note_count_stats: request.chart.note_count_stats,
         arrow_effect_time_s: request.arrow_effect_time_s,
         lane_tipsy: request.visual.visual.tipsy,
+        lane_tipsy_offset: request.visual.visual.tipsy_offset,
+        lane_tipsy_speed: request.visual.visual.tipsy_speed,
         lane_move_y: &request.visual.visual.move_y_cols,
     });
     let measure_column_xs =

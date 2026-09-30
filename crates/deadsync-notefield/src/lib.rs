@@ -1574,7 +1574,7 @@ mod tests {
             -16.0,
             params,
             1.0,
-            tipsy_y_extra(2, 0.37, 1.0),
+            tipsy_y_extra(2, 0.37, 1.0, 0.0, 0.0),
         );
         let expected_x = 320.0
             + note_x_offset(
@@ -1589,8 +1589,8 @@ mod tests {
                 params,
                 0.0,
             );
-        let expected_y = 240.0 + tipsy_y_extra(2, 0.37, 1.0) - 16.0;
-        let beat_coupled_y = 240.0 + tipsy_y_extra(2, 12.0, 1.0) - 16.0;
+        let expected_y = 240.0 + tipsy_y_extra(2, 0.37, 1.0, 0.0, 0.0) - 16.0;
+        let beat_coupled_y = 240.0 + tipsy_y_extra(2, 12.0, 1.0, 0.0, 0.0) - 16.0;
         assert!((center[0] - expected_x).abs() <= 1e-6);
         assert!((center[1] - expected_y).abs() <= 1e-6);
         assert!((center[1] - beat_coupled_y).abs() > 1e-3);
@@ -1640,6 +1640,7 @@ mod tests {
                         flip: amount,
                         invert: -amount,
                         beat: amount,
+                        ..NoteXParams::default()
                     };
                     let mut tornado_cache = [super::TornadoLaneCache::default(); 8];
                     super::compute_tornado_lane_caches(
@@ -1681,7 +1682,7 @@ mod tests {
                                 ),
                             115.125
                                 + move_col_extra(&move_y, local_col)
-                                + tipsy_y_extra(local_col, 0.37, tipsy),
+                                + tipsy_y_extra(local_col, 0.37, tipsy, 0.0, 0.0),
                         ];
                         assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
                     }
@@ -1830,12 +1831,24 @@ mod tests {
                 params[local_col].tiny.to_bits(),
                 expected_params.tiny.to_bits()
             );
-            let expected_offset = tipsy_y_extra(local_col, 1.25, visual.tipsy)
-                + move_col_extra(&visual.move_y_cols, local_col);
+            let expected_offset = tipsy_y_extra(
+                local_col,
+                1.25,
+                visual.tipsy,
+                visual.tipsy_offset,
+                visual.tipsy_speed,
+            ) + move_col_extra(&visual.move_y_cols, local_col);
             assert_eq!(lane_offsets[local_col].to_bits(), expected_offset.to_bits());
             assert_eq!(
                 tipsy_offsets[local_col].to_bits(),
-                tipsy_y_extra(local_col, 1.25, visual.tipsy).to_bits(),
+                tipsy_y_extra(
+                    local_col,
+                    1.25,
+                    visual.tipsy,
+                    visual.tipsy_offset,
+                    visual.tipsy_speed
+                )
+                .to_bits(),
             );
             assert_eq!(
                 move_y_offsets[local_col].to_bits(),
@@ -2018,9 +2031,87 @@ mod tests {
 
     #[test]
     fn tipsy_y_extra_matches_itg_column_wave() {
-        assert_eq!(tipsy_y_extra(0, 0.0, 0.0), 0.0);
-        assert_eq!(tipsy_y_extra(0, 0.0, f32::NAN), 0.0);
-        assert!((tipsy_y_extra(0, 0.0, -1.0) + 25.6).abs() <= 1e-6);
+        assert_eq!(tipsy_y_extra(0, 0.0, 0.0, 0.0, 0.0), 0.0);
+        assert_eq!(tipsy_y_extra(0, 0.0, f32::NAN, 0.0, 0.0), 0.0);
+        assert!((tipsy_y_extra(0, 0.0, -1.0, 0.0, 0.0) + 25.6).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn motion_suboptions_match_native_coordinates() {
+        // Golden coordinates from ITGmania ArrowEffects.cpp CalculateDrunkAngle
+        // and UpdateTipsy, compiled with _fallback/metrics.ini constants.
+        let cols = [-96.0, -32.0, 32.0, 96.0];
+        for (elapsed, y, amount, offset, speed, period, expected) in [
+            (
+                2.25,
+                192.0,
+                0.75,
+                2.5,
+                -0.5,
+                -0.99,
+                [9.47400856, -6.95947361, -20.1198063, -23.8174801],
+            ),
+            (
+                0.37,
+                -96.0,
+                -1.25,
+                200.0,
+                1.5,
+                0.75,
+                [33.7493935, -39.8901978, 30.2086658, -8.5450201],
+            ),
+        ] {
+            let params = NoteXParams {
+                screen_height: 480.0,
+                drunk: amount,
+                drunk_offset: offset,
+                drunk_speed: speed,
+                drunk_period: period,
+                ..NoteXParams::default()
+            };
+            for (col, expected) in expected.into_iter().enumerate() {
+                let actual = note_x_extra(
+                    col,
+                    y,
+                    0.0,
+                    elapsed,
+                    &cols,
+                    &[0.0; 4],
+                    &[TornadoBounds::default(); 4],
+                    params,
+                );
+                assert!((actual - expected).abs() < 0.0001, "column {col}: {actual}");
+            }
+        }
+        let visual = deadsync_gameplay::VisualEffects {
+            tipsy: 0.75,
+            tipsy_offset: 2.5,
+            tipsy_speed: -0.5,
+            ..deadsync_gameplay::VisualEffects::default()
+        };
+        let mut lane_offsets = [0.0; 4];
+        let mut tipsy_offsets = [0.0; 4];
+        super::fill_gameplay_lane_effects(
+            &visual,
+            2.25,
+            4,
+            &mut [super::VisualEffectParams::default(); 4],
+            &mut lane_offsets,
+            &mut tipsy_offsets,
+            &mut [0.0; 4],
+        );
+        for (col, expected) in [4.20492792, 3.88934255, 3.57264614, 3.25493073]
+            .into_iter()
+            .enumerate()
+        {
+            assert!(
+                (lane_offsets[col] - expected).abs() < 0.0001,
+                "column {col}"
+            );
+            assert_eq!(lane_offsets[col], tipsy_offsets[col]);
+        }
+        // At -100% speed and column offset, Tipsy has no temporal or column phase.
+        assert_eq!(tipsy_y_extra(3, 100.0, -1.0, -1.0, -1.0), -25.6);
     }
 
     #[test]
@@ -2033,9 +2124,46 @@ mod tests {
 
     #[test]
     fn drunk_x_extra_uses_column_and_y_phase() {
-        assert_eq!(drunk_x_extra(0, 0.0, 0.0, 480.0, 0.0), 0.0);
-        assert_eq!(drunk_x_extra(0, 0.0, 0.0, 480.0, f32::NAN), 0.0);
-        assert!((drunk_x_extra(0, 0.0, 0.0, 480.0, -1.0) + 32.0).abs() <= 1e-6);
+        assert_eq!(
+            drunk_x_extra(
+                0,
+                0.0,
+                0.0,
+                NoteXParams {
+                    screen_height: 480.0,
+                    drunk: 0.0,
+                    ..NoteXParams::default()
+                }
+            ),
+            0.0
+        );
+        assert_eq!(
+            drunk_x_extra(
+                0,
+                0.0,
+                0.0,
+                NoteXParams {
+                    screen_height: 480.0,
+                    drunk: f32::NAN,
+                    ..NoteXParams::default()
+                }
+            ),
+            0.0
+        );
+        assert!(
+            (drunk_x_extra(
+                0,
+                0.0,
+                0.0,
+                NoteXParams {
+                    screen_height: 480.0,
+                    drunk: -1.0,
+                    ..NoteXParams::default()
+                }
+            ) + 32.0)
+                .abs()
+                <= 1e-6
+        );
     }
 
     #[test]
@@ -2073,6 +2201,7 @@ mod tests {
                 drunk: 0.0,
                 invert: 0.0,
                 beat: 0.0,
+                ..NoteXParams::default()
             },
         );
         assert!((delta - 192.0).abs() <= 1e-6);
@@ -2098,11 +2227,12 @@ mod tests {
                 flip: -0.5,
                 invert: 0.0,
                 beat: 0.0,
+                ..NoteXParams::default()
             },
         );
 
         assert!((delta + 128.0).abs() <= 1e-6);
-        assert!((tipsy_y_extra(0, 0.0, -1.0) + 25.6).abs() <= 1e-6);
+        assert!((tipsy_y_extra(0, 0.0, -1.0, 0.0, 0.0) + 25.6).abs() <= 1e-6);
     }
 
     #[test]
@@ -2158,6 +2288,21 @@ mod tests {
         assert_eq!(appearance_alpha(160.0, 0.0, 0.0, sudden), 1.0);
         assert!((appearance_alpha(180.0, 0.0, 0.0, sudden) - 0.5).abs() <= 1e-6);
         assert_eq!(appearance_alpha(200.0, 0.0, 0.0, sudden), 0.0);
+    }
+
+    #[test]
+    fn hidden_offset_moves_native_fade_band() {
+        // ArrowEffects::GetHidden{End,Start}Line: [120,160] + 160*offset.
+        for (offset, end, middle, start) in [(1.5, 360.0, 380.0, 400.0), (-0.5, 40.0, 60.0, 80.0)] {
+            let hidden = NoteAlphaParams {
+                hidden: 1.0,
+                hidden_offset: offset,
+                ..NoteAlphaParams::default()
+            };
+            assert_eq!(appearance_alpha(end, 0.0, 0.0, hidden), 0.0);
+            assert!((appearance_alpha(middle, 0.0, 0.0, hidden) - 0.5).abs() < 0.000001);
+            assert_eq!(appearance_alpha(start, 0.0, 0.0, hidden), 1.0);
+        }
     }
 
     #[test]

@@ -153,6 +153,9 @@ pub(crate) struct NoteXParams {
     pub invert: f32,
     pub tornado: f32,
     pub drunk: f32,
+    pub drunk_offset: f32,
+    pub drunk_speed: f32,
+    pub drunk_period: f32,
     pub beat: f32,
 }
 
@@ -755,7 +758,13 @@ pub(crate) fn fill_gameplay_lane_effects(
         .min(move_y_offsets.len());
     for local_col in 0..columns {
         effect_params[local_col] = gameplay_visual_effect_params(visual, local_col);
-        let tipsy = tipsy_y_extra(local_col, arrow_effect_time_s, visual.tipsy);
+        let tipsy = tipsy_y_extra(
+            local_col,
+            arrow_effect_time_s,
+            visual.tipsy,
+            visual.tipsy_offset,
+            visual.tipsy_speed,
+        );
         let move_y = move_col_extra(&visual.move_y_cols, local_col);
         lane_offsets[local_col] = tipsy + move_y;
         tipsy_offsets[local_col] = tipsy;
@@ -856,12 +865,20 @@ pub(crate) fn compute_active_note_geometry(
     }
 }
 
-pub(crate) fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
+pub(crate) fn tipsy_y_extra(
+    local_col: usize,
+    elapsed: f32,
+    tipsy: f32,
+    offset: f32,
+    speed: f32,
+) -> f32 {
     if !signed_effect_active(tipsy) {
         return 0.0;
     }
     let col = local_col as f32;
-    let angle = col.mul_add(TIPSY_COLUMN_FREQUENCY, elapsed * TIPSY_TIMER_FREQUENCY);
+    // ArrowEffects::UpdateTipsy: offset scales column phase, speed scales time.
+    let angle = elapsed * (speed * TIPSY_TIMER_FREQUENCY + TIPSY_TIMER_FREQUENCY)
+        + col * (offset * TIPSY_COLUMN_FREQUENCY + TIPSY_COLUMN_FREQUENCY);
     tipsy * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * TIPSY_ARROW_MAGNITUDE
 }
 
@@ -874,20 +891,17 @@ pub(crate) fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
     beat * shift
 }
 
-pub(crate) fn drunk_x_extra(
-    local_col: usize,
-    y: f32,
-    elapsed: f32,
-    screen_height: f32,
-    drunk: f32,
-) -> f32 {
-    if !signed_effect_active(drunk) {
+pub(crate) fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, params: NoteXParams) -> f32 {
+    if !signed_effect_active(params.drunk) {
         return 0.0;
     }
     let col = local_col as f32;
-    let angle =
-        col.mul_add(DRUNK_COLUMN_FREQUENCY, elapsed) + y * DRUNK_OFFSET_FREQUENCY / screen_height;
-    drunk * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE
+    // ArrowEffects::CalculateDrunkAngle; option values are native percentage units.
+    let angle = elapsed * (1.0 + params.drunk_speed)
+        + col * (params.drunk_offset * DRUNK_COLUMN_FREQUENCY + DRUNK_COLUMN_FREQUENCY)
+        + y * (params.drunk_period * DRUNK_OFFSET_FREQUENCY + DRUNK_OFFSET_FREQUENCY)
+            / params.screen_height;
+    params.drunk * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE
 }
 
 pub(crate) fn tornado_x_extra(
@@ -942,7 +956,7 @@ pub(crate) fn note_x_extra(
         );
     }
     if signed_effect_active(params.drunk) {
-        out += drunk_x_extra(local_col, y, elapsed, params.screen_height, params.drunk);
+        out += drunk_x_extra(local_col, y, elapsed, params);
     }
     if signed_effect_active(params.flip) {
         let mirrored = col_offsets
@@ -1028,7 +1042,7 @@ pub(crate) fn note_x_offset_cached(
         );
     }
     if signed_effect_active(params.drunk) {
-        extra += drunk_x_extra(local_col, y, elapsed, params.screen_height, params.drunk);
+        extra += drunk_x_extra(local_col, y, elapsed, params);
     }
     if signed_effect_active(params.flip) {
         let mirrored = col_offsets

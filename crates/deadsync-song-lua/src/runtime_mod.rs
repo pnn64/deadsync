@@ -901,13 +901,14 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         "zoomx" => SongLuaEaseTarget::PlayerZoomX,
         "zoomy" => SongLuaEaseTarget::PlayerZoomY,
         "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
-        "boost" | "brake" | "wave" | "expand" | "boomerang" | "drunk" | "dizzy" | "confusion"
+        "boost" | "brake" | "wave" | "expand" | "boomerang" | "drunk" | "drunkoffset"
+        | "drunkspeed" | "drunkperiod" | "tipsyoffset" | "tipsyspeed" | "dizzy" | "confusion"
         | "confusionoffset" | "flip" | "invert" | "tornado" | "tipsy" | "bumpy" | "bumpyoffset"
         | "bumpyperiod" | "pulseinner" | "pulseouter" | "pulseperiod" | "pulseoffset" | "beat"
-        | "randomspeed" | "hidden" | "sudden" | "suddenoffset" | "stealth" | "blink"
-        | "rvanish" | "randomvanish" | "reversevanish" | "dark" | "blind" | "cover" | "reverse"
-        | "split" | "alternate" | "cross" | "centered" | "incoming" | "space" | "hallway"
-        | "distant" | "overhead" | "xmod" | "cmod" | "mmod" | "tiny" | "mini"
+        | "randomspeed" | "hidden" | "hiddenoffset" | "sudden" | "suddenoffset" | "stealth"
+        | "blink" | "rvanish" | "randomvanish" | "reversevanish" | "dark" | "blind" | "cover"
+        | "reverse" | "split" | "alternate" | "cross" | "centered" | "incoming" | "space"
+        | "hallway" | "distant" | "overhead" | "xmod" | "cmod" | "mmod" | "tiny" | "mini"
         | "confusionyoffset" | "skewx" | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
         _ => return None,
     })

@@ -553,6 +553,9 @@ pub enum SongLuaEaseMaskTarget {
     AccelExpand,
     AccelBoomerang,
     VisualDrunk,
+    VisualDrunkPeriod,
+    VisualDrunkSpeed,
+    VisualDrunkOffset,
     VisualDizzy,
     VisualConfusion,
     VisualConfusionOffset,
@@ -561,6 +564,8 @@ pub enum SongLuaEaseMaskTarget {
     VisualInvert,
     VisualTornado,
     VisualTipsy,
+    VisualTipsySpeed,
+    VisualTipsyOffset,
     VisualTiny,
     VisualBumpy,
     VisualBumpyOffset,
@@ -576,6 +581,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualBeat,
     VisualRandomSpeed,
     AppearanceHidden,
+    AppearanceHiddenOffset,
     AppearanceSudden,
     AppearanceSuddenOffset,
     AppearanceStealth,
@@ -655,12 +661,8 @@ impl SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTarget<'_> {
 impl SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTargetOwned {
     fn as_runtime_ease_target(&self) -> SongLuaRuntimeEaseTarget<'_> {
         match self {
-            Self::Mod(target_name) => {
-                SongLuaRuntimeEaseTarget::Mod(target_name.as_str())
-            }
-            Self::Player(target) => {
-                SongLuaRuntimeEaseTarget::Player(*target)
-            }
+            Self::Mod(target_name) => SongLuaRuntimeEaseTarget::Mod(target_name.as_str()),
+            Self::Player(target) => SongLuaRuntimeEaseTarget::Player(*target),
             Self::Function => SongLuaRuntimeEaseTarget::Function,
         }
     }
@@ -1039,10 +1041,7 @@ pub struct SongLuaMessageCommandIndices {
     entries: Vec<SongLuaMessageCommandEntry>,
 }
 
-fn song_lua_message_key<'a>(
-    keys: &'a [u8],
-    entry: &SongLuaMessageCommandEntry,
-) -> &'a [u8] {
+fn song_lua_message_key<'a>(keys: &'a [u8], entry: &SongLuaMessageCommandEntry) -> &'a [u8] {
     &keys[entry.key_start..entry.key_start + entry.key_len]
 }
 
@@ -1719,6 +1718,9 @@ fn append_song_lua_ease_targets_key(
         "expand" => push(SongLuaEaseMaskTarget::AccelExpand, pct_from, pct_to),
         "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
         "drunk" => push(SongLuaEaseMaskTarget::VisualDrunk, pct_from, pct_to),
+        "drunkperiod" => push(SongLuaEaseMaskTarget::VisualDrunkPeriod, pct_from, pct_to),
+        "drunkspeed" => push(SongLuaEaseMaskTarget::VisualDrunkSpeed, pct_from, pct_to),
+        "drunkoffset" => push(SongLuaEaseMaskTarget::VisualDrunkOffset, pct_from, pct_to),
         "dizzy" => push(SongLuaEaseMaskTarget::VisualDizzy, pct_from, pct_to),
         "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
         "confusionoffset" => push(
@@ -1730,6 +1732,8 @@ fn append_song_lua_ease_targets_key(
         "invert" => push(SongLuaEaseMaskTarget::VisualInvert, pct_from, pct_to),
         "tornado" => push(SongLuaEaseMaskTarget::VisualTornado, pct_from, pct_to),
         "tipsy" => push(SongLuaEaseMaskTarget::VisualTipsy, pct_from, pct_to),
+        "tipsyspeed" => push(SongLuaEaseMaskTarget::VisualTipsySpeed, pct_from, pct_to),
+        "tipsyoffset" => push(SongLuaEaseMaskTarget::VisualTipsyOffset, pct_from, pct_to),
         "bumpy" => push(SongLuaEaseMaskTarget::VisualBumpy, pct_from, pct_to),
         "bumpyoffset" => push(SongLuaEaseMaskTarget::VisualBumpyOffset, pct_from, pct_to),
         "bumpyperiod" => push(SongLuaEaseMaskTarget::VisualBumpyPeriod, pct_from, pct_to),
@@ -1740,6 +1744,11 @@ fn append_song_lua_ease_targets_key(
         "beat" => push(SongLuaEaseMaskTarget::VisualBeat, pct_from, pct_to),
         "randomspeed" => push(SongLuaEaseMaskTarget::VisualRandomSpeed, pct_from, pct_to),
         "hidden" => push(SongLuaEaseMaskTarget::AppearanceHidden, pct_from, pct_to),
+        "hiddenoffset" => push(
+            SongLuaEaseMaskTarget::AppearanceHiddenOffset,
+            pct_from,
+            pct_to,
+        ),
         "sudden" => push(SongLuaEaseMaskTarget::AppearanceSudden, pct_from, pct_to),
         "suddenoffset" => push(
             SongLuaEaseMaskTarget::AppearanceSuddenOffset,
@@ -2084,12 +2093,8 @@ where
         if !song_lua_target_matches_player(window.player(), player) {
             continue;
         }
-        if append_song_lua_ease_window_for(
-            &mut out,
-            &window,
-            timing_player,
-            global_offset_seconds,
-        ) == SongLuaRuntimeEaseAppend::Unsupported
+        if append_song_lua_ease_window_for(&mut out, &window, timing_player, global_offset_seconds)
+            == SongLuaRuntimeEaseAppend::Unsupported
         {
             unsupported_targets += 1;
             unsupported_window(&window);
@@ -2254,6 +2259,9 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
         SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
         SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkPeriod => visual.drunk_period = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkSpeed => visual.drunk_speed = Some(value),
+        SongLuaEaseMaskTarget::VisualDrunkOffset => visual.drunk_offset = Some(value),
         SongLuaEaseMaskTarget::VisualDizzy => visual.dizzy = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
@@ -2266,6 +2274,8 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualInvert => visual.invert = Some(value),
         SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
         SongLuaEaseMaskTarget::VisualTipsy => visual.tipsy = Some(value),
+        SongLuaEaseMaskTarget::VisualTipsySpeed => visual.tipsy_speed = Some(value),
+        SongLuaEaseMaskTarget::VisualTipsyOffset => visual.tipsy_offset = Some(value),
         SongLuaEaseMaskTarget::VisualTiny => visual.tiny = Some(value),
         SongLuaEaseMaskTarget::VisualBumpy => visual.bumpy = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyOffset => visual.bumpy_offset = Some(value),
@@ -2297,6 +2307,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
         SongLuaEaseMaskTarget::VisualRandomSpeed => visual.random_speed = Some(value),
         SongLuaEaseMaskTarget::AppearanceHidden => appearance.hidden = value,
+        SongLuaEaseMaskTarget::AppearanceHiddenOffset => appearance.hidden_offset = value,
         SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
         SongLuaEaseMaskTarget::AppearanceSuddenOffset => appearance.sudden_offset = value,
         SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = value,
@@ -2448,6 +2459,9 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
         SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkPeriod => window.visual.drunk_period.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkSpeed => window.visual.drunk_speed.is_some(),
+        SongLuaEaseMaskTarget::VisualDrunkOffset => window.visual.drunk_offset.is_some(),
         SongLuaEaseMaskTarget::VisualDizzy => window.visual.dizzy.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
@@ -2460,6 +2474,8 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualInvert => window.visual.invert.is_some(),
         SongLuaEaseMaskTarget::VisualTornado => window.visual.tornado.is_some(),
         SongLuaEaseMaskTarget::VisualTipsy => window.visual.tipsy.is_some(),
+        SongLuaEaseMaskTarget::VisualTipsySpeed => window.visual.tipsy_speed.is_some(),
+        SongLuaEaseMaskTarget::VisualTipsyOffset => window.visual.tipsy_offset.is_some(),
         SongLuaEaseMaskTarget::VisualTiny => window.visual.tiny.is_some(),
         SongLuaEaseMaskTarget::VisualBumpy => window.visual.bumpy.is_some(),
         SongLuaEaseMaskTarget::VisualBumpyOffset => window.visual.bumpy_offset.is_some(),
@@ -2491,6 +2507,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
         SongLuaEaseMaskTarget::VisualRandomSpeed => window.visual.random_speed.is_some(),
         SongLuaEaseMaskTarget::AppearanceHidden => window.appearance.hidden.is_some(),
+        SongLuaEaseMaskTarget::AppearanceHiddenOffset => window.appearance.hidden_offset.is_some(),
         SongLuaEaseMaskTarget::AppearanceSudden => window.appearance.sudden.is_some(),
         SongLuaEaseMaskTarget::AppearanceSuddenOffset => window.appearance.sudden_offset.is_some(),
         SongLuaEaseMaskTarget::AppearanceStealth => window.appearance.stealth.is_some(),
@@ -2737,11 +2754,9 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
         while group_start < indices.len() {
             let column = out[indices[group_start]].column;
             let target = out[indices[group_start]].target;
-            let group_end = indices[group_start..]
-                .partition_point(|&index| {
-                    out[index].column == column && out[index].target == target
-                })
-                + group_start;
+            let group_end = indices[group_start..].partition_point(|&index| {
+                out[index].column == column && out[index].target == target
+            }) + group_start;
             let mut next = group_start + 1;
             for position in group_start..group_end {
                 next = next.max(position + 1);
@@ -3020,9 +3035,9 @@ fn apply_chart_attack_window_fallback(
 
 #[inline]
 fn chart_attack_notes_sorted(notes: &[Note]) -> bool {
-    notes.windows(2).all(|pair| {
-        (pair[0].row_index, pair[0].column) <= (pair[1].row_index, pair[1].column)
-    })
+    notes
+        .windows(2)
+        .all(|pair| (pair[0].row_index, pair[0].column) <= (pair[1].row_index, pair[1].column))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -3088,14 +3103,13 @@ fn sort_attack_row_columns(notes: &mut [Note]) {
     while start < notes.len() {
         let row = notes[start].row_index;
         let mut end = start + 1;
-        let mut columns = if notes[start].column < MAX_COLS
-            && notes[start].column < u128::BITS as usize
-        {
-            1u128 << notes[start].column
-        } else {
-            sort_player_notes(notes);
-            return;
-        };
+        let mut columns =
+            if notes[start].column < MAX_COLS && notes[start].column < u128::BITS as usize {
+                1u128 << notes[start].column
+            } else {
+                sort_player_notes(notes);
+                return;
+            };
         while end < notes.len() && notes[end].row_index == row {
             let column = notes[end].column;
             if column >= MAX_COLS
@@ -3466,11 +3480,9 @@ fn apply_borrowed_chart_attacks(
         if !mods.has_chart_effect() {
             continue;
         }
-        let Some(row_bounds) = chart_attack_row_range_values(
-            attack.start_second,
-            attack.len_seconds,
-            timing_player,
-        ) else {
+        let Some(row_bounds) =
+            chart_attack_row_range_values(attack.start_second, attack.len_seconds, timing_player)
+        else {
             continue;
         };
         let turn_seed = chart_attack_turn_seed(base_seed, player, index);
@@ -3644,6 +3656,9 @@ const fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
 
 fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.drunk, visual.drunk);
+    mark_active_target(&mut targets.drunk_period, visual.drunk_period);
+    mark_active_target(&mut targets.drunk_speed, visual.drunk_speed);
+    mark_active_target(&mut targets.drunk_offset, visual.drunk_offset);
     mark_active_target(&mut targets.dizzy, visual.dizzy);
     mark_active_target(&mut targets.confusion, visual.confusion);
     mark_active_target(&mut targets.confusion_offset, visual.confusion_offset);
@@ -3658,6 +3673,8 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.invert, visual.invert);
     mark_active_target(&mut targets.tornado, visual.tornado);
     mark_active_target(&mut targets.tipsy, visual.tipsy);
+    mark_active_target(&mut targets.tipsy_speed, visual.tipsy_speed);
+    mark_active_target(&mut targets.tipsy_offset, visual.tipsy_offset);
     mark_active_target(&mut targets.tiny, visual.tiny);
     mark_active_target(&mut targets.bumpy, visual.bumpy);
     mark_active_target(&mut targets.bumpy_offset, visual.bumpy_offset);
@@ -3992,10 +4009,10 @@ impl ActiveWindowIndex {
                     .filter_map(|(index, window)| is_active(window, now).then_some(index)),
             );
         }
-        self.next_start_second = self.start_order.get(self.next_start).map_or(
-            f32::INFINITY,
-            |&index| start_second(&windows[index]),
-        );
+        self.next_start_second = self
+            .start_order
+            .get(self.next_start)
+            .map_or(f32::INFINITY, |&index| start_second(&windows[index]));
         self.next_expiry_second = self
             .active
             .iter()
@@ -4027,10 +4044,10 @@ impl ActiveWindowIndex {
         while self.next_start_second <= now {
             let index = self.start_order[self.next_start];
             self.next_start += 1;
-            self.next_start_second = self.start_order.get(self.next_start).map_or(
-                f32::INFINITY,
-                |&index| start_second(&windows[index]),
-            );
+            self.next_start_second = self
+                .start_order
+                .get(self.next_start)
+                .map_or(f32::INFINITY, |&index| start_second(&windows[index]));
             if is_active(&windows[index], now) {
                 if self.active.last().is_none_or(|&last| last < index) {
                     self.active.push(index);
@@ -4038,9 +4055,8 @@ impl ActiveWindowIndex {
                     let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
                     self.active.insert(insert_at, index);
                 }
-                self.next_expiry_second = self
-                    .next_expiry_second
-                    .min(expiry_second(&windows[index]));
+                self.next_expiry_second =
+                    self.next_expiry_second.min(expiry_second(&windows[index]));
                 self.stats.activations = self.stats.activations.saturating_add(1);
             }
         }
@@ -4050,8 +4066,7 @@ impl ActiveWindowIndex {
             self.active.retain(|&index| {
                 let active = is_active(&windows[index], now);
                 if active {
-                    next_expiry_second =
-                        next_expiry_second.min(expiry_second(&windows[index]));
+                    next_expiry_second = next_expiry_second.min(expiry_second(&windows[index]));
                 }
                 active
             });
@@ -4425,6 +4440,15 @@ fn apply_song_lua_approach_targets(
                 attack.dark_col_speed[col] = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
+            SongLuaEaseMaskTarget::VisualDrunkPeriod => {
+                attack.visual_speed.drunk_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDrunkSpeed => {
+                attack.visual_speed.drunk_speed = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDrunkOffset => {
+                attack.visual_speed.drunk_offset = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualDizzy => attack.visual_speed.dizzy = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusionOffset => {
@@ -4434,6 +4458,12 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualInvert => attack.visual_speed.invert = Some(speed),
             SongLuaEaseMaskTarget::VisualTornado => attack.visual_speed.tornado = Some(speed),
             SongLuaEaseMaskTarget::VisualTipsy => attack.visual_speed.tipsy = Some(speed),
+            SongLuaEaseMaskTarget::VisualTipsySpeed => {
+                attack.visual_speed.tipsy_speed = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTipsyOffset => {
+                attack.visual_speed.tipsy_offset = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualTiny => attack.visual_speed.tiny = Some(speed),
             SongLuaEaseMaskTarget::VisualBumpy => attack.visual_speed.bumpy = Some(speed),
             SongLuaEaseMaskTarget::VisualBumpyOffset => {
@@ -4459,6 +4489,9 @@ fn apply_song_lua_approach_targets(
                 attack.visual_speed.random_speed = Some(speed)
             }
             SongLuaEaseMaskTarget::AppearanceHidden => attack.appearance_speed.hidden = speed,
+            SongLuaEaseMaskTarget::AppearanceHiddenOffset => {
+                attack.appearance_speed.hidden_offset = speed
+            }
             SongLuaEaseMaskTarget::AppearanceSudden => attack.appearance_speed.sudden = speed,
             SongLuaEaseMaskTarget::AppearanceSuddenOffset => {
                 attack.appearance_speed.sudden_offset = speed
@@ -4880,6 +4913,33 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.drunk_period,
+        &mut values.visual_speed.drunk_period,
+        window.visual.drunk_period,
+        window.visual_speed.drunk_period,
+        active_targets.visual.drunk_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.drunk_speed,
+        &mut values.visual_speed.drunk_speed,
+        window.visual.drunk_speed,
+        window.visual_speed.drunk_speed,
+        active_targets.visual.drunk_speed,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.drunk_offset,
+        &mut values.visual_speed.drunk_offset,
+        window.visual.drunk_offset,
+        window.visual_speed.drunk_offset,
+        active_targets.visual.drunk_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.dizzy,
         &mut values.visual_speed.dizzy,
         window.visual.dizzy,
@@ -4948,6 +5008,24 @@ fn apply_active_visual_window(
         window.visual.tipsy,
         window.visual_speed.tipsy,
         active_targets.visual.tipsy,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tipsy_speed,
+        &mut values.visual_speed.tipsy_speed,
+        window.visual.tipsy_speed,
+        window.visual_speed.tipsy_speed,
+        active_targets.visual.tipsy_speed,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tipsy_offset,
+        &mut values.visual_speed.tipsy_offset,
+        window.visual.tipsy_offset,
+        window.visual_speed.tipsy_offset,
+        active_targets.visual.tipsy_offset,
         active_clear_all,
         persisted,
     );
@@ -5239,7 +5317,11 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
         return Some(ScrollSpeedSetting::XMod(v));
     }
     let (&kind, value) = trimmed.as_bytes().split_first()?;
-    let value = std::str::from_utf8(value).ok()?.trim().parse::<f32>().ok()?;
+    let value = std::str::from_utf8(value)
+        .ok()?
+        .trim()
+        .parse::<f32>()
+        .ok()?;
     if value <= 0.0 {
         return None;
     }
@@ -5439,6 +5521,24 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "drunkperiod" => set_approached_mod(
+            &mut out.visual.drunk_period,
+            &mut out.visual_speed.drunk_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drunkspeed" => set_approached_mod(
+            &mut out.visual.drunk_speed,
+            &mut out.visual_speed.drunk_speed,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "drunkoffset" => set_approached_mod(
+            &mut out.visual.drunk_offset,
+            &mut out.visual_speed.drunk_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "dizzy" => set_approached_mod(
             &mut out.visual.dizzy,
             &mut out.visual_speed.dizzy,
@@ -5478,6 +5578,18 @@ fn apply_runtime_mod(
         "tipsy" => set_approached_mod(
             &mut out.visual.tipsy,
             &mut out.visual_speed.tipsy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tipsyspeed" => set_approached_mod(
+            &mut out.visual.tipsy_speed,
+            &mut out.visual_speed.tipsy_speed,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tipsyoffset" => set_approached_mod(
+            &mut out.visual.tipsy_offset,
+            &mut out.visual_speed.tipsy_offset,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -5889,6 +6001,9 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
     }
     VisualEffects {
         drunk: merge_attack_value(base.drunk, attack.drunk),
+        drunk_period: merge_attack_value(base.drunk_period, attack.drunk_period),
+        drunk_speed: merge_attack_value(base.drunk_speed, attack.drunk_speed),
+        drunk_offset: merge_attack_value(base.drunk_offset, attack.drunk_offset),
         dizzy: merge_attack_value(base.dizzy, attack.dizzy),
         confusion: merge_attack_value(base.confusion, attack.confusion),
         confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
@@ -5898,6 +6013,8 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         invert: merge_attack_value(base.invert, attack.invert),
         tornado: merge_attack_value(base.tornado, attack.tornado),
         tipsy: merge_attack_value(base.tipsy, attack.tipsy),
+        tipsy_speed: merge_attack_value(base.tipsy_speed, attack.tipsy_speed),
+        tipsy_offset: merge_attack_value(base.tipsy_offset, attack.tipsy_offset),
         tiny: merge_attack_value(base.tiny, attack.tiny),
         bumpy: merge_attack_value(base.bumpy, attack.bumpy),
         bumpy_offset: merge_attack_value(base.bumpy_offset, attack.bumpy_offset),

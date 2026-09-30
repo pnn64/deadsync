@@ -2451,7 +2451,17 @@ mod tests {
         scratch.begin_frame();
         let sample = |y: f32| HoldPathSample {
             adjusted_travel: y - 100.0,
-            center_x: 200.0 + crate::drunk_x_extra(2, y - 100.0, 65.5, 480.0, -2.0),
+            center_x: 200.0
+                + crate::drunk_x_extra(
+                    2,
+                    y - 100.0,
+                    65.5,
+                    crate::NoteXParams {
+                        screen_height: 480.0,
+                        drunk: -2.0,
+                        ..crate::NoteXParams::default()
+                    },
+                ),
             world_z: 0.0,
             arrow_px: 64.0,
         };

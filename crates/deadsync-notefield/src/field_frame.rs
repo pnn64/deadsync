@@ -281,6 +281,9 @@ fn compose_field_contents<S, F>(
             screen_height: request.geometry.screen_height,
             tornado: visual.tornado,
             drunk: visual.drunk,
+            drunk_offset: visual.drunk_offset,
+            drunk_speed: visual.drunk_speed,
+            drunk_period: visual.drunk_period,
             flip: visual.flip,
             invert: visual.invert,
             beat: visual.beat,
@@ -1584,6 +1587,9 @@ fn note_x_offset(
             screen_height,
             tornado: visual.tornado,
             drunk: visual.drunk,
+            drunk_offset: visual.drunk_offset,
+            drunk_speed: visual.drunk_speed,
+            drunk_period: visual.drunk_period,
             flip: visual.flip,
             invert: visual.invert,
             beat: visual.beat,
@@ -1640,7 +1646,13 @@ mod hold_lane_frame_cache_tests {
         };
         visual.move_y_cols[local_col] = -0.2;
         let move_y_offset = crate::move_col_extra(&visual.move_y_cols, local_col);
-        let tipsy_y_offset = crate::tipsy_y_extra(local_col, elapsed, visual.tipsy);
+        let tipsy_y_offset = crate::tipsy_y_extra(
+            local_col,
+            elapsed,
+            visual.tipsy,
+            visual.tipsy_offset,
+            visual.tipsy_speed,
+        );
         let effect_params = VisualEffectParams::default();
         let frame = hold_lane_frame(
             240.0,

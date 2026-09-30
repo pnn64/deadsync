@@ -167,6 +167,9 @@ impl AccelOverrides {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisualOverrides {
     pub drunk: Option<f32>,
+    pub drunk_offset: Option<f32>,
+    pub drunk_speed: Option<f32>,
+    pub drunk_period: Option<f32>,
     pub dizzy: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
@@ -175,6 +178,8 @@ pub struct VisualOverrides {
     pub invert: Option<f32>,
     pub tornado: Option<f32>,
     pub tipsy: Option<f32>,
+    pub tipsy_offset: Option<f32>,
+    pub tipsy_speed: Option<f32>,
     pub tiny: Option<f32>,
     pub bumpy: Option<f32>,
     pub bumpy_offset: Option<f32>,
@@ -195,6 +200,9 @@ impl Default for VisualOverrides {
     fn default() -> Self {
         Self {
             drunk: None,
+            drunk_offset: None,
+            drunk_speed: None,
+            drunk_period: None,
             dizzy: None,
             confusion: None,
             confusion_offset: None,
@@ -203,6 +211,8 @@ impl Default for VisualOverrides {
             invert: None,
             tornado: None,
             tipsy: None,
+            tipsy_offset: None,
+            tipsy_speed: None,
             tiny: None,
             bumpy: None,
             bumpy_offset: None,
@@ -225,6 +235,9 @@ impl VisualOverrides {
     #[inline(always)]
     pub fn any(self) -> bool {
         self.drunk.is_some()
+            || self.drunk_offset.is_some()
+            || self.drunk_speed.is_some()
+            || self.drunk_period.is_some()
             || self.dizzy.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
@@ -233,6 +246,8 @@ impl VisualOverrides {
             || self.invert.is_some()
             || self.tornado.is_some()
             || self.tipsy.is_some()
+            || self.tipsy_offset.is_some()
+            || self.tipsy_speed.is_some()
             || self.tiny.is_some()
             || self.bumpy.is_some()
             || self.bumpy_offset.is_some()
@@ -355,6 +370,9 @@ impl AccelEffects {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VisualEffects {
     pub drunk: f32,
+    pub drunk_offset: f32,
+    pub drunk_speed: f32,
+    pub drunk_period: f32,
     pub dizzy: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
@@ -364,6 +382,8 @@ pub struct VisualEffects {
     pub invert: f32,
     pub tornado: f32,
     pub tipsy: f32,
+    pub tipsy_offset: f32,
+    pub tipsy_speed: f32,
     pub tiny: f32,
     pub bumpy: f32,
     pub bumpy_offset: f32,
@@ -391,6 +411,9 @@ impl VisualEffects {
     pub fn from_mask_bits(mask: u16) -> Self {
         Self {
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
+            drunk_offset: 0.0,
+            drunk_speed: 0.0,
+            drunk_period: 0.0,
             dizzy: f32::from((mask & VISUAL_MASK_BIT_DIZZY) != 0),
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
@@ -400,6 +423,8 @@ impl VisualEffects {
             invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
             tornado: f32::from((mask & VISUAL_MASK_BIT_TORNADO) != 0),
             tipsy: f32::from((mask & VISUAL_MASK_BIT_TIPSY) != 0),
+            tipsy_offset: 0.0,
+            tipsy_speed: 0.0,
             tiny: 0.0,
             bumpy: f32::from((mask & VISUAL_MASK_BIT_BUMPY) != 0),
             bumpy_offset: 0.0,
@@ -489,6 +514,9 @@ pub fn approach_visual_overrides_to_base(
 ) {
     let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
     approach_optional_visual(&mut visual.drunk, base.drunk, step);
+    approach_optional_visual(&mut visual.drunk_offset, base.drunk_offset, step);
+    approach_optional_visual(&mut visual.drunk_speed, base.drunk_speed, step);
+    approach_optional_visual(&mut visual.drunk_period, base.drunk_period, step);
     approach_optional_visual(&mut visual.dizzy, base.dizzy, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
@@ -501,6 +529,8 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.invert, base.invert, step);
     approach_optional_visual(&mut visual.tornado, base.tornado, step);
     approach_optional_visual(&mut visual.tipsy, base.tipsy, step);
+    approach_optional_visual(&mut visual.tipsy_offset, base.tipsy_offset, step);
+    approach_optional_visual(&mut visual.tipsy_speed, base.tipsy_speed, step);
     approach_optional_visual(&mut visual.tiny, base.tiny, step);
     approach_optional_visual(&mut visual.bumpy, base.bumpy, step);
     approach_optional_visual(&mut visual.bumpy_offset, base.bumpy_offset, step);
@@ -542,6 +572,30 @@ pub fn approach_visual_overrides_to_target(
         target.drunk,
         base.drunk,
         speed.drunk,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_offset,
+        target.drunk_offset,
+        base.drunk_offset,
+        speed.drunk_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_speed,
+        target.drunk_speed,
+        base.drunk_speed,
+        speed.drunk_speed,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.drunk_period,
+        target.drunk_period,
+        base.drunk_period,
+        speed.drunk_period,
         delta_time,
         1.0,
     );
@@ -605,6 +659,22 @@ pub fn approach_visual_overrides_to_target(
         target.tipsy,
         base.tipsy,
         speed.tipsy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tipsy_offset,
+        target.tipsy_offset,
+        base.tipsy_offset,
+        speed.tipsy_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tipsy_speed,
+        target.tipsy_speed,
+        base.tipsy_speed,
+        speed.tipsy_speed,
         delta_time,
         1.0,
     );

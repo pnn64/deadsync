@@ -623,6 +623,8 @@ pub(crate) struct ScrollTravelRequest<'a> {
     pub note_count_stats: &'a [NoteCountStat],
     pub arrow_effect_time_s: f32,
     pub lane_tipsy: f32,
+    pub lane_tipsy_offset: f32,
+    pub lane_tipsy_speed: f32,
     pub lane_move_y: &'a [f32],
 }
 
@@ -910,6 +912,8 @@ impl ScrollTravel<'_> {
             local_col,
             self.request.arrow_effect_time_s,
             self.request.lane_tipsy,
+            self.request.lane_tipsy_offset,
+            self.request.lane_tipsy_speed,
         ) + move_col_extra(self.request.lane_move_y, local_col)
     }
 
@@ -1295,7 +1299,7 @@ mod tests {
         lane_window_bounds_by_note_row_from_cursor, random_speed_lane_seed, random_speed_seed,
         random_speed_seed_from_lane_seed, scroll_travel, song_time_ns_delta_seconds,
     };
-    use crate::{AccelYParams, ModelMeshCache, ModelMeshCacheStats, move_col_extra, tipsy_y_extra};
+    use crate::{AccelYParams, ModelMeshCache, ModelMeshCacheStats, move_col_extra};
     use deadlib_present::actors::{FlatDraw, SpriteSource};
     use deadlib_render_core::BlendMode;
     use deadsync_core::input::MAX_COLS;
@@ -1475,6 +1479,8 @@ mod tests {
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         }
     }
@@ -2387,9 +2393,12 @@ mod tests {
         let mut request = request(&timing, ScrollSpeedSetting::XMod(1.0), 4.0);
         request.arrow_effect_time_s = 2.25;
         request.lane_tipsy = 0.75;
+        request.lane_tipsy_offset = 2.5;
+        request.lane_tipsy_speed = -0.5;
         request.lane_move_y = &move_y;
         let travel = scroll_travel(request);
-        let expected_offset = tipsy_y_extra(1, 2.25, 0.75) + move_col_extra(&move_y, 1);
+        // Native UpdateTipsy output, plus the authored MoveY offset.
+        let expected_offset = 3.88934255 + move_col_extra(&move_y, 1);
         assert_near(travel.lane_offset(1), expected_offset);
 
         let raw = travel.raw_beat(5.0);

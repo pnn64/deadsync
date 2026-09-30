@@ -999,6 +999,8 @@ mod tests {
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         }
     }
@@ -1091,6 +1093,8 @@ mod tests {
                     let travel = scroll_travel(ScrollTravelRequest {
                         arrow_effect_time_s: arrow_time,
                         lane_tipsy: tipsy,
+                        lane_tipsy_offset: 0.0,
+                        lane_tipsy_speed: 0.0,
                         lane_move_y: &visual.move_y_cols,
                         ..travel_request(&timing, speed)
                     });
@@ -1273,6 +1277,8 @@ mod tests {
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         });
         let boomerang_request = request(

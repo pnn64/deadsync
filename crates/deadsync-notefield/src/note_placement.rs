@@ -60,6 +60,8 @@ mod tests {
             note_count_stats: &[],
             arrow_effect_time_s: elapsed_screen_s,
             lane_tipsy: 0.0,
+            lane_tipsy_offset: 0.0,
+            lane_tipsy_speed: 0.0,
             lane_move_y: &[],
         })
     }

@@ -195,7 +195,12 @@ fn runtime_mod_value(
     Some(match key {
         "beat" => visual.beat.unwrap_or(0.0),
         "drunk" => visual.drunk.unwrap_or(0.0),
+        "drunkoffset" => visual.drunk_offset.unwrap_or(0.0),
+        "drunkspeed" => visual.drunk_speed.unwrap_or(0.0),
+        "drunkperiod" => visual.drunk_period.unwrap_or(0.0),
         "tipsy" => visual.tipsy.unwrap_or(0.0),
+        "tipsyoffset" => visual.tipsy_offset.unwrap_or(0.0),
+        "tipsyspeed" => visual.tipsy_speed.unwrap_or(0.0),
         "dizzy" => visual.dizzy.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
         "confusionoffset" => visual.confusion_offset.unwrap_or(0.0),
@@ -477,6 +482,71 @@ end}
         !parity.gaps.is_empty(),
         "the audit rejects missing sampled targets"
     );
+}
+
+#[test]
+fn motion_suboptions_survive_lua_writes_and_reset() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create motion fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(&entry, r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    options:FromString('*2 250% drunkoffset, *4 -50% drunkspeed, *3 -99% drunkperiod, *5 250% tipsyoffset, *6 -50% tipsyspeed, *7 150% hiddenoffset')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:DrunkOffset(200):DrunkSpeed(1.5):DrunkPeriod(0.75)
+            options:TipsyOffset(-1):TipsySpeed(-1)
+            options:HiddenOffset(-0.5)
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#).expect("write motion fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Motion suboptions");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile motion suboptions");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.25, [2.5, -0.5, -0.99, 2.5, -0.5, 1.5]),
+        (0.5, [200.0, 1.5, 0.75, -1.0, -1.0, -0.5]),
+        (1.0, [0.0; 6]),
+    ] {
+        runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        for (key, expected) in [
+            "drunkoffset",
+            "drunkspeed",
+            "drunkperiod",
+            "tipsyoffset",
+            "tipsyspeed",
+            "hiddenoffset",
+        ]
+        .into_iter()
+        .zip(expected)
+        {
+            let actual = runtime_mod_value(&runtime, 0, key).expect("supported motion modifier");
+            assert!(
+                (actual - expected).abs() < 0.000001,
+                "{key} at {second}: {actual}"
+            );
+        }
+    }
 }
 
 #[test]
