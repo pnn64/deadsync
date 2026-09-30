@@ -76,18 +76,27 @@ fn lua_cmd_function(body: &str, out: &mut String) -> Result<(), String> {
     Ok(())
 }
 
-fn lua_cmd_without_comments(body: &str) -> Result<String, String> {
-    let mut out = String::with_capacity(body.len());
+fn lua_cmd_without_comments(body: &str) -> Result<std::borrow::Cow<'_, str>, String> {
+    // The matching-parenthesis scan already validated string boundaries.
+    // A body without a comment marker needs no copy or second character scan.
+    if !body.contains("--") {
+        return Ok(std::borrow::Cow::Borrowed(body));
+    }
+    let mut out: Option<String> = None;
+    let mut copied_until = 0;
     let mut index = 0;
     while index < body.len() {
         if body[index..].starts_with("--") {
             let end = lua_comment_end(body, index);
+            let out = out.get_or_insert_with(|| String::with_capacity(body.len()));
+            out.push_str(&body[copied_until..index]);
             out.push(' ');
             out.extend(body[index..end].chars().filter(|&ch| ch == '\n'));
+            copied_until = end;
             index = end;
             continue;
         }
-        let end = if matches!(body.as_bytes()[index], b'\'' | b'"') {
+        index = if matches!(body.as_bytes()[index], b'\'' | b'"') {
             lua_quoted_end(body, index)?
         } else if let Some(open_end) = lua_long_bracket_end(body, index) {
             lua_long_string_end(body, index, open_end)?
@@ -99,10 +108,13 @@ fn lua_cmd_without_comments(body: &str) -> Result<String, String> {
                     .expect("character boundary")
                     .len_utf8()
         };
-        out.push_str(&body[index..end]);
-        index = end;
     }
-    Ok(out)
+    if let Some(mut out) = out {
+        out.push_str(&body[copied_until..]);
+        Ok(std::borrow::Cow::Owned(out))
+    } else {
+        Ok(std::borrow::Cow::Borrowed(body))
+    }
 }
 
 fn lua_cmd_name(command: &str) -> Result<(&str, &str), String> {
@@ -120,9 +132,9 @@ fn lua_cmd_name(command: &str) -> Result<(&str, &str), String> {
     Ok((&command[..end], &command[end..]))
 }
 
-fn lua_cmd_commands(body: &str) -> Result<Vec<&str>, String> {
+fn lua_cmd_commands(body: &str) -> Result<smallvec::SmallVec<[&str; 8]>, String> {
     let bytes = body.as_bytes();
-    let mut out = Vec::new();
+    let mut out = smallvec::SmallVec::new();
     let mut start = 0;
     let mut index = 0;
     let mut paren = 0_i32;
@@ -237,12 +249,35 @@ fn lua_long_bracket_end(source: &str, index: usize) -> Option<usize> {
 }
 
 fn lua_long_string_end(source: &str, index: usize, open_end: usize) -> Result<usize, String> {
-    let equals = &source[index + 1..open_end - 1];
-    let close = format!("]{equals}]");
-    source[open_end..]
-        .find(&close)
-        .map(|offset| open_end + offset + close.len())
-        .ok_or_else(|| "unterminated Lua long string".to_string())
+    let equals_len = open_end - index - 2;
+    let bytes = source.as_bytes();
+    let mut cursor = open_end;
+    let mut misses = 0;
+    while let Some(offset) = memchr::memchr(b']', &bytes[cursor..]) {
+        let close = cursor + offset;
+        let mut end = close + 1;
+        while bytes.get(end) == Some(&b'=') {
+            end += 1;
+        }
+        if end - close - 1 == equals_len && bytes.get(end) == Some(&b']') {
+            return Ok(end + 1);
+        }
+        // Reconsider the closing bracket after a wrong-length equals run.
+        // Each run is scanned once, including adversarial near matches.
+        cursor = end;
+        misses += 1;
+        if misses == 8 && equals_len <= 14 {
+            // Dense near matches benefit from memmem's substring search.
+            // Ordinary strings never construct a terminator, even on the stack.
+            let mut terminator = [b'='; 16];
+            terminator[0] = b']';
+            terminator[equals_len + 1] = b']';
+            return memchr::memmem::find(&bytes[cursor..], &terminator[..equals_len + 2])
+                .map(|offset| cursor + offset + equals_len + 2)
+                .ok_or_else(|| "unterminated Lua long string".to_string());
+        }
+    }
+    Err("unterminated Lua long string".to_string())
 }
 
 #[cfg(test)]
@@ -355,3 +390,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/cmd_preprocess.rs"]
+mod cmd_preprocess_perf;
