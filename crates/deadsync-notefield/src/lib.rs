@@ -2383,8 +2383,68 @@ mod tests {
         assert!(!appearance_needs_rows(NoteAlphaParams {
             blink: 1.0,
             stealth: 1.0,
+            stealth_past_receptors: true,
             ..NoteAlphaParams::default()
         }));
+        assert!(!appearance_needs_rows(NoteAlphaParams {
+            stealth_col: 1.0,
+            ..NoteAlphaParams::default()
+        }));
+    }
+
+    #[test]
+    fn lane_stealth_combines_before_clamp_and_honors_receptor_boundary() {
+        assert_eq!(
+            appearance_alpha(
+                200.0,
+                0.0,
+                0.0,
+                NoteAlphaParams {
+                    stealth: f32::EPSILON,
+                    ..NoteAlphaParams::default()
+                }
+            ),
+            1.0 - f32::EPSILON
+        );
+        for (global, column, hidden, y, expected) in [
+            (0.25, 0.25, 0.0, 200.0, 0.5),
+            (0.75, 0.5, 0.0, 200.0, 0.0),
+            (0.0, -0.25, 1.0, 140.0, 0.75),
+            (-0.25, 0.0, 1.0, 140.0, 0.75),
+            (1.0, -1.0, 0.0, 200.0, 1.0),
+        ] {
+            let cache = super::note_appearance_cache(
+                0.0,
+                0.0,
+                NoteAlphaParams {
+                    stealth: global,
+                    stealth_col: column,
+                    hidden,
+                    ..NoteAlphaParams::default()
+                },
+            );
+            let visibility = appearance_note_alpha_cached(y, &cache);
+            assert!((visibility - expected).abs() < 0.000001);
+            let (alpha, glow) = super::appearance_note_alpha_glow_cached(y, &cache);
+            assert_eq!(alpha, if expected > 0.5 { 1.0 } else { 0.0 });
+            assert!((glow - (1.3 - 2.6 * (expected - 0.5).abs())).abs() < 0.000001);
+        }
+        for past in [false, true] {
+            let cache = super::note_appearance_cache(
+                0.0,
+                0.0,
+                NoteAlphaParams {
+                    stealth_col: 1.0,
+                    stealth_past_receptors: past,
+                    ..NoteAlphaParams::default()
+                },
+            );
+            assert_eq!(
+                appearance_note_alpha_cached(-0.001, &cache),
+                f32::from(!past)
+            );
+            assert_eq!(appearance_note_alpha_cached(0.0, &cache), 0.0);
+        }
     }
 
     #[test]

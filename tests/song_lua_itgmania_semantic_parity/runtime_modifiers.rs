@@ -111,6 +111,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     push("tilt".into(), if key == "hallway" { -value } else { value });
                     push("skew".into(), 0.0);
                 }
+                "stealthpastreceptors" => push(key, f32::from(value > 0.5)),
                 _ => push(key, value),
             };
             if operation == "FromString" {
@@ -145,7 +146,12 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     set_option(key.to_string(), value);
                 }
             } else {
-                match value_f32(args.first()) {
+                let value = if operation == "StealthPastReceptors" {
+                    args.first().and_then(Value::as_bool).map(f32::from)
+                } else {
+                    value_f32(args.first())
+                };
+                match value {
                     Some(value) => set_option(operation.to_ascii_lowercase(), value),
                     None => {
                         let target = args.first().map_or_else(String::new, Value::to_string);
@@ -174,6 +180,15 @@ fn runtime_mod_value(
 ) -> Option<f32> {
     let visual = runtime.visual[player];
     let appearance = runtime.appearance[player];
+    if let Some(column) = key
+        .strip_prefix("stealth")
+        .and_then(|suffix| suffix.parse::<usize>().ok())
+    {
+        return column
+            .checked_sub(1)
+            .and_then(|col| appearance.stealth_cols.get(col))
+            .copied();
+    }
     for (prefix, values) in [
         ("confusionoffset", visual.confusion_offset_cols),
         ("movex", visual.move_x_cols),
@@ -224,6 +239,7 @@ fn runtime_mod_value(
         "hidden" => appearance.hidden,
         "hiddenoffset" => appearance.hidden_offset,
         "stealth" => appearance.stealth,
+        "stealthpastreceptors" => f32::from(appearance.stealth_past_receptors),
         "sudden" => appearance.sudden,
         "suddenoffset" => appearance.sudden_offset,
         "blink" => appearance.blink,
@@ -546,6 +562,58 @@ end}
                 "{key} at {second}: {actual}"
             );
         }
+    }
+}
+
+#[test]
+fn lane_stealth_survives_lua_writes_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create Stealth fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    options:FromString('*2 25% stealth1, *4 100% stealth4, *0 stealthpastreceptors')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:Stealth1(0.75, 2):Stealth4(0):StealthPastReceptors(false)
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '50% stealth2')
+            phase = 3
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write Stealth fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Lane Stealth");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile Stealth fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected, past) in [
+        (0.25, [0.25, 0.0, 0.0, 1.0], true),
+        (0.5, [0.75, 0.0, 0.0, 0.0], false),
+        (1.0, [0.0, 0.5, 0.0, 0.0], false),
+    ] {
+        runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime.appearance[0].stealth_cols[..4], expected);
+        assert_eq!(runtime.appearance[0].stealth_past_receptors, past);
     }
 }
 

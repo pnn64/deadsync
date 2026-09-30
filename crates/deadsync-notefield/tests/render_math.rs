@@ -57,6 +57,7 @@ macro_rules! params {
             stealth: $v[4],
             blink: $v[5],
             random_vanish: $v[6],
+            ..$module::NoteAlphaParams::default()
         }
     };
 }
@@ -70,10 +71,17 @@ fn assert_float(actual: f32, expected: f32) {
     );
 }
 
-fn compare_appearance(elapsed: f32, mini: f32, values: [f32; 7], queries: &[f32]) {
+fn compare_appearance(elapsed: f32, mini: f32, mut values: [f32; 7], queries: &[f32]) {
+    // Native signed and sub-epsilon Stealth deliberately replaces the frozen
+    // renderer's positive-only gate; unit tests cover those native values.
+    // Normalize this changed field to retain bitwise checks for other effects.
+    if values[4] != 0.0 && values[4] <= f32::EPSILON {
+        values[4] = 0.0;
+    }
     let new = appearance::note_appearance_cache(elapsed, mini, params!(appearance, values));
     let old = old_appearance::note_appearance_cache(elapsed, mini, params!(old_appearance, values));
-    assert_eq!(std::mem::size_of_val(&new), std::mem::size_of_val(&old));
+    // The current cache also carries lane Stealth and past-receptor state.
+    // Historical modifiers still produce identical outputs with those disabled.
     let bounds = appearance::bounds(&new);
     assert_eq!(
         bounds.map(f32::to_bits),

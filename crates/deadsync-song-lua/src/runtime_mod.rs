@@ -883,7 +883,8 @@ fn runtime_mod_column_key(key: &str, prefix: &str) -> bool {
 
 #[must_use]
 pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
-    if runtime_mod_column_key(key, "bumpy")
+    if runtime_mod_column_key(key, "stealth")
+        || runtime_mod_column_key(key, "bumpy")
         || runtime_mod_column_key(key, "dark")
         || runtime_mod_column_key(key, "tiny")
         || runtime_mod_column_key(key, "movex")
@@ -901,15 +902,64 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         "zoomx" => SongLuaEaseTarget::PlayerZoomX,
         "zoomy" => SongLuaEaseTarget::PlayerZoomY,
         "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
-        "boost" | "brake" | "wave" | "expand" | "boomerang" | "drunk" | "drunkoffset"
-        | "drunkspeed" | "drunkperiod" | "tipsyoffset" | "tipsyspeed" | "dizzy" | "confusion"
-        | "confusionoffset" | "flip" | "invert" | "tornado" | "tipsy" | "bumpy" | "bumpyoffset"
-        | "bumpyperiod" | "pulseinner" | "pulseouter" | "pulseperiod" | "pulseoffset" | "beat"
-        | "randomspeed" | "hidden" | "hiddenoffset" | "sudden" | "suddenoffset" | "stealth"
-        | "blink" | "rvanish" | "randomvanish" | "reversevanish" | "dark" | "blind" | "cover"
-        | "reverse" | "split" | "alternate" | "cross" | "centered" | "incoming" | "space"
-        | "hallway" | "distant" | "overhead" | "xmod" | "cmod" | "mmod" | "tiny" | "mini"
-        | "confusionyoffset" | "skewx" | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
+        "boost"
+        | "brake"
+        | "wave"
+        | "expand"
+        | "boomerang"
+        | "drunk"
+        | "drunkoffset"
+        | "drunkspeed"
+        | "drunkperiod"
+        | "tipsyoffset"
+        | "tipsyspeed"
+        | "dizzy"
+        | "confusion"
+        | "confusionoffset"
+        | "flip"
+        | "invert"
+        | "tornado"
+        | "tipsy"
+        | "bumpy"
+        | "bumpyoffset"
+        | "bumpyperiod"
+        | "pulseinner"
+        | "pulseouter"
+        | "pulseperiod"
+        | "pulseoffset"
+        | "beat"
+        | "randomspeed"
+        | "hidden"
+        | "hiddenoffset"
+        | "sudden"
+        | "suddenoffset"
+        | "stealth"
+        | "stealthpastreceptors"
+        | "blink"
+        | "rvanish"
+        | "randomvanish"
+        | "reversevanish"
+        | "dark"
+        | "blind"
+        | "cover"
+        | "reverse"
+        | "split"
+        | "alternate"
+        | "cross"
+        | "centered"
+        | "incoming"
+        | "space"
+        | "hallway"
+        | "distant"
+        | "overhead"
+        | "xmod"
+        | "cmod"
+        | "mmod"
+        | "tiny"
+        | "mini"
+        | "confusionyoffset"
+        | "skewx"
+        | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
         _ => return None,
     })
 }

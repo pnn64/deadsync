@@ -272,6 +272,8 @@ pub struct AppearanceOverrides {
     pub sudden: Option<f32>,
     pub sudden_offset: Option<f32>,
     pub stealth: Option<f32>,
+    pub stealth_cols: [Option<f32>; MAX_COLS],
+    pub stealth_past_receptors: Option<bool>,
     pub blink: Option<f32>,
     pub random_vanish: Option<f32>,
 }
@@ -279,12 +281,14 @@ pub struct AppearanceOverrides {
 impl AppearanceOverrides {
     #[inline(always)]
     #[must_use]
-    pub const fn any(self) -> bool {
+    pub fn any(self) -> bool {
         self.hidden.is_some()
             || self.hidden_offset.is_some()
             || self.sudden.is_some()
             || self.sudden_offset.is_some()
             || self.stealth.is_some()
+            || self.stealth_cols.iter().any(Option::is_some)
+            || self.stealth_past_receptors.is_some()
             || self.blink.is_some()
             || self.random_vanish.is_some()
     }
@@ -795,6 +799,8 @@ pub struct AppearanceEffects {
     pub sudden: f32,
     pub sudden_offset: f32,
     pub stealth: f32,
+    pub stealth_cols: [f32; MAX_COLS],
+    pub stealth_past_receptors: bool,
     pub blink: f32,
     pub random_vanish: f32,
 }
@@ -811,6 +817,8 @@ impl AppearanceEffects {
             ),
             sudden_offset: 0.0,
             stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
+            stealth_cols: [0.0; MAX_COLS],
+            stealth_past_receptors: false,
             blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),
             random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
         }
@@ -825,6 +833,8 @@ impl AppearanceEffects {
             sudden: 1.0,
             sudden_offset: 1.0,
             stealth: 1.0,
+            stealth_cols: [1.0; MAX_COLS],
+            stealth_past_receptors: false,
             blink: 1.0,
             random_vanish: 1.0,
         }
@@ -857,6 +867,15 @@ pub fn apply_appearance_target(
     if let Some(value) = overrides.stealth {
         target.stealth = value;
         speed.stealth = override_speeds.stealth.unwrap_or(1.0).max(0.0);
+    }
+    for col in 0..MAX_COLS {
+        if let Some(value) = overrides.stealth_cols[col] {
+            target.stealth_cols[col] = value;
+            speed.stealth_cols[col] = override_speeds.stealth_cols[col].unwrap_or(1.0).max(0.0);
+        }
+    }
+    if let Some(value) = overrides.stealth_past_receptors {
+        target.stealth_past_receptors = value;
     }
     if let Some(value) = overrides.blink {
         target.blink = value;
@@ -901,6 +920,15 @@ pub fn approach_appearance_effects(
         target.stealth,
         delta_time * speed.stealth,
     );
+    for col in 0..MAX_COLS {
+        approach_f32(
+            &mut current.stealth_cols[col],
+            target.stealth_cols[col],
+            delta_time * speed.stealth_cols[col],
+        );
+    }
+    // PlayerOptions::Approach copies boolean options immediately.
+    current.stealth_past_receptors = target.stealth_past_receptors;
     approach_f32(&mut current.blink, target.blink, delta_time * speed.blink);
     approach_f32(
         &mut current.random_vanish,

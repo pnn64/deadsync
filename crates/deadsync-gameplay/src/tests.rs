@@ -2579,6 +2579,8 @@ mod tests {
             sudden: 0.35,
             sudden_offset: 0.15,
             stealth: 0.1,
+            stealth_cols: [0.2; MAX_COLS],
+            stealth_past_receptors: true,
             blink: 0.05,
             random_vanish: 0.4,
         };
@@ -3378,6 +3380,48 @@ mod tests {
         assert_near(merged.tipsy_speed, -0.5);
         approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
         assert!(!current.any());
+    }
+
+    #[test]
+    fn lane_stealth_approaches_independently_and_boolean_switches_immediately() {
+        let mods = parse_attack_mods("*2 75% stealth1, *4 -25% stealth4, *0 stealthpastreceptors");
+        assert_eq!(mods.appearance.stealth_cols[0], Some(0.75));
+        assert_eq!(mods.appearance.stealth_cols[3], Some(-0.25));
+        assert_eq!(mods.appearance.stealth_past_receptors, Some(true));
+        assert!(mods.appearance.any());
+        let mut target = AppearanceEffects::default();
+        let mut speed = AppearanceEffects::approach_speeds();
+        apply_appearance_target(
+            &mut target,
+            &mut speed,
+            mods.appearance,
+            mods.appearance_speed,
+        );
+        let mut current = AppearanceEffects::default();
+        approach_appearance_effects(&mut current, target, speed, 0.1);
+        assert_near(current.stealth_cols[0], 0.2);
+        assert_near(current.stealth_cols[3], -0.25);
+        assert_eq!(current.stealth_cols[1], 0.0);
+        assert!(current.stealth_past_receptors);
+        approach_appearance_effects(
+            &mut current,
+            AppearanceEffects::default(),
+            AppearanceEffects::approach_speeds(),
+            1.0,
+        );
+        assert_eq!(current, AppearanceEffects::default());
+        assert_eq!(
+            parse_attack_mods("50% stealthpastreceptors")
+                .appearance
+                .stealth_past_receptors,
+            Some(false)
+        );
+        assert_eq!(
+            parse_attack_mods("51% stealthpastreceptors")
+                .appearance
+                .stealth_past_receptors,
+            Some(true)
+        );
     }
 
     #[test]

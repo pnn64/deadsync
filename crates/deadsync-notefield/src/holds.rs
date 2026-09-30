@@ -619,9 +619,14 @@ where
     let phase = visible_top_distance / segment_height + phase_offset;
     let phase_end = visible_bottom_distance / segment_height + phase_offset;
     let uv = [body_uv[0], body_uv[2], body_uv[1], body_uv[3]];
+    let stealth_crosses_receptor = !request.appearance.stealth_past_receptors
+        && (request.appearance.stealth != 0.0 || request.appearance.stealth_col != 0.0)
+        && ((sample_path(body_top).adjusted_travel + request.lane_offset < 0.0)
+            != (sample_path(body_bottom).adjusted_travel + request.lane_offset < 0.0));
     if request.use_legacy_sprites
         && allow_legacy_sprites
         && !appearance_needs_rows(request.appearance)
+        && !stealth_crosses_receptor
     {
         compose_legacy_hold_body(
             draws,
@@ -2299,6 +2304,46 @@ mod tests {
                             );
                         }
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lane_stealth_hold_crosses_receptor_without_hiding_visible_section() {
+        use deadlib_present::actors::FlatMeshVertices;
+        let body = TestSlot::sprite("body");
+        for past in [false, true] {
+            let mut request = body_cap_request(Some(&body), None, None);
+            request.y_head = -64.0;
+            request.y_tail = 64.0;
+            request.draw_span = Some((-64.0, 64.0));
+            request.appearance = NoteAlphaParams {
+                stealth_col: 1.0,
+                stealth_past_receptors: past,
+                ..NoteAlphaParams::default()
+            };
+            request.appearance_cache = crate::note_appearance_cache(0.0, 0.0, request.appearance);
+            let mut draws = Vec::new();
+            compose_hold_body_caps(
+                &mut draws,
+                &mut HoldMeshScratch::default(),
+                request,
+                &straight_path,
+                &test_source,
+            );
+            assert_eq!(draws.is_empty(), past);
+            for draw in &draws {
+                match draw {
+                    FlatDraw::Sprite(sprite) => assert!(sprite.center[1] < 0.0),
+                    FlatDraw::TexturedMesh(mesh) => {
+                        let vertices = match &mesh.vertices {
+                            FlatMeshVertices::Shared(v) => v.as_ref(),
+                            FlatMeshVertices::Reusable(v) => v.as_slice(),
+                        };
+                        assert!(vertices.iter().all(|v| v.pos[1] <= 0.0));
+                    }
+                    _ => panic!("hold body draw"),
                 }
             }
         }

@@ -99,7 +99,9 @@ fn lua_stream_mod_tokens_preserve_state_speeds_precedence_and_partial_errors() {
             // The frozen parser misread `no <mod>` as one enabled name.
             // Native reset semantics are checked separately below.
             "*2 50% Drunk, nomines, 0% NoMines, -0% reverse",
-            "C400, 1.5x, CA250, 70% TINY, *-3 25% No Holds",
+            // The frozen parser enabled every nonzero boolean amount. Keep
+            // this comparison above the native threshold, tested separately.
+            "C400, 1.5x, CA250, 70% TINY, *-3 75% No Holds",
             "inf mini, -inf moveX1, NaN MoveY2, *NaN 99% Mini",
             " , %$éあ, éR-éV-éR-S-é, +3E2 X",
             &format!("50% {}", "Aé-9".repeat(90)),

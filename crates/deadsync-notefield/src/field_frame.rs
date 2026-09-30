@@ -217,8 +217,12 @@ fn compose_field_contents<S, F>(
     let column_dirs = field.column_dirs;
     let column_receptor_ys = field.column_receptor_ys;
     let mini = prepared.mini;
-    let alpha_params = note_alpha_params(appearance);
-    let appearance_cache = note_appearance_cache(elapsed_screen, mini, alpha_params);
+    // Frame-local lane caches: fixed stack capacity, built before note/hold
+    // composition on this thread. No allocation, lookup misses, or eviction.
+    let alpha_params: [NoteAlphaParams; deadsync_core::input::MAX_COLS] =
+        std::array::from_fn(|col| note_alpha_params(&appearance, col));
+    let appearance_caches =
+        alpha_params.map(|params| note_appearance_cache(elapsed_screen, mini, params));
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
     let column_x_offsets = prepared.column_x_offsets;
@@ -315,7 +319,10 @@ fn compose_field_contents<S, F>(
             }
     };
     let alpha_glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> (f32, f32) {
-        appearance_note_alpha_glow_cached(adjusted + lane_offsets[local_col], &appearance_cache)
+        appearance_note_alpha_glow_cached(
+            adjusted + lane_offsets[local_col],
+            &appearance_caches[local_col],
+        )
     };
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
         note_world_z_for_bumpy_cached(
@@ -641,8 +648,8 @@ fn compose_field_contents<S, F>(
                 diffuse: hold_diffuse,
                 elapsed_s: elapsed_screen,
                 lane_offset,
-                appearance: alpha_params,
-                appearance_cache,
+                appearance: alpha_params[local_col],
+                appearance_cache: appearance_caches[local_col],
                 use_legacy_sprites: use_legacy_hold_sprites,
                 rotation_y_deg: note_rotation_y,
                 depth_test: hold_depth_test,
@@ -895,7 +902,7 @@ fn compose_field_contents<S, F>(
         &lane_offsets[..num_cols],
         note_x_is_static,
         &static_note_x_offsets[..num_cols],
-        appearance_cache,
+        &appearance_caches[..num_cols],
         &scale_mine_slot,
         sprite_source,
     );
@@ -929,7 +936,7 @@ fn compose_visible_notes<S, F>(
     lane_offsets: &[f32],
     note_x_is_static: bool,
     static_note_x_offsets: &[f32],
-    appearance_cache: crate::NoteAppearanceCache,
+    appearance_caches: &[crate::NoteAppearanceCache],
     scale_mine_slot: &impl Fn(&S) -> [f32; 2],
     sprite_source: &F,
 ) where
@@ -1011,7 +1018,7 @@ fn compose_visible_notes<S, F>(
                 }
                 let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(
                     adjusted_travel + lane_offset,
-                    &appearance_cache,
+                    &appearance_caches[local_col],
                 );
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                     return;
@@ -1453,13 +1460,15 @@ fn model_center(
 }
 
 #[inline(always)]
-const fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
+const fn note_alpha_params(appearance: &AppearanceEffects, local_col: usize) -> NoteAlphaParams {
     NoteAlphaParams {
         hidden: appearance.hidden,
         hidden_offset: appearance.hidden_offset,
         sudden: appearance.sudden,
         sudden_offset: appearance.sudden_offset,
         stealth: appearance.stealth,
+        stealth_col: appearance.stealth_cols[local_col],
+        stealth_past_receptors: appearance.stealth_past_receptors,
         blink: appearance.blink,
         random_vanish: appearance.random_vanish,
     }

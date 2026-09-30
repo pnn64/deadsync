@@ -585,6 +585,8 @@ pub enum SongLuaEaseMaskTarget {
     AppearanceSudden,
     AppearanceSuddenOffset,
     AppearanceStealth,
+    AppearanceStealthColumn(usize),
+    AppearanceStealthPastReceptors,
     AppearanceBlink,
     AppearanceRandomVanish,
     VisibilityDark,
@@ -1662,6 +1664,14 @@ fn append_song_lua_ease_targets_key(
         );
     };
 
+    if let Some(col) = mod_column_suffix(key, "stealth") {
+        push(
+            SongLuaEaseMaskTarget::AppearanceStealthColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
     if let Some(col) = mod_column_suffix(key, "dark") {
         push(
             SongLuaEaseMaskTarget::VisibilityDarkColumn(col),
@@ -1756,6 +1766,11 @@ fn append_song_lua_ease_targets_key(
             pct_to,
         ),
         "stealth" => push(SongLuaEaseMaskTarget::AppearanceStealth, pct_from, pct_to),
+        "stealthpastreceptors" => push(
+            SongLuaEaseMaskTarget::AppearanceStealthPastReceptors,
+            pct_from,
+            pct_to,
+        ),
         "blink" => push(SongLuaEaseMaskTarget::AppearanceBlink, pct_from, pct_to),
         "rvanish" | "randomvanish" | "reversevanish" => push(
             SongLuaEaseMaskTarget::AppearanceRandomVanish,
@@ -2311,6 +2326,14 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AppearanceSudden => appearance.sudden = value,
         SongLuaEaseMaskTarget::AppearanceSuddenOffset => appearance.sudden_offset = value,
         SongLuaEaseMaskTarget::AppearanceStealth => appearance.stealth = value,
+        SongLuaEaseMaskTarget::AppearanceStealthColumn(col) => {
+            if let Some(amount) = appearance.stealth_cols.get_mut(col) {
+                *amount = value;
+            }
+        }
+        SongLuaEaseMaskTarget::AppearanceStealthPastReceptors => {
+            appearance.stealth_past_receptors = value > 0.5
+        }
         SongLuaEaseMaskTarget::AppearanceBlink => appearance.blink = value,
         SongLuaEaseMaskTarget::AppearanceRandomVanish => appearance.random_vanish = value,
         SongLuaEaseMaskTarget::VisibilityDark => visibility.dark = Some(value),
@@ -2511,6 +2534,14 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AppearanceSudden => window.appearance.sudden.is_some(),
         SongLuaEaseMaskTarget::AppearanceSuddenOffset => window.appearance.sudden_offset.is_some(),
         SongLuaEaseMaskTarget::AppearanceStealth => window.appearance.stealth.is_some(),
+        SongLuaEaseMaskTarget::AppearanceStealthColumn(col) => window
+            .appearance
+            .stealth_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::AppearanceStealthPastReceptors => {
+            window.appearance.stealth_past_receptors.is_some()
+        }
         SongLuaEaseMaskTarget::AppearanceBlink => window.appearance.blink.is_some(),
         SongLuaEaseMaskTarget::AppearanceRandomVanish => window.appearance.random_vanish.is_some(),
         SongLuaEaseMaskTarget::VisibilityDark => window.visibility.dark.is_some(),
@@ -4497,6 +4528,9 @@ fn apply_song_lua_approach_targets(
                 attack.appearance_speed.sudden_offset = speed
             }
             SongLuaEaseMaskTarget::AppearanceStealth => attack.appearance_speed.stealth = speed,
+            SongLuaEaseMaskTarget::AppearanceStealthColumn(col) if col < MAX_COLS => {
+                attack.appearance_speed.stealth_cols[col] = speed
+            }
             SongLuaEaseMaskTarget::AppearanceBlink => attack.appearance_speed.blink = speed,
             SongLuaEaseMaskTarget::AppearanceRandomVanish => {
                 attack.appearance_speed.random_vanish = speed
@@ -4627,7 +4661,7 @@ pub fn refresh_active_attack_player(
 }
 
 #[inline(always)]
-const fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -> bool {
+fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -> bool {
     left.hidden.to_bits() == right.hidden.to_bits()
         && left.hidden_offset.to_bits() == right.hidden_offset.to_bits()
         && left.sudden.to_bits() == right.sudden.to_bits()
@@ -4635,6 +4669,12 @@ const fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -
         && left.stealth.to_bits() == right.stealth.to_bits()
         && left.blink.to_bits() == right.blink.to_bits()
         && left.random_vanish.to_bits() == right.random_vanish.to_bits()
+        && left.stealth_past_receptors == right.stealth_past_receptors
+        && left
+            .stealth_cols
+            .iter()
+            .zip(right.stealth_cols)
+            .all(|(left, right)| left.to_bits() == right.to_bits())
 }
 
 #[inline]
@@ -5395,6 +5435,15 @@ fn apply_runtime_mod(
     percent_value: Option<f32>,
     approach_speed: f32,
 ) {
+    if let Some(col) = mod_column_suffix(key, "stealth") {
+        set_approached_mod(
+            &mut out.appearance.stealth_cols[col],
+            &mut out.appearance_speed.stealth_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
     if let Some(col) = mod_column_suffix(key, "dark") {
         set_approached_mod(
             &mut out.visibility.dark_cols[col],
@@ -5659,6 +5708,10 @@ fn apply_runtime_mod(
                 out.mini_percent = Some(mini);
                 out.mini_speed = Some(approach_speed.max(0.0));
             }
+        }
+        "stealthpastreceptors" => {
+            out.appearance.stealth_past_receptors =
+                attack_level(percent_value).map(|level| level > 0.5);
         }
         "hidden" => {
             out.appearance.hidden = attack_level(percent_value);

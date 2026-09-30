@@ -2474,4 +2474,77 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn lane_stealth_hides_only_its_notes_in_composed_field() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|index| {
+                TestSlot::new(if index < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "lane0"
+                } else {
+                    "lane1"
+                })
+            })
+            .collect();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(1).expect("index")],
+        ];
+        for beat in [0.5, 3.0] {
+            let mut notes = [note(0), note(1)];
+            for note in &mut notes {
+                note.note_type = NoteType::Tap;
+                note.beat = beat;
+                note.row_index = usize::try_from(deadsync_core::timing::beat_to_note_row(beat))
+                    .expect("positive fixture beat");
+            }
+            for past in [false, true] {
+                let mut request =
+                    request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                request.chart.lane_note_row_indices = &lanes;
+                let rows = [deadsync_core::timing::beat_to_note_row(beat); 2];
+                request.chart.note_itg_rows = &rows;
+                request.visual.appearance.stealth = 0.25;
+                request.visual.appearance.stealth_cols[0] = 0.75;
+                request.visual.appearance.stealth_past_receptors = past;
+                let prepared = prepare_notefield(&request).expect("prepared field");
+                let frame = NotefieldFieldFrameView {
+                    feedback: spline_feedback(&[]),
+                    completed_rows: Default::default(),
+                };
+                let mut draws = Vec::new();
+                compose_notefield_field(
+                    &mut Vec::new(),
+                    &mut draws,
+                    &mut Vec::new(),
+                    &mut ModelMeshCache::default(),
+                    &mut HoldMeshScratch::default(),
+                    &mut CapturedActorScratch::with_capacities(32, 0),
+                    &mut NotefieldCameraCache::default(),
+                    &request,
+                    &prepared,
+                    &frame,
+                    &source,
+                );
+                let keys = sprite_keys(&draws);
+                assert!(keys.contains(&"lane1"), "neighbor lane stays visible");
+                assert_eq!(
+                    keys.contains(&"lane0"),
+                    beat < 1.0 && !past,
+                    "beat {beat}, past {past}"
+                );
+                assert!(
+                    keys.contains(&"target0"),
+                    "Stealth leaves receptors visible"
+                );
+            }
+        }
+    }
 }

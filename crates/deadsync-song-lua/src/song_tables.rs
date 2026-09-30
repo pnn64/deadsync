@@ -605,7 +605,7 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
         }
         let state = player_option_state(lua, owner)?;
         let value = if player_option_uses_bool(key) {
-            Value::Boolean(amount != Some(0.0))
+            Value::Boolean(amount.unwrap_or(1.0) > 0.5)
         } else {
             Value::Number(f64::from(amount.unwrap_or(1.0)))
         };
@@ -1515,6 +1515,32 @@ assert(options:Reverse() == 0 and options:XMod() == 1)
                 );
             }
         }
+    }
+
+    #[test]
+    fn boolean_option_strings_use_native_half_threshold() {
+        let lua = Lua::new();
+        let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
+            .expect("create option table");
+        lua.globals()
+            .set("options", options)
+            .expect("expose options");
+        lua.load(
+            r#"
+options:FromString('50% stealthpastreceptors')
+assert(options:StealthPastReceptors() == false)
+options:FromString('51% stealthpastreceptors')
+assert(options:StealthPastReceptors() == true)
+options:FromString('-50% stealthpastreceptors')
+assert(options:StealthPastReceptors() == false)
+options:FromString('25% noholds')
+assert(options:NoHolds() == false)
+options:FromString('51% noholds')
+assert(options:NoHolds() == true)
+"#,
+        )
+        .exec()
+        .expect("native boolean threshold");
     }
 
     #[test]

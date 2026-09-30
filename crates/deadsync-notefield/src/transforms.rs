@@ -23,6 +23,8 @@ pub(crate) struct NoteAlphaParams {
     pub sudden: f32,
     pub sudden_offset: f32,
     pub stealth: f32,
+    pub stealth_col: f32,
+    pub stealth_past_receptors: bool,
     pub blink: f32,
     pub random_vanish: f32,
 }
@@ -79,6 +81,8 @@ pub(crate) struct NoteAppearanceCache {
     sudden_bounds_finite: bool,
     stealth_active: bool,
     stealth: f32,
+    stealth_col: f32,
+    stealth_past_receptors: bool,
     blink_adjust: f32,
     random_vanish_active: bool,
     random_vanish: f32,
@@ -1109,6 +1113,7 @@ pub(crate) fn appearance_note_alpha_is_identity(params: NoteAlphaParams) -> bool
     params.hidden == 0.0
         && params.sudden == 0.0
         && params.stealth == 0.0
+        && params.stealth_col == 0.0
         && params.blink == 0.0
         && params.random_vanish == 0.0
 }
@@ -1140,6 +1145,8 @@ pub(crate) fn note_appearance_cache(
             sudden_bounds_finite: true,
             stealth_active: false,
             stealth: 0.0,
+            stealth_col: 0.0,
+            stealth_past_receptors: params.stealth_past_receptors,
             blink_adjust: 0.0,
             random_vanish_active: false,
             random_vanish: 0.0,
@@ -1177,7 +1184,8 @@ pub(crate) fn note_appearance_cache(
         sudden_end.is_finite() && sudden_start.is_finite() && sudden_denom.is_finite();
     let hidden_active = params.hidden > f32::EPSILON;
     let sudden_active = params.sudden > f32::EPSILON;
-    let stealth_active = params.stealth > f32::EPSILON;
+    let stealth_active = (!params.stealth.is_nan() && params.stealth != 0.0)
+        || (!params.stealth_col.is_nan() && params.stealth_col != 0.0);
     let blink_active = params.blink > f32::EPSILON;
     let random_vanish_active = params.random_vanish > f32::EPSILON;
     let path = match (
@@ -1264,11 +1272,13 @@ pub(crate) fn note_appearance_cache(
             combined_fade_low_adjust = params.hidden.mul_add(-1.0, combined_fade_low_adjust);
             combined_fade_low_adjust = params.sudden.mul_add(0.0, combined_fade_low_adjust);
             combined_fade_low_adjust -= params.stealth;
+            combined_fade_low_adjust -= params.stealth_col;
             combined_fade_low_adjust += blink_adjust;
             let mut combined_fade_high_adjust = 0.0;
             combined_fade_high_adjust = params.hidden.mul_add(0.0, combined_fade_high_adjust);
             combined_fade_high_adjust = params.sudden.mul_add(-1.0, combined_fade_high_adjust);
             combined_fade_high_adjust -= params.stealth;
+            combined_fade_high_adjust -= params.stealth_col;
             combined_fade_high_adjust += blink_adjust;
             (
                 (1.0 + combined_fade_low_adjust).clamp(0.0, 1.0),
@@ -1296,6 +1306,8 @@ pub(crate) fn note_appearance_cache(
         sudden_bounds_finite,
         stealth_active,
         stealth: params.stealth,
+        stealth_col: params.stealth_col,
+        stealth_past_receptors: params.stealth_past_receptors,
         blink_adjust,
         random_vanish_active,
         random_vanish: params.random_vanish,
@@ -1369,7 +1381,7 @@ fn sudden_fade_scaled_finite(y: f32, cache: &NoteAppearanceCache) -> f32 {
 
 #[inline(always)]
 pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) -> f32 {
-    if cache.identity || y < 0.0 {
+    if cache.identity || (y < 0.0 && !cache.stealth_past_receptors) {
         return 1.0;
     }
     match cache.path {
@@ -1408,6 +1420,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         AppearancePath::StealthOnly => {
             let mut visible_adjust = 0.0;
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
         AppearancePath::BlinkOnly => {
@@ -1436,6 +1449,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         AppearancePath::StealthBlinkOnly => {
             let mut visible_adjust = 0.0;
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             visible_adjust += cache.blink_adjust;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
@@ -1446,6 +1460,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
                 .hidden
                 .mul_add(scaled.clamp(-1.0, 0.0), visible_adjust);
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
         AppearancePath::SuddenStealthOnly => {
@@ -1455,6 +1470,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
                 .sudden
                 .mul_add(scaled.clamp(-1.0, 0.0), visible_adjust);
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
         AppearancePath::HiddenSuddenStealthOnly => {
@@ -1474,6 +1490,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
                 .sudden
                 .mul_add(sudden_scaled.clamp(-1.0, 0.0), visible_adjust);
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
         AppearancePath::HiddenBlinkOnly => {
@@ -1520,6 +1537,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
                 .hidden
                 .mul_add(scaled.clamp(-1.0, 0.0), visible_adjust);
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             visible_adjust += cache.blink_adjust;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
@@ -1530,6 +1548,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
                 .sudden
                 .mul_add(scaled.clamp(-1.0, 0.0), visible_adjust);
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             visible_adjust += cache.blink_adjust;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
@@ -1550,6 +1569,7 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
                 .sudden
                 .mul_add(sudden_scaled.clamp(-1.0, 0.0), visible_adjust);
             visible_adjust -= cache.stealth;
+            visible_adjust -= cache.stealth_col;
             visible_adjust += cache.blink_adjust;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
@@ -1583,6 +1603,7 @@ fn appearance_note_alpha_general(y: f32, cache: &NoteAppearanceCache) -> f32 {
     }
     if cache.stealth_active {
         visible_adjust -= cache.stealth;
+        visible_adjust -= cache.stealth_col;
     }
     visible_adjust += cache.blink_adjust;
     if cache.random_vanish_active {
