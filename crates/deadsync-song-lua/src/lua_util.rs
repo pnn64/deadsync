@@ -2,6 +2,7 @@ use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use image::image_dimensions;
 use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
+use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::c_int;
 use std::fs;
@@ -78,6 +79,57 @@ mod actor_state_perf;
 #[path = "../tests/perf/update_dispatch.rs"]
 pub(super) mod update_dispatch_perf;
 
+#[cfg(test)]
+#[path = "../tests/perf/frame_capture.rs"]
+mod frame_capture_perf;
+
+enum ActorScriptDir {
+    Blank,
+    Text(mlua::LuaString),
+}
+
+impl mlua::FromLua for ActorScriptDir {
+    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+        // Keep String's coercions and errors for non-stack conversions.
+        let text = String::from_lua(value.clone(), lua)?;
+        if text.trim().is_empty() {
+            Ok(Self::Blank)
+        } else {
+            Ok(Self::Text(mlua::LuaString::from_lua(value, lua)?))
+        }
+    }
+
+    unsafe fn from_stack(index: c_int, lua: &mlua::state::RawLua) -> mlua::Result<Self> {
+        let state = lua.state();
+        // SAFETY: mlua owns this live stack slot. Borrow only a type-checked
+        // string, validate it while it stays on the stack, then retain it using
+        // mlua's owning handle. No raw pointer or borrowed bytes escape.
+        unsafe {
+            let blank = if ffi::lua_type(state, index) == ffi::LUA_TSTRING {
+                let mut len = 0;
+                let data = ffi::lua_tolstring(state, index, &mut len);
+                let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+                std::str::from_utf8(bytes)
+                    .map_err(|err| mlua::Error::FromLuaConversionError {
+                        from: "string",
+                        to: "String".into(),
+                        message: Some(err.to_string()),
+                    })?
+                    .trim()
+                    .is_empty()
+            } else {
+                // Numeric coercion and non-string errors stay identical.
+                String::from_stack(index, lua)?.trim().is_empty()
+            };
+            if blank {
+                Ok(Self::Blank)
+            } else {
+                Ok(Self::Text(mlua::LuaString::from_stack(index, lua)?))
+            }
+        }
+    }
+}
+
 // Short, transient Lua fields stay on the stack. Keep String's coercions and
 // diagnostics, including the direct-stack UTF-8 error, for existing scripts.
 struct LuaFieldText<const N: usize>(smallvec::SmallVec<[u8; N]>)
@@ -140,7 +192,7 @@ pub struct SongLuaOverlayCompileActor<Kind> {
 }
 
 struct SongLuaOverlayUpdateCapture {
-    actor_indices: HashMap<usize, usize>,
+    actor_indices: FxHashMap<usize, usize>,
     active_broadcast: Option<String>,
     // Scoped with active_broadcast so nested dispatch restores both together.
     active_broadcast_command: Option<mlua::LuaString>,
@@ -168,7 +220,7 @@ pub struct SongLuaScheduledOverlayUpdate {
 }
 
 impl SongLuaOverlayUpdateCapture {
-    fn new(actor_indices: HashMap<usize, usize>) -> Self {
+    fn new(actor_indices: FxHashMap<usize, usize>) -> Self {
         let actor_count = actor_indices.len();
         Self {
             actor_indices,
@@ -312,8 +364,21 @@ impl SongLuaOverlayUpdateCapture {
     }
 }
 
+// Keep the former map entry point for behavior tests and frozen baselines.
+#[cfg(test)]
 pub fn begin_overlay_update_capture(lua: &Lua, actor_indices: HashMap<usize, usize>) {
-    lua.set_app_data(SongLuaOverlayUpdateCapture::new(actor_indices));
+    begin_overlay_update_capture_from_indices(lua, actor_indices);
+}
+
+pub(crate) fn begin_overlay_update_capture_from_indices(
+    lua: &Lua,
+    actor_indices: impl IntoIterator<Item = (usize, usize)>,
+) {
+    // Actor pointers are trusted internal keys. Build the fast map directly
+    // from compiler actors or an existing map without an intermediate map.
+    lua.set_app_data(SongLuaOverlayUpdateCapture::new(
+        actor_indices.into_iter().collect(),
+    ));
 }
 
 pub fn drain_overlay_update_capture(
@@ -2236,11 +2301,17 @@ pub fn call_actor_function(
         Some(params) => command.call::<()>((actor, params)),
         None => command.call::<()>((actor,)),
     };
-    if let Some(script_dir) = actor
-        .get::<Option<String>>("__songlua_script_dir")?
-        .filter(|dir| !dir.trim().is_empty())
+    if let Some(ActorScriptDir::Text(script_dir)) =
+        actor.get::<Option<ActorScriptDir>>("__songlua_script_dir")?
     {
-        return call_with_script_dir(lua, Path::new(&script_dir), call);
+        let globals = lua.globals();
+        let previous = globals.get::<Value>("__songlua_script_dir")?;
+        // Reuse Lua's immutable string, including long paths, without creating
+        // either a Rust copy or a second Lua string for the scoped directory.
+        globals.set("__songlua_script_dir", script_dir)?;
+        let result = call();
+        globals.set("__songlua_script_dir", previous)?;
+        return result;
     }
     call()
 }

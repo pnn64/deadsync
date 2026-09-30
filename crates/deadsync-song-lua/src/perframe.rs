@@ -1527,6 +1527,25 @@ fn overlay_state_update_value(
     }
 }
 
+fn overlay_state_matches_update_value(
+    state: &SongLuaOverlayState,
+    target: SongLuaOverlayUpdateTarget,
+    value: &SongLuaOverlayUpdateValue,
+) -> bool {
+    if target == SongLuaOverlayUpdateTarget::VertexColors {
+        // Compare the state's inline colors with the existing track's owned
+        // colors. Only a changed track needs new owned samples.
+        return match value {
+            SongLuaOverlayUpdateValue::None => state.vertex_colors.is_none(),
+            SongLuaOverlayUpdateValue::VertexColors(colors) => {
+                state.vertex_colors.as_ref() == Some(colors.as_ref())
+            }
+            _ => false,
+        };
+    }
+    overlay_state_update_value(state, target) == *value
+}
+
 fn set_overlay_state_update_value(
     state: &mut SongLuaOverlayState,
     target: crate::SongLuaOverlayUpdateTarget,
@@ -1807,17 +1826,21 @@ fn capture_update_overlay_samples<Kind>(
             .iter()
             .filter(|(_, index)| !captured_tracks[**index])
             .filter_map(|(&(overlay_index, target), &track_index)| {
-                let current = from_states
-                    .get(overlay_index)
-                    .map(|state| overlay_state_update_value(state, target))?;
-                let message = to_states
-                    .get(overlay_index)
-                    .map(|state| overlay_state_update_value(state, target))?;
+                let current_state = from_states.get(overlay_index)?;
+                let message_state = to_states.get(overlay_index)?;
                 let tracked = tracks
                     .get(track_index)
                     .and_then(|track| track.samples.last())
                     .map(|sample| &sample.value)?;
-                (*tracked != message).then_some((overlay_index, target, current, message))
+                if overlay_state_matches_update_value(message_state, target, tracked) {
+                    return None;
+                }
+                Some((
+                    overlay_index,
+                    target,
+                    overlay_state_update_value(current_state, target),
+                    overlay_state_update_value(message_state, target),
+                ))
             }),
     );
     // Runtime update tracks are applied after message commands. Keep an existing
@@ -2210,12 +2233,13 @@ pub fn compile_update_functions<Kind>(
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
     let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
-    let overlay_indices_by_pointer = overlays
-        .iter()
-        .enumerate()
-        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
-        .collect::<std::collections::HashMap<_, _>>();
-    crate::lua_util::begin_overlay_update_capture(lua, overlay_indices_by_pointer);
+    crate::lua_util::begin_overlay_update_capture_from_indices(
+        lua,
+        overlays
+            .iter()
+            .enumerate()
+            .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index)),
+    );
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
@@ -2910,3 +2934,7 @@ mod frame_sampling_perf;
 #[cfg(test)]
 #[path = "../tests/perf/update_dispatch_compile.rs"]
 mod update_dispatch_compile_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/borrowed_tracks.rs"]
+mod borrowed_tracks_perf;
