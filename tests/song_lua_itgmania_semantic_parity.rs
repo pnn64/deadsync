@@ -487,16 +487,12 @@ fn compile_trace_song_at(
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
     if trace.arrow_timing == "native" {
-        let candidates = song
-            .charts
-            .iter()
-            .enumerate()
-            .filter(|(_, chart)| {
-                chart.chart_type == trace.steps_type
-                    && chart
-                        .difficulty
-                        .eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
-            });
+        let candidates = song.charts.iter().enumerate().filter(|(_, chart)| {
+            chart.chart_type == trace.steps_type
+                && chart
+                    .difficulty
+                    .eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
+        });
         let chart_index = candidates
             .clone()
             .find(|(_, chart)| chart.description == trace.description)
@@ -504,9 +500,8 @@ fn compile_trace_song_at(
                 // DeadSync trims Unicode whitespace from descriptions; native
                 // ITGmania retains a trailing NBSP in Sharkmode. Keep exact
                 // matches first and never choose an ambiguous trimmed match.
-                let mut trimmed = candidates.filter(|(_, chart)| {
-                    chart.description.trim() == trace.description.trim()
-                });
+                let mut trimmed = candidates
+                    .filter(|(_, chart)| chart.description.trim() == trace.description.trim());
                 let first = trimmed.next()?;
                 trimmed.next().is_none().then_some(first)
             })
@@ -1647,16 +1642,6 @@ fn collect_native_drawables<'a>(
     }
 }
 
-fn starred_mods(value: &str) -> String {
-    value
-        .split(',')
-        .map(str::trim)
-        .filter(|part| part.starts_with('*'))
-        .map(str::to_ascii_lowercase)
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
     parity.section("timeline");
     let beat_epsilon = trace.fixture_context.beat_step + EPSILON;
@@ -1691,27 +1676,12 @@ fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mu
                         track.operation
                     )
                 });
-            } else if track.kind == "modifier" {
-                let Some(raw) = args.get(1).and_then(Value::as_str) else {
-                    continue;
-                };
-                let wanted = starred_mods(raw);
-                if wanted.is_empty() {
-                    continue;
-                }
-                let found = compiled.beat_mods.iter().any(|actual| {
-                    (actual.start - beat).abs() <= beat_epsilon
-                        && starred_mods(&actual.mods) == wanted
-                });
-                parity.check(found, || {
-                    format!(
-                        "missing modifier `{wanted}` near beat {beat:.3} for {}",
-                        track.actor.as_deref().unwrap_or("unknown player")
-                    )
-                });
             }
         }
     }
+    // Recurring modifier readers compile to sampled numeric targets, not raw
+    // beat_mods strings. The runtime modifier audit checks their gameplay values
+    // for both PlayerOptions writes and PlayerState::SetPlayerOptions.
 }
 
 fn value_f32(value: Option<&Value>) -> Option<f32> {
@@ -4073,15 +4043,6 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
                 .is_some_and(|w| w <= 0.0)
         }),
         "circle fixture must exercise ITGmania near-plane clipping"
-    );
-}
-
-#[test]
-fn starred_modifier_normalization_ignores_existing_options() {
-    crate::paths::init();
-    assert_eq!(
-        starred_mods("Overhead, 100% Dark, *1 no dark, *2 80% stealth"),
-        "*1 no dark, *2 80% stealth"
     );
 }
 

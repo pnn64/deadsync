@@ -265,6 +265,9 @@ where
         .map_err(|err| err.to_string())?;
     compile_timer.push_stage("execute_init");
     let root = Value::Table(roots);
+    // Startup queues and the initial update can consume one-shot broadcasts
+    // before the sampled replay starts. Retain their events as well.
+    crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
     let startup_states = run_actor_startup_commands(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor startup commands for song lua session '{}': {err}",
@@ -284,6 +287,17 @@ where
     compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
     compile_timer.push_stage("draw_functions");
+    let mut startup_broadcasts = crate::lua_util::runtime_broadcast_captures(&lua);
+    crate::lua_util::end_overlay_update_capture(&lua);
+    // Actor::UpdateTweening needs positive delta. Match the first-frame clock
+    // used when restoring the state before queued startup commands.
+    let startup_beat = crate::song_beat_at_elapsed_seconds(
+        1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS,
+        context,
+    );
+    for (beat, _, _) in &mut startup_broadcasts {
+        *beat = startup_beat;
+    }
     register_loaded_easing_names(&lua, &mut host).map_err(|err| err.to_string())?;
     compile_timer.push_stage("easing_names");
     mark_compile_layers(&root).map_err(|err| err.to_string())?;
@@ -296,6 +310,7 @@ where
         screen_height: context.screen_height,
         ..CompiledSongLua::default()
     };
+    merge_runtime_messages(&mut out.messages, 0, &startup_broadcasts);
     let compile_globals =
         snapshot_compile_globals(&lua, &globals).map_err(|err| err.to_string())?;
     let overlays = read_overlay_compile_actors(
@@ -697,8 +712,9 @@ where
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
     out.overlay_updates.extend(update_overlay_tracks);
-    retime_runtime_action_messages(
-        &mut out.messages[runtime_action_message_start..],
+    merge_runtime_messages(
+        &mut out.messages,
+        runtime_action_message_start,
         &runtime_broadcasts,
     );
     for capture in stateful_message_captures {
@@ -803,20 +819,21 @@ where
     split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
 }
 
-fn retime_runtime_action_messages(
-    messages: &mut [SongLuaMessageEvent],
+fn merge_runtime_messages(
+    messages: &mut Vec<SongLuaMessageEvent>,
+    action_start: usize,
     runtime_broadcasts: &[(f32, String, bool)],
 ) {
-    let mut matched = vec![false; messages.len()];
-    for (runtime_beat, runtime_message, has_params) in runtime_broadcasts {
-        if *has_params {
-            continue;
-        }
+    let action_end = messages.len();
+    let mut matched = vec![false; action_end - action_start];
+    for (runtime_beat, runtime_message, _) in runtime_broadcasts {
         let Some(index) = messages
             .iter()
             .enumerate()
+            .take(action_end)
+            .skip(action_start)
             .filter(|(index, event)| {
-                !matched[*index]
+                !matched[*index - action_start]
                     && !event.message.starts_with("__songlua_overlay_fn_action_")
                     && event.message == *runtime_message
                     && event.beat <= *runtime_beat + f32::EPSILON
@@ -824,10 +841,18 @@ fn retime_runtime_action_messages(
             .max_by(|(_, left), (_, right)| left.beat.total_cmp(&right.beat))
             .map(|(index, _)| index)
         else {
+            // MessageManager::Broadcast dispatches every runtime call, including
+            // schedules stored under local or chart-specific table names. The
+            // sampled tracks retain parameter-dependent listener writes.
+            messages.push(SongLuaMessageEvent {
+                beat: *runtime_beat,
+                message: runtime_message.clone(),
+                persists: false,
+            });
             continue;
         };
         messages[index].beat = *runtime_beat;
-        matched[index] = true;
+        matched[index - action_start] = true;
     }
 }
 

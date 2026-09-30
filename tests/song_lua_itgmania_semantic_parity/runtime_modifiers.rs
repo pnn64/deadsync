@@ -60,10 +60,16 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
     let mut writes = Vec::new();
     let mut unsupported = BTreeMap::<String, usize>::new();
     for track in &trace.timeline_tracks {
+        let state_setter = track.operation == "PlayerState.SetPlayerOptions";
         let Some(player) = (0..2).find(|player| {
             track.actor.as_deref()
                 == Some(
-                    format!("player-state:PLAYER_{}/options:ModsLevel_Song", player + 1).as_str(),
+                    if state_setter {
+                        format!("player-state:PLAYER_{}", player + 1)
+                    } else {
+                        format!("player-state:PLAYER_{}/options:ModsLevel_Song", player + 1)
+                    }
+                    .as_str(),
                 )
         }) else {
             continue;
@@ -71,10 +77,17 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
         if !trace.enabled_players.unwrap_or([true; 2])[player] {
             continue;
         }
-        let Some(operation) = track.operation.strip_prefix("PlayerOptions.") else {
+        let operation = if state_setter {
+            "FromString"
+        } else if let Some(operation) = track.operation.strip_prefix("PlayerOptions.") {
+            operation
+        } else {
             continue;
         };
         for (sequence, beat, second, args, _) in &track.samples {
+            if state_setter && args.first().and_then(Value::as_str) != Some("ModsLevel_Song") {
+                continue;
+            }
             let (Some(beat), Some(second)) = (beat, second) else {
                 continue;
             };
@@ -90,6 +103,10 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             };
             // Hallway and Distant set perspective tilt and reset skew.
             let mut set_option = |key: String, value: f32| match key.as_str() {
+                "overhead" if value > 0.5 => {
+                    push("tilt".into(), 0.0);
+                    push("skew".into(), 0.0);
+                }
                 "hallway" | "distant" => {
                     push("tilt".into(), if key == "hallway" { -value } else { value });
                     push("skew".into(), 0.0);
@@ -98,12 +115,29 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             };
             if operation == "FromString" {
                 let raw = args
-                    .first()
+                    .get(usize::from(state_setter))
                     .and_then(Value::as_str)
                     .expect("modifier string");
                 for part in raw.split(',').filter(|part| !part.trim().is_empty()) {
                     let part = part.trim().to_ascii_lowercase();
                     let words = part.split_whitespace().collect::<Vec<_>>();
+                    // GetString always includes this neutral lighting enum. It
+                    // is metadata rather than a numeric notefield modifier.
+                    if words.as_slice() == ["nohidelights"] {
+                        continue;
+                    }
+                    let key = words.last().expect("nonempty modifier part");
+                    let speed = key
+                        .strip_suffix('x')
+                        .map(|raw| ("xmod", raw))
+                        .or_else(|| key.strip_prefix('c').map(|raw| ("cmod", raw)))
+                        .or_else(|| key.strip_prefix('m').map(|raw| ("mmod", raw)));
+                    if let Some((key, value)) = speed
+                        .and_then(|(key, raw)| raw.parse::<f32>().ok().map(|value| (key, value)))
+                    {
+                        set_option(key.into(), value);
+                        continue;
+                    }
                     let Some((value, key)) = mod_string_level(&words).zip(words.last()) else {
                         *unsupported.entry(part.clone()).or_default() += 1;
                         continue;
@@ -314,6 +348,135 @@ fn runtime_reader_preserves_order_and_easing_body() {
             );
         }
     }
+}
+
+#[test]
+fn state_option_strings_drive_sampled_targets() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create option fixture directory");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local phase = 1
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+return Def.ActorFrame{OnCommand=function(self)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            player:SetPlayerOptions("ModsLevel_Song", "*7 50% Drunk, C500")
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions("ModsLevel_Song", "25% Mini")
+            phase = 3
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write option fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "State option strings");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile option strings");
+    assert!(
+        compiled[0].beat_mods.is_empty(),
+        "recurring writes use sampled targets"
+    );
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, drunk, mini, speed) in [
+        (
+            0.25,
+            0.0,
+            0.0,
+            deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
+        ),
+        (
+            0.5,
+            0.5,
+            0.0,
+            deadsync_rules::scroll::ScrollSpeedSetting::CMod(500.0),
+        ),
+        (
+            1.0,
+            0.0,
+            0.25,
+            deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
+        ),
+        (
+            1.5,
+            0.0,
+            0.25,
+            deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
+        ),
+    ] {
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(
+            runtime_mod_value(&runtime, 0, "drunk"),
+            Some(drunk),
+            "drunk at {second}"
+        );
+        assert_eq!(
+            runtime_mod_value(&runtime, 0, "mini"),
+            Some(mini),
+            "mini at {second}"
+        );
+        assert_eq!(
+            runtime.scroll_speed[0]
+                .unwrap_or(deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0)),
+            speed,
+            "speed at {second}"
+        );
+    }
+    let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
+    trace.timeline_tracks = vec![NativeTimelineTrack {
+        kind: "modifier".into(),
+        actor: Some("player-state:PLAYER_1".into()),
+        operation: "PlayerState.SetPlayerOptions".into(),
+        samples: vec![
+            (
+                1,
+                Some(1.0),
+                Some(0.5),
+                vec![
+                    serde_json::json!("ModsLevel_Song"),
+                    serde_json::json!("*7 50% Drunk, C500"),
+                ],
+                None,
+            ),
+            (
+                2,
+                Some(2.0),
+                Some(1.0),
+                vec![
+                    serde_json::json!("ModsLevel_Song"),
+                    serde_json::json!("25% Mini"),
+                ],
+                None,
+            ),
+        ],
+    }];
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 3, "audit state-level string writes");
+    parity.assert_complete("state option string targets");
+    let mut missing = compiled;
+    missing[0].eases.clear();
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &missing, &context, &mut parity);
+    assert!(
+        !parity.gaps.is_empty(),
+        "the audit rejects missing sampled targets"
+    );
 }
 
 #[test]

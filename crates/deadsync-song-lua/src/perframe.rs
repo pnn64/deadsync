@@ -24,7 +24,7 @@ use crate::{
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
-const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
+pub(crate) const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
 
 #[cfg(test)]
 #[path = "../tests/perf/dense_capture.rs"]

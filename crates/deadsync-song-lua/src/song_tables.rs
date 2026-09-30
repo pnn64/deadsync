@@ -161,6 +161,18 @@ fn create_player_state_table(
                     .and_then(read_string)
                     .unwrap_or_default();
                 owner.set("__songlua_player_options_string", options_text.clone())?;
+                // LunaPlayerState::SetPlayerOptions parses a fresh PlayerOptions
+                // and assigns it. Keep the table identity held by Lua readers,
+                // but reset prior targets and approach speeds before parsing.
+                let state = player_option_state(lua, &options_for_set)?;
+                let speeds = player_option_speeds(lua, &options_for_set)?;
+                for pair in state.pairs::<String, Value>() {
+                    let (key, _) = pair?;
+                    state.raw_set(key.as_str(), default_player_option_value(lua, &key)?)?;
+                    speeds.raw_set(key, 1.0_f32)?;
+                }
+                set_player_speedmod(&options_for_set, "xmod", Some(1.0))?;
+                set_player_speed_approaches(lua, &options_for_set, Some(1.0))?;
                 apply_player_options_string(lua, &options_for_set, &options_text)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(())
@@ -1445,6 +1457,39 @@ fn create_steps_by_steps_type_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn state_options_replace_previous_targets() {
+        let lua = Lua::new();
+        let context = SongLuaCompileContext::new(Path::new("."), "Option assignment");
+        let runtime = create_song_runtime_table(&lua, &context).expect("create runtime");
+        let (state, options) =
+            create_player_state_table(&lua, context.players[0].clone(), 0, &runtime)
+                .expect("create player state");
+        lua.globals()
+            .set("player", state)
+            .expect("expose player state");
+        lua.load(
+            r#"
+local options = player:GetPlayerOptions("ModsLevel_Song")
+options:FromString("*7 50% Drunk, Shuffle, C500")
+options:FromString("25% Mini")
+assert(options:Drunk() == 0.5 and options:Mini() == 0.25)
+player:SetPlayerOptions("ModsLevel_Song", "*3 75% Reverse")
+assert(options == player:GetPlayerOptions("ModsLevel_Song"))
+assert(options:Drunk() == 0 and options:Mini() == 0 and not options:Shuffle())
+assert(options:XMod() == 1 and options:CMod() == nil and options:Reverse() == 0.75)
+player:SetPlayerOptions("ModsLevel_Song", "")
+assert(options:Reverse() == 0 and options:XMod() == 1)
+"#,
+        )
+        .exec()
+        .expect("run native-style option assignment");
+        let speeds = player_option_speeds(&lua, &options).expect("read approach speeds");
+        for key in ["drunk", "reverse", "xmod", "cmod", "mmod"] {
+            assert_eq!(speeds.raw_get::<f32>(key).expect("recorded approach"), 1.0);
+        }
+    }
 
     #[test]
     fn speed_option_writes_preserve_shared_approach_speed() {

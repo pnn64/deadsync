@@ -9136,12 +9136,123 @@ return Def.ActorFrame{
             .iter()
             .find(|event| event.message == "BossOn")
             .expect("runtime action should retain its named broadcast");
+        assert_eq!(
+            compiled
+                .messages
+                .iter()
+                .filter(|event| event.message == "BossOn")
+                .count(),
+            1
+        );
 
         assert!(
             message.beat > 1.01 && message.beat <= 1.06,
             "runtime message must use the first recurring update wake after beat 1.01, got {}",
             message.beat
         );
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_runtime_broadcasts() {
+        let song_dir = test_dir("runtime-local-messages");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local fired = false
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            if fired or GAMESTATE:GetSongBeat() < 1.01 then return end
+            fired = true
+            MESSAGEMAN:Broadcast("Pulse")
+            MESSAGEMAN:Broadcast("Pulse")
+            MESSAGEMAN:Broadcast("Tint", {alpha=0.25})
+        end)
+    end,
+    Def.Quad{
+        Name="Light",
+        PulseMessageCommand=function(self) self:x(self:GetX()+1) end,
+        TintMessageCommand=function(self, params)
+            if params and params.alpha then self:diffusealpha(params.alpha) end
+        end,
+    },
+}
+"#,
+        )
+        .expect("write runtime broadcast fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime local messages");
+        context.song_display_bpms = [60.0; 2];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile runtime broadcasts");
+        let events = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message == "Pulse" || event.message == "Tint")
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 3);
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.message.as_str())
+                .collect::<Vec<_>>(),
+            ["Pulse", "Pulse", "Tint"]
+        );
+        assert!(
+            events
+                .iter()
+                .all(|event| event.beat > 1.01 && event.beat <= 1.06)
+        );
+        assert!(compiled.overlay_updates.iter().any(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse && track.samples.iter().any(|sample| matches!(&sample.value, SongLuaOverlayUpdateValue::Vec4(color) if color[3] == 0.25))), "capture parameter-dependent listener state");
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_startup_broadcasts() {
+        let song_dir = test_dir("startup-broadcasts");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local fired = false
+return Def.ActorFrame{
+    OnCommand=function(self)
+        MESSAGEMAN:Broadcast("Immediate")
+        self:queuecommand("Bind")
+    end,
+    BindCommand=function(self)
+        MESSAGEMAN:Broadcast("Startup")
+        self:SetUpdateFunction(function()
+            if fired then return end
+            fired = true
+            MESSAGEMAN:Broadcast("Ready")
+        end)
+    end,
+    Def.Quad{
+        ImmediateMessageCommand=function(self) self:x(5) end,
+        StartupMessageCommand=function(self) self:x(10) end,
+        ReadyMessageCommand=function(self) self:y(20) end,
+    },
+}
+"#,
+        )
+        .expect("write startup broadcast fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Startup broadcasts");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile startup broadcasts");
+        let events = compiled
+            .messages
+            .iter()
+            .filter(|event| matches!(event.message.as_str(), "Immediate" | "Startup" | "Ready"))
+            .map(|event| (event.beat, event.message.as_str()))
+            .collect::<Vec<_>>();
+        let first_beat = crate::song_beat_at_elapsed_seconds(1.0 / 60.0, &context);
+        assert_eq!(events, [(first_beat, "Startup"), (first_beat, "Ready")]);
+        let quad = compiled
+            .overlays
+            .iter()
+            .find(|overlay| matches!(overlay.kind, SongLuaOverlayKind::Quad))
+            .expect("startup quad");
+        assert_eq!(quad.initial_state.x, 5.0);
     }
 
     #[test]

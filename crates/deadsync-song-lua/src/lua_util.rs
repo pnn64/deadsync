@@ -200,6 +200,7 @@ struct SongLuaOverlayUpdateCapture {
     active_broadcast: Option<String>,
     // Scoped with active_broadcast so nested dispatch restores both together.
     active_broadcast_command: Option<mlua::LuaString>,
+    active_broadcast_params: bool,
     runtime_broadcasts: Vec<(f32, String, bool)>,
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
@@ -230,6 +231,7 @@ impl SongLuaOverlayUpdateCapture {
             actor_indices,
             active_broadcast: None,
             active_broadcast_command: None,
+            active_broadcast_params: false,
             runtime_broadcasts: Vec::new(),
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
@@ -552,18 +554,21 @@ fn record_overlay_update_capture(
         {
             return false;
         }
-        capture
-            .active_broadcast_command
-            .as_ref()
-            .is_some_and(|command| {
-                actor
-                    .get::<Option<Function>>(command)
-                    .ok()
-                    .flatten()
-                    .is_some()
-            })
+        !capture.active_broadcast_params
+            && capture
+                .active_broadcast_command
+                .as_ref()
+                .is_some_and(|command| {
+                    actor
+                        .get::<Option<Function>>(command)
+                        .ok()
+                        .flatten()
+                        .is_some()
+                })
     };
     // The receiving actor's own command is compiled as a timed message block.
+    // Parameter-dependent commands need their actual writes: those parameters
+    // were unavailable when the static blocks were captured.
     // Mutations to other actors must remain in the sequential capture because
     // stateful commands can select a different target on every broadcast.
     if direct_message_actor {
@@ -621,16 +626,17 @@ fn record_overlay_update_capture_immediate(
         {
             return false;
         }
-        capture
-            .active_broadcast_command
-            .as_ref()
-            .is_some_and(|command| {
-                actor
-                    .get::<Option<Function>>(command)
-                    .ok()
-                    .flatten()
-                    .is_some()
-            })
+        !capture.active_broadcast_params
+            && capture
+                .active_broadcast_command
+                .as_ref()
+                .is_some_and(|command| {
+                    actor
+                        .get::<Option<Function>>(command)
+                        .ok()
+                        .flatten()
+                        .is_some()
+                })
     };
     if direct_message_actor {
         return true;
@@ -1914,7 +1920,10 @@ pub fn broadcast_song_lua_message(
     let command = ActorCommandName::new(message, "MessageCommand");
     let globals = lua.globals();
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
-    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+    // Synchronous On broadcasts are already part of the startup snapshot.
+    // Queued startup commands run after this scope, on the first update.
+    let on_startup = lua.app_data_ref::<SongLuaStartupQueues>().is_some();
+    if !on_startup && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
         capture
             .runtime_broadcasts
             .push((beat, message.to_string(), params.is_some()));
@@ -1934,7 +1943,9 @@ pub fn broadcast_song_lua_message(
             let previous = capture.active_broadcast.replace(message.to_string());
             let previous_command =
                 std::mem::replace(&mut capture.active_broadcast_command, command_key);
-            (previous, previous_command)
+            let previous_params =
+                std::mem::replace(&mut capture.active_broadcast_params, params.is_some());
+            (previous, previous_command, previous_params)
         });
     let result = || {
         let registry = song_lua_actor_registry(lua)?;
@@ -1958,11 +1969,12 @@ pub fn broadcast_song_lua_message(
         })
     };
     let result = result();
-    if let Some((previous, previous_command)) = capture_broadcast
+    if let Some((previous, previous_command, previous_params)) = capture_broadcast
         && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
     {
         capture.active_broadcast = previous;
         capture.active_broadcast_command = previous_command;
+        capture.active_broadcast_params = previous_params;
     }
     let restore = globals.raw_set(ACTIVE_BROADCAST_KEY, previous_broadcast);
     restore?;
