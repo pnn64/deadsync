@@ -562,6 +562,15 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualBumpyX,
+    VisualBumpyXOffset,
+    VisualBumpyXPeriod,
+    VisualTanBumpy,
+    VisualTanBumpyOffset,
+    VisualTanBumpyPeriod,
+    VisualTanBumpyX,
+    VisualTanBumpyXOffset,
+    VisualTanBumpyXPeriod,
     VisualDrunkZ,
     VisualDrunkZOffset,
     VisualDrunkZSpeed,
@@ -1764,6 +1773,31 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "bumpyx" => push(SongLuaEaseMaskTarget::VisualBumpyX, pct_from, pct_to),
+        "bumpyxoffset" => push(SongLuaEaseMaskTarget::VisualBumpyXOffset, pct_from, pct_to),
+        "bumpyxperiod" => push(SongLuaEaseMaskTarget::VisualBumpyXPeriod, pct_from, pct_to),
+        "tanbumpy" => push(SongLuaEaseMaskTarget::VisualTanBumpy, pct_from, pct_to),
+        "tanbumpyoffset" => push(
+            SongLuaEaseMaskTarget::VisualTanBumpyOffset,
+            pct_from,
+            pct_to,
+        ),
+        "tanbumpyperiod" => push(
+            SongLuaEaseMaskTarget::VisualTanBumpyPeriod,
+            pct_from,
+            pct_to,
+        ),
+        "tanbumpyx" => push(SongLuaEaseMaskTarget::VisualTanBumpyX, pct_from, pct_to),
+        "tanbumpyxoffset" => push(
+            SongLuaEaseMaskTarget::VisualTanBumpyXOffset,
+            pct_from,
+            pct_to,
+        ),
+        "tanbumpyxperiod" => push(
+            SongLuaEaseMaskTarget::VisualTanBumpyXPeriod,
+            pct_from,
+            pct_to,
+        ),
         "drunkz" => push(SongLuaEaseMaskTarget::VisualDrunkZ, pct_from, pct_to),
         "drunkzoffset" => push(SongLuaEaseMaskTarget::VisualDrunkZOffset, pct_from, pct_to),
         "drunkzspeed" => push(SongLuaEaseMaskTarget::VisualDrunkZSpeed, pct_from, pct_to),
@@ -2359,6 +2393,15 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyX => visual.bumpy_x = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyXOffset => visual.bumpy_x_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBumpyXPeriod => visual.bumpy_x_period = Some(value),
+        SongLuaEaseMaskTarget::VisualTanBumpy => visual.tan_bumpy = Some(value),
+        SongLuaEaseMaskTarget::VisualTanBumpyOffset => visual.tan_bumpy_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualTanBumpyPeriod => visual.tan_bumpy_period = Some(value),
+        SongLuaEaseMaskTarget::VisualTanBumpyX => visual.tan_bumpy_x = Some(value),
+        SongLuaEaseMaskTarget::VisualTanBumpyXOffset => visual.tan_bumpy_x_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualTanBumpyXPeriod => visual.tan_bumpy_x_period = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkZ => visual.drunk_z = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkZOffset => visual.drunk_z_offset = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkZSpeed => visual.drunk_z_speed = Some(value),
@@ -2594,6 +2637,15 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyX => window.visual.bumpy_x.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyXOffset => window.visual.bumpy_x_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBumpyXPeriod => window.visual.bumpy_x_period.is_some(),
+        SongLuaEaseMaskTarget::VisualTanBumpy => window.visual.tan_bumpy.is_some(),
+        SongLuaEaseMaskTarget::VisualTanBumpyOffset => window.visual.tan_bumpy_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualTanBumpyPeriod => window.visual.tan_bumpy_period.is_some(),
+        SongLuaEaseMaskTarget::VisualTanBumpyX => window.visual.tan_bumpy_x.is_some(),
+        SongLuaEaseMaskTarget::VisualTanBumpyXOffset => window.visual.tan_bumpy_x_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualTanBumpyXPeriod => window.visual.tan_bumpy_x_period.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkZ => window.visual.drunk_z.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkZOffset => window.visual.drunk_z_offset.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkZSpeed => window.visual.drunk_z_speed.is_some(),
@@ -3830,6 +3882,15 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.bumpy_x, visual.bumpy_x);
+    mark_active_target(&mut targets.bumpy_x_offset, visual.bumpy_x_offset);
+    mark_active_target(&mut targets.bumpy_x_period, visual.bumpy_x_period);
+    mark_active_target(&mut targets.tan_bumpy, visual.tan_bumpy);
+    mark_active_target(&mut targets.tan_bumpy_offset, visual.tan_bumpy_offset);
+    mark_active_target(&mut targets.tan_bumpy_period, visual.tan_bumpy_period);
+    mark_active_target(&mut targets.tan_bumpy_x, visual.tan_bumpy_x);
+    mark_active_target(&mut targets.tan_bumpy_x_offset, visual.tan_bumpy_x_offset);
+    mark_active_target(&mut targets.tan_bumpy_x_period, visual.tan_bumpy_x_period);
     mark_active_target(&mut targets.drunk_z, visual.drunk_z);
     mark_active_target(&mut targets.drunk_z_offset, visual.drunk_z_offset);
     mark_active_target(&mut targets.drunk_z_speed, visual.drunk_z_speed);
@@ -4646,6 +4707,27 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualBumpyX => attack.visual_speed.bumpy_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualBumpyXOffset => {
+                attack.visual_speed.bumpy_x_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBumpyXPeriod => {
+                attack.visual_speed.bumpy_x_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanBumpy => attack.visual_speed.tan_bumpy = Some(speed),
+            SongLuaEaseMaskTarget::VisualTanBumpyOffset => {
+                attack.visual_speed.tan_bumpy_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanBumpyPeriod => {
+                attack.visual_speed.tan_bumpy_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanBumpyX => attack.visual_speed.tan_bumpy_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualTanBumpyXOffset => {
+                attack.visual_speed.tan_bumpy_x_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTanBumpyXPeriod => {
+                attack.visual_speed.tan_bumpy_x_period = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualDrunkZ => attack.visual_speed.drunk_z = Some(speed),
             SongLuaEaseMaskTarget::VisualDrunkZOffset => {
                 attack.visual_speed.drunk_z_offset = Some(speed)
@@ -5237,6 +5319,87 @@ fn apply_active_visual_window(
         window.visual.parabola_x,
         window.visual_speed.parabola_x,
         active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bumpy_x,
+        &mut values.visual_speed.bumpy_x,
+        window.visual.bumpy_x,
+        window.visual_speed.bumpy_x,
+        active_targets.visual.bumpy_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bumpy_x_offset,
+        &mut values.visual_speed.bumpy_x_offset,
+        window.visual.bumpy_x_offset,
+        window.visual_speed.bumpy_x_offset,
+        active_targets.visual.bumpy_x_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bumpy_x_period,
+        &mut values.visual_speed.bumpy_x_period,
+        window.visual.bumpy_x_period,
+        window.visual_speed.bumpy_x_period,
+        active_targets.visual.bumpy_x_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_bumpy,
+        &mut values.visual_speed.tan_bumpy,
+        window.visual.tan_bumpy,
+        window.visual_speed.tan_bumpy,
+        active_targets.visual.tan_bumpy,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_bumpy_offset,
+        &mut values.visual_speed.tan_bumpy_offset,
+        window.visual.tan_bumpy_offset,
+        window.visual_speed.tan_bumpy_offset,
+        active_targets.visual.tan_bumpy_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_bumpy_period,
+        &mut values.visual_speed.tan_bumpy_period,
+        window.visual.tan_bumpy_period,
+        window.visual_speed.tan_bumpy_period,
+        active_targets.visual.tan_bumpy_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_bumpy_x,
+        &mut values.visual_speed.tan_bumpy_x,
+        window.visual.tan_bumpy_x,
+        window.visual_speed.tan_bumpy_x,
+        active_targets.visual.tan_bumpy_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_bumpy_x_offset,
+        &mut values.visual_speed.tan_bumpy_x_offset,
+        window.visual.tan_bumpy_x_offset,
+        window.visual_speed.tan_bumpy_x_offset,
+        active_targets.visual.tan_bumpy_x_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tan_bumpy_x_period,
+        &mut values.visual_speed.tan_bumpy_x_period,
+        window.visual.tan_bumpy_x_period,
+        window.visual_speed.tan_bumpy_x_period,
+        active_targets.visual.tan_bumpy_x_period,
         active_clear_all,
         persisted,
     );
@@ -6066,6 +6229,60 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "bumpyx" => set_approached_mod(
+            &mut out.visual.bumpy_x,
+            &mut out.visual_speed.bumpy_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpyxoffset" => set_approached_mod(
+            &mut out.visual.bumpy_x_offset,
+            &mut out.visual_speed.bumpy_x_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bumpyxperiod" => set_approached_mod(
+            &mut out.visual.bumpy_x_period,
+            &mut out.visual_speed.bumpy_x_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tanbumpy" => set_approached_mod(
+            &mut out.visual.tan_bumpy,
+            &mut out.visual_speed.tan_bumpy,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tanbumpyoffset" => set_approached_mod(
+            &mut out.visual.tan_bumpy_offset,
+            &mut out.visual_speed.tan_bumpy_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tanbumpyperiod" => set_approached_mod(
+            &mut out.visual.tan_bumpy_period,
+            &mut out.visual_speed.tan_bumpy_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tanbumpyx" => set_approached_mod(
+            &mut out.visual.tan_bumpy_x,
+            &mut out.visual_speed.tan_bumpy_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tanbumpyxoffset" => set_approached_mod(
+            &mut out.visual.tan_bumpy_x_offset,
+            &mut out.visual_speed.tan_bumpy_x_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tanbumpyxperiod" => set_approached_mod(
+            &mut out.visual.tan_bumpy_x_period,
+            &mut out.visual_speed.tan_bumpy_x_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "drunkz" => set_approached_mod(
             &mut out.visual.drunk_z,
             &mut out.visual_speed.drunk_z,
@@ -6669,6 +6886,15 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        bumpy_x: merge_attack_value(base.bumpy_x, attack.bumpy_x),
+        bumpy_x_offset: merge_attack_value(base.bumpy_x_offset, attack.bumpy_x_offset),
+        bumpy_x_period: merge_attack_value(base.bumpy_x_period, attack.bumpy_x_period),
+        tan_bumpy: merge_attack_value(base.tan_bumpy, attack.tan_bumpy),
+        tan_bumpy_offset: merge_attack_value(base.tan_bumpy_offset, attack.tan_bumpy_offset),
+        tan_bumpy_period: merge_attack_value(base.tan_bumpy_period, attack.tan_bumpy_period),
+        tan_bumpy_x: merge_attack_value(base.tan_bumpy_x, attack.tan_bumpy_x),
+        tan_bumpy_x_offset: merge_attack_value(base.tan_bumpy_x_offset, attack.tan_bumpy_x_offset),
+        tan_bumpy_x_period: merge_attack_value(base.tan_bumpy_x_period, attack.tan_bumpy_x_period),
         drunk_z: merge_attack_value(base.drunk_z, attack.drunk_z),
         drunk_z_offset: merge_attack_value(base.drunk_z_offset, attack.drunk_z_offset),
         drunk_z_speed: merge_attack_value(base.drunk_z_speed, attack.drunk_z_speed),

@@ -3458,6 +3458,113 @@ mod tests {
     }
 
     #[test]
+    fn bumpy_variants_keep_native_units_speeds_and_reset() {
+        let mods = parse_attack_mods(
+            "*2 -25% bumpyx,*4 -50% bumpyxoffset,*6 -75% bumpyxperiod,*8 -100% tanbumpy,*10 -125% tanbumpyoffset,*12 -150% tanbumpyperiod,*14 -175% tanbumpyx,*16 -200% tanbumpyxoffset,*18 -225% tanbumpyxperiod",
+        );
+        assert_eq!(
+            [
+                mods.visual.bumpy_x,
+                mods.visual.bumpy_x_offset,
+                mods.visual.bumpy_x_period,
+                mods.visual.tan_bumpy,
+                mods.visual.tan_bumpy_offset,
+                mods.visual.tan_bumpy_period,
+                mods.visual.tan_bumpy_x,
+                mods.visual.tan_bumpy_x_offset,
+                mods.visual.tan_bumpy_x_period
+            ],
+            [
+                Some(-1.0 / 4.0),
+                Some(-2.0 / 4.0),
+                Some(-3.0 / 4.0),
+                Some(-4.0 / 4.0),
+                Some(-5.0 / 4.0),
+                Some(-6.0 / 4.0),
+                Some(-7.0 / 4.0),
+                Some(-8.0 / 4.0),
+                Some(-9.0 / 4.0)
+            ]
+        );
+        assert_eq!(
+            [
+                mods.visual_speed.bumpy_x,
+                mods.visual_speed.bumpy_x_offset,
+                mods.visual_speed.bumpy_x_period,
+                mods.visual_speed.tan_bumpy,
+                mods.visual_speed.tan_bumpy_offset,
+                mods.visual_speed.tan_bumpy_period,
+                mods.visual_speed.tan_bumpy_x,
+                mods.visual_speed.tan_bumpy_x_offset,
+                mods.visual_speed.tan_bumpy_x_period
+            ],
+            [
+                Some(2.0),
+                Some(4.0),
+                Some(6.0),
+                Some(8.0),
+                Some(10.0),
+                Some(12.0),
+                Some(14.0),
+                Some(16.0),
+                Some(18.0)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.0625,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.bumpy_x,
+                merged.bumpy_x_offset,
+                merged.bumpy_x_period,
+                merged.tan_bumpy,
+                merged.tan_bumpy_offset,
+                merged.tan_bumpy_period,
+                merged.tan_bumpy_x,
+                merged.tan_bumpy_x_offset,
+                merged.tan_bumpy_x_period
+            ],
+            [
+                -1.0 / 8.0,
+                -2.0 / 8.0,
+                -3.0 / 8.0,
+                -4.0 / 8.0,
+                -5.0 / 8.0,
+                -6.0 / 8.0,
+                -7.0 / 8.0,
+                -8.0 / 8.0,
+                -9.0 / 8.0
+            ]
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no bumpyx,no bumpyxoffset,no bumpyxperiod,no tanbumpy,no tanbumpyoffset,no tanbumpyperiod,no tanbumpyx,no tanbumpyxoffset,no tanbumpyxperiod",
+        );
+        assert_eq!(
+            [
+                cleared.visual.bumpy_x,
+                cleared.visual.bumpy_x_offset,
+                cleared.visual.bumpy_x_period,
+                cleared.visual.tan_bumpy,
+                cleared.visual.tan_bumpy_offset,
+                cleared.visual.tan_bumpy_period,
+                cleared.visual.tan_bumpy_x,
+                cleared.visual.tan_bumpy_x_offset,
+                cleared.visual.tan_bumpy_x_period
+            ],
+            [Some(0.0); 9]
+        );
+    }
+
+    #[test]
     fn drunk_variants_keep_native_units_speeds_and_boolean_reset() {
         let mods = parse_attack_mods(
             "*2 -25% drunkz,*4 -50% drunkzoffset,*6 -75% drunkzspeed,*8 -100% drunkzperiod,*10 -125% tandrunk,*12 -150% tandrunkoffset,*14 -175% tandrunkspeed,*16 -200% tandrunkperiod,*18 -225% tandrunkz,*20 -250% tandrunkzoffset,*22 -275% tandrunkzspeed,*24 -300% tandrunkzperiod,cosecant",

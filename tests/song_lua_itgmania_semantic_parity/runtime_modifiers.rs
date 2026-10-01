@@ -241,6 +241,15 @@ fn runtime_mod_value(
         "twirl" => visual.twirl.unwrap_or(0.0),
         "roll" => visual.roll.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "bumpyx" => visual.bumpy_x.unwrap_or(0.0),
+        "bumpyxoffset" => visual.bumpy_x_offset.unwrap_or(0.0),
+        "bumpyxperiod" => visual.bumpy_x_period.unwrap_or(0.0),
+        "tanbumpy" => visual.tan_bumpy.unwrap_or(0.0),
+        "tanbumpyoffset" => visual.tan_bumpy_offset.unwrap_or(0.0),
+        "tanbumpyperiod" => visual.tan_bumpy_period.unwrap_or(0.0),
+        "tanbumpyx" => visual.tan_bumpy_x.unwrap_or(0.0),
+        "tanbumpyxoffset" => visual.tan_bumpy_x_offset.unwrap_or(0.0),
+        "tanbumpyxperiod" => visual.tan_bumpy_x_period.unwrap_or(0.0),
         "drunkz" => visual.drunk_z.unwrap_or(0.0),
         "drunkzoffset" => visual.drunk_z_offset.unwrap_or(0.0),
         "drunkzspeed" => visual.drunk_z_speed.unwrap_or(0.0),
@@ -882,6 +891,91 @@ end}
         );
         assert_eq!(runtime_mod_value(&runtime, 0, "xmode"), Some(expected));
         assert_eq!(runtime_mod_value(&runtime, 1, "xmode"), Some(0.0));
+    }
+}
+
+#[test]
+fn bumpy_variants_survive_lua_methods_strings_approach_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create Bumpy fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(&entry, r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local names = {"BumpyX","BumpyXOffset","BumpyXPeriod","TanBumpy","TanBumpyOffset","TanBumpyPeriod","TanBumpyX","TanBumpyXOffset","TanBumpyXPeriod"}
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    for i, name in ipairs(names) do
+        local amount, speed = options[name](options)
+        assert(amount == 0 and speed == 1 and select('#', options[name](options)) == 2)
+        assert(options[name](options, -i/4, i/2, true) == options)
+        amount, speed = options[name](options)
+        assert(amount == -i/4 and speed == i/2)
+        other:FromString('*9999 '..i * 12.5 ..'% '..string.lower(name))
+    end
+    assert(options:Cosecant(true) == false and options:Cosecant() == true)
+    assert(options:Cosecant(0) == true and options:Cosecant() == true)
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            for i, name in ipairs(names) do options:FromString('*9999 '..i * 25 ..'% '..string.lower(name)) end
+            assert(options:Cosecant(false, false) == options and not options:Cosecant())
+            phase = 2
+        elseif phase == 2 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 3
+        end
+    end)
+end}
+"#).expect("write Bumpy fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Bumpy variants");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile Bumpy fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, dt, multiplier, csc) in [
+        (0.25, 0.25, -0.125, 1.0),
+        (0.5, 1_000_000.0, 0.25, 0.0),
+        (1.0, 1_000_000.0, 0.0, 0.0),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                dt,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        for (i, key) in [
+            "bumpyx",
+            "bumpyxoffset",
+            "bumpyxperiod",
+            "tanbumpy",
+            "tanbumpyoffset",
+            "tanbumpyperiod",
+            "tanbumpyx",
+            "tanbumpyxoffset",
+            "tanbumpyxperiod",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some((i + 1) as f32 * multiplier),
+                "{key} at {second}"
+            );
+            assert_eq!(
+                runtime_mod_value(&runtime, 1, key),
+                Some((i + 1) as f32 / 8.0)
+            );
+        }
+        assert_eq!(runtime_mod_value(&runtime, 0, "cosecant"), Some(csc));
     }
 }
 

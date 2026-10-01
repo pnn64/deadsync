@@ -308,6 +308,12 @@ fn indicator_x(
             drunk_speed: request.visual.drunk_speed,
             drunk_period: request.visual.drunk_period,
             cosecant: request.visual.cosecant,
+            bumpy_x: request.visual.bumpy_x,
+            bumpy_x_offset: request.visual.bumpy_x_offset,
+            bumpy_x_period: request.visual.bumpy_x_period,
+            tan_bumpy_x: request.visual.tan_bumpy_x,
+            tan_bumpy_x_offset: request.visual.tan_bumpy_x_offset,
+            tan_bumpy_x_period: request.visual.tan_bumpy_x_period,
             tan_drunk: request.visual.tan_drunk,
             tan_drunk_offset: request.visual.tan_drunk_offset,
             tan_drunk_speed: request.visual.tan_drunk_speed,
@@ -837,6 +843,12 @@ mod tests {
         request.arrow_effect_time = 0.37;
         request.visual.beat = 1.0;
         request.visual.drunk = 1.0;
+        request.visual.bumpy_x = 0.75;
+        request.visual.bumpy_x_offset = 0.5;
+        request.visual.bumpy_x_period = 0.25;
+        request.visual.tan_bumpy_x = -0.125;
+        request.visual.tan_bumpy_x_offset = 0.25;
+        request.visual.tan_bumpy_x_period = 1.0;
         let col_offsets = [-96.0, -32.0, 32.0, 96.0];
         let invert = [0.0; 4];
         let tornado = [TornadoBounds::default(); 4];
@@ -851,6 +863,12 @@ mod tests {
             drunk_speed: request.visual.drunk_speed,
             drunk_period: request.visual.drunk_period,
             cosecant: request.visual.cosecant,
+            bumpy_x: request.visual.bumpy_x,
+            bumpy_x_offset: request.visual.bumpy_x_offset,
+            bumpy_x_period: request.visual.bumpy_x_period,
+            tan_bumpy_x: request.visual.tan_bumpy_x,
+            tan_bumpy_x_offset: request.visual.tan_bumpy_x_offset,
+            tan_bumpy_x_period: request.visual.tan_bumpy_x_period,
             tan_drunk: request.visual.tan_drunk,
             tan_drunk_offset: request.visual.tan_drunk_offset,
             tan_drunk_speed: request.visual.tan_drunk_speed,

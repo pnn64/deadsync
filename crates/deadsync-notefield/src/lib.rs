@@ -1549,6 +1549,193 @@ mod tests {
     }
 
     #[test]
+    fn bumpy_variants_match_compiled_native_vectors() {
+        // CalculateBumpyAngle and SelectTanType were copied verbatim from
+        // the unchanged local ArrowEffects.cpp and compiled with MSVC.
+        for (travel, amount, offset, period, sin, tan, csc) in [
+            (0f32, 1f32, 0f32, 0f32, 0f32, 0f32, f32::INFINITY),
+            (
+                64f32,
+                1f32,
+                0f32,
+                0f32,
+                -30.2721004f32,
+                46.312851f32,
+                -52.8539467f32,
+            ),
+            (
+                -128f32,
+                -0.75f32,
+                0.5f32,
+                -0.25f32,
+                6.45359945f32,
+                6.60831594f32,
+                139.457062f32,
+            ),
+            (
+                192f32,
+                2f32,
+                -1f32,
+                -2f32,
+                40.6623268f32,
+                47.2163048f32,
+                157.393845f32,
+            ),
+            (
+                384f32,
+                0.5f32,
+                2f32,
+                1.5f32,
+                17.8958206f32,
+                -40.0815506f32,
+                22.3515892f32,
+            ),
+            (
+                -96f32,
+                -2f32,
+                -0.75f32,
+                -2f32,
+                76.2335358f32,
+                -251.409851f32,
+                83.9525528f32,
+            ),
+            (
+                32f32,
+                1f32,
+                0f32,
+                0f32,
+                36.3718948f32,
+                -87.4015884f32,
+                43.9900055f32,
+            ),
+            (
+                256f32,
+                0.25f32,
+                50f32,
+                -0.25f32,
+                -9.68371964f32,
+                38.8108025f32,
+                -10.3266096f32,
+            ),
+            (
+                64f32,
+                2.50000003e-08f32,
+                0f32,
+                0f32,
+                -7.56802478e-07f32,
+                1.15782132e-06f32,
+                -1.32134869e-06f32,
+            ),
+            (0f32, 1f32, 0f32, -1f32, f32::NAN, f32::NAN, f32::NAN),
+            (
+                128f32,
+                1f32,
+                0.300000012f32,
+                -1f32,
+                f32::NAN,
+                f32::NAN,
+                f32::NAN,
+            ),
+            (0f32, 0f32, 0f32, -1f32, 0f32, 0f32, 0f32),
+        ] {
+            for (tangent, cosecant, expected) in
+                [(false, false, sin), (true, false, tan), (true, true, csc)]
+            {
+                let params = NoteXParams {
+                    bumpy_x: if tangent { 0.0 } else { amount },
+                    bumpy_x_offset: offset,
+                    bumpy_x_period: period,
+                    tan_bumpy_x: if tangent { amount } else { 0.0 },
+                    tan_bumpy_x_offset: offset,
+                    tan_bumpy_x_period: period,
+                    cosecant,
+                    ..NoteXParams::default()
+                };
+                let x = note_x_offset(
+                    0,
+                    travel,
+                    0.0,
+                    0.0,
+                    &[-96.0],
+                    &[0.0],
+                    &[TornadoBounds::default()],
+                    &[0.5],
+                    params,
+                    1.0,
+                );
+                let cached = super::note_x_offset_cached(
+                    0,
+                    travel,
+                    0.0,
+                    0.0,
+                    &[-96.0],
+                    &[0.0],
+                    &[TornadoBounds::default()],
+                    &[],
+                    &[32.0],
+                    params,
+                    0.5,
+                );
+                let expected_x = (-96.0 + expected) * 0.5 + 32.0;
+                if expected.is_nan() {
+                    assert!(x.is_nan() && cached.is_nan());
+                } else if expected.is_infinite() {
+                    assert_eq!(x, expected);
+                    assert_eq!(cached, expected);
+                } else {
+                    assert!((x - expected_x).abs() <= 0.00002);
+                    assert_eq!(x, cached);
+                }
+                if tangent {
+                    let z_params = VisualEffectParams {
+                        tan_bumpy: amount,
+                        tan_bumpy_offset: offset,
+                        tan_bumpy_period: period,
+                        cosecant,
+                        tiny: 1.0,
+                        ..VisualEffectParams::default()
+                    };
+                    let z = note_world_z_cached(
+                        travel,
+                        super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                        lane_note_transform_cache(0.0, z_params),
+                    );
+                    if expected.is_nan() {
+                        assert!(z.is_nan());
+                    } else if expected.is_infinite() {
+                        assert_eq!(z, expected);
+                    } else {
+                        assert!((z - expected).abs() <= 0.00002);
+                    }
+                    // Native NeedZBuffer omits TanBumpy, despite its depth.
+                    assert!(!visual_hold_body_needs_z_buffer(z_params));
+                }
+            }
+        }
+        for params in [
+            NoteXParams {
+                bumpy_x: 0.000000025,
+                ..NoteXParams::default()
+            },
+            NoteXParams {
+                tan_bumpy_x: 0.000000025,
+                ..NoteXParams::default()
+            },
+        ] {
+            assert!(!super::fill_static_note_x_offsets(
+                1,
+                &[0.0],
+                &[0.0],
+                &[TornadoBounds::default()],
+                &[0.0],
+                params,
+                1.0,
+                &mut [0.0]
+            ));
+        }
+    }
+
+    #[test]
     fn drunk_variants_match_compiled_native_vectors() {
         // CalculateDrunkAngle and SelectTanType were copied verbatim from
         // the unchanged local ArrowEffects.cpp and compiled with MSVC.

@@ -33,6 +33,9 @@ pub(crate) struct NoteAlphaParams {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct VisualEffectParams {
+    pub tan_bumpy: f32,
+    pub tan_bumpy_offset: f32,
+    pub tan_bumpy_period: f32,
     pub local_col: usize,
     pub cosecant: bool,
     pub drunk_z: f32,
@@ -63,6 +66,7 @@ pub(crate) struct VisualEffectParams {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LaneNoteTransformCache {
+    tan_bumpy: [f32; 3],
     local_col: usize,
     cosecant: bool,
     drunk_z: DrunkWaveParams,
@@ -179,6 +183,12 @@ enum AccelYPath {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct NoteXParams {
+    pub bumpy_x: f32,
+    pub bumpy_x_offset: f32,
+    pub bumpy_x_period: f32,
+    pub tan_bumpy_x: f32,
+    pub tan_bumpy_x_offset: f32,
+    pub tan_bumpy_x_period: f32,
     pub cosecant: bool,
     pub tan_drunk: f32,
     pub tan_drunk_offset: f32,
@@ -574,6 +584,7 @@ pub(crate) fn note_world_z_cached(
         let angle = 100.0f32.mul_add(frame_cache.offset, y) / frame_cache.divisor;
         z += lane_cache.bumpy_amplitude * angle.sin();
     }
+    z += bumpy_wave_offset(y, lane_cache.tan_bumpy, true, lane_cache.cosecant);
     // ArrowEffects::GetZPos adds ParabolaZ after Bumpy, without Tiny scaling.
     if lane_cache.parabola_z != 0.0 {
         z += lane_cache.parabola_z * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
@@ -742,6 +753,11 @@ pub(crate) fn lane_note_transform_cache(
         None
     };
     LaneNoteTransformCache {
+        tan_bumpy: [
+            params.tan_bumpy,
+            params.tan_bumpy_offset,
+            params.tan_bumpy_period,
+        ],
         local_col: params.local_col,
         cosecant: params.cosecant,
         drunk_z: DrunkWaveParams {
@@ -903,6 +919,9 @@ pub(crate) fn gameplay_visual_effect_params(
             square_z_offset: visual.square_z_offset,
             square_z_period: visual.square_z_period,
             bumpy: visual.bumpy,
+            tan_bumpy: visual.tan_bumpy,
+            tan_bumpy_offset: visual.tan_bumpy_offset,
+            tan_bumpy_period: visual.tan_bumpy_period,
             rotate_z: 0.0,
         },
         local_col,
@@ -1098,6 +1117,25 @@ fn drunk_wave_offset(
     params.amount * (wave * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE)
 }
 
+// ArrowEffects::CalculateBumpyAngle/GetXPos/GetZPos. Horizontal Bumpy
+// precedes Tiny spacing; tangent depth remains unscaled. Preserve native
+// IEEE division at period -1 and tangent/cosecant poles.
+fn bumpy_wave_offset(y: f32, params: [f32; 3], tangent: bool, cosecant: bool) -> f32 {
+    let [amount, offset, period] = params;
+    if amount == 0.0 || !amount.is_finite() {
+        return 0.0;
+    }
+    let angle = (y + 100.0 * offset) / (period * 16.0 + 16.0);
+    let wave = if !tangent {
+        angle.sin()
+    } else if cosecant {
+        1.0 / angle.sin()
+    } else {
+        angle.tan()
+    };
+    amount * 40.0 * wave
+}
+
 pub(crate) fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, params: NoteXParams) -> f32 {
     drunk_wave_offset(
         local_col,
@@ -1197,6 +1235,22 @@ pub(crate) fn note_x_extra(
             params.tornado,
         );
     }
+    out += bumpy_wave_offset(
+        y,
+        [params.bumpy_x, params.bumpy_x_offset, params.bumpy_x_period],
+        false,
+        false,
+    );
+    out += bumpy_wave_offset(
+        y,
+        [
+            params.tan_bumpy_x,
+            params.tan_bumpy_x_offset,
+            params.tan_bumpy_x_period,
+        ],
+        true,
+        params.cosecant,
+    );
     if params.drunk != 0.0 {
         out += drunk_x_extra(local_col, y, elapsed, params);
     }
@@ -1292,6 +1346,22 @@ pub(crate) fn note_x_offset_cached(
             },
         );
     }
+    extra += bumpy_wave_offset(
+        y,
+        [params.bumpy_x, params.bumpy_x_offset, params.bumpy_x_period],
+        false,
+        false,
+    );
+    extra += bumpy_wave_offset(
+        y,
+        [
+            params.tan_bumpy_x,
+            params.tan_bumpy_x_offset,
+            params.tan_bumpy_x_period,
+        ],
+        true,
+        params.cosecant,
+    );
     if params.drunk != 0.0 {
         extra += drunk_x_extra(local_col, y, elapsed, params);
     }
@@ -1341,6 +1411,8 @@ pub(crate) fn fill_static_note_x_offsets(
     out: &mut [f32],
 ) -> bool {
     if signed_effect_active(params.tornado)
+        || params.bumpy_x != 0.0
+        || params.tan_bumpy_x != 0.0
         || params.drunk != 0.0
         || params.tan_drunk != 0.0
         || signed_effect_active(params.beat)

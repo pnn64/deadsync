@@ -292,6 +292,12 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 drunk_speed: visual.drunk_speed,
                 drunk_period: visual.drunk_period,
                 cosecant: visual.cosecant,
+                bumpy_x: visual.bumpy_x,
+                bumpy_x_offset: visual.bumpy_x_offset,
+                bumpy_x_period: visual.bumpy_x_period,
+                tan_bumpy_x: visual.tan_bumpy_x,
+                tan_bumpy_x_offset: visual.tan_bumpy_x_offset,
+                tan_bumpy_x_period: visual.tan_bumpy_x_period,
                 tan_drunk: visual.tan_drunk,
                 tan_drunk_offset: visual.tan_drunk_offset,
                 tan_drunk_speed: visual.tan_drunk_speed,
@@ -3176,7 +3182,7 @@ mod tests {
     }
 
     #[test]
-    fn drunk_variants_move_composed_notes_and_hold_meshes() {
+    fn wave_variants_move_composed_notes_and_hold_meshes() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
             compose_notefield_field,
@@ -3242,6 +3248,15 @@ mod tests {
                             request.chart.note_itg_rows = &[96, 144];
                             request.arrow_effect_time_s = 1.25;
                             request.visual.visual = VisualEffects {
+                                bumpy_x: amount / 3.0,
+                                bumpy_x_offset: -0.5,
+                                bumpy_x_period: 0.5,
+                                tan_bumpy_x: amount / 2.0,
+                                tan_bumpy_x_offset: 0.25,
+                                tan_bumpy_x_period: 1.0,
+                                tan_bumpy: amount * 0.75,
+                                tan_bumpy_offset: 0.5,
+                                tan_bumpy_period: 0.25,
                                 tan_drunk: amount,
                                 tan_drunk_offset: 0.75,
                                 tan_drunk_speed: -0.5,
@@ -3300,6 +3315,8 @@ mod tests {
                                     amount
                                         * (wave(0.625 + col as f32 * 0.35 + travel * 7.5 / 480.0)
                                             * 32.0)
+                                        + amount / 3.0 * 40.0 * ((travel - 50.0) / 24.0).sin()
+                                        + amount / 2.0 * 40.0 * wave((travel + 25.0) / 32.0)
                                 };
                                 let z_at = |travel: f32| {
                                     amount
@@ -3309,6 +3326,7 @@ mod tests {
                                             * (wave(
                                                 0.625 + col as f32 * 0.25 + travel * 5.0 / 480.0,
                                             ) * 32.0)
+                                        + amount * 0.75 * 40.0 * wave((travel + 50.0) / 20.0)
                                 };
                                 let x_at_y = |y: f32| {
                                     receptor[0]
@@ -3342,8 +3360,11 @@ mod tests {
                                                     (sprite.center[1] - receptor[1]) / direction,
                                                 );
                                                 assert!(
-                                                    (sprite.world_z - expected_z).abs() < 0.001,
-                                                    "{placement:?}, {kind:?}, col {col}"
+                                                    (sprite.world_z - expected_z).abs()
+                                                        < 0.0001 * expected_z.abs().max(1.0),
+                                                    "{placement:?}, {kind:?}, col {col}, z {} expected {expected_z}, y {}",
+                                                    sprite.world_z,
+                                                    sprite.center[1]
                                                 );
                                             }
                                         }
@@ -3363,7 +3384,7 @@ mod tests {
                                     meshes[col] += 1;
                                     assert!(
                                         !mesh.depth_test,
-                                        "DrunkZ alone does not request native depth testing"
+                                        "native depth testing omits DrunkZ and TanBumpy"
                                     );
                                     let vertices = match &mesh.vertices {
                                         FlatMeshVertices::Shared(v) => v.as_ref(),

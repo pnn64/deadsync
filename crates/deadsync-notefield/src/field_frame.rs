@@ -280,6 +280,12 @@ fn compose_field_contents<S, F>(
         drunk_speed: visual.drunk_speed,
         drunk_period: visual.drunk_period,
         cosecant: visual.cosecant,
+        bumpy_x: visual.bumpy_x,
+        bumpy_x_offset: visual.bumpy_x_offset,
+        bumpy_x_period: visual.bumpy_x_period,
+        tan_bumpy_x: visual.tan_bumpy_x,
+        tan_bumpy_x_offset: visual.tan_bumpy_x_offset,
+        tan_bumpy_x_period: visual.tan_bumpy_x_period,
         tan_drunk: visual.tan_drunk,
         tan_drunk_offset: visual.tan_drunk_offset,
         tan_drunk_speed: visual.tan_drunk_speed,
@@ -1642,6 +1648,9 @@ fn hold_lane_frame(
             && visual.drunk_z == 0.0
             && visual.tan_drunk == 0.0
             && visual.tan_drunk_z == 0.0
+            && visual.bumpy_x == 0.0
+            && visual.tan_bumpy_x == 0.0
+            && visual.tan_bumpy == 0.0
             && visual_use_legacy_hold_sprites(
                 effect_params.bumpy,
                 visual.drunk,
@@ -1660,7 +1669,7 @@ mod hold_lane_frame_cache_tests {
     fn travel_mods_select_hold_meshes_even_below_epsilon() {
         for (amount, axis) in [-2.5, 2.5, 0.000000025]
             .into_iter()
-            .flat_map(|amount| (0..6).map(move |axis| (amount, axis)))
+            .flat_map(|amount| (0..9).map(move |axis| (amount, axis)))
         {
             let visual = VisualEffects {
                 xmode: if axis == 0 { amount } else { 0.0 },
@@ -1669,6 +1678,9 @@ mod hold_lane_frame_cache_tests {
                 drunk_z: if axis == 3 { amount } else { 0.0 },
                 tan_drunk: if axis == 4 { amount } else { 0.0 },
                 tan_drunk_z: if axis == 5 { amount } else { 0.0 },
+                bumpy_x: if axis == 6 { amount } else { 0.0 },
+                tan_bumpy_x: if axis == 7 { amount } else { 0.0 },
+                tan_bumpy: if axis == 8 { amount } else { 0.0 },
                 ..VisualEffects::default()
             };
             let params = VisualEffectParams::default();

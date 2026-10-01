@@ -176,6 +176,15 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub bumpy_x: Option<f32>,
+    pub bumpy_x_offset: Option<f32>,
+    pub bumpy_x_period: Option<f32>,
+    pub tan_bumpy: Option<f32>,
+    pub tan_bumpy_offset: Option<f32>,
+    pub tan_bumpy_period: Option<f32>,
+    pub tan_bumpy_x: Option<f32>,
+    pub tan_bumpy_x_offset: Option<f32>,
+    pub tan_bumpy_x_period: Option<f32>,
     pub drunk_z: Option<f32>,
     pub drunk_z_offset: Option<f32>,
     pub drunk_z_speed: Option<f32>,
@@ -236,6 +245,15 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            bumpy_x: None,
+            bumpy_x_offset: None,
+            bumpy_x_period: None,
+            tan_bumpy: None,
+            tan_bumpy_offset: None,
+            tan_bumpy_period: None,
+            tan_bumpy_x: None,
+            tan_bumpy_x_offset: None,
+            tan_bumpy_x_period: None,
             drunk_z: None,
             drunk_z_offset: None,
             drunk_z_speed: None,
@@ -298,6 +316,15 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.bumpy_x.is_some()
+            || self.bumpy_x_offset.is_some()
+            || self.bumpy_x_period.is_some()
+            || self.tan_bumpy.is_some()
+            || self.tan_bumpy_offset.is_some()
+            || self.tan_bumpy_period.is_some()
+            || self.tan_bumpy_x.is_some()
+            || self.tan_bumpy_x_offset.is_some()
+            || self.tan_bumpy_x_period.is_some()
             || self.drunk_z.is_some()
             || self.drunk_z_offset.is_some()
             || self.drunk_z_speed.is_some()
@@ -464,6 +491,15 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub bumpy_x: f32,
+    pub bumpy_x_offset: f32,
+    pub bumpy_x_period: f32,
+    pub tan_bumpy: f32,
+    pub tan_bumpy_offset: f32,
+    pub tan_bumpy_period: f32,
+    pub tan_bumpy_x: f32,
+    pub tan_bumpy_x_offset: f32,
+    pub tan_bumpy_x_period: f32,
     pub drunk_z: f32,
     pub drunk_z_offset: f32,
     pub drunk_z_speed: f32,
@@ -532,6 +568,15 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            bumpy_x: 0.0,
+            bumpy_x_offset: 0.0,
+            bumpy_x_period: 0.0,
+            tan_bumpy: 0.0,
+            tan_bumpy_offset: 0.0,
+            tan_bumpy_period: 0.0,
+            tan_bumpy_x: 0.0,
+            tan_bumpy_x_offset: 0.0,
+            tan_bumpy_x_period: 0.0,
             drunk_z: 0.0,
             drunk_z_offset: 0.0,
             drunk_z_speed: 0.0,
@@ -662,6 +707,23 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.bumpy_x, base.bumpy_x, step);
+    approach_optional_visual(&mut visual.bumpy_x_offset, base.bumpy_x_offset, step);
+    approach_optional_visual(&mut visual.bumpy_x_period, base.bumpy_x_period, step);
+    approach_optional_visual(&mut visual.tan_bumpy, base.tan_bumpy, step);
+    approach_optional_visual(&mut visual.tan_bumpy_offset, base.tan_bumpy_offset, step);
+    approach_optional_visual(&mut visual.tan_bumpy_period, base.tan_bumpy_period, step);
+    approach_optional_visual(&mut visual.tan_bumpy_x, base.tan_bumpy_x, step);
+    approach_optional_visual(
+        &mut visual.tan_bumpy_x_offset,
+        base.tan_bumpy_x_offset,
+        step,
+    );
+    approach_optional_visual(
+        &mut visual.tan_bumpy_x_period,
+        base.tan_bumpy_x_period,
+        step,
+    );
     approach_optional_visual(&mut visual.drunk_z, base.drunk_z, step);
     approach_optional_visual(&mut visual.drunk_z_offset, base.drunk_z_offset, step);
     approach_optional_visual(&mut visual.drunk_z_speed, base.drunk_z_speed, step);
@@ -804,6 +866,78 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_x,
+        target.bumpy_x,
+        base.bumpy_x,
+        speed.bumpy_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_x_offset,
+        target.bumpy_x_offset,
+        base.bumpy_x_offset,
+        speed.bumpy_x_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bumpy_x_period,
+        target.bumpy_x_period,
+        base.bumpy_x_period,
+        speed.bumpy_x_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_bumpy,
+        target.tan_bumpy,
+        base.tan_bumpy,
+        speed.tan_bumpy,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_bumpy_offset,
+        target.tan_bumpy_offset,
+        base.tan_bumpy_offset,
+        speed.tan_bumpy_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_bumpy_period,
+        target.tan_bumpy_period,
+        base.tan_bumpy_period,
+        speed.tan_bumpy_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_bumpy_x,
+        target.tan_bumpy_x,
+        base.tan_bumpy_x,
+        speed.tan_bumpy_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_bumpy_x_offset,
+        target.tan_bumpy_x_offset,
+        base.tan_bumpy_x_offset,
+        speed.tan_bumpy_x_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tan_bumpy_x_period,
+        target.tan_bumpy_x_period,
+        base.tan_bumpy_x_period,
+        speed.tan_bumpy_x_period,
         delta_time,
         1.0,
     );
