@@ -365,8 +365,23 @@ impl<'a> ScriptToken<'a> {
 }
 
 #[inline(always)]
-fn split_script_call_args(raw: &str) -> SmallVec<[&str; 6]> {
-    let mut out = SmallVec::new();
+#[must_use]
+pub fn split_script_token<'a>(token: &'a str) -> Option<ScriptToken<'a>> {
+    let raw = token.trim();
+    let mut command = None;
+    let mut args = SmallVec::new();
+    // Keep the command separate: arguments only need one buffer, and six
+    // arguments fit inline without spilling for the command itself.
+    let mut push_part = |part: &'a str| {
+        let part = part.trim();
+        if !part.is_empty() {
+            if command.is_none() {
+                command = Some(part);
+            } else {
+                args.push(part);
+            }
+        }
+    };
     let mut start = 0usize;
     let mut depth = 0usize;
     let mut quote = 0u8;
@@ -392,33 +407,18 @@ fn split_script_call_args(raw: &str) -> SmallVec<[&str; 6]> {
                 depth = depth.saturating_sub(1);
             }
             b',' if depth == 0 => {
-                let part = raw[start..idx].trim();
-                if !part.is_empty() {
-                    out.push(part);
-                }
+                push_part(&raw[start..idx]);
                 start = idx + 1;
             }
             _ => {}
         }
         idx += 1;
     }
-    let tail = raw[start..].trim();
-    if !tail.is_empty() {
-        out.push(tail);
-    }
-    out
-}
-
-#[inline(always)]
-#[must_use]
-pub fn split_script_token(token: &str) -> Option<ScriptToken<'_>> {
-    let parts = split_script_call_args(token.trim());
-    if parts.is_empty() {
-        return None;
-    }
-    let command = ScriptCommand::from(parts[0]);
-    let args = parts.into_iter().skip(1).collect();
-    Some(ScriptToken { command, args })
+    push_part(&raw[start..]);
+    Some(ScriptToken {
+        command: ScriptCommand::from(command?),
+        args,
+    })
 }
 
 #[inline(always)]
@@ -630,6 +630,13 @@ fn append_sprite_animation_command_plans(
     script: &str,
     plans: &mut Vec<SpriteAnimationCommandPlan>,
 ) {
+    for_each_sprite_animation_command_plan(script, |plan| plans.push(plan));
+}
+
+fn for_each_sprite_animation_command_plan(
+    script: &str,
+    mut visit: impl FnMut(SpriteAnimationCommandPlan),
+) {
     let script = normalized_script_command(script);
     for raw_token in script.split(';') {
         let token = raw_token.trim();
@@ -643,7 +650,7 @@ fn append_sprite_animation_command_plans(
             ScriptCommand::SetStateProperties => {
                 let args = token.args();
                 if let Some((frame_count, frame_delays)) = parse_script_state_properties(args) {
-                    plans.push(SpriteAnimationCommandPlan::StateProperties(
+                    visit(SpriteAnimationCommandPlan::StateProperties(
                         SpriteStatePropertiesPlan {
                             frame_count,
                             frame_delays,
@@ -654,7 +661,7 @@ fn append_sprite_animation_command_plans(
             ScriptCommand::SetAllStateDelays => {
                 let args = token.args();
                 if let Some(delay) = args.first().and_then(|arg| parse_script_number(arg)) {
-                    plans.push(SpriteAnimationCommandPlan::AllStateDelays(delay.max(0.0)));
+                    visit(SpriteAnimationCommandPlan::AllStateDelays(delay.max(0.0)));
                 }
             }
             _ => {}
@@ -737,10 +744,17 @@ pub fn apply_sprite_animation_command_plans<T>(
     default_is_beat_based: bool,
     mut apply_plan: impl FnMut(&mut T, SpriteAnimationCommandPlan, bool),
 ) {
-    let (beat_based, plans) =
-        sprite_animation_command_plans_from_commands(commands, default_is_beat_based);
-    for plan in plans {
-        apply_plan(slot, plan, beat_based);
+    let sorted = sorted_sprite_animation_command_refs(commands);
+    // Resolve the final clock before applying any plan, preserving command
+    // name order and the same clock for every callback.
+    let mut beat_based = default_is_beat_based;
+    for (_, script) in sorted.iter().copied() {
+        if let Some(clock) = parse_script_effectclock_from_commands(script) {
+            beat_based = clock;
+        }
+    }
+    for (_, script) in sorted {
+        for_each_sprite_animation_command_plan(script, |plan| apply_plan(slot, plan, beat_based));
     }
 }
 
@@ -750,9 +764,7 @@ pub fn apply_sprite_animation_script_plans<T>(
     beat_based: bool,
     mut apply_plan: impl FnMut(&mut T, SpriteAnimationCommandPlan, bool),
 ) {
-    for plan in sprite_animation_command_plans(script) {
-        apply_plan(slot, plan, beat_based);
-    }
+    for_each_sprite_animation_command_plan(script, |plan| apply_plan(slot, plan, beat_based));
 }
 
 #[inline(always)]

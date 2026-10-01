@@ -1019,11 +1019,24 @@ fn expand_explosion_cmd<'a>(
             let Some(name) = token.args().first() else {
                 continue;
             };
-            let key = format!(
-                "{}command",
-                name.trim().trim_matches(['\'', '"']).to_ascii_lowercase()
-            );
-            let Some((key, command)) = commands.get_key_value(&key) else {
+            let name = name.trim().trim_matches(['\'', '"']);
+            // Most actor command names are short. Preserve arbitrary UTF-8
+            // and oversized names with one exact-capacity heap fallback.
+            let mut inline_key = ArrayString::<128>::new();
+            let mut heap_key;
+            let key = if name.len() <= inline_key.capacity() - "command".len() {
+                inline_key.push_str(name);
+                inline_key.as_mut_str().make_ascii_lowercase();
+                inline_key.push_str("command");
+                inline_key.as_str()
+            } else {
+                heap_key = String::with_capacity(name.len() + "command".len());
+                heap_key.push_str(name);
+                heap_key.make_ascii_lowercase();
+                heap_key.push_str("command");
+                heap_key.as_str()
+            };
+            let Some((key, command)) = commands.get_key_value(key) else {
                 continue;
             };
             if stack.is_full() || stack.contains(&key.as_str()) {
@@ -1331,6 +1344,13 @@ fn for_each_direct_tap_explosion_element(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod command_preparation_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/command_preparation/cases.rs"
+        ));
+    }
 
     #[test]
     fn animation_seek_and_movie_rate_do_not_split_tweens() {
