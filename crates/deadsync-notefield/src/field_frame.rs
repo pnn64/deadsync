@@ -209,6 +209,11 @@ fn compose_field_contents<S, F>(
     let num_cols = frame_plan.num_cols;
     let col_end = col_start + num_cols;
     let field_zoom = prepared.field_zoom;
+    let fade_travel_scale = if field_zoom.is_finite() && field_zoom.abs() > f32::EPSILON {
+        field_zoom.recip()
+    } else {
+        0.0
+    };
     let scroll_speed = prepared.scroll_speed;
     let draw_range = prepared.draw_range;
     let current_beat = prepared.current_beat;
@@ -335,9 +340,10 @@ fn compose_field_contents<S, F>(
             }
     };
     let alpha_glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> (f32, f32) {
+        let y_offset = adjusted * fade_travel_scale;
         appearance_note_alpha_glow_cached(
-            adjusted + lane_tipsy_offsets[local_col],
-            adjusted,
+            y_offset + lane_tipsy_offsets[local_col],
+            y_offset,
             &appearance_caches[local_col],
         )
     };
@@ -688,6 +694,7 @@ fn compose_field_contents<S, F>(
                 diffuse: hold_diffuse,
                 elapsed_s: elapsed_screen,
                 lane_offset: lane_tipsy_offsets[local_col],
+                fade_travel_scale,
                 appearance: alpha_params[local_col],
                 appearance_cache: appearance_caches[local_col],
                 use_legacy_sprites: use_legacy_hold_sprites,
@@ -942,6 +949,7 @@ fn compose_field_contents<S, F>(
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
         &lane_tipsy_offsets[..num_cols],
+        fade_travel_scale,
         note_x_params,
         note_x_is_static,
         &static_note_x_offsets[..num_cols],
@@ -978,6 +986,7 @@ fn compose_visible_notes<S, F>(
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
     lane_tipsy_offsets: &[f32],
+    fade_travel_scale: f32,
     note_x_params: NoteXParams,
     note_x_is_static: bool,
     static_note_x_offsets: &[f32],
@@ -1057,9 +1066,10 @@ fn compose_visible_notes<S, F>(
                 if !prepared.draw_range.contains(adjusted_travel) {
                     return;
                 }
+                let y_offset = adjusted_travel * fade_travel_scale;
                 let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(
-                    adjusted_travel + lane_tipsy_offsets[local_col],
-                    adjusted_travel,
+                    y_offset + lane_tipsy_offsets[local_col],
+                    y_offset,
                     &appearance_caches[local_col],
                 );
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
@@ -1619,13 +1629,14 @@ fn resolved_appearance<S>(
 
 #[inline(always)]
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
-    visual_hold_body_needs_z_buffer(VisualEffectParams {
-        bumpy: visual.bumpy,
-        parabola_z: visual.parabola_z,
-        square_z: visual.square_z,
-        twirl: visual.twirl,
-        ..VisualEffectParams::default()
-    })
+    visual.z_buffer
+        || visual_hold_body_needs_z_buffer(VisualEffectParams {
+            bumpy: visual.bumpy,
+            parabola_z: visual.parabola_z,
+            square_z: visual.square_z,
+            twirl: visual.twirl,
+            ..VisualEffectParams::default()
+        })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1644,7 +1655,8 @@ fn hold_lane_frame(
         receptor_draw_y: receptor_y + move_y_offset + tipsy_y_offset,
         receptor_center_x,
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
-        use_legacy_sprites: visual.twirl == 0.0
+        use_legacy_sprites: !visual.z_buffer
+            && visual.twirl == 0.0
             && visual.parabola_x == 0.0
             && visual.xmode == 0.0
             && visual.parabola_z == 0.0

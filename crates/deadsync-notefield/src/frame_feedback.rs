@@ -2788,6 +2788,94 @@ mod tests {
     }
 
     #[test]
+    fn z_buffer_enables_depth_on_composed_hold_bodies_and_caps() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.hold_columns[0].head_inactive = Some(TestSlot::new("head"));
+        ns.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+        ns.hold_columns[0].topcap_inactive = Some(TestSlot::new("top"));
+        ns.hold_columns[0].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let index = deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index");
+        let lanes = [vec![index], vec![]];
+        for kind in [NoteType::Hold, NoteType::Roll] {
+            let mut n = note(0);
+            n.note_type = kind;
+            n.beat = 2.0;
+            n.row_index = 96;
+            n.hold = Some(HoldData {
+                end_row_index: 144,
+                end_beat: 3.0,
+                result: None,
+                life: 1.0,
+                let_go_started_at: None,
+                let_go_starting_life: 1.0,
+                last_held_row_index: 96,
+                last_held_beat: 2.0,
+            });
+            let notes = [n];
+            for placement in [FieldPlacement::P1, FieldPlacement::P2] {
+                for direction in [-1.0, 1.0] {
+                    for enabled in [false, true] {
+                        let mut request =
+                            request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
+                        request.chart.visible_beat = 1.0;
+                        request.chart.search_beat = 1.0;
+                        request.chart.lane_hold_indices = &lanes;
+                        request.chart.note_itg_rows = &[96];
+                        request.geometry.column_dirs.fill(direction);
+                        request.visual.visual.z_buffer = enabled;
+                        let prepared = prepare_notefield(&request).expect("prepare field");
+                        let frame = NotefieldFieldFrameView {
+                            feedback: spline_feedback(&[]),
+                            completed_rows: Default::default(),
+                        };
+                        let mut draws = Vec::new();
+                        compose_notefield_field(
+                            &mut Vec::new(),
+                            &mut draws,
+                            &mut Vec::new(),
+                            &mut ModelMeshCache::default(),
+                            &mut HoldMeshScratch::with_columns(1),
+                            &mut CapturedActorScratch::with_capacities(32, 0),
+                            &mut NotefieldCameraCache::default(),
+                            &request,
+                            &prepared,
+                            &frame,
+                            &source,
+                        );
+                        for part in ["body", "top", "bottom"] {
+                            let rendered = draws
+                                .iter()
+                                .find(|draw| match draw {
+                                    FlatDraw::Sprite(sprite) => {
+                                        sprite.source.texture_key() == Some(part)
+                                    }
+                                    FlatDraw::TexturedMesh(mesh) => mesh.texture.as_ref() == part,
+                                    _ => false,
+                                })
+                                .expect("rendered hold part");
+                            match rendered {
+                                FlatDraw::TexturedMesh(mesh) => {
+                                    assert_eq!(mesh.depth_test, enabled)
+                                }
+                                FlatDraw::Sprite(_) => assert!(!enabled, "ZBuffer requires a mesh"),
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn draw_size_clips_composed_hold_and_roll_geometry() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
@@ -2942,18 +3030,18 @@ mod tests {
             ] {
                 let mut n = note(player * 2);
                 n.note_type = kind;
-                n.beat = 1.5;
-                n.row_index = 72;
+                n.beat = 3.1875;
+                n.row_index = 153;
                 if matches!(kind, NoteType::Hold | NoteType::Roll) {
                     n.hold = Some(HoldData {
-                        end_row_index: 96,
-                        end_beat: 2.0,
+                        end_row_index: 165,
+                        end_beat: 3.4375,
                         result: None,
                         life: 1.0,
                         let_go_started_at: None,
                         let_go_starting_life: 1.0,
-                        last_held_row_index: 72,
-                        last_held_beat: 1.5,
+                        last_held_row_index: 153,
+                        last_held_beat: 3.1875,
                     });
                 }
                 let notes = [n];
@@ -2961,45 +3049,49 @@ mod tests {
                     for sudden in [false, true] {
                         for stealth_type in [false, true] {
                             for move_y in [-2.0, 3.0] {
-                                let mut request = request(
-                                    &ns, &timing, &notes, &hides, placement, player, 2, 2, 4,
-                                );
-                                request.chart.lane_note_row_indices = &lanes;
-                                request.chart.lane_hold_indices = &lanes;
-                                request.chart.note_itg_rows = &[72];
-                                request.geometry.column_dirs.fill(direction);
-                                request.visual.visual.move_y_cols.fill(move_y);
-                                request.visual.visual.tipsy = 8.0;
-                                request.visual.appearance.hidden = f32::from(!sudden);
-                                request.visual.appearance.sudden = f32::from(sudden);
-                                request.visual.appearance.stealth_type = stealth_type;
-                                let prepared = prepare_notefield(&request).expect("prepare field");
-                                let frame = NotefieldFieldFrameView {
-                                    feedback: spline_feedback(&[]),
-                                    completed_rows: Default::default(),
-                                };
-                                let mut draws = Vec::new();
-                                compose_notefield_field(
-                                    &mut Vec::new(),
-                                    &mut draws,
-                                    &mut Vec::new(),
-                                    &mut ModelMeshCache::default(),
-                                    &mut HoldMeshScratch::with_columns(2),
-                                    &mut CapturedActorScratch::with_capacities(32, 0),
-                                    &mut NotefieldCameraCache::default(),
-                                    &request,
-                                    &prepared,
-                                    &frame,
-                                    &source,
-                                );
-                                let visible = sudden == stealth_type;
-                                let keys = sprite_keys(&draws);
-                                assert_eq!(
-                                    keys.contains(&"note"),
-                                    visible,
-                                    "{placement:?}, {kind:?}, dir={direction}, sudden={sudden}, type={stealth_type}: {keys:?}"
-                                );
-                                assert!(keys.contains(&"target0"), "receptor stays visible");
+                                for zoom in [0.5, 1.0, 1.5] {
+                                    let mut request = request(
+                                        &ns, &timing, &notes, &hides, placement, player, 2, 2, 4,
+                                    );
+                                    request.chart.lane_note_row_indices = &lanes;
+                                    request.chart.lane_hold_indices = &lanes;
+                                    request.chart.note_itg_rows = &[153];
+                                    request.geometry.column_dirs.fill(direction);
+                                    request.geometry.field_zoom = zoom;
+                                    request.visual.visual.move_y_cols.fill(move_y);
+                                    request.visual.visual.tipsy = 8.0;
+                                    request.visual.appearance.hidden = f32::from(!sudden);
+                                    request.visual.appearance.sudden = f32::from(sudden);
+                                    request.visual.appearance.stealth_type = stealth_type;
+                                    let prepared =
+                                        prepare_notefield(&request).expect("prepare field");
+                                    let frame = NotefieldFieldFrameView {
+                                        feedback: spline_feedback(&[]),
+                                        completed_rows: Default::default(),
+                                    };
+                                    let mut draws = Vec::new();
+                                    compose_notefield_field(
+                                        &mut Vec::new(),
+                                        &mut draws,
+                                        &mut Vec::new(),
+                                        &mut ModelMeshCache::default(),
+                                        &mut HoldMeshScratch::with_columns(2),
+                                        &mut CapturedActorScratch::with_capacities(32, 0),
+                                        &mut NotefieldCameraCache::default(),
+                                        &request,
+                                        &prepared,
+                                        &frame,
+                                        &source,
+                                    );
+                                    let visible = !sudden || stealth_type;
+                                    let keys = sprite_keys(&draws);
+                                    assert_eq!(
+                                        keys.contains(&"note"),
+                                        visible,
+                                        "{placement:?}, {kind:?}, dir={direction}, sudden={sudden}, type={stealth_type}: {keys:?}"
+                                    );
+                                    assert!(keys.contains(&"target0"), "receptor stays visible");
+                                }
                             }
                         }
                     }

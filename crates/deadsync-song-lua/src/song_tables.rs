@@ -453,6 +453,7 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
             | "tandrunkzperiod"
             | "stealthtype"
             | "dizzyholds"
+            | "zbuffer"
             | "cosecant"
     ) {
         return create_native_option(lua, &owner, name);
@@ -585,7 +586,10 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
         let state = player_option_state(lua, &owner)?;
-        if matches!(key.as_str(), "cosecant" | "dizzyholds" | "stealthtype") {
+        if matches!(
+            key.as_str(),
+            "cosecant" | "dizzyholds" | "stealthtype" | "zbuffer"
+        ) {
             let previous = state.get::<Option<bool>>(key.as_str())?.unwrap_or(false);
             if let Some(Value::Boolean(value)) = method_arg(&args, 0) {
                 state.set(key.as_str(), *value)?;
@@ -1894,15 +1898,16 @@ assert(options:Reverse() == 0 and options:XMod() == 1)
     }
 
     #[test]
-    fn stealth_type_matches_native_boolean_binding() {
-        let lua = Lua::new();
-        let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
-            .expect("create options");
-        lua.globals()
-            .set("o", options.clone())
-            .expect("expose options");
-        lua.load(
-            r#"
+    fn boolean_options_match_native_binding() {
+        for (method, key) in [("StealthType", "stealthtype"), ("ZBuffer", "zbuffer")] {
+            let lua = Lua::new();
+            let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
+                .expect("create options");
+            lua.globals()
+                .set("o", options.clone())
+                .expect("expose options");
+            lua.load(
+                r#"
 assert(o:StealthType() == false and select('#', o:StealthType()) == 1)
 assert(o:StealthType(true) == false and o:StealthType() == true)
 for _, value in ipairs({0, 1, 'true', 'false', {}}) do
@@ -1914,19 +1919,19 @@ assert(o:StealthType(true, true) == o)
 o:FromString('*0 50% stealthtype'); assert(o:StealthType() == false)
 o:FromString('*0 51% stealthtype'); assert(o:StealthType() == true)
 o:FromString('no stealthtype'); assert(o:StealthType() == false)
-"#,
-        )
-        .exec()
-        .expect("native boolean protocol");
-        // Direct boolean writes have no approach speed, even with a numeric arg.
-        let speeds = player_option_speeds(&lua, &options).expect("read speeds");
-        lua.load("o:StealthType(true, -1)")
+"#
+                .replace("StealthType", method)
+                .replace("stealthtype", key),
+            )
             .exec()
-            .expect("numeric arg is ignored");
-        assert_eq!(
-            speeds.get::<f32>("stealthtype").expect("unchanged speed"),
-            1.0
-        );
+            .expect("native boolean protocol");
+            // Direct boolean writes have no approach speed, even with a numeric arg.
+            let speeds = player_option_speeds(&lua, &options).expect("read speeds");
+            lua.load(format!("o:{method}(true, -1)"))
+                .exec()
+                .expect("numeric arg is ignored");
+            assert_eq!(speeds.get::<f32>(key).expect("unchanged speed"), 1.0);
+        }
     }
 
     #[test]

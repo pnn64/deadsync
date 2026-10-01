@@ -190,6 +190,7 @@ impl AccelOverrides {
 pub struct VisualOverrides {
     pub mod_timer_type: Option<ModTimerType>,
     pub dizzy_holds: Option<bool>,
+    pub z_buffer: Option<bool>,
     pub cosecant: Option<bool>,
     pub drunk: Option<f32>,
     pub drunk_offset: Option<f32>,
@@ -262,6 +263,7 @@ impl Default for VisualOverrides {
         Self {
             mod_timer_type: None,
             dizzy_holds: None,
+            z_buffer: None,
             cosecant: None,
             drunk: None,
             drunk_offset: None,
@@ -336,6 +338,7 @@ impl VisualOverrides {
     pub fn any(self) -> bool {
         self.mod_timer_type.is_some()
             || self.dizzy_holds.is_some()
+            || self.z_buffer.is_some()
             || self.cosecant.is_some()
             || self.drunk.is_some()
             || self.drunk_offset.is_some()
@@ -516,6 +519,7 @@ impl AccelEffects {
 pub struct VisualEffects {
     pub mod_timer_type: ModTimerType,
     pub dizzy_holds: bool,
+    pub z_buffer: bool,
     pub cosecant: bool,
     pub drunk: f32,
     pub drunk_offset: f32,
@@ -596,6 +600,7 @@ impl VisualEffects {
         Self {
             mod_timer_type: ModTimerType::Default,
             dizzy_holds: false,
+            z_buffer: false,
             cosecant: false,
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
             drunk_offset: 0.0,
@@ -737,6 +742,7 @@ pub fn approach_visual_overrides_to_base(
 ) {
     visual.mod_timer_type = None;
     visual.dizzy_holds = None;
+    visual.z_buffer = None;
     visual.cosecant = None;
     let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
     approach_optional_visual(&mut visual.drunk, base.drunk, step);
@@ -847,6 +853,7 @@ pub fn approach_visual_overrides_to_target(
 ) {
     current.mod_timer_type = target.mod_timer_type;
     current.dizzy_holds = target.dizzy_holds;
+    current.z_buffer = target.z_buffer;
     current.cosecant = target.cosecant;
     approach_attack_value(
         &mut current.drunk,

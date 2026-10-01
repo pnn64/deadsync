@@ -1229,7 +1229,7 @@ fn push_update_mod_targets_with_key<S: ModState>(
             if speed.is_some()
                 || matches!(
                     key,
-                    "cosecant" | "dizzyholds" | "stealthtype" | "modtimersetting"
+                    "cosecant" | "dizzyholds" | "stealthtype" | "zbuffer" | "modtimersetting"
                 )
             {
                 if !from.is_finite() || speed.is_some_and(|speed| !speed.is_finite()) {

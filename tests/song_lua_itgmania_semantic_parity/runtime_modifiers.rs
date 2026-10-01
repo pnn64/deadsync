@@ -115,7 +115,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     push("tilt".into(), if key == "hallway" { -value } else { value });
                     push("skew".into(), 0.0);
                 }
-                "stealthtype" | "stealthpastreceptors" | "cosecant" | "dizzyholds" => {
+                "stealthtype" | "stealthpastreceptors" | "cosecant" | "dizzyholds" | "zbuffer" => {
                     push(key, f32::from(value > 0.5))
                 }
                 _ => push(key, value),
@@ -181,7 +181,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     args.first().map(|_| 1.0)
                 } else if matches!(
                     operation,
-                    "StealthType" | "StealthPastReceptors" | "Cosecant" | "DizzyHolds"
+                    "StealthType" | "StealthPastReceptors" | "Cosecant" | "DizzyHolds" | "ZBuffer"
                 ) {
                     // BOOL_INTERFACE treats a non-boolean first argument as a
                     // query. A chaining argument does not turn it into a write.
@@ -286,6 +286,7 @@ fn runtime_mod_value(
         "tandrunkzspeed" => visual.tan_drunk_z_speed.unwrap_or(0.0),
         "tandrunkzperiod" => visual.tan_drunk_z_period.unwrap_or(0.0),
         "dizzyholds" => f32::from(visual.dizzy_holds.unwrap_or(false)),
+        "zbuffer" => f32::from(visual.z_buffer.unwrap_or(false)),
         "cosecant" => f32::from(visual.cosecant.unwrap_or(false)),
         "drawsize" => visual.draw_size.unwrap_or(0.0),
         "drawsizeback" => visual.draw_size_back.unwrap_or(0.0),
@@ -1173,13 +1174,14 @@ end}
 }
 
 #[test]
-fn stealth_type_survives_lua_boolean_methods_strings_and_fresh_options() {
+fn boolean_options_survive_methods_strings_and_fresh_options() {
     crate::paths::init();
-    let directory = tempfile::tempdir().expect("create StealthType fixture");
-    let entry = directory.path().join("default.lua");
-    fs::write(
-        &entry,
-        r#"
+    for (method, key) in [("StealthType", "stealthtype"), ("ZBuffer", "zbuffer")] {
+        let directory = tempfile::tempdir().expect("create StealthType fixture");
+        let entry = directory.path().join("default.lua");
+        fs::write(
+            &entry,
+            r#"
 local player = GAMESTATE:GetPlayerState(PLAYER_1)
 local options = player:GetPlayerOptions('ModsLevel_Song')
 local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
@@ -1219,46 +1221,49 @@ return Def.ActorFrame{OnCommand=function(self)
         end
     end)
 end}
-"#,
-    )
-    .expect("write StealthType fixture");
-    let mut context = SongLuaCompileContext::new(directory.path(), "StealthType");
-    context.song_timing_bpms = vec![(0.0, 120.0)];
-    context.music_length_seconds = 2.0;
-    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
-        .expect("compile StealthType fixture");
-    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
-    assert_eq!(unsupported, 0);
-    for (second, expected) in [
-        (0.25, 1.0),
-        (f32::from_bits(0.5f32.to_bits() - 1), 1.0),
-        (0.5, 0.0),
-        (0.75, 1.0),
-        (1.0, 0.0),
-        (1.25, 1.0),
-        (1.5, 0.0),
-        (1.75, 0.0),
-    ] {
-        for player in 0..2 {
-            runtime.refresh_player(
-                player,
-                second,
-                0.0,
-                deadsync_gameplay::AppearanceEffects::default(),
-                AttackBaseEffects::default,
-                SongLuaPlayerTransform::default(),
+"#
+            .replace("StealthType", method)
+            .replace("stealthtype", key),
+        )
+        .expect("write StealthType fixture");
+        let mut context = SongLuaCompileContext::new(directory.path(), method);
+        context.song_timing_bpms = vec![(0.0, 120.0)];
+        context.music_length_seconds = 2.0;
+        let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+            .expect("compile StealthType fixture");
+        let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+        assert_eq!(unsupported, 0);
+        for (second, expected) in [
+            (0.25, 1.0),
+            (f32::from_bits(0.5f32.to_bits() - 1), 1.0),
+            (0.5, 0.0),
+            (0.75, 1.0),
+            (1.0, 0.0),
+            (1.25, 1.0),
+            (1.5, 0.0),
+            (1.75, 0.0),
+        ] {
+            for player in 0..2 {
+                runtime.refresh_player(
+                    player,
+                    second,
+                    0.0,
+                    deadsync_gameplay::AppearanceEffects::default(),
+                    AttackBaseEffects::default,
+                    SongLuaPlayerTransform::default(),
+                );
+            }
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some(expected),
+                "{second}"
+            );
+            assert_eq!(
+                runtime_mod_value(&runtime, 1, key),
+                Some(1.0),
+                "independent P2 at {second}"
             );
         }
-        assert_eq!(
-            runtime_mod_value(&runtime, 0, "stealthtype"),
-            Some(expected),
-            "{second}"
-        );
-        assert_eq!(
-            runtime_mod_value(&runtime, 1, "stealthtype"),
-            Some(1.0),
-            "independent P2 at {second}"
-        );
     }
 }
 
@@ -1270,6 +1275,7 @@ fn boolean_option_queries_are_not_modifier_targets() {
         "Cosecant",
         "StealthPastReceptors",
         "StealthType",
+        "ZBuffer",
     ]
     .into_iter()
     .map(|name| NativeTimelineTrack {
@@ -1300,12 +1306,13 @@ fn boolean_option_queries_are_not_modifier_targets() {
     .collect();
     let (writes, unsupported) = option_writes(&trace);
     assert!(unsupported.is_empty());
-    assert_eq!(writes.len(), 8);
+    assert_eq!(writes.len(), 10);
     for key in [
         "dizzyholds",
         "cosecant",
         "stealthpastreceptors",
         "stealthtype",
+        "zbuffer",
     ] {
         let values = writes
             .iter()

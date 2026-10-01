@@ -554,6 +554,7 @@ pub enum SongLuaEaseMaskTarget {
     AccelBoomerang,
     VisualModTimerType,
     VisualDizzyHolds,
+    VisualZBuffer,
     VisualCosecant,
     VisualDrunk,
     VisualDrunkPeriod,
@@ -1773,6 +1774,7 @@ fn append_song_lua_ease_targets_key(
         "modtimersong" => push(SongLuaEaseMaskTarget::VisualModTimerType, 2.0, 2.0),
         "modtimerdefault" => push(SongLuaEaseMaskTarget::VisualModTimerType, 3.0, 3.0),
         "dizzyholds" => push(SongLuaEaseMaskTarget::VisualDizzyHolds, pct_from, pct_to),
+        "zbuffer" => push(SongLuaEaseMaskTarget::VisualZBuffer, pct_from, pct_to),
         "cosecant" => push(SongLuaEaseMaskTarget::VisualCosecant, pct_from, pct_to),
         "drunk" => push(SongLuaEaseMaskTarget::VisualDrunk, pct_from, pct_to),
         "drunkperiod" => push(SongLuaEaseMaskTarget::VisualDrunkPeriod, pct_from, pct_to),
@@ -2407,6 +2409,7 @@ pub fn song_lua_apply_eased_target(
             visual.mod_timer_type = ModTimerType::from_value(value)
         }
         SongLuaEaseMaskTarget::VisualDizzyHolds => visual.dizzy_holds = Some(value > 0.5),
+        SongLuaEaseMaskTarget::VisualZBuffer => visual.z_buffer = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualCosecant => visual.cosecant = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
         SongLuaEaseMaskTarget::VisualDrunkPeriod => visual.drunk_period = Some(value),
@@ -2655,6 +2658,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerType => window.visual.mod_timer_type.is_some(),
         SongLuaEaseMaskTarget::VisualDizzyHolds => window.visual.dizzy_holds.is_some(),
+        SongLuaEaseMaskTarget::VisualZBuffer => window.visual.z_buffer.is_some(),
         SongLuaEaseMaskTarget::VisualCosecant => window.visual.cosecant.is_some(),
         SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
         SongLuaEaseMaskTarget::VisualDrunkPeriod => window.visual.drunk_period.is_some(),
@@ -3904,6 +3908,9 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     if visual.dizzy_holds.is_some() {
         targets.dizzy_holds = Some(false);
     }
+    if visual.z_buffer.is_some() {
+        targets.z_buffer = Some(false);
+    }
     if visual.cosecant.is_some() {
         targets.cosecant = Some(false);
     }
@@ -4729,6 +4736,7 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualModTimerType
             | SongLuaEaseMaskTarget::VisualDizzyHolds
+            | SongLuaEaseMaskTarget::VisualZBuffer
             | SongLuaEaseMaskTarget::VisualCosecant => {}
             SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
             SongLuaEaseMaskTarget::VisualDrunkPeriod => {
@@ -5293,6 +5301,11 @@ fn apply_active_visual_window(
         && (!persisted || (!active_clear_all && active_targets.visual.dizzy_holds.is_none()))
     {
         values.visual.dizzy_holds = Some(value);
+    }
+    if let Some(value) = window.visual.z_buffer
+        && (!persisted || (!active_clear_all && active_targets.visual.z_buffer.is_none()))
+    {
+        values.visual.z_buffer = Some(value);
     }
     if let Some(value) = window.visual.cosecant
         && (!persisted || (!active_clear_all && active_targets.visual.cosecant.is_none()))
@@ -6255,6 +6268,7 @@ fn apply_runtime_mod(
         "dizzyholds" => {
             out.visual.dizzy_holds = attack_level(percent_value).map(|level| level > 0.5)
         }
+        "zbuffer" => out.visual.z_buffer = attack_level(percent_value).map(|level| level > 0.5),
         "cosecant" => out.visual.cosecant = attack_level(percent_value).map(|level| level > 0.5),
         "drunk" => set_approached_mod(
             &mut out.visual.drunk,
@@ -6968,6 +6982,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
     VisualEffects {
         mod_timer_type: attack.mod_timer_type.unwrap_or(base.mod_timer_type),
         dizzy_holds: attack.dizzy_holds.unwrap_or(base.dizzy_holds),
+        z_buffer: attack.z_buffer.unwrap_or(base.z_buffer),
         cosecant: attack.cosecant.unwrap_or(base.cosecant),
         drunk: merge_attack_value(base.drunk, attack.drunk),
         drunk_period: merge_attack_value(base.drunk_period, attack.drunk_period),
