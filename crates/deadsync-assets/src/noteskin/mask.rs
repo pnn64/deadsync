@@ -3,7 +3,13 @@ use deadsync_noteskin::script::{
     ScriptCommand, normalized_script_command, parse_script_bool, split_script_token,
 };
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+#[cfg(test)]
+#[path = "../../tests/mask_preparation/mod.rs"]
+mod mask_preparation;
+
+static EMPTY_MASK_VERTICES: LazyLock<Arc<[ModelVertex]>> = LazyLock::new(|| Arc::from([]));
 
 #[derive(Default)]
 struct DepthMode {
@@ -122,62 +128,176 @@ fn load_mask_mesh(slot: &SpriteSlot) -> Option<ModelMesh> {
     // Texture translation may select another quant column. A static mesh is
     // valid only when all atlas cells have the same cutout, including alpha=1
     // pixels: ITG discards <=1/256, so only byte alpha=0 leaves the mask open.
-    if image
-        .enumerate_pixels()
-        .any(|(px, py, pixel)| (pixel[3] == 0) != (image.get_pixel(x + px % w, y + py % h)[3] == 0))
-    {
+    if !mask_cells_match(&image, [x, y, w, h]) {
         return None;
     }
     Some(cutout_mesh(&image, [x, y, w, h], slot.source_size))
 }
 
-fn cutout_mesh(image: &image::RgbaImage, [x, y, w, h]: [u32; 4], size: [i32; 2]) -> ModelMesh {
+fn mask_cells_match(image: &image::RgbaImage, [x, y, w, h]: [u32; 4]) -> bool {
+    if image.width() == 0 || image.height() == 0 {
+        return true;
+    }
+    let bytes = image.as_raw();
+    let stride = image.width() as usize * 4;
+    // Preserve cheap rejection before constructing the row/cell iterators.
+    let first_reference = y as usize * stride + x as usize * 4 + 3;
+    if (bytes[3] == 0) != (bytes[first_reference] == 0) {
+        return false;
+    }
+    let cell_bytes = w as usize * 4;
+    for (row, pixels) in bytes
+        .chunks_exact(stride)
+        .take(image.height() as usize)
+        .enumerate()
+    {
+        let origin = (y as usize + row % h as usize) * stride + x as usize * 4;
+        let reference = &bytes[origin..origin + cell_bytes];
+        let reference_pixels = reference.as_chunks::<4>().0;
+        for cell in pixels.chunks_exact(cell_bytes) {
+            // The selected cell always has its own alpha pattern.
+            if cell.as_ptr() == reference.as_ptr() {
+                continue;
+            }
+            if cell
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(reference_pixels)
+                .any(|(pixel, reference)| (pixel[3] == 0) != (reference[3] == 0))
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+// The two row frontiers normally fit on the stack. Only unusually fragmented
+// rows spill into one reusable buffer; interleaved slots retain both rows.
+struct MaskRows {
+    inline: [[usize; 64]; 2],
+    lengths: [usize; 2],
+    spill: Vec<usize>,
+    initial_spill: usize,
+}
+
+impl MaskRows {
+    fn new(width: u32) -> Self {
+        Self {
+            inline: [[0; 64]; 2],
+            lengths: [0; 2],
+            spill: Vec::new(),
+            initial_spill: (width as usize).div_ceil(2).saturating_sub(64).min(256) * 2,
+        }
+    }
+
+    fn get(&self, side: usize, index: usize) -> Option<usize> {
+        if index >= self.lengths[side] {
+            None
+        } else if index < 64 {
+            Some(self.inline[side][index])
+        } else {
+            Some(self.spill[(index - 64) * 2 + side])
+        }
+    }
+
+    fn push(&mut self, side: usize, value: usize) {
+        let index = self.lengths[side];
+        if index < 64 {
+            self.inline[side][index] = value;
+        } else {
+            let offset = (index - 64) * 2 + side;
+            if self.spill.is_empty() {
+                self.spill.reserve_exact(self.initial_spill);
+            }
+            if offset >= self.spill.len() {
+                self.spill.resize(offset + 1, 0);
+            }
+            self.spill[offset] = value;
+        }
+        self.lengths[side] += 1;
+    }
+}
+
+fn mask_rectangles(image: &image::RgbaImage, [x, y, w, h]: [u32; 4]) -> Vec<[u32; 4]> {
     let mut rects: Vec<[u32; 4]> = Vec::new();
+    let mut active = MaskRows::new(w);
     for row in 0..h {
+        let side = (row & 1) as usize;
+        let previous = 1 - side;
+        active.lengths[side] = 0;
+        let mut cursor = 0;
+        let origin = ((y as usize + row as usize) * image.width() as usize + x as usize) * 4;
+        let pixels = &image.as_raw()[origin..origin + w as usize * 4];
         let mut col = 0;
         while col < w {
-            if image.get_pixel(x + col, y + row)[3] != 0 {
+            if pixels[col as usize * 4 + 3] != 0 {
                 col += 1;
                 continue;
             }
             let start = col;
-            while col < w && image.get_pixel(x + col, y + row)[3] == 0 {
+            while col < w && pixels[col as usize * 4 + 3] == 0 {
                 col += 1;
             }
-            if let Some(rect) = rects
-                .iter_mut()
-                .rev()
-                .find(|r| r[0] == start && r[2] == col && r[3] == row)
-            {
-                rect[3] += 1;
-            } else {
-                rects.push([start, row, col, row + 1]);
+            // Previous-row runs are sorted by column. Advance once through
+            // that frontier instead of searching all accumulated rectangles.
+            while let Some(index) = active.get(previous, cursor) {
+                if rects[index][0] >= start {
+                    break;
+                }
+                cursor += 1;
             }
+            let index = if let Some(index) = active.get(previous, cursor)
+                && rects[index][0] == start
+                && rects[index][2] == col
+            {
+                rects[index][3] += 1;
+                cursor += 1;
+                index
+            } else {
+                let index = rects.len();
+                rects.push([start, row, col, row + 1]);
+                index
+            };
+            active.push(side, index);
         }
     }
+    rects
+}
+
+fn mesh_from_rectangles(rects: Vec<[u32; 4]>, [w, h]: [u32; 2], size: [i32; 2]) -> ModelMesh {
     let [width, height] = size.map(|v| v as f32);
-    let mut vertices = Vec::with_capacity(rects.len() * 6);
-    for [left, top, right, bottom] in rects {
-        for [px, py] in [
-            [left, top],
-            [left, bottom],
-            [right, bottom],
-            [left, top],
-            [right, bottom],
-            [right, top],
-        ] {
-            let (u, v) = (px as f32 / w as f32, py as f32 / h as f32);
-            vertices.push(ModelVertex {
-                normal: [0.0, 0.0, 1.0],
-                pos: [(u - 0.5) * width, (0.5 - v) * height, 0.0],
-                uv: [u, v],
-                tex_matrix_scale: [1.0; 2],
-            });
-        }
-    }
+    // Each rectangle contributes exactly six vertices. Collecting this known-
+    // length iterator lets Arc allocate the output directly, without a Vec.
+    let vertices = if rects.is_empty() {
+        Arc::clone(&EMPTY_MASK_VERTICES)
+    } else {
+        rects
+            .into_iter()
+            .flat_map(|[left, top, right, bottom]| {
+                [
+                    [left, top],
+                    [left, bottom],
+                    [right, bottom],
+                    [left, top],
+                    [right, bottom],
+                    [right, top],
+                ]
+                .map(|[px, py]| {
+                    let (u, v) = (px as f32 / w as f32, py as f32 / h as f32);
+                    ModelVertex {
+                        normal: [0.0, 0.0, 1.0],
+                        pos: [(u - 0.5) * width, (0.5 - v) * height, 0.0],
+                        uv: [u, v],
+                        tex_matrix_scale: [1.0; 2],
+                    }
+                })
+            })
+            .collect()
+    };
     ModelMesh {
-        vertices: vertices.into(),
-        // Preserve the full sprite canvas, including its transparent margins.
+        vertices,
         bounds: [
             -width * 0.5,
             -height * 0.5,
@@ -187,4 +307,8 @@ fn cutout_mesh(image: &image::RgbaImage, [x, y, w, h]: [u32; 4], size: [i32; 2])
             0.0,
         ],
     }
+}
+
+fn cutout_mesh(image: &image::RgbaImage, [x, y, w, h]: [u32; 4], size: [i32; 2]) -> ModelMesh {
+    mesh_from_rectangles(mask_rectangles(image, [x, y, w, h]), [w, h], size)
 }

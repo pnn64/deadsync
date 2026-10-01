@@ -582,7 +582,7 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn init_asset_paths() {
+    pub(super) fn init_asset_paths() {
         static INIT: std::sync::Once = std::sync::Once::new();
         INIT.call_once(|| {
             let bundle = Path::new(env!("CARGO_MANIFEST_DIR"))
