@@ -11,6 +11,7 @@ pub mod popular_packs;
 pub mod runtime;
 pub mod score_compat;
 pub mod score_import;
+pub mod smo_describe;
 pub mod smo_details;
 pub mod smo_search;
 pub mod srpg_shop;
