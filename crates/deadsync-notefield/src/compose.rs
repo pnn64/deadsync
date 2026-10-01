@@ -219,6 +219,8 @@ pub struct MeasureCounterOptions {
 /// Canonical inputs for one player notefield composition pass.
 pub struct NotefieldComposeRequest<'a, S> {
     pub hud_style: NotefieldHudStyle,
+    /// Empty in regular gameplay; Practice supplies annotations in both views.
+    pub timing_labels: &'a [crate::TimingSegmentLabel],
     pub placement: FieldPlacement,
     pub view: ViewOverride,
     pub geometry: NotefieldGeometry,

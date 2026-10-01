@@ -15,13 +15,13 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
-use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
     GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, ScrollEffects,
     handle_core_input, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_notefield::{TimingLabelStyle, TimingSegmentLabel as PracticeTimingLabel};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
@@ -35,7 +35,6 @@ const BEATS_PER_MEASURE: f32 = 4.0;
 const MIN_CURSOR_BEAT: f32 = 0.0;
 const BEAT_EPSILON: f32 = 0.000_1;
 const MARKER_Z: f32 = 2985.0;
-const EDIT_TIMING_LABEL_Z: f32 = MARKER_Z;
 const EDIT_FIELD_CURSOR_TEX: &str = "practice/snap_display_icon_9x1 (doubleres).png";
 const EDIT_FIELD_CURSOR_Z: f32 = MARKER_Z + 1.0;
 const EDIT_MENU_ROW_HEIGHT: f32 = 32.0;
@@ -80,13 +79,6 @@ const PRACTICE_DENSITY_LINE_Z: i16 = PRACTICE_DENSITY_Z + 1;
 const PRACTICE_DENSITY_LINE_WIDTH: f32 = 2.0;
 
 pub type MusicStartSnap = fn(&Path, f64) -> f64;
-
-#[derive(Clone, Copy)]
-struct TimingLabelStyle {
-    color: [f32; 4],
-    left_side: bool,
-    offset_x: f32,
-}
 
 // PARITY[ITGmania NoteField]: Simply Love inherits these timing label
 // colors, sides, and offsets from `_fallback/metrics.ini` `[NoteField]`.
@@ -141,21 +133,6 @@ enum Mode {
 enum MarkerPlacement {
     P1,
     P2,
-}
-
-#[derive(Clone, Copy)]
-struct PracticeFieldGeom {
-    player_idx: usize,
-    center_x: f32,
-    offset_y: f32,
-    width: f32,
-    zoom: f32,
-}
-
-struct PracticeTimingLabel {
-    text: Arc<str>,
-    beat: f32,
-    style: TimingLabelStyle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -347,12 +324,6 @@ pub struct State {
     pub gameplay: gameplay_screen::State,
     runtime: PracticeRuntimeView,
     density_graph: PracticeDensityGraph,
-    /// Actor-ready immutable timing labels, compiled once per player at
-    /// Practice entry. The boxed slices have exact song-lifetime capacity and
-    /// require no invalidation, eviction, synchronization, or frame-time
-    /// formatting. Actor construction computes only dynamic position,
-    /// visibility, and glow before cloning a visible label's shared text.
-    timing_labels: [Box<[PracticeTimingLabel]>; MAX_PLAYERS],
     edit_text: PracticeEditText,
     menu_text: PracticeMenuText,
     mode: Mode,
@@ -549,11 +520,11 @@ pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) 
             Vec::new().into_boxed_slice()
         }
     });
+    gameplay.set_practice_timing_labels(timing_labels);
     let mut state = State {
         gameplay,
         runtime,
         density_graph,
-        timing_labels,
         edit_text: PracticeEditText::new(),
         menu_text: PracticeMenuText::new(),
         mode: Mode::Editing,
@@ -2227,17 +2198,9 @@ fn append_player_markers(
     let field_zoom = practice_edit_field_zoom();
     let width = (num_cols as f32 * ScrollSpeedSetting::ARROW_SPACING * spacing_mult * field_zoom)
         .max(ScrollSpeedSetting::ARROW_SPACING);
-    let geom = PracticeFieldGeom {
-        player_idx,
-        center_x,
-        offset_y,
-        width,
-        zoom: field_zoom,
-    };
     let marker_phase = (state.gameplay.total_elapsed_in_screen() * std::f32::consts::PI).sin();
     let marker_shade = marker_phase.mul_add(0.25, 0.75);
     let cursor_y = marker_y_for_beat(state, player_idx, offset_y, state.cursor_beat);
-    append_timing_segment_labels(state, actors, geom);
     append_field_cursor(
         actors,
         center_x,
@@ -2262,24 +2225,6 @@ fn append_player_markers(
             append_marker_bar(actors, center_x, y, width, marker_shade);
         }
         (None, None) => {}
-    }
-}
-
-fn append_timing_segment_labels(state: &State, actors: &mut Vec<Actor>, geom: PracticeFieldGeom) {
-    let Some(labels) = state.timing_labels.get(geom.player_idx) else {
-        return;
-    };
-    let glow_alpha = timing_label_glow_alpha(state.gameplay.total_elapsed_in_screen());
-    for label in labels {
-        append_timing_segment_label(
-            state,
-            actors,
-            geom,
-            label.style,
-            &label.text,
-            label.beat,
-            glow_alpha,
-        );
     }
 }
 
@@ -2331,51 +2276,6 @@ fn compile_timing_labels(timing: &TimingSegments) -> Box<[PracticeTimingLabel]> 
         push(fmt_itg_float(seg.length), seg.beat, FAKE_LABEL_STYLE);
     }
     labels.into_boxed_slice()
-}
-
-fn append_timing_segment_label(
-    state: &State,
-    actors: &mut Vec<Actor>,
-    geom: PracticeFieldGeom,
-    style: TimingLabelStyle,
-    text: &Arc<str>,
-    beat: f32,
-    glow_alpha: f32,
-) {
-    let y = marker_y_for_beat(state, geom.player_idx, geom.offset_y, beat);
-    if !timing_label_y_is_visible(y) {
-        return;
-    }
-    let x = timing_label_x(geom.center_x, geom.width, geom.zoom, style);
-    let align_x = if style.left_side { 1.0 } else { 0.0 };
-    let color = style.color;
-    actors.push(act!(text:
-        font("miso"):
-        settext(text):
-        align(align_x, 0.5):
-        xy(x, y):
-        zoom(geom.zoom):
-        wrapwidthpixels(300.0):
-        diffuse(color[0], color[1], color[2], color[3]):
-        glow(1.0, 1.0, 1.0, glow_alpha):
-        shadowlength(2.0):
-        z(EDIT_TIMING_LABEL_Z)
-    ));
-}
-
-fn timing_label_y_is_visible(y: f32) -> bool {
-    let margin = practice_marker_bar_height();
-    y.is_finite() && y >= -margin && y <= screen_height() + margin
-}
-
-fn timing_label_x(center_x: f32, width: f32, zoom: f32, style: TimingLabelStyle) -> f32 {
-    let side = if style.left_side { -1.0 } else { 1.0 };
-    center_x + side * style.offset_x.mul_add(zoom, width * 0.5)
-}
-
-fn timing_label_glow_alpha(elapsed: f32) -> f32 {
-    let phase = elapsed * std::f32::consts::TAU / 6.0;
-    phase.cos().mul_add(0.5, 0.5).clamp(0.0, 1.0)
 }
 
 fn timing_speed_label(seg: SpeedSegment) -> String {
@@ -3015,11 +2915,11 @@ fn append_help_section(
 #[cfg(test)]
 mod tests {
     use super::{
-        BPM_LABEL_STYLE, CursorHoldDir, DISPLAY_SCROLL_MAX_SMOOTH_BEATS,
-        DISPLAY_SCROLL_SNAP_EPSILON, EditInfoSource, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX,
-        MUSIC_RATE_HOTKEY_MIN, MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir,
-        PracticeMenuText, PracticeNavMode, PracticeNumber, SPEED_LABEL_STYLE, TAB_FAST_MULTIPLIER,
-        append_pending_effects, build_edit_info_text_into, clamp_selection, compile_timing_labels,
+        CursorHoldDir, DISPLAY_SCROLL_MAX_SMOOTH_BEATS, DISPLAY_SCROLL_SNAP_EPSILON,
+        EditInfoSource, HELP_MENU, MAIN_MENU, MUSIC_RATE_HOTKEY_MAX, MUSIC_RATE_HOTKEY_MIN,
+        MUSIC_RATE_HOTKEY_STEP, MenuDef, MusicRateHoldDir, PageHoldDir, PracticeMenuText,
+        PracticeNavMode, PracticeNumber, TAB_FAST_MULTIPLIER, append_pending_effects,
+        build_edit_info_text_into, clamp_selection, compile_timing_labels,
         edit_cursor_hold_dir_for_action_in_mode, edit_scroll_hold_rate,
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate, gameplay_hotkey_input,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
@@ -3027,7 +2927,7 @@ mod tests {
         page_hold_dir_for_key, practice_density_geom, practice_edit_beat_travel,
         practice_nav_mode_from_config, practice_playback_visuals, practice_style_notefield_width,
         push_selection_info, quantized_music_rate, rotate_practice_density_mesh,
-        timing_label_glow_alpha, timing_label_x, timing_speed_label,
+        timing_speed_label,
     };
     use crate::SimplyLoveEffect as ThemeEffect;
     use crate::SimplyLoveRuntimeRequest;
@@ -3554,19 +3454,6 @@ mod tests {
                 (8.0, "4.000000"),
             ]
         );
-    }
-
-    #[test]
-    fn timing_label_x_uses_inherited_side_offsets() {
-        assert_eq!(timing_label_x(400.0, 160.0, 0.5, BPM_LABEL_STYLE), 290.0);
-        assert_eq!(timing_label_x(400.0, 160.0, 0.5, SPEED_LABEL_STYLE), 495.0);
-    }
-
-    #[test]
-    fn timing_label_glow_uses_six_second_cycle() {
-        assert_eq!(timing_label_glow_alpha(0.0), 1.0);
-        assert!((timing_label_glow_alpha(3.0) - 0.0).abs() < 0.000_001);
-        assert!((timing_label_glow_alpha(6.0) - 1.0).abs() < 0.000_001);
     }
 
     #[test]

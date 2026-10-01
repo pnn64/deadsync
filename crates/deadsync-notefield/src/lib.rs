@@ -24,6 +24,7 @@ mod placement;
 mod receptors;
 mod song_lua;
 mod style;
+mod timing_labels;
 mod transforms;
 
 #[cfg(test)]
@@ -83,6 +84,7 @@ pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
+pub use timing_labels::{TimingLabelStyle, TimingSegmentLabel};
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };

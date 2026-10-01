@@ -1059,6 +1059,7 @@ mod tests {
     ) -> NotefieldComposeRequest<'a, TestSlot> {
         NotefieldComposeRequest {
             hud_style: style(),
+            timing_labels: &[],
             placement,
             view: ViewOverride::default(),
             geometry: NotefieldGeometry {
@@ -2149,6 +2150,176 @@ mod tests {
             }; MAX_COLS],
             countdown_font: "test",
             countdown_text_slot: 0,
+        }
+    }
+
+    #[test]
+    fn practice_timing_labels_follow_edit_and_playback_fields() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            TimingLabelStyle, TimingSegmentLabel, compose_notefield_field,
+        };
+        use deadlib_present::actors::Actor;
+        use deadsync_rules::timing::{DelaySegment, StopSegment, TimingSegments};
+
+        let ns = noteskin();
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 120.0), (4.0, 240.0)],
+            stops: vec![StopSegment {
+                beat: 4.0,
+                duration: 0.5,
+            }],
+            delays: vec![DelaySegment {
+                beat: 4.0,
+                duration: 0.25,
+            }],
+            ..TimingSegments::default()
+        };
+        let timing = TimingData::from_segments(0.0, 0.0, &segments, &[]);
+        let bpm = TimingLabelStyle {
+            color: [1.0, 0.0, 0.0, 1.0],
+            left_side: true,
+            offset_x: 60.0,
+        };
+        let stop = TimingLabelStyle {
+            color: [0.8, 0.8, 0.0, 1.0],
+            offset_x: 50.0,
+            ..bpm
+        };
+        let labels = [
+            TimingSegmentLabel {
+                text: "240.000000".into(),
+                beat: 4.0,
+                style: bpm,
+            },
+            TimingSegmentLabel {
+                text: "0.500000".into(),
+                beat: 4.0,
+                style: stop,
+            },
+            TimingSegmentLabel {
+                text: "300.000000".into(),
+                beat: 5.0,
+                style: bpm,
+            },
+            TimingSegmentLabel {
+                text: "999.000000".into(),
+                beat: 200.0,
+                style: bpm,
+            },
+        ];
+        let hides = SongLuaNoteHideWindows::default();
+        let frame = NotefieldFieldFrameView {
+            feedback: spline_feedback(&[]),
+            completed_rows: Default::default(),
+        };
+        for edit in [false, true] {
+            for reverse in [false, true] {
+                for rate in [0.75, 1.5] {
+                    for speed in [
+                        ScrollSpeedSetting::XMod(1.5),
+                        ScrollSpeedSetting::CMod(240.0),
+                    ] {
+                        for (player, placement) in
+                            [(0, FieldPlacement::P1), (1, FieldPlacement::P2)]
+                        {
+                            let mut request =
+                                request(&ns, &timing, &[], &hides, placement, player, 2, 2, 4);
+                            request.timing_labels = &labels;
+                            request.chart.visible_beat = 3.0;
+                            request.chart.search_beat = 3.0;
+                            request.chart.visible_music_time_ns = 1_500_000_000;
+                            request.chart.music_rate = rate;
+                            request.visual.current_display_beat = 3.0;
+                            request.visual.spacing_multiplier = 1.5;
+                            request.visual.scroll.reverse = f32::from(reverse);
+                            request.geometry.column_dirs =
+                                [if reverse { -1.0 } else { 1.0 }; MAX_COLS];
+                            request.geometry.field_zoom = 0.5;
+                            request.geometry.scroll_speed = speed;
+                            request.geometry.draw_distance_before_targets = 600.0;
+                            request.geometry.draw_distance_after_targets = 600.0;
+                            request.view.center_receptors_y = true;
+                            if edit {
+                                request.view.edit_beat_bars = true;
+                                request.view.scroll_speed = Some(ScrollSpeedSetting::XMod(1.5));
+                            }
+                            let render = |request: &NotefieldComposeRequest<'_, TestSlot>| {
+                                let prepared = prepare_notefield(request).unwrap();
+                                let mut actors = Vec::new();
+                                compose_notefield_field(
+                                    &mut actors,
+                                    &mut Vec::new(),
+                                    &mut Vec::new(),
+                                    &mut ModelMeshCache::default(),
+                                    &mut HoldMeshScratch::default(),
+                                    &mut CapturedActorScratch::with_capacities(32, 0),
+                                    &mut NotefieldCameraCache::default(),
+                                    request,
+                                    &prepared,
+                                    &frame,
+                                    &source,
+                                );
+                                actors
+                                    .into_iter()
+                                    .filter_map(|actor| match actor {
+                                        Actor::Text {
+                                            content,
+                                            offset,
+                                            color,
+                                            scale,
+                                            align,
+                                            ..
+                                        } if labels.iter().any(|label| {
+                                            label.text.as_ref() == content.as_ref()
+                                        }) =>
+                                        {
+                                            Some((content, offset, color, scale, align))
+                                        }
+                                        _ => None,
+                                    })
+                                    .collect::<Vec<_>>()
+                            };
+                            let actual = render(&request);
+                            assert_eq!(
+                                actual.len(),
+                                3,
+                                "offscreen labels must be culled: edit={edit} reverse={reverse} rate={rate} speed={speed:?}"
+                            );
+                            let center_x = if player == 0 { 160.0 } else { 480.0 };
+                            for (i, (content, offset, color, scale, align)) in
+                                actual.iter().enumerate()
+                            {
+                                assert_eq!(content.as_ref(), labels[i].text.as_ref());
+                                assert_eq!(*color, labels[i].style.color);
+                                assert_eq!(*scale, [0.5; 2]);
+                                assert_eq!(*align, [1.0, 0.5]);
+                                let x = center_x - if i == 1 { 65.0 } else { 70.0 };
+                                // At 120 BPM, beat 3 is at 1.5s; the delay puts
+                                // beat 4 at 2.25s, then the stop and 240 BPM put
+                                // beat 5 at 3s. X-mod/editor travel stays in beats.
+                                let travel =
+                                    if !edit && matches!(speed, ScrollSpeedSetting::CMod(_)) {
+                                        (if i == 2 { 1.5 } else { 0.75 }) * 128.0 / rate
+                                    } else {
+                                        (if i == 2 { 2.0 } else { 1.0 }) * 48.0
+                                    };
+                                let y = 240.0 + if reverse { -travel } else { travel };
+                                assert!((offset[0] - x).abs() < 0.001);
+                                assert!(
+                                    (offset[1] - y).abs() < 0.001,
+                                    "edit={edit} reverse={reverse} rate={rate} speed={speed:?} actual={offset:?} expected_y={y}"
+                                );
+                            }
+                            request.timing_labels = &[];
+                            assert!(
+                                render(&request).is_empty(),
+                                "ordinary fields must not show timing annotations"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 

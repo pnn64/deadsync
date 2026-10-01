@@ -153,6 +153,7 @@ where
             || actor_camera_scope
             || request.capture_requests.note_field
             || request.view.edit_beat_bars
+            || !request.timing_labels.is_empty()
             || request.capture_requests.direct_note_field,
         "ordinary uncaptured gameplay fields must stay on the direct draw stream",
     );
@@ -408,6 +409,7 @@ fn compose_field_contents<S, F>(
             travel,
         },
     );
+    crate::timing_labels::compose_timing_labels(actors, request, prepared);
     compose_notefield_feedback(
         flat_draws,
         cue_hud_draws,

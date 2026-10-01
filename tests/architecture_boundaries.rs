@@ -10392,6 +10392,8 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "StreamProgressLookup",
         "TapJudgmentHudFrame",
         "TapJudgmentSprite",
+        "TimingLabelStyle",
+        "TimingSegmentLabel",
         "TornadoBounds",
         "ViewOverride",
         "actor_from_flat_draw",

@@ -834,6 +834,10 @@ pub struct State {
     notefield_judgment_assets: [notefield::ResolvedJudgmentAssets; MAX_PLAYERS],
     notefield_combo_assets: notefield::ResolvedComboMilestoneAssets,
     notefield_plans: [notefield::GameplayNotefieldPlan; MAX_PLAYERS],
+    /// Practice-only immutable annotations, precompiled at entry and dropped
+    /// with the screen. Empty regular-gameplay slices allocate no storage;
+    /// live frames borrow text without formatting, invalidation, or growth.
+    practice_timing_labels: [Box<[deadsync_notefield::TimingSegmentLabel]>; MAX_PLAYERS],
     sync_overlay_text_cache: RefCell<SyncOverlayTextCache>,
     pub background_path_dirty: bool,
     pub background_changes: Vec<SongBackgroundChange>,
@@ -1173,6 +1177,7 @@ impl State {
             notefield_judgment_assets,
             notefield_combo_assets,
             notefield_plans,
+            practice_timing_labels: std::array::from_fn(|_| Box::default()),
             sync_overlay_text_cache: RefCell::new(SyncOverlayTextCache::default()),
             background_path_dirty: true,
             background_changes,
@@ -1215,6 +1220,13 @@ impl State {
         player_idx: usize,
     ) -> &notefield::GameplayNotefieldPlan {
         &self.notefield_plans[player_idx]
+    }
+
+    pub(crate) fn set_practice_timing_labels(
+        &mut self,
+        labels: [Box<[deadsync_notefield::TimingSegmentLabel]>; MAX_PLAYERS],
+    ) {
+        self.practice_timing_labels = labels;
     }
 
     /// Borrows this frame's offscreen passes in song-layer dependency order.
@@ -5076,6 +5088,7 @@ pub fn draw_field(
         request.capture,
         state.itl_cmod_warning[player_idx],
         state.display_mods_text(player_idx),
+        &state.practice_timing_labels[player_idx],
         notefield_view,
         field_scratch,
         flat_draw_scratch,

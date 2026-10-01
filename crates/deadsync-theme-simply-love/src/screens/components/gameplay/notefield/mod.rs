@@ -623,6 +623,7 @@ pub(crate) fn compose_frame(
     capture_requests: ProxyCaptureRequests,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
+    timing_labels: &[deadsync_notefield::TimingSegmentLabel],
     view: ViewOverride,
     actors: &mut Vec<Actor>,
     flat_draws: &mut Vec<FlatDraw>,
@@ -755,6 +756,7 @@ pub(crate) fn compose_frame(
     };
     let no_song_note_hides = deadsync_gameplay::SongLuaNoteHideWindows::default();
     let request = NotefieldComposeRequest {
+        timing_labels,
         hud_style: style,
         placement,
         view,
