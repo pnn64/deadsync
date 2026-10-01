@@ -34,8 +34,16 @@ pub const fn sync_pref_offset(pref: SyncPref, default: SyncPref) -> f32 {
 
 #[must_use]
 pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> String {
+    let mut out = String::new();
+    format_display_bpm_range_into(range, music_rate, &mut out);
+    out
+}
+
+/// Format into reusable storage, replacing its previous contents.
+pub fn format_display_bpm_range_into(range: Option<(f64, f64)>, music_rate: f32, out: &mut String) {
+    out.clear();
     let Some((lo, hi)) = range else {
-        return String::new();
+        return;
     };
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
@@ -46,7 +54,7 @@ pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> S
     let hi = hi * f64::from(rate);
     let use_decimals = (rate - 1.0).abs() > 0.001;
     let equal = (lo - hi).abs() < 1.0e-6;
-    let mut out = String::with_capacity(if equal { 8 } else { 19 });
+    out.reserve(if equal { 8 } else { 19 });
     let write_one = |out: &mut String, value: f64| {
         if use_decimals {
             write!(out, "{value:.1}").expect("writing to a String cannot fail");
@@ -61,13 +69,12 @@ pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> S
         }
     };
     if equal {
-        write_one(&mut out, lo);
+        write_one(out, lo);
     } else {
-        write_one(&mut out, lo.min(hi));
+        write_one(out, lo.min(hi));
         out.push_str(" - ");
-        write_one(&mut out, lo.max(hi));
+        write_one(out, lo.max(hi));
     }
-    out
 }
 
 pub const STANDARD_DIFFICULTY_NAMES: [&str; 5] =

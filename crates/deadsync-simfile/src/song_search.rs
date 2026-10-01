@@ -61,6 +61,15 @@ fn search_standard_difficulty_index(name: &str) -> Option<usize> {
 
 #[must_use]
 pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
+    let mut out = String::new();
+    song_search_difficulties_text_into(song, chart_type, &mut out);
+    out
+}
+
+/// Format the first standard-difficulty meters into reusable storage.
+/// Replaces previous contents, including when no standard chart exists.
+pub fn song_search_difficulties_text_into(song: &SongData, chart_type: &str, out: &mut String) {
+    out.clear();
     let mut meters = [None; 5];
     let mut found = 0;
     for chart in &song.charts {
@@ -79,17 +88,30 @@ pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> Strin
         }
     }
     if found == 0 {
-        return "-".to_string();
+        out.reserve_exact(1);
+        out.push('-');
+        return;
     }
 
-    let mut out = String::with_capacity(32);
+    out.reserve(32);
     for meter in meters.into_iter().flatten() {
         if !out.is_empty() {
             out.push_str("   ");
         }
         write!(out, "{meter}").expect("writing to a String cannot fail");
     }
-    out
+}
+
+/// Inclusive display-BPM filter bounds, independent of chart type/difficulty.
+#[must_use]
+pub fn song_search_bpm_tiers(song: &SongData) -> Option<(i32, i32)> {
+    let (bpm_lo, bpm_hi) = song.display_bpm_range()?;
+    let mut lo = song_search_bpm_tier(bpm_lo);
+    let mut hi = song_search_bpm_tier(bpm_hi);
+    if lo > hi {
+        std::mem::swap(&mut lo, &mut hi);
+    }
+    Some((lo, hi))
 }
 
 fn parse_song_search_filter(input: &str) -> SongSearchFilter {
@@ -201,14 +223,9 @@ pub fn song_passes_search_filters(
     }
 
     if let Some(want_tier) = bpm_tier {
-        let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
+        let Some((lo, hi)) = song_search_bpm_tiers(song) else {
             return false;
         };
-        let mut lo = song_search_bpm_tier(bpm_lo);
-        let mut hi = song_search_bpm_tier(bpm_hi);
-        if lo > hi {
-            std::mem::swap(&mut lo, &mut hi);
-        }
         if lo == hi {
             if want_tier != lo {
                 return false;

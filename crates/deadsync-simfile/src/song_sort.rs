@@ -81,7 +81,9 @@ pub fn song_artist_sort_key(song: &SongData) -> (String, String) {
 
 // Keep the small dispatch in callers; the bulk loop stays out of line.
 #[inline(always)]
-fn cmp_ignore_ascii_case(left: &str, right: &str) -> Ordering {
+/// Compare ASCII-lowercased bytes, leaving other UTF-8 bytes unchanged.
+#[must_use]
+pub fn cmp_ignore_ascii_case(left: &str, right: &str) -> Ordering {
     let (left, right) = (left.as_bytes(), right.as_bytes());
     let shared = left.len().min(right.len());
     if shared == 0 {
