@@ -1434,19 +1434,29 @@ pub fn itg_active_model_commands(
 pub fn model_draw_program(
     commands: &HashMap<String, String>,
 ) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
+    model_draw_program_from_scripts([
+        commands.get("initcommand").map(String::as_str),
+        commands.get("nonecommand").map(String::as_str),
+    ])
+}
+
+pub(crate) fn model_draw_program_from_scripts(
+    scripts: [Option<&str>; 2],
+) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
     let mut state = ModelDrawState::default();
     let mut base_zoom = [1.0; 3];
     let mut effect = ModelEffectState::default();
     let mut timeline: Vec<ModelTweenSegment> = Vec::new();
     let mut cursor_time = 0.0f32;
     let mut pending_tween: Option<(f32, TweenType)> = None;
-    let mut grouped_mods: Vec<ItgActorMod> = Vec::new();
+    // Batch modifiers in inline storage; unusually large groups retain a heap fallback.
+    let mut grouped_mods: SmallVec<[ItgActorMod; 8]> = SmallVec::new();
 
     let flush_group = |state: &mut ModelDrawState,
                        timeline: &mut Vec<ModelTweenSegment>,
                        cursor_time: &mut f32,
                        pending_tween: &mut Option<(f32, TweenType)>,
-                       grouped_mods: &mut Vec<ItgActorMod>| {
+                       grouped_mods: &mut SmallVec<[ItgActorMod; 8]>| {
         if grouped_mods.is_empty() {
             return;
         }
@@ -1482,10 +1492,7 @@ pub fn model_draw_program(
         grouped_mods.clear();
     };
 
-    for key in ["initcommand", "nonecommand"] {
-        let Some(script) = commands.get(key) else {
-            continue;
-        };
+    for script in scripts.into_iter().flatten() {
         let script = normalized_script_command(script);
         for raw in script.split(';') {
             let token = raw.trim();
@@ -1709,6 +1716,13 @@ pub fn model_draw_program(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod model_loading_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/model_loading/cases.rs"
+        ));
+    }
 
     #[test]
     fn script_token_reuses_split_semantics() {

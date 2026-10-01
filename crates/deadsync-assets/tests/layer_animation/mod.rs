@@ -60,11 +60,29 @@ fn fixture(kind: &str, shared: bool) -> Vec<Arc<[SpriteSlot]>> {
 
 fn snapshot(slot: &SpriteSlot) -> String {
     // Clone assigns a fresh cache identity. Compare every other stored field.
-    format!("{slot:?}").replacen(
+    let mut snapshot = format!("{slot:?}").replacen(
         &format!("stable_id: {}", slot.stable_id()),
         "stable_id: <identity>",
         1,
-    )
+    );
+    // Sequential frames have equivalent explicit and implicit representations.
+    // Playback and UV checks below still compare their observable results.
+    if let SpriteSource::Animated {
+        frame_count,
+        frame_indices,
+        ..
+    } = slot.source.as_ref()
+        && frame_indices
+            .as_deref()
+            .is_none_or(|indices| indices.is_empty() || indices.iter().copied().eq(0..*frame_count))
+    {
+        snapshot = snapshot.replacen(
+            &format!("frame_indices: {frame_indices:?}"),
+            "frame_indices: <sequential>",
+            1,
+        );
+    }
+    snapshot
 }
 
 #[test]

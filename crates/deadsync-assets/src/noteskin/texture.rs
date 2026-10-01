@@ -40,6 +40,10 @@ use std::sync::{
 #[path = "../../tests/layer_animation/mod.rs"]
 mod layer_animation;
 
+#[cfg(test)]
+#[path = "../../tests/sequential_animation/mod.rs"]
+mod sequential_animation;
+
 #[derive(Debug)]
 pub enum SpriteSource {
     Atlas {
@@ -68,6 +72,10 @@ pub enum SpriteSource {
         cached_actor_texture: AtomicU64,
     },
 }
+
+// An empty explicit list uses the frame-index identity fallback while retaining
+// the indexed sheet origin in UV caching, source rebuilds and pause handling.
+static SEQUENTIAL_FRAME_INDICES: LazyLock<Arc<[usize]>> = LazyLock::new(|| Arc::from([]));
 
 impl SpriteSource {
     pub fn texture_key(&self) -> &str {
@@ -930,7 +938,13 @@ fn source_from_plan(plan: SpriteSourcePlan, def: &SpriteDefinition) -> Arc<Sprit
                 frame_size,
                 grid,
                 frame_count,
-                frame_indices: frame_indices.map(Arc::<[usize]>::from),
+                frame_indices: frame_indices.map(|indices| {
+                    if indices.is_empty() {
+                        Arc::clone(&SEQUENTIAL_FRAME_INDICES)
+                    } else {
+                        Arc::from(indices)
+                    }
+                }),
                 rate,
                 frame_durations: frame_durations.map(Arc::<[f32]>::from),
                 frame_timing,
@@ -1109,29 +1123,37 @@ pub(super) fn itg_note_animation_source(
     let frame_h = slot.def.size[1].abs().max(1);
     let base_col = (slot.def.src[0].max(0) / frame_w) as usize % grid_x;
     let base_row = (slot.def.src[1].max(0) / frame_h) as usize % grid_y;
-    let frame_indices = match (color_x, color_y) {
-        (false, false) => (0..grid_x * grid_y).collect::<Vec<_>>(),
-        (true, false) => (0..grid_y).map(|row| row * grid_x + base_col).collect(),
-        (false, true) => (0..grid_x).map(|col| base_row * grid_x + col).collect(),
+    let frame_count = match (color_x, color_y) {
+        (false, false) => grid_x * grid_y,
+        (true, false) => grid_y,
+        (false, true) => grid_x,
         (true, true) => unreachable!(),
     };
-    if frame_indices.len() <= 1 {
+    if frame_count <= 1 {
         return None;
     }
+    let frame_indices = match (color_x, color_y) {
+        // Empty explicit indices retain the sheet origin and use the existing
+        // identity fallback for every frame without storing the whole range.
+        (false, false) => Some(Vec::new()),
+        (true, false) => Some((0..grid_y).map(|row| row * grid_x + base_col).collect()),
+        (false, true) => Some((0..grid_x).map(|col| base_row * grid_x + col).collect()),
+        (true, true) => unreachable!(),
+    };
 
     let tex_dims = match slot.source.as_ref() {
         SpriteSource::Atlas { tex_dims, .. } => *tex_dims,
         SpriteSource::Animated { .. } => return None,
     };
-    let frames_per_cycle = frame_indices.len() as f32 / animation.length.max(1e-6);
+    let frames_per_cycle = frame_count as f32 / animation.length.max(1e-6);
     Some(source_from_plan(
         SpriteSourcePlan::Animated {
             texture_key: key.to_string(),
             tex_dims,
             frame_size: [frame_w, frame_h],
             grid: (grid_x, grid_y),
-            frame_count: frame_indices.len(),
-            frame_indices: Some(frame_indices),
+            frame_count,
+            frame_indices,
             rate: if beat_based {
                 AnimationRate::FramesPerBeat(frames_per_cycle)
             } else {

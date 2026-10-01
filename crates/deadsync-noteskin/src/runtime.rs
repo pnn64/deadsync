@@ -6,7 +6,7 @@ use crate::explosion::{
     itg_partition_tap_explosion_sources, itg_tap_explosion_key, parse_explosion_animation,
     parse_explosion_animation_with_init, parse_itg_tap_explosion_animation_commands,
 };
-use crate::script::{itg_active_model_commands, model_draw_program};
+use crate::script::{model_draw_program, model_draw_program_from_scripts};
 use crate::{
     ExplosionAnimation, ModelDrawState, ModelEffectState, ModelTweenSegment, NoteAnimPart,
     NoteColorType, NoteDisplayMetrics, NotePartTextureTranslate, Quantization,
@@ -1334,8 +1334,10 @@ pub fn itg_slot_with_active_model_draw<T: Clone>(
     mut apply: impl FnMut(&mut T, ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState),
 ) -> T {
     let mut out = slot.clone();
-    let scripted = itg_active_model_commands(commands, active_key);
-    let (draw, timeline, effect) = model_draw_program(&scripted);
+    let (draw, timeline, effect) = model_draw_program_from_scripts([
+        commands.get("initcommand").map(String::as_str),
+        commands.get(active_key).map(String::as_str),
+    ]);
     apply(&mut out, draw, timeline, effect);
     out
 }
