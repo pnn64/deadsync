@@ -15602,7 +15602,7 @@ return Def.ActorFrame{
         po:LifeSetting("LifeType_Battery")
             :DrainSetting("DrainType_NoRecover")
             :HideLightSetting("HideLightType_HideAllLights")
-            :ModTimerSetting("ModTimerType_Beat")
+            :ModTimerSetting("ModTimerType_Beat", true)
             :FailSetting("FailType_Off")
             :MinTNSToHideNotes("TapNoteScore_W3")
             :WavePeriod(2.5)

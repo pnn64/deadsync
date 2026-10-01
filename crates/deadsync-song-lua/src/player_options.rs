@@ -2,6 +2,13 @@ use mlua::{Lua, Value};
 
 use crate::{SongLuaSpeedMod, read_boolish, read_f32};
 
+pub const MOD_TIMER_NAMES: [&str; 4] = [
+    "ModTimerType_Game",
+    "ModTimerType_Beat",
+    "ModTimerType_Song",
+    "ModTimerType_Default",
+];
+
 pub const SONG_LUA_PLAYER_OPTION_CAPABILITIES: &[&str] = &[
     "FromString",
     "IsEasierForSongAndSteps",
@@ -289,7 +296,11 @@ pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     let value = raw.parse::<f32>().ok()?;
     // PlayerOptions::FromOneModString uses StringToFloat, which turns
     // non-finite numeric strings (for example Lua's `-inf`) into zero.
-    Some(if value.is_finite() { value / 100.0 } else { 0.0 })
+    Some(if value.is_finite() {
+        value / 100.0
+    } else {
+        0.0
+    })
 }
 
 #[must_use]

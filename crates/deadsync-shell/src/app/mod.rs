@@ -986,8 +986,8 @@ fn prewarm_gameplay_text_layout_cache(
 }
 
 #[inline(always)]
-fn arrow_effect_time_seconds(at: Instant) -> f32 {
-    deadlib_platform::host_time::instant_nanos(at) as f32 / 1_000_000_000.0
+fn arrow_effect_time_seconds(at: Instant) -> f64 {
+    deadlib_platform::host_time::instant_nanos(at) as f64 / 1_000_000_000.0
 }
 
 fn app_path_view(path: PathBuf) -> AppPathView {
@@ -6952,7 +6952,7 @@ impl App {
 
     fn get_current_actors(
         &mut self,
-        arrow_effect_time_s: f32,
+        arrow_effect_time_s: f64,
         policy: FramePolicy,
     ) -> (
         Vec<Actor>,

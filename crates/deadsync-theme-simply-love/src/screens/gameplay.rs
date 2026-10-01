@@ -5029,7 +5029,7 @@ pub fn draw_field(
     state: &State,
     asset_manager: &AssetManager,
     view: ActorViewOverride,
-    arrow_effect_time_s: f32,
+    arrow_effect_time_s: f64,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     request: deadsync_song_lua::playback::FieldFrame,
     notefield_camera_cache: &mut [deadsync_notefield::NotefieldCameraCache; MAX_PLAYERS],

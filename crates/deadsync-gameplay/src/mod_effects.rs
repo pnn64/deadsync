@@ -1,3 +1,25 @@
+/// ITGmania PlayerOptions timer selectors; enum changes never approach.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ModTimerType {
+    Game = 0,
+    Beat = 1,
+    Song = 2,
+    #[default]
+    Default = 3,
+}
+
+impl ModTimerType {
+    pub const fn from_value(value: f32) -> Option<Self> {
+        match value {
+            0.0 => Some(Self::Game),
+            1.0 => Some(Self::Beat),
+            2.0 => Some(Self::Song),
+            3.0 => Some(Self::Default),
+            _ => None,
+        }
+    }
+}
+
 #[inline(always)]
 #[must_use]
 pub fn effective_mini_percent(
@@ -166,6 +188,7 @@ impl AccelOverrides {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VisualOverrides {
+    pub mod_timer_type: Option<ModTimerType>,
     pub dizzy_holds: Option<bool>,
     pub cosecant: Option<bool>,
     pub drunk: Option<f32>,
@@ -176,6 +199,8 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub mod_timer_mult: Option<f32>,
+    pub mod_timer_offset: Option<f32>,
     pub bumpy_x: Option<f32>,
     pub bumpy_x_offset: Option<f32>,
     pub bumpy_x_period: Option<f32>,
@@ -235,6 +260,7 @@ pub struct VisualOverrides {
 impl Default for VisualOverrides {
     fn default() -> Self {
         Self {
+            mod_timer_type: None,
             dizzy_holds: None,
             cosecant: None,
             drunk: None,
@@ -245,6 +271,8 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            mod_timer_mult: None,
+            mod_timer_offset: None,
             bumpy_x: None,
             bumpy_x_offset: None,
             bumpy_x_period: None,
@@ -306,7 +334,8 @@ impl Default for VisualOverrides {
 impl VisualOverrides {
     #[inline(always)]
     pub fn any(self) -> bool {
-        self.dizzy_holds.is_some()
+        self.mod_timer_type.is_some()
+            || self.dizzy_holds.is_some()
             || self.cosecant.is_some()
             || self.drunk.is_some()
             || self.drunk_offset.is_some()
@@ -316,6 +345,8 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.mod_timer_mult.is_some()
+            || self.mod_timer_offset.is_some()
             || self.bumpy_x.is_some()
             || self.bumpy_x_offset.is_some()
             || self.bumpy_x_period.is_some()
@@ -481,6 +512,7 @@ impl AccelEffects {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct VisualEffects {
+    pub mod_timer_type: ModTimerType,
     pub dizzy_holds: bool,
     pub cosecant: bool,
     pub drunk: f32,
@@ -491,6 +523,8 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub mod_timer_mult: f32,
+    pub mod_timer_offset: f32,
     pub bumpy_x: f32,
     pub bumpy_x_offset: f32,
     pub bumpy_x_period: f32,
@@ -558,6 +592,7 @@ impl VisualEffects {
     #[must_use]
     pub fn from_mask_bits(mask: u16) -> Self {
         Self {
+            mod_timer_type: ModTimerType::Default,
             dizzy_holds: false,
             cosecant: false,
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
@@ -568,6 +603,8 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            mod_timer_mult: 0.0,
+            mod_timer_offset: 0.0,
             bumpy_x: 0.0,
             bumpy_x_offset: 0.0,
             bumpy_x_period: 0.0,
@@ -696,6 +733,7 @@ pub fn approach_visual_overrides_to_base(
     base: VisualEffects,
     delta_time: f32,
 ) {
+    visual.mod_timer_type = None;
     visual.dizzy_holds = None;
     visual.cosecant = None;
     let step = delta_time * OUTRO_ATTACK_CLEAR_RATE;
@@ -707,6 +745,8 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.mod_timer_mult, base.mod_timer_mult, step);
+    approach_optional_visual(&mut visual.mod_timer_offset, base.mod_timer_offset, step);
     approach_optional_visual(&mut visual.bumpy_x, base.bumpy_x, step);
     approach_optional_visual(&mut visual.bumpy_x_offset, base.bumpy_x_offset, step);
     approach_optional_visual(&mut visual.bumpy_x_period, base.bumpy_x_period, step);
@@ -803,6 +843,7 @@ pub fn approach_visual_overrides_to_target(
     base: VisualEffects,
     delta_time: f32,
 ) {
+    current.mod_timer_type = target.mod_timer_type;
     current.dizzy_holds = target.dizzy_holds;
     current.cosecant = target.cosecant;
     approach_attack_value(
@@ -866,6 +907,22 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.mod_timer_mult,
+        target.mod_timer_mult,
+        base.mod_timer_mult,
+        speed.mod_timer_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.mod_timer_offset,
+        target.mod_timer_offset,
+        base.mod_timer_offset,
+        speed.mod_timer_offset,
         delta_time,
         1.0,
     );

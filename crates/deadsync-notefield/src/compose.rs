@@ -227,7 +227,10 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub options: NotefieldOptions,
     pub capture_requests: ProxyCaptureRequests,
     pub edit_measure_text_slot_base: u8,
-    pub arrow_effect_time_s: f32,
+    /// Global game clock, kept in native double precision until selection.
+    pub arrow_effect_time_s: f64,
+    /// Global music seconds, before player-specific visual delay/split timing.
+    pub music_time_s: f32,
 }
 
 /// Noteskin-dependent values shared by all note, hold, receptor, and cue passes.
@@ -325,6 +328,7 @@ pub struct PreparedNotefield<'a, S> {
     pub field: FieldLayout,
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
+    pub arrow_effect_time_s: f32,
     pub current_time_s: f32,
     pub current_beat: f32,
     pub is_in_delay: bool,
@@ -384,6 +388,12 @@ pub fn prepare_notefield<'a, S>(
         request.visual.perspective.tilt,
     );
     let draw_range = NoteDrawRange::new(request.geometry, request.visual, mini, field_zoom);
+    let arrow_effect_time_s = mod_timer_time(
+        request.visual.visual,
+        request.arrow_effect_time_s,
+        request.visual.current_display_beat,
+        request.music_time_s,
+    );
     let notes = prepare_notes(
         request,
         frame_plan,
@@ -391,6 +401,7 @@ pub fn prepare_notefield<'a, S>(
         scroll_speed,
         effect_height,
         draw_range,
+        arrow_effect_time_s,
     )?;
     Some(PreparedNotefield {
         frame_plan,
@@ -398,6 +409,7 @@ pub fn prepare_notefield<'a, S>(
         field_zoom,
         scroll_speed,
         current_time_s,
+        arrow_effect_time_s,
         current_beat: request.chart.visible_beat,
         is_in_delay: request.chart.is_in_delay,
         mini,
@@ -414,6 +426,17 @@ pub fn prepare_notefield<'a, S>(
         column_rotations_deg,
         notes,
     })
+}
+
+// ArrowEffects::GetTime uses global GAMESTATE clocks, adds the offset first,
+// computes in double precision, and rounds once on return to float.
+fn mod_timer_time(visual: VisualEffects, game: f64, beat: f32, song: f32) -> f32 {
+    let time = match visual.mod_timer_type {
+        deadsync_gameplay::ModTimerType::Game | deadsync_gameplay::ModTimerType::Default => game,
+        deadsync_gameplay::ModTimerType::Beat => f64::from(beat),
+        deadsync_gameplay::ModTimerType::Song => f64::from(song),
+    };
+    ((time + f64::from(visual.mod_timer_offset)) * (1.0 + f64::from(visual.mod_timer_mult))) as f32
 }
 
 fn prepare_field<S>(
@@ -468,6 +491,7 @@ fn prepare_notes<'a, S>(
     scroll_speed: ScrollSpeedSetting,
     effect_height: f32,
     draw_range: NoteDrawRange,
+    arrow_effect_time_s: f32,
 ) -> Option<Option<PreparedNotefieldNotes<'a, S>>> {
     let Some(base) = request.noteskin.base else {
         return Some(None);
@@ -505,7 +529,7 @@ fn prepare_notes<'a, S>(
     let note_depth_frame_cache = note_depth_frame_cache(
         request.visual.visual.bumpy_offset,
         request.visual.visual.bumpy_period,
-        request.arrow_effect_time_s,
+        arrow_effect_time_s,
         request.geometry.screen_height,
     );
     let tiny_spacing_scale = tiny_spacing_scale(request.visual.visual.tiny);
@@ -550,7 +574,7 @@ fn prepare_notes<'a, S>(
         effect_height,
         screen_height: request.geometry.screen_height,
         note_count_stats: request.chart.note_count_stats,
-        arrow_effect_time_s: request.arrow_effect_time_s,
+        arrow_effect_time_s,
         lane_tipsy: request.visual.visual.tipsy,
         lane_tipsy_offset: request.visual.visual.tipsy_offset,
         lane_tipsy_speed: request.visual.visual.tipsy_speed,
@@ -641,6 +665,112 @@ const fn resolved_frame_features(
 mod tests {
     use super::*;
     use crate::MeasureLineMode;
+
+    #[test]
+    fn mod_timer_matches_native_get_time_bits() {
+        // Golden bits from the unmodified ArrowEffects::GetTime compiled with
+        // MSVC /O2. Large game times detect premature float conversion.
+        let cases: [(u8, f64, f32, f32, f32, f32, u32); 20] = [
+            (0, 17.125, 3.25, -0.5, 0.0, 0.0, 0x41890000u32),
+            (1, 17.125, 3.25, -0.5, 0.0, 0.0, 0x40500000u32),
+            (2, 17.125, 3.25, -0.5, 0.0, 0.0, 0xbf000000u32),
+            (3, 17.125, 3.25, -0.5, 0.0, 0.0, 0x41890000u32),
+            (
+                0,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x44cdaa9au32,
+            ),
+            (
+                1,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x41b5511du32,
+            ),
+            (
+                2,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x414da99du32,
+            ),
+            (
+                3,
+                1234.1234567890001,
+                17.123455,
+                9.76543236,
+                0.333333343,
+                -0.125,
+                0x44cdaa9au32,
+            ),
+            (
+                0,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x40000000u32,
+            ),
+            (
+                1,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x3f80181du32,
+            ),
+            (
+                2,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x3f7ffffcu32,
+            ),
+            (
+                3,
+                16777217.25,
+                12345.75,
+                -3.5,
+                -0.99999994,
+                16777216.0,
+                0x40000000u32,
+            ),
+            (0, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0xceb09b3au32),
+            (1, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0x4339d000u32),
+            (2, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0xbf400000u32),
+            (3, 987654321.125, -123.125, 1.25, -2.5, -0.75, 0xceb09b3au32),
+            (0, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+            (1, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+            (2, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+            (3, 99999.75, 0.0, -1.5, -1.0, 123.0, 0x00000000u32),
+        ];
+        for (mode, game, beat, song, mult, offset, bits) in cases {
+            let visual = VisualEffects {
+                mod_timer_type: deadsync_gameplay::ModTimerType::from_value(f32::from(mode))
+                    .expect("valid native mode"),
+                mod_timer_mult: mult,
+                mod_timer_offset: offset,
+                ..Default::default()
+            };
+            assert_eq!(
+                mod_timer_time(visual, game, beat, song).to_bits(),
+                bits,
+                "mode {mode}, game {game}"
+            );
+        }
+    }
 
     fn features() -> NotefieldFrameFeatures {
         NotefieldFrameFeatures {

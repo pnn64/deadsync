@@ -1224,9 +1224,9 @@ fn push_update_mod_targets_with_key<S: ModState>(
                 continue;
             };
             let speed = speeds[player].get(key).copied();
-            // These booleans have no native approach speed, but initial values and
+            // These switches have no native approach speed, but initial values and
             // later writes are still step targets, never interpolated samples.
-            if speed.is_some() || matches!(key, "cosecant" | "dizzyholds") {
+            if speed.is_some() || matches!(key, "cosecant" | "dizzyholds" | "modtimersetting") {
                 if !from.is_finite() || speed.is_some_and(|speed| !speed.is_finite()) {
                     continue;
                 }
@@ -1252,7 +1252,7 @@ fn push_update_mod_targets_with_key<S: ModState>(
                     *name = key.to_owned();
                 }
                 // Current approaches float targets at the authored speed;
-                // booleans change immediately. Never tween toward a future write.
+                // switches change immediately. Never tween toward a future write.
                 out.push(SongLuaEaseWindow {
                     approach_speed: speed,
                     unit,

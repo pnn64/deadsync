@@ -221,8 +221,8 @@ fn compose_field_contents<S, F>(
     // composition on this thread. No allocation, lookup misses, or eviction.
     let alpha_params: [NoteAlphaParams; deadsync_core::input::MAX_COLS] =
         std::array::from_fn(|col| note_alpha_params(&appearance, col));
-    let appearance_caches =
-        alpha_params.map(|params| note_appearance_cache(elapsed_screen, mini, params));
+    let appearance_caches = alpha_params
+        .map(|params| note_appearance_cache(prepared.arrow_effect_time_s, mini, params));
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
     let column_x_offsets = prepared.column_x_offsets;

@@ -164,15 +164,7 @@ fn create_player_state_table(
                 // LunaPlayerState::SetPlayerOptions parses a fresh PlayerOptions
                 // and assigns it. Keep the table identity held by Lua readers,
                 // but reset prior targets and approach speeds before parsing.
-                let state = player_option_state(lua, &options_for_set)?;
-                let speeds = player_option_speeds(lua, &options_for_set)?;
-                for pair in state.pairs::<String, Value>() {
-                    let (key, _) = pair?;
-                    state.raw_set(key.as_str(), default_player_option_value(lua, &key)?)?;
-                    speeds.raw_set(key, 1.0_f32)?;
-                }
-                set_player_speedmod(&options_for_set, "xmod", Some(1.0))?;
-                set_player_speed_approaches(lua, &options_for_set, Some(1.0))?;
+                reset_player_options(lua, &options_for_set)?;
                 apply_player_options_string(lua, &options_for_set, &options_text)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(())
@@ -435,6 +427,9 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
             | "skew"
             | "drawsize"
             | "drawsizeback"
+            | "modtimersetting"
+            | "modtimermult"
+            | "modtimeroffset"
             | "bumpyx"
             | "bumpyxoffset"
             | "bumpyxperiod"
@@ -542,7 +537,50 @@ fn native_option_previous(state: &Table, speeds: &Table, key: &str) -> mlua::Res
     ])
 }
 
+fn create_timer_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
+    use crate::player_options::MOD_TIMER_NAMES;
+    let owner = owner.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let state = player_option_state(lua, &owner)?;
+        let previous = state.get::<Option<u8>>("modtimersetting")?.unwrap_or(3);
+        if let Some(value) = method_arg(&args, 0).filter(|v| !matches!(v, Value::Nil)) {
+            let mode = match value {
+                Value::Integer(value) if (0..=3).contains(value) => Some(*value as u8),
+                Value::Number(value) if (0.0..=3.0).contains(value) && value.fract() == 0.0 => {
+                    Some(*value as u8)
+                }
+                Value::String(value) => {
+                    let value = value.to_str()?;
+                    MOD_TIMER_NAMES
+                        .iter()
+                        .position(|label| {
+                            value == *label
+                                || label
+                                    .strip_prefix("ModTimerType_")
+                                    .is_some_and(|legacy| value.eq_ignore_ascii_case(legacy))
+                        })
+                        .map(|mode| mode as u8)
+                }
+                _ => None,
+            }
+            .ok_or_else(|| mlua::Error::runtime("Invalid ModTimerType"))?;
+            state.set("modtimersetting", mode)?;
+        }
+        let result = if matches!(args.back(), Some(Value::Boolean(true))) {
+            Value::Table(owner.clone())
+        } else if let Some(label) = MOD_TIMER_NAMES.get(usize::from(previous)) {
+            Value::String(lua.create_string(*label)?)
+        } else {
+            Value::Nil
+        };
+        Ok(MultiValue::from_iter([result]))
+    })
+}
+
 fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
+    if key == "modtimersetting" {
+        return create_timer_option(lua, owner);
+    }
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
         let state = player_option_state(lua, &owner)?;
@@ -637,6 +675,23 @@ fn set_player_speed_approaches(lua: &Lua, owner: &Table, speed: Option<f32>) -> 
     Ok(())
 }
 
+fn reset_player_options(lua: &Lua, owner: &Table) -> mlua::Result<()> {
+    let state = player_option_state(lua, owner)?;
+    let speeds = player_option_speeds(lua, owner)?;
+    for pair in state.pairs::<String, Value>() {
+        let (key, _) = pair?;
+        if key == "modtimersetting" {
+            state.raw_set(key.as_str(), 3)?;
+            speeds.raw_set(key, Value::Nil)?;
+        } else {
+            state.raw_set(key.as_str(), default_player_option_value(lua, &key)?)?;
+            speeds.raw_set(key, 1.0_f32)?;
+        }
+    }
+    set_player_speedmod(owner, "xmod", Some(1.0))?;
+    set_player_speed_approaches(lua, owner, Some(1.0))
+}
+
 fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Result<()> {
     for option in text.split(',') {
         apply_player_option_token(lua, owner, option)?;
@@ -709,6 +764,7 @@ pub(crate) fn player_uses_modifiers(
             continue; // Native FromString ignores unrecognized modifier names.
         }
         let actual = match current.raw_get::<Value>(key.as_str())? {
+            Value::Nil if key == "modtimersetting" => Value::Integer(3),
             Value::Nil => default_player_option_value(lua, &key)?,
             value => value,
         };
@@ -753,7 +809,20 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
         if key.is_empty() {
             return Ok(());
         }
+        if key == "clearall" {
+            reset_player_options(lua, owner)?;
+        }
         let state = player_option_state(lua, owner)?;
+        let timer = match key {
+            "modtimergame" => Some(0),
+            "modtimerbeat" => Some(1),
+            "modtimersong" => Some(2),
+            "modtimerdefault" => Some(3),
+            _ => None,
+        };
+        if let Some(timer) = timer {
+            return state.set("modtimersetting", timer);
+        }
         if set_perspective_angle(&state, key, amount.unwrap_or(1.0))? {
             let speeds = player_option_speeds(lua, owner)?;
             speeds.set("tilt", speed)?;
@@ -1662,6 +1731,46 @@ assert(o:Hallway() == 0.25 and o:Distant() == nil)
                 Value::Nil
             ));
         }
+    }
+
+    #[test]
+    fn timer_binding_matches_native_enum_and_float_protocol() {
+        let lua = Lua::new();
+        let options =
+            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
+        lua.globals().set("o", options).expect("expose options");
+        lua.load(
+            r#"
+assert(o:ModTimerSetting() == 'ModTimerType_Default' and select('#', o:ModTimerSetting()) == 1)
+assert(o:ModTimerSetting('ModTimerType_Song') == 'ModTimerType_Default')
+assert(o:ModTimerSetting('GaMe', true) == o and o:ModTimerSetting() == 'ModTimerType_Game')
+assert(o:ModTimerSetting(1) == 'ModTimerType_Game' and o:ModTimerSetting() == 'ModTimerType_Beat')
+assert(o:ModTimerSetting(nil) == 'ModTimerType_Beat' and o:ModTimerSetting(nil, true) == o)
+for _, invalid in ipairs({-1, 4, 1.5, '1', 'modtimertype_song', false}) do
+    assert(not pcall(function() o:ModTimerSetting(invalid) end))
+    assert(o:ModTimerSetting() == 'ModTimerType_Beat')
+end
+for _, mode in ipairs({'Game', 'Beat', 'Song', 'Default'}) do
+    o:FromString('*0 no modtimer'..mode)
+    assert(o:ModTimerSetting() == 'ModTimerType_'..mode)
+end
+for _, name in ipairs({'ModTimerMult', 'ModTimerOffset'}) do
+    local value, speed = o[name](o)
+    assert(value == 0 and speed == 1 and select('#', o[name](o)) == 2)
+    assert(o[name](o, -2, 3, true) == o)
+    value, speed = o[name](o, 1)
+    assert(value == -2 and speed == 3)
+    assert(not pcall(function() o[name](o, -.5, -1) end))
+    assert(o[name](o) == -.5 and select(2, o[name](o)) == 3)
+end
+o:FromString('modtimersong, clearall')
+assert(o:ModTimerSetting() == 'ModTimerType_Default')
+assert(o:ModTimerMult() == 0 and select(2, o:ModTimerMult()) == 1)
+assert(o:ModTimerOffset() == 0 and select(2, o:ModTimerOffset()) == 1)
+"#,
+        )
+        .exec()
+        .expect("native timer protocol");
     }
 
     #[test]

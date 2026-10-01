@@ -3881,6 +3881,50 @@ mod tests {
     }
 
     #[test]
+    fn mod_timer_modes_are_immediate_and_floats_approach_independently() {
+        for (alias, expected) in [
+            ("game", ModTimerType::Game),
+            ("beat", ModTimerType::Beat),
+            ("song", ModTimerType::Song),
+            ("default", ModTimerType::Default),
+        ] {
+            let mods = parse_attack_mods(&format!(
+                "*0 no modtimer{alias}, *2 100% modtimermult, *4 -200% modtimeroffset"
+            ));
+            assert_eq!(mods.visual.mod_timer_type, Some(expected));
+            assert!(mods.visual.any());
+            assert_eq!(mods.visual_speed.mod_timer_type, None);
+            let mut current = VisualOverrides::default();
+            approach_visual_overrides_to_target(
+                &mut current,
+                mods.visual,
+                mods.visual_speed,
+                VisualEffects::default(),
+                0.25,
+            );
+            assert_eq!(current.mod_timer_type, Some(expected));
+            assert_eq!(current.mod_timer_mult, Some(0.5));
+            assert_eq!(current.mod_timer_offset, Some(-1.0));
+            assert_eq!(
+                merge_attack_visual_effects(VisualEffects::default(), current).mod_timer_type,
+                expected
+            );
+            approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
+            assert!(!current.any());
+        }
+        let song = attack_mask_window(0.0, 1.0, parse_attack_mods("modtimersong"));
+        let game = attack_mask_window(1.0, 2.0, parse_attack_mods("modtimergame"));
+        let targets = collect_active_attack_targets(&[game.clone()], 1.5);
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        apply_active_attack_mask_window(&mut values, &game, targets, false, 0.0);
+        apply_active_attack_mask_window(&mut values, &song, targets, true, 0.0);
+        assert_eq!(values.visual.mod_timer_type, Some(ModTimerType::Game));
+        let reset = attack_mask_window(2.0, 3.0, parse_attack_mods("clearall"));
+        apply_active_attack_mask_window(&mut values, &reset, Default::default(), false, 0.0);
+        assert_eq!(values.visual.mod_timer_type, None);
+    }
+
+    #[test]
     fn dizzy_holds_is_immediate_and_respects_resets_and_persisted_targets() {
         assert!(!VisualEffects::default().dizzy_holds);
         for (text, expected) in [

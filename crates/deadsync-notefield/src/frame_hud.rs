@@ -479,7 +479,7 @@ fn compose_judgment<S>(
             hold_judgments: frame.hold_judgments,
             hold_sprite: frame.hold_sprite.as_ref(),
             current_beat: prepared.current_beat,
-            arrow_effect_time: request.arrow_effect_time_s,
+            arrow_effect_time: prepared.arrow_effect_time_s,
             mini: prepared.mini,
             visual: request.visual.visual,
             noteskin_column_xs,

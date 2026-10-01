@@ -552,6 +552,7 @@ pub enum SongLuaEaseMaskTarget {
     AccelWave,
     AccelExpand,
     AccelBoomerang,
+    VisualModTimerType,
     VisualDizzyHolds,
     VisualCosecant,
     VisualDrunk,
@@ -562,6 +563,8 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualModTimerMult,
+    VisualModTimerOffset,
     VisualBumpyX,
     VisualBumpyXOffset,
     VisualBumpyXPeriod,
@@ -1763,6 +1766,11 @@ fn append_song_lua_ease_targets_key(
         "wave" => push(SongLuaEaseMaskTarget::AccelWave, pct_from, pct_to),
         "expand" => push(SongLuaEaseMaskTarget::AccelExpand, pct_from, pct_to),
         "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
+        "modtimersetting" => push(SongLuaEaseMaskTarget::VisualModTimerType, pct_from, pct_to),
+        "modtimergame" => push(SongLuaEaseMaskTarget::VisualModTimerType, 0.0, 0.0),
+        "modtimerbeat" => push(SongLuaEaseMaskTarget::VisualModTimerType, 1.0, 1.0),
+        "modtimersong" => push(SongLuaEaseMaskTarget::VisualModTimerType, 2.0, 2.0),
+        "modtimerdefault" => push(SongLuaEaseMaskTarget::VisualModTimerType, 3.0, 3.0),
         "dizzyholds" => push(SongLuaEaseMaskTarget::VisualDizzyHolds, pct_from, pct_to),
         "cosecant" => push(SongLuaEaseMaskTarget::VisualCosecant, pct_from, pct_to),
         "drunk" => push(SongLuaEaseMaskTarget::VisualDrunk, pct_from, pct_to),
@@ -1773,6 +1781,12 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "modtimermult" => push(SongLuaEaseMaskTarget::VisualModTimerMult, pct_from, pct_to),
+        "modtimeroffset" => push(
+            SongLuaEaseMaskTarget::VisualModTimerOffset,
+            pct_from,
+            pct_to,
+        ),
         "bumpyx" => push(SongLuaEaseMaskTarget::VisualBumpyX, pct_from, pct_to),
         "bumpyxoffset" => push(SongLuaEaseMaskTarget::VisualBumpyXOffset, pct_from, pct_to),
         "bumpyxperiod" => push(SongLuaEaseMaskTarget::VisualBumpyXPeriod, pct_from, pct_to),
@@ -2383,6 +2397,9 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AccelWave => accel.wave = Some(value),
         SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
         SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
+        SongLuaEaseMaskTarget::VisualModTimerType => {
+            visual.mod_timer_type = ModTimerType::from_value(value)
+        }
         SongLuaEaseMaskTarget::VisualDizzyHolds => visual.dizzy_holds = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualCosecant => visual.cosecant = Some(value > 0.5),
         SongLuaEaseMaskTarget::VisualDrunk => visual.drunk = Some(value),
@@ -2393,6 +2410,8 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualModTimerMult => visual.mod_timer_mult = Some(value),
+        SongLuaEaseMaskTarget::VisualModTimerOffset => visual.mod_timer_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyX => visual.bumpy_x = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyXOffset => visual.bumpy_x_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyXPeriod => visual.bumpy_x_period = Some(value),
@@ -2627,6 +2646,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
         SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
+        SongLuaEaseMaskTarget::VisualModTimerType => window.visual.mod_timer_type.is_some(),
         SongLuaEaseMaskTarget::VisualDizzyHolds => window.visual.dizzy_holds.is_some(),
         SongLuaEaseMaskTarget::VisualCosecant => window.visual.cosecant.is_some(),
         SongLuaEaseMaskTarget::VisualDrunk => window.visual.drunk.is_some(),
@@ -2637,6 +2657,8 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualModTimerMult => window.visual.mod_timer_mult.is_some(),
+        SongLuaEaseMaskTarget::VisualModTimerOffset => window.visual.mod_timer_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBumpyX => window.visual.bumpy_x.is_some(),
         SongLuaEaseMaskTarget::VisualBumpyXOffset => window.visual.bumpy_x_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBumpyXPeriod => window.visual.bumpy_x_period.is_some(),
@@ -3868,6 +3890,9 @@ const fn mark_active_target(targets: &mut Option<f32>, value: Option<f32>) {
 }
 
 fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
+    if visual.mod_timer_type.is_some() {
+        targets.mod_timer_type = Some(ModTimerType::Default);
+    }
     if visual.dizzy_holds.is_some() {
         targets.dizzy_holds = Some(false);
     }
@@ -3882,6 +3907,8 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.mod_timer_mult, visual.mod_timer_mult);
+    mark_active_target(&mut targets.mod_timer_offset, visual.mod_timer_offset);
     mark_active_target(&mut targets.bumpy_x, visual.bumpy_x);
     mark_active_target(&mut targets.bumpy_x_offset, visual.bumpy_x_offset);
     mark_active_target(&mut targets.bumpy_x_period, visual.bumpy_x_period);
@@ -4692,7 +4719,9 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisibilityDarkColumn(col) if col < MAX_COLS => {
                 attack.dark_col_speed[col] = Some(speed)
             }
-            SongLuaEaseMaskTarget::VisualDizzyHolds | SongLuaEaseMaskTarget::VisualCosecant => {}
+            SongLuaEaseMaskTarget::VisualModTimerType
+            | SongLuaEaseMaskTarget::VisualDizzyHolds
+            | SongLuaEaseMaskTarget::VisualCosecant => {}
             SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
             SongLuaEaseMaskTarget::VisualDrunkPeriod => {
                 attack.visual_speed.drunk_period = Some(speed)
@@ -4707,6 +4736,12 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualModTimerMult => {
+                attack.visual_speed.mod_timer_mult = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualModTimerOffset => {
+                attack.visual_speed.mod_timer_offset = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualBumpyX => attack.visual_speed.bumpy_x = Some(speed),
             SongLuaEaseMaskTarget::VisualBumpyXOffset => {
                 attack.visual_speed.bumpy_x_offset = Some(speed)
@@ -5240,6 +5275,11 @@ fn apply_active_visual_window(
     persisted: bool,
 ) {
     let active_clear_all = active_targets.clear_all;
+    if let Some(value) = window.visual.mod_timer_type
+        && (!persisted || (!active_clear_all && active_targets.visual.mod_timer_type.is_none()))
+    {
+        values.visual.mod_timer_type = Some(value);
+    }
     if let Some(value) = window.visual.dizzy_holds
         && (!persisted || (!active_clear_all && active_targets.visual.dizzy_holds.is_none()))
     {
@@ -5319,6 +5359,24 @@ fn apply_active_visual_window(
         window.visual.parabola_x,
         window.visual_speed.parabola_x,
         active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.mod_timer_mult,
+        &mut values.visual_speed.mod_timer_mult,
+        window.visual.mod_timer_mult,
+        window.visual_speed.mod_timer_mult,
+        active_targets.visual.mod_timer_mult,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.mod_timer_offset,
+        &mut values.visual_speed.mod_timer_offset,
+        window.visual.mod_timer_offset,
+        window.visual_speed.mod_timer_offset,
+        active_targets.visual.mod_timer_offset,
         active_clear_all,
         persisted,
     );
@@ -6177,6 +6235,14 @@ fn apply_runtime_mod(
         "wave" => out.accel.wave = attack_level(percent_value),
         "expand" => out.accel.expand = attack_level(percent_value),
         "boomerang" => out.accel.boomerang = attack_level(percent_value),
+        "modtimergame" => out.visual.mod_timer_type = Some(ModTimerType::Game),
+        "modtimerbeat" => out.visual.mod_timer_type = Some(ModTimerType::Beat),
+        "modtimersong" => out.visual.mod_timer_type = Some(ModTimerType::Song),
+        "modtimerdefault" => out.visual.mod_timer_type = Some(ModTimerType::Default),
+        "modtimersetting" => {
+            out.visual.mod_timer_type =
+                attack_level(percent_value).and_then(ModTimerType::from_value)
+        }
         "dizzyholds" => {
             out.visual.dizzy_holds = attack_level(percent_value).map(|level| level > 0.5)
         }
@@ -6226,6 +6292,18 @@ fn apply_runtime_mod(
         "parabolax" => set_approached_mod(
             &mut out.visual.parabola_x,
             &mut out.visual_speed.parabola_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "modtimermult" => set_approached_mod(
+            &mut out.visual.mod_timer_mult,
+            &mut out.visual_speed.mod_timer_mult,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "modtimeroffset" => set_approached_mod(
+            &mut out.visual.mod_timer_offset,
+            &mut out.visual_speed.mod_timer_offset,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -6876,6 +6954,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         }
     }
     VisualEffects {
+        mod_timer_type: attack.mod_timer_type.unwrap_or(base.mod_timer_type),
         dizzy_holds: attack.dizzy_holds.unwrap_or(base.dizzy_holds),
         cosecant: attack.cosecant.unwrap_or(base.cosecant),
         drunk: merge_attack_value(base.drunk, attack.drunk),
@@ -6886,6 +6965,8 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        mod_timer_mult: merge_attack_value(base.mod_timer_mult, attack.mod_timer_mult),
+        mod_timer_offset: merge_attack_value(base.mod_timer_offset, attack.mod_timer_offset),
         bumpy_x: merge_attack_value(base.bumpy_x, attack.bumpy_x),
         bumpy_x_offset: merge_attack_value(base.bumpy_x_offset, attack.bumpy_x_offset),
         bumpy_x_period: merge_attack_value(base.bumpy_x_period, attack.bumpy_x_period),

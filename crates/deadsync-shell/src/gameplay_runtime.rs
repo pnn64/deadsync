@@ -742,7 +742,7 @@ pub(crate) fn push_actors(
     state: &mut deadsync_theme_simply_love::screens::gameplay::State,
     assets: &deadlib_assets::AssetManager,
     view: deadsync_theme_simply_love::screens::gameplay::ActorViewOverride,
-    arrow_effect_time_s: f32,
+    arrow_effect_time_s: f64,
     visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
     use deadsync_theme_simply_love::screens::gameplay;
@@ -797,7 +797,7 @@ pub(crate) fn push_practice_actors(
     actors: &mut Vec<deadlib_present::actors::Actor>,
     state: &mut deadsync_theme_simply_love::screens::practice::State,
     assets: &deadlib_assets::AssetManager,
-    arrow_effect_time_s: f32,
+    arrow_effect_time_s: f64,
     visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
     use deadsync_theme_simply_love::screens::practice;

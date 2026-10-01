@@ -277,7 +277,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             local_col,
             receptor_y,
             beat_factor,
-            request.arrow_effect_time_s,
+            prepared.arrow_effect_time_s,
             &col_offsets[..num_cols],
             &invert_distances[..num_cols],
             &tornado_bounds[..num_cols],
@@ -627,7 +627,7 @@ mod tests {
         let mut tipsy = [0.0; MAX_COLS];
         crate::fill_gameplay_lane_effects(
             &request.visual.visual,
-            request.arrow_effect_time_s,
+            prepared.arrow_effect_time_s,
             prepared.frame_plan.num_cols,
             &mut [crate::VisualEffectParams::default(); MAX_COLS],
             &mut [0.0; MAX_COLS],
@@ -1132,6 +1132,7 @@ mod tests {
             capture_requests: ProxyCaptureRequests::default(),
             edit_measure_text_slot_base: 0,
             arrow_effect_time_s: 0.1,
+            music_time_s: 0.1,
         }
     }
 
@@ -3182,6 +3183,91 @@ mod tests {
     }
 
     #[test]
+    fn blink_uses_selected_global_timer_in_composed_note_draws() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_gameplay::ModTimerType;
+        let mut ns = noteskin();
+        ns.notes = (0..4 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("timer-note"))
+            .collect();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut tap = note(0);
+        tap.note_type = NoteType::Tap;
+        tap.beat = 3.0;
+        let notes = [tap];
+        let lanes = [vec![
+            deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index"),
+        ]];
+        for (mode, mult, offset, time) in [
+            (ModTimerType::Game, 0.0, 0.0, 1.25),
+            (ModTimerType::Default, 0.0, 0.0, 1.25),
+            (ModTimerType::Beat, -0.75, -1.0, 1.25),
+            (ModTimerType::Song, -0.75, -1.0, 1.25),
+            (ModTimerType::Song, -1.0, 37.0, 0.0),
+            (ModTimerType::Song, -0.75, -5.6, 0.1),
+        ] {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.lane_note_row_indices = &lanes;
+            request.chart.note_itg_rows = &[144];
+            request.arrow_effect_time_s =
+                if matches!(mode, ModTimerType::Game | ModTimerType::Default) {
+                    1.25
+                } else {
+                    99.0
+                };
+            request.visual.current_display_beat = 6.0;
+            request.music_time_s = 6.0;
+            request.visual.appearance.blink = 0.5;
+            request.visual.visual.mod_timer_type = mode;
+            request.visual.visual.mod_timer_mult = mult;
+            request.visual.visual.mod_timer_offset = offset;
+            let prepared = prepare_notefield(&request).expect("field");
+            assert!((prepared.arrow_effect_time_s - time).abs() < 0.000001);
+            let frame = NotefieldFieldFrameView {
+                feedback: spline_feedback(&[]),
+                completed_rows: Default::default(),
+            };
+            let mut draws = Vec::new();
+            compose_notefield_field(
+                &mut Vec::new(),
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &mut HoldMeshScratch::with_columns(2),
+                &mut CapturedActorScratch::with_capacities(16, 0),
+                &mut NotefieldCameraCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            let opacity: Vec<_> = draws.iter().filter_map(|draw| match draw {
+                FlatDraw::Sprite(sprite) if matches!(&sprite.source, SpriteSource::TextureHandle {key, ..} if key.as_ref() == "timer-note") => Some((sprite.tint[3], sprite.glow[3])),
+                _ => None,
+            }).collect();
+            // Native Blink treats any nonzero amount as enabled. Quantized
+            // sin(12.5) and sin(0) hide the note; sin(1) shows it. The screen
+            // clock is 0.1 in every case, so it cannot drive this transition.
+            if time == 0.1 {
+                assert_eq!(opacity.first(), Some(&(1.0, 0.0)), "{mode:?}");
+                // The theme frequency is rounded to 0.3333, retaining a tiny glow.
+                assert!(
+                    opacity
+                        .iter()
+                        .skip(1)
+                        .all(|&(alpha, glow)| alpha == 0.0 && glow < 0.001)
+                );
+            } else {
+                assert!(opacity.is_empty(), "{mode:?}: {opacity:?}");
+            }
+        }
+    }
+
+    #[test]
     fn wave_variants_move_composed_notes_and_hold_meshes() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
@@ -3240,182 +3326,233 @@ mod tests {
                 for direction in [-1.0, 1.0] {
                     for amount in [-0.75, 0.75] {
                         for cosecant in [false, true] {
-                            let mut request =
-                                request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
-                            request.geometry.column_dirs.fill(direction);
-                            request.chart.lane_note_row_indices = &lanes;
-                            request.chart.lane_hold_indices = &lanes;
-                            request.chart.note_itg_rows = &[96, 144];
-                            request.arrow_effect_time_s = 1.25;
-                            request.visual.visual = VisualEffects {
-                                bumpy_x: amount / 3.0,
-                                bumpy_x_offset: -0.5,
-                                bumpy_x_period: 0.5,
-                                tan_bumpy_x: amount / 2.0,
-                                tan_bumpy_x_offset: 0.25,
-                                tan_bumpy_x_period: 1.0,
-                                tan_bumpy: amount * 0.75,
-                                tan_bumpy_offset: 0.5,
-                                tan_bumpy_period: 0.25,
-                                tan_drunk: amount,
-                                tan_drunk_offset: 0.75,
-                                tan_drunk_speed: -0.5,
-                                tan_drunk_period: -0.25,
-                                drunk_z: amount,
-                                drunk_z_offset: -0.5,
-                                drunk_z_speed: 0.5,
-                                drunk_z_period: 0.25,
-                                tan_drunk_z: -amount / 2.0,
-                                tan_drunk_z_offset: 0.25,
-                                tan_drunk_z_speed: -0.5,
-                                tan_drunk_z_period: -0.5,
-                                cosecant,
-                                tiny: 1.0,
-                                tipsy: 0.25,
-                                move_y_cols: [0.5; MAX_COLS],
-                                ..VisualEffects::default()
-                            };
-                            request.visual.accel.wave = 0.5;
-                            let prepared = prepare_notefield(&request).expect("prepared field");
-                            let frame = NotefieldFieldFrameView {
-                                feedback: spline_feedback(&[]),
-                                completed_rows: Default::default(),
-                            };
-                            let mut draws = Vec::new();
-                            let mut scratch = HoldMeshScratch::with_columns(2);
-                            compose_notefield_field(
-                                &mut Vec::new(),
-                                &mut draws,
-                                &mut Vec::new(),
-                                &mut ModelMeshCache::default(),
-                                &mut scratch,
-                                &mut CapturedActorScratch::with_capacities(32, 0),
-                                &mut NotefieldCameraCache::default(),
-                                &request,
-                                &prepared,
-                                &frame,
-                                &source,
-                            );
-                            let positions = sprite_positions(&draws);
-                            let mut meshes = [0; 2];
-                            for col in 0..2 {
-                                let receptor = positions
-                                    .iter()
-                                    .find(|(key, _)| *key == format!("target{col}"))
-                                    .expect("receptor")
-                                    .1;
-                                let wave = |angle: f32| {
-                                    if cosecant {
-                                        1.0 / angle.sin()
+                            for mode in [
+                                deadsync_gameplay::ModTimerType::Default,
+                                deadsync_gameplay::ModTimerType::Game,
+                                deadsync_gameplay::ModTimerType::Beat,
+                                deadsync_gameplay::ModTimerType::Song,
+                            ] {
+                                let mut request =
+                                    request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
+                                request.geometry.column_dirs.fill(direction);
+                                request.chart.lane_note_row_indices = &lanes;
+                                request.chart.lane_hold_indices = &lanes;
+                                request.chart.note_itg_rows = &[96, 144];
+                                // The selected global clock is 6; the other clocks differ,
+                                // including the player's split beat and screen elapsed time.
+                                request.arrow_effect_time_s = if matches!(
+                                    mode,
+                                    deadsync_gameplay::ModTimerType::Game
+                                        | deadsync_gameplay::ModTimerType::Default
+                                ) {
+                                    6.0
+                                } else {
+                                    99.0
+                                };
+                                request.visual.current_display_beat =
+                                    if mode == deadsync_gameplay::ModTimerType::Beat {
+                                        6.0
                                     } else {
-                                        angle.tan()
-                                    }
+                                        88.0
+                                    };
+                                request.music_time_s =
+                                    if mode == deadsync_gameplay::ModTimerType::Song {
+                                        6.0
+                                    } else {
+                                        77.0
+                                    };
+                                request.visual.visual = VisualEffects {
+                                    mod_timer_type: mode,
+                                    mod_timer_mult: -0.75,
+                                    mod_timer_offset: -1.0,
+                                    bumpy_x: amount / 3.0,
+                                    bumpy_x_offset: -0.5,
+                                    bumpy_x_period: 0.5,
+                                    tan_bumpy_x: amount / 2.0,
+                                    tan_bumpy_x_offset: 0.25,
+                                    tan_bumpy_x_period: 1.0,
+                                    tan_bumpy: amount * 0.75,
+                                    tan_bumpy_offset: 0.5,
+                                    tan_bumpy_period: 0.25,
+                                    tan_drunk: amount,
+                                    tan_drunk_offset: 0.75,
+                                    tan_drunk_speed: -0.5,
+                                    tan_drunk_period: -0.25,
+                                    drunk_z: amount,
+                                    drunk_z_offset: -0.5,
+                                    drunk_z_speed: 0.5,
+                                    drunk_z_period: 0.25,
+                                    tan_drunk_z: -amount / 2.0,
+                                    tan_drunk_z_offset: 0.25,
+                                    tan_drunk_z_speed: -0.5,
+                                    tan_drunk_z_period: -0.5,
+                                    cosecant,
+                                    tiny: 1.0,
+                                    tipsy: 0.25,
+                                    move_y_cols: [0.5; MAX_COLS],
+                                    ..VisualEffects::default()
                                 };
-                                let x_at = |travel: f32| {
-                                    amount
-                                        * (wave(0.625 + col as f32 * 0.35 + travel * 7.5 / 480.0)
-                                            * 32.0)
-                                        + amount / 3.0 * 40.0 * ((travel - 50.0) / 24.0).sin()
-                                        + amount / 2.0 * 40.0 * wave((travel + 25.0) / 32.0)
-                                };
-                                let z_at = |travel: f32| {
-                                    amount
-                                        * ((1.875 + col as f32 * 0.1 + travel * 12.5 / 480.0).cos()
-                                            * 32.0)
-                                        - amount / 2.0
-                                            * (wave(
-                                                0.625 + col as f32 * 0.25 + travel * 5.0 / 480.0,
-                                            ) * 32.0)
-                                        + amount * 0.75 * 40.0 * wave((travel + 50.0) / 20.0)
-                                };
-                                let x_at_y = |y: f32| {
-                                    receptor[0]
-                                        + (x_at((y - receptor[1]) / direction) - x_at(0.0)) * 0.5
-                                };
-                                let expected_row_x = prepared.field.playfield_center_x
-                                    + prepared.column_x_offsets[col]
-                                    + (prepared
+                                request.visual.accel.wave = 0.5;
+                                let prepared = prepare_notefield(&request).expect("prepared field");
+                                assert_eq!(prepared.arrow_effect_time_s, 1.25);
+                                assert_eq!(
+                                    prepared
                                         .notes
                                         .as_ref()
-                                        .expect("prepared notes")
-                                        .col_offsets[col]
-                                        + x_at(0.0))
-                                        * 0.5;
-                                assert!((receptor[0] - expected_row_x).abs() < 0.0001);
-                                let arrow = positions
-                                    .iter()
-                                    .find(|(key, _)| *key == format!("note{col}"))
-                                    .expect("arrow")
-                                    .1;
-                                assert!((arrow[0] - x_at_y(arrow[1])).abs() < 0.001);
-                                for draw in &draws {
-                                    if let FlatDraw::Sprite(sprite) = draw {
-                                        if let SpriteSource::TextureHandle { key, .. } =
-                                            &sprite.source
-                                        {
-                                            if [format!("target{col}"), format!("note{col}")]
-                                                .contains(&key.to_string())
+                                        .expect("notes")
+                                        .travel
+                                        .arrow_effect_time_s(),
+                                    1.25
+                                );
+                                let frame = NotefieldFieldFrameView {
+                                    feedback: spline_feedback(&[]),
+                                    completed_rows: Default::default(),
+                                };
+                                let mut draws = Vec::new();
+                                let mut scratch = HoldMeshScratch::with_columns(2);
+                                compose_notefield_field(
+                                    &mut Vec::new(),
+                                    &mut draws,
+                                    &mut Vec::new(),
+                                    &mut ModelMeshCache::default(),
+                                    &mut scratch,
+                                    &mut CapturedActorScratch::with_capacities(32, 0),
+                                    &mut NotefieldCameraCache::default(),
+                                    &request,
+                                    &prepared,
+                                    &frame,
+                                    &source,
+                                );
+                                let positions = sprite_positions(&draws);
+                                let mut meshes = [0; 2];
+                                for col in 0..2 {
+                                    let receptor = positions
+                                        .iter()
+                                        .find(|(key, _)| *key == format!("target{col}"))
+                                        .expect("receptor")
+                                        .1;
+                                    let wave = |angle: f32| {
+                                        if cosecant {
+                                            1.0 / angle.sin()
+                                        } else {
+                                            angle.tan()
+                                        }
+                                    };
+                                    let x_at = |travel: f32| {
+                                        amount
+                                            * (wave(
+                                                0.625 + col as f32 * 0.35 + travel * 7.5 / 480.0,
+                                            ) * 32.0)
+                                            + amount / 3.0 * 40.0 * ((travel - 50.0) / 24.0).sin()
+                                            + amount / 2.0 * 40.0 * wave((travel + 25.0) / 32.0)
+                                    };
+                                    let z_at = |travel: f32| {
+                                        amount
+                                            * ((1.875 + col as f32 * 0.1 + travel * 12.5 / 480.0)
+                                                .cos()
+                                                * 32.0)
+                                            - amount / 2.0
+                                                * (wave(
+                                                    0.625
+                                                        + col as f32 * 0.25
+                                                        + travel * 5.0 / 480.0,
+                                                ) * 32.0)
+                                            + amount * 0.75 * 40.0 * wave((travel + 50.0) / 20.0)
+                                    };
+                                    let x_at_y = |y: f32| {
+                                        receptor[0]
+                                            + (x_at((y - receptor[1]) / direction) - x_at(0.0))
+                                                * 0.5
+                                    };
+                                    let expected_row_x = prepared.field.playfield_center_x
+                                        + prepared.column_x_offsets[col]
+                                        + (prepared
+                                            .notes
+                                            .as_ref()
+                                            .expect("prepared notes")
+                                            .col_offsets[col]
+                                            + x_at(0.0))
+                                            * 0.5;
+                                    assert!((receptor[0] - expected_row_x).abs() < 0.0001);
+                                    let arrow = positions
+                                        .iter()
+                                        .find(|(key, _)| *key == format!("note{col}"))
+                                        .expect("arrow")
+                                        .1;
+                                    assert!((arrow[0] - x_at_y(arrow[1])).abs() < 0.001);
+                                    for draw in &draws {
+                                        if let FlatDraw::Sprite(sprite) = draw {
+                                            if let SpriteSource::TextureHandle { key, .. } =
+                                                &sprite.source
                                             {
-                                                let expected_z = z_at(
-                                                    (sprite.center[1] - receptor[1]) / direction,
-                                                );
+                                                if [format!("target{col}"), format!("note{col}")]
+                                                    .contains(&key.to_string())
+                                                {
+                                                    let expected_z = z_at(
+                                                        (sprite.center[1] - receptor[1])
+                                                            / direction,
+                                                    );
+                                                    assert!(
+                                                        (sprite.world_z - expected_z).abs()
+                                                            < 0.0001 * expected_z.abs().max(1.0),
+                                                        "{placement:?}, {kind:?}, col {col}, z {} expected {expected_z}, y {}",
+                                                        sprite.world_z,
+                                                        sprite.center[1]
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        let FlatDraw::TexturedMesh(mesh) = draw else {
+                                            continue;
+                                        };
+                                        if ![
+                                            format!("body{col}"),
+                                            format!("top{col}"),
+                                            format!("bottom{col}"),
+                                        ]
+                                        .contains(&mesh.texture.to_string())
+                                        {
+                                            continue;
+                                        }
+                                        meshes[col] += 1;
+                                        assert!(
+                                            !mesh.depth_test,
+                                            "native depth testing omits DrunkZ and TanBumpy"
+                                        );
+                                        let vertices = match &mesh.vertices {
+                                            FlatMeshVertices::Shared(v) => v.as_ref(),
+                                            FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                        };
+                                        for quad in vertices.chunks_exact(6) {
+                                            for (left, right) in
+                                                [(&quad[0], &quad[1]), (&quad[5], &quad[4])]
+                                            {
+                                                let x = (left.pos[0] + right.pos[0]) * 0.5;
+                                                let expected_x = x_at_y(left.pos[1]);
                                                 assert!(
-                                                    (sprite.world_z - expected_z).abs()
-                                                        < 0.0001 * expected_z.abs().max(1.0),
-                                                    "{placement:?}, {kind:?}, col {col}, z {} expected {expected_z}, y {}",
-                                                    sprite.world_z,
-                                                    sprite.center[1]
+                                                    (x - expected_x).abs()
+                                                        < 0.002 * expected_x.abs().max(1.0)
                                                 );
+                                                let expected_z =
+                                                    z_at((left.pos[1] - receptor[1]) / direction);
+                                                assert!(
+                                                    (left.pos[2] - expected_z).abs()
+                                                        < 0.001 * expected_z.abs().max(1.0)
+                                                );
+                                                assert_eq!(right.pos[2], left.pos[2]);
                                             }
                                         }
                                     }
-                                    let FlatDraw::TexturedMesh(mesh) = draw else {
-                                        continue;
-                                    };
-                                    if ![
-                                        format!("body{col}"),
-                                        format!("top{col}"),
-                                        format!("bottom{col}"),
-                                    ]
-                                    .contains(&mesh.texture.to_string())
-                                    {
-                                        continue;
-                                    }
-                                    meshes[col] += 1;
-                                    assert!(
-                                        !mesh.depth_test,
-                                        "native depth testing omits DrunkZ and TanBumpy"
-                                    );
-                                    let vertices = match &mesh.vertices {
-                                        FlatMeshVertices::Shared(v) => v.as_ref(),
-                                        FlatMeshVertices::Reusable(v) => v.as_slice(),
-                                    };
-                                    for quad in vertices.chunks_exact(6) {
-                                        for (left, right) in
-                                            [(&quad[0], &quad[1]), (&quad[5], &quad[4])]
-                                        {
-                                            let x = (left.pos[0] + right.pos[0]) * 0.5;
-                                            let expected_x = x_at_y(left.pos[1]);
-                                            assert!(
-                                                (x - expected_x).abs()
-                                                    < 0.002 * expected_x.abs().max(1.0)
-                                            );
-                                            let expected_z =
-                                                z_at((left.pos[1] - receptor[1]) / direction);
-                                            assert!(
-                                                (left.pos[2] - expected_z).abs()
-                                                    < 0.001 * expected_z.abs().max(1.0)
-                                            );
-                                            assert_eq!(right.pos[2], left.pos[2]);
-                                        }
-                                    }
                                 }
+                                if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                                    assert!(
+                                        meshes.into_iter().all(|n| n >= 3),
+                                        "body and both caps"
+                                    );
+                                }
+                                assert_eq!(scratch.stats().capacity_grows, 0);
+                                assert_eq!(scratch.stats().saturated_pairs, 0);
                             }
-                            if matches!(kind, NoteType::Hold | NoteType::Roll) {
-                                assert!(meshes.into_iter().all(|n| n >= 3), "body and both caps");
-                            }
-                            assert_eq!(scratch.stats().capacity_grows, 0);
-                            assert_eq!(scratch.stats().saturated_pairs, 0);
                         }
                     }
                 }

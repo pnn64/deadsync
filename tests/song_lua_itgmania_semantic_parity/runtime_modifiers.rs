@@ -103,6 +103,10 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             };
             // FromString Overhead always resets perspective, even at level zero.
             let mut set_option = |key: String, value: f32| match key.as_str() {
+                "modtimergame" => push("modtimersetting".into(), 0.0),
+                "modtimerbeat" => push("modtimersetting".into(), 1.0),
+                "modtimersong" => push("modtimersetting".into(), 2.0),
+                "modtimerdefault" => push("modtimersetting".into(), 3.0),
                 "overhead" => {
                     push("tilt".into(), 0.0);
                     push("skew".into(), 0.0);
@@ -157,7 +161,23 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                 {
                     continue;
                 }
-                let value = if operation == "Overhead" {
+                let value = if operation == "ModTimerSetting" {
+                    let Some(target) = args.first().filter(|v| !v.is_null()) else {
+                        continue;
+                    };
+                    if let Some(raw) = target.as_str() {
+                        ["Game", "Beat", "Song", "Default"]
+                            .iter()
+                            .position(|label| {
+                                raw == format!("ModTimerType_{label}")
+                                    || raw.eq_ignore_ascii_case(label)
+                            })
+                            .map(|mode| mode as f32)
+                    } else {
+                        value_f32(Some(target))
+                            .filter(|v| (0.0..=3.0).contains(v) && v.fract() == 0.0)
+                    }
+                } else if operation == "Overhead" {
                     args.first().map(|_| 1.0)
                 } else if matches!(
                     operation,
@@ -240,6 +260,9 @@ fn runtime_mod_value(
         "dizzy" => visual.dizzy.unwrap_or(0.0),
         "twirl" => visual.twirl.unwrap_or(0.0),
         "roll" => visual.roll.unwrap_or(0.0),
+        "modtimersetting" => visual.mod_timer_type.unwrap_or_default() as u8 as f32,
+        "modtimermult" => visual.mod_timer_mult.unwrap_or(0.0),
+        "modtimeroffset" => visual.mod_timer_offset.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
         "bumpyx" => visual.bumpy_x.unwrap_or(0.0),
         "bumpyxoffset" => visual.bumpy_x_offset.unwrap_or(0.0),
@@ -2030,4 +2053,90 @@ fn native_modifier_values_match_deadsync() {
     assert!(parity.checks() > 0, "fixture contains no modifier writes");
     eprintln!("{}", parity.summary(&trace.title));
     parity.assert_complete("runtime modifier");
+}
+
+#[test]
+fn mod_timer_survives_lua_selectors_approach_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create timer fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(&entry, r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    assert(ModTimerType:GetName() == 'ModTimerType')
+    assert(ModTimerType:Reverse()['song'] == 2 and ModTimerType:Reverse()[0] == 0)
+    assert(options:ModTimerSetting() == 'ModTimerType_Default')
+    assert(options:ModTimerSetting(ModTimerType[3]) == 'ModTimerType_Default')
+    assert(options:ModTimerSetting() == 'ModTimerType_Song')
+    options:ModTimerMult(1, 2, true):ModTimerOffset(-2, 4, true)
+    other:FromString('*0 no modtimerbeat, *9999 -50% modtimermult, *9999 150% modtimeroffset')
+    assert(other:ModTimerSetting() == 'ModTimerType_Beat')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:ModTimerSetting('GaMe', true):ModTimerMult(-1, 9999, true):ModTimerOffset(3, 9999, true)
+            phase = 2
+        elseif phase == 2 and beat >= 1.5 then
+            options:FromString('clearall')
+            phase = 3
+        elseif phase == 3 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', 'modtimerbeat')
+            phase = 4
+        elseif phase == 4 and beat >= 3 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            phase = 5
+        end
+    end)
+end}
+"#).expect("write timer fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "ModTimer");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile timer fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, dt, mode, mult, offset) in [
+        (0.25, 0.25, 2.0, 0.5, -1.0),
+        (0.5, 1_000_000.0, 0.0, -1.0, 3.0),
+        (0.75, 1_000_000.0, 3.0, 0.0, 0.0),
+        (1.0, 1_000_000.0, 1.0, 0.0, 0.0),
+        (1.5, 1_000_000.0, 3.0, 0.0, 0.0),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                dt,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        for (key, expected) in [
+            ("modtimersetting", mode),
+            ("modtimermult", mult),
+            ("modtimeroffset", offset),
+        ] {
+            assert_eq!(
+                runtime_mod_value(&runtime, 0, key),
+                Some(expected),
+                "{key} at {second}"
+            );
+        }
+        for (key, expected) in [
+            ("modtimersetting", 1.0),
+            ("modtimermult", -0.5),
+            ("modtimeroffset", 1.5),
+        ] {
+            assert_eq!(
+                runtime_mod_value(&runtime, 1, key),
+                Some(expected),
+                "P2 {key}"
+            );
+        }
+    }
 }

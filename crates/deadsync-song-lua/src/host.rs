@@ -249,6 +249,14 @@ pub fn install_basic_globals(
     globals.set("PlayerNumber", create_player_number_table(lua)?)?;
     globals.set("OtherPlayer", create_other_player_table(lua)?)?;
     globals.set("Difficulty", create_difficulty_table(lua)?)?;
+    let timers = create_string_enum_table(lua, &crate::player_options::MOD_TIMER_NAMES)?;
+    let reverse = timers.get::<Function>("Reverse")?.call::<Table>(())?;
+    for (mode, label) in ["game", "beat", "song", "default"].into_iter().enumerate() {
+        reverse.raw_set(label, mode)?;
+        reverse.raw_set(mode, mode)?;
+    }
+    crate::set_string_method(lua, &timers, "GetName", "ModTimerType")?;
+    globals.set("ModTimerType", timers)?;
     globals.set(
         "EditState",
         create_string_enum_table(
