@@ -2542,16 +2542,32 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         } else {
             queue.raw_remove(1_i64)?;
         }
+        let starts = actor.get::<Option<Table>>("__songlua_command_queue_starts")?;
+        let start = starts
+            .as_ref()
+            .map(|starts| starts.raw_get::<Option<f32>>(1))
+            .transpose()?
+            .flatten()
+            .unwrap_or(
+                actor
+                    .get::<Option<f32>>("__songlua_capture_cursor")?
+                    .unwrap_or(0.0),
+            );
+        if let Some(starts) = starts {
+            if starts.raw_len() > 1 {
+                starts.raw_remove(1_i64)?;
+            } else {
+                starts.raw_set(1, Value::Nil)?;
+            }
+        }
         // Effect setters bypass the tween queue, but a queued command itself
         // begins at the current queue cursor. Preserve that command-local now.
         let immediate_start_key = "__songlua_capture_immediate_start";
         let previous_immediate_start = actor.get::<Value>(immediate_start_key)?;
-        actor.set(
-            immediate_start_key,
-            actor
-                .get::<Option<f32>>("__songlua_capture_cursor")?
-                .unwrap_or(0.0),
-        )?;
+        actor.set(immediate_start_key, start)?;
+        let previous_start = lua
+            .app_data_mut::<SongLuaQueuedStartup>()
+            .map(|mut scope| std::mem::replace(&mut scope.0, start));
         let result = run_actor_message_with_params(
             lua,
             actor,
@@ -2559,6 +2575,11 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             None,
         );
         actor.set(immediate_start_key, previous_immediate_start)?;
+        if let Some(previous) = previous_start {
+            lua.app_data_mut::<SongLuaQueuedStartup>()
+                .expect("queued startup scope remains installed during dispatch")
+                .0 = previous;
+        }
         result?;
     }
     Ok(())
@@ -2916,8 +2937,10 @@ pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Tab
 fn actor_immediate_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     record_probe_actor_call(lua, actor)?;
     prepare_capture_scope_actor(lua, actor)?;
-    let start = actor
-        .get::<Option<f32>>("__songlua_capture_immediate_start")?
+    let start = lua
+        .app_data_ref::<SongLuaQueuedStartup>()
+        .map(|scope| scope.0)
+        .or(actor.get::<Option<f32>>("__songlua_capture_immediate_start")?)
         .unwrap_or(0.0);
     if let Some(block) = actor.get::<Option<Table>>("__songlua_capture_immediate_block")?
         && (block.get::<f32>("start")? - start).abs() <= f32::EPSILON
@@ -3114,7 +3137,13 @@ pub fn capture_block_set_bool(
     value: bool,
 ) -> mlua::Result<()> {
     if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Bool(value)) {
-        let block = actor_current_capture_block(lua, actor)?;
+        let block = if key == "visible" && lua.app_data_ref::<SongLuaQueuedStartup>().is_some() {
+            // Actor::SetVisible bypasses TweenState, including a queued command
+            // with later sleeps or tweens still waiting behind it.
+            actor_immediate_capture_block(lua, actor)?
+        } else {
+            actor_current_capture_block(lua, actor)?
+        };
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
@@ -4775,7 +4804,27 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 }
                 let queue = actor_command_queue(lua, &actor)?;
-                queue.raw_set(queue.raw_len() + 1, name)?;
+                let index = queue.raw_len() + 1;
+                if lua.app_data_ref::<SongLuaStartupQueues>().is_some()
+                    || lua.app_data_ref::<SongLuaQueuedStartup>().is_some()
+                {
+                    let starts =
+                        match actor.get::<Option<Table>>("__songlua_command_queue_starts")? {
+                            Some(starts) => starts,
+                            None => {
+                                let starts = lua.create_table()?;
+                                actor.set("__songlua_command_queue_starts", starts.clone())?;
+                                starts
+                            }
+                        };
+                    starts.raw_set(
+                        index,
+                        actor
+                            .get::<Option<f32>>("__songlua_capture_cursor")?
+                            .unwrap_or(0.0),
+                    )?;
+                }
+                queue.raw_set(index, name)?;
                 if lua.app_data_ref::<SongLuaStartupQueues>().is_some()
                     || !actor_has_active_command(lua, &actor)?
                 {
@@ -8358,11 +8407,17 @@ pub fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
 }
 
 struct SongLuaStartupQueues(Vec<Table>);
-struct SongLuaQueuedStartup;
+struct SongLuaQueuedStartup(f32);
+
+pub struct SongLuaStartupState {
+    pub initial: SongLuaOverlayState,
+    pub blocks: Vec<SongLuaOverlayCommandBlock>,
+}
 
 fn collect_startup_states(
+    lua: &Lua,
     actor: &Table,
-    states: &mut HashMap<usize, SongLuaOverlayState>,
+    states: &mut HashMap<usize, (Table, SongLuaOverlayState)>,
 ) -> mlua::Result<()> {
     if actor
         .get::<Option<String>>("__songlua_actor_type")?
@@ -8370,12 +8425,20 @@ fn collect_startup_states(
     {
         states.insert(
             actor.to_pointer() as usize,
-            actor_overlay_initial_state(actor).map_err(mlua::Error::external)?,
+            (
+                actor.clone(),
+                actor_overlay_initial_state(actor).map_err(mlua::Error::external)?,
+            ),
         );
+        // Capture queued writes separately from OnCommand, without changing
+        // its tween cursor or the state used for target discovery.
+        flush_actor_capture(actor)?;
+        actor.set("__songlua_capture_blocks", lua.create_table()?)?;
+        actor.set("__songlua_capture_immediate_block", Value::Nil)?;
     }
     for child in actor.sequence_values::<Value>() {
         if let Value::Table(child) = child? {
-            collect_startup_states(&child, states)?;
+            collect_startup_states(lua, &child, states)?;
         }
     }
     Ok(())
@@ -8384,7 +8447,7 @@ fn collect_startup_states(
 pub fn run_actor_startup_commands(
     lua: &Lua,
     root: &Value,
-) -> mlua::Result<HashMap<usize, SongLuaOverlayState>> {
+) -> mlua::Result<HashMap<usize, SongLuaStartupState>> {
     let Value::Table(root) = root else {
         return Ok(HashMap::new());
     };
@@ -8398,17 +8461,30 @@ pub fn run_actor_startup_commands(
     if !queued.0.is_empty() {
         // Actor::UpdateTweening requires positive delta time. Keep the state
         // after On but before queued commands for the compiled beat-zero frame.
-        collect_startup_states(root, &mut states)?;
-        lua.set_app_data(SongLuaQueuedStartup);
+        let mut initial_states = HashMap::new();
+        collect_startup_states(lua, root, &mut initial_states)?;
+        lua.set_app_data(SongLuaQueuedStartup(0.0));
         let result = queued
             .0
             .into_iter()
             .try_for_each(|actor| drain_actor_command_queue(lua, &actor));
         lua.remove_app_data::<SongLuaQueuedStartup>();
         result?;
-        let mut ready = HashMap::with_capacity(states.len());
-        collect_startup_states(root, &mut ready)?;
-        states.retain(|actor, initial| ready.get(actor).is_some_and(|state| state != initial));
+        for (pointer, (actor, initial)) in initial_states {
+            flush_actor_capture(&actor)?;
+            let blocks = read_actor_capture_blocks(&actor).map_err(mlua::Error::external)?;
+            let mut state = initial;
+            let changes = blocks.iter().any(|block| {
+                let previous = state;
+                crate::apply_overlay_delta(&mut state, &block.delta);
+                state != previous
+            });
+            if changes
+                || actor_overlay_initial_state(&actor).map_err(mlua::Error::external)? != initial
+            {
+                states.insert(pointer, SongLuaStartupState { initial, blocks });
+            }
+        }
     }
     Ok(states)
 }

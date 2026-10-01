@@ -33,7 +33,7 @@ mod dense_capture_perf;
 pub(crate) fn apply_startup_states<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
-    states: &std::collections::HashMap<usize, SongLuaOverlayState>,
+    states: &std::collections::HashMap<usize, crate::lua_util::SongLuaStartupState>,
     tracks: &mut [SongLuaOverlayUpdateTrack],
     messages: &mut Vec<SongLuaMessageEvent>,
 ) {
@@ -41,13 +41,30 @@ pub(crate) fn apply_startup_states<Kind>(
     let beat = song_beat_at_elapsed_seconds(1.0 / SONG_LUA_UPDATE_REFERENCE_FPS, context);
     let mut changed = false;
     for (index, overlay) in overlays.iter_mut().enumerate() {
-        let Some(&initial) = states.get(&(overlay.table.to_pointer() as usize)) else {
+        let Some(startup) = states.get(&(overlay.table.to_pointer() as usize)) else {
             continue;
         };
+        let initial = startup.initial;
         let ready = overlay.actor.initial_state;
-        let Some((_, delta)) = overlay_delta_pair_from_states(initial, ready, ready) else {
-            continue;
-        };
+        let mut blocks = startup.blocks.clone();
+        if blocks.is_empty() {
+            let Some((_, delta)) = overlay_delta_pair_from_states(initial, ready, ready) else {
+                continue;
+            };
+            blocks.push(crate::SongLuaOverlayCommandBlock {
+                start: 0.0,
+                duration: 0.0,
+                easing: None,
+                opt1: None,
+                opt2: None,
+                delta,
+            });
+        }
+        // Native zero-time queues consume the first positive frame's delta.
+        // Keep that frame as the trigger, and preserve the original queue clock.
+        for block in &mut blocks {
+            block.start -= 1.0 / SONG_LUA_UPDATE_REFERENCE_FPS;
+        }
         overlay.actor.initial_state = initial;
         overlay
             .actor
@@ -55,14 +72,7 @@ pub(crate) fn apply_startup_states<Kind>(
             .push(crate::SongLuaOverlayMessageCommand {
                 message: MESSAGE.to_string(),
                 aux: None,
-                blocks: vec![crate::SongLuaOverlayCommandBlock {
-                    start: 0.0,
-                    duration: 0.0,
-                    easing: None,
-                    opt1: None,
-                    opt2: None,
-                    delta,
-                }],
+                blocks,
             });
         for track in tracks
             .iter_mut()

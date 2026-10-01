@@ -4949,16 +4949,17 @@ mod tests {
         note_column_pos_offset_y_from_points, note_column_zoom_hide_beats_per_t,
         note_field_column_actors as create_note_field_column_actors, note_hide_window_from_indices,
         note_hide_windows_from_flags, note_song_lua_side_effect, offset_texture_rect,
-        overlay_eases_from_captures, overlay_state_axis_scale, overlay_state_z_scale,
-        parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
-        push_multitap_arrow_sample, push_overlay_sample_eases, push_song_lua_overlay_sound_paths,
-        push_song_lua_video_paths, push_startup_message_if_listened,
-        read_global_function_nested_tables, read_graph_display_body_state,
-        read_graph_display_line_state, read_song_meter_display_state,
-        read_update_function_nested_tables, read_update_function_tables, record_song_lua_broadcast,
-        reset_actor_capture, reset_indexed_actor_capture_tables,
-        runtime_static_overlay_index_by_path, scale_to_rect_plan, set_compile_song_runtime_values,
-        song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
+        overlay_eases_from_captures, overlay_state_after_blocks, overlay_state_axis_scale,
+        overlay_state_z_scale, parse_overlay_blend_mode, parse_overlay_effect_clock,
+        parse_overlay_effect_mode, push_multitap_arrow_sample, push_overlay_sample_eases,
+        push_song_lua_overlay_sound_paths, push_song_lua_video_paths,
+        push_startup_message_if_listened, read_global_function_nested_tables,
+        read_graph_display_body_state, read_graph_display_line_state,
+        read_song_meter_display_state, read_update_function_nested_tables,
+        read_update_function_tables, record_song_lua_broadcast, reset_actor_capture,
+        reset_indexed_actor_capture_tables, runtime_static_overlay_index_by_path,
+        scale_to_rect_plan, set_compile_song_runtime_values, song_lua_arch_name,
+        song_lua_difficulty_from_value, song_lua_human_player_count,
         song_lua_steps_type_is_dance_single, song_lua_video_paths, sort_compiled_song_lua,
         sort_note_hide_windows, sprite_animation_state_at, sprite_animation_state_from,
         sprite_custom_animation_state_from, sprite_frame_count, sprite_image_frame_size,
@@ -15879,6 +15880,8 @@ return Def.ActorFrame{
             if po:GetReversePercentForColumn(0) ~= 0 then
                 error("unexpected reverse percent")
             end
+            assert(ArrowEffects.GetYPos(ps, 1, 32) == -103)
+            assert(ArrowEffects.GetYPos(ps, 1, 0, 340) == -170)
             mod_actions = {
                 {4, string.format("%.0f:%.0f", ArrowEffects.GetXPos(ps, 1, 0), ArrowEffects.GetYPos(ps, 1, 0)), true},
             }
@@ -15895,7 +15898,9 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "-96:-125");
+        // Native YReverseOffset uses 145 - (-125) = 270. GetYPos returns
+        // the NoteField-local -135; Player supplies its ten-pixel midpoint.
+        assert_eq!(compiled.messages[0].message, "-96:-135");
         assert_eq!(compiled.note_hides.len(), 1);
         assert_eq!(compiled.note_hides[0].player, 0);
         assert_eq!(compiled.note_hides[0].column, 0);
@@ -17994,14 +17999,33 @@ return Def.ActorFrame{
                 target: SongLuaProxyTarget::NoteField { player_index: 0 }
             }
         ));
-        assert!(!compiled.overlays[0].initial_state.visible);
-        assert_eq!(compiled.overlays[0].message_commands.len(), 1);
-        assert_eq!(
-            compiled.overlays[0].message_commands[0].blocks[0]
-                .delta
-                .visible,
-            Some(true)
-        );
+        let overlay = &compiled.overlays[0];
+        assert!(overlay.initial_state.visible);
+        assert_eq!(overlay.message_commands.len(), 2);
+        let startup = compiled
+            .messages
+            .iter()
+            .find(|event| event.message == "__songlua_queued_startup")
+            .expect("queued binding runs on the first positive update");
+        assert!(startup.beat > 0.0 && startup.beat < 8.0);
+        let hide = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message == startup.message)
+            .unwrap();
+        let hidden = overlay_state_after_blocks(overlay.initial_state, &hide.blocks, 0.0);
+        assert!(!hidden.visible);
+        let show_event = compiled
+            .messages
+            .iter()
+            .find(|event| event.beat == 8.0)
+            .unwrap();
+        let show = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message == show_event.message)
+            .unwrap();
+        assert!(overlay_state_after_blocks(hidden, &show.blocks, 0.0).visible);
     }
 
     #[test]
@@ -18155,7 +18179,20 @@ return Def.ActorFrame{
                 target: SongLuaProxyTarget::Player { player_index: 0 }
             }
         ));
-        assert!(!compiled.overlays[0].initial_state.visible);
+        let overlay = &compiled.overlays[0];
+        assert!(overlay.initial_state.visible);
+        let event = compiled
+            .messages
+            .iter()
+            .find(|event| event.message == "__songlua_queued_startup")
+            .expect("cmd queues binding for the first positive update");
+        assert!(event.beat > 0.0);
+        let command = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message == event.message)
+            .unwrap();
+        assert!(!overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.0).visible);
     }
 
     #[test]
@@ -18478,7 +18515,20 @@ return Def.ActorFrame{
             .iter()
             .position(|overlay| overlay.name.as_deref() == Some("LocalTarget"))
             .unwrap();
-        assert!(!compiled.overlays[local_index].initial_state.visible);
+        let local = &compiled.overlays[local_index];
+        assert!(local.initial_state.visible);
+        let event = compiled
+            .messages
+            .iter()
+            .find(|event| event.message == "__songlua_queued_startup")
+            .expect("queued broadcast hides the local target on update");
+        assert!(event.beat > 0.0);
+        let command = local
+            .message_commands
+            .iter()
+            .find(|command| command.message == event.message)
+            .unwrap();
+        assert!(!overlay_state_after_blocks(local.initial_state, &command.blocks, 0.0).visible);
         assert!(compiled.overlays.iter().any(|overlay| {
             matches!(
                 overlay.kind,

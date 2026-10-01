@@ -4625,3 +4625,49 @@ return Def.ActorFrame{
         }
     }
 }
+
+#[test]
+fn queued_visibility_matches_native_actor_updates() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            root.join("tests/fixtures/itgmania-song-lua-micro/queued-visibility-native.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, "Queued Visibility");
+    context.screen_width = 854.0;
+    context.screen_height = 480.0;
+    context.music_length_seconds = 0.2;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join("queued-visibility.lua").as_path()],
+        0,
+        &context,
+    )
+    .unwrap();
+    let mut checked = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let second = value_f32(sample.get("time")).unwrap();
+        let states = compiled_local_states_at(&compiled[0], &context, second, second);
+        for actor in sample["actors"].as_array().unwrap().iter().skip(1) {
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == actor["name"].as_str())
+                .unwrap();
+            assert_eq!(
+                states[index].visible,
+                actor["visible"].as_bool().unwrap(),
+                "{} at {second}",
+                actor["name"]
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 35);
+}
