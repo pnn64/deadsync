@@ -3,6 +3,8 @@ use deadlib_present::actors::{ActorResourceArena, SpriteSource as ActorSpriteSou
 use deadlib_present::texture::TextureContext;
 use deadlib_render_core::{SamplerDesc, TexturedMeshVertex};
 use deadsync_noteskin::ModelVertex;
+#[cfg(test)]
+use deadsync_noteskin::itg_sprite_animation_slot_plan;
 use deadsync_noteskin::mine::{
     MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
     mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
@@ -20,11 +22,10 @@ use deadsync_noteskin::{
     SpriteAnimatedUvCache, SpriteAtlasUvCache, SpriteDefinition, SpriteFrameTiming, SpriteSlotPlan,
     SpriteSourcePlan, generated_animation_sprite_slot_plan,
     itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
-    itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
-    itg_sprite_slot_plan_from_path, model_draw_at, model_draw_at_cursor, model_glow_at,
-    model_glow_with_draw, model_vertex_for_sprite, neg_rot_sin_cos,
-    sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing, sprite_scrolled_uv,
-    sprite_sheet_frame,
+    itg_frame_sprite_slot_plan_from_path, itg_sprite_slot_plan_from_path, model_draw_at,
+    model_draw_at_cursor, model_glow_at, model_glow_with_draw, model_vertex_for_sprite,
+    neg_rot_sin_cos, sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing,
+    sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation,
 };
 use image::image_dimensions;
 use log::warn;
@@ -51,6 +52,10 @@ mod model_atlas_preparation;
 #[cfg(test)]
 #[path = "../../tests/texture_bulk/mod.rs"]
 mod texture_bulk;
+
+#[cfg(test)]
+#[path = "../../tests/sprite_initialization/mod.rs"]
+mod sprite_initialization;
 
 #[derive(Debug)]
 pub enum SpriteSource {
@@ -84,6 +89,12 @@ pub enum SpriteSource {
 // An empty explicit list uses the frame-index identity fallback while retaining
 // the indexed sheet origin in UV caching, source rebuilds and pause handling.
 static SEQUENTIAL_FRAME_INDICES: LazyLock<Arc<[usize]>> = LazyLock::new(|| Arc::from([]));
+
+// Every sprite starts with these immutable empty model arrays. Share their
+// two Arc headers instead of allocating them again for each loaded slot.
+static EMPTY_MODEL_TIMELINE: LazyLock<Arc<[ModelTweenSegment]>> = LazyLock::new(|| Arc::from([]));
+static EMPTY_MODEL_AUTO_ROT_KEYS: LazyLock<Arc<[ModelAutoRotKey]>> =
+    LazyLock::new(|| Arc::from([]));
 
 impl SpriteSource {
     pub fn texture_key(&self) -> &str {
@@ -952,6 +963,55 @@ fn atlas_source(
     }
 }
 
+fn animated_source(
+    texture_key: Arc<str>,
+    tex_dims: (u32, u32),
+    frame_size: [i32; 2],
+    grid: (usize, usize),
+    frame_count: usize,
+    frame_indices: Option<Arc<[usize]>>,
+    rate: AnimationRate,
+    frame_durations: Option<Arc<[f32]>>,
+    def: &SpriteDefinition,
+) -> SpriteSource {
+    let texel_scale = texture_texel_scale(tex_dims);
+    let frame_timing = frame_durations
+        .as_deref()
+        .map(|durations| SpriteFrameTiming::new(frame_count, durations));
+    let uv_cache = SpriteAnimatedUvCache::new(
+        texel_scale,
+        def,
+        frame_size,
+        [grid.0, grid.1],
+        frame_count,
+        frame_indices.is_some(),
+    );
+    SpriteSource::Animated {
+        texture_key,
+        tex_dims,
+        texel_scale,
+        frame_size,
+        grid,
+        frame_count,
+        frame_indices,
+        rate,
+        frame_durations,
+        frame_timing,
+        uv_cache,
+        cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
+        cached_actor_texture: AtomicU64::new(0),
+    }
+}
+
+fn replace_sprite_source(current: &mut Arc<SpriteSource>, source: SpriteSource) {
+    if let Some(current) = Arc::get_mut(current) {
+        *current = source;
+    } else {
+        *current = Arc::new(source);
+    }
+}
+
 fn source_from_plan(plan: SpriteSourcePlan, def: &SpriteDefinition) -> Arc<SpriteSource> {
     match plan {
         SpriteSourcePlan::Atlas {
@@ -967,42 +1027,23 @@ fn source_from_plan(plan: SpriteSourcePlan, def: &SpriteDefinition) -> Arc<Sprit
             frame_indices,
             rate,
             frame_durations,
-        } => {
-            let texel_scale = texture_texel_scale(tex_dims);
-            let frame_timing = frame_durations
-                .as_deref()
-                .map(|durations| SpriteFrameTiming::new(frame_count, durations));
-            let uv_cache = SpriteAnimatedUvCache::new(
-                texel_scale,
-                def,
-                frame_size,
-                [grid.0, grid.1],
-                frame_count,
-                frame_indices.is_some(),
-            );
-            Arc::new(SpriteSource::Animated {
-                texture_key: texture_key.into(),
-                tex_dims,
-                texel_scale,
-                frame_size,
-                grid,
-                frame_count,
-                frame_indices: frame_indices.map(|indices| {
-                    if indices.is_empty() {
-                        Arc::clone(&SEQUENTIAL_FRAME_INDICES)
-                    } else {
-                        Arc::from(indices)
-                    }
-                }),
-                rate,
-                frame_durations: frame_durations.map(Arc::<[f32]>::from),
-                frame_timing,
-                uv_cache,
-                cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
-                cached_generation: AtomicU64::new(u64::MAX),
-                cached_actor_texture: AtomicU64::new(0),
-            })
-        }
+        } => Arc::new(animated_source(
+            texture_key.into(),
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices.map(|indices| {
+                if indices.is_empty() {
+                    Arc::clone(&SEQUENTIAL_FRAME_INDICES)
+                } else {
+                    Arc::from(indices)
+                }
+            }),
+            rate,
+            frame_durations.map(Arc::<[f32]>::from),
+            def,
+        )),
     }
 }
 
@@ -1031,10 +1072,10 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         note_color_translate: plan.note_color_translate,
         model: None,
         model_draw: ModelDrawState::default(),
-        model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
+        model_timeline: Arc::clone(&EMPTY_MODEL_TIMELINE),
         model_effect: ModelEffectState::default(),
         model_auto_rot_total_frames: 0.0,
-        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
+        model_auto_rot_z_keys: Arc::clone(&EMPTY_MODEL_AUTO_ROT_KEYS),
     }
 }
 
@@ -1069,22 +1110,6 @@ fn source_plan_from_slot(slot: &SpriteSlot) -> SpriteSourcePlan {
             frame_durations: frame_durations.as_ref().map(|durations| durations.to_vec()),
         },
     }
-}
-
-fn plan_from_slot(slot: &SpriteSlot) -> SpriteSlotPlan {
-    SpriteSlotPlan {
-        def: slot.def.clone(),
-        source_size: slot.source_size,
-        source: source_plan_from_slot(slot),
-        note_color_translate: slot.note_color_translate,
-    }
-}
-
-fn apply_slot_plan(slot: &mut SpriteSlot, plan: SpriteSlotPlan) {
-    slot.def = plan.def;
-    slot.source_size = plan.source_size;
-    slot.source = source_from_plan(plan.source, &slot.def);
-    slot.note_color_translate = plan.note_color_translate;
 }
 
 pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
@@ -1273,6 +1298,7 @@ fn slot_is_beat_based(slot: &SpriteSlot) -> bool {
     slot.source.is_beat_based()
 }
 
+#[inline(always)]
 fn itg_apply_sprite_animation_plan(
     slot: &mut SpriteSlot,
     plan: deadsync_noteskin::script::SpriteAnimationCommandPlan,
@@ -1281,15 +1307,95 @@ fn itg_apply_sprite_animation_plan(
     if slot.model.is_some() {
         return;
     }
-    if let Some(plan) = itg_sprite_animation_slot_plan(
-        plan_from_slot(slot),
-        plan,
-        beat_based,
-        assets::sprite_sheet_dims,
-        assets::texture_source_frame_dims_from_real,
-    ) {
-        apply_slot_plan(slot, plan);
+    match plan {
+        deadsync_noteskin::script::SpriteAnimationCommandPlan::StateProperties(plan) => {
+            apply_state_properties(slot, plan.frame_count, &plan.frame_delays, beat_based);
+        }
+        deadsync_noteskin::script::SpriteAnimationCommandPlan::AllStateDelays(delay) => {
+            apply_all_state_delays(slot, delay, beat_based);
+        }
     }
+}
+
+fn apply_state_properties(
+    slot: &mut SpriteSlot,
+    frame_count: usize,
+    frame_delays: &[f32],
+    beat_based: bool,
+) {
+    let tex_dims = match slot.source.as_ref() {
+        SpriteSource::Atlas { tex_dims, .. } | SpriteSource::Animated { tex_dims, .. } => *tex_dims,
+    };
+    let key = slot.texture_key();
+    let (columns, rows) = assets::sprite_sheet_dims(key);
+    let Some(animation) = sprite_state_properties_animation(
+        [tex_dims.0, tex_dims.1],
+        [columns as usize, rows as usize],
+        slot.def.src,
+        frame_count,
+        frame_delays,
+        beat_based,
+    ) else {
+        return;
+    };
+    let source_frame = assets::texture_source_frame_dims_from_real(key, tex_dims.0, tex_dims.1);
+    let key = slot.texture_key_shared();
+    slot.def.src = animation.start_src;
+    slot.def.size = animation.frame_size;
+    slot.source_size = [source_frame.0 as i32, source_frame.1 as i32];
+    let source = animated_source(
+        key,
+        tex_dims,
+        animation.frame_size,
+        (columns.max(1) as usize, rows.max(1) as usize),
+        animation.frame_count,
+        None,
+        animation.rate,
+        Some(Arc::from(animation.frame_durations)),
+        &slot.def,
+    );
+    replace_sprite_source(&mut slot.source, source);
+}
+
+fn apply_all_state_delays(slot: &mut SpriteSlot, delay: f32, beat_based: bool) {
+    let SpriteSource::Animated {
+        texture_key,
+        tex_dims,
+        frame_size,
+        grid,
+        frame_count,
+        frame_indices,
+        ..
+    } = slot.source.as_ref()
+    else {
+        return;
+    };
+    let frame_count = (*frame_count).max(1);
+    let delay = delay.max(1e-6);
+    // Ordinary sprite sheets fit this stack scratch; only the resulting Arc
+    // is allocated. Large authored animations keep the growable fallback.
+    let durations: Arc<[f32]> = if frame_count <= 64 {
+        Arc::from(&[delay; 64][..frame_count])
+    } else {
+        Arc::from(vec![delay; frame_count])
+    };
+    let rate = if beat_based {
+        AnimationRate::FramesPerBeat(1.0 / delay)
+    } else {
+        AnimationRate::FramesPerSecond(1.0 / delay)
+    };
+    let source = animated_source(
+        Arc::clone(texture_key),
+        *tex_dims,
+        *frame_size,
+        *grid,
+        frame_count,
+        frame_indices.clone(),
+        rate,
+        Some(durations),
+        &slot.def,
+    );
+    replace_sprite_source(&mut slot.source, source);
 }
 
 pub fn itg_apply_state_properties_from_commands(
