@@ -328,6 +328,7 @@ fn tween_replay_factor_reuse_keeps_state_only_and_warm_scalar_getters_allocation
 fn writes(count: usize, late: bool) -> Vec<SongLuaScheduledOverlayUpdate> {
     (0..count)
         .map(|i| SongLuaScheduledOverlayUpdate {
+            initial_value: None,
             delay_seconds: 0.25,
             duration_seconds: 1.0,
             easing: None,

@@ -505,7 +505,7 @@ fn capture_transform_mask(block: &Table) -> Result<u16, String> {
     Ok(mask)
 }
 
-fn actor_transform_mask(actor: &Table) -> Result<u16, String> {
+fn actor_transform_mask(lua: &Lua, actor: &Table) -> Result<u16, String> {
     let mut mask = 0;
     if let Some(block) = actor
         .get::<Option<Table>>("__songlua_capture_block")
@@ -521,16 +521,39 @@ fn actor_transform_mask(actor: &Table) -> Result<u16, String> {
             mask |= capture_transform_mask(&block.map_err(|err| err.to_string())?)?;
         }
     }
+    use SongLuaOverlayUpdateTarget as Target;
+    let captured = crate::lua_util::captured_update_target_mask(lua, actor);
+    for (index, target) in [
+        Target::X,
+        Target::Y,
+        Target::Z,
+        Target::RotationX,
+        Target::RotationZ,
+        Target::RotationY,
+        Target::ZoomX,
+        Target::ZoomY,
+        Target::ZoomZ,
+        Target::SkewX,
+        Target::SkewY,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if captured & (1_u128 << target as usize) != 0 {
+            mask |= 1 << index;
+        }
+    }
     Ok(mask)
 }
 
 fn player_transform_masks(
+    lua: &Lua,
     player_tables: &[Option<Table>; LUA_PLAYERS],
 ) -> Result<[u16; LUA_PLAYERS], String> {
     let mut masks = [0; LUA_PLAYERS];
     for (player, actor) in player_tables.iter().enumerate() {
         if let Some(actor) = actor {
-            masks[player] = actor_transform_mask(actor)?;
+            masks[player] = actor_transform_mask(lua, actor)?;
         }
     }
     Ok(masks)
@@ -1784,6 +1807,7 @@ fn append_scheduled_overlay_updates(
         };
         let from = scheduled_values[update.target as usize]
             .cloned()
+            .or_else(|| update.initial_value.clone())
             .or_else(|| {
                 update_states
                     .get(overlay_index)
@@ -1850,10 +1874,10 @@ fn apply_captured_final_values(
     }
 }
 
-fn capture_update_overlay_samples<Kind>(
+fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
     lua: &Lua,
     context: &SongLuaCompileContext,
-    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    overlays: &[Actor],
     baseline: &[SongLuaOverlayState],
     from_states: &[SongLuaOverlayState],
     update_states: &mut [SongLuaOverlayState],
@@ -1899,6 +1923,27 @@ fn capture_update_overlay_samples<Kind>(
             };
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
+            let actor = overlays[overlay_index].borrow();
+            if actor
+                .raw_get::<Option<i64>>("__songlua_player_index")
+                .map_err(|err| err.to_string())?
+                .is_some()
+                && actor
+                    .raw_get::<Option<String>>("__songlua_player_child_name")
+                    .map_err(|err| err.to_string())?
+                    .is_none()
+            {
+                // Player Lua getters retain destinations. Their render state
+                // must also retain immediate writes before a delayed return.
+                for (target, value) in values {
+                    set_overlay_state_update_value(
+                        &mut update_states[overlay_index],
+                        *target,
+                        value,
+                    );
+                    set_overlay_state_update_value(&mut to_states[overlay_index], *target, value);
+                }
+            }
             apply_captured_final_values(
                 update_states,
                 to_states,
@@ -1976,7 +2021,8 @@ fn capture_update_overlay_samples<Kind>(
         );
     }
     for &overlay_index in reset_indices.iter() {
-        reset_actor_capture(lua, &overlays[overlay_index].table).map_err(|err| err.to_string())?;
+        reset_actor_capture(lua, overlays[overlay_index].borrow())
+            .map_err(|err| err.to_string())?;
     }
     Ok(())
 }
@@ -2039,9 +2085,9 @@ fn scheduled_overlay_factor(sample: &SongLuaScheduledOverlaySample, seconds: f64
     crate::overlay_command_ease_factor(sample.easing.as_deref(), linear_factor, sample.opt1)
 }
 
-fn apply_scheduled_overlay_states_uncached<Kind>(
+fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
     lua: &Lua,
-    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    overlays: &[Actor],
     states: &mut [SongLuaOverlayState],
     scheduled: &[SongLuaScheduledOverlaySample],
     seconds: f64,
@@ -2069,7 +2115,7 @@ fn apply_scheduled_overlay_states_uncached<Kind>(
         if let Some(overlay) = overlays.get(sample.overlay_index) {
             crate::lua_util::set_actor_overlay_update_getter_value(
                 lua,
-                &overlay.table,
+                overlay.borrow(),
                 sample.target,
                 &value,
             )?;
@@ -2078,9 +2124,9 @@ fn apply_scheduled_overlay_states_uncached<Kind>(
     Ok(())
 }
 
-fn apply_scheduled_overlay_states<Kind>(
+fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
     lua: &Lua,
-    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    overlays: &[Actor],
     states: &mut [SongLuaOverlayState],
     scheduled: &[SongLuaScheduledOverlaySample],
     seconds: f64,
@@ -2136,7 +2182,7 @@ fn apply_scheduled_overlay_states<Kind>(
         if let Some(overlay) = overlays.get(sample.overlay_index) {
             crate::lua_util::set_actor_overlay_update_getter_value(
                 lua,
-                &overlay.table,
+                overlay.borrow(),
                 sample.target,
                 &value,
             )?;
@@ -2451,13 +2497,25 @@ pub fn compile_update_functions<Kind>(
     let option_tables = update_player_option_tables(lua)?;
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
-    let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
+    let overlay_count = overlays.len();
+    // Player transforms use the same chronological tween capture as song
+    // actors. Their temporary indices never become drawable overlay tracks.
+    let mut capture_actors: Vec<Table> = overlays.iter().map(|actor| actor.table.clone()).collect();
+    let mut baseline_overlays = current_overlay_compile_actor_states(overlays)?;
+    let mut player_capture_indices = [None; LUA_PLAYERS];
+    for (player, actor) in player_tables.iter().enumerate() {
+        if let Some(actor) = actor {
+            player_capture_indices[player] = Some(capture_actors.len());
+            capture_actors.push(actor.clone());
+            baseline_overlays.push(actor_overlay_initial_state(actor)?);
+        }
+    }
     crate::lua_util::begin_overlay_update_capture_from_indices(
         lua,
-        overlays
+        capture_actors
             .iter()
             .enumerate()
-            .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index)),
+            .map(|(index, actor)| (actor.to_pointer() as usize, index)),
     );
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     let mut replay_overlays = baseline_overlays.clone();
@@ -2505,7 +2563,7 @@ pub fn compile_update_functions<Kind>(
     capture_update_overlay_samples(
         lua,
         context,
-        overlays,
+        &capture_actors,
         &baseline_overlays,
         &baseline_overlays,
         &mut update_overlays,
@@ -2523,7 +2581,8 @@ pub fn compile_update_functions<Kind>(
     let mut beat = start;
     let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
     let mut scheduled_states = baseline_overlays.clone();
-    let mut transform_masks = player_transform_masks(&player_tables)?;
+    let mut transform_masks = player_transform_masks(lua, &player_tables)?;
+    let mut player_capture_masks = transform_masks;
     let mut frame_count = 0;
     for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
         let next_beat = exact_beat as f32;
@@ -2543,7 +2602,7 @@ pub fn compile_update_functions<Kind>(
         let stage = profile.then(Instant::now);
         apply_scheduled_overlay_states(
             lua,
-            overlays,
+            &capture_actors,
             &mut scheduled_states,
             &scheduled_overlay_samples,
             seconds,
@@ -2553,14 +2612,64 @@ pub fn compile_update_functions<Kind>(
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, started)?;
         update_overlays.copy_from_slice(&replay_overlays);
-        let next_masks = player_transform_masks(&player_tables)?;
+        let next_masks = player_transform_masks(lua, &player_tables)?;
         let prior_active = if player_samples.len() >= 2 {
             player_samples[player_samples.len() - 2]
         } else {
             baseline_players
         };
+        capture_update_overlay_samples(
+            lua,
+            context,
+            &capture_actors,
+            &baseline_overlays,
+            &current_overlays,
+            &mut update_overlays,
+            &mut replay_overlays,
+            started,
+            &mut overlay_tracks,
+            &mut overlay_track_indices,
+            beat,
+            next_beat,
+            seconds,
+            &mut scheduled_overlay_samples,
+            &mut overlay_sample_scratch,
+        )?;
+        apply_scheduled_overlay_states(
+            lua,
+            &capture_actors,
+            &mut replay_overlays,
+            &scheduled_overlay_samples,
+            seconds,
+        )?;
+        overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
         let mut next_players = current_perframe_player_states(&player_tables)?;
         for player in 0..LUA_PLAYERS {
+            player_capture_masks[player] |= next_masks[player];
+            if let Some(index) = player_capture_indices[player] {
+                let state = &replay_overlays[index];
+                let mask = player_capture_masks[player];
+                let output = &mut next_players[player];
+                macro_rules! sample {
+                    ($bit:literal, $out:ident, $field:ident) => {
+                        if mask & (1 << $bit) != 0 {
+                            output.$out = Some(state.$field);
+                        }
+                    };
+                }
+                sample!(0, x, x);
+                sample!(1, y, y);
+                sample!(2, z, z);
+                sample!(3, rotation_x, rot_x_deg);
+                sample!(4, rotation_z, rot_z_deg);
+                sample!(5, rotation_y, rot_y_deg);
+                sample!(6, zoom_x, zoom_x);
+                sample!(7, zoom_y, zoom_y);
+                sample!(8, zoom_z, zoom_z);
+                sample!(9, skew_x, skew_x);
+                sample!(10, skew_y, skew_y);
+            }
             let ended = transform_masks[player] & !next_masks[player];
             if ended != 0 {
                 if let Some(actor) = player_tables[player].as_ref() {
@@ -2571,6 +2680,29 @@ pub fn compile_update_functions<Kind>(
                         baseline_players[player],
                         ended,
                     )?;
+                    if let Some(index) = player_capture_indices[player] {
+                        let state = &mut replay_overlays[index];
+                        let output = next_players[player];
+                        macro_rules! close {
+                            ($bit:literal, $out:ident, $field:ident) => {
+                                if ended & (1 << $bit) != 0 {
+                                    state.$field =
+                                        output.$out.unwrap_or(baseline_overlays[index].$field);
+                                }
+                            };
+                        }
+                        close!(0, x, x);
+                        close!(1, y, y);
+                        close!(2, z, z);
+                        close!(3, rotation_x, rot_x_deg);
+                        close!(4, rotation_z, rot_z_deg);
+                        close!(5, rotation_y, rot_y_deg);
+                        close!(6, zoom_x, zoom_x);
+                        close!(7, zoom_y, zoom_y);
+                        close!(8, zoom_z, zoom_z);
+                        close!(9, skew_x, skew_x);
+                        close!(10, skew_y, skew_y);
+                    }
                 }
             }
         }
@@ -2586,25 +2718,6 @@ pub fn compile_update_functions<Kind>(
         let stage = profile.then(Instant::now);
         column_samples.push(read_note_column_transform_samples(lua)?);
         column_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
-        let stage = profile.then(Instant::now);
-        capture_update_overlay_samples(
-            lua,
-            context,
-            overlays,
-            &baseline_overlays,
-            &current_overlays,
-            &mut update_overlays,
-            &mut replay_overlays,
-            started,
-            &mut overlay_tracks,
-            &mut overlay_track_indices,
-            beat,
-            next_beat,
-            seconds,
-            &mut scheduled_overlay_samples,
-            &mut overlay_sample_scratch,
-        )?;
-        overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         std::mem::swap(&mut current_overlays, &mut replay_overlays);
         beat = next_beat;
     }
@@ -2707,7 +2820,18 @@ pub fn compile_update_functions<Kind>(
         &baseline_overlays,
         scheduled_overlay_samples,
     );
-    let stateful_messages = crate::lua_util::stateful_message_captures(lua);
+    overlay_tracks.retain(|track| track.overlay_index < overlay_count);
+    let mut stateful_messages = crate::lua_util::stateful_message_captures(lua);
+    for capture in &mut stateful_messages {
+        capture
+            .overlay_targets
+            .retain(|(index, _)| *index < overlay_count);
+        capture
+            .writes
+            .retain(|write| write.overlay_index < overlay_count);
+    }
+    stateful_messages
+        .retain(|capture| !capture.overlay_targets.is_empty() || !capture.writes.is_empty());
     let runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
     sound_events.extend(crate::lua_util::take_runtime_sounds(lua));
     crate::lua_util::end_overlay_update_capture(lua);

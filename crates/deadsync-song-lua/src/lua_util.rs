@@ -195,6 +195,13 @@ pub struct SongLuaOverlayCompileActor<Kind> {
     pub message_sounds: Vec<(String, PathBuf)>,
 }
 
+#[cfg(test)]
+impl<Kind> std::borrow::Borrow<Table> for SongLuaOverlayCompileActor<Kind> {
+    fn borrow(&self) -> &Table {
+        &self.table
+    }
+}
+
 struct SongLuaOverlayUpdateCapture {
     actor_indices: FxHashMap<usize, usize>,
     active_broadcast: Option<String>,
@@ -218,6 +225,7 @@ pub(crate) struct SongLuaUpdateErrors(pub Vec<String>);
 
 #[derive(Clone)]
 pub struct SongLuaScheduledOverlayUpdate {
+    pub initial_value: Option<SongLuaOverlayUpdateValue>,
     pub delay_seconds: f32,
     pub duration_seconds: f32,
     pub easing: Option<String>,
@@ -361,7 +369,12 @@ impl SongLuaOverlayUpdateCapture {
             return false;
         };
         Self::replace_value(&mut self.final_values[index], target, value.clone());
+        let initial_value = self.values[index]
+            .iter()
+            .find(|(property, _)| *property == target)
+            .map(|(_, value)| value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
+            initial_value,
             delay_seconds,
             duration_seconds,
             easing,
@@ -424,6 +437,20 @@ pub fn drain_overlay_update_capture(
 
 pub fn end_overlay_update_capture(lua: &Lua) {
     lua.remove_app_data::<SongLuaOverlayUpdateCapture>();
+}
+
+pub(crate) fn captured_update_target_mask(lua: &Lua, actor: &Table) -> u128 {
+    let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
+        return 0;
+    };
+    let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) else {
+        return 0;
+    };
+    capture.values[index]
+        .iter()
+        .map(|(target, _)| *target)
+        .chain(capture.scheduled[index].iter().map(|update| update.target))
+        .fold(0, |mask, target| mask | (1_u128 << target as usize))
 }
 
 pub fn stateful_message_captures(lua: &Lua) -> Vec<SongLuaStatefulMessageCapture> {
@@ -12780,6 +12807,31 @@ pub fn set_actor_overlay_update_getter_value(
 ) -> Result<(), String> {
     use SongLuaOverlayUpdateTarget as Target;
     use SongLuaOverlayUpdateValue as UpdateValue;
+
+    // Actor.h exposes destination scale/rotation/skew to Lua. Current player
+    // transforms are sampled separately; positional getters use current XYZ.
+    if matches!(
+        target,
+        Target::Zoom
+            | Target::ZoomX
+            | Target::ZoomY
+            | Target::ZoomZ
+            | Target::RotationX
+            | Target::RotationY
+            | Target::RotationZ
+            | Target::SkewX
+            | Target::SkewY
+    ) && actor
+        .raw_get::<Option<i64>>("__songlua_player_index")
+        .map_err(|err| err.to_string())?
+        .is_some()
+        && actor
+            .raw_get::<Option<String>>("__songlua_player_child_name")
+            .map_err(|err| err.to_string())?
+            .is_none()
+    {
+        return Ok(());
+    }
 
     let key = match target {
         Target::X => "x",

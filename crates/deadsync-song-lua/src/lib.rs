@@ -7752,6 +7752,165 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_samples_player_tween_starts() {
+        let song_dir = test_dir("player-tween-starts");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!("../../../tests/fixtures/song-lua/player-tween.lua"),
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Player Tween Starts");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.1;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        // Native player-tween.lua: rendered transforms at frames 60 and 75.
+        for (target, start, midpoint, finish) in [
+            (SongLuaEaseTarget::PlayerRotationZ, 5.0, 1.25, 0.0),
+            (SongLuaEaseTarget::PlayerRotationX, -30.0, -7.5, 0.0),
+            (SongLuaEaseTarget::PlayerZoomY, 1.18, 1.045, 1.0),
+            (SongLuaEaseTarget::PlayerSkewX, 0.1, 0.025, 0.0),
+        ] {
+            let eases: Vec<_> = compiled
+                .eases
+                .iter()
+                .filter(|ease| ease.player == Some(1) && ease.target == target)
+                .collect();
+            for (beat, expected) in [(1.0, start), (1.25, midpoint)] {
+                let ease = eases
+                    .iter()
+                    .find(|ease| (ease.start - beat).abs() < 0.00001)
+                    .unwrap();
+                assert!(
+                    (ease.from - expected).abs() < 0.0001,
+                    "{target:?} at {beat}: {ease:?}"
+                );
+            }
+            assert!(
+                (eases.last().unwrap().to - finish).abs() < 0.0001,
+                "{target:?} tail"
+            );
+        }
+        assert!(
+            compiled
+                .eases
+                .iter()
+                .any(|ease| ease.target == SongLuaEaseTarget::PlayerSkewX && ease.from == -0.1)
+        );
+        for target in [
+            SongLuaEaseTarget::PlayerZoomX,
+            SongLuaEaseTarget::PlayerZoomY,
+            SongLuaEaseTarget::PlayerZoomZ,
+        ] {
+            let eases: Vec<_> = compiled
+                .eases
+                .iter()
+                .filter(|ease| ease.player == Some(2) && ease.target == target)
+                .collect();
+            for (beat, expected) in [(1.0, 0.7), (1.25, 0.85)] {
+                let ease = eases
+                    .iter()
+                    .find(|ease| (ease.start - beat).abs() < 0.00001)
+                    .unwrap();
+                assert!(
+                    (ease.from - expected).abs() < 0.0001,
+                    "{target:?} at {beat}: {ease:?}"
+                );
+            }
+            assert!((eases.last().unwrap().to - 1.0).abs() < 0.0001);
+        }
+        // Actor.h's non-positional Lua getters return destinations throughout.
+        for track in &compiled.overlay_updates {
+            match track.target {
+                SongLuaOverlayUpdateTarget::Diffuse => {
+                    assert!(track.samples.iter().all(|sample| sample.value
+                        == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.5])))
+                }
+                SongLuaOverlayUpdateTarget::X => assert!(
+                    track
+                        .samples
+                        .iter()
+                        .all(|sample| sample.value == SongLuaOverlayUpdateValue::F32(1.0))
+                ),
+                SongLuaOverlayUpdateTarget::Y => assert!(
+                    track
+                        .samples
+                        .iter()
+                        .all(|sample| sample.value == SongLuaOverlayUpdateValue::F32(0.0))
+                ),
+                _ => {}
+            }
+        }
+        assert!(
+            compiled
+                .overlay_updates
+                .iter()
+                .all(|track| track.overlay_index < compiled.overlays.len())
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_samples_queued_particle_fades() {
+        let song_dir = test_dir("queued-particle-fades");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!("../../../tests/fixtures/song-lua/particle-fade.lua"),
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Particle Fade");
+        context.song_display_bpms = [132.0, 132.0];
+        context.music_length_seconds = 16.0 * 60.0 / 132.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let alpha = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse)
+            .unwrap();
+        let visible = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::Visible)
+            .unwrap();
+        // Captured by the native particle-fade.lua fixture, without RNG.
+        for (frame, expected, shown) in [
+            (130, 1.0, true),
+            (132, 0.92, true),
+            (136, 0.76, true),
+            (150, 0.20, true),
+            (155, 0.0, false),
+            (362, 1.0, true),
+            (368, 0.76, true),
+            (387, 0.0, false),
+        ] {
+            let beat = frame as f32 * 132.0 / 3600.0;
+            let sample = alpha
+                .samples
+                .iter()
+                .find(|sample| (sample.beat - beat).abs() < 0.00001)
+                .unwrap();
+            let SongLuaOverlayUpdateValue::Vec4(value) = sample.value else {
+                panic!("alpha value");
+            };
+            assert!(
+                (value[3] - expected).abs() < 0.0001,
+                "frame {frame}: {sample:?}"
+            );
+            let sample = visible
+                .samples
+                .iter()
+                .rev()
+                .find(|sample| sample.beat <= beat + 0.00001)
+                .unwrap();
+            assert_eq!(
+                sample.value,
+                SongLuaOverlayUpdateValue::Bool(shown),
+                "frame {frame}"
+            );
+        }
+    }
+
+    #[test]
     fn compile_song_lua_updates_read_current_action_tween_state() {
         let song_dir = test_dir("update-action-current-tween-state");
         let entry = song_dir.join("default.lua");

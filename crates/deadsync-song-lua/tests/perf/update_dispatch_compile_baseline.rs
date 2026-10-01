@@ -125,7 +125,7 @@ pub(super) fn compile_update_functions<Kind>(
     let mut beat = start;
     let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
     let mut scheduled_states = baseline_overlays.clone();
-    let mut transform_masks = player_transform_masks(&player_tables)?;
+    let mut transform_masks = player_transform_masks(lua, &player_tables)?;
     let mut frame_count = 0;
     for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
         let next_beat = exact_beat as f32;
@@ -155,7 +155,7 @@ pub(super) fn compile_update_functions<Kind>(
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, started)?;
         update_overlays.copy_from_slice(&replay_overlays);
-        let next_masks = player_transform_masks(&player_tables)?;
+        let next_masks = player_transform_masks(lua, &player_tables)?;
         let prior_active = if player_samples.len() >= 2 {
             player_samples[player_samples.len() - 2]
         } else {

@@ -80,6 +80,8 @@ struct NativeTrace {
     player_render_tracks: Vec<NativePlayerRenderTrack>,
     #[serde(default)]
     projected_vertex_tracks: Vec<NativeProjectedVertexTrack>,
+    #[serde(default)]
+    update_frames: Vec<(f64, f64)>,
     end_position: NativePosition,
     display: NativeDisplay,
     fixture_context: NativeFixtureContext,
@@ -122,6 +124,8 @@ struct NativeActor {
     path: String,
     #[serde(default)]
     final_render_state: Option<NativeRenderSnapshot>,
+    #[serde(default)]
+    render_state_samples: Vec<(usize, Option<f32>, bool)>,
 }
 
 #[derive(Deserialize)]
@@ -142,6 +146,8 @@ struct NativePlayerRenderTrack {
     player: usize,
     path: String,
     samples: Vec<(f32, f32, bool, bool, bool, Vec<String>)>,
+    #[serde(default)]
+    transform_samples: Vec<[Option<f32>; 12]>,
 }
 
 #[derive(Deserialize)]
@@ -1103,56 +1109,23 @@ fn native_update_render_writes(
     (alpha_writes, visible_writes)
 }
 
-fn compiled_update_alpha_at(
-    compiled: &CompiledSongLua,
-    overlay_index: usize,
+fn native_render_probe(
+    trace: &NativeTrace,
+    definition: &NativeDefinition,
     beat: f32,
-) -> Option<f32> {
-    let samples = &compiled
-        .overlay_updates
+) -> Option<(f32, Option<f32>, bool)> {
+    let samples = &trace
+        .runtime_actors
         .iter()
-        .find(|track| {
-            track.overlay_index == overlay_index
-                && track.target == SongLuaOverlayUpdateTarget::Diffuse
-        })?
-        .samples;
-    let next = samples.partition_point(|sample| sample.beat <= beat);
-    let current = samples.get(next.saturating_sub(1))?;
-    let SongLuaOverlayUpdateValue::Vec4(from) = current.value else {
-        return None;
-    };
-    let Some(next) = samples.get(next) else {
-        return Some(from[3]);
-    };
-    let SongLuaOverlayUpdateValue::Vec4(to) = next.value else {
-        return Some(from[3]);
-    };
-    let span = next.beat - current.beat;
-    if span <= f32::EPSILON {
-        return Some(to[3]);
-    }
-    let t = ((beat - current.beat) / span).clamp(0.0, 1.0);
-    Some((to[3] - from[3]).mul_add(t, from[3]))
-}
-
-fn compiled_update_visibility_at(
-    compiled: &CompiledSongLua,
-    overlay_index: usize,
-    beat: f32,
-) -> Option<bool> {
-    let samples = &compiled
-        .overlay_updates
-        .iter()
-        .find(|track| {
-            track.overlay_index == overlay_index
-                && track.target == SongLuaOverlayUpdateTarget::Visible
-        })?
-        .samples;
-    let next = samples.partition_point(|sample| sample.beat <= beat);
-    let SongLuaOverlayUpdateValue::Bool(value) = samples.get(next.saturating_sub(1))?.value else {
-        return None;
-    };
-    Some(value)
+        .find(|actor| definition.runtime_actors.iter().any(|id| *id == actor.id))?
+        .render_state_samples;
+    let frame = trace
+        .update_frames
+        .partition_point(|&(position, _)| position < f64::from(beat) - 0.000001);
+    let &(position, _) = trace.update_frames.get(frame)?;
+    let next = samples.partition_point(|&(index, _, _)| index <= frame);
+    let &(_, alpha, visible) = samples.get(next.checked_sub(1)?)?;
+    Some((position as f32, alpha, visible))
 }
 
 fn persistence_probes<T: Copy>(
@@ -1207,9 +1180,20 @@ fn compare_update_render_persistence(
                 trace.fixture_context.beat_step,
                 trace.trace_until_beat,
             ) {
-                let Some(actual) = compiled_update_alpha_at(compiled, overlay_index, beat) else {
+                let (beat, expected) = match native_render_probe(trace, definition, beat) {
+                    Some((beat, Some(alpha), _)) => (beat, alpha),
+                    Some((_, None, _)) => continue,
+                    None => (beat, expected),
+                };
+                let Some(SongLuaOverlayUpdateValue::Vec4(actual)) = compiled_update_value_at(
+                    compiled,
+                    overlay_index,
+                    SongLuaOverlayUpdateTarget::Diffuse,
+                    beat,
+                ) else {
                     continue;
                 };
+                let actual = actual[3];
                 parity.check((expected - actual).abs() <= 0.03, || {
                     format!(
                         "layer {layer} alpha persistence differs for {}/{} at beat {beat:.3}: ITGmania {expected:.4}, DeadSync {actual:.4}",
@@ -1222,8 +1206,14 @@ fn compare_update_render_persistence(
                 trace.fixture_context.beat_step,
                 trace.trace_until_beat,
             ) {
-                let Some(actual) = compiled_update_visibility_at(compiled, overlay_index, beat)
-                else {
+                let (beat, expected) = native_render_probe(trace, definition, beat)
+                    .map_or((beat, expected), |(beat, _, visible)| (beat, visible));
+                let Some(SongLuaOverlayUpdateValue::Bool(actual)) = compiled_update_value_at(
+                    compiled,
+                    overlay_index,
+                    SongLuaOverlayUpdateTarget::Visible,
+                    beat,
+                ) else {
                     continue;
                 };
                 parity.check(expected == actual, || {
@@ -2406,7 +2396,9 @@ fn compiled_player_range(
             SongLuaEaseTarget::PlayerRotationZ => state.rot_z_deg,
             SongLuaEaseTarget::PlayerSkewX => state.skew_x,
             SongLuaEaseTarget::PlayerSkewY => state.skew_y,
-            SongLuaEaseTarget::PlayerZoom => state.zoom,
+            // Actor::GetZoom is the X scale; uniform writes also emit axis
+            // tracks in DeadSync's sampled player transform representation.
+            SongLuaEaseTarget::PlayerZoom => state.zoom_x,
             SongLuaEaseTarget::PlayerZoomX => state.zoom_x,
             SongLuaEaseTarget::PlayerZoomY => state.zoom_y,
             SongLuaEaseTarget::PlayerZoomZ => state.zoom_z,
@@ -2418,7 +2410,10 @@ fn compiled_player_range(
         .iter()
         .flat_map(|layer| &layer.eases)
         .filter(|ease| {
-            ease.target == *target && (ease.player.is_none() || ease.player == Some(player))
+            (ease.target == *target
+                || (*target == SongLuaEaseTarget::PlayerZoom
+                    && ease.target == SongLuaEaseTarget::PlayerZoomX))
+                && (ease.player.is_none() || ease.player == Some(player))
         })
     {
         for step in 0..=256 {
@@ -2479,6 +2474,34 @@ fn compare_player_operation_ranges(
         if (native_min - default).abs() <= EPSILON && (native_max - default).abs() <= EPSILON {
             continue;
         }
+        // Setter ranges do not include uniform zoom writes in the individual
+        // axes, and may contain destinations that never render. Prefer the
+        // captured current transforms when the oracle provides them.
+        let field = match target {
+            SongLuaEaseTarget::PlayerX => 1,
+            SongLuaEaseTarget::PlayerY => 2,
+            SongLuaEaseTarget::PlayerZ => 3,
+            SongLuaEaseTarget::PlayerRotationX => 4,
+            SongLuaEaseTarget::PlayerRotationZ => 5,
+            SongLuaEaseTarget::PlayerRotationY => 6,
+            SongLuaEaseTarget::PlayerZoom | SongLuaEaseTarget::PlayerZoomX => 7,
+            SongLuaEaseTarget::PlayerZoomY => 8,
+            SongLuaEaseTarget::PlayerZoomZ => 9,
+            SongLuaEaseTarget::PlayerSkewX => 10,
+            SongLuaEaseTarget::PlayerSkewY => 11,
+            _ => continue,
+        };
+        let (native_min, native_max) = trace
+            .player_render_tracks
+            .iter()
+            .find(|track| track.player == usize::from(player))
+            .into_iter()
+            .flat_map(|track| &track.transform_samples)
+            .filter_map(|sample| sample[field])
+            .filter(|value| value.is_finite())
+            .map(|value| (value, value))
+            .reduce(|(low, high), (value, _)| (low.min(value), high.max(value)))
+            .unwrap_or((native_min, native_max));
         let expected = (native_min, native_max);
         let compiled_range = compiled_player_range(compiled, player, &target, default);
         let axis_ranges = (target == SongLuaEaseTarget::PlayerZoom).then(|| {
