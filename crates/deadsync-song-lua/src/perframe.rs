@@ -2768,6 +2768,30 @@ pub fn compile_update_functions<Kind>(
         for (index, target, value) in overlay_sample_scratch.retargeted_states.drain(..) {
             set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
         }
+        // Endpoint-only tracks turn nonlinear tweens into straight lines.
+        // Bake their rendered values at the same load-time replay frames;
+        // later endpoint merges retain these samples, including interrupted fades.
+        for sample in &scheduled_overlay_samples {
+            if sample.overlay_index >= overlay_count
+                || seconds < sample.start_seconds
+                || seconds > sample.end_seconds
+                || matches!(sample.easing.as_deref(), None | Some("linear" | "instant"))
+            {
+                continue;
+            }
+            let value =
+                overlay_state_update_value(&replay_overlays[sample.overlay_index], sample.target);
+            push_captured_overlay_value(
+                &mut overlay_tracks,
+                &mut overlay_track_indices,
+                sample.overlay_index,
+                sample.target,
+                beat,
+                &current_overlays[sample.overlay_index],
+                next_beat,
+                &value,
+            );
+        }
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         let mut next_players = current_perframe_player_states(&player_tables)?;

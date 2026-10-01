@@ -4729,7 +4729,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
     )?;
     actor.set(
         "smooth",
-        make_actor_tween_method(lua, actor, Some("inOutQuad"))?,
+        make_actor_tween_method(lua, actor, Some("smooth"))?,
     )?;
     actor.set(
         "spring",

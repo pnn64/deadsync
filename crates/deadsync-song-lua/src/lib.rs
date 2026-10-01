@@ -2909,6 +2909,8 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
         "instant" => 1.0,
         "inQuad" => t * t,
         "outQuad" => (1.0 - t).mul_add(-(1.0 - t), 1.0),
+        // ITGmania's fallback smooth(t) uses scalar Bezier {0, 0, 1, 1}.
+        "smooth" => t * t * (3.0 - 2.0 * t),
         "inOutQuad" => {
             if t < 0.5 {
                 2.0 * t * t

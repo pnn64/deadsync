@@ -30,6 +30,158 @@ use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 use deadsync_song_lua::SongLuaOverlayStateDelta;
 
 #[test]
+#[cfg(feature = "test-support")]
+fn song_lua_background_fit_and_smooth_match_native_actors() {
+    crate::tests::init_paths();
+    let song_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/song-lua")
+        .canonicalize()
+        .unwrap();
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-actors/background-fit-smooth.json"
+    )))
+    .unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Background Fit");
+    context.screen_width = 854.0;
+    context.song_display_bpms = [60.0, 60.0];
+    context.music_length_seconds = 4.0;
+    let compiled = compile_song_lua(&song_dir.join("background-fit-smooth.lua"), &context).unwrap();
+    let index_for = |name| {
+        compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(name))
+            .unwrap()
+    };
+    let fit = index_for("Fit");
+    let cover = index_for("Cover");
+    let seconds = compiled
+        .messages
+        .iter()
+        .map(|message| Some(message.beat))
+        .collect::<Vec<_>>();
+    let events = deadsync_song_lua::gameplay::build_song_lua_overlay_message_events_with_seconds(
+        &compiled, &seconds,
+    );
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+    let tracks =
+        deadsync_song_lua::gameplay::build_song_lua_overlay_update_tracks(&compiled, &timing, 0.0);
+    let command_index = compiled.overlays[cover]
+        .message_commands
+        .iter()
+        .position(|command| command.message == "Fade")
+        .unwrap();
+    let fade_events = [SongLuaOverlayMessageRuntime {
+        event_second: 1.0 / 60.0,
+        command_index,
+    }];
+    let mut command_cache = SongLuaMessageStateCache::default();
+    let mut overlays = compiled.overlays.clone();
+    overlays.push(SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::UpdateTracks { tracks },
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    });
+    let ranges = vec![0..0; overlays.len()];
+    let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+    let mut caches = Vec::new();
+    let mut local = Vec::new();
+    let mut composed = Vec::new();
+    // Native scalar Bezier {0, 0, 1, 1}; 2.5s is still inside the fade.
+    for (sample, time, alpha) in [
+        (0, 0.0, 0.0),
+        (1, 91.0 / 60.0, 0.15625),
+        (2, 121.0 / 60.0, 0.5),
+        (3, 151.0 / 60.0, 0.84375),
+        (4, 3.5, 1.0),
+        (1, 91.0 / 60.0, 0.15625),
+    ] {
+        song_lua_overlay_state_sets_from_into::<SpriteSlot>(
+            time,
+            &overlays,
+            &events,
+            &[],
+            &ranges,
+            854.0,
+            480.0,
+            &mut order,
+            &mut caches,
+            &mut local,
+            &mut composed,
+        );
+        let expected = native["samples"][sample]["actors"][3]["current"]["diffuse"][0][3]
+            .as_f64()
+            .unwrap() as f32;
+        assert!((expected - alpha).abs() < 1e-6);
+        assert!(
+            (local[cover].diffuse[3] - expected).abs() < 1e-6,
+            "cached at {time}: {:?}",
+            local[cover]
+        );
+        let uncached = replay_song_lua_message_state(
+            time,
+            compiled.overlays[cover].initial_state,
+            &compiled.overlays[cover].message_commands,
+            Some(&fade_events),
+        );
+        let cached_command = song_lua_message_state_cached(
+            time,
+            compiled.overlays[cover].initial_state,
+            &compiled.overlays[cover].message_commands,
+            Some(&fade_events),
+            &mut command_cache,
+        );
+        assert!(
+            (cached_command.diffuse[3] - expected).abs() < 1e-6,
+            "cached command at {time}"
+        );
+        assert!(
+            (uncached.diffuse[3] - expected).abs() < 1e-6,
+            "uncached at {time}"
+        );
+    }
+    assert_eq!(local[cover].stretch_rect, Some([0.0, 0.0, 854.0, 480.0]));
+    use deadsync_song_lua::playback::actor_conformance as actor;
+    let state = composed[fit];
+    let [sx, sy] = deadsync_song_lua::overlay_state_axis_scale(state);
+    let matrix = actor::sprite_matrix(
+        [state.x, state.y, state.z],
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+        [0.0; 3],
+        [sx, sy, deadsync_song_lua::overlay_state_z_scale(state)],
+        [1.0; 3],
+        [64.0, 32.0],
+        [state.halign, state.valign],
+        [state.skew_x, state.skew_y],
+    );
+    let vertices = native["samples"][0]["actors"][2]["draws"][0]["vertices"]
+        .as_array()
+        .unwrap();
+    assert_eq!(vertices.len(), 4);
+    for point in [[-32.0, -16.0], [32.0, -16.0], [-32.0, 16.0], [32.0, 16.0]] {
+        let actual = actor::project_world(matrix, [point[0], point[1], 0.0, 1.0]);
+        assert!(
+            vertices.iter().any(|vertex| (0..2).all(|axis| (actual[axis]
+                - vertex["screen"][axis].as_f64().unwrap() as f32)
+                .abs()
+                < 1e-4)),
+            "actual {actual:?}"
+        );
+    }
+}
+
+#[test]
 fn song_lua_deferred_messages_render_each_broadcast_value() {
     crate::tests::init_paths();
     let song_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

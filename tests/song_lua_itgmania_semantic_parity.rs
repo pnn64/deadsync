@@ -716,6 +716,7 @@ struct NativeFinalRenderState {
     visible: bool,
     wrote_alpha: bool,
     wrote_visible: bool,
+    sampled: bool,
 }
 
 impl Default for NativeFinalRenderState {
@@ -725,6 +726,7 @@ impl Default for NativeFinalRenderState {
             visible: true,
             wrote_alpha: false,
             wrote_visible: false,
+            sampled: false,
         }
     }
 }
@@ -792,6 +794,7 @@ fn native_final_render_state(
             visible: snapshot.visible,
             wrote_alpha: snapshot.alpha.is_some(),
             wrote_visible: true,
+            sampled: true,
         };
     }
     let mut operations = trace
@@ -865,7 +868,8 @@ fn apply_compiled_delta(
     )
 }
 
-fn compiled_final_render_state(
+// Older fixtures contain setter destinations without a current-state snapshot.
+fn compiled_dest_render_state(
     compiled: &CompiledSongLua,
     overlay_index: usize,
 ) -> SongLuaOverlayState {
@@ -913,6 +917,7 @@ fn compiled_final_render_state(
 fn compare_final_render_states(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
     parity: &mut Parity,
 ) {
     parity.section("final render");
@@ -939,9 +944,16 @@ fn compare_final_render_states(
         if native.len() != deadsync.len() {
             continue;
         }
+        let seconds = trace.end_position.seconds;
+        let beat = song_beat_at_elapsed_seconds(seconds, context);
+        let final_states = compiled_local_states_at(compiled, context, beat, seconds);
         for (definition, overlay_index) in native.into_iter().zip(deadsync) {
             let expected = native_final_render_state(trace, definition);
-            let actual = compiled_final_render_state(compiled, overlay_index);
+            let actual = if expected.sampled {
+                final_states[overlay_index]
+            } else {
+                compiled_dest_render_state(compiled, overlay_index)
+            };
             if expected.wrote_alpha {
                 parity.check((expected.alpha - actual.diffuse[3]).abs() <= EPSILON, || {
                     format!(
@@ -960,6 +972,56 @@ fn compare_final_render_states(
             }
         }
     }
+}
+
+#[test]
+fn final_render_samples_unfinished_native_fade() {
+    crate::paths::init();
+    let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Background Fit");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    let compiled = deadsync_assets::song_lua::compile_song_lua(
+        &song_dir.join("background-fit-smooth.lua"),
+        &context,
+    )
+    .unwrap();
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/itgmania-actors/background-fit-smooth.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let alpha = native["samples"][3]["actors"][3]["current"]["diffuse"][0][3]
+        .as_f64()
+        .unwrap();
+    assert!((alpha - 0.84375).abs() < 1e-6);
+    let trace: NativeTrace = serde_json::from_value(serde_json::json!({
+        "oracle": "itgmania_song_lua_headless_semantic_trace", "title": "Background Fit",
+        "style": "single", "simfile": "background-fit-smooth.lua", "roots": ["root"],
+        "actor_definitions": [
+            {"id": "root", "class": "ActorFrame", "children": [
+                {"layer_index": 0, "definition_id": "fit"},
+                {"layer_index": 1, "definition_id": "cover"}
+            ]},
+            {"id": "fit", "class": "Sprite", "name": "Fit"},
+            {"id": "cover", "class": "Quad", "name": "Cover"}
+        ],
+        "runtime_actors": [
+            {"id": "fit", "path": "Fit", "final_render_state": {"alpha": 1, "visible": true}},
+            {"id": "cover", "path": "Cover", "final_render_state": {"alpha": alpha, "visible": true}}
+        ],
+        "timeline_tracks": [], "tween_tracks": [],
+        "end_position": {"seconds": 151.0 / 60.0}, "trace_until_beat": 151.0 / 60.0,
+        "fixture_context": {"beat_step": 0.25},
+        "display": {"width": 854, "height": 480, "logical_width": 854, "logical_height": 480}
+    })).unwrap();
+    let mut parity = Parity::default();
+    compare_final_render_states(&trace, &[compiled], &context, &mut parity);
+    assert_eq!(parity.checks(), 4);
+    parity.assert_complete("unfinished native fade");
 }
 
 fn compare_player_proxy_sources(
@@ -1835,7 +1897,7 @@ fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> Exp
         Some("linear") => Some("linear"),
         Some("accelerate") => Some("inQuad"),
         Some("decelerate") => Some("outQuad"),
-        Some("smooth") => Some("inOutQuad"),
+        Some("smooth") => Some("smooth"),
         Some("spring") => Some("spring"),
         Some("bouncebegin") => Some("inBounce"),
         Some("bounceend") => Some("outBounce"),
@@ -3397,7 +3459,7 @@ fn compare_semantics(
     let mut parity = Parity::default();
     compare_compile_info(compiled, &mut parity);
     compare_layers(trace, compiled, &mut parity);
-    compare_final_render_states(trace, compiled, &mut parity);
+    compare_final_render_states(trace, compiled, context, &mut parity);
     compare_player_proxy_sources(trace, compiled, &mut parity);
     compare_update_render_persistence(trace, compiled, &mut parity);
     compare_update_render_values(trace, compiled, context, &mut parity);
