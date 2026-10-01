@@ -1,4 +1,6 @@
-use image::{Rgba, RgbaImage};
+#[cfg(test)]
+use image::Rgba;
+use image::RgbaImage;
 use smallvec::SmallVec;
 use std::{hash::Hasher, sync::LazyLock};
 use twox_hash::XxHash64;
@@ -165,35 +167,44 @@ pub fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
         "mine gradient requires at least one color"
     );
     let frame_count = colors.len();
-    let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
-    let mut image = RgbaImage::new(frame_size * frame_count as u32, frame_size);
+    let frame_size = MINE_GRADIENT_FRAME_SIZE as usize;
+    let mut image = RgbaImage::new(
+        MINE_GRADIENT_FRAME_SIZE * frame_count as u32,
+        MINE_GRADIENT_FRAME_SIZE,
+    );
+    let stride = image.width() as usize * 4;
+    let pixels: &mut [u8] = image.as_mut();
     let colors = mine_gradient_colors(colors);
     let profile = &*MINE_GRADIENT_PROFILE;
     for frame in 0..frame_count {
-        let x_offset = frame as u32 * frame_size;
-        // Rotation depends on frame and radial layer, not the individual pixel.
+        let x_offset = frame * frame_size * 4;
         let layer_colors: [MineGradientColor; MINE_FILL_LAYERS] = std::array::from_fn(|layer| {
             colors[(frame + colors.len() - (layer % colors.len())) % colors.len()]
         });
-        for y in 0..frame_size {
-            for x in 0..frame_size {
-                let profile_index = y as usize * frame_size as usize + x as usize;
-                let layer = profile.layers[profile_index];
+        // The fixed 64px radial profile is exactly symmetric on both axes.
+        // Compute one quadrant, mirror bytes, then copy both complete rows.
+        for y in 0..frame_size / 2 {
+            let mut row = [0u8; MINE_GRADIENT_FRAME_SIZE as usize * 4];
+            for x in 0..frame_size / 2 {
+                let index = y * frame_size + x;
+                let layer = profile.layers[index];
                 if layer == MINE_GRADIENT_OUTSIDE_LAYER {
                     continue;
                 }
-                image.put_pixel(
-                    x_offset + x,
-                    y,
-                    Rgba(mine_gradient_pixel(
-                        layer_colors[usize::from(layer)],
-                        profile.edge_alpha[profile_index],
-                    )),
+                let pixel = mine_gradient_pixel(
+                    layer_colors[usize::from(layer)],
+                    profile.edge_alpha[index],
                 );
+                row[x * 4..x * 4 + 4].copy_from_slice(&pixel);
+                let mirrored = (frame_size - 1 - x) * 4;
+                row[mirrored..mirrored + 4].copy_from_slice(&pixel);
+            }
+            for target_y in [y, frame_size - 1 - y] {
+                let start = target_y * stride + x_offset;
+                pixels[start..start + row.len()].copy_from_slice(&row);
             }
         }
     }
-
     image
 }
 
@@ -395,6 +406,14 @@ mod tests {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/gradient_preparation/cases.rs"
+        ));
+    }
+
+    mod gradient_symmetry {
+        use super::*;
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/gradient_symmetry/cases.rs"
         ));
     }
 

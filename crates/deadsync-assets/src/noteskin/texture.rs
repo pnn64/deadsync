@@ -48,6 +48,10 @@ mod sequential_animation;
 #[path = "../../tests/model_atlas_preparation/mod.rs"]
 mod model_atlas_preparation;
 
+#[cfg(test)]
+#[path = "../../tests/texture_bulk/mod.rs"]
+mod texture_bulk;
+
 #[derive(Debug)]
 pub enum SpriteSource {
     Atlas {
@@ -803,6 +807,18 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
     slot.uv_cycle_seconds = plan.uv_cycle_seconds;
 }
 
+// The atlas builder has already resized the frame and validated tile bounds.
+fn copy_model_atlas_frame(atlas: &mut image::RgbaImage, frame: &image::RgbaImage, x: u32, y: u32) {
+    let atlas_stride = atlas.width() as usize * 4;
+    let frame_stride = frame.width() as usize * 4;
+    let offset = y as usize * atlas_stride + x as usize * 4;
+    let pixels: &mut [u8] = atlas.as_mut();
+    for (row, source) in frame.as_raw().chunks_exact(frame_stride).enumerate() {
+        let start = offset + row * atlas_stride;
+        pixels[start..start + frame_stride].copy_from_slice(source);
+    }
+}
+
 // Built on the asset worker, retained by the existing generated-texture registry,
 // and uploaded with the skin before gameplay. Drawing only selects cached UVs.
 // Bound each atlas to 64 MiB / 8192px; no runtime decoding or cache maintenance.
@@ -840,11 +856,11 @@ fn model_animation_atlas(
             previous = Some((&frame.path, image));
         }
         let image = &previous.as_ref().expect("a frame image was decoded").1;
-        image::imageops::replace(
+        copy_model_atlas_frame(
             &mut atlas,
             image,
-            i64::from(index as u32 % columns * width),
-            i64::from(index as u32 / columns * height),
+            index as u32 % columns * width,
+            index as u32 / columns * height,
         );
     }
     Ok(atlas)
@@ -919,23 +935,29 @@ fn texture_texel_scale(tex_dims: (u32, u32)) -> [f32; 2] {
     ]
 }
 
+fn atlas_source(
+    texture_key: Arc<str>,
+    tex_dims: (u32, u32),
+    def: &SpriteDefinition,
+) -> SpriteSource {
+    let texel_scale = texture_texel_scale(tex_dims);
+    SpriteSource::Atlas {
+        texture_key,
+        tex_dims,
+        texel_scale,
+        uv_cache: SpriteAtlasUvCache::new(texel_scale, def),
+        cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
+        cached_actor_texture: AtomicU64::new(0),
+    }
+}
+
 fn source_from_plan(plan: SpriteSourcePlan, def: &SpriteDefinition) -> Arc<SpriteSource> {
     match plan {
         SpriteSourcePlan::Atlas {
             texture_key,
             tex_dims,
-        } => {
-            let texel_scale = texture_texel_scale(tex_dims);
-            Arc::new(SpriteSource::Atlas {
-                texture_key: texture_key.into(),
-                tex_dims,
-                texel_scale,
-                uv_cache: SpriteAtlasUvCache::new(texel_scale, def),
-                cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
-                cached_generation: AtomicU64::new(u64::MAX),
-                cached_actor_texture: AtomicU64::new(0),
-            })
-        }
+        } => Arc::new(atlas_source(texture_key.into(), tex_dims, def)),
         SpriteSourcePlan::Animated {
             texture_key,
             tex_dims,
@@ -1396,13 +1418,14 @@ fn freeze_sprite_animation(slot: &mut SpriteSlot) {
     ];
     slot.animation_start_frame = 0;
     slot.animation_start_time = 0.0;
-    slot.source = source_from_plan(
-        SpriteSourcePlan::Atlas {
-            texture_key: texture_key.to_string(),
-            tex_dims: *tex_dims,
-        },
-        &slot.def,
-    );
+    let source = atlas_source(Arc::clone(texture_key), *tex_dims, &slot.def);
+    // Freshly loaded sprites usually own their source. Keep its allocation;
+    // shared sources need a new value so other sprites retain their animation.
+    if let Some(current) = Arc::get_mut(&mut slot.source) {
+        *current = source;
+    } else {
+        slot.source = Arc::new(source);
+    }
 }
 
 #[cfg(test)]
