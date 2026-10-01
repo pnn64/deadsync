@@ -115,7 +115,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     push("tilt".into(), if key == "hallway" { -value } else { value });
                     push("skew".into(), 0.0);
                 }
-                "stealthpastreceptors" | "cosecant" | "dizzyholds" => {
+                "stealthtype" | "stealthpastreceptors" | "cosecant" | "dizzyholds" => {
                     push(key, f32::from(value > 0.5))
                 }
                 _ => push(key, value),
@@ -181,7 +181,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     args.first().map(|_| 1.0)
                 } else if matches!(
                     operation,
-                    "StealthPastReceptors" | "Cosecant" | "DizzyHolds"
+                    "StealthType" | "StealthPastReceptors" | "Cosecant" | "DizzyHolds"
                 ) {
                     // BOOL_INTERFACE treats a non-boolean first argument as a
                     // query. A chaining argument does not turn it into a write.
@@ -319,6 +319,7 @@ fn runtime_mod_value(
         "hidden" => appearance.hidden,
         "hiddenoffset" => appearance.hidden_offset,
         "stealth" => appearance.stealth,
+        "stealthtype" => f32::from(appearance.stealth_type),
         "stealthpastreceptors" => f32::from(appearance.stealth_past_receptors),
         "sudden" => appearance.sudden,
         "suddenoffset" => appearance.sudden_offset,
@@ -1172,40 +1173,140 @@ end}
 }
 
 #[test]
+fn stealth_type_survives_lua_boolean_methods_strings_and_fresh_options() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create StealthType fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local player = GAMESTATE:GetPlayerState(PLAYER_1)
+local options = player:GetPlayerOptions('ModsLevel_Song')
+local other = GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    assert(options:StealthType() == false and select('#', options:StealthType()) == 1)
+    assert(options:StealthType(true) == false and options:StealthType() == true)
+    for _, invalid in ipairs({0, 1, 'false', 'true'}) do
+        assert(options:StealthType(invalid) == true and options:StealthType() == true)
+    end
+    assert(options:StealthType(nil, false) == options)
+    assert(options:StealthType(false, 0, true) == true and options:StealthType() == false)
+    assert(options:StealthType(true, true) == options)
+    other:FromString('*0 51% stealthtype')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            assert(options:StealthType(false, false) == options)
+            phase = 2
+        elseif phase == 2 and beat >= 1.5 then
+            options:FromString('*0 50% stealthtype')
+            assert(options:StealthType() == false)
+            options:FromString('*0 51% stealthtype')
+            assert(options:StealthType() == true)
+            phase = 3
+        elseif phase == 3 and beat >= 2 then
+            player:SetPlayerOptions('ModsLevel_Song', '')
+            assert(options:StealthType() == false)
+            phase = 4
+        elseif phase == 4 and beat >= 2.5 then
+            options:StealthType(true)
+            phase = 5
+        elseif phase == 5 and beat >= 3 then
+            options:FromString('clearall')
+            assert(options:StealthType() == false)
+            phase = 6
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write StealthType fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "StealthType");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile StealthType fixture");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.25, 1.0),
+        (f32::from_bits(0.5f32.to_bits() - 1), 1.0),
+        (0.5, 0.0),
+        (0.75, 1.0),
+        (1.0, 0.0),
+        (1.25, 1.0),
+        (1.5, 0.0),
+        (1.75, 0.0),
+    ] {
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                second,
+                0.0,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+        }
+        assert_eq!(
+            runtime_mod_value(&runtime, 0, "stealthtype"),
+            Some(expected),
+            "{second}"
+        );
+        assert_eq!(
+            runtime_mod_value(&runtime, 1, "stealthtype"),
+            Some(1.0),
+            "independent P2 at {second}"
+        );
+    }
+}
+
+#[test]
 fn boolean_option_queries_are_not_modifier_targets() {
     let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
-    trace.timeline_tracks = ["DizzyHolds", "Cosecant", "StealthPastReceptors"]
+    trace.timeline_tracks = [
+        "DizzyHolds",
+        "Cosecant",
+        "StealthPastReceptors",
+        "StealthType",
+    ]
+    .into_iter()
+    .map(|name| NativeTimelineTrack {
+        kind: "modifier".into(),
+        actor: Some("player-state:PLAYER_1/options:ModsLevel_Song".into()),
+        operation: format!("PlayerOptions.{name}"),
+        samples: [
+            serde_json::json!([true]),
+            serde_json::json!([false, false]),
+            serde_json::json!([0]),
+            serde_json::json!([1]),
+            serde_json::json!(["true"]),
+            serde_json::json!([null, false]),
+        ]
         .into_iter()
-        .map(|name| NativeTimelineTrack {
-            kind: "modifier".into(),
-            actor: Some("player-state:PLAYER_1/options:ModsLevel_Song".into()),
-            operation: format!("PlayerOptions.{name}"),
-            samples: [
-                serde_json::json!([true]),
-                serde_json::json!([false, false]),
-                serde_json::json!([0]),
-                serde_json::json!([1]),
-                serde_json::json!(["true"]),
-                serde_json::json!([null, false]),
-            ]
-            .into_iter()
-            .enumerate()
-            .map(|(seq, args)| {
-                (
-                    seq as u64 + 1,
-                    Some(0.0),
-                    Some(0.0),
-                    args.as_array().expect("args").clone(),
-                    None,
-                )
-            })
-            .collect(),
+        .enumerate()
+        .map(|(seq, args)| {
+            (
+                seq as u64 + 1,
+                Some(0.0),
+                Some(0.0),
+                args.as_array().expect("args").clone(),
+                None,
+            )
         })
-        .collect();
+        .collect(),
+    })
+    .collect();
     let (writes, unsupported) = option_writes(&trace);
     assert!(unsupported.is_empty());
-    assert_eq!(writes.len(), 6);
-    for key in ["dizzyholds", "cosecant", "stealthpastreceptors"] {
+    assert_eq!(writes.len(), 8);
+    for key in [
+        "dizzyholds",
+        "cosecant",
+        "stealthpastreceptors",
+        "stealthtype",
+    ] {
         let values = writes
             .iter()
             .filter(|write| write.key == key)

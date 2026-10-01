@@ -336,7 +336,8 @@ fn compose_field_contents<S, F>(
     };
     let alpha_glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> (f32, f32) {
         appearance_note_alpha_glow_cached(
-            adjusted + lane_offsets[local_col],
+            adjusted + lane_tipsy_offsets[local_col],
+            adjusted,
             &appearance_caches[local_col],
         )
     };
@@ -686,7 +687,7 @@ fn compose_field_contents<S, F>(
                 target_arrow_px: hold_target_arrow_px,
                 diffuse: hold_diffuse,
                 elapsed_s: elapsed_screen,
-                lane_offset,
+                lane_offset: lane_tipsy_offsets[local_col],
                 appearance: alpha_params[local_col],
                 appearance_cache: appearance_caches[local_col],
                 use_legacy_sprites: use_legacy_hold_sprites,
@@ -940,6 +941,7 @@ fn compose_field_contents<S, F>(
         &visible_note_bounds[..num_cols],
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
+        &lane_tipsy_offsets[..num_cols],
         note_x_params,
         note_x_is_static,
         &static_note_x_offsets[..num_cols],
@@ -975,6 +977,7 @@ fn compose_visible_notes<S, F>(
     visible_note_bounds: &[(usize, usize)],
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
+    lane_tipsy_offsets: &[f32],
     note_x_params: NoteXParams,
     note_x_is_static: bool,
     static_note_x_offsets: &[f32],
@@ -1055,7 +1058,8 @@ fn compose_visible_notes<S, F>(
                     return;
                 }
                 let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(
-                    adjusted_travel + lane_offset,
+                    adjusted_travel + lane_tipsy_offsets[local_col],
+                    adjusted_travel,
                     &appearance_caches[local_col],
                 );
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
@@ -1514,6 +1518,7 @@ const fn note_alpha_params(appearance: &AppearanceEffects, local_col: usize) -> 
         sudden_offset: appearance.sudden_offset,
         stealth: appearance.stealth,
         stealth_col: appearance.stealth_cols[local_col],
+        stealth_type: appearance.stealth_type,
         stealth_past_receptors: appearance.stealth_past_receptors,
         blink: appearance.blink,
         random_vanish: appearance.random_vanish,

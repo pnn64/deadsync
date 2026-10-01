@@ -85,6 +85,7 @@ fn option_metadata_matches_parent_for_unchanged_options() {
                     | "TanDrunkZOffset"
                     | "TanDrunkZSpeed"
                     | "TanDrunkZPeriod"
+                    | "StealthType"
                     | "DizzyHolds"
                     | "Cosecant"
             )

@@ -2916,6 +2916,99 @@ mod tests {
     }
 
     #[test]
+    fn stealth_type_selects_fade_travel_in_composed_notes_and_holds() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("note"))
+            .collect();
+        ns.mines = (0..2).map(|_| Some(TestSlot::new("note"))).collect();
+        ns.mine_layers = (0..2).map(|_| vec![TestSlot::new("note")].into()).collect();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        for (placement, player) in [(FieldPlacement::P1, 0), (FieldPlacement::P2, 1)] {
+            let mut lanes = vec![vec![]; 4];
+            lanes[player * 2]
+                .push(deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index"));
+            for kind in [
+                NoteType::Tap,
+                NoteType::Mine,
+                NoteType::Hold,
+                NoteType::Roll,
+            ] {
+                let mut n = note(player * 2);
+                n.note_type = kind;
+                n.beat = 1.5;
+                n.row_index = 72;
+                if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                    n.hold = Some(HoldData {
+                        end_row_index: 96,
+                        end_beat: 2.0,
+                        result: None,
+                        life: 1.0,
+                        let_go_started_at: None,
+                        let_go_starting_life: 1.0,
+                        last_held_row_index: 72,
+                        last_held_beat: 1.5,
+                    });
+                }
+                let notes = [n];
+                for direction in [-1.0, 1.0] {
+                    for sudden in [false, true] {
+                        for stealth_type in [false, true] {
+                            for move_y in [-2.0, 3.0] {
+                                let mut request = request(
+                                    &ns, &timing, &notes, &hides, placement, player, 2, 2, 4,
+                                );
+                                request.chart.lane_note_row_indices = &lanes;
+                                request.chart.lane_hold_indices = &lanes;
+                                request.chart.note_itg_rows = &[72];
+                                request.geometry.column_dirs.fill(direction);
+                                request.visual.visual.move_y_cols.fill(move_y);
+                                request.visual.visual.tipsy = 8.0;
+                                request.visual.appearance.hidden = f32::from(!sudden);
+                                request.visual.appearance.sudden = f32::from(sudden);
+                                request.visual.appearance.stealth_type = stealth_type;
+                                let prepared = prepare_notefield(&request).expect("prepare field");
+                                let frame = NotefieldFieldFrameView {
+                                    feedback: spline_feedback(&[]),
+                                    completed_rows: Default::default(),
+                                };
+                                let mut draws = Vec::new();
+                                compose_notefield_field(
+                                    &mut Vec::new(),
+                                    &mut draws,
+                                    &mut Vec::new(),
+                                    &mut ModelMeshCache::default(),
+                                    &mut HoldMeshScratch::with_columns(2),
+                                    &mut CapturedActorScratch::with_capacities(32, 0),
+                                    &mut NotefieldCameraCache::default(),
+                                    &request,
+                                    &prepared,
+                                    &frame,
+                                    &source,
+                                );
+                                let visible = sudden == stealth_type;
+                                let keys = sprite_keys(&draws);
+                                assert_eq!(
+                                    keys.contains(&"note"),
+                                    visible,
+                                    "{placement:?}, {kind:?}, dir={direction}, sudden={sudden}, type={stealth_type}: {keys:?}"
+                                );
+                                assert!(keys.contains(&"target0"), "receptor stays visible");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn lane_stealth_hides_only_its_notes_in_composed_field() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,

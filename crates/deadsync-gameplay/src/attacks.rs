@@ -625,6 +625,7 @@ pub enum SongLuaEaseMaskTarget {
     AppearanceSuddenOffset,
     AppearanceStealth,
     AppearanceStealthColumn(usize),
+    AppearanceStealthType,
     AppearanceStealthPastReceptors,
     AppearanceBlink,
     AppearanceRandomVanish,
@@ -1888,6 +1889,11 @@ fn append_song_lua_ease_targets_key(
             pct_to,
         ),
         "stealth" => push(SongLuaEaseMaskTarget::AppearanceStealth, pct_from, pct_to),
+        "stealthtype" => push(
+            SongLuaEaseMaskTarget::AppearanceStealthType,
+            pct_from,
+            pct_to,
+        ),
         "stealthpastreceptors" => push(
             SongLuaEaseMaskTarget::AppearanceStealthPastReceptors,
             pct_from,
@@ -2496,6 +2502,7 @@ pub fn song_lua_apply_eased_target(
                 *amount = value;
             }
         }
+        SongLuaEaseMaskTarget::AppearanceStealthType => appearance.stealth_type = value > 0.5,
         SongLuaEaseMaskTarget::AppearanceStealthPastReceptors => {
             appearance.stealth_past_receptors = value > 0.5
         }
@@ -2743,6 +2750,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
             .stealth_cols
             .get(col)
             .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::AppearanceStealthType => window.appearance.stealth_type.is_some(),
         SongLuaEaseMaskTarget::AppearanceStealthPastReceptors => {
             window.appearance.stealth_past_receptors.is_some()
         }
@@ -5001,6 +5009,7 @@ fn appearance_bits_eq(left: AppearanceEffects, right: AppearanceEffects) -> bool
         && left.stealth.to_bits() == right.stealth.to_bits()
         && left.blink.to_bits() == right.blink.to_bits()
         && left.random_vanish.to_bits() == right.random_vanish.to_bits()
+        && left.stealth_type == right.stealth_type
         && left.stealth_past_receptors == right.stealth_past_receptors
         && left
             .stealth_cols
@@ -6607,6 +6616,9 @@ fn apply_runtime_mod(
                 out.mini_percent = Some(mini);
                 out.mini_speed = Some(approach_speed.max(0.0));
             }
+        }
+        "stealthtype" => {
+            out.appearance.stealth_type = attack_level(percent_value).map(|level| level > 0.5);
         }
         "stealthpastreceptors" => {
             out.appearance.stealth_past_receptors =

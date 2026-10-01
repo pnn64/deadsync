@@ -2580,6 +2580,7 @@ mod tests {
             sudden_offset: 0.15,
             stealth: 0.1,
             stealth_cols: [0.2; MAX_COLS],
+            stealth_type: true,
             stealth_past_receptors: true,
             blink: 0.05,
             random_vanish: 0.4,
@@ -3380,6 +3381,36 @@ mod tests {
         assert_near(merged.tipsy_speed, -0.5);
         approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 1.0);
         assert!(!current.any());
+    }
+
+    #[test]
+    fn stealth_type_uses_boolean_threshold_and_immediate_copy() {
+        for (text, expected) in [
+            ("*0 stealthtype", true),
+            ("*0 50% stealthtype", false),
+            ("*0 51% stealthtype", true),
+            ("no stealthtype", false),
+        ] {
+            let mods = parse_attack_mods(text);
+            assert_eq!(mods.appearance.stealth_type, Some(expected));
+            assert!(mods.appearance.any());
+            let mut target = AppearanceEffects::default();
+            let mut speed = AppearanceEffects::approach_speeds();
+            apply_appearance_target(
+                &mut target,
+                &mut speed,
+                mods.appearance,
+                mods.appearance_speed,
+            );
+            let mut current = AppearanceEffects {
+                stealth_type: !expected,
+                ..Default::default()
+            };
+            approach_appearance_effects(&mut current, target, speed, 0.0);
+            assert_eq!(current.stealth_type, expected, "{text}");
+            approach_appearance_effects(&mut current, AppearanceEffects::default(), speed, 0.0);
+            assert!(!current.stealth_type, "return to base is immediate");
+        }
     }
 
     #[test]

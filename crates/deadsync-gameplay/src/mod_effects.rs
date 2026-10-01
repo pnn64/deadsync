@@ -412,6 +412,7 @@ pub struct AppearanceOverrides {
     pub sudden_offset: Option<f32>,
     pub stealth: Option<f32>,
     pub stealth_cols: [Option<f32>; MAX_COLS],
+    pub stealth_type: Option<bool>,
     pub stealth_past_receptors: Option<bool>,
     pub blink: Option<f32>,
     pub random_vanish: Option<f32>,
@@ -427,6 +428,7 @@ impl AppearanceOverrides {
             || self.sudden_offset.is_some()
             || self.stealth.is_some()
             || self.stealth_cols.iter().any(Option::is_some)
+            || self.stealth_type.is_some()
             || self.stealth_past_receptors.is_some()
             || self.blink.is_some()
             || self.random_vanish.is_some()
@@ -1363,6 +1365,7 @@ pub struct AppearanceEffects {
     pub sudden_offset: f32,
     pub stealth: f32,
     pub stealth_cols: [f32; MAX_COLS],
+    pub stealth_type: bool,
     pub stealth_past_receptors: bool,
     pub blink: f32,
     pub random_vanish: f32,
@@ -1381,6 +1384,7 @@ impl AppearanceEffects {
             sudden_offset: 0.0,
             stealth: f32::from((mask & APPEARANCE_MASK_BIT_STEALTH) != 0),
             stealth_cols: [0.0; MAX_COLS],
+            stealth_type: false,
             stealth_past_receptors: false,
             blink: f32::from((mask & APPEARANCE_MASK_BIT_BLINK) != 0),
             random_vanish: f32::from((mask & APPEARANCE_MASK_BIT_RANDOM_VANISH) != 0),
@@ -1397,6 +1401,7 @@ impl AppearanceEffects {
             sudden_offset: 1.0,
             stealth: 1.0,
             stealth_cols: [1.0; MAX_COLS],
+            stealth_type: false,
             stealth_past_receptors: false,
             blink: 1.0,
             random_vanish: 1.0,
@@ -1436,6 +1441,9 @@ pub fn apply_appearance_target(
             target.stealth_cols[col] = value;
             speed.stealth_cols[col] = override_speeds.stealth_cols[col].unwrap_or(1.0).max(0.0);
         }
+    }
+    if let Some(value) = overrides.stealth_type {
+        target.stealth_type = value;
     }
     if let Some(value) = overrides.stealth_past_receptors {
         target.stealth_past_receptors = value;
@@ -1491,6 +1499,7 @@ pub fn approach_appearance_effects(
         );
     }
     // PlayerOptions::Approach copies boolean options immediately.
+    current.stealth_type = target.stealth_type;
     current.stealth_past_receptors = target.stealth_past_receptors;
     approach_f32(&mut current.blink, target.blink, delta_time * speed.blink);
     approach_f32(

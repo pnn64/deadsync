@@ -26,6 +26,7 @@ pub(crate) struct NoteAlphaParams {
     pub sudden_offset: f32,
     pub stealth: f32,
     pub stealth_col: f32,
+    pub stealth_type: bool,
     pub stealth_past_receptors: bool,
     pub blink: f32,
     pub random_vanish: f32,
@@ -113,6 +114,7 @@ pub(crate) struct NoteAppearanceCache {
     stealth_active: bool,
     stealth: f32,
     stealth_col: f32,
+    stealth_type: bool,
     stealth_past_receptors: bool,
     blink_adjust: f32,
     random_vanish_active: bool,
@@ -1478,6 +1480,7 @@ pub(crate) fn note_appearance_cache(
             stealth_active: false,
             stealth: 0.0,
             stealth_col: 0.0,
+            stealth_type: params.stealth_type,
             stealth_past_receptors: params.stealth_past_receptors,
             blink_adjust: 0.0,
             random_vanish_active: false,
@@ -1639,6 +1642,7 @@ pub(crate) fn note_appearance_cache(
         stealth_active,
         stealth: params.stealth,
         stealth_col: params.stealth_col,
+        stealth_type: params.stealth_type,
         stealth_past_receptors: params.stealth_past_receptors,
         blink_adjust,
         random_vanish_active,
@@ -1651,8 +1655,12 @@ pub(crate) fn note_appearance_cache(
 }
 
 #[inline(always)]
-pub(crate) fn appearance_note_alpha_glow_cached(y: f32, cache: &NoteAppearanceCache) -> (f32, f32) {
-    let percent_visible = appearance_note_alpha_cached(y, cache);
+pub(crate) fn appearance_note_alpha_glow_cached(
+    y: f32,
+    y_offset: f32,
+    cache: &NoteAppearanceCache,
+) -> (f32, f32) {
+    let percent_visible = appearance_note_alpha_cached(y, y_offset, cache);
     (
         appearance_note_actor_alpha_from_alpha(percent_visible),
         appearance_note_glow_from_alpha(percent_visible),
@@ -1712,7 +1720,19 @@ fn sudden_fade_scaled_finite(y: f32, cache: &NoteAppearanceCache) -> f32 {
 }
 
 #[inline(always)]
-pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) -> f32 {
+pub(crate) fn appearance_note_alpha_cached(
+    y_without_reverse: f32,
+    y_offset: f32,
+    cache: &NoteAppearanceCache,
+) -> f32 {
+    // Native StealthType excludes Tipsy from fade and receptor tests.
+    // RandomVanish continues to use the position including Tipsy.
+    // MoveY affects placement only and is excluded from both coordinates.
+    let y = if cache.stealth_type {
+        y_offset
+    } else {
+        y_without_reverse
+    };
     if cache.identity || (y < 0.0 && !cache.stealth_past_receptors) {
         return 1.0;
     }
@@ -1907,11 +1927,15 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         }
         AppearancePath::General => {}
     }
-    appearance_note_alpha_general(y, cache)
+    appearance_note_alpha_general(y, y_without_reverse, cache)
 }
 
 #[inline(always)]
-fn appearance_note_alpha_general(y: f32, cache: &NoteAppearanceCache) -> f32 {
+fn appearance_note_alpha_general(
+    y: f32,
+    y_without_reverse: f32,
+    cache: &NoteAppearanceCache,
+) -> f32 {
     let mut visible_adjust = 0.0;
     if cache.hidden_active {
         let scaled = if cache.hidden_degenerate {
@@ -1939,7 +1963,7 @@ fn appearance_note_alpha_general(y: f32, cache: &NoteAppearanceCache) -> f32 {
     }
     visible_adjust += cache.blink_adjust;
     if cache.random_vanish_active {
-        let dist = (y - cache.center_line).abs();
+        let dist = (y_without_reverse - cache.center_line).abs();
         visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * cache.random_vanish;
     }
     (1.0 + visible_adjust).clamp(0.0, 1.0)

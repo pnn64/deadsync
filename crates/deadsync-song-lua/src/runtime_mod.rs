@@ -973,6 +973,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "sudden"
         | "suddenoffset"
         | "stealth"
+        | "stealthtype"
         | "stealthpastreceptors"
         | "blink"
         | "rvanish"

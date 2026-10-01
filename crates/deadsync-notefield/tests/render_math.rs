@@ -99,10 +99,10 @@ fn compare_appearance(elapsed: f32, mini: f32, mut values: [f32; 7], queries: &[
             assert_float(a, b);
         }
         assert_float(
-            appearance::appearance_note_alpha_cached(y, &new),
+            appearance::appearance_note_alpha_cached(y, y, &new),
             old_appearance::appearance_note_alpha_cached(y, &old),
         );
-        let (a, b) = appearance::appearance_note_alpha_glow_cached(y, &new);
+        let (a, b) = appearance::appearance_note_alpha_glow_cached(y, y, &new);
         let (c, d) = old_appearance::appearance_note_alpha_glow_cached(y, &old);
         assert_float(a, c);
         assert_float(b, d);
@@ -362,6 +362,7 @@ fn rendering_lookups_remain_allocation_free() {
         for i in 0..1024 {
             black_box(appearance::appearance_note_alpha_glow_cached(
                 i as f32 / 4.0,
+                i as f32 / 4.0,
                 &cache,
             ));
             black_box(font::measure_line_width_logical(
@@ -485,7 +486,11 @@ fn benchmark_render_math() {
                     } else {
                         let new = black_box(&new);
                         for &y in black_box(&ys) {
-                            black_box(appearance::appearance_note_alpha_cached(black_box(y), new));
+                            black_box(appearance::appearance_note_alpha_cached(
+                                black_box(y),
+                                black_box(y),
+                                new,
+                            ));
                         }
                     }
                 },

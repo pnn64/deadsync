@@ -1226,7 +1226,12 @@ fn push_update_mod_targets_with_key<S: ModState>(
             let speed = speeds[player].get(key).copied();
             // These switches have no native approach speed, but initial values and
             // later writes are still step targets, never interpolated samples.
-            if speed.is_some() || matches!(key, "cosecant" | "dizzyholds" | "modtimersetting") {
+            if speed.is_some()
+                || matches!(
+                    key,
+                    "cosecant" | "dizzyholds" | "stealthtype" | "modtimersetting"
+                )
+            {
                 if !from.is_finite() || speed.is_some_and(|speed| !speed.is_finite()) {
                     continue;
                 }

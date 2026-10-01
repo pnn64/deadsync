@@ -112,6 +112,7 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub target_arrow_px: f32,
     pub diffuse: [f32; 4],
     pub elapsed_s: f32,
+    /// Tipsy offset used by appearance; MoveY changes only geometry.
     pub lane_offset: f32,
     pub appearance: NoteAlphaParams,
     pub appearance_cache: NoteAppearanceCache,
@@ -474,6 +475,7 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
 fn hold_alpha_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> (f32, f32) {
     let (alpha, glow) = appearance_note_alpha_glow_cached(
         sample.adjusted_travel + request.lane_offset,
+        sample.adjusted_travel,
         &request.appearance_cache,
     );
     (alpha, itg_actor_glow_alpha(glow))
@@ -489,8 +491,11 @@ fn hold_endpoint_alpha_glow(
     if let Some(appearance) = cached_appearance {
         return appearance;
     }
-    let (alpha, glow) =
-        appearance_note_alpha_glow_cached(sample.adjusted_travel + lane_offset, appearance_cache);
+    let (alpha, glow) = appearance_note_alpha_glow_cached(
+        sample.adjusted_travel + lane_offset,
+        sample.adjusted_travel,
+        appearance_cache,
+    );
     (alpha, itg_actor_glow_alpha(glow))
 }
 
@@ -626,10 +631,15 @@ where
     let phase = visible_top_distance / segment_height + phase_offset;
     let phase_end = visible_bottom_distance / segment_height + phase_offset;
     let uv = [body_uv[0], body_uv[2], body_uv[1], body_uv[3]];
+    let fade_lane_offset = if request.appearance.stealth_type {
+        0.0
+    } else {
+        request.lane_offset
+    };
     let stealth_crosses_receptor = !request.appearance.stealth_past_receptors
         && (request.appearance.stealth != 0.0 || request.appearance.stealth_col != 0.0)
-        && ((sample_path(body_top).adjusted_travel + request.lane_offset < 0.0)
-            != (sample_path(body_bottom).adjusted_travel + request.lane_offset < 0.0));
+        && ((sample_path(body_top).adjusted_travel + fade_lane_offset < 0.0)
+            != (sample_path(body_bottom).adjusted_travel + fade_lane_offset < 0.0));
     if request.use_legacy_sprites
         && allow_legacy_sprites
         && !appearance_needs_rows(request.appearance)
@@ -2479,40 +2489,105 @@ mod tests {
     }
 
     #[test]
+    fn stealth_type_uses_raw_travel_for_body_and_caps() {
+        let body = TestSlot::sprite("body");
+        let top = TestSlot::sprite("top");
+        let bottom = TestSlot::sprite("bottom");
+        for sudden in [false, true] {
+            for stealth_type in [false, true] {
+                let mut request = body_cap_request(Some(&body), Some(&top), Some(&bottom));
+                request.y_head = 292.0;
+                request.y_tail = 356.0;
+                request.draw_span = Some((292.0, 356.0));
+                request.target_arrow_px = 16.0;
+                request.lane_offset = 256.0;
+                request.appearance = NoteAlphaParams {
+                    hidden: f32::from(!sudden),
+                    sudden: f32::from(sudden),
+                    stealth_type,
+                    ..Default::default()
+                };
+                request.appearance_cache =
+                    crate::note_appearance_cache(0.0, 0.0, request.appearance);
+                let sample = |y: f32| HoldPathSample {
+                    adjusted_travel: y - 256.0,
+                    ..straight_path(y)
+                };
+                let mut draws = Vec::new();
+                compose_hold_body_caps(
+                    &mut draws,
+                    &mut HoldMeshScratch::default(),
+                    request,
+                    &sample,
+                    &test_source,
+                );
+                assert_eq!(
+                    !draws.is_empty(),
+                    sudden == stealth_type,
+                    "sudden={sudden}, type={stealth_type}"
+                );
+                if !draws.is_empty() {
+                    for key in ["body", "top", "bottom"] {
+                        assert!(
+                            draws.iter().any(|draw| match draw {
+                                FlatDraw::Sprite(_) => sprite_key(draw) == key,
+                                FlatDraw::TexturedMesh(m) => m.texture.as_ref() == key,
+                                _ => false,
+                            }),
+                            "{key}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn lane_stealth_hold_crosses_receptor_without_hiding_visible_section() {
         use deadlib_present::actors::FlatMeshVertices;
         let body = TestSlot::sprite("body");
-        for past in [false, true] {
-            let mut request = body_cap_request(Some(&body), None, None);
-            request.y_head = -64.0;
-            request.y_tail = 64.0;
-            request.draw_span = Some((-64.0, 64.0));
-            request.appearance = NoteAlphaParams {
-                stealth_col: 1.0,
-                stealth_past_receptors: past,
-                ..NoteAlphaParams::default()
-            };
-            request.appearance_cache = crate::note_appearance_cache(0.0, 0.0, request.appearance);
-            let mut draws = Vec::new();
-            compose_hold_body_caps(
-                &mut draws,
-                &mut HoldMeshScratch::default(),
-                request,
-                &straight_path,
-                &test_source,
-            );
-            assert_eq!(draws.is_empty(), past);
-            for draw in &draws {
-                match draw {
-                    FlatDraw::Sprite(sprite) => assert!(sprite.center[1] < 0.0),
-                    FlatDraw::TexturedMesh(mesh) => {
-                        let vertices = match &mesh.vertices {
-                            FlatMeshVertices::Shared(v) => v.as_ref(),
-                            FlatMeshVertices::Reusable(v) => v.as_slice(),
-                        };
-                        assert!(vertices.iter().all(|v| v.pos[1] <= 0.0));
+        for stealth_type in [false, true] {
+            for lane_offset in [0.0, 64.0] {
+                for past in [false, true] {
+                    let mut request = body_cap_request(Some(&body), None, None);
+                    request.lane_offset = lane_offset;
+                    request.y_head = -64.0;
+                    request.y_tail = 64.0;
+                    request.draw_span = Some((-64.0, 64.0));
+                    request.appearance = NoteAlphaParams {
+                        stealth_type,
+                        stealth_col: 1.0,
+                        stealth_past_receptors: past,
+                        ..NoteAlphaParams::default()
+                    };
+                    request.appearance_cache =
+                        crate::note_appearance_cache(0.0, 0.0, request.appearance);
+                    let mut draws = Vec::new();
+                    compose_hold_body_caps(
+                        &mut draws,
+                        &mut HoldMeshScratch::default(),
+                        request,
+                        &straight_path,
+                        &test_source,
+                    );
+                    assert_eq!(
+                        draws.is_empty(),
+                        past || (!stealth_type && lane_offset == 64.0),
+                        "type={stealth_type}, offset={lane_offset}, past={past}"
+                    );
+                    for draw in &draws {
+                        match draw {
+                            FlatDraw::Sprite(sprite) => assert!(sprite.center[1] < 0.0),
+                            FlatDraw::TexturedMesh(mesh) => {
+                                let vertices = match &mesh.vertices {
+                                    FlatMeshVertices::Shared(v) => v.as_ref(),
+                                    FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                };
+                                assert!(vertices.iter().all(|v| v.pos[1] <= 0.0));
+                            }
+                            _ => panic!("hold body draw"),
+                        }
                     }
-                    _ => panic!("hold body draw"),
                 }
             }
         }

@@ -255,7 +255,7 @@ mod tests {
     use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 
     fn appearance_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
-        appearance_note_alpha_cached(y, &super::note_appearance_cache(elapsed, mini, params))
+        appearance_note_alpha_cached(y, y, &super::note_appearance_cache(elapsed, mini, params))
     }
 
     fn appearance_glow(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
@@ -419,6 +419,108 @@ mod tests {
 
     fn edit_bar_info(row: i32, segments: &[TimeSignatureSegment]) -> Option<EditBeatBarInfo> {
         EditBeatBarCursor::new(row, segments).info_for_row(row)
+    }
+
+    #[test]
+    fn stealth_type_fades_match_native_cpp_vectors() {
+        // ArrowGetPercentVisible and its fade-line functions from local
+        // ITGmania ArrowEffects.cpp, compiled unchanged with MSVC /O2.
+        // y includes lane shifts; y_offset is post-acceleration travel.
+        #[rustfmt::skip]
+        const CASES: &[(bool, bool, f32, [f32; 7], f32, f32, u32)] = &[
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f800000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f800000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f000000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 204.0, 140.0, 0x3f000000u32),
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x00000000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x00000000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x3f000000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 76.0, 140.0, 0x3f000000u32),
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x3f800000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x00000000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x00000000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], -4.0, 60.0, 0x00000000u32),
+            (false, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x00000000u32),
+            (false, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x3f000000u32),
+            (true, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 244.0, 180.0, 0x3f000000u32),
+            (false, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f800000u32),
+            (false, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f800000u32),
+            (true, false, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f000000u32),
+            (true, true, 0.0, [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], 116.0, 180.0, 0x3f000000u32),
+            (false, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x00000000u32),
+            (false, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x3f800000u32),
+            (true, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], 44.0, -20.0, 0x00000000u32),
+            (false, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x3f800000u32),
+            (false, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x00000000u32),
+            (true, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.25, 0.75, 0.0], -20.0, 44.0, 0x00000000u32),
+            (false, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (false, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (true, false, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (true, true, 0.0, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 160.0, 224.0, 0x00000000u32),
+            (false, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3f400000u32),
+            (false, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3f400000u32),
+            (true, false, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3e800000u32),
+            (true, true, 0.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25], 240.0, 140.0, 0x3e800000u32),
+            (false, false, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (false, true, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (true, false, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (true, true, 0.5, [1.0, 0.25, 1.0, -0.25, 0.125, 0.125, 0.5], 320.0, 240.0, 0x00000000u32),
+            (false, false, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3f800000u32),
+            (false, true, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3f800000u32),
+            (true, false, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3ed5555au32),
+            (true, true, 0.5, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 250.0, 190.0, 0x3ed5555au32),
+            (false, false, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x3e800000u32),
+            (false, true, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x3e800000u32),
+            (true, false, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x00000000u32),
+            (true, true, 0.0, [0.75, 0.25, 0.5, -0.25, 0.125, 0.125, 0.0], 200.0, 160.0, 0x00000000u32),
+        ];
+        for &(
+            stealth_type,
+            past,
+            mini,
+            [
+                hidden,
+                hidden_offset,
+                sudden,
+                sudden_offset,
+                stealth,
+                stealth_col,
+                random_vanish,
+            ],
+            y,
+            y_offset,
+            bits,
+        ) in CASES
+        {
+            let cache = super::note_appearance_cache(
+                0.1,
+                mini,
+                super::NoteAlphaParams {
+                    stealth_type,
+                    stealth_past_receptors: past,
+                    hidden,
+                    hidden_offset,
+                    sudden,
+                    sudden_offset,
+                    stealth,
+                    stealth_col,
+                    random_vanish,
+                    ..Default::default()
+                },
+            );
+            let visibility = appearance_note_alpha_cached(y, y_offset, &cache);
+            let expected = f32::from_bits(bits);
+            assert!(
+                (visibility - expected).abs() <= 0.000001,
+                "type={stealth_type}, past={past}, y={y}, offset={y_offset}: {visibility} != {expected}"
+            );
+            let (alpha, glow) = super::appearance_note_alpha_glow_cached(y, y_offset, &cache);
+            assert_eq!(alpha, if expected > 0.5 { 1.0 } else { 0.0 });
+            assert!((glow - (1.3 - (expected - 0.5).abs() * 2.6).max(0.0)).abs() < 0.00001);
+        }
     }
 
     #[test]
@@ -3297,9 +3399,9 @@ mod tests {
                     ..NoteAlphaParams::default()
                 },
             );
-            let visibility = appearance_note_alpha_cached(y, &cache);
+            let visibility = appearance_note_alpha_cached(y, y, &cache);
             assert!((visibility - expected).abs() < 0.000001);
-            let (alpha, glow) = super::appearance_note_alpha_glow_cached(y, &cache);
+            let (alpha, glow) = super::appearance_note_alpha_glow_cached(y, y, &cache);
             assert_eq!(alpha, if expected > 0.5 { 1.0 } else { 0.0 });
             assert!((glow - (1.3 - 2.6 * (expected - 0.5).abs())).abs() < 0.000001);
         }
@@ -3314,10 +3416,10 @@ mod tests {
                 },
             );
             assert_eq!(
-                appearance_note_alpha_cached(-0.001, &cache),
+                appearance_note_alpha_cached(-0.001, -0.001, &cache),
                 f32::from(!past)
             );
-            assert_eq!(appearance_note_alpha_cached(0.0, &cache), 0.0);
+            assert_eq!(appearance_note_alpha_cached(0.0, 0.0, &cache), 0.0);
         }
     }
 
