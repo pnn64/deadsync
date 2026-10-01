@@ -235,6 +235,9 @@ impl SongLuaOverlayTopologyIndex {
                 if parent_index >= index {
                     return None;
                 }
+                if matches!(parent.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
+                    return None;
+                }
                 if matches!(
                     parent.kind,
                     SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
@@ -2198,6 +2201,9 @@ fn song_lua_overlay_camera_ancestor<S: NoteskinSlot + Clone>(
 ) -> Option<usize> {
     while let Some(current) = index {
         let overlay = overlays.get(current)?;
+        if matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
+            return None;
+        }
         if matches!(
             overlay.kind,
             SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
@@ -4538,8 +4544,6 @@ fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayStat
         draw_order: state.draw_order,
         draw_by_z_position: state.draw_by_z_position,
         glow: state.glow,
-        fov: state.fov,
-        vanishpoint: state.vanishpoint,
         diffuse: state.diffuse,
         visible: state.visible,
         mask_source: state.mask_source,
@@ -6387,6 +6391,9 @@ fn song_lua_overlay_camera_state<S: NoteskinSlot + Clone>(
 ) -> Option<SongLuaOverlayState> {
     while let Some(current) = index {
         let overlay = overlays.get(current)?;
+        if matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
+            return None;
+        }
         let state = overlay_states.get(current).copied()?;
         if matches!(
             overlay.kind,

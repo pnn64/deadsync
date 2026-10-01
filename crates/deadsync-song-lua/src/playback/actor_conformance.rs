@@ -222,6 +222,37 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
         screen[1],
         &mut out,
     );
+    // Audit the same texture-space states used by the capture renderer.
+    // Global composition alone includes placement that BeginRenderingTo resets.
+    let topology = SongLuaOverlayTopologyIndex::new(overlays);
+    if topology
+        .aft_ancestors
+        .iter()
+        .any(|index| index.get().is_some())
+    {
+        let order = song_lua_overlay_order_cache_from(overlays, &[]);
+        let mut capture = out.clone();
+        for (index, overlay) in overlays.iter().enumerate() {
+            if !matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
+                continue;
+            }
+            song_lua_fill_capture_overlay_states(
+                overlays,
+                &out,
+                local_states,
+                &order,
+                index,
+                screen[0],
+                screen[1],
+                &mut capture,
+            );
+            for (child, ancestor) in topology.aft_ancestors.iter().enumerate() {
+                if ancestor.get() == Some(index) {
+                    out[child] = capture[child];
+                }
+            }
+        }
+    }
     out
 }
 

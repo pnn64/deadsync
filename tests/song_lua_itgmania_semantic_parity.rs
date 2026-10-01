@@ -406,6 +406,16 @@ fn read_trace() -> NativeTrace {
 }
 
 fn read_trace_file(path: &Path) -> NativeTrace {
+    if path.extension().is_some_and(|extension| extension == "zst") {
+        let input = fs::File::open(path).unwrap_or_else(|error| {
+            panic!("failed to open native trace {}: {error}", path.display())
+        });
+        let decoder = zstd::stream::read::Decoder::new(input).unwrap_or_else(|error| {
+            panic!("failed to decode native trace {}: {error}", path.display())
+        });
+        return serde_json::from_reader(std::io::BufReader::new(decoder))
+            .unwrap_or_else(|error| panic!("invalid native trace {}: {error}", path.display()));
+    }
     serde_json::from_slice(
         &fs::read(path).unwrap_or_else(|error| {
             panic!("failed to read native trace {}: {error}", path.display())
@@ -1139,6 +1149,86 @@ fn position_spline_tracks_keep_native_clock_and_modifier_state() {
     let mut parity = compare_semantics(&trace, &compiled, 0, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     parity.assert_complete("Position spline clock and modifier state");
+}
+
+#[test]
+fn aft_boundaries_match_native_geometry_and_visibility() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/aft-boundary.json"));
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/aft-boundary-native.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, trace.title.clone());
+    context.screen_width = 854.0;
+    context.screen_height = 480.0;
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[song_dir.join("aft-boundary.lua").as_path()], 0, &context)
+            .unwrap();
+    let mut parity = compare_semantics(&trace, &compiled, 0, &context);
+    let drawables = projected_drawable_map(&trace, &compiled);
+    parity.section("native AFT vertices");
+    for sample in native["samples"].as_array().unwrap() {
+        let second = value_f32(sample.get("time")).unwrap();
+        let states = compiled_overlay_states_at(&compiled[0], &context, second, second);
+        for actor in sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|actor| actor["kind"] == "sprite")
+        {
+            let definition = trace
+                .actor_definitions
+                .iter()
+                .find(|def| actor["name"].as_str() == def.name.as_deref())
+                .unwrap();
+            let (_, index) = drawables[&definition.id];
+            let state = states[index];
+            parity.check(state.visible == actor["visible"].as_bool().unwrap(), || {
+                format!("{:?} visibility", definition.name)
+            });
+            if actor["visible"] == false {
+                continue;
+            }
+            let track = trace
+                .projected_vertex_tracks
+                .iter()
+                .find(|track| track.definition_id.as_deref() == Some(&definition.id))
+                .unwrap();
+            let vertices = if track.camera_actor == "orthographic-screen" {
+                compiled_world_vertices(state, track.texture_size).map(|[x, y, _, _]| [x, y])
+            } else {
+                compiled_perspective_vertices(
+                    &compiled[0],
+                    &states,
+                    index,
+                    state,
+                    track.texture_size,
+                )
+                .unwrap()
+            };
+            for (corner, actual) in vertices.iter().enumerate() {
+                let expected = &actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["screen"];
+                for axis in 0..2 {
+                    let expected = value_f32(expected.get(axis)).unwrap();
+                    parity.check((actual[axis] - expected).abs() < 0.0002, || {
+                        format!(
+                            "{:?} corner {corner} axis {axis}: {} vs {expected}",
+                            definition.name, actual[axis]
+                        )
+                    });
+                }
+            }
+        }
+    }
+    parity.assert_complete("native AFT boundary");
 }
 
 #[test]
@@ -3157,6 +3247,9 @@ fn compiled_perspective_vertices(
     let camera = loop {
         let index = parent?;
         let overlay = &compiled.overlays[index];
+        if matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
+            return None;
+        }
         if matches!(
             overlay.kind,
             SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
@@ -3167,6 +3260,18 @@ fn compiled_perspective_vertices(
         parent = overlay.parent_index;
     };
     let screen = [compiled.screen_width, compiled.screen_height];
+    let mut viewport = screen;
+    let mut parent = compiled.overlays[index].parent_index;
+    while let Some(index) = parent {
+        if matches!(
+            compiled.overlays[index].kind,
+            SongLuaOverlayKind::ActorFrameTexture { .. }
+        ) {
+            viewport = states[index].size.unwrap_or(screen);
+            break;
+        }
+        parent = compiled.overlays[index].parent_index;
+    }
     let projection = actor::view_projection(
         screen.map(|axis| axis as u32),
         camera.fov?,
@@ -3183,8 +3288,8 @@ fn compiled_perspective_vertices(
     }
     Some(corners.map(|[x, y, _, w]| {
         [
-            (x / w + 1.0) * screen[0] * 0.5,
-            (1.0 - y / w) * screen[1] * 0.5,
+            (x / w + 1.0) * viewport[0] * 0.5,
+            (1.0 - y / w) * viewport[1] * 0.5,
         ]
     }))
 }

@@ -53,10 +53,38 @@
     },
     {
       "simfile": "7th Gear/7th Gear.ssc",
-      "fixture": "7th Gear/7th Gear.ssc.semantic.json",
+      "fixture": "7th Gear/7th Gear.ssc.semantic.json.zst",
       "title": "7th Gear",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.03125,
+          "max_events": 5000000
+        },
+        "sha256": "fc36429dac82f7dce7581613f76c78ca250eb8bc89236d4e6410af886aff453f",
+        "uncompressed_sha256": "1641d95ce6c50ba19c8b4d91faa8d7a6eae02861be63918211cc14c8aa4496df",
+        "compressed_bytes": 18682642,
+        "uncompressed_bytes": 212193452
+      }
     },
     {
       "simfile": "And Drugs/and drugs.ssc",

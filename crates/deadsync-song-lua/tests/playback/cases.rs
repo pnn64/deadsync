@@ -2659,6 +2659,55 @@ fn song_lua_proxy_index_finds_nested_player_replacement() {
 }
 
 #[test]
+fn aft_resets_static_and_dynamic_camera_scopes() {
+    for dynamic in [false, true] {
+        for inner_fov in [None, Some(25.0)] {
+            let mut outer = test_order_overlay(SongLuaOverlayKind::ActorFrame, None, 0);
+            outer.initial_state.fov = Some(50.0);
+            let mut capture = test_capture_overlay("camera-target");
+            capture.parent_index = Some(0);
+            capture.initial_state.fov = Some(80.0);
+            let mut inner = test_order_overlay(SongLuaOverlayKind::ActorFrame, Some(1), 0);
+            inner.initial_state.fov = inner_fov;
+            if dynamic {
+                inner.message_commands = vec![test_message_command(SongLuaOverlayStateDelta {
+                    fov: Some(25.0),
+                    ..SongLuaOverlayStateDelta::default()
+                })];
+            }
+            let overlays = vec![
+                outer,
+                capture,
+                inner,
+                test_order_overlay(SongLuaOverlayKind::Actor, Some(1), 0),
+                test_order_overlay(SongLuaOverlayKind::Actor, Some(2), 0),
+                test_order_overlay(SongLuaOverlayKind::Actor, Some(0), 0),
+            ];
+            let states = overlays
+                .iter()
+                .map(|overlay| overlay.initial_state)
+                .collect::<Vec<_>>();
+            let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+            assert_eq!(topology.dynamic_camera_scope, dynamic);
+            for (index, fov) in [(3, None), (4, inner_fov), (5, Some(50.0))] {
+                assert_eq!(
+                    topology
+                        .camera_state(&states, index)
+                        .and_then(|state| state.fov),
+                    fov
+                );
+                assert_eq!(
+                    song_lua_overlay_camera_state(&overlays, &states, overlays[index].parent_index)
+                        .and_then(|state| state.fov),
+                    fov
+                );
+            }
+            assert_eq!(song_lua_capture_root_state(states[1]).fov, None);
+        }
+    }
+}
+
+#[test]
 fn song_lua_dynamic_camera_scope_tracks_nested_state() {
     let mut outer = test_order_overlay(SongLuaOverlayKind::ActorFrame, None, 0);
     outer.initial_state.fov = Some(50.0);

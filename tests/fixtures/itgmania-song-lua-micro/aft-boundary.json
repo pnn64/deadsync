@@ -1,0 +1,4081 @@
+{
+  "actor_definitions": [
+    {
+      "children": [
+        {
+          "definition_id": "def-0002",
+          "layer_index": 1
+        },
+        {
+          "definition_id": "def-0009",
+          "layer_index": 2
+        },
+        {
+          "definition_id": "def-0010",
+          "layer_index": 3
+        },
+        {
+          "definition_id": "def-0011",
+          "layer_index": 4
+        },
+        {
+          "definition_id": "def-0012",
+          "layer_index": 5
+        }
+      ],
+      "class": "ActorFrame",
+      "commands": [
+        {
+          "last_line": 11,
+          "line": 9,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0001",
+      "line": -1,
+      "name": "Outer",
+      "properties": [],
+      "runtime_actors": [
+        "def-0001"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [
+        {
+          "definition_id": "def-0003",
+          "layer_index": 1
+        },
+        {
+          "definition_id": "def-0004",
+          "layer_index": 2
+        },
+        {
+          "definition_id": "def-0008",
+          "layer_index": 3
+        }
+      ],
+      "class": "ActorFrameTexture",
+      "commands": [
+        {
+          "last_line": 17,
+          "line": 14,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0002",
+      "layer_index": 1,
+      "line": 12,
+      "name": "ScreenTarget",
+      "parent_id": "def-0001",
+      "properties": [],
+      "runtime_actors": [
+        "def-0002"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 4,
+          "line": 4,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0003",
+      "layer_index": 1,
+      "line": -1,
+      "name": "ScreenBackground",
+      "parent_id": "def-0002",
+      "properties": [],
+      "runtime_actors": [
+        "def-0003"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [
+        {
+          "definition_id": "def-0005",
+          "layer_index": 1
+        },
+        {
+          "definition_id": "def-0006",
+          "layer_index": 2
+        }
+      ],
+      "class": "ActorFrameTexture",
+      "commands": [
+        {
+          "last_line": 24,
+          "line": 21,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0004",
+      "layer_index": 2,
+      "line": 19,
+      "name": "SmallTarget",
+      "parent_id": "def-0002",
+      "properties": [],
+      "runtime_actors": [
+        "def-0004"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 4,
+          "line": 4,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0005",
+      "layer_index": 1,
+      "line": -1,
+      "name": "SmallBackground",
+      "parent_id": "def-0004",
+      "properties": [],
+      "runtime_actors": [
+        "def-0005"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [
+        {
+          "definition_id": "def-0007",
+          "layer_index": 1
+        }
+      ],
+      "class": "ActorFrame",
+      "commands": [
+        {
+          "last_line": 28,
+          "line": 28,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0006",
+      "layer_index": 2,
+      "line": 26,
+      "name": "InnerCamera",
+      "parent_id": "def-0004",
+      "properties": [],
+      "runtime_actors": [
+        "def-0006"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 4,
+          "line": 4,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0007",
+      "layer_index": 1,
+      "line": -1,
+      "name": "InnerPerspective",
+      "parent_id": "def-0006",
+      "properties": [],
+      "runtime_actors": [
+        "def-0007"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 4,
+          "line": 4,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0008",
+      "layer_index": 3,
+      "line": -1,
+      "name": "AfterSmall",
+      "parent_id": "def-0002",
+      "properties": [],
+      "runtime_actors": [
+        "def-0008"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 4,
+          "line": 4,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0009",
+      "layer_index": 2,
+      "line": -1,
+      "name": "AfterTarget",
+      "parent_id": "def-0001",
+      "properties": [],
+      "runtime_actors": [
+        "def-0009"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [],
+      "class": "ActorProxy",
+      "commands": [
+        {
+          "last_line": 41,
+          "line": 37,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0010",
+      "layer_index": 3,
+      "line": 35,
+      "name": "ComboCopy",
+      "parent_id": "def-0001",
+      "properties": [],
+      "runtime_actors": [
+        "def-0010"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 4,
+          "line": 4,
+          "name": "InitCommand",
+          "source": "song:/default.lua"
+        },
+        {
+          "last_line": 44,
+          "line": 44,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0011",
+      "layer_index": 4,
+      "line": -1,
+      "name": "Hidden",
+      "parent_id": "def-0001",
+      "properties": [],
+      "runtime_actors": [
+        "def-0011"
+      ],
+      "source": "=(tail call)"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 57,
+          "line": 48,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0012",
+      "layer_index": 5,
+      "line": 46,
+      "name": "VisibilityProbe",
+      "parent_id": "def-0001",
+      "properties": [],
+      "runtime_actors": [
+        "def-0012"
+      ],
+      "source": "song:/default.lua"
+    }
+  ],
+  "arrow_timing": "native",
+  "bpm_segments": [
+    {
+      "beat": 0,
+      "bpm": 60,
+      "seconds": 0
+    }
+  ],
+  "capabilities": {
+    "actor_definitions": true,
+    "actor_method_calls": true,
+    "callback_calls": true,
+    "callback_operation_tracks": true,
+    "child_layer_order": true,
+    "command_execution": true,
+    "compact_event_tracks": true,
+    "embedded_itgmania_lua": true,
+    "external_actor_paths": true,
+    "launches_itgmania": false,
+    "message_broadcasts": true,
+    "modifier_mutations": true,
+    "native_draw_list_memory": false,
+    "native_tween_queue_memory": false,
+    "player_render_samples": true,
+    "projected_vertex_samples": true,
+    "raster_output": false,
+    "raw_event_stream": false,
+    "render_state_calls": true,
+    "runtime_complete": true,
+    "source_derived_transform_model": true,
+    "stable_draw_order": true,
+    "tween_segments": true,
+    "tween_time_validation": false
+  },
+  "command_tracks": [
+    {
+      "actor": "def-0001",
+      "command": "InitCommand",
+      "definition_id": "def-0001",
+      "line": 9,
+      "runs": [
+        [
+          1,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "command": "InitCommand",
+      "definition_id": "def-0002",
+      "line": 14,
+      "runs": [
+        [
+          8,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "command": "InitCommand",
+      "definition_id": "def-0003",
+      "line": 4,
+      "runs": [
+        [
+          17,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "command": "InitCommand",
+      "definition_id": "def-0004",
+      "line": 21,
+      "runs": [
+        [
+          21,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "command": "InitCommand",
+      "definition_id": "def-0005",
+      "line": 4,
+      "runs": [
+        [
+          29,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "command": "InitCommand",
+      "definition_id": "def-0006",
+      "line": 28,
+      "runs": [
+        [
+          33,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "command": "InitCommand",
+      "definition_id": "def-0007",
+      "line": 4,
+      "runs": [
+        [
+          37,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0008",
+      "command": "InitCommand",
+      "definition_id": "def-0008",
+      "line": 4,
+      "runs": [
+        [
+          41,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0009",
+      "command": "InitCommand",
+      "definition_id": "def-0009",
+      "line": 4,
+      "runs": [
+        [
+          45,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "line": 4,
+      "runs": [
+        [
+          49,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "command": "OnCommand",
+      "definition_id": "def-0010",
+      "line": 37,
+      "runs": [
+        [
+          53,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "line": 44,
+      "runs": [
+        [
+          57,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0012",
+      "command": "OnCommand",
+      "definition_id": "def-0012",
+      "line": 48,
+      "runs": [
+        [
+          60,
+          0,
+          0
+        ]
+      ],
+      "source": "song:/default.lua"
+    }
+  ],
+  "compact_event_layouts": {
+    "command_tracks.runs": [
+      "seq",
+      "beat",
+      "seconds"
+    ],
+    "operation_tracks.samples": [
+      "seq",
+      "beat",
+      "seconds",
+      "args"
+    ],
+    "timeline_tracks.samples": [
+      "seq",
+      "beat",
+      "seconds",
+      "args",
+      "detail"
+    ]
+  },
+  "description": "",
+  "difficulty": "Difficulty_Challenge",
+  "display": {
+    "height": 480,
+    "logical_height": 480,
+    "logical_width": 854,
+    "width": 854
+  },
+  "draw_orders": [
+    {
+      "final_children": [
+        {
+          "actor": "def-0002",
+          "definition_id": "def-0002",
+          "draw_index": 1,
+          "draw_order": 0.0,
+          "layer_index": 1
+        },
+        {
+          "actor": "def-0009",
+          "definition_id": "def-0009",
+          "draw_index": 2,
+          "draw_order": 0.0,
+          "layer_index": 2
+        },
+        {
+          "actor": "def-0010",
+          "definition_id": "def-0010",
+          "draw_index": 3,
+          "draw_order": 0.0,
+          "layer_index": 3
+        },
+        {
+          "actor": "def-0011",
+          "definition_id": "def-0011",
+          "draw_index": 4,
+          "draw_order": 0.0,
+          "layer_index": 4
+        },
+        {
+          "actor": "def-0012",
+          "definition_id": "def-0012",
+          "draw_index": 5,
+          "draw_order": 0.0,
+          "layer_index": 5
+        }
+      ],
+      "instance": 1,
+      "mode": "stable_draw_order",
+      "parent_actor": "def-0001",
+      "parent_definition_id": "def-0001",
+      "snapshots": [
+        {
+          "cause": "native_load",
+          "children": [
+            {
+              "actor": "def-0002",
+              "definition_id": "def-0002",
+              "draw_index": 1,
+              "draw_order": 0.0,
+              "layer_index": 1
+            },
+            {
+              "actor": "def-0009",
+              "definition_id": "def-0009",
+              "draw_index": 2,
+              "draw_order": 0.0,
+              "layer_index": 2
+            },
+            {
+              "actor": "def-0010",
+              "definition_id": "def-0010",
+              "draw_index": 3,
+              "draw_order": 0.0,
+              "layer_index": 3
+            },
+            {
+              "actor": "def-0011",
+              "definition_id": "def-0011",
+              "draw_index": 4,
+              "draw_order": 0.0,
+              "layer_index": 4
+            },
+            {
+              "actor": "def-0012",
+              "definition_id": "def-0012",
+              "draw_index": 5,
+              "draw_order": 0.0,
+              "layer_index": 5
+            }
+          ],
+          "seq": 1
+        }
+      ]
+    },
+    {
+      "final_children": [
+        {
+          "actor": "def-0003",
+          "definition_id": "def-0003",
+          "draw_index": 1,
+          "draw_order": 0.0,
+          "layer_index": 1
+        },
+        {
+          "actor": "def-0004",
+          "definition_id": "def-0004",
+          "draw_index": 2,
+          "draw_order": 0.0,
+          "layer_index": 2
+        },
+        {
+          "actor": "def-0008",
+          "definition_id": "def-0008",
+          "draw_index": 3,
+          "draw_order": 0.0,
+          "layer_index": 3
+        }
+      ],
+      "instance": 1,
+      "mode": "stable_draw_order",
+      "parent_actor": "def-0002",
+      "parent_definition_id": "def-0002",
+      "snapshots": [
+        {
+          "cause": "native_load",
+          "children": [
+            {
+              "actor": "def-0003",
+              "definition_id": "def-0003",
+              "draw_index": 1,
+              "draw_order": 0.0,
+              "layer_index": 1
+            },
+            {
+              "actor": "def-0004",
+              "definition_id": "def-0004",
+              "draw_index": 2,
+              "draw_order": 0.0,
+              "layer_index": 2
+            },
+            {
+              "actor": "def-0008",
+              "definition_id": "def-0008",
+              "draw_index": 3,
+              "draw_order": 0.0,
+              "layer_index": 3
+            }
+          ],
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "final_children": [
+        {
+          "actor": "def-0005",
+          "definition_id": "def-0005",
+          "draw_index": 1,
+          "draw_order": 0.0,
+          "layer_index": 1
+        },
+        {
+          "actor": "def-0006",
+          "definition_id": "def-0006",
+          "draw_index": 2,
+          "draw_order": 0.0,
+          "layer_index": 2
+        }
+      ],
+      "instance": 1,
+      "mode": "stable_draw_order",
+      "parent_actor": "def-0004",
+      "parent_definition_id": "def-0004",
+      "snapshots": [
+        {
+          "cause": "native_load",
+          "children": [
+            {
+              "actor": "def-0005",
+              "definition_id": "def-0005",
+              "draw_index": 1,
+              "draw_order": 0.0,
+              "layer_index": 1
+            },
+            {
+              "actor": "def-0006",
+              "definition_id": "def-0006",
+              "draw_index": 2,
+              "draw_order": 0.0,
+              "layer_index": 2
+            }
+          ],
+          "seq": 21
+        }
+      ]
+    },
+    {
+      "final_children": [
+        {
+          "actor": "def-0007",
+          "definition_id": "def-0007",
+          "draw_index": 1,
+          "draw_order": 0.0,
+          "layer_index": 1
+        }
+      ],
+      "instance": 1,
+      "mode": "stable_draw_order",
+      "parent_actor": "def-0006",
+      "parent_definition_id": "def-0006",
+      "snapshots": [
+        {
+          "cause": "native_load",
+          "children": [
+            {
+              "actor": "def-0007",
+              "definition_id": "def-0007",
+              "draw_index": 1,
+              "draw_order": 0.0,
+              "layer_index": 1
+            }
+          ],
+          "seq": 33
+        }
+      ]
+    }
+  ],
+  "dropped_events": 0,
+  "enabled_players": [
+    true,
+    true
+  ],
+  "end_position": {
+    "beat": 7,
+    "seconds": 7
+  },
+  "external_actors": [
+    {
+      "class": "Screen",
+      "id": "external-0001",
+      "name": "ScreenGameplay",
+      "path": "ScreenGameplay"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0002",
+      "name": "PlayerP1",
+      "path": "ScreenGameplay/PlayerP1"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0003",
+      "name": "PlayerP2",
+      "path": "ScreenGameplay/PlayerP2"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0004",
+      "name": "Overlay",
+      "path": "ScreenGameplay/Overlay"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0005",
+      "name": "Underlay",
+      "path": "ScreenGameplay/Underlay"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0006",
+      "name": "SongBackground",
+      "path": "ScreenGameplay/SongBackground"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0007",
+      "name": "SongForeground",
+      "path": "ScreenGameplay/SongForeground"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0008",
+      "name": "NoteField",
+      "path": "ScreenGameplay/PlayerP1/NoteField"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0009",
+      "name": "NoteField",
+      "path": "ScreenGameplay/PlayerP2/NoteField"
+    },
+    {
+      "class": "ActorFrame",
+      "id": "external-0010",
+      "name": "Combo",
+      "path": "ScreenGameplay/PlayerP1/Combo"
+    }
+  ],
+  "fixture_context": {
+    "beat_step": 0.25,
+    "bpm": 60.0,
+    "bpm_segments": [
+      [
+        0.0,
+        60.0
+      ]
+    ],
+    "chart_description": "",
+    "difficulty_code": 4,
+    "max_beat": 7.0,
+    "steps_type_code": 0,
+    "update_fps": 60
+  },
+  "game": "dance",
+  "harness_version": "0.1.0",
+  "itgmania_version": "1.2.0",
+  "loaded_lua_files": [
+    "song:/default.lua"
+  ],
+  "operation_tracks": [],
+  "oracle": "itgmania_song_lua_headless_semantic_trace",
+  "player_render_tracks": [
+    {
+      "path": "ScreenGameplay/PlayerP1",
+      "player": 1,
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          false,
+          true,
+          []
+        ]
+      ],
+      "transform_samples": [
+        [
+          0,
+          241,
+          240,
+          0,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "path": "ScreenGameplay/PlayerP2",
+      "player": 2,
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          false,
+          true,
+          []
+        ]
+      ],
+      "transform_samples": [
+        [
+          0,
+          612,
+          240,
+          0,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          0,
+          0
+        ]
+      ]
+    }
+  ],
+  "projected_vertex_tracks": [
+    {
+      "actor": "def-0003",
+      "camera_actor": "orthographic-screen",
+      "class": "Quad",
+      "definition_id": "def-0003",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          1,
+          [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              854,
+              0,
+              0
+            ],
+            [
+              854,
+              480,
+              0
+            ],
+            [
+              0,
+              480,
+              0
+            ]
+          ],
+          [
+            [
+              -1,
+              1,
+              0,
+              1
+            ],
+            [
+              1,
+              1,
+              0,
+              1
+            ],
+            [
+              1,
+              -1,
+              0,
+              1
+            ],
+            [
+              -1,
+              -1,
+              0,
+              1
+            ]
+          ],
+          [
+            [
+              0,
+              0
+            ],
+            [
+              854,
+              0
+            ],
+            [
+              854,
+              480
+            ],
+            [
+              0,
+              480
+            ]
+          ],
+          [
+            0,
+            427,
+            240,
+            0
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        854,
+        480
+      ]
+    },
+    {
+      "actor": "def-0005",
+      "camera_actor": "orthographic-screen",
+      "class": "Quad",
+      "definition_id": "def-0005",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          1,
+          [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              320,
+              0,
+              0
+            ],
+            [
+              320,
+              200,
+              0
+            ],
+            [
+              0,
+              200,
+              0
+            ]
+          ],
+          [
+            [
+              -1,
+              1,
+              0,
+              1
+            ],
+            [
+              1,
+              1,
+              0,
+              1
+            ],
+            [
+              1,
+              -1,
+              0,
+              1
+            ],
+            [
+              -1,
+              -1,
+              0,
+              1
+            ]
+          ],
+          [
+            [
+              0,
+              0
+            ],
+            [
+              320,
+              0
+            ],
+            [
+              320,
+              200
+            ],
+            [
+              0,
+              200
+            ]
+          ],
+          [
+            0,
+            160,
+            100,
+            0
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        320,
+        200
+      ]
+    },
+    {
+      "actor": "def-0007",
+      "camera_actor": "def-0006",
+      "class": "Quad",
+      "definition_id": "def-0007",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          1,
+          [
+            [
+              377,
+              210,
+              0
+            ],
+            [
+              477,
+              210,
+              0
+            ],
+            [
+              477,
+              270,
+              0
+            ],
+            [
+              377,
+              270,
+              0
+            ]
+          ],
+          [
+            [
+              -120.71067811865474,
+              128.85864889166396,
+              1029.883905968762,
+              1030.8691911333117
+            ],
+            [
+              120.71067811865474,
+              128.85864889166396,
+              1029.883905968762,
+              1030.8691911333117
+            ],
+            [
+              120.71067811865474,
+              -128.85864889166396,
+              1029.883905968762,
+              1030.8691911333117
+            ],
+            [
+              -120.71067811865474,
+              -128.85864889166396,
+              1029.883905968762,
+              1030.8691911333117
+            ]
+          ],
+          [
+            [
+              141.2646370023419,
+              87.5
+            ],
+            [
+              178.73536299765806,
+              87.5
+            ],
+            [
+              178.73536299765806,
+              112.5
+            ],
+            [
+              141.2646370023419,
+              112.5
+            ]
+          ],
+          [
+            45,
+            427,
+            240,
+            1030.8691911333117
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        100,
+        60
+      ]
+    },
+    {
+      "actor": "def-0008",
+      "camera_actor": "orthographic-screen",
+      "class": "Quad",
+      "definition_id": "def-0008",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          1,
+          [
+            [
+              100,
+              70,
+              0
+            ],
+            [
+              140,
+              70,
+              0
+            ],
+            [
+              140,
+              90,
+              0
+            ],
+            [
+              100,
+              90,
+              0
+            ]
+          ],
+          [
+            [
+              -0.765807962529274,
+              0.7083333333333333,
+              0,
+              1
+            ],
+            [
+              -0.6721311475409837,
+              0.7083333333333333,
+              0,
+              1
+            ],
+            [
+              -0.6721311475409837,
+              0.625,
+              0,
+              1
+            ],
+            [
+              -0.765807962529274,
+              0.625,
+              0,
+              1
+            ]
+          ],
+          [
+            [
+              100,
+              70
+            ],
+            [
+              140,
+              70
+            ],
+            [
+              140,
+              90
+            ],
+            [
+              100,
+              90
+            ]
+          ],
+          [
+            0,
+            427,
+            240,
+            0
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        40,
+        20
+      ]
+    },
+    {
+      "actor": "def-0009",
+      "camera_actor": "def-0001",
+      "class": "Quad",
+      "definition_id": "def-0009",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          1,
+          [
+            [
+              432.3114644099224,
+              249.98941168548615,
+              0
+            ],
+            [
+              493.5149687915566,
+              268.7012007877413,
+              0
+            ],
+            [
+              484.1590742404291,
+              299.30295297855844,
+              0
+            ],
+            [
+              422.9555698587948,
+              280.5911638763033,
+              0
+            ]
+          ],
+          [
+            [
+              9.199726220579436,
+              -30.783441593217873,
+              738.4353345097561,
+              739.5856948319107
+            ],
+            [
+              115.2073054108344,
+              -88.44582302963269,
+              738.4353345097561,
+              739.5856948319107
+            ],
+            [
+              99.00242069802462,
+              -182.74839868429703,
+              738.4353345097561,
+              739.5856948319107
+            ],
+            [
+              -7.0051584922303505,
+              -125.0860172478822,
+              738.4353345097561,
+              739.5856948319107
+            ]
+          ],
+          [
+            [
+              432.3114644099225,
+              249.98941168548615
+            ],
+            [
+              493.5149687915566,
+              268.7012007877413
+            ],
+            [
+              484.15907424042905,
+              299.3029529785585
+            ],
+            [
+              422.9555698587948,
+              280.5911638763033
+            ]
+          ],
+          [
+            60,
+            427,
+            240,
+            739.5856948319107
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        80,
+        40
+      ]
+    },
+    {
+      "actor": "def-0011",
+      "camera_actor": "def-0001",
+      "class": "Quad",
+      "definition_id": "def-0011",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          false,
+          1,
+          [],
+          [],
+          [],
+          [
+            60,
+            0,
+            0,
+            0
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        10,
+        10
+      ]
+    },
+    {
+      "actor": "def-0012",
+      "camera_actor": "def-0001",
+      "class": "Quad",
+      "definition_id": "def-0012",
+      "sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera",
+        "effect_chain"
+      ],
+      "samples": [
+        [
+          0,
+          0,
+          true,
+          1,
+          [
+            [
+              427,
+              240,
+              0
+            ],
+            [
+              427,
+              240,
+              0
+            ],
+            [
+              427,
+              240,
+              0
+            ],
+            [
+              427,
+              240,
+              0
+            ]
+          ],
+          [
+            [
+              0,
+              0,
+              738.4353345097561,
+              739.5856948319107
+            ],
+            [
+              0,
+              0,
+              738.4353345097561,
+              739.5856948319107
+            ],
+            [
+              0,
+              0,
+              738.4353345097561,
+              739.5856948319107
+            ],
+            [
+              0,
+              0,
+              738.4353345097561,
+              739.5856948319107
+            ]
+          ],
+          [
+            [
+              427,
+              240
+            ],
+            [
+              427,
+              240
+            ],
+            [
+              427,
+              240
+            ],
+            [
+              427,
+              240
+            ]
+          ],
+          [
+            60,
+            427,
+            240,
+            739.5856948319107
+          ],
+          []
+        ]
+      ],
+      "texture": "",
+      "texture_size": [
+        1,
+        1
+      ]
+    }
+  ],
+  "random_generator": "ITGmania MersenneTwister",
+  "random_seed": 1,
+  "raw_event_count": 64,
+  "root_layers": [
+    {
+      "definition_id": "def-0001",
+      "layer": "foreground",
+      "layer_index": 0,
+      "start_beat": 0
+    }
+  ],
+  "roots": [
+    "def-0001"
+  ],
+  "runtime_actors": [
+    {
+      "definition_id": "def-0001",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0001",
+      "name": "Outer",
+      "path": "def-0001",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0002",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0002",
+      "name": "ScreenTarget",
+      "path": "def-0002",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0003",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0003",
+      "name": "ScreenBackground",
+      "path": "def-0003",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0004",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0004",
+      "name": "SmallTarget",
+      "path": "def-0004",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0005",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0005",
+      "name": "SmallBackground",
+      "path": "def-0005",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0006",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0006",
+      "name": "InnerCamera",
+      "path": "def-0006",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0007",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0007",
+      "name": "InnerPerspective",
+      "path": "def-0007",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0008",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0008",
+      "name": "AfterSmall",
+      "path": "def-0008",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0009",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0009",
+      "name": "AfterTarget",
+      "path": "def-0009",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0010",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0010",
+      "name": "ComboCopy",
+      "path": "def-0010",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0011",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": false
+      },
+      "id": "def-0011",
+      "name": "Hidden",
+      "path": "def-0011",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          false
+        ]
+      ]
+    },
+    {
+      "definition_id": "def-0012",
+      "final_render_state": {
+        "alpha": 1,
+        "visible": true
+      },
+      "id": "def-0012",
+      "name": "VisibilityProbe",
+      "path": "def-0012",
+      "render_state_samples": [
+        [
+          0,
+          1,
+          true
+        ]
+      ]
+    }
+  ],
+  "runtime_errors": [],
+  "schema_version": 1,
+  "semantic_derivation": {
+    "draw_model": "ActorFrame::SortByDrawOrder stable sort",
+    "render_model": {
+      "actor_transform_order": [
+        "translation",
+        "rotation_xyz",
+        "scale",
+        "alignment",
+        "skew"
+      ],
+      "perspective": "ActorFrame::BeginDraw -> RageDisplay::LoadMenuPerspective",
+      "player_render_rule": "source Player visible or a visible ActorProxy targeting it",
+      "projected_sample_layout": [
+        "beat",
+        "seconds",
+        "visible",
+        "alpha",
+        "world_vertices",
+        "clip_vertices",
+        "screen_vertices",
+        "camera"
+      ],
+      "projected_vertex_order": [
+        "top_left",
+        "top_right",
+        "bottom_right",
+        "bottom_left"
+      ],
+      "projection_width_basis": "SCREEN_WIDTH",
+      "rotation_xyz": "RageMatrixRotationX * RageMatrixRotationY * RageMatrixRotationZ",
+      "vector_transform": "RageVec4TransformCoord"
+    },
+    "source_files": [
+      "src/Actor.cpp",
+      "src/Actor.h",
+      "src/ActorFrame.cpp",
+      "src/RageDisplay.cpp",
+      "src/RageMath.cpp"
+    ],
+    "tween_model": "Actor::BeginTweening and Actor::DestTweenState"
+  },
+  "simfile": "song:/test.ssc",
+  "song_clock": "continuous-bpm",
+  "source_simfile": "aft-boundary/test.ssc",
+  "steps_type": "dance-single",
+  "style": "single",
+  "theme": "headless",
+  "timeline_tracks": [],
+  "title": "AFT Boundary",
+  "trace_until_beat": 7,
+  "tween_queue_controls": [],
+  "tween_tracks": [
+    {
+      "actor": "def-0001",
+      "command": "InitCommand",
+      "definition_id": "def-0001",
+      "kind": "immediate",
+      "line": 9,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 2,
+          "operations": [
+            {
+              "args": [
+                427,
+                240
+              ],
+              "operation": "ActorFrame.xy",
+              "seq": 2
+            },
+            {
+              "args": [
+                17
+              ],
+              "operation": "ActorFrame.rotationz",
+              "seq": 3
+            },
+            {
+              "args": [
+                0.8
+              ],
+              "operation": "ActorFrame.zoom",
+              "seq": 4
+            },
+            {
+              "args": [
+                60
+              ],
+              "operation": "ActorFrame.fov",
+              "seq": 5
+            },
+            {
+              "args": [
+                427,
+                240
+              ],
+              "operation": "ActorFrame.vanishpoint",
+              "seq": 6
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "command": "InitCommand",
+      "definition_id": "def-0002",
+      "kind": "immediate",
+      "line": 14,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 9,
+          "operations": [
+            {
+              "args": [
+                80,
+                40
+              ],
+              "operation": "ActorFrameTexture.xy",
+              "seq": 9
+            },
+            {
+              "args": [
+                31
+              ],
+              "operation": "ActorFrameTexture.rotationz",
+              "seq": 10
+            },
+            {
+              "args": [
+                0.5
+              ],
+              "operation": "ActorFrameTexture.zoom",
+              "seq": 11
+            },
+            {
+              "args": [
+                854
+              ],
+              "operation": "ActorFrameTexture.SetWidth",
+              "seq": 12
+            },
+            {
+              "args": [
+                480
+              ],
+              "operation": "ActorFrameTexture.SetHeight",
+              "seq": 13
+            },
+            {
+              "args": [
+                "ScreenTarget"
+              ],
+              "operation": "ActorFrameTexture.SetTextureName",
+              "seq": 14
+            },
+            {
+              "args": [],
+              "operation": "ActorFrameTexture.Create",
+              "seq": 15
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "command": "InitCommand",
+      "definition_id": "def-0003",
+      "kind": "immediate",
+      "line": 4,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 18,
+          "operations": [
+            {
+              "args": [
+                427,
+                240
+              ],
+              "operation": "Quad.xy",
+              "seq": 18
+            },
+            {
+              "args": [
+                854,
+                480
+              ],
+              "operation": "Quad.zoomto",
+              "seq": 19
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "command": "InitCommand",
+      "definition_id": "def-0004",
+      "kind": "immediate",
+      "line": 21,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 22,
+          "operations": [
+            {
+              "args": [
+                90,
+                50
+              ],
+              "operation": "ActorFrameTexture.xy",
+              "seq": 22
+            },
+            {
+              "args": [
+                13
+              ],
+              "operation": "ActorFrameTexture.rotationz",
+              "seq": 23
+            },
+            {
+              "args": [
+                320
+              ],
+              "operation": "ActorFrameTexture.SetWidth",
+              "seq": 24
+            },
+            {
+              "args": [
+                200
+              ],
+              "operation": "ActorFrameTexture.SetHeight",
+              "seq": 25
+            },
+            {
+              "args": [
+                "SmallTarget"
+              ],
+              "operation": "ActorFrameTexture.SetTextureName",
+              "seq": 26
+            },
+            {
+              "args": [],
+              "operation": "ActorFrameTexture.Create",
+              "seq": 27
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "command": "InitCommand",
+      "definition_id": "def-0005",
+      "kind": "immediate",
+      "line": 4,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 30,
+          "operations": [
+            {
+              "args": [
+                160,
+                100
+              ],
+              "operation": "Quad.xy",
+              "seq": 30
+            },
+            {
+              "args": [
+                320,
+                200
+              ],
+              "operation": "Quad.zoomto",
+              "seq": 31
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "command": "InitCommand",
+      "definition_id": "def-0006",
+      "kind": "immediate",
+      "line": 28,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 34,
+          "operations": [
+            {
+              "args": [
+                45
+              ],
+              "operation": "ActorFrame.fov",
+              "seq": 34
+            },
+            {
+              "args": [
+                427,
+                240
+              ],
+              "operation": "ActorFrame.vanishpoint",
+              "seq": 35
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "command": "InitCommand",
+      "definition_id": "def-0007",
+      "kind": "immediate",
+      "line": 4,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 38,
+          "operations": [
+            {
+              "args": [
+                427,
+                240
+              ],
+              "operation": "Quad.xy",
+              "seq": 38
+            },
+            {
+              "args": [
+                100,
+                60
+              ],
+              "operation": "Quad.zoomto",
+              "seq": 39
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0008",
+      "command": "InitCommand",
+      "definition_id": "def-0008",
+      "kind": "immediate",
+      "line": 4,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 42,
+          "operations": [
+            {
+              "args": [
+                120,
+                80
+              ],
+              "operation": "Quad.xy",
+              "seq": 42
+            },
+            {
+              "args": [
+                40,
+                20
+              ],
+              "operation": "Quad.zoomto",
+              "seq": 43
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0009",
+      "command": "InitCommand",
+      "definition_id": "def-0009",
+      "kind": "immediate",
+      "line": 4,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 46,
+          "operations": [
+            {
+              "args": [
+                50,
+                30
+              ],
+              "operation": "Quad.xy",
+              "seq": 46
+            },
+            {
+              "args": [
+                80,
+                40
+              ],
+              "operation": "Quad.zoomto",
+              "seq": 47
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "immediate",
+      "line": 4,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 50,
+          "operations": [
+            {
+              "args": [
+                0,
+                0
+              ],
+              "operation": "Quad.xy",
+              "seq": 50
+            },
+            {
+              "args": [
+                10,
+                10
+              ],
+              "operation": "Quad.zoomto",
+              "seq": 51
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "command": "OnCommand",
+      "definition_id": "def-0010",
+      "kind": "immediate",
+      "line": 37,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 54,
+          "operations": [
+            {
+              "args": [
+                {
+                  "actor": "external-0010",
+                  "name": "Combo",
+                  "path": "ScreenGameplay/PlayerP1/Combo"
+                }
+              ],
+              "operation": "ActorProxy.SetTarget",
+              "seq": 54
+            },
+            {
+              "args": [
+                true
+              ],
+              "operation": "ActorProxy.visible",
+              "seq": 55
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "immediate",
+      "line": 44,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 58,
+          "operations": [
+            {
+              "args": [
+                false
+              ],
+              "operation": "Quad.visible",
+              "seq": 58
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "actor": "def-0012",
+      "command": "OnCommand",
+      "definition_id": "def-0012",
+      "kind": "immediate",
+      "line": 48,
+      "segments": [
+        {
+          "beat": 0,
+          "duration": 0.0,
+          "enqueue_seq": 61,
+          "operations": [
+            {
+              "args": [
+                false
+              ],
+              "operation": "Quad.visible",
+              "seq": 61
+            },
+            {
+              "args": [
+                true
+              ],
+              "operation": "Quad.visible",
+              "seq": 62
+            },
+            {
+              "args": [
+                0
+              ],
+              "operation": "Quad.zoom",
+              "seq": 63
+            }
+          ],
+          "seconds": 0
+        }
+      ],
+      "source": "song:/default.lua"
+    }
+  ],
+  "update_fps": 60,
+  "update_frames": [
+    [
+      0,
+      0
+    ],
+    [
+      0.016666666666666666,
+      0.016666666666666666
+    ],
+    [
+      0.03333333333333333,
+      0.03333333333333333
+    ],
+    [
+      0.05,
+      0.05
+    ],
+    [
+      0.06666666666666667,
+      0.06666666666666667
+    ],
+    [
+      0.08333333333333333,
+      0.08333333333333333
+    ],
+    [
+      0.1,
+      0.1
+    ],
+    [
+      0.11666666666666668,
+      0.11666666666666668
+    ],
+    [
+      0.13333333333333333,
+      0.13333333333333333
+    ],
+    [
+      0.15,
+      0.15
+    ],
+    [
+      0.16666666666666666,
+      0.16666666666666666
+    ],
+    [
+      0.18333333333333332,
+      0.18333333333333332
+    ],
+    [
+      0.2,
+      0.2
+    ],
+    [
+      0.21666666666666667,
+      0.21666666666666667
+    ],
+    [
+      0.23333333333333336,
+      0.23333333333333336
+    ],
+    [
+      0.25,
+      0.25
+    ],
+    [
+      0.26666666666666666,
+      0.26666666666666666
+    ],
+    [
+      0.2833333333333333,
+      0.2833333333333333
+    ],
+    [
+      0.3,
+      0.3
+    ],
+    [
+      0.31666666666666665,
+      0.31666666666666665
+    ],
+    [
+      0.3333333333333333,
+      0.3333333333333333
+    ],
+    [
+      0.35,
+      0.35
+    ],
+    [
+      0.36666666666666664,
+      0.36666666666666664
+    ],
+    [
+      0.38333333333333336,
+      0.38333333333333336
+    ],
+    [
+      0.4,
+      0.4
+    ],
+    [
+      0.41666666666666674,
+      0.41666666666666674
+    ],
+    [
+      0.43333333333333335,
+      0.43333333333333335
+    ],
+    [
+      0.45,
+      0.45
+    ],
+    [
+      0.4666666666666666,
+      0.4666666666666666
+    ],
+    [
+      0.48333333333333334,
+      0.48333333333333334
+    ],
+    [
+      0.5,
+      0.5
+    ],
+    [
+      0.5166666666666667,
+      0.5166666666666667
+    ],
+    [
+      0.5333333333333333,
+      0.5333333333333333
+    ],
+    [
+      0.55,
+      0.55
+    ],
+    [
+      0.5666666666666667,
+      0.5666666666666667
+    ],
+    [
+      0.5833333333333334,
+      0.5833333333333334
+    ],
+    [
+      0.6,
+      0.6
+    ],
+    [
+      0.6166666666666667,
+      0.6166666666666667
+    ],
+    [
+      0.6333333333333333,
+      0.6333333333333333
+    ],
+    [
+      0.65,
+      0.65
+    ],
+    [
+      0.6666666666666666,
+      0.6666666666666666
+    ],
+    [
+      0.6833333333333333,
+      0.6833333333333333
+    ],
+    [
+      0.7,
+      0.7
+    ],
+    [
+      0.7166666666666667,
+      0.7166666666666667
+    ],
+    [
+      0.7333333333333333,
+      0.7333333333333333
+    ],
+    [
+      0.75,
+      0.75
+    ],
+    [
+      0.7666666666666667,
+      0.7666666666666667
+    ],
+    [
+      0.7833333333333333,
+      0.7833333333333333
+    ],
+    [
+      0.8,
+      0.8
+    ],
+    [
+      0.8166666666666668,
+      0.8166666666666668
+    ],
+    [
+      0.8333333333333335,
+      0.8333333333333335
+    ],
+    [
+      0.85,
+      0.85
+    ],
+    [
+      0.8666666666666667,
+      0.8666666666666667
+    ],
+    [
+      0.8833333333333333,
+      0.8833333333333333
+    ],
+    [
+      0.9,
+      0.9
+    ],
+    [
+      0.9166666666666665,
+      0.9166666666666665
+    ],
+    [
+      0.9333333333333332,
+      0.9333333333333332
+    ],
+    [
+      0.95,
+      0.95
+    ],
+    [
+      0.9666666666666667,
+      0.9666666666666667
+    ],
+    [
+      0.9833333333333333,
+      0.9833333333333333
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      1.0166666666666666,
+      1.0166666666666666
+    ],
+    [
+      1.0333333333333334,
+      1.0333333333333334
+    ],
+    [
+      1.05,
+      1.05
+    ],
+    [
+      1.0666666666666669,
+      1.0666666666666669
+    ],
+    [
+      1.0833333333333333,
+      1.0833333333333333
+    ],
+    [
+      1.1,
+      1.1
+    ],
+    [
+      1.1166666666666667,
+      1.1166666666666667
+    ],
+    [
+      1.1333333333333333,
+      1.1333333333333333
+    ],
+    [
+      1.15,
+      1.15
+    ],
+    [
+      1.1666666666666667,
+      1.1666666666666667
+    ],
+    [
+      1.1833333333333331,
+      1.1833333333333331
+    ],
+    [
+      1.2,
+      1.2
+    ],
+    [
+      1.2166666666666666,
+      1.2166666666666666
+    ],
+    [
+      1.2333333333333334,
+      1.2333333333333334
+    ],
+    [
+      1.25,
+      1.25
+    ],
+    [
+      1.2666666666666666,
+      1.2666666666666666
+    ],
+    [
+      1.2833333333333334,
+      1.2833333333333334
+    ],
+    [
+      1.3,
+      1.3
+    ],
+    [
+      1.3166666666666669,
+      1.3166666666666669
+    ],
+    [
+      1.3333333333333333,
+      1.3333333333333333
+    ],
+    [
+      1.35,
+      1.35
+    ],
+    [
+      1.3666666666666667,
+      1.3666666666666667
+    ],
+    [
+      1.3833333333333333,
+      1.3833333333333333
+    ],
+    [
+      1.4,
+      1.4
+    ],
+    [
+      1.4166666666666667,
+      1.4166666666666667
+    ],
+    [
+      1.4333333333333331,
+      1.4333333333333331
+    ],
+    [
+      1.45,
+      1.45
+    ],
+    [
+      1.4666666666666666,
+      1.4666666666666666
+    ],
+    [
+      1.4833333333333334,
+      1.4833333333333334
+    ],
+    [
+      1.5,
+      1.5
+    ],
+    [
+      1.5166666666666666,
+      1.5166666666666666
+    ],
+    [
+      1.5333333333333334,
+      1.5333333333333334
+    ],
+    [
+      1.55,
+      1.55
+    ],
+    [
+      1.5666666666666669,
+      1.5666666666666669
+    ],
+    [
+      1.5833333333333333,
+      1.5833333333333333
+    ],
+    [
+      1.6,
+      1.6
+    ],
+    [
+      1.6166666666666667,
+      1.6166666666666667
+    ],
+    [
+      1.6333333333333333,
+      1.6333333333333333
+    ],
+    [
+      1.65,
+      1.65
+    ],
+    [
+      1.6666666666666667,
+      1.6666666666666667
+    ],
+    [
+      1.6833333333333331,
+      1.6833333333333331
+    ],
+    [
+      1.7,
+      1.7
+    ],
+    [
+      1.7166666666666666,
+      1.7166666666666666
+    ],
+    [
+      1.7333333333333334,
+      1.7333333333333334
+    ],
+    [
+      1.75,
+      1.75
+    ],
+    [
+      1.7666666666666666,
+      1.7666666666666666
+    ],
+    [
+      1.7833333333333334,
+      1.7833333333333334
+    ],
+    [
+      1.8,
+      1.8
+    ],
+    [
+      1.8166666666666669,
+      1.8166666666666669
+    ],
+    [
+      1.8333333333333333,
+      1.8333333333333333
+    ],
+    [
+      1.85,
+      1.85
+    ],
+    [
+      1.8666666666666667,
+      1.8666666666666667
+    ],
+    [
+      1.8833333333333333,
+      1.8833333333333333
+    ],
+    [
+      1.9,
+      1.9
+    ],
+    [
+      1.9166666666666667,
+      1.9166666666666667
+    ],
+    [
+      1.9333333333333331,
+      1.9333333333333331
+    ],
+    [
+      1.95,
+      1.95
+    ],
+    [
+      1.9666666666666663,
+      1.9666666666666663
+    ],
+    [
+      1.9833333333333336,
+      1.9833333333333336
+    ],
+    [
+      2,
+      2
+    ],
+    [
+      2.0166666666666666,
+      2.0166666666666666
+    ],
+    [
+      2.033333333333333,
+      2.033333333333333
+    ],
+    [
+      2.05,
+      2.05
+    ],
+    [
+      2.066666666666667,
+      2.066666666666667
+    ],
+    [
+      2.0833333333333335,
+      2.0833333333333335
+    ],
+    [
+      2.1,
+      2.1
+    ],
+    [
+      2.1166666666666667,
+      2.1166666666666667
+    ],
+    [
+      2.1333333333333333,
+      2.1333333333333333
+    ],
+    [
+      2.15,
+      2.15
+    ],
+    [
+      2.1666666666666665,
+      2.1666666666666665
+    ],
+    [
+      2.183333333333333,
+      2.183333333333333
+    ],
+    [
+      2.2,
+      2.2
+    ],
+    [
+      2.216666666666667,
+      2.216666666666667
+    ],
+    [
+      2.2333333333333334,
+      2.2333333333333334
+    ],
+    [
+      2.25,
+      2.25
+    ],
+    [
+      2.2666666666666666,
+      2.2666666666666666
+    ],
+    [
+      2.283333333333333,
+      2.283333333333333
+    ],
+    [
+      2.3,
+      2.3
+    ],
+    [
+      2.316666666666667,
+      2.316666666666667
+    ],
+    [
+      2.3333333333333335,
+      2.3333333333333335
+    ],
+    [
+      2.35,
+      2.35
+    ],
+    [
+      2.3666666666666667,
+      2.3666666666666667
+    ],
+    [
+      2.3833333333333333,
+      2.3833333333333333
+    ],
+    [
+      2.4,
+      2.4
+    ],
+    [
+      2.4166666666666665,
+      2.4166666666666665
+    ],
+    [
+      2.433333333333333,
+      2.433333333333333
+    ],
+    [
+      2.45,
+      2.45
+    ],
+    [
+      2.466666666666667,
+      2.466666666666667
+    ],
+    [
+      2.4833333333333334,
+      2.4833333333333334
+    ],
+    [
+      2.5,
+      2.5
+    ],
+    [
+      2.5166666666666666,
+      2.5166666666666666
+    ],
+    [
+      2.533333333333333,
+      2.533333333333333
+    ],
+    [
+      2.55,
+      2.55
+    ],
+    [
+      2.566666666666667,
+      2.566666666666667
+    ],
+    [
+      2.5833333333333335,
+      2.5833333333333335
+    ],
+    [
+      2.6,
+      2.6
+    ],
+    [
+      2.6166666666666667,
+      2.6166666666666667
+    ],
+    [
+      2.6333333333333333,
+      2.6333333333333333
+    ],
+    [
+      2.65,
+      2.65
+    ],
+    [
+      2.6666666666666665,
+      2.6666666666666665
+    ],
+    [
+      2.683333333333333,
+      2.683333333333333
+    ],
+    [
+      2.7,
+      2.7
+    ],
+    [
+      2.716666666666667,
+      2.716666666666667
+    ],
+    [
+      2.7333333333333334,
+      2.7333333333333334
+    ],
+    [
+      2.75,
+      2.75
+    ],
+    [
+      2.7666666666666666,
+      2.7666666666666666
+    ],
+    [
+      2.783333333333333,
+      2.783333333333333
+    ],
+    [
+      2.8,
+      2.8
+    ],
+    [
+      2.816666666666667,
+      2.816666666666667
+    ],
+    [
+      2.8333333333333335,
+      2.8333333333333335
+    ],
+    [
+      2.85,
+      2.85
+    ],
+    [
+      2.8666666666666667,
+      2.8666666666666667
+    ],
+    [
+      2.8833333333333333,
+      2.8833333333333333
+    ],
+    [
+      2.9,
+      2.9
+    ],
+    [
+      2.9166666666666665,
+      2.9166666666666665
+    ],
+    [
+      2.933333333333333,
+      2.933333333333333
+    ],
+    [
+      2.95,
+      2.95
+    ],
+    [
+      2.966666666666667,
+      2.966666666666667
+    ],
+    [
+      2.9833333333333334,
+      2.9833333333333334
+    ],
+    [
+      3,
+      3
+    ],
+    [
+      3.0166666666666666,
+      3.0166666666666666
+    ],
+    [
+      3.033333333333333,
+      3.033333333333333
+    ],
+    [
+      3.05,
+      3.05
+    ],
+    [
+      3.066666666666667,
+      3.066666666666667
+    ],
+    [
+      3.0833333333333335,
+      3.0833333333333335
+    ],
+    [
+      3.1,
+      3.1
+    ],
+    [
+      3.1166666666666667,
+      3.1166666666666667
+    ],
+    [
+      3.1333333333333333,
+      3.1333333333333333
+    ],
+    [
+      3.15,
+      3.15
+    ],
+    [
+      3.1666666666666665,
+      3.1666666666666665
+    ],
+    [
+      3.183333333333333,
+      3.183333333333333
+    ],
+    [
+      3.2,
+      3.2
+    ],
+    [
+      3.216666666666667,
+      3.216666666666667
+    ],
+    [
+      3.2333333333333334,
+      3.2333333333333334
+    ],
+    [
+      3.25,
+      3.25
+    ],
+    [
+      3.2666666666666666,
+      3.2666666666666666
+    ],
+    [
+      3.283333333333333,
+      3.283333333333333
+    ],
+    [
+      3.3,
+      3.3
+    ],
+    [
+      3.316666666666667,
+      3.316666666666667
+    ],
+    [
+      3.3333333333333335,
+      3.3333333333333335
+    ],
+    [
+      3.35,
+      3.35
+    ],
+    [
+      3.3666666666666667,
+      3.3666666666666667
+    ],
+    [
+      3.3833333333333333,
+      3.3833333333333333
+    ],
+    [
+      3.4,
+      3.4
+    ],
+    [
+      3.4166666666666665,
+      3.4166666666666665
+    ],
+    [
+      3.433333333333333,
+      3.433333333333333
+    ],
+    [
+      3.45,
+      3.45
+    ],
+    [
+      3.466666666666667,
+      3.466666666666667
+    ],
+    [
+      3.4833333333333334,
+      3.4833333333333334
+    ],
+    [
+      3.5,
+      3.5
+    ],
+    [
+      3.5166666666666666,
+      3.5166666666666666
+    ],
+    [
+      3.533333333333333,
+      3.533333333333333
+    ],
+    [
+      3.55,
+      3.55
+    ],
+    [
+      3.566666666666667,
+      3.566666666666667
+    ],
+    [
+      3.5833333333333335,
+      3.5833333333333335
+    ],
+    [
+      3.6,
+      3.6
+    ],
+    [
+      3.6166666666666663,
+      3.6166666666666663
+    ],
+    [
+      3.6333333333333337,
+      3.6333333333333337
+    ],
+    [
+      3.65,
+      3.65
+    ],
+    [
+      3.6666666666666665,
+      3.6666666666666665
+    ],
+    [
+      3.6833333333333327,
+      3.6833333333333327
+    ],
+    [
+      3.7,
+      3.7
+    ],
+    [
+      3.7166666666666672,
+      3.7166666666666672
+    ],
+    [
+      3.7333333333333334,
+      3.7333333333333334
+    ],
+    [
+      3.75,
+      3.75
+    ],
+    [
+      3.7666666666666666,
+      3.7666666666666666
+    ],
+    [
+      3.7833333333333328,
+      3.7833333333333328
+    ],
+    [
+      3.8,
+      3.8
+    ],
+    [
+      3.8166666666666673,
+      3.8166666666666673
+    ],
+    [
+      3.8333333333333335,
+      3.8333333333333335
+    ],
+    [
+      3.85,
+      3.85
+    ],
+    [
+      3.8666666666666663,
+      3.8666666666666663
+    ],
+    [
+      3.8833333333333337,
+      3.8833333333333337
+    ],
+    [
+      3.9,
+      3.9
+    ],
+    [
+      3.9166666666666665,
+      3.9166666666666665
+    ],
+    [
+      3.9333333333333327,
+      3.9333333333333327
+    ],
+    [
+      3.95,
+      3.95
+    ],
+    [
+      3.9666666666666672,
+      3.9666666666666672
+    ],
+    [
+      3.9833333333333334,
+      3.9833333333333334
+    ],
+    [
+      4,
+      4
+    ],
+    [
+      4.016666666666667,
+      4.016666666666667
+    ],
+    [
+      4.033333333333333,
+      4.033333333333333
+    ],
+    [
+      4.05,
+      4.05
+    ],
+    [
+      4.066666666666666,
+      4.066666666666666
+    ],
+    [
+      4.083333333333333,
+      4.083333333333333
+    ],
+    [
+      4.1,
+      4.1
+    ],
+    [
+      4.116666666666666,
+      4.116666666666666
+    ],
+    [
+      4.133333333333334,
+      4.133333333333334
+    ],
+    [
+      4.15,
+      4.15
+    ],
+    [
+      4.166666666666667,
+      4.166666666666667
+    ],
+    [
+      4.183333333333334,
+      4.183333333333334
+    ],
+    [
+      4.2,
+      4.2
+    ],
+    [
+      4.216666666666667,
+      4.216666666666667
+    ],
+    [
+      4.233333333333333,
+      4.233333333333333
+    ],
+    [
+      4.25,
+      4.25
+    ],
+    [
+      4.266666666666667,
+      4.266666666666667
+    ],
+    [
+      4.283333333333333,
+      4.283333333333333
+    ],
+    [
+      4.3,
+      4.3
+    ],
+    [
+      4.316666666666666,
+      4.316666666666666
+    ],
+    [
+      4.333333333333333,
+      4.333333333333333
+    ],
+    [
+      4.35,
+      4.35
+    ],
+    [
+      4.366666666666666,
+      4.366666666666666
+    ],
+    [
+      4.383333333333334,
+      4.383333333333334
+    ],
+    [
+      4.4,
+      4.4
+    ],
+    [
+      4.416666666666667,
+      4.416666666666667
+    ],
+    [
+      4.433333333333334,
+      4.433333333333334
+    ],
+    [
+      4.45,
+      4.45
+    ],
+    [
+      4.466666666666667,
+      4.466666666666667
+    ],
+    [
+      4.483333333333333,
+      4.483333333333333
+    ],
+    [
+      4.5,
+      4.5
+    ],
+    [
+      4.516666666666667,
+      4.516666666666667
+    ],
+    [
+      4.533333333333333,
+      4.533333333333333
+    ],
+    [
+      4.55,
+      4.55
+    ],
+    [
+      4.566666666666666,
+      4.566666666666666
+    ],
+    [
+      4.583333333333333,
+      4.583333333333333
+    ],
+    [
+      4.6,
+      4.6
+    ],
+    [
+      4.616666666666666,
+      4.616666666666666
+    ],
+    [
+      4.633333333333334,
+      4.633333333333334
+    ],
+    [
+      4.65,
+      4.65
+    ],
+    [
+      4.666666666666667,
+      4.666666666666667
+    ],
+    [
+      4.683333333333334,
+      4.683333333333334
+    ],
+    [
+      4.7,
+      4.7
+    ],
+    [
+      4.716666666666667,
+      4.716666666666667
+    ],
+    [
+      4.733333333333333,
+      4.733333333333333
+    ],
+    [
+      4.75,
+      4.75
+    ],
+    [
+      4.766666666666667,
+      4.766666666666667
+    ],
+    [
+      4.783333333333333,
+      4.783333333333333
+    ],
+    [
+      4.8,
+      4.8
+    ],
+    [
+      4.816666666666666,
+      4.816666666666666
+    ],
+    [
+      4.833333333333333,
+      4.833333333333333
+    ],
+    [
+      4.85,
+      4.85
+    ],
+    [
+      4.866666666666666,
+      4.866666666666666
+    ],
+    [
+      4.883333333333334,
+      4.883333333333334
+    ],
+    [
+      4.9,
+      4.9
+    ],
+    [
+      4.916666666666667,
+      4.916666666666667
+    ],
+    [
+      4.933333333333334,
+      4.933333333333334
+    ],
+    [
+      4.95,
+      4.95
+    ],
+    [
+      4.966666666666667,
+      4.966666666666667
+    ],
+    [
+      4.983333333333333,
+      4.983333333333333
+    ],
+    [
+      5,
+      5
+    ],
+    [
+      5.016666666666667,
+      5.016666666666667
+    ],
+    [
+      5.033333333333333,
+      5.033333333333333
+    ],
+    [
+      5.05,
+      5.05
+    ],
+    [
+      5.066666666666666,
+      5.066666666666666
+    ],
+    [
+      5.083333333333333,
+      5.083333333333333
+    ],
+    [
+      5.1,
+      5.1
+    ],
+    [
+      5.116666666666666,
+      5.116666666666666
+    ],
+    [
+      5.133333333333334,
+      5.133333333333334
+    ],
+    [
+      5.15,
+      5.15
+    ],
+    [
+      5.166666666666667,
+      5.166666666666667
+    ],
+    [
+      5.183333333333334,
+      5.183333333333334
+    ],
+    [
+      5.2,
+      5.2
+    ],
+    [
+      5.216666666666667,
+      5.216666666666667
+    ],
+    [
+      5.233333333333333,
+      5.233333333333333
+    ],
+    [
+      5.25,
+      5.25
+    ],
+    [
+      5.266666666666667,
+      5.266666666666667
+    ],
+    [
+      5.283333333333333,
+      5.283333333333333
+    ],
+    [
+      5.3,
+      5.3
+    ],
+    [
+      5.316666666666666,
+      5.316666666666666
+    ],
+    [
+      5.333333333333333,
+      5.333333333333333
+    ],
+    [
+      5.35,
+      5.35
+    ],
+    [
+      5.366666666666666,
+      5.366666666666666
+    ],
+    [
+      5.383333333333334,
+      5.383333333333334
+    ],
+    [
+      5.4,
+      5.4
+    ],
+    [
+      5.416666666666667,
+      5.416666666666667
+    ],
+    [
+      5.433333333333334,
+      5.433333333333334
+    ],
+    [
+      5.45,
+      5.45
+    ],
+    [
+      5.466666666666667,
+      5.466666666666667
+    ],
+    [
+      5.483333333333333,
+      5.483333333333333
+    ],
+    [
+      5.5,
+      5.5
+    ],
+    [
+      5.516666666666667,
+      5.516666666666667
+    ],
+    [
+      5.533333333333333,
+      5.533333333333333
+    ],
+    [
+      5.55,
+      5.55
+    ],
+    [
+      5.566666666666666,
+      5.566666666666666
+    ],
+    [
+      5.583333333333333,
+      5.583333333333333
+    ],
+    [
+      5.6,
+      5.6
+    ],
+    [
+      5.616666666666666,
+      5.616666666666666
+    ],
+    [
+      5.633333333333334,
+      5.633333333333334
+    ],
+    [
+      5.65,
+      5.65
+    ],
+    [
+      5.666666666666667,
+      5.666666666666667
+    ],
+    [
+      5.683333333333334,
+      5.683333333333334
+    ],
+    [
+      5.7,
+      5.7
+    ],
+    [
+      5.716666666666667,
+      5.716666666666667
+    ],
+    [
+      5.733333333333333,
+      5.733333333333333
+    ],
+    [
+      5.75,
+      5.75
+    ],
+    [
+      5.766666666666667,
+      5.766666666666667
+    ],
+    [
+      5.783333333333333,
+      5.783333333333333
+    ],
+    [
+      5.8,
+      5.8
+    ],
+    [
+      5.816666666666666,
+      5.816666666666666
+    ],
+    [
+      5.833333333333333,
+      5.833333333333333
+    ],
+    [
+      5.85,
+      5.85
+    ],
+    [
+      5.866666666666666,
+      5.866666666666666
+    ],
+    [
+      5.883333333333334,
+      5.883333333333334
+    ],
+    [
+      5.9,
+      5.9
+    ],
+    [
+      5.916666666666667,
+      5.916666666666667
+    ],
+    [
+      5.933333333333334,
+      5.933333333333334
+    ],
+    [
+      5.95,
+      5.95
+    ],
+    [
+      5.966666666666667,
+      5.966666666666667
+    ],
+    [
+      5.983333333333333,
+      5.983333333333333
+    ],
+    [
+      6,
+      6
+    ],
+    [
+      6.016666666666667,
+      6.016666666666667
+    ],
+    [
+      6.033333333333333,
+      6.033333333333333
+    ],
+    [
+      6.05,
+      6.05
+    ],
+    [
+      6.066666666666666,
+      6.066666666666666
+    ],
+    [
+      6.083333333333333,
+      6.083333333333333
+    ],
+    [
+      6.1,
+      6.1
+    ],
+    [
+      6.116666666666666,
+      6.116666666666666
+    ],
+    [
+      6.133333333333334,
+      6.133333333333334
+    ],
+    [
+      6.15,
+      6.15
+    ],
+    [
+      6.166666666666667,
+      6.166666666666667
+    ],
+    [
+      6.183333333333334,
+      6.183333333333334
+    ],
+    [
+      6.2,
+      6.2
+    ],
+    [
+      6.216666666666667,
+      6.216666666666667
+    ],
+    [
+      6.233333333333333,
+      6.233333333333333
+    ],
+    [
+      6.25,
+      6.25
+    ],
+    [
+      6.266666666666667,
+      6.266666666666667
+    ],
+    [
+      6.283333333333333,
+      6.283333333333333
+    ],
+    [
+      6.3,
+      6.3
+    ],
+    [
+      6.316666666666666,
+      6.316666666666666
+    ],
+    [
+      6.333333333333333,
+      6.333333333333333
+    ],
+    [
+      6.35,
+      6.35
+    ],
+    [
+      6.366666666666666,
+      6.366666666666666
+    ],
+    [
+      6.383333333333334,
+      6.383333333333334
+    ],
+    [
+      6.4,
+      6.4
+    ],
+    [
+      6.416666666666667,
+      6.416666666666667
+    ],
+    [
+      6.433333333333334,
+      6.433333333333334
+    ],
+    [
+      6.45,
+      6.45
+    ],
+    [
+      6.466666666666667,
+      6.466666666666667
+    ],
+    [
+      6.483333333333333,
+      6.483333333333333
+    ],
+    [
+      6.5,
+      6.5
+    ],
+    [
+      6.516666666666667,
+      6.516666666666667
+    ],
+    [
+      6.533333333333333,
+      6.533333333333333
+    ],
+    [
+      6.55,
+      6.55
+    ],
+    [
+      6.566666666666666,
+      6.566666666666666
+    ],
+    [
+      6.583333333333333,
+      6.583333333333333
+    ],
+    [
+      6.6,
+      6.6
+    ],
+    [
+      6.616666666666666,
+      6.616666666666666
+    ],
+    [
+      6.633333333333334,
+      6.633333333333334
+    ],
+    [
+      6.65,
+      6.65
+    ],
+    [
+      6.666666666666667,
+      6.666666666666667
+    ],
+    [
+      6.683333333333334,
+      6.683333333333334
+    ],
+    [
+      6.7,
+      6.7
+    ],
+    [
+      6.716666666666667,
+      6.716666666666667
+    ],
+    [
+      6.733333333333333,
+      6.733333333333333
+    ],
+    [
+      6.75,
+      6.75
+    ],
+    [
+      6.766666666666667,
+      6.766666666666667
+    ],
+    [
+      6.783333333333333,
+      6.783333333333333
+    ],
+    [
+      6.8,
+      6.8
+    ],
+    [
+      6.816666666666666,
+      6.816666666666666
+    ],
+    [
+      6.833333333333333,
+      6.833333333333333
+    ],
+    [
+      6.85,
+      6.85
+    ],
+    [
+      6.866666666666666,
+      6.866666666666666
+    ],
+    [
+      6.883333333333334,
+      6.883333333333334
+    ],
+    [
+      6.9,
+      6.9
+    ],
+    [
+      6.916666666666667,
+      6.916666666666667
+    ],
+    [
+      6.933333333333334,
+      6.933333333333334
+    ],
+    [
+      6.95,
+      6.95
+    ],
+    [
+      6.966666666666667,
+      6.966666666666667
+    ],
+    [
+      6.983333333333333,
+      6.983333333333333
+    ],
+    [
+      7,
+      7
+    ]
+  ]
+}
