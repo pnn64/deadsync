@@ -1,9 +1,12 @@
 pub mod arrowcloud;
+pub mod banners;
 pub mod downloads;
 pub mod groovestats;
+pub mod itgdb;
 pub mod lobbies;
 pub mod pack_page;
 pub mod player_leaderboards;
+pub mod popular_packs;
 pub mod runtime;
 pub mod score_compat;
 pub mod score_import;
