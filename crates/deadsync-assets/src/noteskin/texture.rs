@@ -61,6 +61,10 @@ mod sprite_initialization;
 #[path = "../../tests/sprite_preparation/mod.rs"]
 mod sprite_preparation;
 
+#[cfg(test)]
+#[path = "../../tests/model_source_preparation/mod.rs"]
+mod model_source_preparation;
+
 #[derive(Debug)]
 pub enum SpriteSource {
     Atlas {
@@ -99,6 +103,9 @@ static SEQUENTIAL_FRAME_INDICES: LazyLock<Arc<[usize]>> = LazyLock::new(|| Arc::
 static EMPTY_MODEL_TIMELINE: LazyLock<Arc<[ModelTweenSegment]>> = LazyLock::new(|| Arc::from([]));
 static EMPTY_MODEL_AUTO_ROT_KEYS: LazyLock<Arc<[ModelAutoRotKey]>> =
     LazyLock::new(|| Arc::from([]));
+
+// Empty meshes share their immutable output header after the first use.
+static EMPTY_MODEL_GEOMETRY: LazyLock<Arc<[TexturedMeshVertex]>> = LazyLock::new(|| Arc::from([]));
 
 impl SpriteSource {
     pub fn texture_key(&self) -> &str {
@@ -619,23 +626,31 @@ pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
         .model
         .as_ref()
         .expect("model geometry requested for non-model noteskin slot");
-    let mut vertices = Vec::with_capacity(model.vertices.len());
-    for vertex in model.vertices.iter().copied() {
-        let vertex = model_vertex_for_sprite(&slot.def, vertex);
-        vertices.push(TexturedMeshVertex {
-            normal: [
-                vertex.normal[0],
-                vertex.normal[1],
-                vertex.normal[2],
-                f32::from(slot.model_texture_mode()),
-            ],
-            pos: vertex.pos,
-            uv: vertex.uv,
-            color: [1.0; 4],
-            tex_matrix_scale: vertex.tex_matrix_scale,
-        });
+    if model.vertices.is_empty() {
+        return Arc::clone(&EMPTY_MODEL_GEOMETRY);
     }
-    Arc::from(vertices)
+    let texture_mode = f32::from(slot.model_texture_mode());
+    // Mapping the exact-length slice iterator builds the final Arc directly.
+    model
+        .vertices
+        .iter()
+        .copied()
+        .map(|vertex| {
+            let vertex = model_vertex_for_sprite(&slot.def, vertex);
+            TexturedMeshVertex {
+                normal: [
+                    vertex.normal[0],
+                    vertex.normal[1],
+                    vertex.normal[2],
+                    texture_mode,
+                ],
+                pos: vertex.pos,
+                uv: vertex.uv,
+                color: [1.0; 4],
+                tex_matrix_scale: vertex.tex_matrix_scale,
+            }
+        })
+        .collect()
 }
 
 #[must_use]
@@ -909,24 +924,39 @@ fn model_animation_source(animation: &ItgTextureAnimation) -> Result<Arc<SpriteS
             crate::textures::model_texture_sampler(&key),
         );
     }
-    let mut plan = generated_animation_sprite_slot_plan(
+    Ok(model_animation_source_data(
         key,
         (atlas_width, atlas_height),
         [width as i32, height as i32],
-        count,
-        AnimationRate::FramesPerSecond(1.0),
-        false,
-    );
-    if let SpriteSourcePlan::Animated {
+        (columns as usize, rows as usize),
+        animation,
+    ))
+}
+
+fn model_animation_source_data(
+    key: String,
+    tex_dims: (u32, u32),
+    frame_size: [i32; 2],
+    grid: (usize, usize),
+    animation: &ItgTextureAnimation,
+) -> Arc<SpriteSource> {
+    let def = SpriteDefinition {
+        size: frame_size,
+        ..SpriteDefinition::default()
+    };
+    // Frame count is known: write delays into their shared storage once.
+    let durations = animation.frames.iter().map(|frame| frame.delay).collect();
+    Arc::new(animated_source(
+        key.into(),
+        tex_dims,
+        frame_size,
         grid,
-        frame_durations,
-        ..
-    } = &mut plan.source
-    {
-        *grid = (columns as usize, rows as usize);
-        *frame_durations = Some(animation.frames.iter().map(|frame| frame.delay).collect());
-    }
-    Ok(source_from_plan(plan.source, &plan.def))
+        animation.frames.len(),
+        None,
+        AnimationRate::FramesPerSecond(1.0),
+        Some(durations),
+        &def,
+    ))
 }
 
 pub fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
@@ -1375,6 +1405,32 @@ fn apply_state_properties(
 }
 
 fn apply_all_state_delays(slot: &mut SpriteSlot, delay: f32, beat_based: bool) {
+    if !matches!(slot.source.as_ref(), SpriteSource::Animated { .. }) {
+        return;
+    }
+    let delay = delay.max(1e-6);
+    // Reuse only exclusively owned storage; shared and weak owners keep their
+    // original delays. Length mismatches still construct a complete new array.
+    let reused = (Arc::strong_count(&slot.source) == 1)
+        .then(|| {
+            Arc::get_mut(&mut slot.source).and_then(|source| {
+                let SpriteSource::Animated {
+                    frame_count,
+                    frame_durations,
+                    ..
+                } = source
+                else {
+                    return None;
+                };
+                let durations = frame_durations.as_mut()?;
+                if durations.len() != (*frame_count).max(1) {
+                    return None;
+                }
+                Arc::get_mut(durations)?.fill(delay);
+                frame_durations.take()
+            })
+        })
+        .flatten();
     let SpriteSource::Animated {
         texture_key,
         tex_dims,
@@ -1385,17 +1441,16 @@ fn apply_all_state_delays(slot: &mut SpriteSlot, delay: f32, beat_based: bool) {
         ..
     } = slot.source.as_ref()
     else {
-        return;
+        unreachable!()
     };
     let frame_count = (*frame_count).max(1);
-    let delay = delay.max(1e-6);
-    // Ordinary sprite sheets fit this stack scratch; only the resulting Arc
-    // is allocated. Large authored animations keep the growable fallback.
-    let durations: Arc<[f32]> = if frame_count <= 64 {
-        Arc::from(&[delay; 64][..frame_count])
-    } else {
-        Arc::from(vec![delay; frame_count])
-    };
+    let durations = reused.unwrap_or_else(|| {
+        if frame_count <= 64 {
+            return Arc::from(&[delay; 64][..frame_count]);
+        }
+        // The exact frame count lets collect allocate only the final Arc.
+        std::iter::repeat_n(delay, frame_count).collect()
+    });
     let rate = if beat_based {
         AnimationRate::FramesPerBeat(1.0 / delay)
     } else {

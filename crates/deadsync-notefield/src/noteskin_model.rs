@@ -10,6 +10,10 @@ use std::sync::Arc;
 
 const MIN_SLOT_LOOKUP_SIZE: usize = 2;
 
+// Empty cached meshes share their immutable output header.
+static EMPTY_MODEL_GEOMETRY: std::sync::LazyLock<Arc<[TexturedMeshVertex]>> =
+    std::sync::LazyLock::new(|| Arc::from([]));
+
 #[derive(Clone, Copy, Default)]
 struct SlotLookup {
     stable_id: u64,
@@ -356,23 +360,31 @@ fn build_model_geometry<S: NoteskinSlot>(slot: &S) -> Arc<[TexturedMeshVertex]> 
     let model = slot
         .model()
         .expect("model geometry requested for non-model noteskin slot");
-    let mut vertices = Vec::with_capacity(model.vertices.len());
-    for &vertex in model.vertices.iter() {
-        let vertex = model_vertex_for_sprite(slot.sprite_def(), vertex);
-        vertices.push(TexturedMeshVertex {
-            normal: [
-                vertex.normal[0],
-                vertex.normal[1],
-                vertex.normal[2],
-                f32::from(slot.model_texture_mode()),
-            ],
-            pos: vertex.pos,
-            uv: vertex.uv,
-            color: [1.0; 4],
-            tex_matrix_scale: vertex.tex_matrix_scale,
-        });
+    if model.vertices.is_empty() {
+        return Arc::clone(&EMPTY_MODEL_GEOMETRY);
     }
-    Arc::from(vertices)
+    let texture_mode = f32::from(slot.model_texture_mode());
+    let def = slot.sprite_def();
+    model
+        .vertices
+        .iter()
+        .copied()
+        .map(|vertex| {
+            let vertex = model_vertex_for_sprite(def, vertex);
+            TexturedMeshVertex {
+                normal: [
+                    vertex.normal[0],
+                    vertex.normal[1],
+                    vertex.normal[2],
+                    texture_mode,
+                ],
+                pos: vertex.pos,
+                uv: vertex.uv,
+                color: [1.0; 4],
+                tex_matrix_scale: vertex.tex_matrix_scale,
+            }
+        })
+        .collect()
 }
 
 #[inline(always)]
@@ -1457,3 +1469,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/model_geometry_preparation/mod.rs"]
+mod model_geometry_preparation;

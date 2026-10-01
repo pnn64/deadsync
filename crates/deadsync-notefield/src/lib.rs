@@ -26,6 +26,11 @@ mod song_lua;
 mod style;
 mod transforms;
 
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+
 pub use actor_builder::{
     BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFrameFeatures,
     NotefieldFramePlan,
