@@ -25,11 +25,7 @@ fn batch(
     }
 }
 
-fn fixture(
-    lua: &Lua,
-    count: usize,
-    fields: usize,
-) -> (Vec<Table>, Vec<AuxSnapshot>) {
+fn fixture(lua: &Lua, count: usize, fields: usize) -> (Vec<Table>, Vec<AuxSnapshot>) {
     let actors: Vec<_> = (0..count)
         .map(|i| {
             let actor = lua.create_table().unwrap();

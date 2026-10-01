@@ -487,10 +487,47 @@ pub fn song_lua_column_y_offset(
 ) -> f32 {
     windows
         .iter()
-        .filter(|window| window.column == local_col)
+        .filter(|window| {
+            window.column == local_col && window.target == SongLuaColumnTransformTarget::OffsetY
+        })
         .filter_map(|window| song_lua_column_offset_window_value(window, now))
         .next_back()
         .unwrap_or(0.0)
+}
+
+/// Resolve the bounded, frame-local column state in one window scan.
+/// Consumers sample the solved splines in constant time, without allocations.
+pub fn song_lua_column_transforms(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    num_cols: usize,
+    current_time_s: f32,
+) -> ([[f32; MAX_COLS]; 4], [SongLuaPositionSpline; MAX_COLS]) {
+    let active_cols = num_cols.min(MAX_COLS);
+    let mut x_offsets = [0.0; MAX_COLS];
+    let mut y_offsets = [0.0; MAX_COLS];
+    let mut zooms = [1.0; MAX_COLS];
+    let mut rotations_deg = [0.0; MAX_COLS];
+    // Frame-local, fixed capacity state: one window scan, then constant-time
+    // sampling per note/hold vertex. No allocation or gameplay miss work.
+    let mut splines = [SongLuaPositionSpline::default(); MAX_COLS];
+    for window in windows {
+        if window.column >= active_cols {
+            continue;
+        }
+        let Some(value) = song_lua_column_offset_window_value(window, current_time_s) else {
+            continue;
+        };
+        match window.target {
+            SongLuaColumnTransformTarget::OffsetX => x_offsets[window.column] = value,
+            SongLuaColumnTransformTarget::OffsetY => y_offsets[window.column] = value,
+            SongLuaColumnTransformTarget::Zoom => zooms[window.column] = value.max(0.0),
+            SongLuaColumnTransformTarget::RotationZ => {
+                rotations_deg[window.column] = value.to_degrees();
+            }
+            target => splines[window.column].set(target, value),
+        }
+    }
+    ([x_offsets, y_offsets, zooms, rotations_deg], splines)
 }
 
 #[derive(Debug, Clone, Copy)]

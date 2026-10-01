@@ -11,9 +11,11 @@ use crate::{
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, ChartNoteIndex, PerspectiveEffects, ScrollEffects,
-    SongLuaColumnOffsetWindowRuntime, SongLuaColumnTransformTarget, SongLuaNoteHideWindows,
-    VisibilityEffects, VisualEffects, song_lua_column_offset_window_value,
+    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
+    song_lua_column_transforms,
 };
+#[cfg(test)]
+use deadsync_gameplay::{SongLuaColumnTransformTarget, song_lua_column_offset_window_value};
 use deadsync_noteskin::{NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteskinRuntime};
 use deadsync_rules::note::{Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -337,9 +339,24 @@ pub struct PreparedNotefield<'a, S> {
     pub receptor_alphas: [f32; MAX_COLS],
     pub blind_active: bool,
     pub column_x_offsets: [f32; MAX_COLS],
+    pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline; MAX_COLS],
     pub column_zooms: [f32; MAX_COLS],
     pub column_rotations_deg: [f32; MAX_COLS],
     pub notes: Option<PreparedNotefieldNotes<'a, S>>,
+}
+
+impl<S> PreparedNotefield<'_, S> {
+    pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
+        let spline = self.column_position_splines[col];
+        let (position, derivative) = spline.sample(self.current_beat, beat);
+        let receptor = spline.receptor(self.current_beat);
+        (
+            std::array::from_fn(|axis| {
+                (position[axis] - if axis < 2 { receptor[axis] } else { 0.0 }) * self.field_zoom
+            }),
+            derivative,
+        )
+    }
 }
 
 /// Resolve canonical layout and travel inputs without reading clocks or globals.
@@ -367,16 +384,24 @@ pub fn prepare_notefield<'a, S>(
         .scroll_speed
         .unwrap_or(request.geometry.scroll_speed);
     let current_time_s = song_time_ns_to_seconds(request.chart.visible_music_time_ns);
-    let [
-        column_x_offsets,
-        column_y_offsets,
-        column_zooms,
-        column_rotations_deg,
-    ] = song_lua_column_transforms(
+    let (
+        [
+            mut column_x_offsets,
+            mut column_y_offsets,
+            column_zooms,
+            column_rotations_deg,
+        ],
+        column_position_splines,
+    ) = song_lua_column_transforms(
         request.song_lua.column_offsets,
         frame_plan.num_cols,
         current_time_s,
     );
+    for col in 0..frame_plan.num_cols {
+        let receptor = column_position_splines[col].receptor(request.chart.visible_beat);
+        column_x_offsets[col] += receptor[0] * field_zoom;
+        column_y_offsets[col] += receptor[1];
+    }
     let field = prepare_field(request, frame_plan, field_zoom, column_y_offsets);
     let mini = effective_mini_value(
         request.visual.mini_percent,
@@ -422,6 +447,7 @@ pub fn prepare_notefield<'a, S>(
             .map(|dark| (1.0 - request.visual.visibility.dark - dark).clamp(0.0, 1.0)),
         blind_active: request.visual.visibility.blind > f32::EPSILON,
         column_x_offsets,
+        column_position_splines,
         column_zooms,
         column_rotations_deg,
         notes,
@@ -619,35 +645,6 @@ fn column_reverse_percents(scroll: ScrollEffects, num_cols: usize) -> [f32; MAX_
         *percent = scroll.reverse_percent_for_column(local_col, num_cols);
     }
     out
-}
-
-fn song_lua_column_transforms(
-    windows: &[SongLuaColumnOffsetWindowRuntime],
-    num_cols: usize,
-    current_time_s: f32,
-) -> [[f32; MAX_COLS]; 4] {
-    let active_cols = num_cols.min(MAX_COLS);
-    let mut x_offsets = [0.0; MAX_COLS];
-    let mut y_offsets = [0.0; MAX_COLS];
-    let mut zooms = [1.0; MAX_COLS];
-    let mut rotations_deg = [0.0; MAX_COLS];
-    for window in windows {
-        if window.column >= active_cols {
-            continue;
-        }
-        let Some(value) = song_lua_column_offset_window_value(window, current_time_s) else {
-            continue;
-        };
-        match window.target {
-            SongLuaColumnTransformTarget::OffsetX => x_offsets[window.column] = value,
-            SongLuaColumnTransformTarget::OffsetY => y_offsets[window.column] = value,
-            SongLuaColumnTransformTarget::Zoom => zooms[window.column] = value.max(0.0),
-            SongLuaColumnTransformTarget::RotationZ => {
-                rotations_deg[window.column] = value.to_degrees();
-            }
-        }
-    }
-    [x_offsets, y_offsets, zooms, rotations_deg]
 }
 
 const fn resolved_frame_features(
@@ -868,7 +865,8 @@ mod tests {
             ),
         ];
 
-        let [x_offsets, y_offsets, zooms, rotations] = song_lua_column_transforms(&windows, 4, 2.0);
+        let ([x_offsets, y_offsets, zooms, rotations], _) =
+            song_lua_column_transforms(&windows, 4, 2.0);
         assert!((x_offsets[1] - 32.0).abs() <= f32::EPSILON);
         assert!((zooms[1] - 0.5).abs() <= f32::EPSILON);
         assert!((rotations[1] - 180.0).abs() <= 0.001);
@@ -909,7 +907,7 @@ mod tests {
                 5.1,
                 f32::NAN,
             ] {
-                let actual = song_lua_column_transforms(&windows, num_cols, time);
+                let (actual, _) = song_lua_column_transforms(&windows, num_cols, time);
                 for (target_index, target) in targets.into_iter().enumerate() {
                     for column in 0..MAX_COLS {
                         let expected = windows

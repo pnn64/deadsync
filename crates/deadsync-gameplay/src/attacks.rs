@@ -739,6 +739,107 @@ pub enum SongLuaColumnTransformTarget {
     OffsetY,
     Zoom,
     RotationZ,
+    PositionPoint {
+        point: u8,
+        axis: u8,
+    },
+    PositionEnabled,
+    PositionBeatsPerT,
+    PositionReceptorT,
+    PositionSubtractBeat,
+}
+
+/// Solved two-point Offset spline and its native beat coordinates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SongLuaPositionSpline {
+    pub enabled: bool,
+    pub points: [[f32; 3]; 2],
+    pub beats_per_t: f32,
+    pub receptor_t: f32,
+    pub subtract_song_beat: bool,
+}
+
+impl Default for SongLuaPositionSpline {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            points: [[0.0; 3]; 2],
+            beats_per_t: 1.0,
+            receptor_t: 0.0,
+            subtract_song_beat: true,
+        }
+    }
+}
+
+impl SongLuaPositionSpline {
+    pub fn set(&mut self, target: SongLuaColumnTransformTarget, value: f32) {
+        use SongLuaColumnTransformTarget::*;
+        match target {
+            PositionPoint { point, axis } => {
+                if let Some(component) = self
+                    .points
+                    .get_mut(usize::from(point))
+                    .and_then(|point| point.get_mut(usize::from(axis)))
+                {
+                    *component = value;
+                }
+            }
+            PositionEnabled => self.enabled = value > 0.0,
+            PositionBeatsPerT => self.beats_per_t = value,
+            PositionReceptorT => self.receptor_t = value,
+            PositionSubtractBeat => self.subtract_song_beat = value > 0.5,
+            _ => {}
+        }
+    }
+
+    pub fn receptor(self, song_beat: f32) -> [f32; 3] {
+        self.at_t(if self.subtract_song_beat {
+            self.receptor_t
+        } else {
+            song_beat / self.beats_per_t
+        })
+        .0
+    }
+
+    pub fn sample(self, song_beat: f32, note_beat: f32) -> ([f32; 3], [f32; 3]) {
+        let t = if self.subtract_song_beat {
+            (note_beat - song_beat) / self.beats_per_t - self.receptor_t
+        } else {
+            note_beat / self.beats_per_t
+        };
+        self.at_t(t)
+    }
+
+    fn at_t(self, t: f32) -> ([f32; 3], [f32; 3]) {
+        if !self.enabled || !t.is_finite() {
+            return ([0.0; 3], [0.0; 3]);
+        }
+        // CubicSpline::check_minimum_size solves two points as straight lines.
+        // Its integer conversion truncates toward zero: (-1, 0) extrapolates.
+        // The final point has the opposite derivative even without looping.
+        let fraction = if t <= -1.0 {
+            0.0
+        } else if t >= 1.0 {
+            1.0
+        } else {
+            t
+        };
+        let delta =
+            std::array::from_fn::<_, 3, _>(|axis| self.points[1][axis] - self.points[0][axis]);
+        let position = if fraction == 1.0 {
+            self.points[1]
+        } else if fraction == 0.0 {
+            self.points[0]
+        } else {
+            std::array::from_fn(|axis| self.points[0][axis] + delta[axis] * fraction)
+        };
+        let derivative = if t >= 1.0 {
+            delta.map(|value| -value)
+        } else {
+            delta
+        };
+        (position, derivative)
+    }
 }
 
 #[must_use]

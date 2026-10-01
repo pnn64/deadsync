@@ -82,6 +82,10 @@ pub(crate) struct HoldPathSample {
     pub center_x: f32,
     pub world_z: f32,
     pub arrow_px: f32,
+    pub position_offset: [f32; 3],
+    pub spline_derivative: [f32; 3],
+    pub spline_step: f32,
+    pub cap_step: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -456,12 +460,29 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
     P: Fn(f32) -> HoldPathSample,
 {
     let rendered = compose_hold_body(draws, mesh_scratch, &request, sample_path, sprite_source);
+    // NoteDisplay gives each cap a constant beat; only the body interpolates.
+    let cap_head = sample_path(request.y_head);
+    let cap_tail = sample_path(request.y_tail);
+    let sample_top_cap = |y: f32| {
+        let mut sample = sample_path(y);
+        sample.position_offset = cap_head.position_offset;
+        sample.spline_derivative = cap_head.spline_derivative;
+        sample.cap_step = sample.spline_step;
+        sample
+    };
+    let sample_bottom_cap = |y: f32| {
+        let mut sample = sample_path(y);
+        sample.position_offset = cap_tail.position_offset;
+        sample.spline_derivative = cap_tail.spline_derivative;
+        sample.cap_step = sample.spline_step;
+        sample
+    };
     compose_top_cap(
         draws,
         mesh_scratch,
         &request,
         &rendered,
-        sample_path,
+        &sample_top_cap,
         sprite_source,
     );
     compose_bottom_cap(
@@ -469,7 +490,7 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
         mesh_scratch,
         &request,
         &rendered,
-        sample_path,
+        &sample_bottom_cap,
         sprite_source,
     )
 }
@@ -1189,8 +1210,9 @@ fn append_hold_body_mesh_slice<S: NoteskinSlot>(
     let (top_alpha, top_glow) = top_appearance;
     let (bottom_alpha, bottom_glow) = bottom_appearance;
     let top_row_positions = prev_row.unwrap_or_else(|| {
-        let row = hold_strip_row_3d(
-            [top.center_x, top_y, top.world_z],
+        let row = hold_path_row(
+            top,
+            top_y,
             top.arrow_px * width_ratio * 0.5,
             request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
             u0,
@@ -1221,8 +1243,9 @@ fn append_hold_body_mesh_slice<S: NoteskinSlot>(
     if rendered.head_row.is_none() {
         rendered.head_row = Some([top_row[0].pos, top_row[1].pos]);
     }
-    let bottom_row = hold_strip_row_3d(
-        [bottom.center_x, bottom_y, bottom.world_z],
+    let bottom_row = hold_path_row(
+        bottom,
+        bottom_y,
         bottom.arrow_px * width_ratio * 0.5,
         request.rotation_y_deg + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
         u0,
@@ -1338,7 +1361,8 @@ fn compose_top_cap<S, F, P>(
     let start = v0;
     v0 = start + span * ((cap_top - original_top) / (original_bottom - original_top));
     v1 = start + span * ((cap_bottom - original_top) / (original_bottom - original_top));
-    let top = sample_path(cap_top);
+    let mut top = sample_path(cap_top);
+    top.cap_step = 0.0;
     let bottom = sample_path(cap_bottom);
     let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
         && !is_model
@@ -1346,8 +1370,9 @@ fn compose_top_cap<S, F, P>(
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
-        let top_row = hold_strip_row_3d(
-            [top.center_x, cap_top, top.world_z],
+        let top_row = hold_path_row(
+            top,
+            cap_top,
             scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
             request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
             u0,
@@ -1361,6 +1386,7 @@ fn compose_top_cap<S, F, P>(
             ],
         );
         let bottom_row = if let Some(body_head_row) = rendered.head_row
+            && bottom.spline_step == 0.0
             && request
                 .body_slot
                 .is_some_and(|body| body.source_size()[0] == slot.source_size()[0])
@@ -1382,8 +1408,9 @@ fn compose_top_cap<S, F, P>(
                 ],
             )
         } else {
-            hold_strip_row_3d(
-                [bottom.center_x, cap_bottom, bottom.world_z],
+            hold_path_row(
+                bottom,
+                cap_bottom,
                 scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
                 request.rotation_y_deg
                     + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
@@ -1502,8 +1529,9 @@ fn compose_cap_mesh<S, P>(
                 let sample = sample_path(next_y);
                 let (alpha, glow) = hold_alpha_glow(request, sample);
                 let v = (v1 - v0).mul_add((next_y - top_y) / (bottom_y - top_y), v0);
-                let row = hold_strip_row_3d(
-                    [sample.center_x, next_y, sample.world_z],
+                let row = hold_path_row(
+                    sample,
+                    next_y,
                     scale_hold_part(slot.source_size(), sample.arrow_px)[0] * 0.5,
                     request.rotation_y_deg
                         + visual_note_rotation_y(sample.adjusted_travel, request.twirl),
@@ -1663,7 +1691,8 @@ fn compose_bottom_cap<S, F, P>(
     let start = v0;
     v0 = start + span * ((draw_top - original_top) / (original_bottom - original_top));
     v1 = start + span * ((draw_bottom - original_top) / (original_bottom - original_top));
-    let top = sample_path(draw_top);
+    let mut top = sample_path(draw_top);
+    top.cap_step = 0.0;
     let bottom = sample_path(draw_bottom);
     let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
         && !is_model
@@ -1672,6 +1701,7 @@ fn compose_bottom_cap<S, F, P>(
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
         let top_row = if let Some(body_tail_row) = rendered.tail_row
+            && top.spline_step == 0.0
             && request
                 .body_slot
                 .is_some_and(|body| body.source_size()[0] == slot.source_size()[0])
@@ -1690,8 +1720,9 @@ fn compose_bottom_cap<S, F, P>(
                 ],
             )
         } else {
-            hold_strip_row_3d(
-                [top.center_x, draw_top, top.world_z],
+            hold_path_row(
+                top,
+                draw_top,
                 scale_hold_part(slot.source_size(), top.arrow_px)[0] * 0.5,
                 request.rotation_y_deg + visual_note_rotation_y(top.adjusted_travel, request.twirl),
                 u0,
@@ -1705,8 +1736,9 @@ fn compose_bottom_cap<S, F, P>(
                 ],
             )
         };
-        let bottom_row = hold_strip_row_3d(
-            [bottom.center_x, draw_bottom, bottom.world_z],
+        let bottom_row = hold_path_row(
+            bottom,
+            draw_bottom,
             scale_hold_part(slot.source_size(), bottom.arrow_px)[0] * 0.5,
             request.rotation_y_deg + visual_note_rotation_y(bottom.adjusted_travel, request.twirl),
             u0,
@@ -1889,6 +1921,85 @@ pub(crate) fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -
         .saturating_add(2)
         .clamp(2048, HOLD_BODY_SEGMENT_SAFETY_MAX);
     (max_segments, estimated <= HOLD_BODY_LEGACY_SEGMENT_LIMIT)
+}
+
+// NoteDisplay's spline hold basis uses RageVec3Cross and RageAARotate.
+// Keep the native Y sign and the normalization of both quaternion products.
+fn hold_spline_axes(derivative: [f32; 3], rotation_y_deg: f32) -> ([f32; 3], [f32; 3]) {
+    let normalize = |vector: [f32; 3]| {
+        let square = vector.iter().map(|value| value * value).sum::<f32>();
+        let scale = if square > 0.0 {
+            1.0 / square.sqrt()
+        } else {
+            1.0
+        };
+        vector.map(|value| value * scale)
+    };
+    let derivative = normalize(derivative);
+    let forward = normalize([derivative[0], derivative[1] + 1.0, derivative[2]]);
+    let left = if forward[2].abs() > 0.9 {
+        [forward[2], 0.0, -forward[0]]
+    } else {
+        [-forward[1], -forward[0], 0.0]
+    };
+    let multiply = |a: [f32; 4], b: [f32; 4]| {
+        let out = [
+            a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+            a[3] * b[1] + a[1] * b[3] + a[2] * b[0] - a[0] * b[2],
+            a[3] * b[2] + a[2] * b[3] + a[0] * b[1] - a[1] * b[0],
+            a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+        ];
+        let square = out.iter().map(|value| value * value).sum::<f32>();
+        let scale = if square > 0.0 {
+            1.0 / square.sqrt()
+        } else {
+            1.0
+        };
+        out.map(|value| value * scale)
+    };
+    let (sine, cosine) = (-rotation_y_deg * std::f32::consts::PI / 180.0 / 2.0).sin_cos();
+    let quat = [
+        forward[0] * sine,
+        forward[1] * sine,
+        forward[2] * sine,
+        cosine,
+    ];
+    let conjugate = [-quat[0], -quat[1], -quat[2], quat[3]];
+    let left = multiply(multiply(quat, [left[0], left[1], left[2], 0.0]), conjugate);
+    (forward, [left[0], left[1], left[2]])
+}
+
+fn hold_path_row(
+    sample: HoldPathSample,
+    y: f32,
+    half_width: f32,
+    rotation_y_deg: f32,
+    u0: f32,
+    u1: f32,
+    v: f32,
+    color: [f32; 4],
+) -> [TexturedMeshVertex; 2] {
+    let mut center = [
+        sample.center_x + sample.position_offset[0],
+        y + sample.position_offset[1],
+        sample.world_z + sample.position_offset[2],
+    ];
+    if sample.spline_derivative == [0.0; 3] && sample.cap_step == 0.0 {
+        return hold_strip_row_3d(center, half_width, rotation_y_deg, u0, u1, v, color);
+    }
+    let (forward, left) = hold_spline_axes(sample.spline_derivative, rotation_y_deg);
+    // Native cap rows after the first advance one field-local unit.
+    for axis in 0..3 {
+        center[axis] += forward[axis] * sample.cap_step;
+    }
+    hold_strip_row_from_positions(
+        std::array::from_fn(|axis| center[axis] + left[axis] * half_width),
+        std::array::from_fn(|axis| center[axis] - left[axis] * half_width),
+        u0,
+        u1,
+        v,
+        color,
+    )
 }
 
 pub(crate) fn hold_strip_row_3d(
@@ -2317,8 +2428,144 @@ mod tests {
         }
     }
 
+    #[test]
+    fn position_spline_hold_rows_match_native_orientation() {
+        // NoteDisplay.cpp cross products and RageMath.cpp rotation/normalize,
+        // evaluated by MSVC /O2. Includes Bunny's almost negative-Y tangent.
+        let cases = [
+            (
+                [0f32, -216f32, 0.200000003f32],
+                0f32,
+                [1f32, 0f32, 0f32],
+                [0f32, 0.000450611231f32, 0.999999821f32],
+            ),
+            (
+                [0f32, -216f32, 0.200000003f32],
+                45f32,
+                [0.707106829f32, -0.707106709f32, 0.000318630278f32],
+                [0f32, 0.000450611231f32, 0.999999821f32],
+            ),
+            (
+                [0f32, -216f32, 0.200000003f32],
+                -90f32,
+                [4.74863739e-08f32, 1f32, -0.000450611318f32],
+                [0f32, 0.000450611231f32, 0.999999821f32],
+            ),
+            (
+                [48f32, -216f32, 0.200000003f32],
+                0f32,
+                [-0.109118469f32, -0.994028747f32, 0f32],
+                [0.994020224f32, 0.10911753f32, 0.00414175075f32],
+            ),
+            (
+                [48f32, -216f32, 0.200000003f32],
+                45f32,
+                [-0.143227533f32, -0.709497929f32, 0.689998925f32],
+                [0.994020224f32, 0.10911753f32, 0.00414175075f32],
+            ),
+            (
+                [48f32, -216f32, 0.200000003f32],
+                -90f32,
+                [-0.211517721f32, -0.0241230205f32, -0.977076471f32],
+                [0.994020224f32, 0.10911753f32, 0.00414175075f32],
+            ),
+            (
+                [-48f32, 216f32, -0.200000003f32],
+                0f32,
+                [-0.994028926f32, 0.109116748f32, 0f32],
+                [-0.109116741f32, 0.994028807f32, -0.000454653084f32],
+            ),
+            (
+                [-48f32, 216f32, -0.200000003f32],
+                45f32,
+                [-0.709852695f32, 0.139995679f32, -0.690297306f32],
+                [-0.109116741f32, 0.994028807f32, -0.000454653084f32],
+            ),
+            (
+                [-48f32, 216f32, -0.200000003f32],
+                -90f32,
+                [-0.0236211419f32, 0.216087013f32, 0.976088405f32],
+                [-0.109116741f32, 0.994028807f32, -0.000454653084f32],
+            ),
+            (
+                [12f32, 18f32, 3f32],
+                0f32,
+                [-0.957508862f32, -0.288403869f32, 0f32],
+                [0.287657112f32, 0.955029607f32, 0.071914278f32],
+            ),
+            (
+                [12f32, 18f32, 3f32],
+                45f32,
+                [-0.738138914f32, -0.309331894f32, -0.599553823f32],
+                [0.287657112f32, 0.955029607f32, 0.071914278f32],
+            ),
+            (
+                [12f32, 18f32, 3f32],
+                -90f32,
+                [-0.137721106f32, -0.594954371f32, 0.791872621f32],
+                [0.287657112f32, 0.955029607f32, 0.071914278f32],
+            ),
+            (
+                [0f32, 0f32, 1f32],
+                0f32,
+                [-1f32, 0f32, 0f32],
+                [0f32, 0.707106769f32, 0.707106769f32],
+            ),
+            (
+                [0f32, 0f32, 1f32],
+                45f32,
+                [-0.707106829f32, 0.5f32, -0.5f32],
+                [0f32, 0.707106769f32, 0.707106769f32],
+            ),
+            (
+                [0f32, 0f32, 1f32],
+                -90f32,
+                [-2.98023259e-08f32, -0.707106769f32, 0.707106769f32],
+                [0f32, 0.707106769f32, 0.707106769f32],
+            ),
+        ];
+        for (derivative, angle, left, forward) in cases {
+            let sample = HoldPathSample {
+                center_x: 100.0,
+                world_z: 3.0,
+                arrow_px: 64.0,
+                position_offset: [12.0, 54.0, 0.05],
+                spline_derivative: derivative,
+                ..Default::default()
+            };
+            let row = hold_path_row(sample, 200.0, 32.0, angle, 0.0, 1.0, 0.5, [1.0; 4]);
+            let center = [112.0, 254.0, 3.05];
+            let cap = hold_path_row(
+                HoldPathSample {
+                    cap_step: 1.5,
+                    ..sample
+                },
+                200.0,
+                32.0,
+                angle,
+                0.0,
+                1.0,
+                0.5,
+                [1.0; 4],
+            );
+            for axis in 0..3 {
+                assert!(
+                    (row[0].pos[axis] - (center[axis] + left[axis] * 32.0)).abs() < 0.002,
+                    "derivative={derivative:?}, angle={angle}, axis={axis}: {:?}",
+                    row[0].pos
+                );
+                assert!((row[1].pos[axis] - (center[axis] - left[axis] * 32.0)).abs() < 0.002);
+                assert!((cap[0].pos[axis] - row[0].pos[axis] - forward[axis] * 1.5).abs() < 0.002);
+            }
+        }
+    }
+
     fn straight_path(y: f32) -> HoldPathSample {
         HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
             adjusted_travel: y,
             center_x: 32.0,
             world_z: y * 0.1,
@@ -2420,6 +2667,10 @@ mod tests {
                             &mut scratch,
                             request,
                             &|y| HoldPathSample {
+                                position_offset: [0.0; 3],
+                                spline_derivative: [0.0; 3],
+                                spline_step: 0.0,
+                                cap_step: 0.0,
                                 arrow_px: 64.0 * zoom,
                                 ..straight_path(y)
                             },
@@ -2519,6 +2770,10 @@ mod tests {
                     request.appearance_cache =
                         crate::note_appearance_cache(0.0, 0.0, request.appearance);
                     let sample = |y: f32| HoldPathSample {
+                        position_offset: [0.0; 3],
+                        spline_derivative: [0.0; 3],
+                        spline_step: 0.0,
+                        cap_step: 0.0,
                         adjusted_travel: (y - 256.0) * zoom,
                         ..straight_path(y)
                     };
@@ -2615,6 +2870,10 @@ mod tests {
                 request.depth_test = true;
                 request.lane_reverse = reverse;
                 let sample = |y: f32| HoldPathSample {
+                    position_offset: [0.0; 3],
+                    spline_derivative: [0.0; 3],
+                    spline_step: 0.0,
+                    cap_step: 0.0,
                     adjusted_travel: if reverse { -y } else { y },
                     center_x: 32.0,
                     world_z: 0.0,
@@ -2737,6 +2996,10 @@ mod tests {
     #[test]
     fn cached_hold_endpoint_sample_matches_direct_sampling() {
         let sample = |y: f32| HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
             adjusted_travel: y.mul_add(1.25, -3.0),
             center_x: y.mul_add(-0.5, 17.0),
             world_z: y * 0.125,
@@ -2768,6 +3031,10 @@ mod tests {
     fn cached_hold_endpoint_appearance_matches_direct_evaluation() {
         let request: HoldBodyCapRequest<'_, TestSlot> = body_cap_request(None, None, None);
         let sample = HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
             adjusted_travel: 37.5,
             center_x: -12.0,
             world_z: 4.0,
@@ -2841,6 +3108,10 @@ mod tests {
         let mut mesh_scratch = HoldMeshScratch::with_columns(1);
         mesh_scratch.begin_frame();
         let curved_path = |y: f32| HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
             adjusted_travel: y,
             center_x: y.mul_add(0.125, 12.0),
             world_z: y * 0.25,
@@ -2896,6 +3167,10 @@ mod tests {
                 let sample = |y: f32| {
                     let travel = if reverse { -y } else { y };
                     HoldPathSample {
+                        position_offset: [0.0; 3],
+                        spline_derivative: [0.0; 3],
+                        spline_step: 0.0,
+                        cap_step: 0.0,
                         adjusted_travel: travel,
                         center_x: crate::note_x_offset(
                             0,
@@ -2968,6 +3243,10 @@ mod tests {
         let mut scratch = HoldMeshScratch::with_columns(1);
         scratch.begin_frame();
         let sample = |y: f32| HoldPathSample {
+            position_offset: [0.0; 3],
+            spline_derivative: [0.0; 3],
+            spline_step: 0.0,
+            cap_step: 0.0,
             adjusted_travel: y - 100.0,
             center_x: 200.0
                 + crate::drunk_x_extra(
@@ -3733,6 +4012,10 @@ mod tests {
                 &mut HoldMeshScratch::default(),
                 request,
                 &|y| HoldPathSample {
+                    position_offset: [0.0; 3],
+                    spline_derivative: [0.0; 3],
+                    spline_step: 0.0,
+                    cap_step: 0.0,
                     adjusted_travel: if reason == "hidden" { 0.0 } else { y },
                     ..straight_path(y)
                 },
@@ -3992,6 +4275,10 @@ mod tests {
                             &mut HoldMeshScratch::default(),
                             draw,
                             &|y| HoldPathSample {
+                                position_offset: [0.0; 3],
+                                spline_derivative: [0.0; 3],
+                                spline_step: 0.0,
+                                cap_step: 0.0,
                                 arrow_px: 64.0 * zoom,
                                 ..straight_path(y)
                             },

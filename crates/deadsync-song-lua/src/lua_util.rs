@@ -10212,6 +10212,78 @@ fn note_column_position_x_offset(column: &Table) -> Result<Option<f32>, String> 
     Ok(Some(position_x - base_x))
 }
 
+// Two-point splines are linear even when Solve uses cubic interpolation.
+// Keep point and handler validation together to avoid partial captures.
+fn note_column_pos_spline(
+    actor: &Table,
+) -> Result<Option<[(SongLuaColumnTransformTarget, f32); 10]>, String> {
+    use SongLuaColumnTransformTarget::*;
+    let Some(handler) = actor
+        .get::<Option<Table>>("__songlua_pos_handler")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let mode = handler
+        .get::<String>("__songlua_spline_mode")
+        .map_err(|err| err.to_string())?;
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
+        return Ok(None);
+    }
+    let spline = handler
+        .get::<Table>("__songlua_spline")
+        .map_err(|err| err.to_string())?;
+    if spline
+        .get::<i64>("__songlua_spline_size")
+        .map_err(|err| err.to_string())?
+        != 2
+    {
+        return Ok(None);
+    }
+    let points = spline
+        .get::<Table>("__songlua_spline_points")
+        .map_err(|err| err.to_string())?;
+    let mut out = [(PositionEnabled, 0.0); 10];
+    for point in 0..2u8 {
+        let Some(values) = points
+            .get::<Option<Table>>(i64::from(point) + 1)
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        for axis in 0..3u8 {
+            let value = values
+                .get::<Option<f32>>(i64::from(axis) + 1)
+                .map_err(|err| err.to_string())?
+                .unwrap_or(0.0);
+            if !value.is_finite() {
+                return Ok(None);
+            }
+            out[usize::from(point) * 3 + usize::from(axis)] =
+                (PositionPoint { point, axis }, value);
+        }
+    }
+    let beats = handler
+        .get::<f32>("__songlua_beats_per_t")
+        .map_err(|err| err.to_string())?;
+    let receptor = handler
+        .get::<f32>("__songlua_receptor_t")
+        .map_err(|err| err.to_string())?;
+    if !beats.is_finite() || beats == 0.0 || !receptor.is_finite() {
+        return Ok(None);
+    }
+    let subtract = handler
+        .get::<bool>("__songlua_subtract_song_beat")
+        .map_err(|err| err.to_string())?;
+    out[6..].copy_from_slice(&[
+        (PositionEnabled, 1.0),
+        (PositionBeatsPerT, beats),
+        (PositionReceptorT, receptor),
+        (PositionSubtractBeat, if subtract { 1.0 } else { 0.0 }),
+    ]);
+    Ok(Some(out))
+}
+
 pub fn read_note_column_transform_samples_for_fields(
     note_fields: Vec<Table>,
 ) -> Result<Vec<SongLuaColumnTransformSample>, String> {
@@ -10249,14 +10321,21 @@ pub fn read_note_column_transform_samples_for_fields(
                     });
                 }
             };
-            push(
-                SongLuaColumnTransformTarget::OffsetX,
-                note_column_position_x_offset(&column)?,
-            );
-            push(
-                SongLuaColumnTransformTarget::OffsetY,
-                note_column_pos_offset_y(&column)?,
-            );
+            let position_spline = note_column_pos_spline(&column)?;
+            if position_spline.is_some() {
+                // Clear the uniform translation when switching to a beat spline.
+                push(SongLuaColumnTransformTarget::OffsetX, Some(0.0));
+                push(SongLuaColumnTransformTarget::OffsetY, Some(0.0));
+            } else {
+                push(
+                    SongLuaColumnTransformTarget::OffsetX,
+                    note_column_position_x_offset(&column)?,
+                );
+                push(
+                    SongLuaColumnTransformTarget::OffsetY,
+                    note_column_pos_offset_y(&column)?,
+                );
+            }
             push(
                 SongLuaColumnTransformTarget::Zoom,
                 note_column_handler_uniform_component(&column, "__songlua_zoom_handler", 1, 1.0)?,
@@ -10265,6 +10344,14 @@ pub fn read_note_column_transform_samples_for_fields(
                 SongLuaColumnTransformTarget::RotationZ,
                 note_column_handler_uniform_component(&column, "__songlua_rot_handler", 3, 0.0)?,
             );
+            // Keep target order so frame capture uses the linear merge path.
+            if let Some(spline) = position_spline {
+                for (target, value) in spline {
+                    push(target, Some(value));
+                }
+            } else {
+                push(SongLuaColumnTransformTarget::PositionEnabled, Some(0.0));
+            }
         }
     }
     Ok(out)

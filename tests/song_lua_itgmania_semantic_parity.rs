@@ -2653,7 +2653,12 @@ fn compare_column_splines(
             {
                 continue;
             }
-            let actual = deadsync_gameplay::song_lua_column_y_offset(&windows, column, seconds);
+            let (transforms, splines) =
+                deadsync_gameplay::song_lua_column_transforms(&windows, column + 1, seconds);
+            let actual = transforms[1].get(column).copied().unwrap_or(0.0)
+                + splines
+                    .get(column)
+                    .map_or(0.0, |spline| spline.receptor(beat)[1]);
             parity.check_once(
                 actual.is_finite() && (actual - expected).abs() <= 0.03,
                 reported.entry(column).or_default(),

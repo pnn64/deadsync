@@ -231,6 +231,7 @@ fn compose_field_contents<S, F>(
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
     let column_x_offsets = prepared.column_x_offsets;
+    let position_splines = prepared.column_position_splines;
     let column_zooms = prepared.column_zooms;
     let column_rotations_deg = prepared.column_rotations_deg;
     let scale_sprite =
@@ -638,7 +639,9 @@ fn compose_field_contents<S, F>(
                 });
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
-        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites && !has_zoom_spline;
+        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites
+            && !has_zoom_spline
+            && !position_splines[local_col].enabled;
         let sample_hold_path = |screen_y: f32| {
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
                 lane_receptor_y,
@@ -646,69 +649,90 @@ fn compose_field_contents<S, F>(
                 screen_y,
                 lane_offset,
             );
+            let beat = if (y_tail - y_head).abs() <= f32::EPSILON {
+                body_head_beat
+            } else {
+                body_head_beat
+                    + (hold.end_beat - body_head_beat) * ((screen_y - y_head) / (y_tail - y_head))
+            };
+            let (offset, derivative) = prepared.spline_offsets(local_col, beat);
             HoldPathSample {
                 adjusted_travel,
                 center_x: lane_center_x_from_adjusted_travel(local_col, adjusted_travel),
                 world_z: world_z_for_adjusted_travel(local_col, adjusted_travel),
+                position_offset: offset,
+                spline_derivative: derivative,
+                spline_step: if position_splines[local_col].enabled {
+                    field_zoom
+                } else {
+                    0.0
+                },
+                cap_step: 0.0,
                 arrow_px: target_arrow_px
                     * column_zoom
                     * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
                         + body_zoom_offset_at_y(screen_y)),
             }
         };
-        compose_hold_body_caps(
-            flat_draws,
-            hold_mesh_scratch,
-            HoldBodyCapRequest {
-                body_slot: hold_plan.body_slot,
-                top_cap_slot: hold_plan.top_cap_slot,
-                bottom_cap_slot: hold_plan.bottom_cap_slot,
-                y_head,
-                y_tail,
-                draw_span: hold_plan.draw_span,
-                body_flipped,
-                lane_reverse,
-                top_anchor_reverse: note_display.top_hold_anchor_when_reverse,
-                body_phase: hold_plan.body_phase,
-                top_cap_phase: hold_plan.top_cap_phase,
-                bottom_cap_phase: hold_plan.bottom_cap_phase,
-                body_uv_translation: note_part_uv_translation_for_quantization(
-                    note.beat,
-                    note.quantization_idx,
-                    ns.note_display_metrics.part_texture_translate[hold_parts.body as usize],
-                    false,
-                ),
-                top_cap_uv_translation: note_part_uv_translation_for_quantization(
-                    note.beat,
-                    note.quantization_idx,
-                    ns.note_display_metrics.part_texture_translate[hold_parts.topcap as usize],
-                    false,
-                ),
-                bottom_cap_uv_translation: note_part_uv_translation_for_quantization(
-                    note.beat,
-                    note.quantization_idx,
-                    ns.note_display_metrics.part_texture_translate[hold_parts.bottomcap as usize],
-                    false,
-                ),
-                target_arrow_px: hold_target_arrow_px,
-                diffuse: hold_diffuse,
-                elapsed_s: elapsed_screen,
-                lane_offset: lane_tipsy_offsets[local_col],
-                fade_travel_scale,
-                appearance: alpha_params[local_col],
-                appearance_cache: appearance_caches[local_col],
-                use_legacy_sprites: use_legacy_hold_sprites,
-                rotation_y_deg: 0.0,
-                twirl: visual.twirl,
-                depth_test: hold_depth_test,
-                draw_bounds,
-                body_z: crate::style::HOLD_BODY_Z,
-                cap_z: crate::style::HOLD_CAP_Z,
-                glow_z: crate::style::HOLD_GLOW_Z,
-            },
-            &sample_hold_path,
-            sprite_source,
-        );
+        // Native normalization of an identical-point Offset spline produces
+        // no finite hold strip. Keep the head, and omit its body/caps.
+        let position_spline = position_splines[local_col];
+        if !position_spline.enabled || position_spline.points[0] != position_spline.points[1] {
+            compose_hold_body_caps(
+                flat_draws,
+                hold_mesh_scratch,
+                HoldBodyCapRequest {
+                    body_slot: hold_plan.body_slot,
+                    top_cap_slot: hold_plan.top_cap_slot,
+                    bottom_cap_slot: hold_plan.bottom_cap_slot,
+                    y_head,
+                    y_tail,
+                    draw_span: hold_plan.draw_span,
+                    body_flipped,
+                    lane_reverse,
+                    top_anchor_reverse: note_display.top_hold_anchor_when_reverse,
+                    body_phase: hold_plan.body_phase,
+                    top_cap_phase: hold_plan.top_cap_phase,
+                    bottom_cap_phase: hold_plan.bottom_cap_phase,
+                    body_uv_translation: note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate[hold_parts.body as usize],
+                        false,
+                    ),
+                    top_cap_uv_translation: note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate[hold_parts.topcap as usize],
+                        false,
+                    ),
+                    bottom_cap_uv_translation: note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate
+                            [hold_parts.bottomcap as usize],
+                        false,
+                    ),
+                    target_arrow_px: hold_target_arrow_px,
+                    diffuse: hold_diffuse,
+                    elapsed_s: elapsed_screen,
+                    lane_offset: lane_tipsy_offsets[local_col],
+                    fade_travel_scale,
+                    appearance: alpha_params[local_col],
+                    appearance_cache: appearance_caches[local_col],
+                    use_legacy_sprites: use_legacy_hold_sprites,
+                    rotation_y_deg: 0.0,
+                    twirl: visual.twirl,
+                    depth_test: hold_depth_test,
+                    draw_bounds,
+                    body_z: crate::style::HOLD_BODY_Z,
+                    cap_z: crate::style::HOLD_CAP_Z,
+                    glow_z: crate::style::HOLD_GLOW_Z,
+                },
+                &sample_hold_path,
+                sprite_source,
+            );
+        }
 
         if hold_head_zoom.abs() <= f32::EPSILON {
             return;
@@ -732,8 +756,11 @@ fn compose_field_contents<S, F>(
         } else {
             lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel)
         };
-        let head_center = [head_center_x, head_draw_y];
-        let head_world_z = world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
+        let (head_offset, _) =
+            prepared.spline_offsets(local_col, if engaged { current_beat } else { note.beat });
+        let head_center = [head_center_x + head_offset[0], head_draw_y + head_offset[1]];
+        let head_world_z =
+            world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel) + head_offset[2];
         let elapsed = elapsed_screen;
         let head_part = if head_slot.is_none() && head_layers.is_none() {
             ns.head_fallback_part(matches!(note.note_type, NoteType::Roll), use_active)
@@ -1075,7 +1102,9 @@ fn compose_visible_notes<S, F>(
                 if note_alpha <= f32::EPSILON && glow_alpha <= f32::EPSILON {
                     return;
                 }
+                let (spline_offset, _) = prepared.spline_offsets(local_col, note.beat);
                 let column_center_x = prepared.field.playfield_center_x
+                    + spline_offset[0]
                     + prepared.column_x_offsets[local_col]
                     + if note_x_is_static {
                         static_note_x_offsets[local_col]
@@ -1094,13 +1123,14 @@ fn compose_visible_notes<S, F>(
                             notes.tiny_spacing_scale,
                         )
                     };
-                let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
+                let y_pos =
+                    direction.mul_add(adjusted_travel, receptor_y) + lane_offset + spline_offset[1];
                 let transform_cache = lane_transform_caches[local_col];
                 let world_z = note_world_z_cached(
                     adjusted_travel,
                     notes.note_depth_frame_cache,
                     transform_cache,
-                );
+                ) + spline_offset[2];
                 let effect_zoom = prepared.column_zooms[local_col]
                     * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache);
                 let note_scale = field_zoom * effect_zoom;

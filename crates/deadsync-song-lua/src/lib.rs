@@ -4626,6 +4626,11 @@ pub enum SongLuaColumnTransformTarget {
     OffsetY,
     Zoom,
     RotationZ,
+    PositionPoint { point: u8, axis: u8 },
+    PositionEnabled,
+    PositionBeatsPerT,
+    PositionReceptorT,
+    PositionSubtractBeat,
 }
 
 impl SongLuaColumnTransformTarget {
@@ -4633,8 +4638,8 @@ impl SongLuaColumnTransformTarget {
     #[must_use]
     pub const fn baseline(self) -> f32 {
         match self {
-            Self::OffsetX | Self::OffsetY | Self::RotationZ => 0.0,
-            Self::Zoom => 1.0,
+            Self::Zoom | Self::PositionBeatsPerT | Self::PositionSubtractBeat => 1.0,
+            _ => 0.0,
         }
     }
 }
@@ -15236,7 +15241,7 @@ local function bounce_col(v)
     local spline = ph:GetSpline()
     spline:SetSize(2)
     spline:SetPoint(1, {0, v, 0})
-    spline:SetPoint(2, {0, v, 0.001})
+    spline:SetPoint(2, {0, -v, 0.01*v})
     spline:Solve()
 end
 
@@ -15257,8 +15262,14 @@ return Def.ActorFrame{}
 
         assert_eq!(compiled.info.unsupported_function_eases, 0);
         assert!(compiled.eases.is_empty());
-        assert_eq!(compiled.column_offsets.len(), 1);
-        let window = &compiled.column_offsets[0];
+        assert_eq!(compiled.column_offsets.len(), 5);
+        let window = compiled
+            .column_offsets
+            .iter()
+            .find(|window| {
+                window.target == SongLuaColumnTransformTarget::PositionPoint { point: 0, axis: 1 }
+            })
+            .expect("first point Y");
         assert_eq!(window.player, 0);
         assert_eq!(window.column, 1);
         assert_eq!(window.unit, SongLuaTimeUnit::Beat);
@@ -15268,6 +15279,72 @@ return Def.ActorFrame{}
         assert!((window.from_y - 33.75).abs() <= 0.001);
         assert!(window.to_y.abs() <= 0.001);
         assert_eq!(window.easing.as_deref(), Some("outSine"));
+        let second = compiled
+            .column_offsets
+            .iter()
+            .find(|window| {
+                window.target == SongLuaColumnTransformTarget::PositionPoint { point: 1, axis: 1 }
+            })
+            .expect("second point Y");
+        assert!((second.from_y + 33.75).abs() <= 0.001);
+        assert_eq!(second.to_y, 0.0);
+        let depth = compiled
+            .column_offsets
+            .iter()
+            .find(|window| {
+                window.target == SongLuaColumnTransformTarget::PositionPoint { point: 1, axis: 2 }
+            })
+            .expect("second point Z");
+        assert!((depth.from_y - 0.3375).abs() <= 0.001);
+        assert_eq!(depth.to_y, 0.0);
+    }
+
+    #[test]
+    fn column_position_spline_updates_and_disable_reach_runtime() {
+        let song_dir = test_dir("column-position-two-point-update");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame{InitCommand=function(self)
+    self:SetUpdateFunction(function()
+        local h = SCREENMAN:GetTopScreen():GetChild("PlayerP2"):GetChild("NoteField"):GetColumnActors()[3]:GetPosHandler()
+        if GAMESTATE:GetSongBeat() >= 2 then
+            h:SetSplineMode("NoteColumnSplineMode_Disabled")
+        else
+            h:SetSplineMode("NoteColumnSplineMode_Offset")
+            h:SetBeatsPerT(6)
+            h:SetReceptorT(0.25)
+            h:SetSubtractSongBeat(false)
+            local s = h:GetSpline()
+            s:SetSize(2)
+            s:SetPoint(1, {-12,108,0})
+            s:SetPoint(2, {36,-108,0.2})
+            s:Solve()
+        end
+    end)
+end}
+"#).expect("write Lua fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Column Position Update");
+        context.music_length_seconds = 4.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile fixture");
+        let timing = deadsync_rules::timing::TimingData::default();
+        let windows = crate::gameplay::build_song_lua_column_offset_windows_for_player(
+            &compiled, &timing, 1, 0.0,
+        );
+        let before = deadsync_gameplay::song_lua_column_transforms(&windows, 3, 0.5).1[2];
+        assert!(before.enabled);
+        assert_eq!(before.beats_per_t, 6.0);
+        assert_eq!(before.receptor_t, 0.25);
+        assert!(!before.subtract_song_beat);
+        assert_eq!(before.points, [[-12.0, 108.0, 0.0], [36.0, -108.0, 0.2]]);
+        let (position, derivative) = before.sample(20.0, 3.0);
+        assert_eq!(position, [12.0, 0.0, 0.1]);
+        assert_eq!(derivative, [48.0, -216.0, 0.2]);
+        assert!(!deadsync_gameplay::song_lua_column_transforms(&windows, 3, 3.0).1[2].enabled);
+        assert!(!deadsync_gameplay::song_lua_column_transforms(&windows, 3, 0.5).1[1].enabled);
+        let p1 = crate::gameplay::build_song_lua_column_offset_windows_for_player(
+            &compiled, &timing, 0, 0.0,
+        );
+        assert!(p1.is_empty());
     }
 
     #[test]

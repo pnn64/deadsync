@@ -259,6 +259,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             notes.note_depth_frame_cache,
             crate::lane_note_transform_cache(current_beat, effect),
         );
+        lane_depths[local_col] +=
+            prepared.column_position_splines[local_col].receptor(current_beat)[2] * field_zoom;
         let base_zoom = visual_arrow_effect_zoom(0.0, effect);
         lane_base_zooms[local_col] = base_zoom;
         let effect_zoom = (base_zoom
@@ -2781,6 +2783,208 @@ mod tests {
                                 "draw range leaves receptors visible"
                             );
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn position_splines_reach_composed_notes_receptors_and_holds() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_gameplay::{
+            SongLuaColumnOffsetWindowRuntime, SongLuaColumnTransformTarget as Target, SongLuaEase,
+        };
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("note"))
+            .collect();
+        ns.mine_layers = vec![vec![TestSlot::new("note")].into(), vec![].into()];
+        ns.hold_columns[0].head_inactive = Some(TestSlot::new("note"));
+        ns.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+        ns.hold_columns[0].topcap_inactive = Some(TestSlot::new("top"));
+        ns.hold_columns[0].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        ns.roll_columns = ns.hold_columns.clone();
+        let points = [[-12.0, 108.0, 0.0], [36.0, -108.0, 0.2]];
+        let mut values = vec![
+            (Target::PositionEnabled, 1.0),
+            (Target::PositionBeatsPerT, 8.0),
+        ];
+        for point in 0..2u8 {
+            for axis in 0..3u8 {
+                values.push((
+                    Target::PositionPoint { point, axis },
+                    points[usize::from(point)][usize::from(axis)],
+                ));
+            }
+        }
+        let windows: Vec<_> = values
+            .into_iter()
+            .map(|(target, value)| SongLuaColumnOffsetWindowRuntime {
+                column: 0,
+                target,
+                start_second: 0.0,
+                end_second: 4.0,
+                sustain_end_second: 4.0,
+                from_y: value,
+                to_y: value,
+                easing: SongLuaEase::Linear,
+                opt1: None,
+                opt2: None,
+            })
+            .collect();
+        let mut flat_spline = windows.clone();
+        for window in &mut flat_spline {
+            if matches!(window.target, Target::PositionPoint { .. }) {
+                window.from_y = 0.0;
+                window.to_y = 0.0;
+            }
+        }
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let index = deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index");
+        let lanes = [vec![index], vec![]];
+        let render = |request: &NotefieldComposeRequest<'_, TestSlot>| {
+            let prepared = prepare_notefield(request).expect("prepare field");
+            let frame = NotefieldFieldFrameView {
+                feedback: spline_feedback(&[]),
+                completed_rows: Default::default(),
+            };
+            let mut draws = Vec::new();
+            compose_notefield_field(
+                &mut Vec::new(),
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &mut HoldMeshScratch::with_columns(1),
+                &mut CapturedActorScratch::with_capacities(32, 0),
+                &mut NotefieldCameraCache::default(),
+                request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            draws
+        };
+        for kind in [
+            NoteType::Tap,
+            NoteType::Mine,
+            NoteType::Hold,
+            NoteType::Roll,
+        ] {
+            let mut n = note(0);
+            n.note_type = kind;
+            n.beat = 2.0;
+            n.row_index = 96;
+            if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                n.hold = Some(HoldData {
+                    end_row_index: 144,
+                    end_beat: 3.0,
+                    result: None,
+                    life: 1.0,
+                    let_go_started_at: None,
+                    let_go_starting_life: 1.0,
+                    last_held_row_index: 96,
+                    last_held_beat: 2.0,
+                });
+            }
+            let notes = [n];
+            for placement in [FieldPlacement::P1, FieldPlacement::P2] {
+                for direction in [-1.0, 1.0] {
+                    for zoom in [0.5, 1.0, 1.5] {
+                        let mut request =
+                            request(&ns, &timing, &notes, &hides, placement, 0, 1, 2, 2);
+                        request.chart.lane_note_row_indices = &lanes;
+                        request.chart.lane_hold_indices = &lanes;
+                        request.chart.note_itg_rows = &[96];
+                        request.geometry.column_dirs.fill(direction);
+                        request.geometry.field_zoom = zoom;
+                        let before = render(&request);
+                        request.song_lua.column_offsets = &windows;
+                        let after = render(&request);
+                        let sprite = |draws: &[FlatDraw], key: &str| {
+                            draws
+                                .iter()
+                                .find_map(|draw| match draw {
+                                    FlatDraw::Sprite(sprite)
+                                        if sprite.source.texture_key() == Some(key) =>
+                                    {
+                                        Some([sprite.center[0], sprite.center[1], sprite.world_z])
+                                    }
+                                    _ => None,
+                                })
+                                .expect("composed sprite")
+                        };
+                        // Native t=(2-1)/8 gives (-6,81,.025); receptor t=0
+                        // gives (-12,108,0). Reverse affects only ArrowEffects.
+                        for (key, delta) in [
+                            ("note", [-6.0, 81.0, 0.025]),
+                            ("target0", [-12.0, 108.0, 0.0]),
+                        ] {
+                            let a = sprite(&after, key);
+                            let b = sprite(&before, key);
+                            for axis in 0..3 {
+                                assert!(
+                                    (a[axis] - b[axis] - delta[axis] * zoom).abs() < 0.001,
+                                    "{kind:?}, {placement:?}, dir={direction}, zoom={zoom}, {key}, axis={axis}: {a:?} vs {b:?}"
+                                );
+                            }
+                        }
+                        if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                            for (part, depth) in [("top", 0.025), ("bottom", 0.05)] {
+                                let mesh = after
+                                    .iter()
+                                    .find_map(|draw| match draw {
+                                        FlatDraw::TexturedMesh(mesh)
+                                            if mesh.texture.as_ref() == part =>
+                                        {
+                                            Some(mesh)
+                                        }
+                                        _ => None,
+                                    })
+                                    .expect("spline cap uses mesh");
+                                let vertices = match &mesh.vertices {
+                                    FlatMeshVertices::Shared(v) => v.as_ref(),
+                                    FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                };
+                                assert!(!vertices.is_empty());
+                                // Native cap rows keep the same beat and advance one unit
+                                // along the forward vector after their first row.
+                                let step_z = 0.00414175075 * zoom;
+                                assert!(
+                                    vertices
+                                        .iter()
+                                        .all(|vertex| (vertex.pos[2] - depth * zoom).abs() < 0.001
+                                            || (vertex.pos[2] - depth * zoom - step_z).abs()
+                                                < 0.001),
+                                    "{part} constant beat"
+                                );
+                                assert!(
+                                    vertices.iter().any(|vertex| (vertex.pos[2]
+                                        - depth * zoom
+                                        - step_z)
+                                        .abs()
+                                        < 0.001)
+                                );
+                            }
+                            assert!(after.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref()=="body")));
+                        }
+                        if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                            request.song_lua.column_offsets = &flat_spline;
+                            let flat = render(&request);
+                            request.song_lua.column_offsets = &[];
+                            assert_eq!(sprite(&flat, "note"), sprite(&before, "note"));
+                            assert!(!flat.iter().any(|draw| matches!(draw,
+                                FlatDraw::TexturedMesh(mesh) if ["body","top","bottom"].contains(&mesh.texture.as_ref()))));
+                        }
+                        request.song_lua.column_offsets = &[];
+                        let restored = render(&request);
+                        assert_eq!(sprite(&restored, "note"), sprite(&before, "note"));
                     }
                 }
             }

@@ -180,6 +180,21 @@ const fn song_lua_runtime_column_transform_target(
         crate::SongLuaColumnTransformTarget::RotationZ => {
             deadsync_gameplay::SongLuaColumnTransformTarget::RotationZ
         }
+        crate::SongLuaColumnTransformTarget::PositionPoint { point, axis } => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionPoint { point, axis }
+        }
+        crate::SongLuaColumnTransformTarget::PositionEnabled => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionEnabled
+        }
+        crate::SongLuaColumnTransformTarget::PositionBeatsPerT => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionBeatsPerT
+        }
+        crate::SongLuaColumnTransformTarget::PositionReceptorT => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionReceptorT
+        }
+        crate::SongLuaColumnTransformTarget::PositionSubtractBeat => {
+            deadsync_gameplay::SongLuaColumnTransformTarget::PositionSubtractBeat
+        }
     }
 }
 

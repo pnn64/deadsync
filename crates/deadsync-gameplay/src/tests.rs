@@ -18925,4 +18925,101 @@ mod tests {
             "/tests/perf/crossover_rows.rs"
         ));
     }
+
+    #[test]
+    fn two_point_position_spline_matches_native_samples() {
+        let spline = SongLuaPositionSpline {
+            enabled: true,
+            points: [[-12.0, 108.0, 0.0], [36.0, -108.0, 0.2]],
+            beats_per_t: 6.0,
+            receptor_t: 0.0,
+            subtract_song_beat: true,
+        };
+        // ITGmania CubicSpline.cpp, MSVC /O2, including negative fractions
+        // and the final point's reversed derivative.
+        let cases = [
+            (
+                -2f32,
+                [-12f32, 108f32, 0f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                -1f32,
+                [-12f32, 108f32, 0f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                -0.999000013f32,
+                [-59.9519997f32, 323.783997f32, -0.1998f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                -0.25f32,
+                [-24f32, 162f32, -0.0500000007f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0f32,
+                [-12f32, 108f32, 0f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0.25f32,
+                [0f32, 54f32, 0.0500000007f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0.5f32,
+                [12f32, 0f32, 0.100000001f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                0.999000013f32,
+                [35.9519997f32, -107.783997f32, 0.1998f32],
+                [48f32, -216f32, 0.200000003f32],
+            ),
+            (
+                1f32,
+                [36f32, -108f32, 0.200000003f32],
+                [-48f32, 216f32, -0.200000003f32],
+            ),
+            (
+                1.5f32,
+                [36f32, -108f32, 0.200000003f32],
+                [-48f32, 216f32, -0.200000003f32],
+            ),
+            (
+                3f32,
+                [36f32, -108f32, 0.200000003f32],
+                [-48f32, 216f32, -0.200000003f32],
+            ),
+        ];
+        for (t, expected, derivative) in cases {
+            let (actual, actual_derivative) = spline.sample(0.0, t * 6.0);
+            for axis in 0..3 {
+                assert!(
+                    (actual[axis] - expected[axis]).abs() < 0.0001,
+                    "t={t}, axis={axis}"
+                );
+                assert_eq!(actual_derivative[axis], derivative[axis]);
+            }
+        }
+        let relative = SongLuaPositionSpline {
+            receptor_t: 0.25,
+            ..spline
+        };
+        assert_eq!(relative.receptor(99.0), [0.0, 54.0, 0.05]);
+        assert_eq!(relative.sample(20.0, 24.5).0, [12.0, 0.0, 0.1]);
+        let absolute = SongLuaPositionSpline {
+            subtract_song_beat: false,
+            ..relative
+        };
+        assert_eq!(absolute.receptor(3.0), [12.0, 0.0, 0.1]);
+        assert_eq!(absolute.sample(99.0, 3.0).0, [12.0, 0.0, 0.1]);
+        let disabled = SongLuaPositionSpline {
+            enabled: false,
+            ..spline
+        };
+        assert_eq!(disabled.sample(0.0, 3.0), ([0.0; 3], [0.0; 3]));
+    }
 }
