@@ -1214,6 +1214,70 @@ pub fn sprite_state_properties_animation(
     frame_delays: &[f32],
     beat_based: bool,
 ) -> Option<SpriteStatePropertiesAnimation> {
+    sprite_state_properties_animation_with(
+        tex_dims,
+        sheet_grid,
+        src,
+        frame_count,
+        beat_based,
+        |anim_frames| {
+            let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
+            let mut durations = Vec::with_capacity(anim_frames);
+            for idx in 0..anim_frames {
+                durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
+            }
+            durations
+        },
+    )
+}
+
+/// Builds a state animation while reusing the supplied delay buffer.
+///
+/// The sheet and frame-count rules match [`sprite_state_properties_animation`].
+/// Delays are truncated or padded using the first delay (or 1.0 for an empty
+/// input), then clamped to zero. A new buffer is allocated only when the input
+/// capacity cannot hold the frame count.
+#[must_use]
+pub fn sprite_state_properties_animation_owned(
+    tex_dims: [u32; 2],
+    sheet_grid: [usize; 2],
+    src: [i32; 2],
+    frame_count: usize,
+    mut frame_delays: Vec<f32>,
+    beat_based: bool,
+) -> Option<SpriteStatePropertiesAnimation> {
+    sprite_state_properties_animation_with(
+        tex_dims,
+        sheet_grid,
+        src,
+        frame_count,
+        beat_based,
+        |anim_frames| {
+            let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
+            if frame_delays.capacity() < anim_frames {
+                let mut durations = Vec::with_capacity(anim_frames);
+                for idx in 0..anim_frames {
+                    durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
+                }
+                return durations;
+            }
+            frame_delays.resize(anim_frames, fallback);
+            for delay in &mut frame_delays {
+                *delay = delay.max(0.0);
+            }
+            frame_delays
+        },
+    )
+}
+
+fn sprite_state_properties_animation_with(
+    tex_dims: [u32; 2],
+    sheet_grid: [usize; 2],
+    src: [i32; 2],
+    frame_count: usize,
+    beat_based: bool,
+    build_durations: impl FnOnce(usize) -> Vec<f32>,
+) -> Option<SpriteStatePropertiesAnimation> {
     let cols = sheet_grid[0].max(1);
     let rows = sheet_grid[1].max(1);
     let available = (cols * rows).max(1);
@@ -1237,11 +1301,7 @@ pub fn sprite_state_properties_animation(
         .saturating_add(col)
         .min(available - 1);
 
-    let fallback = frame_delays.first().copied().unwrap_or(1.0).max(0.0);
-    let mut durations = Vec::with_capacity(anim_frames);
-    for idx in 0..anim_frames {
-        durations.push(frame_delays.get(idx).copied().unwrap_or(fallback).max(0.0));
-    }
+    let durations = build_durations(anim_frames);
     let default_delay = durations.first().copied().unwrap_or(1.0).max(1e-6);
     let rate = if beat_based {
         AnimationRate::FramesPerBeat(1.0 / default_delay)

@@ -25,7 +25,7 @@ use deadsync_noteskin::{
     itg_frame_sprite_slot_plan_from_path, itg_sprite_slot_plan_from_path, model_draw_at,
     model_draw_at_cursor, model_glow_at, model_glow_with_draw, model_vertex_for_sprite,
     neg_rot_sin_cos, sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing,
-    sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation,
+    sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation_owned,
 };
 use image::image_dimensions;
 use log::warn;
@@ -56,6 +56,10 @@ mod texture_bulk;
 #[cfg(test)]
 #[path = "../../tests/sprite_initialization/mod.rs"]
 mod sprite_initialization;
+
+#[cfg(test)]
+#[path = "../../tests/sprite_preparation/mod.rs"]
+mod sprite_preparation;
 
 #[derive(Debug)]
 pub enum SpriteSource {
@@ -1079,6 +1083,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     }
 }
 
+#[cfg(test)]
 fn source_plan_from_slot(slot: &SpriteSlot) -> SpriteSourcePlan {
     match slot.source.as_ref() {
         SpriteSource::Atlas {
@@ -1156,8 +1161,8 @@ pub fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
     );
     slot.def.src = plan.def.src;
     slot.def.size = plan.def.size;
-    let source_plan = source_plan_from_slot(slot);
-    slot.source = source_from_plan(source_plan, &slot.def);
+    let source = atlas_source(slot.texture_key_shared(), (tex_w, tex_h), &slot.def);
+    replace_sprite_source(&mut slot.source, source);
 }
 
 pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot> {
@@ -1206,13 +1211,27 @@ pub(super) fn itg_note_animation_source(
     if frame_count <= 1 {
         return None;
     }
-    let frame_indices = match (color_x, color_y) {
-        // Empty explicit indices retain the sheet origin and use the existing
-        // identity fallback for every frame without storing the whole range.
-        (false, false) => Some(Vec::new()),
-        (true, false) => Some((0..grid_y).map(|row| row * grid_x + base_col).collect()),
-        (false, true) => Some((0..grid_x).map(|col| base_row * grid_x + col).collect()),
-        (true, true) => unreachable!(),
+    // Explicit empty indices preserve the existing sheet-origin semantics.
+    // Small color lanes need only their final Arc, without a temporary Vec.
+    let frame_indices = if !color_x && !color_y {
+        Arc::clone(&SEQUENTIAL_FRAME_INDICES)
+    } else {
+        let index = |frame| {
+            if color_x {
+                frame * grid_x + base_col
+            } else {
+                base_row * grid_x + frame
+            }
+        };
+        if frame_count <= 64 {
+            let mut indices = [0; 64];
+            for (frame, value) in indices[..frame_count].iter_mut().enumerate() {
+                *value = index(frame);
+            }
+            Arc::from(&indices[..frame_count])
+        } else {
+            Arc::from((0..frame_count).map(index).collect::<Vec<_>>())
+        }
     };
 
     let tex_dims = match slot.source.as_ref() {
@@ -1220,23 +1239,21 @@ pub(super) fn itg_note_animation_source(
         SpriteSource::Animated { .. } => return None,
     };
     let frames_per_cycle = frame_count as f32 / animation.length.max(1e-6);
-    Some(source_from_plan(
-        SpriteSourcePlan::Animated {
-            texture_key: key.to_string(),
-            tex_dims,
-            frame_size: [frame_w, frame_h],
-            grid: (grid_x, grid_y),
-            frame_count,
-            frame_indices,
-            rate: if beat_based {
-                AnimationRate::FramesPerBeat(frames_per_cycle)
-            } else {
-                AnimationRate::FramesPerSecond(frames_per_cycle)
-            },
-            frame_durations: None,
+    Some(Arc::new(animated_source(
+        slot.texture_key_shared(),
+        tex_dims,
+        [frame_w, frame_h],
+        (grid_x, grid_y),
+        frame_count,
+        Some(frame_indices),
+        if beat_based {
+            AnimationRate::FramesPerBeat(frames_per_cycle)
+        } else {
+            AnimationRate::FramesPerSecond(frames_per_cycle)
         },
+        None,
         &slot.def,
-    ))
+    )))
 }
 
 pub fn itg_slot_from_path_animated(
@@ -1309,7 +1326,7 @@ fn itg_apply_sprite_animation_plan(
     }
     match plan {
         deadsync_noteskin::script::SpriteAnimationCommandPlan::StateProperties(plan) => {
-            apply_state_properties(slot, plan.frame_count, &plan.frame_delays, beat_based);
+            apply_state_properties(slot, plan.frame_count, plan.frame_delays, beat_based);
         }
         deadsync_noteskin::script::SpriteAnimationCommandPlan::AllStateDelays(delay) => {
             apply_all_state_delays(slot, delay, beat_based);
@@ -1320,7 +1337,7 @@ fn itg_apply_sprite_animation_plan(
 fn apply_state_properties(
     slot: &mut SpriteSlot,
     frame_count: usize,
-    frame_delays: &[f32],
+    frame_delays: Vec<f32>,
     beat_based: bool,
 ) {
     let tex_dims = match slot.source.as_ref() {
@@ -1328,7 +1345,7 @@ fn apply_state_properties(
     };
     let key = slot.texture_key();
     let (columns, rows) = assets::sprite_sheet_dims(key);
-    let Some(animation) = sprite_state_properties_animation(
+    let Some(animation) = sprite_state_properties_animation_owned(
         [tex_dims.0, tex_dims.1],
         [columns as usize, rows as usize],
         slot.def.src,

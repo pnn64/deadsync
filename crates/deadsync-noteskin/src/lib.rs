@@ -83,8 +83,8 @@ pub use sprite::{
     neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animation_plan, sprite_atlas_uv,
     sprite_atlas_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
     sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing, sprite_scrolled_uv,
-    sprite_sheet_frame, sprite_state_properties_animation, sprite_uv_scroll_clock,
-    state_properties_source_plan,
+    sprite_sheet_frame, sprite_state_properties_animation, sprite_state_properties_animation_owned,
+    sprite_uv_scroll_clock, state_properties_source_plan,
 };
 
 #[cfg(test)]
