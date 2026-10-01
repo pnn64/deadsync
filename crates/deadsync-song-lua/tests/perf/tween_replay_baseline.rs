@@ -30,7 +30,7 @@ pub(super) fn capture_update_overlay_samples<Kind>(
         update_states,
         to_states,
         scheduled_samples,
-        next_beat,
+        next_seconds,
         &mut scratch.completed,
     );
     scratch.reset_indices.clear();

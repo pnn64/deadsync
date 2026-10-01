@@ -1304,6 +1304,8 @@ pub struct SongLuaCompileContext {
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
     pub song_timing_bpms: Vec<(f32, f32)>,
+    /// Global song timing with pauses/warps; distinct from selected chart timing.
+    pub song_timing: Option<deadsync_rules::timing::TimingData>,
     /// Selected chart timing, shared with gameplay; populated before Lua compilation.
     pub player_timing: [Option<deadsync_rules::timing::TimingData>; LUA_PLAYERS],
     pub song_music_rate: f32,
@@ -1333,6 +1335,7 @@ impl SongLuaCompileContext {
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
             song_timing_bpms: Vec::new(),
+            song_timing: None,
             player_timing: std::array::from_fn(|_| None),
             song_music_rate: 1.0,
             random_seed: 1,
@@ -1397,6 +1400,10 @@ pub fn parse_song_timing_bpms(source: &str) -> Vec<(f32, f32)> {
 
 #[must_use]
 pub fn song_elapsed_seconds_at(beat: f32, context: &SongLuaCompileContext) -> f32 {
+    if let Some(timing) = &context.song_timing {
+        return (timing.get_time_for_beat_exact(beat) - timing.get_time_for_beat_exact(0.0))
+            / song_music_rate(context);
+    }
     let rate = song_music_rate(context);
     let mut cursor_beat = 0.0;
     let mut seconds = 0.0;
@@ -1424,6 +1431,11 @@ pub fn song_beat_at_elapsed_seconds(seconds: f32, context: &SongLuaCompileContex
 // Lua numbers and the reference update clock are doubles. Narrow only when
 // storing runtime windows, after the chart's strict boundary predicates run.
 fn song_beat_at_seconds64(seconds: f64, context: &SongLuaCompileContext) -> f64 {
+    if let Some(timing) = &context.song_timing {
+        let music_second = (seconds * f64::from(song_music_rate(context))) as f32
+            + timing.get_time_for_beat_exact(0.0);
+        return f64::from(timing.get_song_position(music_second).beat);
+    }
     let target = seconds * f64::from(song_music_rate(context));
     let mut cursor_beat = 0.0;
     let mut cursor_seconds = 0.0;

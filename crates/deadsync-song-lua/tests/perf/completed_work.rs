@@ -48,6 +48,8 @@ impl Fixture {
     }
     fn advance(&mut self, old: bool, beat: f32) {
         if old {
+            // Neutralize the frozen beat path's early f32-epsilon completion
+            // so both implementations see the same elapsed-time cutoff.
             baseline::merge_completed_scheduled_overlay_samples(
                 &mut self.tracks,
                 &mut self.indices,
@@ -55,7 +57,7 @@ impl Fixture {
                 &mut self.update,
                 &mut self.next,
                 &mut self.scheduled,
-                beat,
+                beat - f32::EPSILON,
             );
         } else {
             merge_completed_scheduled_overlay_samples_into(
@@ -65,7 +67,7 @@ impl Fixture {
                 &mut self.update,
                 &mut self.next,
                 &mut self.scheduled,
-                beat,
+                f64::from(beat),
                 &mut self.completed,
             );
         }

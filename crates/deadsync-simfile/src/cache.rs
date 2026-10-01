@@ -26,7 +26,7 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-pub const SONG_CACHE_VERSION: u8 = 24;
+pub const SONG_CACHE_VERSION: u8 = 25;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -847,6 +847,7 @@ pub struct SerializableSongData {
     pub min_bpm: f64,
     pub max_bpm: f64,
     pub normalized_bpms: String,
+    pub song_timing: Option<CachedTimingSegments>,
     pub music_length_seconds: f32,
     pub first_second: f32,
     pub total_length_seconds: i32,
@@ -990,6 +991,7 @@ pub struct CachedSongMeta {
     pub min_bpm: f64,
     pub max_bpm: f64,
     pub normalized_bpms: String,
+    pub song_timing: Option<CachedTimingSegments>,
     pub music_length_seconds: f32,
     pub first_second: f32,
     pub total_length_seconds: i32,
@@ -1074,6 +1076,7 @@ struct BorrowedCachedSongMeta<'a> {
     min_bpm: f64,
     max_bpm: f64,
     normalized_bpms: &'a str,
+    song_timing: Option<&'a CachedTimingSegments>,
     music_length_seconds: f32,
     first_second: f32,
     total_length_seconds: i32,
@@ -1563,6 +1566,9 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
         min_bpm: song.min_bpm,
         max_bpm: song.max_bpm,
         normalized_bpms: song.normalized_bpms,
+        song_timing: song
+            .song_timing
+            .map(|segments| TimingData::from_segments(-song.offset, 0.0, &segments.into(), &[])),
         music_length_seconds: song.music_length_seconds,
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
@@ -1607,6 +1613,7 @@ pub fn build_cached_song_meta(
         min_bpm: song.min_bpm,
         max_bpm: song.max_bpm,
         normalized_bpms: song.normalized_bpms.clone(),
+        song_timing: song.song_timing.clone(),
         music_length_seconds: song.music_length_seconds,
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
@@ -1648,6 +1655,7 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             min_bpm: song.min_bpm,
             max_bpm: song.max_bpm,
             normalized_bpms: &song.normalized_bpms,
+            song_timing: song.song_timing.as_ref(),
             music_length_seconds: song.music_length_seconds,
             first_second: song.first_second,
             total_length_seconds: song.total_length_seconds,
@@ -1709,6 +1717,9 @@ pub fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         min_bpm: song.min_bpm,
         max_bpm: song.max_bpm,
         normalized_bpms: song.normalized_bpms,
+        song_timing: song
+            .song_timing
+            .map(|segments| TimingData::from_segments(-song.offset, 0.0, &segments.into(), &[])),
         music_length_seconds: song.music_length_seconds,
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
@@ -2981,6 +2992,7 @@ mod tests {
             min_bpm: 60.0,
             max_bpm: 60.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 2,
@@ -3026,6 +3038,46 @@ mod tests {
         assert_eq!(song.precise_last_second(), 12.75);
         assert_eq!(song.total_length_seconds, 12);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn song_clock_survives_cache_round_trip() {
+        let root = test_dir("song-clock-round-trip");
+        let simfile = root.join("song.ssc");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Song clock;").expect("write clock simfile");
+        let mut data = cached_song(&simfile);
+        data.has_lua = true;
+        data.offset = 0.25;
+        data.song_timing = Some(CachedTimingSegments::from(&TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            stops: vec![deadsync_rules::timing::StopSegment {
+                beat: 2.0,
+                duration: 0.5,
+            }],
+            delays: vec![deadsync_rules::timing::DelaySegment {
+                beat: 3.0,
+                duration: 0.25,
+            }],
+            warps: vec![deadsync_rules::timing::WarpSegment {
+                beat: 5.0,
+                length: 1.0,
+            }],
+            ..Default::default()
+        }));
+        let parsed = build_song_meta(data.clone(), 0.125);
+        write_song_cache_file(&cache_path, &data, 0.125).expect("write song clock cache");
+        let cached = load_cached_song(&simfile, &cache_path, false).expect("load song clock cache");
+        let restored = build_song_meta_from_cache(cached.data);
+        for song in [parsed, restored] {
+            let timing = song.song_timing.expect("retain global clock");
+            let origin = timing.get_time_for_beat_exact(0.0);
+            assert_eq!(origin, -0.25);
+            assert!(timing.get_song_position(origin + 2.25).is_in_freeze);
+            assert!(timing.get_song_position(origin + 3.6).is_in_delay);
+            assert_eq!(timing.get_song_position(origin + 6.0).beat, 6.25);
+        }
+        fs::remove_dir_all(root).expect("remove clock fixture");
     }
 
     #[test]
@@ -3352,6 +3404,7 @@ mod tests {
             min_bpm: 0.0,
             max_bpm: 0.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,

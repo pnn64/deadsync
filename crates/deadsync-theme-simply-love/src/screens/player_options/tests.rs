@@ -272,6 +272,7 @@ pub(super) mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
             normalized_bpms: "120".to_string(),
+            song_timing: None,
             music_length_seconds: 120.0,
             first_second: 0.0,
             total_length_seconds: 120,

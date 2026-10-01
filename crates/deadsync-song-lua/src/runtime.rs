@@ -7,10 +7,17 @@ use crate::{
     SongLuaCompileContext, song_display_bps, song_elapsed_seconds_at, song_music_rate,
 };
 
+pub(crate) struct SongLuaClock(pub deadsync_rules::timing::TimingData);
+
 pub fn create_song_runtime_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
 ) -> mlua::Result<Table> {
+    if let Some(timing) = &context.song_timing {
+        lua.set_app_data(SongLuaClock(timing.clone()));
+    } else {
+        lua.remove_app_data::<SongLuaClock>();
+    }
     let table = lua.create_table()?;
     table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0_i64)?;
@@ -18,6 +25,8 @@ pub fn create_song_runtime_table(
     table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
     table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
+    table.set("__songlua_freeze", false)?;
+    table.set("__songlua_delay", false)?;
     let bpms = lua.create_table()?;
     for (index, &(beat, bpm)) in context.song_timing_bpms.iter().enumerate() {
         let segment = lua.create_table()?;
@@ -52,6 +61,18 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
                 move |_, _self: Option<Value>| {
                     song_runtime.get::<Value>(SONG_LUA_RUNTIME_SECONDS_KEY)
                 }
+            })?,
+        )?;
+    }
+    for (method, key) in [
+        ("GetFreeze", "__songlua_freeze"),
+        ("GetDelay", "__songlua_delay"),
+    ] {
+        table.set(
+            method,
+            lua.create_function({
+                let song_runtime = song_runtime.clone();
+                move |_, _self: Option<Value>| song_runtime.get::<bool>(key)
             })?,
         )?;
     }
@@ -159,6 +180,18 @@ pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
     let music_rate = runtime
         .get::<Option<f32>>(SONG_LUA_RUNTIME_RATE_KEY)?
         .unwrap_or(1.0);
+    if let Some(clock) = lua.app_data_ref::<SongLuaClock>() {
+        let seconds = clock.0.get_time_for_beat_exact(beat);
+        let position = clock.0.get_song_position(seconds);
+        runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat)?;
+        runtime.set(
+            SONG_LUA_RUNTIME_SECONDS_KEY,
+            (seconds - clock.0.get_time_for_beat_exact(0.0)) / music_rate.max(f32::EPSILON),
+        )?;
+        runtime.set("__songlua_freeze", position.is_in_freeze)?;
+        runtime.set("__songlua_delay", position.is_in_delay)?;
+        return runtime.set(SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0);
+    }
     let mut segment_beat = 0.0;
     let mut segment_seconds = 0.0;
     if let Some(bpms) = runtime.get::<Option<Table>>("__songlua_timing_bpms")? {

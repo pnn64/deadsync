@@ -803,7 +803,13 @@ pub fn call_perframe_entry(
 
 #[must_use]
 pub fn update_function_end_beat(context: &SongLuaCompileContext) -> f32 {
-    song_beat_at_elapsed_seconds(context.music_length_seconds.max(0.0), context).max(0.0)
+    let seconds = context.music_length_seconds.max(0.0);
+    let seconds = if context.song_timing.is_some() {
+        seconds / song_music_rate(context)
+    } else {
+        seconds
+    };
+    song_beat_at_elapsed_seconds(seconds, context).max(0.0)
 }
 
 #[must_use]
@@ -820,13 +826,19 @@ pub(crate) fn update_function_replay_beats(
     end: f32,
 ) -> Vec<(f64, f64)> {
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
-    let end_seconds = f64::from(song_elapsed_seconds_at(end, context));
+    let end_seconds = f64::from(
+        if context.song_timing.is_some() && end == update_function_end_beat(context) {
+            context.music_length_seconds / song_music_rate(context)
+        } else {
+            song_elapsed_seconds_at(end, context)
+        },
+    );
     let frame_count = ((end_seconds - start_seconds) * f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
         .ceil()
         .max(0.0) as usize;
     // Empty timing maps have no prefix to reuse. Keep their original build
     // path: pre-sizing this case regressed allocator-sensitive benchmarks.
-    if context.song_timing_bpms.is_empty() {
+    if context.song_timing_bpms.is_empty() || context.song_timing.is_some() {
         let mut out = vec![(f64::from(start), 0.0)];
         let mut previous_seconds = start_seconds;
         for frame in 1..=frame_count {
@@ -1902,7 +1914,7 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
         update_states,
         to_states,
         scheduled_samples,
-        next_beat,
+        next_seconds,
         &mut scratch.completed,
     );
     scratch.reset_indices.clear();
@@ -2212,7 +2224,7 @@ fn merge_completed_scheduled_overlay_samples(
         update_states,
         to_states,
         scheduled,
-        beat,
+        f64::from(beat),
         &mut Vec::new(),
     );
 }
@@ -2229,7 +2241,7 @@ fn merge_completed_scheduled_overlay_samples_into(
     update_states: &mut [SongLuaOverlayState],
     to_states: &mut [SongLuaOverlayState],
     scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
-    beat: f32,
+    seconds: f64,
     completed: &mut Vec<SongLuaScheduledOverlaySample>,
 ) {
     completed.clear();
@@ -2238,9 +2250,11 @@ fn merge_completed_scheduled_overlay_samples_into(
     }
     // Keep pending tweens (and their capacity) in place across sample ticks.
     // The common case where none have completed does not allocate or move them.
-    completed.extend(scheduled.extract_if(.., |sample| sample.end_beat <= beat + f32::EPSILON));
+    // Beats do not advance during a pause. Actor delays and tweens still do.
+    completed
+        .extend(scheduled.extract_if(.., |sample| sample.end_seconds <= seconds + f64::EPSILON));
     if !completed.is_empty() {
-        completed.sort_by(|left, right| left.end_beat.total_cmp(&right.end_beat));
+        completed.sort_by(|left, right| left.end_seconds.total_cmp(&right.end_seconds));
         for sample in completed.iter() {
             if let Some(state) = update_states.get_mut(sample.overlay_index) {
                 set_overlay_state_update_value(state, sample.target, &sample.value);
@@ -2434,6 +2448,23 @@ pub fn call_update_functions_at(
     runtime
         .set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, seconds)
         .map_err(|err| err.to_string())?;
+    if let Some(clock) = lua.app_data_ref::<crate::runtime::SongLuaClock>() {
+        let rate = runtime
+            .get::<f32>(crate::SONG_LUA_RUNTIME_RATE_KEY)
+            .map_err(|err| err.to_string())?;
+        let position = clock.0.get_song_position(
+            (seconds * f64::from(rate)) as f32 + clock.0.get_time_for_beat_exact(0.0),
+        );
+        runtime
+            .set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)
+            .map_err(|err| err.to_string())?;
+        runtime
+            .set("__songlua_freeze", position.is_in_freeze)
+            .map_err(|err| err.to_string())?;
+        runtime
+            .set("__songlua_delay", position.is_in_delay)
+            .map_err(|err| err.to_string())?;
+    }
     let result =
         crate::lua_util::run_actor_compile_update_functions_with_delta(lua, root, delta_seconds)
             .map_err(|err| err.to_string());
@@ -2738,7 +2769,18 @@ pub fn compile_update_functions<Kind>(
         // reference frames; the gameplay window builder retains its tail.
         let from_mods = &mod_samples[index];
         let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
-        let (mod_start, mod_end, mod_unit) = if use_mod_clock {
+        let (mod_start, mod_end, mod_unit) = if let Some(timing) = &context.song_timing {
+            let origin = timing.get_time_for_beat_exact(0.0);
+            let start = sample_seconds[index] + origin;
+            (
+                start,
+                sample_seconds
+                    .get(index + 1)
+                    .copied()
+                    .map_or_else(|| start.next_up(), |second| second + origin),
+                SongLuaTimeUnit::Second,
+            )
+        } else if use_mod_clock {
             (
                 sample_seconds[index],
                 sample_seconds

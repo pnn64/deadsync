@@ -449,6 +449,7 @@ pub fn song_lua_compile_context(
         [60.0, 60.0],
     );
     let timing_bpms = deadsync_song_lua::parse_song_timing_bpms(&song.normalized_bpms);
+    context.song_timing = song.song_timing.clone();
     if !timing_bpms.is_empty() {
         context.song_timing_bpms = timing_bpms;
     }

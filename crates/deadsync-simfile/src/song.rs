@@ -305,6 +305,18 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         min_bpm: summary.min_bpm,
         max_bpm: summary.max_bpm,
         normalized_bpms: summary.normalized_bpms,
+        song_timing: (has_lua
+            && (!summary.global_timing_segments.stops.is_empty()
+                || !summary.global_timing_segments.delays.is_empty()
+                || !summary.global_timing_segments.warps.is_empty()))
+        .then(|| {
+            CachedTimingSegments::from_rssp_owned(
+                summary.global_timing_segments.clone(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            )
+        }),
         music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
         music_length_seconds,
         first_second: 0.0,

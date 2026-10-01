@@ -1,0 +1,25 @@
+#VERSION:0.83;
+#TITLE:Song clock;
+#OFFSET:0;
+#BPMS:0=60,4=120;
+#STOPS:2=0.5;
+#DELAYS:3=0.25;
+#WARPS:5=1;
+#FGCHANGES:0=song-clock.lua=1=0=0=1;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:clock;
+#DIFFICULTY:Challenge;
+#METER:1;
+#BPMS:0=180;
+#NOTES:
+0000
+0000
+0000
+0000
+,
+0000
+0000
+0000
+0000
+;

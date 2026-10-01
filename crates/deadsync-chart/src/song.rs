@@ -222,6 +222,8 @@ pub struct SongData {
     pub min_bpm: f64,
     pub max_bpm: f64,
     pub normalized_bpms: String,
+    /// Full global timing for Lua songs with pauses or warps, shared at song load.
+    pub song_timing: Option<deadsync_rules::timing::TimingData>,
     /// Length of the music file in seconds (audio duration, including trailing silence).
     /// Mirrors `ITGmania`'s `Song::m_fMusicLengthSeconds` / `MusicLengthSeconds()` Lua.
     pub music_length_seconds: f32,
@@ -818,6 +820,7 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 180.0,
             normalized_bpms: String::new(),
+            song_timing: None,
             music_length_seconds: 0.0,
             first_second: 0.0,
             total_length_seconds: 0,

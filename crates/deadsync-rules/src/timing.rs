@@ -847,6 +847,99 @@ impl TimingData {
         }
     }
 
+    /// ITGmania's float song-position clock for compatibility-sensitive Lua.
+    /// Each event rounds its accumulated seconds before the next event. Keep
+    /// this separate from the integer clock used for note judgment.
+    #[must_use]
+    pub fn get_song_position(&self, seconds: f32) -> BeatInfo {
+        let seconds = seconds + self.global_offset_sec;
+        let mut start = GetBeatStarts::default();
+        let mut time = timing_ns_to_seconds(self.beat_start_time_ns());
+        let mut bpm = self.get_bpm_for_beat(0.0);
+        let mut bps = bpm / 60.0;
+        // Timing is an ordered event state machine; preserving native event
+        // ordering and float operations matters more than splitting its cases.
+        loop {
+            let mut row = i32::MAX;
+            let mut event = TimingEvent::NotFound;
+            find_event(
+                &mut row,
+                &mut event,
+                start,
+                0.0,
+                false,
+                &self.beat_to_time,
+                &self.warps,
+                &self.stops,
+                &self.delays,
+            );
+            if event == TimingEvent::NotFound {
+                break;
+            }
+            let duration = if start.is_warping {
+                0.0
+            } else {
+                note_row_to_beat(row - start.last_row) / bps
+            };
+            let next_time = time + duration;
+            if seconds < next_time {
+                break;
+            }
+            time = next_time;
+            match event {
+                TimingEvent::WarpDest => start.is_warping = false,
+                TimingEvent::Bpm => {
+                    bpm = self.beat_to_time[start.bpm_idx].bpm;
+                    bps = bpm / 60.0;
+                    start.bpm_idx += 1;
+                }
+                TimingEvent::Delay | TimingEvent::Stop | TimingEvent::StopDelay => {
+                    if event != TimingEvent::Stop {
+                        let delay = self.delays[start.delay_idx];
+                        let end = time + delay.duration;
+                        if seconds < end {
+                            return BeatInfo {
+                                beat: delay.beat,
+                                bpm,
+                                is_in_delay: true,
+                                ..BeatInfo::default()
+                            };
+                        }
+                        time = end;
+                        start.delay_idx += 1;
+                    }
+                    if event != TimingEvent::Delay {
+                        let stop = self.stops[start.stop_idx];
+                        let end = time + stop.duration;
+                        if seconds < end {
+                            return BeatInfo {
+                                beat: stop.beat,
+                                bpm,
+                                is_in_freeze: true,
+                                ..BeatInfo::default()
+                            };
+                        }
+                        time = end;
+                        start.stop_idx += 1;
+                    }
+                }
+                TimingEvent::Warp => {
+                    start.is_warping = true;
+                    let warp = self.warps[start.warp_idx];
+                    start.warp_destination = start.warp_destination.max(warp.beat + warp.length);
+                    start.warp_idx += 1;
+                }
+                _ => {}
+            }
+            start.last_row = row;
+        }
+        BeatInfo {
+            beat: note_row_to_beat(start.last_row) + (seconds - time) * bps,
+            bpm,
+            ..BeatInfo::default()
+        }
+    }
+
     pub fn get_beat_info_from_time_cached(
         &self,
         target_time_sec: f32,

@@ -380,23 +380,33 @@ fn modifier_runtime(
         &[],
     );
     let constants = std::array::from_fn(|player| {
+        let timing = if context.song_timing.is_some() {
+            context.player_timing[player].as_ref().unwrap_or(&timing)
+        } else {
+            &timing
+        };
         compiled
             .iter()
             .flat_map(|layer| {
                 deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
-                    layer, &timing, player, 0.0,
+                    layer, timing, player, 0.0,
                 )
             })
             .collect::<Vec<_>>()
     });
     let eases = std::array::from_fn(|player| {
+        let timing = if context.song_timing.is_some() {
+            context.player_timing[player].as_ref().unwrap_or(&timing)
+        } else {
+            &timing
+        };
         compiled
             .iter()
             .flat_map(|layer| {
                 let (eases, unsupported) =
                     deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
                         layer,
-                        &timing,
+                        timing,
                         player,
                         0.0,
                         &constants[player],
@@ -489,6 +499,119 @@ fn hidden_actor_tweens_drive_modifiers_without_probe_state() {
                 "{key} at {second}: {actual} != {expected}"
             );
         }
+    }
+}
+
+#[test]
+fn song_clock_uses_global_pauses() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let song = parse_song(&directory.join("song-clock.ssc"));
+    let mut context = SongLuaCompileContext::new(&directory, "Song clock");
+    context.song_timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
+    context.song_timing = song.song_timing.clone();
+    assert!(
+        context.song_timing.is_some(),
+        "retain global timing at song load"
+    );
+    // The fixture's selected Steps has its own 180 BPM timing. Global song
+    // position and sampled modifier timestamps must remain independent of it.
+    context.player_timing[0] = Some(deadsync_rules::timing::TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 180.0)],
+            ..Default::default()
+        },
+        &[],
+    ));
+    context.music_length_seconds = 6.0;
+    for rate in [1.0, 2.0] {
+        context.song_music_rate = rate;
+        let compiled =
+            compile_song_lua_layers(&[directory.join("song-clock.lua").as_path()], 0, &context)
+                .unwrap();
+        let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+        assert_eq!(unsupported, 0);
+        for (second, invert, freeze, delay, speed, x) in [
+            (1.2, 0.12, 0.0, 0.0, 1.0, 0.0),
+            (2.3, 0.2, 1.0, 0.0, 1.0, 0.375),
+            (2.4, 0.2, 1.0, 0.0, 1.0, 0.5),
+            (3.6, 0.3, 0.0, 1.0, 1.0, 0.5),
+            (4.0, 0.325, 0.0, 0.0, 1.0, 0.5),
+            (4.8, 0.41, 0.0, 0.0, 2.0, 0.5),
+            (5.0, 0.45, 0.0, 0.0, 2.0, 0.5),
+            (5.5, 0.65, 0.0, 0.0, 2.0, 0.5),
+        ] {
+            let x = if rate == 2.0 && (second == 2.3 || second == 2.4) {
+                0.25
+            } else {
+                x
+            };
+            let _ = runtime.refresh_player(
+                0,
+                second,
+                1_000_000.0,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (key, expected) in [
+                ("invert", invert),
+                ("drunk", freeze),
+                ("wave", delay),
+                ("xmod", speed),
+                ("tornado", x),
+            ] {
+                let actual = runtime_mod_value(&runtime, 0, key).unwrap();
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "{key} at {second}: {actual} != {expected}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn song_clock_retains_native_float_rounding() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let song = parse_song(&directory.join("song-clock-float.ssc"));
+    let mut context = SongLuaCompileContext::new(&directory, "Float song clock");
+    context.song_timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
+    context.song_timing = song.song_timing.clone();
+    context.music_length_seconds = 34.0;
+    let compiled =
+        compile_song_lua_layers(&[directory.join("song-clock.lua").as_path()], 0, &context)
+            .expect("compile float song clock");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (seconds, beat, expected) in [
+        (32.5, 74.58333587646484_f32, 7.458333492279053_f32),
+        (32.75, 74.95417022705078, 7.49541711807251),
+        (33.0, 75.32500457763672, 7.532500267028809),
+    ] {
+        assert_eq!(
+            context
+                .song_timing
+                .as_ref()
+                .expect("float clock")
+                .get_song_position(seconds)
+                .beat,
+            beat
+        );
+        let _ = runtime.refresh_player(
+            0,
+            seconds,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        // Runtime modifier composition can round by one ULP; the native song
+        // position itself is checked bit for bit above.
+        assert!((runtime_mod_value(&runtime, 0, "invert").unwrap() - expected).abs() < 1e-6);
     }
 }
 
@@ -2054,10 +2177,15 @@ pub(super) fn compare_runtime_modifiers(
     let mut cursor = 0;
     let mut perspective = [[0.0; 2]; 2];
     while cursor < writes.len() {
-        let second = writes[cursor].second;
+        let trace_second = writes[cursor].second;
+        let second = trace_second
+            + context
+                .song_timing
+                .as_ref()
+                .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
         let mut last_writes = BTreeMap::new();
         let mut last_speed = [None; 2];
-        while cursor < writes.len() && writes[cursor].second == second {
+        while cursor < writes.len() && writes[cursor].second == trace_second {
             let write = &writes[cursor];
             if matches!(write.key.as_str(), "xmod" | "cmod" | "mmod") {
                 last_speed[write.player] = Some(write);

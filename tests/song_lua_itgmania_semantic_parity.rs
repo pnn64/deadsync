@@ -554,6 +554,7 @@ fn compile_trace_song_at(
         context.player_timing = std::array::from_fn(|_| Some(payload.charts[0].timing.clone()));
     }
     let timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
+    context.song_timing = song.song_timing.clone();
     if !timing_bpms.is_empty() {
         context.song_timing_bpms = timing_bpms;
     }

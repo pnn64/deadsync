@@ -74,6 +74,7 @@ pub fn song_with_charts(charts: Vec<deadsync_chart::ChartData>) -> Arc<deadsync_
         min_bpm: 0.0,
         max_bpm: 0.0,
         normalized_bpms: String::new(),
+        song_timing: None,
         music_length_seconds: 0.0,
         first_second: 0.0,
         total_length_seconds: 0,

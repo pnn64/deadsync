@@ -177,7 +177,8 @@ fn completion_matches_legacy_across_interleaved_tweens_and_boundaries() {
             &mut expected_update,
             &mut expected_next,
             &mut expected,
-            beat,
+            // Neutralize the frozen beat path's early-completion epsilon.
+            beat - f32::EPSILON,
         );
         assert_eq!(actual_update, expected_update);
         assert_eq!(actual_next, expected_next);

@@ -1,0 +1,17 @@
+#VERSION:0.83;
+#TITLE:Song clock float;
+#OFFSET:0;
+#BPMS:0=44.5,7=178,74=89;
+#STOPS:74=0.08427;
+#FGCHANGES:0=song-clock.lua=1=0=0=1;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DESCRIPTION:clock;
+#DIFFICULTY:Challenge;
+#METER:1;
+#NOTES:
+0000
+0000
+0000
+0000
+;
