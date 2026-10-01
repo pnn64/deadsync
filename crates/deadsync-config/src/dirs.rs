@@ -108,6 +108,15 @@ impl AppDirs {
         self.cache_dir.join("null-or-die-sync.json")
     }
 
+    /// Which packs the Content Browser has decided are beginner-friendly.
+    ///
+    /// Deciding one costs reading its page, and a verdict is about a pack's
+    /// charts -- which do not change. So these are kept with no expiry.
+    #[must_use]
+    pub fn beginner_verdict_cache_file(&self) -> PathBuf {
+        self.cache_dir.join("beginner-packs.json")
+    }
+
     #[must_use]
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")

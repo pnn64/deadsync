@@ -1,5 +1,6 @@
 pub mod arrowcloud;
 pub mod banners;
+pub mod beginner;
 pub mod downloads;
 pub mod groovestats;
 pub mod itgdb;
