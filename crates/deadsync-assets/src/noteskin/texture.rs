@@ -44,6 +44,10 @@ mod layer_animation;
 #[path = "../../tests/sequential_animation/mod.rs"]
 mod sequential_animation;
 
+#[cfg(test)]
+#[path = "../../tests/model_atlas_preparation/mod.rs"]
+mod model_atlas_preparation;
+
 #[derive(Debug)]
 pub enum SpriteSource {
     Atlas {
@@ -802,6 +806,50 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
 // Built on the asset worker, retained by the existing generated-texture registry,
 // and uploaded with the skin before gameplay. Drawing only selects cached UVs.
 // Bound each atlas to 64 MiB / 8192px; no runtime decoding or cache maintenance.
+fn model_animation_atlas(
+    animation: &ItgTextureAnimation,
+    size: [u32; 2],
+    grid: [u32; 2],
+) -> Result<image::RgbaImage, String> {
+    let [width, height] = size;
+    let [columns, rows] = grid;
+    let atlas_width = width * columns;
+    let atlas_height = height * rows;
+    let mut atlas = image::RgbaImage::new(atlas_width, atlas_height);
+    let mut previous: Option<(&Path, image::RgbaImage)> = None;
+    for (index, frame) in animation.frames.iter().enumerate() {
+        if previous
+            .as_ref()
+            .is_none_or(|(path, _)| path.as_os_str() != frame.path.as_os_str())
+        {
+            // Release the old prepared frame before decoding another image.
+            drop(previous.take());
+            let image = assets::open_image_fallback(&frame.path)
+                .map_err(|error| error.to_string())?
+                .into_rgba8();
+            let image = if image.dimensions() == (width, height) {
+                image
+            } else {
+                image::imageops::resize(
+                    &image,
+                    width,
+                    height,
+                    image::imageops::FilterType::Triangle,
+                )
+            };
+            previous = Some((&frame.path, image));
+        }
+        let image = &previous.as_ref().expect("a frame image was decoded").1;
+        image::imageops::replace(
+            &mut atlas,
+            image,
+            i64::from(index as u32 % columns * width),
+            i64::from(index as u32 / columns * height),
+        );
+    }
+    Ok(atlas)
+}
+
 fn model_animation_source(animation: &ItgTextureAnimation) -> Result<Arc<SpriteSource>, String> {
     let count = animation.frames.len();
     let first = animation.frames.first().ok_or("empty frame sequence")?;
@@ -823,28 +871,7 @@ fn model_animation_source(animation: &ItgTextureAnimation) -> Result<Arc<SpriteS
         crate::textures::canonical_texture_key(&animation.path)
     );
     if assets::texture_dims(&key).is_none() {
-        let mut atlas = image::RgbaImage::new(atlas_width, atlas_height);
-        for (index, frame) in animation.frames.iter().enumerate() {
-            let image = assets::open_image_fallback(&frame.path)
-                .map_err(|error| error.to_string())?
-                .into_rgba8();
-            let image = if image.dimensions() == (width, height) {
-                image
-            } else {
-                image::imageops::resize(
-                    &image,
-                    width,
-                    height,
-                    image::imageops::FilterType::Triangle,
-                )
-            };
-            image::imageops::replace(
-                &mut atlas,
-                &image,
-                i64::from(index as u32 % columns * width),
-                i64::from(index as u32 / columns * height),
-            );
-        }
+        let atlas = model_animation_atlas(animation, [width, height], [columns, rows])?;
         assets::register_generated_texture(
             &key,
             atlas,

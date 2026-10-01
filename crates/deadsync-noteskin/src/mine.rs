@@ -171,6 +171,10 @@ pub fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
     let profile = &*MINE_GRADIENT_PROFILE;
     for frame in 0..frame_count {
         let x_offset = frame as u32 * frame_size;
+        // Rotation depends on frame and radial layer, not the individual pixel.
+        let layer_colors: [MineGradientColor; MINE_FILL_LAYERS] = std::array::from_fn(|layer| {
+            colors[(frame + colors.len() - (layer % colors.len())) % colors.len()]
+        });
         for y in 0..frame_size {
             for x in 0..frame_size {
                 let profile_index = y as usize * frame_size as usize + x as usize;
@@ -178,13 +182,11 @@ pub fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
                 if layer == MINE_GRADIENT_OUTSIDE_LAYER {
                     continue;
                 }
-                let color_index =
-                    (frame + colors.len() - (usize::from(layer) % colors.len())) % colors.len();
                 image.put_pixel(
                     x_offset + x,
                     y,
                     Rgba(mine_gradient_pixel(
-                        colors[color_index],
+                        layer_colors[usize::from(layer)],
                         profile.edge_alpha[profile_index],
                     )),
                 );
@@ -246,45 +248,73 @@ pub fn mine_gradient_samples(
     size: [u32; 2],
     sample_count: usize,
 ) -> Option<Vec<[f32; 4]>> {
-    let [src_x, src_y] = src;
     let [sample_width, sample_height] = size;
     if sample_width == 0 || sample_height == 0 {
         return None;
     }
-
-    let mut colors = Vec::with_capacity(sample_width as usize);
-    for dx in 0..sample_width {
-        let mut r = 0.0_f32;
-        let mut g = 0.0_f32;
-        let mut b = 0.0_f32;
-        let mut alpha_weight = 0.0_f32;
-
-        for dy in 0..sample_height {
-            let pixel = image.get_pixel(src_x + dx, src_y + dy);
-            let a = f32::from(pixel[3]) / 255.0;
-            if a <= f32::EPSILON {
-                continue;
-            }
-            r = f32::from(pixel[0]).mul_add(a, r);
-            g = f32::from(pixel[1]).mul_add(a, g);
-            b = f32::from(pixel[2]).mul_add(a, b);
-            alpha_weight += a;
-        }
-
-        if alpha_weight <= f32::EPSILON {
-            colors.push([0.0, 0.0, 0.0, 0.0]);
-        } else {
-            let inv = 1.0 / alpha_weight;
-            colors.push([
-                (r * inv) / 255.0,
-                (g * inv) / 255.0,
-                (b * inv) / 255.0,
-                (alpha_weight / sample_height as f32).clamp(0.0, 1.0),
-            ]);
-        }
+    // Preserve rejection of invalid full regions even when only a few columns
+    // are needed. Callers normally provide the already validated slot region.
+    image.get_pixel(src[0] + sample_width - 1, src[1] + sample_height - 1);
+    let sample_count = sample_count.max(1);
+    if sample_width == 1 {
+        let color = mine_gradient_column(image, src, sample_height, 0);
+        return Some(vec![[color[0], color[1], color[2], 1.0]; sample_count]);
     }
+    // Sample positions are monotonic. Two inline entries retain both adjacent
+    // columns across repeated positions without building a full-width vector.
+    let mut cache = [(usize::MAX, [0.0f32; 3]); 2];
+    let mut column = |index: usize| {
+        if let Some((_, color)) = cache.iter().find(|(cached, _)| *cached == index) {
+            return *color;
+        }
+        let color = mine_gradient_column(image, src, sample_height, index as u32);
+        cache[0] = cache[1];
+        cache[1] = (index, color);
+        color
+    };
+    let max_index = (sample_width - 1) as f32;
+    let mut samples = Vec::with_capacity(sample_count);
+    let divisor = sample_count.saturating_sub(1).max(1) as f32;
+    for i in 0..sample_count {
+        let t = i as f32 / divisor;
+        let position = t * max_index;
+        let base_index = position as usize;
+        let next_index = (base_index + 1).min(sample_width as usize - 1);
+        let frac = (position - base_index as f32).clamp(0.0, 1.0);
+        let c0 = column(base_index);
+        let c1 = column(next_index);
+        samples.push([
+            (c1[0] - c0[0]).mul_add(frac, c0[0]).clamp(0.0, 1.0),
+            (c1[1] - c0[1]).mul_add(frac, c0[1]).clamp(0.0, 1.0),
+            (c1[2] - c0[2]).mul_add(frac, c0[2]).clamp(0.0, 1.0),
+            1.0,
+        ]);
+    }
+    Some(samples)
+}
 
-    mine_gradient_resample(&colors, sample_count)
+fn mine_gradient_column(image: &RgbaImage, src: [u32; 2], height: u32, dx: u32) -> [f32; 3] {
+    let mut r = 0.0_f32;
+    let mut g = 0.0_f32;
+    let mut b = 0.0_f32;
+    let mut alpha_weight = 0.0_f32;
+    for dy in 0..height {
+        let pixel = image.get_pixel(src[0] + dx, src[1] + dy);
+        let a = f32::from(pixel[3]) / 255.0;
+        if a <= f32::EPSILON {
+            continue;
+        }
+        r = f32::from(pixel[0]).mul_add(a, r);
+        g = f32::from(pixel[1]).mul_add(a, g);
+        b = f32::from(pixel[2]).mul_add(a, b);
+        alpha_weight += a;
+    }
+    if alpha_weight <= f32::EPSILON {
+        [0.0; 3]
+    } else {
+        let inv = 1.0 / alpha_weight;
+        [(r * inv) / 255.0, (g * inv) / 255.0, (b * inv) / 255.0]
+    }
 }
 
 pub fn mine_gradient_samples_from_slot(
@@ -360,6 +390,13 @@ pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod gradient_preparation {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/gradient_preparation/cases.rs"
+        ));
+    }
 
     #[test]
     fn mine_gradient_bytes_round_and_saturate() {
