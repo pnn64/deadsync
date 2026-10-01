@@ -150,8 +150,8 @@ pub(super) fn capture_stable_cross_actor_message_commands<Kind>(
                 continue;
             }
         };
-        let first = cross_actor_effects(&first, source_index);
-        let second = cross_actor_effects(&second, source_index);
+        let first = actor_capture_effects(&first.overlay_blocks, &first.overlay_aux, source_index);
+        let second = actor_capture_effects(&second.overlay_blocks, &second.overlay_aux, source_index);
         if first.is_empty() {
             continue;
         }

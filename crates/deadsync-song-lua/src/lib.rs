@@ -10470,6 +10470,98 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_defers_update_bound_messages() {
+        let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua")
+            .canonicalize()
+            .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Deferred Messages");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled =
+            test_compile_song_lua(&song_dir.join("deferred-message.lua"), &context).unwrap();
+        assert_eq!(
+            compiled.info.skipped_message_command_captures.len(),
+            1,
+            "{:?}",
+            compiled.info.skipped_message_command_captures
+        );
+        assert!(compiled.info.skipped_message_command_captures[0].contains("BrokenMessageCommand"));
+        let receiver = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Receiver"))
+            .unwrap();
+        let target = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Target"))
+            .unwrap();
+        let unsent = |commands: &[SongLuaOverlayMessageCommand]| {
+            commands
+                .iter()
+                .find(|command| command.message == "Unsent")
+                .unwrap()
+                .blocks
+                .clone()
+        };
+        assert_eq!(
+            unsent(&compiled.overlays[receiver].message_commands)[0]
+                .delta
+                .zoom_x,
+            Some(0.6)
+        );
+        assert_eq!(
+            unsent(&target.message_commands)[0].delta.rot_z_deg,
+            Some(30.0)
+        );
+        assert_eq!(
+            unsent(&compiled.player_actors[0].message_commands)[0]
+                .delta
+                .skew_x,
+            Some(0.5)
+        );
+        for (commands, expected) in [
+            (&compiled.overlays[receiver].message_commands, 0.7),
+            (&target.message_commands, 0.8),
+            (&compiled.player_actors[0].message_commands, 0.9),
+        ] {
+            let command = commands
+                .iter()
+                .find(|command| command.message == "UnsentAux")
+                .unwrap();
+            assert_eq!(command.aux, Some(expected));
+            assert!(command.blocks.is_empty());
+        }
+        let late = compiled
+            .stateful_message_captures
+            .iter()
+            .find(|capture| capture.message == "Late")
+            .unwrap();
+        let alphas = late
+            .writes
+            .iter()
+            .filter(|write| {
+                write.overlay_index == receiver
+                    && write.target == SongLuaOverlayUpdateTarget::Diffuse
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(alphas.len(), 2);
+        for (write, expected) in alphas.iter().zip([0.4, 0.8]) {
+            assert_eq!(
+                write.value,
+                SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, expected])
+            );
+        }
+        assert!(
+            !compiled
+                .messages
+                .iter()
+                .any(|message| message.message == "Unsent" || message.message == "Broken")
+        );
+    }
+
+    #[test]
     fn compile_song_lua_skips_failing_overlay_message_commands() {
         let song_dir = test_dir("overlay-message-error");
         let entry = song_dir.join("default.lua");

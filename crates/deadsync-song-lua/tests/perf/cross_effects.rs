@@ -56,7 +56,7 @@ fn effects(
     if old {
         baseline::cross_actor_effects(capture, source)
     } else {
-        cross_actor_effects(capture, source)
+        actor_capture_effects(&capture.overlay_blocks, &capture.overlay_aux, source)
     }
 }
 

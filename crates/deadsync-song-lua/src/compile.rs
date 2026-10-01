@@ -655,6 +655,20 @@ where
         }
     }
     compile_timer.push_stage("update_overlays");
+    for (index, message, path) in crate::lua_util::capture_deferred_messages(
+        &lua,
+        &mut overlays,
+        &mut tracked_actors,
+        &mut out.info.skipped_message_command_captures,
+    )? {
+        let layer = overlays[index]
+            .table
+            .get::<Option<usize>>(COMPILE_LAYER_KEY)
+            .map_err(|err| err.to_string())?
+            .unwrap_or(primary_index);
+        message_sounds.push((layer, message, path));
+    }
+    compile_timer.push_stage("deferred_messages");
     resolve_late_proxy_targets(&mut overlays, &mut hidden_players)?;
     crate::perframe::apply_startup_states(
         context,

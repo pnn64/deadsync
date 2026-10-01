@@ -30,6 +30,98 @@ use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 use deadsync_song_lua::SongLuaOverlayStateDelta;
 
 #[test]
+fn song_lua_deferred_messages_render_each_broadcast_value() {
+    crate::tests::init_paths();
+    let song_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/song-lua")
+        .canonicalize()
+        .unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Deferred Messages");
+    context.song_display_bpms = [60.0, 60.0];
+    context.music_length_seconds = 3.0;
+    let compiled = compile_song_lua(&song_dir.join("deferred-message.lua"), &context).unwrap();
+    let receiver = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Receiver"))
+        .unwrap();
+    let target = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Target"))
+        .unwrap();
+    let seconds = compiled
+        .messages
+        .iter()
+        .map(|message| Some(message.beat))
+        .collect::<Vec<_>>();
+    let events = deadsync_song_lua::gameplay::build_song_lua_overlay_message_events_with_seconds(
+        &compiled, &seconds,
+    );
+    let mut tracks = compiled
+        .overlay_updates
+        .iter()
+        .map(
+            |track| deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack {
+                overlay_index: track.overlay_index,
+                target: track.target,
+                samples: track
+                    .samples
+                    .iter()
+                    .map(
+                        |sample| deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
+                            second: sample.beat,
+                            value: sample.value.clone(),
+                        },
+                    )
+                    .collect(),
+            },
+        )
+        .collect::<Vec<_>>();
+    tracks.sort_by_key(|track| track.overlay_index);
+    let mut overlays = compiled.overlays;
+    overlays.push(SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::UpdateTracks { tracks },
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    });
+    let ranges = vec![0..0; overlays.len()];
+    let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+    let mut caches = Vec::new();
+    let mut local = Vec::new();
+    let mut composed = Vec::new();
+    // Fixed native writes: .4 at the first broadcast, .8 at the second. The
+    // successful late static probe sees .8 and must not replace the first call.
+    for (beat, alpha, rotation) in [(0.75, 1.0, 0.0), (1.5, 0.4, 15.0), (2.5, 0.8, 15.0)] {
+        song_lua_overlay_state_sets_from_into::<SpriteSlot>(
+            beat,
+            &overlays,
+            &events,
+            &[],
+            &ranges,
+            640.0,
+            480.0,
+            &mut order,
+            &mut caches,
+            &mut local,
+            &mut composed,
+        );
+        assert!(
+            (local[receiver].diffuse[3] - alpha).abs() < 1e-6,
+            "alpha at {beat}: {:?}",
+            local[receiver]
+        );
+        assert_eq!(
+            local[receiver].zoom_x, 1.0,
+            "unbroadcast commands must stay idle"
+        );
+        assert_eq!(local[target].rot_z_deg, rotation);
+    }
+}
+
+#[test]
 fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
     let initial = SongLuaOverlayState::default();
     let overlays = vec![SongLuaOverlayActor {

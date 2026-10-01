@@ -223,6 +223,26 @@ struct SongLuaProbeCaptureActive;
 struct SongLuaActionCaptureActive;
 pub(crate) struct SongLuaUpdateErrors(pub Vec<String>);
 
+struct SongLuaDeferredMessage {
+    actor: Table,
+    command: String,
+    detail: String,
+}
+
+// Owned by one load-time Lua session. Retry once after chronological replay;
+// actual broadcasts capture their writes while no static block is available.
+struct SongLuaDeferredMessages(Vec<SongLuaDeferredMessage>);
+
+fn has_deferred_message(lua: &Lua, actor: &Table, command: Option<&str>) -> bool {
+    lua.app_data_ref::<SongLuaDeferredMessages>()
+        .is_some_and(|deferred| {
+            deferred.0.iter().any(|message| {
+                message.actor.to_pointer() == actor.to_pointer()
+                    && command.is_none_or(|command| message.command == command)
+            })
+        })
+}
+
 #[derive(Clone)]
 pub struct SongLuaScheduledOverlayUpdate {
     pub initial_value: Option<SongLuaOverlayUpdateValue>,
@@ -609,6 +629,12 @@ fn record_overlay_update_capture(
                 .active_broadcast_command
                 .as_ref()
                 .is_some_and(|command| {
+                    if command
+                        .to_str()
+                        .is_ok_and(|name| has_deferred_message(lua, actor, Some(&name)))
+                    {
+                        return false;
+                    }
                     actor
                         .get::<Option<Function>>(command)
                         .ok()
@@ -691,6 +717,12 @@ fn record_overlay_update_capture_immediate(
                 .active_broadcast_command
                 .as_ref()
                 .is_some_and(|command| {
+                    if command
+                        .to_str()
+                        .is_ok_and(|name| has_deferred_message(lua, actor, Some(&name)))
+                    {
+                        return false;
+                    }
                     actor
                         .get::<Option<Function>>(command)
                         .ok()
@@ -2814,10 +2846,21 @@ pub fn capture_actor_message_commands(
         let blocks = match blocks {
             Ok(blocks) => blocks,
             Err(err) => {
-                push_unique_compile_detail(
-                    &mut out.skipped,
-                    format!("{}.{}: {err}", actor_debug_label(actor), name),
-                );
+                let detail = format!("{}.{}: {err}", actor_debug_label(actor), name);
+                if lua.app_data_ref::<SongLuaDeferredMessages>().is_none() {
+                    lua.set_app_data(SongLuaDeferredMessages(Vec::new()));
+                }
+                if !has_deferred_message(lua, actor, Some(&name)) {
+                    lua.app_data_mut::<SongLuaDeferredMessages>()
+                        .expect("deferred message list was initialized")
+                        .0
+                        .push(SongLuaDeferredMessage {
+                            actor: actor.clone(),
+                            command: name,
+                            detail: detail.clone(),
+                        });
+                }
+                push_unique_compile_detail(&mut out.skipped, detail);
                 continue;
             }
         };
@@ -11360,37 +11403,29 @@ fn capture_function_action_blocks_inner(
     })
 }
 
-fn cross_actor_effects(
-    capture: &SongLuaFunctionActionCapture,
+fn actor_capture_effects(
+    capture_blocks: &[(usize, Vec<SongLuaOverlayCommandBlock>)],
+    capture_aux: &[(usize, f32)],
     source_index: usize,
 ) -> Vec<(usize, Vec<SongLuaOverlayCommandBlock>, Option<f32>)> {
     // Captures normally arrive in strictly increasing actor order. Merge those
     // lists directly, cloning each retained block list once. Keep the general
     // path for unordered inputs and last-write-wins duplicate actor entries.
-    if capture
-        .overlay_aux
-        .windows(2)
-        .all(|pair| pair[0].0 < pair[1].0)
-        && capture
-            .overlay_blocks
-            .windows(2)
-            .all(|pair| pair[0].0 < pair[1].0)
+    if capture_aux.windows(2).all(|pair| pair[0].0 < pair[1].0)
+        && capture_blocks.windows(2).all(|pair| pair[0].0 < pair[1].0)
     {
-        let mut aux = capture
-            .overlay_aux
+        let mut aux = capture_aux
             .iter()
             .filter(|(index, _)| *index != source_index)
             .peekable();
-        let mut blocks = capture
-            .overlay_blocks
+        let mut blocks = capture_blocks
             .iter()
             .filter(|(index, _)| *index != source_index)
             .peekable();
         if aux.peek().is_none() && blocks.peek().is_none() {
             return Vec::new();
         }
-        let mut effects =
-            Vec::with_capacity(capture.overlay_aux.len() + capture.overlay_blocks.len());
+        let mut effects = Vec::with_capacity(capture_aux.len() + capture_blocks.len());
         loop {
             match (aux.peek(), blocks.peek()) {
                 (Some((aux_index, _)), Some((block_index, _))) if aux_index == block_index => {
@@ -11415,13 +11450,12 @@ fn cross_actor_effects(
         }
         return effects;
     }
-    let mut effects = capture
-        .overlay_aux
+    let mut effects = capture_aux
         .iter()
         .filter(|(index, _)| *index != source_index)
         .map(|(index, aux)| (*index, (Vec::new(), Some(*aux))))
         .collect::<std::collections::BTreeMap<_, _>>();
-    for (index, blocks) in &capture.overlay_blocks {
+    for (index, blocks) in capture_blocks {
         if *index != source_index {
             effects.entry(*index).or_default().0 = blocks.clone();
         }
@@ -11430,6 +11464,139 @@ fn cross_actor_effects(
         .into_iter()
         .map(|(index, (blocks, aux))| (index, blocks, aux))
         .collect()
+}
+
+fn message_capture_runner(
+    lua: &Lua,
+    source: &Table,
+    command_name: &str,
+    command: &Function,
+    drain_tables: &[Table],
+) -> mlua::Result<Function> {
+    let params = default_message_command_params(lua, command_name)?;
+    let source = source.clone();
+    let command = command.clone();
+    let command_name = command_name.to_owned();
+    let drain_tables = drain_tables.to_vec();
+    lua.create_function(move |lua, ()| {
+        run_guarded_actor_command(lua, &source, &command_name, &command, true, params.clone())?;
+        for actor in &drain_tables {
+            drain_actor_command_queue(lua, actor)?;
+        }
+        Ok(())
+    })
+}
+
+pub(crate) fn capture_deferred_messages<Kind>(
+    lua: &Lua,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &mut [SongLuaTrackedActor],
+    skipped: &mut Vec<String>,
+) -> Result<Vec<(usize, String, PathBuf)>, String> {
+    let Some(deferred) = lua.remove_app_data::<SongLuaDeferredMessages>() else {
+        return Ok(Vec::new());
+    };
+    let overlay_tables = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, actor)| (index, actor.table.clone()))
+        .collect::<Vec<_>>();
+    let drain_tables = overlay_tables
+        .iter()
+        .map(|(_, table)| table.clone())
+        .chain(tracked_actors.iter().map(|actor| actor.table.clone()))
+        .collect::<Vec<_>>();
+    let beat = compile_song_runtime_values(lua)
+        .map_err(|err| err.to_string())?
+        .0;
+    let mut sounds = Vec::new();
+    // This pass owns command validation, source effects and cross-actor effects
+    // together. A successful empty source block can still target both players.
+    for deferred in deferred.0 {
+        let Some(source_index) = overlays
+            .iter()
+            .position(|actor| actor.table.to_pointer() == deferred.actor.to_pointer())
+        else {
+            continue;
+        };
+        let command = deferred
+            .actor
+            .get::<Function>(deferred.command.as_str())
+            .map_err(|err| err.to_string())?;
+        let snapshots =
+            snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
+        let runner = message_capture_runner(
+            lua,
+            &deferred.actor,
+            &deferred.command,
+            &command,
+            &drain_tables,
+        )
+        .map_err(|err| err.to_string())?;
+        let first = capture_function_action_blocks_inner(
+            lua,
+            &overlay_tables,
+            tracked_actors,
+            &runner,
+            beat,
+            false,
+        );
+        let second = first.as_ref().ok().map(|_| {
+            capture_function_action_blocks_inner(
+                lua,
+                &overlay_tables,
+                tracked_actors,
+                &runner,
+                beat,
+                false,
+            )
+        });
+        restore_function_action_tables(snapshots).map_err(|err| err.to_string())?;
+        let (Ok(first), Some(Ok(second))) = (first, second) else {
+            continue;
+        };
+        if first != second || first.saw_side_effect || !first.broadcasts.is_empty() {
+            // Keep the original diagnostic when a command cannot be represented
+            // by stable blocks. Runtime writes remain captured at each broadcast.
+            continue;
+        }
+        let message = deferred
+            .command
+            .strip_suffix("MessageCommand")
+            .expect("message suffix");
+        for (index, blocks, aux) in
+            actor_capture_effects(&first.overlay_blocks, &first.overlay_aux, usize::MAX)
+        {
+            overlays[index]
+                .actor
+                .message_commands
+                .push(SongLuaOverlayMessageCommand {
+                    message: message.to_owned(),
+                    blocks,
+                    aux,
+                });
+        }
+        for (index, blocks, aux) in
+            actor_capture_effects(&first.tracked_blocks, &first.tracked_aux, usize::MAX)
+        {
+            tracked_actors[index]
+                .actor
+                .message_commands
+                .push(SongLuaOverlayMessageCommand {
+                    message: message.to_owned(),
+                    blocks,
+                    aux,
+                });
+        }
+        sounds.extend(
+            first
+                .sound_paths
+                .into_iter()
+                .map(|path| (source_index, message.to_owned(), path)),
+        );
+        skipped.retain(|detail| detail != &deferred.detail);
+    }
+    Ok(sounds)
 }
 
 pub fn capture_stable_cross_actor_message_commands<Kind>(
@@ -11467,27 +11634,7 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
     for (source_index, source, command_name, message, command) in commands {
         let table_snapshots =
             snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
-        let params =
-            default_message_command_params(lua, &command_name).map_err(|err| err.to_string())?;
-        let source_for_call = source.clone();
-        let command_for_call = command.clone();
-        let command_name_for_call = command_name.clone();
-        let drain_for_call = drain_tables.clone();
-        let runner = lua
-            .create_function(move |lua, ()| {
-                run_guarded_actor_command(
-                    lua,
-                    &source_for_call,
-                    &command_name_for_call,
-                    &command_for_call,
-                    true,
-                    params.clone(),
-                )?;
-                for actor in &drain_for_call {
-                    drain_actor_command_queue(lua, actor)?;
-                }
-                Ok(())
-            })
+        let runner = message_capture_runner(lua, &source, &command_name, &command, &drain_tables)
             .map_err(|err| err.to_string())?;
         let first =
             capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false);
@@ -11511,8 +11658,9 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
                 continue;
             }
         };
-        let first = cross_actor_effects(&first, source_index);
-        let second = cross_actor_effects(&second, source_index);
+        let first = actor_capture_effects(&first.overlay_blocks, &first.overlay_aux, source_index);
+        let second =
+            actor_capture_effects(&second.overlay_blocks, &second.overlay_aux, source_index);
         if first.is_empty() {
             continue;
         }
@@ -13459,6 +13607,7 @@ where
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
             && message_sounds.is_empty()
+            && !has_deferred_message(lua, actor, None)
         {
             return Ok(None);
         }
@@ -13473,6 +13622,7 @@ where
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
             && message_sounds.is_empty()
+            && !has_deferred_message(lua, actor, None)
             && !has_draw_function
             && !referenced_actors.contains(&(actor.to_pointer() as usize))
         {
