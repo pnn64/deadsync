@@ -1242,7 +1242,8 @@ pub(super) fn itg_note_animation_source(
         return None;
     }
     // Explicit empty indices preserve the existing sheet-origin semantics.
-    // Small color lanes need only their final Arc, without a temporary Vec.
+    // Small color lanes stage on the stack; large lanes collect into their
+    // final Arc without allocating and copying a temporary Vec.
     let frame_indices = if !color_x && !color_y {
         Arc::clone(&SEQUENTIAL_FRAME_INDICES)
     } else {
@@ -1260,7 +1261,7 @@ pub(super) fn itg_note_animation_source(
             }
             Arc::from(&indices[..frame_count])
         } else {
-            Arc::from((0..frame_count).map(index).collect::<Vec<_>>())
+            (0..frame_count).map(index).collect()
         }
     };
 
@@ -2147,3 +2148,7 @@ Materials: 1
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/lane_indices/mod.rs"]
+mod lane_indices;

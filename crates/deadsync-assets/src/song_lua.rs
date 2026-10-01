@@ -117,27 +117,8 @@ fn model_layer_from_slot_frame(
         song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
     );
     if let Some(texture) = &slot.model_additive {
-        let frames = match texture.source.as_ref() {
-            crate::noteskin::SpriteSource::Animated {
-                frame_count,
-                frame_durations,
-                ..
-            } => {
-                let mut end = 0.0;
-                (0..*frame_count)
-                    .map(|frame| {
-                        end += frame_durations
-                            .as_ref()
-                            .and_then(|delays| delays.get(frame))
-                            .copied()
-                            .unwrap_or(1.0);
-                        (texture.uv_for_frame_at(frame, 0.0), end)
-                    })
-                    .collect::<Vec<_>>()
-            }
-            _ => vec![(texture.uv_for_frame_at(0, 0.0), 1.0)],
-        };
-        layer.additive = Some((texture.texture_key_shared(), frames.into()));
+        let frames = model_additive_frames(texture);
+        layer.additive = Some((texture.texture_key_shared(), frames));
     }
     Some(layer)
 }
@@ -205,3 +186,32 @@ fn multitap_arrow_model_layer_from_slot(
 ) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, slot.frame_index_from_phase(0.0))
 }
+
+type ModelAdditiveFrames = std::sync::Arc<[([f32; 4], f32)]>;
+
+fn model_additive_frames(texture: &crate::noteskin::SpriteSlot) -> ModelAdditiveFrames {
+    match texture.source.as_ref() {
+        crate::noteskin::SpriteSource::Animated {
+            frame_count,
+            frame_durations,
+            ..
+        } => {
+            let mut end = 0.0;
+            (0..*frame_count)
+                .map(|frame| {
+                    end += frame_durations
+                        .as_ref()
+                        .and_then(|delays| delays.get(frame))
+                        .copied()
+                        .unwrap_or(1.0);
+                    (texture.uv_for_frame_at(frame, 0.0), end)
+                })
+                .collect()
+        }
+        _ => std::sync::Arc::from([(texture.uv_for_frame_at(0, 0.0), 1.0)]),
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/lua_model_frames/mod.rs"]
+mod lua_model_frames;

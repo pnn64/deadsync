@@ -350,6 +350,15 @@ pub struct ItgResolvedModelLayer {
 }
 
 #[derive(Debug)]
+struct ItgSharedMilkshapeMeshLayer {
+    material_index: i32,
+    bone_index: Option<u8>,
+    vertices: Arc<[ModelVertex]>,
+    bounds: [f32; 6],
+}
+
+// Existing frozen loaders retain their original intermediate Vec storage.
+#[cfg(test)]
 struct ItgMilkshapeMeshLayer {
     material_index: i32,
     bone_index: Option<u8>,
@@ -812,15 +821,6 @@ pub fn itg_parse_milkshape_model_layers(
         }
 
         let triangle_count = lines.next()?.trim().parse::<usize>().ok()?;
-        let mut tri_vertices: Vec<ModelVertex> = Vec::with_capacity(triangle_count * 3);
-        let mut bounds = [
-            f32::INFINITY,
-            f32::INFINITY,
-            f32::INFINITY,
-            f32::NEG_INFINITY,
-            f32::NEG_INFINITY,
-            f32::NEG_INFINITY,
-        ];
         triangles.clear();
         triangles.reserve_exact(triangle_count);
         for _ in 0..triangle_count {
@@ -846,17 +846,10 @@ pub fn itg_parse_milkshape_model_layers(
             }
             triangles.push(indices);
         }
-        for indices in triangles.drain(..) {
-            for vtx in indices.map(|index| mesh_vertices[index]) {
-                bounds[0] = bounds[0].min(vtx.pos[0]);
-                bounds[1] = bounds[1].min(vtx.pos[1]);
-                bounds[2] = bounds[2].min(vtx.pos[2]);
-                bounds[3] = bounds[3].max(vtx.pos[0]);
-                bounds[4] = bounds[4].max(vtx.pos[1]);
-                bounds[5] = bounds[5].max(vtx.pos[2]);
-                tri_vertices.push(vtx);
-            }
+        if triangles.is_empty() {
+            continue;
         }
+        let (tri_vertices, bounds) = expand_mesh_vertices(&mesh_vertices, &mut triangles);
 
         if !tri_vertices.is_empty() {
             model_bounds[0] = model_bounds[0].min(bounds[0]);
@@ -865,7 +858,7 @@ pub fn itg_parse_milkshape_model_layers(
             model_bounds[3] = model_bounds[3].max(bounds[3]);
             model_bounds[4] = model_bounds[4].max(bounds[4]);
             model_bounds[5] = model_bounds[5].max(bounds[5]);
-            meshes.push(ItgMilkshapeMeshLayer {
+            meshes.push(ItgSharedMilkshapeMeshLayer {
                 material_index,
                 bone_index,
                 vertices: tri_vertices,
@@ -997,7 +990,7 @@ pub fn itg_parse_milkshape_model_layers(
             animation_length,
             additive,
             mesh: Arc::new(ModelMesh {
-                vertices: mesh.vertices.into(),
+                vertices: mesh.vertices,
                 bounds,
             }),
             texture,
@@ -1481,3 +1474,38 @@ Materials: 1
         let _ = fs::remove_dir_all(root);
     }
 }
+
+// Parsed triangles contain valid indices. Their three-vertex arrays give
+// collect an exact length, so each mesh needs only its final shared buffer.
+fn expand_mesh_vertices(
+    mesh_vertices: &[ModelVertex],
+    triangles: &mut Vec<[usize; 3]>,
+) -> (Arc<[ModelVertex]>, [f32; 6]) {
+    let vertices: Arc<[ModelVertex]> = triangles
+        .drain(..)
+        .flat_map(|indices| indices.map(|index| mesh_vertices[index]))
+        .collect();
+    let mut bounds = [
+        f32::INFINITY,
+        f32::INFINITY,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+    ];
+    // Keep this scan outside the iterator so vertex copies and bounds updates
+    // can each be optimized without mutable state captured by the collector.
+    for vertex in vertices.iter() {
+        bounds[0] = bounds[0].min(vertex.pos[0]);
+        bounds[1] = bounds[1].min(vertex.pos[1]);
+        bounds[2] = bounds[2].min(vertex.pos[2]);
+        bounds[3] = bounds[3].max(vertex.pos[0]);
+        bounds[4] = bounds[4].max(vertex.pos[1]);
+        bounds[5] = bounds[5].max(vertex.pos[2]);
+    }
+    (vertices, bounds)
+}
+
+#[cfg(test)]
+#[path = "../tests/shared_mesh_preparation/mod.rs"]
+mod shared_mesh_preparation;
