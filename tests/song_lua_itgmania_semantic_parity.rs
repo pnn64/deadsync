@@ -1025,6 +1025,123 @@ fn recurring_ease_tables_match_native_shared_state() {
 }
 
 #[test]
+fn position_spline_curves_match_native_cpp() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/position-spline-native.json"))
+            .expect("native Position fixture"),
+    )
+    .expect("valid native Position JSON");
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let mut checks = 0;
+    for case in native["splines"].as_array().expect("native spline cases") {
+        let points: Vec<[f32; 3]> = case["points"]
+            .as_array()
+            .expect("points")
+            .iter()
+            .map(|point| std::array::from_fn(|axis| point[axis].as_f64().expect("axis") as f32))
+            .collect();
+        let data = deadsync_gameplay::SongLuaSplineData {
+            coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
+            constant: points.iter().all(|point| *point == points[0]),
+            beats_per_t: case["beats_per_t"].as_f64().expect("beats per t") as f32,
+            receptor_t: case["receptor_t"].as_f64().expect("receptor t") as f32,
+            subtract_song_beat: case["subtract_song_beat"].as_bool().expect("beat mode"),
+        };
+        for sample in case["samples"].as_array().expect("samples") {
+            let song = sample["song_beat"].as_f64().expect("song beat") as f32;
+            let note = sample["note_beat"].as_f64().expect("note beat") as f32;
+            let (position, derivative) = data.view().sample(song, note);
+            for (key, actual) in [
+                ("position", position),
+                ("derivative", derivative),
+                ("receptor", data.view().receptor(song)),
+            ] {
+                for axis in 0..3 {
+                    let expected = sample[key][axis].as_f64().expect("native axis") as f32;
+                    assert!(
+                        (actual[axis] - expected).abs() <= 0.0002,
+                        "{key} axis {axis}, song {song}, note {note}: {} vs {expected}",
+                        actual[axis]
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 6426);
+}
+
+#[test]
+fn position_spline_tracks_keep_native_clock_and_modifier_state() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/position-spline.json"));
+    let mut context = SongLuaCompileContext::new(&song_dir, trace.title.clone());
+    context.music_length_seconds = trace.end_position.seconds;
+    context.screen_width = trace.display.logical_width;
+    context.screen_height = trace.display.logical_height;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join("position-spline.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile Position splines");
+    assert_eq!(compiled[0].column_splines.len(), 1);
+    let track = &compiled[0].column_splines[0];
+    assert!(
+        track
+            .at_second(0.99)
+            .expect("initial frame")
+            .position
+            .is_none()
+    );
+    for (second, first_y) in [(1.5, -135.0), (2.5, -115.0)] {
+        let frame = track.at_second(second).expect("active frame");
+        assert_eq!(
+            frame.position.as_ref().expect("Position").coefficients[0][1][0],
+            first_y
+        );
+        assert_eq!(frame.position.as_ref().expect("Position").beats_per_t, 0.5);
+        assert_eq!(frame.position.as_ref().expect("Position").receptor_t, 0.25);
+        assert_eq!(frame.zoom.as_ref().expect("Zoom").coefficients.len(), 4);
+    }
+    assert!(
+        track
+            .at_second(3.1)
+            .expect("disabled frame")
+            .position
+            .is_none()
+    );
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.75,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+    let shifted =
+        deadsync_song_lua::gameplay::song_lua_column_spline_tracks(&compiled[0], 0, &timing, 0.1);
+    let shift = timing.get_time_for_beat_exact(0.0) - 0.1;
+    assert_eq!(
+        shifted[0]
+            .at_second(1.5 + shift)
+            .expect("shifted frame")
+            .position,
+        track.at_second(1.5).expect("source frame").position
+    );
+    let mut parity = compare_semantics(&trace, &compiled, 0, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("Position spline clock and modifier state");
+}
+
+#[test]
 fn final_render_samples_unfinished_native_fade() {
     crate::paths::init();
     let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
@@ -2752,6 +2869,14 @@ fn compare_column_splines(
         &[],
     );
     for player in 0..2 {
+        let spline_tracks = compiled
+            .iter()
+            .flat_map(|layer| {
+                deadsync_song_lua::gameplay::song_lua_column_spline_tracks(
+                    layer, player, &timing, 0.0,
+                )
+            })
+            .collect::<Vec<_>>();
         let windows = compiled
             .iter()
             .flat_map(|layer| {
@@ -2817,10 +2942,17 @@ fn compare_column_splines(
             }
             let (transforms, splines) =
                 deadsync_gameplay::song_lua_column_transforms(&windows, column + 1, seconds);
-            let actual = transforms[1].get(column).copied().unwrap_or(0.0)
+            let mut actual = transforms[1].get(column).copied().unwrap_or(0.0)
                 + splines
                     .get(column)
                     .map_or(0.0, |spline| spline.receptor(beat)[1]);
+            for track in spline_tracks.iter().filter(|track| track.column == column) {
+                if let Some(frame) = track.at_second(seconds) {
+                    if let Some(position) = &frame.position {
+                        actual = position.coefficients[0][1][0];
+                    }
+                }
+            }
             parity.check_once(
                 actual.is_finite() && (actual - expected).abs() <= 0.03,
                 reported.entry(column).or_default(),

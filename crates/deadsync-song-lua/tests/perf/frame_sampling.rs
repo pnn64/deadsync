@@ -103,26 +103,17 @@ fn compact_snapshots_preserve_coercion_order_speed_precedence_and_live_changes()
     ] {
         owner.raw_set("__songlua_speedmod_active", active).unwrap();
         let old = player_option_sample(owner).unwrap();
-        let new = scratch.sample(owner, None).unwrap();
+        let new = scratch.sample(owner).unwrap();
         assert_eq!(bits(&new), bits(&old));
         for (key, value) in old {
             assert_eq!(new.get(&key).unwrap().to_bits(), value.to_bits());
         }
         assert!(new.get("missing").is_none());
-        let new = scratch.sample(owner, Some(0.75)).unwrap();
-        assert_eq!(new.get("reverse"), Some(&0.75));
-        assert_eq!(
-            bits(&new)
-                .iter()
-                .filter(|(key, _)| key == "reverse")
-                .count(),
-            1
-        );
     }
-    let prior = scratch.sample(owner, None).unwrap();
+    let prior = scratch.sample(owner).unwrap();
     state.raw_set("drunk", 8.0).unwrap();
     state.raw_set("tipsy", Value::Nil).unwrap();
-    let next = scratch.sample(owner, None).unwrap();
+    let next = scratch.sample(owner).unwrap();
     assert_ne!(prior.get("drunk"), next.get("drunk"));
     assert!(prior.get("tipsy").is_some() && next.get("tipsy").is_none());
     assert_eq!(bits(&next), bits(&player_option_sample(owner).unwrap()));
@@ -151,7 +142,7 @@ fn compact_snapshots_preserve_conversion_errors_and_raw_access() {
             .raw_set("__songlua_player_option_state", state)
             .unwrap();
         assert_eq!(
-            ModSnapshotScratch::default().sample(&owner, None).err(),
+            ModSnapshotScratch::default().sample(&owner).err(),
             player_option_sample(&owner).err()
         );
         owner
@@ -159,7 +150,7 @@ fn compact_snapshots_preserve_conversion_errors_and_raw_access() {
             .unwrap();
         owner.raw_set("__songlua_speedmod_active", invalid).unwrap();
         assert_eq!(
-            ModSnapshotScratch::default().sample(&owner, None).err(),
+            ModSnapshotScratch::default().sample(&owner).err(),
             player_option_sample(&owner).err()
         );
     }
@@ -174,7 +165,7 @@ fn compact_snapshots_preserve_conversion_errors_and_raw_access() {
         .unwrap();
     let old = player_option_sample(&owners[0]).unwrap();
     let new = ModSnapshotScratch::default()
-        .sample(&owners[0], None)
+        .sample(&owners[0])
         .unwrap();
     assert_eq!(bits(&old), bits(&new));
     assert_eq!(new.get("cmod"), Some(&450.0));
@@ -194,8 +185,8 @@ fn new_samples(
     scratch: &mut ModSnapshotScratch,
 ) {
     for _ in 0..count {
-        black_box(scratch.sample(&tables[0], None).unwrap());
-        black_box(scratch.sample(&tables[1], None).unwrap());
+        black_box(scratch.sample(&tables[0]).unwrap());
+        black_box(scratch.sample(&tables[1]).unwrap());
         black_box(scratch.player_speeds(lua, tables).unwrap());
     }
 }
@@ -455,6 +446,7 @@ impl CompileFixture {
                 &[],
                 &self.messages,
                 &mut Vec::new(),
+                &mut Vec::new(),
             )
         }
         .unwrap();
@@ -486,6 +478,7 @@ impl CompileFixture {
                     &mut self.overlays,
                     &[],
                     &self.messages,
+                    &mut Vec::new(),
                     &mut Vec::new(),
                 )
                 .unwrap(),

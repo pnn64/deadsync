@@ -68,7 +68,7 @@ pub(super) fn compile_update_functions<Kind>(
     restore_started_message_states(lua, overlays, &replay_overlays, started)?;
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
-    let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
+    let baseline_mods = current_update_mod_states(&option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
     let mut sample_beats = vec![start];
     let rate = f64::from(song_music_rate(context));
@@ -175,10 +175,7 @@ pub(super) fn compile_update_functions<Kind>(
         player_samples.push(next_players);
         player_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        mod_samples.push(current_update_mod_states_with_note_columns(
-            lua,
-            &option_tables,
-        )?);
+        mod_samples.push(current_update_mod_states(&option_tables)?);
         mod_speed_samples.push(current_update_mod_speeds(&option_tables)?);
         mod_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);

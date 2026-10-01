@@ -505,7 +505,10 @@ pub fn song_lua_column_transforms(
     windows: &[SongLuaColumnOffsetWindowRuntime],
     num_cols: usize,
     current_time_s: f32,
-) -> ([[f32; MAX_COLS]; 4], [SongLuaPositionSpline; MAX_COLS]) {
+) -> (
+    [[f32; MAX_COLS]; 4],
+    [SongLuaPositionSpline<'static>; MAX_COLS],
+) {
     let active_cols = num_cols.min(MAX_COLS);
     let mut x_offsets = [0.0; MAX_COLS];
     let mut y_offsets = [0.0; MAX_COLS];

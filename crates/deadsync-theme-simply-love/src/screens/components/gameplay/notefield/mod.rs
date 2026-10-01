@@ -836,6 +836,11 @@ pub(crate) fn compose_frame(
             tap_explosion: tap_explosion_noteskin,
         },
         song_lua: NotefieldSongLuaView {
+            column_splines: if show_song_visuals {
+                &state.song_lua_visuals().column_splines[player_idx]
+            } else {
+                &[]
+            },
             note_hides: if show_song_visuals {
                 &state.song_lua_visuals().note_hides[player_idx]
             } else {

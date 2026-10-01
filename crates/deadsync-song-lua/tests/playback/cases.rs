@@ -8986,6 +8986,7 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
         hidden_screen_layers: [false; 2],
         note_hides: std::array::from_fn(|_| deadsync_gameplay::SongLuaNoteHideWindows::default()),
         column_offsets: std::array::from_fn(|_| Vec::new()),
+        column_splines: std::array::from_fn(|_| Vec::new()),
         screen_width: 640.0,
         screen_height: 480.0,
     };

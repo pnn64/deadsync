@@ -68,7 +68,7 @@ pub(super) fn compile_update_functions<Kind>(
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let mut mod_scratch = ModSnapshotScratch::default();
-    let baseline_mods = mod_scratch.states(lua, &option_tables)?;
+    let baseline_mods = mod_scratch.states(&option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
     let replay = update_function_replay_beats(context, start, end);
     let sample_count = replay.len();
@@ -182,7 +182,7 @@ pub(super) fn compile_update_functions<Kind>(
         player_samples.push(next_players);
         player_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        mod_samples.push(mod_scratch.states(lua, &option_tables)?);
+        mod_samples.push(mod_scratch.states(&option_tables)?);
         mod_speed_samples.push(mod_scratch.player_speeds(lua, &option_tables)?);
         mod_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);

@@ -154,7 +154,7 @@ pub use lua_util::{
     read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
     read_model_path, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
-    read_note_column_position_reverse_percents, read_note_column_transform_samples,
+    read_note_column_transform_samples,
     read_note_column_transform_samples_for_fields, read_note_column_zoom_hides,
     read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
@@ -1687,6 +1687,8 @@ pub struct CompiledSongLua<OverlayActor> {
     pub hidden_screen_layers: [bool; 2],
     pub note_hides: Vec<SongLuaNoteHideWindow>,
     pub column_offsets: Vec<SongLuaColumnOffsetWindow>,
+    pub column_splines: Vec<deadsync_gameplay::SongLuaColumnSplineTrack>,
+    pub column_spline_origin: Option<f32>,
     pub info: SongLuaCompileInfo,
 }
 
@@ -1712,6 +1714,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             hidden_screen_layers: [false; 2],
             note_hides: Vec::new(),
             column_offsets: Vec::new(),
+            column_splines: Vec::new(),
+            column_spline_origin: None,
             info: SongLuaCompileInfo::default(),
         }
     }
@@ -8733,7 +8737,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_maps_position_spline_direction_to_reverse() {
+    fn compile_song_lua_keeps_position_splines_separate_from_reverse() {
         let song_dir = test_dir("update-position-spline-reverse");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -8775,23 +8779,18 @@ return Def.ActorFrame{
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Position Spline Reverse");
         context.music_length_seconds = 2.5;
+        context.song_display_bpms = [60.0; 2];
+        context.song_timing_bpms = vec![(0.0, 60.0)];
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        assert!(compiled.eases.iter().any(|ease| {
-            ease.player == Some(1)
-                && ease.target == SongLuaEaseTarget::Mod("reverse".to_string())
-                && (ease.from - 100.0).abs() <= f32::EPSILON
-                && (ease.to - 100.0).abs() <= f32::EPSILON
-        }));
-        assert!(compiled.column_offsets.iter().any(|window| {
-            window.target == SongLuaColumnTransformTarget::Zoom
-                && window.player == 0
-                && (window.from_y < 0.99 || window.to_y < 0.99)
-        }));
-        assert!(compiled.column_offsets.iter().any(|window| {
-            window.target == SongLuaColumnTransformTarget::OffsetX
-                && window.player == 0
-                && (window.from_y.abs() > f32::EPSILON || window.to_y.abs() > f32::EPSILON)
-        }));
+        assert!(!compiled.eases.iter().any(|ease| ease.target == SongLuaEaseTarget::Mod("reverse".into())));
+        assert_eq!(compiled.column_splines.len(), 4);
+        let track = &compiled.column_splines[0];
+        let active = track.at_second(1.5).expect("active Position frame");
+        assert_eq!(active.position.as_ref().expect("position").view().receptor(1.5)[1], 100.0);
+        assert!(active.zoom.as_ref().expect("zoom").view().receptor(1.5)[0] < 0.99);
+        assert!(track.at_second(0.5).expect("baseline").position.is_none());
+        assert!(compiled.column_offsets.iter().filter(|window| window.target == SongLuaColumnTransformTarget::OffsetX)
+            .all(|window| window.from_y == 0.0 && window.to_y == 0.0));
     }
 
     #[test]

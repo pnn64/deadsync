@@ -749,20 +749,140 @@ pub enum SongLuaColumnTransformTarget {
     PositionSubtractBeat,
 }
 
-/// Solved two-point Offset spline and its native beat coordinates.
+/// Immutable solved spline, produced at song load, never solved during play.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SongLuaSplineData {
+    pub coefficients: std::sync::Arc<[[[f32; 4]; 3]]>,
+    pub constant: bool,
+    pub beats_per_t: f32,
+    pub receptor_t: f32,
+    pub subtract_song_beat: bool,
+}
+
+/// Solve native non-looping cubic coefficients at the load boundary.
+pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
+    let size = points.len();
+    let mut out = vec![[[0.0; 4]; 3]; size];
+    let mut diagonals = vec![4.0_f32; size];
+    let mut slopes = vec![0.0_f32; size];
+    for axis in 0..3 {
+        for (coefficients, point) in out.iter_mut().zip(points) {
+            coefficients[axis][0] = point[axis];
+        }
+        if size < 2 || points.iter().all(|point| point[axis] == points[0][axis]) {
+            continue;
+        }
+        if size == 2 {
+            out[0][axis][1] = points[1][axis] - points[0][axis];
+            out[1][axis][1] = -out[0][axis][1];
+            continue;
+        }
+        diagonals.fill(4.0);
+        diagonals[0] = 2.0;
+        diagonals[size - 1] = 2.0;
+        slopes[0] = 3.0 * (points[1][axis] - points[0][axis]);
+        for i in 1..size - 1 {
+            slopes[i] = 3.0 * (points[i + 1][axis] - points[i - 1][axis]);
+        }
+        slopes[size - 1] = 3.0 * (points[size - 1][axis] - points[size - 2][axis]);
+        for i in 0..size - 1 {
+            let multiple = 1.0 / diagonals[i];
+            diagonals[i + 1] -= multiple;
+            slopes[i + 1] -= slopes[i] * multiple;
+        }
+        for i in (1..size).rev() {
+            slopes[i - 1] -= slopes[i] * (1.0 / diagonals[i]);
+        }
+        for i in 0..size {
+            slopes[i] /= diagonals[i];
+        }
+        for i in 0..size {
+            let next = (i + 1) % size;
+            let diff = points[next][axis] - points[i][axis];
+            out[i][axis][1..].copy_from_slice(&[
+                slopes[i],
+                3.0 * diff - 2.0 * slopes[i] - slopes[next],
+                -2.0 * diff + slopes[i] + slopes[next],
+            ]);
+        }
+    }
+    out
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SongLuaColumnSplineFrame {
+    pub second: f32,
+    pub position: Option<SongLuaSplineData>,
+    pub zoom: Option<SongLuaSplineData>,
+}
+
+/// Song-owned immutable tracks, built by the Lua loader and shared by render
+/// readers. Capacity is the authored lane count and changed reference frames,
+/// with at most 65536 points per spline and 128 MiB of coefficients per layer.
+/// No insertion, eviction, misses, allocation, or destruction during play.
+/// A query does one binary search per lane, then constant-time note sampling.
+/// Tracks are freed at the gameplay transition; compile logs expose track sizes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SongLuaColumnSplineTrack {
+    pub player: usize,
+    pub column: usize,
+    pub time_offset: f32,
+    pub frames: std::sync::Arc<[SongLuaColumnSplineFrame]>,
+}
+
+impl SongLuaColumnSplineTrack {
+    pub fn at_second(&self, second: f32) -> Option<&SongLuaColumnSplineFrame> {
+        if !second.is_finite() {
+            return None;
+        }
+        let index = self
+            .frames
+            .partition_point(|frame| frame.second + self.time_offset <= second + 1e-5);
+        index.checked_sub(1).map(|index| &self.frames[index])
+    }
+}
+
+impl SongLuaSplineData {
+    pub fn view(&self) -> SongLuaPositionSpline<'_> {
+        SongLuaPositionSpline {
+            enabled: true,
+            absolute: true,
+            coefficients: &self.coefficients,
+            constant: self.constant,
+            points: std::array::from_fn(|point| {
+                std::array::from_fn(|axis| {
+                    self.coefficients
+                        .get(point)
+                        .map_or(0.0, |value| value[axis][0])
+                })
+            }),
+            beats_per_t: self.beats_per_t,
+            receptor_t: self.receptor_t,
+            subtract_song_beat: self.subtract_song_beat,
+        }
+    }
+}
+
+/// Frame-local spline view; two-point Offset windows retain their scalar form.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SongLuaPositionSpline {
+pub struct SongLuaPositionSpline<'a> {
     pub enabled: bool,
+    pub absolute: bool,
+    pub coefficients: &'a [[[f32; 4]; 3]],
+    pub constant: bool,
     pub points: [[f32; 3]; 2],
     pub beats_per_t: f32,
     pub receptor_t: f32,
     pub subtract_song_beat: bool,
 }
 
-impl Default for SongLuaPositionSpline {
+impl Default for SongLuaPositionSpline<'_> {
     fn default() -> Self {
         Self {
             enabled: false,
+            absolute: false,
+            coefficients: &[],
+            constant: true,
             points: [[0.0; 3]; 2],
             beats_per_t: 1.0,
             receptor_t: 0.0,
@@ -771,7 +891,7 @@ impl Default for SongLuaPositionSpline {
     }
 }
 
-impl SongLuaPositionSpline {
+impl SongLuaPositionSpline<'_> {
     pub fn set(&mut self, target: SongLuaColumnTransformTarget, value: f32) {
         use SongLuaColumnTransformTarget::*;
         match target {
@@ -813,6 +933,24 @@ impl SongLuaPositionSpline {
     fn at_t(self, t: f32) -> ([f32; 3], [f32; 3]) {
         if !self.enabled || !t.is_finite() {
             return ([0.0; 3], [0.0; 3]);
+        }
+        if !self.coefficients.is_empty() {
+            let integer = t as i64;
+            let last = self.coefficients.len() - 1;
+            let (index, fraction) = if integer < 0 {
+                (0, 0.0)
+            } else if integer as usize >= last {
+                (last, 0.0)
+            } else {
+                (integer as usize, t - integer as f32)
+            };
+            let square = fraction * fraction;
+            let cube = square * fraction;
+            let coefficients = self.coefficients[index];
+            return (
+                coefficients.map(|[a, b, c, d]| a + b * fraction + c * square + d * cube),
+                coefficients.map(|[_, b, c, d]| b + 2.0 * c * fraction + 3.0 * d * square),
+            );
         }
         // CubicSpline::check_minimum_size solves two points as straight lines.
         // Its integer conversion truncates toward zero: (-1, 0) extrapolates.
@@ -1331,6 +1469,7 @@ pub struct SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     pub hidden_screen_layers: [bool; 2],
     pub note_hides: [SongLuaNoteHideWindows; MAX_PLAYERS],
     pub column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
+    pub column_splines: [Vec<SongLuaColumnSplineTrack>; MAX_PLAYERS],
     pub screen_width: f32,
     pub screen_height: f32,
 }
@@ -1362,6 +1501,7 @@ pub const fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDe
     hidden_screen_layers: [bool; 2],
     note_hides: [SongLuaNoteHideWindows; MAX_PLAYERS],
     column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
+    column_splines: [Vec<SongLuaColumnSplineTrack>; MAX_PLAYERS],
     screen_width: f32,
     screen_height: f32,
 ) -> SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
@@ -1382,6 +1522,7 @@ pub const fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDe
         hidden_screen_layers,
         note_hides,
         column_offsets,
+        column_splines,
         screen_width,
         screen_height,
     }

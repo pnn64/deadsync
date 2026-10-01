@@ -632,13 +632,17 @@ fn compose_field_contents<S, F>(
             note_hides.zoom_offset(local_col, beat)
         };
         let hold_target_arrow_px = lane_frame.target_arrow_px;
-        let hold_head_zoom = column_zoom
-            * (visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache)
-                + if has_zoom_spline {
-                    note_hides.zoom_offset(local_col, note.beat)
-                } else {
-                    0.0
-                });
+        let hold_head_zoom = prepared.spline_zoom(
+            local_col,
+            if engaged { current_beat } else { note.beat },
+            column_zoom
+                * (visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache)
+                    + if has_zoom_spline {
+                        note_hides.zoom_offset(local_col, note.beat)
+                    } else {
+                        0.0
+                    }),
+        );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
         let use_legacy_hold_sprites = lane_frame.use_legacy_sprites
@@ -657,7 +661,12 @@ fn compose_field_contents<S, F>(
                 body_head_beat
                     + (hold.end_beat - body_head_beat) * ((screen_y - y_head) / (y_tail - y_head))
             };
-            let (offset, derivative) = prepared.spline_offsets(local_col, beat);
+            let (_, derivative) = prepared.spline_offsets(local_col, beat);
+            let center_x = lane_center_x_from_adjusted_travel(local_col, adjusted_travel);
+            let world_z = world_z_for_adjusted_travel(local_col, adjusted_travel);
+            let base = [center_x, screen_y, world_z];
+            let position = prepared.spline_position(local_col, beat, base);
+            let offset = std::array::from_fn(|axis| position[axis] - base[axis]);
             HoldPathSample {
                 adjusted_travel,
                 center_x: lane_center_x_from_adjusted_travel(local_col, adjusted_travel),
@@ -671,15 +680,24 @@ fn compose_field_contents<S, F>(
                 },
                 cap_step: 0.0,
                 arrow_px: target_arrow_px
-                    * column_zoom
-                    * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
-                        + body_zoom_offset_at_y(screen_y)),
+                    * prepared.spline_zoom(
+                        local_col,
+                        beat,
+                        column_zoom
+                            * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
+                                + body_zoom_offset_at_y(screen_y)),
+                    ),
             }
         };
         // Native normalization of an identical-point Offset spline produces
         // no finite hold strip. Keep the head, and omit its body/caps.
         let position_spline = position_splines[local_col];
-        if !position_spline.enabled || position_spline.points[0] != position_spline.points[1] {
+        let constant = if position_spline.coefficients.is_empty() {
+            position_spline.points[0] == position_spline.points[1]
+        } else {
+            position_spline.constant
+        };
+        if !position_spline.enabled || !constant {
             compose_hold_body_caps(
                 flat_draws,
                 hold_mesh_scratch,
@@ -758,11 +776,17 @@ fn compose_field_contents<S, F>(
         } else {
             lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel)
         };
-        let (head_offset, _) =
-            prepared.spline_offsets(local_col, if engaged { current_beat } else { note.beat });
-        let head_center = [head_center_x + head_offset[0], head_draw_y + head_offset[1]];
-        let head_world_z =
-            world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel) + head_offset[2];
+        let position = prepared.spline_position(
+            local_col,
+            if engaged { current_beat } else { note.beat },
+            [
+                head_center_x,
+                head_draw_y,
+                world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel),
+            ],
+        );
+        let head_center = [position[0], position[1]];
+        let head_world_z = position[2];
         let elapsed = elapsed_screen;
         let head_part = if head_slot.is_none() && head_layers.is_none() {
             ns.head_fallback_part(matches!(note.note_type, NoteType::Roll), use_active)
@@ -1105,7 +1129,7 @@ fn compose_visible_notes<S, F>(
                     return;
                 }
                 let (spline_offset, _) = prepared.spline_offsets(local_col, note.beat);
-                let column_center_x = prepared.field.playfield_center_x
+                let mut column_center_x = prepared.field.playfield_center_x
                     + spline_offset[0]
                     + prepared.column_x_offsets[local_col]
                     + if note_x_is_static {
@@ -1125,16 +1149,27 @@ fn compose_visible_notes<S, F>(
                             notes.tiny_spacing_scale,
                         )
                     };
-                let y_pos =
+                let mut y_pos =
                     direction.mul_add(adjusted_travel, receptor_y) + lane_offset + spline_offset[1];
                 let transform_cache = lane_transform_caches[local_col];
-                let world_z = note_world_z_cached(
+                let mut world_z = note_world_z_cached(
                     adjusted_travel,
                     notes.note_depth_frame_cache,
                     transform_cache,
                 ) + spline_offset[2];
-                let effect_zoom = prepared.column_zooms[local_col]
-                    * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache);
+                if prepared.column_position_splines[local_col].absolute {
+                    [column_center_x, y_pos, world_z] = prepared.spline_position(
+                        local_col,
+                        note.beat,
+                        [column_center_x, y_pos, world_z],
+                    );
+                }
+                let effect_zoom = prepared.spline_zoom(
+                    local_col,
+                    note.beat,
+                    prepared.column_zooms[local_col]
+                        * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache),
+                );
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {

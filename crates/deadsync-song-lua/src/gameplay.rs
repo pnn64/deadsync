@@ -1,4 +1,26 @@
 //! Translate compiled Lua commands into deterministic gameplay windows.
+
+pub fn song_lua_column_spline_tracks<OverlayActor>(
+    compiled: &crate::CompiledSongLua<OverlayActor>,
+    player: usize,
+    timing: &deadsync_rules::timing::TimingData,
+    global_offset: f32,
+) -> Vec<deadsync_gameplay::SongLuaColumnSplineTrack> {
+    let time_offset = compiled
+        .column_spline_origin
+        .unwrap_or_else(|| timing.get_time_for_beat_exact(0.0))
+        - global_offset;
+    compiled
+        .column_splines
+        .iter()
+        .filter(|track| track.player == player)
+        .map(|track| {
+            let mut track = track.clone();
+            track.time_offset = time_offset;
+            track
+        })
+        .collect()
+}
 pub type SongLuaRuntimeOverlayStateDelta =
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<crate::SongLuaOverlayStateDelta>;
 

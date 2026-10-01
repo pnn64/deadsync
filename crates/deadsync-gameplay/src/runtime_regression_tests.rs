@@ -267,6 +267,7 @@ mod runtime_regression_tests {
                     [false; 2],
                     std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
                     std::array::from_fn(|_| Vec::new()),
+                    std::array::from_fn(|_| Vec::new()),
                     params.screen_width,
                     params.screen_height,
                 ),

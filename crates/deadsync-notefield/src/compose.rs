@@ -161,6 +161,7 @@ pub struct NotefieldNoteskinView<'a, S> {
 pub struct NotefieldSongLuaView<'a> {
     pub note_hides: &'a SongLuaNoteHideWindows,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
+    pub column_splines: &'a [deadsync_gameplay::SongLuaColumnSplineTrack],
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.
@@ -341,13 +342,39 @@ pub struct PreparedNotefield<'a, S> {
     pub receptor_alphas: [f32; MAX_COLS],
     pub blind_active: bool,
     pub column_x_offsets: [f32; MAX_COLS],
-    pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline; MAX_COLS],
+    pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub column_zoom_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub spline_origin_y: f32,
     pub column_zooms: [f32; MAX_COLS],
     pub column_rotations_deg: [f32; MAX_COLS],
     pub notes: Option<PreparedNotefieldNotes<'a, S>>,
 }
 
 impl<S> PreparedNotefield<'_, S> {
+    pub(crate) fn spline_position(&self, col: usize, beat: f32, base: [f32; 3]) -> [f32; 3] {
+        let spline = self.column_position_splines[col];
+        if spline.enabled && spline.absolute {
+            let position = spline.sample(self.current_beat, beat).0;
+            [
+                self.field.playfield_center_x + position[0] * self.field_zoom,
+                self.spline_origin_y + position[1] * self.field_zoom,
+                position[2] * self.field_zoom,
+            ]
+        } else {
+            let offset = self.spline_offsets(col, beat).0;
+            std::array::from_fn(|axis| base[axis] + offset[axis])
+        }
+    }
+
+    pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
+        let spline = self.column_zoom_splines[col];
+        if spline.enabled {
+            spline.sample(self.current_beat, beat).0[0]
+        } else {
+            base
+        }
+    }
+
     pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
         let spline = self.column_position_splines[col];
         let (position, derivative) = spline.sample(self.current_beat, beat);
@@ -393,18 +420,46 @@ pub fn prepare_notefield<'a, S>(
             column_zooms,
             column_rotations_deg,
         ],
-        column_position_splines,
+        mut column_position_splines,
     ) = song_lua_column_transforms(
         request.song_lua.column_offsets,
         frame_plan.num_cols,
         current_time_s,
     );
+    let mut column_zoom_splines = [deadsync_gameplay::SongLuaPositionSpline::default(); MAX_COLS];
+    for track in request.song_lua.column_splines {
+        if track.column >= frame_plan.num_cols {
+            continue;
+        }
+        if let Some(frame) = track.at_second(current_time_s) {
+            if let Some(position) = &frame.position {
+                column_position_splines[track.column] = position.view();
+            }
+            column_zoom_splines[track.column] = frame
+                .zoom
+                .as_ref()
+                .map_or_else(Default::default, |zoom| zoom.view());
+        }
+    }
     for col in 0..frame_plan.num_cols {
         let receptor = column_position_splines[col].receptor(request.chart.visible_beat);
-        column_x_offsets[col] += receptor[0] * field_zoom;
-        column_y_offsets[col] += receptor[1];
+        if !column_position_splines[col].absolute {
+            column_x_offsets[col] += receptor[0] * field_zoom;
+            column_y_offsets[col] += receptor[1];
+        }
     }
-    let field = prepare_field(request, frame_plan, field_zoom, column_y_offsets);
+    let mut field = prepare_field(request, frame_plan, field_zoom, column_y_offsets);
+    let spline_origin_y = request.geometry.screen_center_y + request.options.notefield_offset[1];
+    for (col, spline) in column_position_splines
+        .iter()
+        .enumerate()
+        .take(frame_plan.num_cols)
+    {
+        if spline.enabled && spline.absolute {
+            field.column_receptor_ys[col] =
+                spline_origin_y + spline.receptor(request.chart.visible_beat)[1] * field_zoom;
+        }
+    }
     let mini = effective_mini_value(
         request.visual.mini_percent,
         request.options.fallback_mini_percent,
@@ -450,6 +505,8 @@ pub fn prepare_notefield<'a, S>(
         blind_active: request.visual.visibility.blind > f32::EPSILON,
         column_x_offsets,
         column_position_splines,
+        column_zoom_splines,
+        spline_origin_y,
         column_zooms,
         column_rotations_deg,
         notes,

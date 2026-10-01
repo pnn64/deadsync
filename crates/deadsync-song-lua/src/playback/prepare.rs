@@ -760,6 +760,8 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
     let mut column_offsets: [Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime>;
         MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
 
+    let mut column_splines = std::array::from_fn(|_| Vec::new());
+
     if song_lua_data.primary.is_none()
         && song_lua_data.background_layers.is_empty()
         && song_lua_data.foreground_layers.is_empty()
@@ -784,6 +786,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 hidden_screen_layers,
                 note_hides,
                 column_offsets,
+                column_splines,
                 params.screen_width,
                 params.screen_height,
             ),
@@ -918,6 +921,12 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             constant_windows[player] = player_windows.constant_windows;
             ease_windows[player] = player_windows.ease_windows;
             column_offsets[player] = player_windows.column_offsets;
+            column_splines[player] = crate::gameplay::song_lua_column_spline_tracks(
+                compiled,
+                player,
+                params.timing_players[player],
+                player_global_offset_seconds,
+            );
         }
 
         let runtime_ms = runtime_started.elapsed().as_secs_f64() * 1000.0;
@@ -1003,6 +1012,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             hidden_screen_layers,
             note_hides,
             column_offsets,
+            column_splines,
             out_screen_width,
             out_screen_height,
         ),

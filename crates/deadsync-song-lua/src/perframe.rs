@@ -279,7 +279,7 @@ impl ModSnapshotScratch {
         }
     }
 
-    fn sample(&mut self, table: &Table, reverse: Option<f32>) -> Result<ModSnapshot, String> {
+    fn sample(&mut self, table: &Table) -> Result<ModSnapshot, String> {
         self.entries.clear();
         if let Some(state) = table
             .raw_get::<Option<Table>>("__songlua_player_option_state")
@@ -335,9 +335,6 @@ impl ModSnapshotScratch {
                 self.override_value(key, value);
             }
         }
-        if let Some(reverse) = reverse {
-            self.override_value("reverse", reverse);
-        }
         Ok(self.finish())
     }
 
@@ -362,33 +359,9 @@ impl ModSnapshotScratch {
 
     fn states(
         &mut self,
-        lua: &Lua,
         tables: &[Table; LUA_PLAYERS],
     ) -> Result<[ModSnapshot; LUA_PLAYERS], String> {
-        let mut states = [
-            self.sample(&tables[0], None)?,
-            self.sample(&tables[1], None)?,
-        ];
-        // Read note columns after both option tables, preserving getter order.
-        for (state, reverse) in states
-            .iter_mut()
-            .zip(crate::read_note_column_position_reverse_percents(lua)?)
-        {
-            if let Some(reverse) = reverse {
-                if let Ok(index) = state
-                    .0
-                    .binary_search_by(|(key, _)| key.as_ref().cmp("reverse"))
-                {
-                    state.0[index].1 = reverse;
-                } else {
-                    self.entries.clear();
-                    self.entries.extend_from_slice(&state.0);
-                    self.insert("reverse", reverse);
-                    *state = self.finish();
-                }
-            }
-        }
-        Ok(states)
+        Ok([self.sample(&tables[0])?, self.sample(&tables[1])?])
     }
 
     fn player_speeds(
@@ -716,23 +689,6 @@ fn current_update_mod_speeds(
         }
     }
     Ok(speeds)
-}
-
-#[cfg(test)]
-fn current_update_mod_states_with_note_columns(
-    lua: &Lua,
-    tables: &[Table; LUA_PLAYERS],
-) -> Result<[SongLuaUpdateModState; LUA_PLAYERS], String> {
-    let mut states = current_update_mod_states(tables)?;
-    for (state, reverse) in states
-        .iter_mut()
-        .zip(crate::read_note_column_position_reverse_percents(lua)?)
-    {
-        if let Some(reverse) = reverse {
-            state.insert("reverse".to_string(), reverse);
-        }
-    }
-    Ok(states)
 }
 
 pub fn active_perframe_entries(
@@ -2566,6 +2522,61 @@ pub fn call_update_functions_at(
     result
 }
 
+#[derive(Default)]
+struct ColumnSplineCapture {
+    lanes: BTreeMap<(usize, usize), Vec<deadsync_gameplay::SongLuaColumnSplineFrame>>,
+    bytes: usize,
+}
+
+impl ColumnSplineCapture {
+    fn capture(&mut self, lua: &Lua, second: f32) -> Result<(), String> {
+        for (player, column, mut frame) in crate::lua_util::read_column_position_splines(lua)? {
+            let frames = self.lanes.entry((player, column)).or_default();
+            if frames
+                .last()
+                .is_some_and(|last| last.position == frame.position && last.zoom == frame.zoom)
+            {
+                continue;
+            }
+            self.bytes += [&frame.position, &frame.zoom]
+                .into_iter()
+                .flatten()
+                .map(|spline| std::mem::size_of_val(spline.coefficients.as_ref()))
+                .sum::<usize>();
+            if self.bytes > 128 * 1024 * 1024 {
+                return Err("Position spline tracks exceed 128 MiB per layer".into());
+            }
+            frame.second = second;
+            frames.push(frame);
+        }
+        Ok(())
+    }
+
+    fn finish(self, out: &mut Vec<deadsync_gameplay::SongLuaColumnSplineTrack>) {
+        log::debug!(
+            "Compiled Position splines: lanes={} frames={} coefficients_bytes={}",
+            self.lanes.len(),
+            self.lanes.values().map(Vec::len).sum::<usize>(),
+            self.bytes
+        );
+        out.extend(
+            self.lanes
+                .into_iter()
+                .filter_map(|((player, column), frames)| {
+                    frames
+                        .iter()
+                        .any(|frame| frame.position.is_some() || frame.zoom.is_some())
+                        .then(|| deadsync_gameplay::SongLuaColumnSplineTrack {
+                            player,
+                            column,
+                            time_offset: 0.0,
+                            frames: frames.into(),
+                        })
+                }),
+        );
+    }
+}
+
 pub fn compile_update_functions<Kind>(
     lua: &Lua,
     root: &Value,
@@ -2574,6 +2585,7 @@ pub fn compile_update_functions<Kind>(
     tracked_actors: &[SongLuaTrackedActor],
     messages: &[SongLuaMessageEvent],
     sound_events: &mut Vec<crate::SongLuaSoundEvent>,
+    column_splines: &mut Vec<deadsync_gameplay::SongLuaColumnSplineTrack>,
 ) -> Result<
     (
         Vec<SongLuaEaseWindow>,
@@ -2593,7 +2605,10 @@ pub fn compile_update_functions<Kind>(
     let mut mod_ms = 0.0;
     let mut column_ms = 0.0;
     let mut overlay_ms = 0.0;
+    let mut spline_capture = ColumnSplineCapture::default();
+    spline_capture.capture(lua, 0.0)?;
     if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
+        spline_capture.finish(column_splines);
         return Ok((
             Vec::new(),
             Vec::new(),
@@ -2606,6 +2621,7 @@ pub fn compile_update_functions<Kind>(
     let start = 0.0;
     let end = update_function_end_beat(context);
     if end <= start {
+        spline_capture.finish(column_splines);
         return Ok((
             Vec::new(),
             Vec::new(),
@@ -2647,7 +2663,7 @@ pub fn compile_update_functions<Kind>(
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let mut mod_scratch = ModSnapshotScratch::default();
-    let baseline_mods = mod_scratch.states(lua, &option_tables)?;
+    let baseline_mods = mod_scratch.states(&option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
     let replay = update_function_replay_beats(context, start, end);
     let sample_count = replay.len();
@@ -2862,11 +2878,12 @@ pub fn compile_update_functions<Kind>(
         player_samples.push(next_players);
         player_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        mod_samples.push(mod_scratch.states(lua, &option_tables)?);
+        mod_samples.push(mod_scratch.states(&option_tables)?);
         mod_speed_samples.push(mod_scratch.player_speeds(lua, &option_tables)?);
         mod_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         column_samples.push(read_note_column_transform_samples(lua)?);
+        spline_capture.capture(lua, (seconds * rate) as f32)?;
         column_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         std::mem::swap(&mut current_overlays, &mut replay_overlays);
         beat = next_beat;
@@ -2994,6 +3011,7 @@ pub fn compile_update_functions<Kind>(
     stateful_messages
         .retain(|capture| !capture.overlay_targets.is_empty() || !capture.writes.is_empty());
     let runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
+    spline_capture.finish(column_splines);
     sound_events.extend(crate::lua_util::take_runtime_sounds(lua));
     crate::lua_util::end_overlay_update_capture(lua);
     Ok((

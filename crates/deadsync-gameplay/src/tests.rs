@@ -1016,6 +1016,7 @@ mod tests {
             hidden_screen_layers: [false; 2],
             note_hides: std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
             column_offsets: std::array::from_fn(|_| Vec::new()),
+            column_splines: std::array::from_fn(|_| Vec::new()),
             screen_width: 800.0,
             screen_height: 600.0,
         };
@@ -18935,6 +18936,7 @@ mod tests {
             beats_per_t: 6.0,
             receptor_t: 0.0,
             subtract_song_beat: true,
+            ..SongLuaPositionSpline::default()
         };
         // ITGmania CubicSpline.cpp, MSVC /O2, including negative fractions
         // and the final point's reversed derivative.

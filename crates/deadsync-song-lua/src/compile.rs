@@ -601,6 +601,7 @@ where
                 &tracked_actors,
                 &out.messages,
                 &mut sound_events,
+                &mut out.column_splines,
             )?
         }
     };
@@ -622,6 +623,10 @@ where
         out.stateful_message_captures.push(capture);
     }
     out.column_offsets.extend(update_column_transforms);
+    out.column_spline_origin = context
+        .song_timing
+        .as_ref()
+        .map(|timing| timing.get_time_for_beat_exact(0.0));
     if let Some(errors) = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>() {
         out.info.unsupported_perframes += errors.0.len();
         for detail in errors.0 {
@@ -979,6 +984,8 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     primary.hidden_screen_layers = compiled.hidden_screen_layers;
     primary.note_hides = compiled.note_hides;
     primary.column_offsets = compiled.column_offsets;
+    primary.column_splines = compiled.column_splines;
+    primary.column_spline_origin = compiled.column_spline_origin;
     primary.info = compiled.info;
     for output in &mut outputs {
         sort_compiled_song_lua(output);

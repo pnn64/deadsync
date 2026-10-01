@@ -259,16 +259,30 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             notes.note_depth_frame_cache,
             crate::lane_note_transform_cache(current_beat, effect),
         );
-        lane_depths[local_col] +=
-            prepared.column_position_splines[local_col].receptor(current_beat)[2] * field_zoom;
+        let spline = prepared.column_position_splines[local_col];
+        let spline_z = spline.receptor(current_beat)[2] * field_zoom;
+        lane_depths[local_col] = if spline.enabled && spline.absolute {
+            spline_z
+        } else {
+            lane_depths[local_col] + spline_z
+        };
         let base_zoom = visual_arrow_effect_zoom(0.0, effect);
-        lane_base_zooms[local_col] = base_zoom;
-        let effect_zoom = (base_zoom
-            + request
-                .song_lua
-                .note_hides
-                .zoom_offset(local_col, current_beat))
-            * prepared.column_zooms[local_col];
+        let zoom_spline = prepared.column_zoom_splines[local_col];
+        lane_base_zooms[local_col] = if zoom_spline.enabled {
+            zoom_spline.receptor(current_beat)[0]
+        } else {
+            base_zoom
+        };
+        let effect_zoom = if zoom_spline.enabled {
+            zoom_spline.receptor(current_beat)[0]
+        } else {
+            (base_zoom
+                + request
+                    .song_lua
+                    .note_hides
+                    .zoom_offset(local_col, current_beat))
+                * prepared.column_zooms[local_col]
+        };
         lane_zooms[local_col] = effect_zoom;
         let hidden = effect_zoom.abs() <= f32::EPSILON;
         let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect)
@@ -319,6 +333,12 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             lane_tipsy_offsets[local_col],
         );
         center[0] += prepared.column_x_offsets[local_col];
+        if spline.enabled && spline.absolute {
+            center = [
+                field.playfield_center_x + spline.receptor(current_beat)[0] * field_zoom,
+                receptor_y,
+            ];
+        }
         lane_centers[local_col] = center;
         let hold_slot = if hidden || !options.hold_explosion_enabled {
             None
@@ -1130,6 +1150,7 @@ mod tests {
             song_lua: NotefieldSongLuaView {
                 note_hides,
                 column_offsets: &[],
+                column_splines: &[],
             },
             options: options(),
             capture_requests: ProxyCaptureRequests::default(),
@@ -2982,6 +3003,30 @@ mod tests {
         ns.hold_columns[0].bottomcap_inactive = Some(TestSlot::new("bottom"));
         ns.roll_columns = ns.hold_columns.clone();
         let points = [[-12.0, 108.0, 0.0], [36.0, -108.0, 0.2]];
+        let absolute_tracks = [deadsync_gameplay::SongLuaColumnSplineTrack {
+            player: 0,
+            column: 0,
+            time_offset: 0.0,
+            frames: vec![deadsync_gameplay::SongLuaColumnSplineFrame {
+                second: 0.0,
+                position: Some(deadsync_gameplay::SongLuaSplineData {
+                    coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
+                    constant: false,
+                    beats_per_t: 8.0,
+                    receptor_t: 0.0,
+                    subtract_song_beat: true,
+                }),
+                zoom: Some(deadsync_gameplay::SongLuaSplineData {
+                    coefficients: deadsync_gameplay::solve_song_lua_spline(&[[0.75; 3], [1.25; 3]])
+                        .into(),
+                    constant: false,
+                    beats_per_t: 8.0,
+                    receptor_t: 0.25,
+                    subtract_song_beat: true,
+                }),
+            }]
+            .into(),
+        }];
         let mut values = vec![
             (Target::PositionEnabled, 1.0),
             (Target::PositionBeatsPerT, 8.0),
@@ -3156,6 +3201,78 @@ mod tests {
                         request.song_lua.column_offsets = &[];
                         let restored = render(&request);
                         assert_eq!(sprite(&restored, "note"), sprite(&before, "note"));
+                        request.song_lua.column_splines = &absolute_tracks;
+                        request.visual.visual.drunk = 0.7;
+                        request.visual.visual.tornado = 0.15;
+                        request.visual.scroll.centered = 0.8;
+                        let absolute = render(&request);
+                        let field = prepare_notefield(&request).expect("absolute field").field;
+                        for (key, position) in [
+                            ("note", [-6.0, 81.0, 0.025]),
+                            ("target0", [-12.0, 108.0, 0.0]),
+                        ] {
+                            let actual = sprite(&absolute, key);
+                            let expected = [
+                                field.playfield_center_x + position[0] * zoom,
+                                request.geometry.screen_center_y + position[1] * zoom,
+                                position[2] * zoom,
+                            ];
+                            for axis in 0..3 {
+                                assert!(
+                                    (actual[axis] - expected[axis]).abs() < 0.001,
+                                    "absolute {kind:?}, dir={direction}, zoom={zoom}, {key}: {actual:?} vs {expected:?}"
+                                );
+                            }
+                        }
+                        for (key, scale) in [("note", 0.6875), ("target0", 0.875)] {
+                            let size = |draws: &[FlatDraw]| {
+                                draws
+                                    .iter()
+                                    .find_map(|draw| match draw {
+                                        FlatDraw::Sprite(sprite)
+                                            if sprite.source.texture_key() == Some(key) =>
+                                        {
+                                            Some(sprite.size)
+                                        }
+                                        _ => None,
+                                    })
+                                    .expect("spline sprite size")
+                            };
+                            for axis in 0..2 {
+                                assert!(
+                                    (size(&absolute)[axis] - size(&before)[axis] * scale).abs()
+                                        < 0.001,
+                                    "absolute zoom {key}"
+                                );
+                            }
+                        }
+                        if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                            assert!(absolute.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref()=="body")));
+                            for curve in
+                                [[points[0]; 4], [points[0], points[0], points[1], points[1]]]
+                            {
+                                let constant = curve.iter().all(|point| *point == curve[0]);
+                                let mut tracks = absolute_tracks.clone();
+                                let mut frames = tracks[0].frames.to_vec();
+                                let data = frames[0].position.as_mut().expect("Position");
+                                data.coefficients =
+                                    deadsync_gameplay::solve_song_lua_spline(&curve).into();
+                                data.constant = constant;
+                                tracks[0].frames = frames.into();
+                                let mut curve_request = self::request(
+                                    &ns, &timing, &notes, &hides, placement, 0, 1, 2, 2,
+                                );
+                                curve_request.chart.lane_note_row_indices = &lanes;
+                                curve_request.chart.lane_hold_indices = &lanes;
+                                curve_request.chart.note_itg_rows = &[96];
+                                curve_request.geometry.column_dirs.fill(direction);
+                                curve_request.geometry.field_zoom = zoom;
+                                curve_request.song_lua.column_splines = &tracks;
+                                let draws = render(&curve_request);
+                                assert_eq!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref()=="body")), !constant,
+                                    "hold path depends on the whole spline");
+                            }
+                        }
                     }
                 }
             }
