@@ -621,7 +621,17 @@ fn record_overlay_update_capture(
     // were unavailable when the static blocks were captured.
     // Mutations to other actors must remain in the sequential capture because
     // stateful commands can select a different target on every broadcast.
-    if direct_message_actor {
+    // X/Y/Z getters expose the current tween state. Even a receiver's own
+    // runtime command must feed their chronological replay; destination
+    // getters and timed effect blocks retain the existing message path.
+    if direct_message_actor
+        && !matches!(
+            target,
+            SongLuaOverlayUpdateTarget::X
+                | SongLuaOverlayUpdateTarget::Y
+                | SongLuaOverlayUpdateTarget::Z
+        )
+    {
         return lua
             .app_data_mut::<SongLuaOverlayUpdateCapture>()
             .is_some_and(|mut capture| capture.touch(actor).is_some());
@@ -688,7 +698,17 @@ fn record_overlay_update_capture_immediate(
                         .is_some()
                 })
     };
-    if direct_message_actor {
+    // X/Y/Z getters expose the current tween state. Even a receiver's own
+    // runtime command must feed their chronological replay; destination
+    // getters and timed effect blocks retain the existing message path.
+    if direct_message_actor
+        && !matches!(
+            target,
+            SongLuaOverlayUpdateTarget::X
+                | SongLuaOverlayUpdateTarget::Y
+                | SongLuaOverlayUpdateTarget::Z
+        )
+    {
         return true;
     }
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
@@ -1640,6 +1660,9 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
         || matches!(
             key,
             "__songlua_visible"
+                | "__songlua_current_x"
+                | "__songlua_current_y"
+                | "__songlua_current_z"
                 | "__songlua_diffuse"
                 | "__songlua_text_attributes"
                 | "__songlua_stroke_color"

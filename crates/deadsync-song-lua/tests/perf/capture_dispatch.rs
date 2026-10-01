@@ -160,7 +160,7 @@ impl Fixture {
                 old,
                 0,
                 immediate,
-                "x",
+                "zoom_x",
                 SongLuaOverlayUpdateValue::F32(i as f32),
             ));
         }
@@ -279,7 +279,7 @@ fn capture_dispatch_key_tracks_live_handlers_and_preserves_suppression() {
                 old.clear();
                 new.clear();
                 for actor in [0, 1] {
-                    for key in ["x", "unsupported"] {
+                    for key in ["zoom_x", "unsupported"] {
                         assert_eq!(
                             old.update(
                                 true,
@@ -321,8 +321,8 @@ fn capture_dispatch_key_tracks_live_handlers_and_preserves_suppression() {
             .raw_remove(crate::SONG_LUA_RUNTIME_KEY)
             .unwrap();
     }
-    assert!(old.update(true, 0, true, "x", SongLuaOverlayUpdateValue::F32(9.0)));
-    assert!(new.update(false, 0, true, "x", SongLuaOverlayUpdateValue::F32(9.0)));
+    assert!(old.update(true, 0, true, "zoom_x", SongLuaOverlayUpdateValue::F32(9.0)));
+    assert!(new.update(false, 0, true, "zoom_x", SongLuaOverlayUpdateValue::F32(9.0)));
     assert_capture(&new, &old);
     assert_eq!(
         new.lua
@@ -353,7 +353,7 @@ fn capture_dispatch_cached_key_keeps_metatable_lookups() {
         let lookup = fixture.lua.load("return function(_, key) assert(key == 'InheritedMessageCommand'); return function() end end").eval::<Function>().unwrap();
         meta.set("__index", lookup).unwrap();
         fixture.actors[0].set_metatable(Some(meta)).unwrap();
-        assert!(fixture.update(old, 0, true, "x", SongLuaOverlayUpdateValue::F32(1.0)));
+        assert!(fixture.update(old, 0, true, "zoom_x", SongLuaOverlayUpdateValue::F32(1.0)));
         assert!(
             fixture
                 .lua

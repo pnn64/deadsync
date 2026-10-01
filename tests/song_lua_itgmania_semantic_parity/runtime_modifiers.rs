@@ -454,6 +454,45 @@ fn runtime_reader_preserves_order_and_easing_body() {
 }
 
 #[test]
+fn hidden_actor_tweens_drive_modifiers_without_probe_state() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Signal tween");
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.music_length_seconds = 3.0;
+    let compiled =
+        compile_song_lua_layers(&[directory.join("signal-tween.lua").as_path()], 0, &context)
+            .expect("compile hidden signal actor");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.5, 0.0),
+        (1.0, 0.0),
+        (1.25, 0.25),
+        (1.5, 1.0 / 3.0),
+        (1.75, 1.0 / 3.0),
+        (2.0, 7.0 / 12.0),
+        (2.25, 2.0 / 3.0),
+    ] {
+        let _ = runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        for (key, expected) in [("invert", expected), ("drunk", 0.0), ("wave", 0.0)] {
+            let actual = runtime_mod_value(&runtime, 0, key).unwrap();
+            assert!(
+                (actual - expected).abs() <= 1e-6,
+                "{key} at {second}: {actual} != {expected}"
+            );
+        }
+    }
+}
+
+#[test]
 fn state_option_strings_drive_sampled_targets() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create option fixture directory");
