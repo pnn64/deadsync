@@ -3,6 +3,7 @@ use crate::lua::itg_quoted_strings;
 use crate::{
     ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex,
 };
+use std::cell::OnceCell;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -250,7 +251,13 @@ fn itg_resolve_animated_texture_ini(
             return None;
         }
         frames.push(ItgTextureFrame {
-            path: itg_resolve_relative_or_noteskin_path(data, path, frame)?,
+            // The first image was already resolved before scanning delays.
+            // Keep each frame owned without probing that same path again.
+            path: if idx == first_frame_idx {
+                texture_path.clone()
+            } else {
+                itg_resolve_relative_or_noteskin_path(data, path, frame)?
+            },
             delay,
         });
         cycle_seconds += delay;
@@ -308,6 +315,16 @@ struct ItgMilkshapeMeshLayer {
     bone_index: Option<u8>,
     vertices: Vec<ModelVertex>,
     bounds: [f32; 6],
+}
+
+// Resolution is scoped to one model load. Materials reused by several meshes
+// share their file/INI lookup, including misses, while layers keep owned data.
+struct ItgMilkshapeMaterial<'a> {
+    texture: &'a str,
+    additive: &'a str,
+    flags: ItgModelMaterialFlags,
+    resolved_texture: OnceCell<Option<ItgResolvedModelTexture>>,
+    resolved_additive: OnceCell<Option<ItgResolvedModelTexture>>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -689,11 +706,17 @@ pub fn itg_parse_milkshape_model_layers(
         f32::NEG_INFINITY,
     ];
 
+    // Retain parsing scratch capacity across mesh sections, then release it
+    // before resolving materials. Each expanded mesh still owns its vertices.
+    let mut mesh_vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut triangles = Vec::new();
     for _ in 0..mesh_count {
         let mesh_header = lines.next()?;
         let material_index = itg_parse_milkshape_mesh_material_index(mesh_header);
         let vertex_count = lines.next()?.trim().parse::<usize>().ok()?;
-        let mut mesh_vertices = Vec::with_capacity(vertex_count);
+        mesh_vertices.clear();
+        mesh_vertices.reserve_exact(vertex_count);
         let mut bone_index = None;
         for vertex_index in 0..vertex_count {
             let line = lines.next()?;
@@ -731,7 +754,8 @@ pub fn itg_parse_milkshape_model_layers(
         }
 
         let normal_count = lines.next()?.trim().parse::<usize>().ok()?;
-        let mut normals = Vec::with_capacity(normal_count);
+        normals.clear();
+        normals.reserve_exact(normal_count);
         for _ in 0..normal_count {
             let mut parts = lines.next()?.split_whitespace();
             let normal = [
@@ -757,7 +781,8 @@ pub fn itg_parse_milkshape_model_layers(
             f32::NEG_INFINITY,
             f32::NEG_INFINITY,
         ];
-        let mut triangles = Vec::with_capacity(triangle_count);
+        triangles.clear();
+        triangles.reserve_exact(triangle_count);
         for _ in 0..triangle_count {
             let line = lines.next()?;
             let mut parts = line.split_whitespace();
@@ -781,7 +806,7 @@ pub fn itg_parse_milkshape_model_layers(
             }
             triangles.push(indices);
         }
-        for indices in triangles {
+        for indices in triangles.drain(..) {
             for vtx in indices.map(|index| mesh_vertices[index]) {
                 bounds[0] = bounds[0].min(vtx.pos[0]);
                 bounds[1] = bounds[1].min(vtx.pos[1]);
@@ -808,6 +833,8 @@ pub fn itg_parse_milkshape_model_layers(
             });
         }
     }
+
+    drop((mesh_vertices, normals, triangles));
 
     if meshes.is_empty() {
         return None;
@@ -839,9 +866,15 @@ pub fn itg_parse_milkshape_model_layers(
         let _emissive = lines.next()?;
         let _shininess = lines.next()?;
         let _transparency = lines.next()?;
-        let texture_line = lines.next()?.trim().to_string();
-        let additive = lines.next()?.trim().to_string();
-        material_textures.push((texture_line, additive, itg_parse_model_material_flags(name)));
+        let texture = lines.next()?.trim();
+        let additive = lines.next()?.trim();
+        material_textures.push(ItgMilkshapeMaterial {
+            texture,
+            additive,
+            flags: itg_parse_model_material_flags(name),
+            resolved_texture: OnceCell::new(),
+            resolved_additive: OnceCell::new(),
+        });
     }
 
     let fallback_texture = std::cell::OnceCell::new();
@@ -858,7 +891,14 @@ pub fn itg_parse_milkshape_model_layers(
     };
     let animation_length = material_textures
         .iter()
-        .filter_map(|(raw, _, _)| itg_resolve_model_material_texture(data, materials_path, raw))
+        .filter_map(|material| {
+            material
+                .resolved_texture
+                .get_or_init(|| {
+                    itg_resolve_model_material_texture(data, materials_path, material.texture)
+                })
+                .as_ref()
+        })
         .map(|texture| texture.tex.uv_cycle_seconds.unwrap_or(1.0))
         .fold(0.0f32, f32::max);
     let mut layers = Vec::with_capacity(meshes.len());
@@ -866,15 +906,19 @@ pub fn itg_parse_milkshape_model_layers(
         let texture_with_flags = if mesh.material_index >= 0 {
             material_textures
                 .get(mesh.material_index as usize)
-                .and_then(|(raw, _, flags)| {
-                    (if raw.trim().trim_matches('"').is_empty() {
+                .and_then(|material| {
+                    (if material.texture.trim().trim_matches('"').is_empty() {
                         Some(ItgResolvedModelTexture::from_path(PathBuf::from(
                             MODEL_WHITE_TEXTURE,
                         )))
                     } else {
-                        itg_resolve_model_material_texture(data, materials_path, raw)
+                        material
+                            .resolved_texture
+                            .get()
+                            .and_then(Option::as_ref)
+                            .cloned()
                     })
-                    .map(|resolved| (resolved, *flags))
+                    .map(|resolved| (resolved, material.flags))
                 })
         } else if mesh.material_index == -1 {
             Some((
@@ -901,7 +945,14 @@ pub fn itg_parse_milkshape_model_layers(
         let additive = usize::try_from(mesh.material_index)
             .ok()
             .and_then(|index| material_textures.get(index))
-            .and_then(|(_, raw, _)| itg_resolve_model_material_texture(data, materials_path, raw));
+            .and_then(|material| {
+                material
+                    .resolved_additive
+                    .get_or_init(|| {
+                        itg_resolve_model_material_texture(data, materials_path, material.additive)
+                    })
+                    .clone()
+            });
         layers.push(ItgResolvedModelLayer {
             animation_length,
             additive,
@@ -962,6 +1013,13 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    mod model_preparation {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/model_preparation/cases.rs"
+        ));
+    }
 
     fn temp_model_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()

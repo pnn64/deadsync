@@ -165,6 +165,27 @@ pub fn assert_reduced_growth(old: impl FnOnce(), new: impl FnOnce()) {
     );
 }
 
+/// Reused buffers may grow, while replacing many fresh allocations overall.
+#[allow(dead_code)]
+pub fn assert_reduced_allocation_calls(old: impl FnOnce(), new: impl FnOnce()) {
+    fn count(work: impl FnOnce()) -> Churn {
+        let tracking = Tracking::start();
+        work();
+        let counts = COUNTS.get().expect("tracking is active");
+        drop(tracking);
+        counts
+    }
+    let old = count(old);
+    let new = count(new);
+    assert!(
+        new.allocs + new.reallocs < old.allocs + old.reallocs
+            && new.frees <= old.frees
+            && new.allocated_bytes < old.allocated_bytes
+            && new.freed_bytes < old.freed_bytes,
+        "expected fewer allocation calls and bytes: old {old:?}, new {new:?}"
+    );
+}
+
 pub fn measure<T>(name: &str, units: usize, mut work: impl FnMut() -> T) {
     const ITERATIONS: usize = 512;
     for _ in 0..64 {
