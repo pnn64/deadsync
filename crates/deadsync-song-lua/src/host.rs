@@ -62,6 +62,9 @@ pub fn install_compile_host(
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
     install_default_stdlib_compat(lua, context.song_dir.as_path())?;
+    let math: Table = lua.globals().get("math")?;
+    math.get::<Function>("randomseed")?
+        .call::<()>(context.random_seed as i32)?;
     install_ease_table(lua, host)?;
     install_compile_globals(
         lua,

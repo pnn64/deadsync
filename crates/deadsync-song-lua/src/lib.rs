@@ -1307,6 +1307,9 @@ pub struct SongLuaCompileContext {
     /// Selected chart timing, shared with gameplay; populated before Lua compilation.
     pub player_timing: [Option<deadsync_rules::timing::TimingData>; LUA_PLAYERS],
     pub song_music_rate: f32,
+    /// Initial ITGmania PRNG seed; fixed per compilation for repeatable playback.
+    /// Scripts may reseed it through math.randomseed or MersenneTwister.Seed.
+    pub random_seed: u32,
     pub music_length_seconds: f32,
     pub style_name: String,
     pub global_offset_seconds: f32,
@@ -1332,6 +1335,7 @@ impl SongLuaCompileContext {
             song_timing_bpms: Vec::new(),
             player_timing: std::array::from_fn(|_| None),
             song_music_rate: 1.0,
+            random_seed: 1,
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
             global_offset_seconds: 0.0,
@@ -7749,6 +7753,47 @@ return Def.ActorFrame{
                 && ease.target == SongLuaEaseTarget::PlayerRotationZ
                 && (ease.from.abs() > 1.0e-4 || ease.to.abs() > 1.0e-4)
         }));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn compile_song_lua_uses_native_seeded_random() {
+        let song_dir = test_dir("seeded-random");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!("../../../tests/fixtures/song-lua/random.lua"),
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Seeded Random"),
+        )
+        .expect("compile native seeded fixture");
+        assert_eq!(compiled.overlays.len(), 3);
+        for (overlay, expected) in compiled.overlays.iter().zip([
+            [
+                -2.0,
+                0.7203244895202072_f64 as f32,
+                1.0,
+                0.12812444777230592_f64 as f32,
+            ],
+            [
+                0.7856989287092829_f64 as f32,
+                0.3580021715717493_f64 as f32,
+                445541548.0_f64 as f32,
+                1.0,
+            ],
+            [
+                -2.0,
+                0.7203244895202072_f64 as f32,
+                1.0,
+                0.12812444777230592_f64 as f32,
+            ],
+        ]) {
+            let state = &overlay.initial_state;
+            assert_eq!([state.x, state.y, state.z, state.zoom], expected);
+        }
     }
 
     #[test]

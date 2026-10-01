@@ -51,6 +51,8 @@ struct NativeTrace {
     #[serde(default)]
     arrow_timing: String,
     #[serde(default)]
+    random_seed: Option<u32>,
+    #[serde(default)]
     difficulty: String,
     #[serde(default)]
     steps_type: String,
@@ -500,6 +502,9 @@ fn compile_trace_song_at(
         song.title.clone(),
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
+    if let Some(seed) = trace.random_seed {
+        context.random_seed = seed;
+    }
     if trace.arrow_timing == "native" {
         let candidates = song.charts.iter().enumerate().filter(|(_, chart)| {
             chart.chart_type == trace.steps_type
