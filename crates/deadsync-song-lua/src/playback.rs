@@ -1681,6 +1681,33 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
             || child.skew_y.abs() > f32::EPSILON
             || ((parent_scale_x - parent_scale_y).abs() > f32::EPSILON
                 && child.rot_z_deg.abs() > f32::EPSILON));
+    child.scale_factors = if !affine_2d
+        && [
+            parent.rot_x_deg,
+            parent.rot_y_deg,
+            parent.rot_z_deg,
+            parent.skew_x,
+            parent.skew_y,
+        ]
+        .iter()
+        .all(|value| value.abs() <= f32::EPSILON)
+    {
+        let [sx, sy] = song_lua_overlay_axis_scale(child);
+        let [ancestor, local] = child
+            .scale_factors
+            .unwrap_or([[1.0; 3], [sx, sy, song_lua_overlay_z_scale(child)]]);
+        let parent_scale = [
+            parent_scale_x,
+            parent_scale_y,
+            song_lua_overlay_z_scale(parent),
+        ];
+        Some([
+            std::array::from_fn(|axis| parent_scale[axis] * ancestor[axis]),
+            local,
+        ])
+    } else {
+        None
+    };
     if affine_2d {
         let parent_linear = song_lua_overlay_linear_2d(parent);
         let child_linear = song_lua_overlay_linear_2d(child);
@@ -6053,15 +6080,10 @@ fn song_lua_apply_overlay_effect(
     }
     if matches!(effect.mode, deadlib_present::anim::EffectMode::Spin) {
         let units = deadlib_present::anim::effect_clock_units(effect, effect_time, effect_beat);
-        rot_deg[0] = effect.magnitude[0]
-            .mul_add(units, rot_deg[0])
-            .rem_euclid(360.0);
-        rot_deg[1] = effect.magnitude[1]
-            .mul_add(units, rot_deg[1])
-            .rem_euclid(360.0);
-        rot_deg[2] = effect.magnitude[2]
-            .mul_add(units, rot_deg[2])
-            .rem_euclid(360.0);
+        for axis in 0..3 {
+            // Actor::Update rounds the product before adding the base angle.
+            rot_deg[axis] = (effect.magnitude[axis] * units + rot_deg[axis]).rem_euclid(360.0);
+        }
     }
     if let Some(percent) = deadlib_present::anim::effect_mix(effect, effect_time, effect_beat) {
         match effect.mode {
@@ -6410,7 +6432,7 @@ fn song_lua_overlay_view_proj(
     camera_state: SongLuaOverlayState,
     overlay_space_width: f32,
     overlay_space_height: f32,
-) -> Option<Matrix4> {
+) -> Option<(Matrix4, Matrix4)> {
     let mut fov_deg = camera_state.fov?;
     if !fov_deg.is_finite() || fov_deg <= f32::EPSILON {
         return None;
@@ -6428,24 +6450,48 @@ fn song_lua_overlay_view_proj(
     vanish_x = 0.5f32.mul_add(-width, vanish_x);
     vanish_y = 0.5f32.mul_add(-height, vanish_y);
 
-    let theta = 0.5 * fov_deg.to_radians();
-    let dist = (0.5 * width / theta.tan()).max(1.0);
-    let proj = glam::camera::rh::proj::opengl::frustum(
-        0.5f32.mul_add(-width, vanish_x) / dist,
-        0.5f32.mul_add(width, vanish_x) / dist,
-        0.5f32.mul_add(height, vanish_y) / dist,
-        0.5f32.mul_add(-height, vanish_y) / dist,
-        1.0,
-        dist + 1000.0,
-    );
+    let theta = (fov_deg / 180.0 * std::f32::consts::PI) / 2.0;
+    let dist = width / 2.0 / theta.tan();
+    let left = (vanish_x - width / 2.0) / dist;
+    let right = (vanish_x + width / 2.0) / dist;
+    let bottom = (vanish_y + height / 2.0) / dist;
+    let top = (vanish_y - height / 2.0) / dist;
+    let far = dist + 1000.0;
+    // RageDisplay divides each coefficient directly. Multiplying by rounded
+    // reciprocals (glam's frustum) shifts projected vertices near W=0.
+    let proj = Matrix4::from_cols_array(&[
+        2.0 / (right - left),
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2.0 / (top - bottom),
+        0.0,
+        0.0,
+        (right + left) / (right - left),
+        (top + bottom) / (top - bottom),
+        -(far + 1.0) / (far - 1.0),
+        -1.0,
+        0.0,
+        0.0,
+        -(2.0 * far) / (far - 1.0),
+        0.0,
+    ]);
     let eye_x = 0.5f32.mul_add(width, -vanish_x);
     let eye_y = 0.5f32.mul_add(height, -vanish_y);
-    let view = glam::camera::rh::view::look_at_mat4(
-        Vector3::new(eye_x, eye_y, dist),
-        Vector3::new(eye_x, eye_y, 0.0),
-        Vector3::new(0.0, 1.0, 0.0),
-    );
-    Some(proj * view)
+    // RageLookAt normalizes all three basis vectors, including the derived
+    // up vector. glam's look-at retains its small normalization error.
+    let camera_z = Vector3::new(0.0, 0.0, dist).normalize();
+    let camera_x = Vector3::Y.cross(camera_z);
+    let camera_y = camera_z.cross(camera_x).normalize();
+    let camera_x = camera_x.normalize();
+    let view = Matrix4::from_cols(
+        Vector4::new(camera_x.x, camera_y.x, camera_z.x, 0.0),
+        Vector4::new(camera_x.y, camera_y.y, camera_z.y, 0.0),
+        Vector4::new(camera_x.z, camera_y.z, camera_z.z, 0.0),
+        Vector4::W,
+    ) * Matrix4::from_translation(Vector3::new(-eye_x, -eye_y, -dist));
+    Some((view, proj))
 }
 
 fn song_lua_actor_multi_vertex_mesh(
@@ -7426,8 +7472,11 @@ fn push_graph_display_tri(
 }
 
 #[cfg(test)]
-fn song_lua_project_overlay_point(view_proj: Matrix4, point: [f32; 3]) -> Option<[f32; 2]> {
-    let clip = view_proj * Vector4::new(point[0], point[1], point[2], 1.0);
+fn song_lua_project_overlay_point(
+    (view, projection): (Matrix4, Matrix4),
+    point: [f32; 3],
+) -> Option<[f32; 2]> {
+    let clip = projection * (view * Vector4::new(point[0], point[1], point[2], 1.0));
     if !clip.w.is_finite() || clip.w <= f32::EPSILON {
         return None;
     }
@@ -7706,16 +7755,115 @@ fn song_lua_overlay_fold_xy_rot(
 
 #[inline(always)]
 fn song_lua_overlay_local_transform(rot_deg: [f32; 3], skew_x: f32, skew_y: f32) -> Matrix4 {
-    // RageMatrix uses row-vector storage for actor transforms. Its positive X/Y
-    // rotations therefore map to negative glam angles; Z has the same sign.
-    Matrix4::from_rotation_x(-rot_deg[0].to_radians())
-        * Matrix4::from_rotation_y(-rot_deg[1].to_radians())
-        * Matrix4::from_rotation_z(rot_deg[2].to_radians())
-        * song_lua_player_skew_x_matrix(skew_x)
+    // Preserve RageMatrixRotationXYZ's coefficients and float operation order.
+    // Three separate rotation matrices accumulate error near the camera plane.
+    let [x, y, z] = rot_deg.map(|degrees| degrees * (std::f32::consts::PI / 180.0));
+    let (sx, cx) = (x.sin(), x.cos());
+    let (sy, cy) = (y.sin(), y.cos());
+    let (sz, cz) = (z.sin(), z.cos());
+    Matrix4::from_cols_array(&[
+        cz * cy,
+        cz * sy * sx + sz * cx,
+        cz * sy * cx + sz * -sx,
+        0.0,
+        -sz * cy,
+        -sz * sy * sx + cz * cx,
+        -sz * sy * cx + cz * -sx,
+        0.0,
+        -sy,
+        cy * sx,
+        cy * cx,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]) * song_lua_player_skew_x_matrix(skew_x)
         * song_lua_player_skew_y_matrix(skew_y)
 }
 
-fn song_lua_projected_local_transform(view_proj: Matrix4, model: Matrix4) -> Matrix4 {
+fn song_lua_overlay_sprite_matrix(
+    state: SongLuaOverlayState,
+    size: [f32; 2],
+    position: [f32; 3],
+    rotation: [f32; 3],
+    effect_scale: [f32; 3],
+) -> Matrix4 {
+    let [sx, sy] = song_lua_overlay_axis_scale(state);
+    let [ancestor, local] = state
+        .scale_factors
+        .unwrap_or([[1.0; 3], [sx, sy, song_lua_overlay_z_scale(state)]]);
+    let local = std::array::from_fn(|axis| local[axis] * effect_scale[axis]);
+    let linear = Matrix4::from_scale(Vector3::from(ancestor))
+        * song_lua_overlay_local_transform(rotation, 0.0, 0.0)
+        * Matrix4::from_scale(Vector3::from(local));
+    Matrix4::from_translation(Vector3::from(position))
+        * linear
+        * Matrix4::from_translation(Vector3::new(
+            (0.5 - state.halign) * size[0],
+            (0.5 - state.valign) * size[1],
+            0.0,
+        ))
+        * song_lua_overlay_local_transform([0.0; 3], state.skew_x, state.skew_y)
+}
+
+fn song_lua_projected_sprite_geometry(
+    state: SongLuaOverlayState,
+    size: [f32; 2],
+    canvas_scale: [f32; 2],
+    offset: [f32; 3],
+    rotation: [f32; 3],
+    effect_scale: [f32; 3],
+) -> Option<(Matrix4, [f32; 2])> {
+    let [x_scale, y_scale] = canvas_scale;
+    if state.stretch_rect.is_some() {
+        let [sx, sy] = song_lua_overlay_axis_scale(state);
+        let (center, size) =
+            song_lua_overlay_rect(state, size, x_scale, y_scale, sx.abs(), sy.abs())?;
+        let model = Matrix4::from_translation(Vector3::new(
+            center[0] + offset[0] * x_scale,
+            center[1] + offset[1] * y_scale,
+            state.z + offset[2],
+        )) * song_lua_overlay_local_transform(rotation, state.skew_x, state.skew_y);
+        return Some((
+            model,
+            [size[0] * effect_scale[0], size[1] * effect_scale[1]],
+        ));
+    }
+    let (crop_center, cropped_size) = song_lua_overlay_rect(
+        SongLuaOverlayState {
+            x: 0.0,
+            y: 0.0,
+            halign: 0.5,
+            valign: 0.5,
+            ..state
+        },
+        size,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+    )?;
+    let model = Matrix4::from_scale(Vector3::new(x_scale, y_scale, 1.0))
+        * song_lua_overlay_sprite_matrix(
+            state,
+            size,
+            [
+                state.x + offset[0],
+                state.y + offset[1],
+                state.z + offset[2],
+            ],
+            rotation,
+            effect_scale,
+        )
+        * Matrix4::from_translation(Vector3::new(crop_center[0], crop_center[1], 0.0));
+    Some((model, cropped_size))
+}
+
+fn song_lua_projected_local_transform(
+    (view, projection): (Matrix4, Matrix4),
+    model: Matrix4,
+) -> Matrix4 {
     let screen_projection = glam::camera::rh::proj::opengl::orthographic(
         0.0,
         screen_width(),
@@ -7724,7 +7872,7 @@ fn song_lua_projected_local_transform(view_proj: Matrix4, model: Matrix4) -> Mat
         -1.0,
         1.0,
     );
-    screen_projection.inverse() * view_proj * model
+    screen_projection.inverse() * projection * (view * model)
 }
 
 fn append_projected_mesh_vertices(
@@ -7911,14 +8059,13 @@ fn song_lua_projected_overlay_actor(
     tint: [f32; 4],
     blend: BlendMode,
     z: i16,
-    center: [f32; 3],
+    model: Matrix4,
     size: [f32; 2],
-    rot_deg: [f32; 3],
     uv: [[f32; 2]; 4],
     state: SongLuaOverlayState,
     flip_x: bool,
     flip_y: bool,
-    view_proj: Matrix4,
+    view_proj: (Matrix4, Matrix4),
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<Actor> {
     let half_w = 0.5 * size[0];
@@ -7929,8 +8076,6 @@ fn song_lua_projected_overlay_actor(
     let edge_fade = song_lua_projected_overlay_edge_fade(state, flip_x, flip_y);
     let xs = song_lua_projected_overlay_axis_slices(edge_fade[0], edge_fade[1]);
     let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
-    let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
-        * song_lua_overlay_local_transform(rot_deg, state.skew_x, state.skew_y);
     // Preserve homogeneous clip-space W until the GPU rasterizer.  ITGmania
     // submits the actor's world vertices under its perspective camera and lets
     // the GPU clip triangles which cross the near/camera planes.  Dividing by
@@ -8307,14 +8452,13 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 return None;
             }
             if let Some(view_proj) = perspective_view_proj() {
-                let (center, size) = song_lua_overlay_rect(
-                    state,
-                    source_size,
-                    x_scale,
-                    y_scale,
-                    size_scale_x,
-                    size_scale_y,
-                )?;
+                // Signed zoom is in the model matrix; UV/color flips are only
+                // needed by the stretched geometry path, which uses abs size.
+                let (flip_x, flip_y) = if state.stretch_rect.is_some() {
+                    (flip_x, flip_y)
+                } else {
+                    (false, false)
+                };
                 let mut tint = state.diffuse;
                 let mut glow = state.glow;
                 let mut effect_offset = [0.0, 0.0, 0.0];
@@ -8333,18 +8477,21 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     &mut effect_scale,
                     &mut rot_deg,
                 );
+                let (model, size) = song_lua_projected_sprite_geometry(
+                    state,
+                    source_size,
+                    [x_scale, y_scale],
+                    effect_offset,
+                    rot_deg,
+                    effect_scale,
+                )?;
                 let actor = song_lua_projected_overlay_actor(
                     Arc::clone(texture_key),
                     tint,
                     overlay_blend,
                     z,
-                    [
-                        effect_offset[0].mul_add(x_scale, center[0]),
-                        effect_offset[1].mul_add(y_scale, center[1]),
-                        effect_offset[2],
-                    ],
-                    [size[0] * effect_scale[0], size[1] * effect_scale[1]],
-                    rot_deg,
+                    model,
+                    size,
                     song_lua_overlay_uvs(
                         state,
                         Some(binding.sheet),
@@ -8976,14 +9123,11 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
         }
         SongLuaOverlayKind::Quad => {
             if let Some(view_proj) = perspective_view_proj() {
-                let (center, size) = song_lua_overlay_rect(
-                    state,
-                    state.size.unwrap_or([1.0, 1.0]),
-                    x_scale,
-                    y_scale,
-                    size_scale_x,
-                    size_scale_y,
-                )?;
+                let (flip_x, flip_y) = if state.stretch_rect.is_some() {
+                    (flip_x, flip_y)
+                } else {
+                    (false, false)
+                };
                 let mut tint = state.diffuse;
                 let mut glow = state.glow;
                 let mut effect_offset = [0.0, 0.0, 0.0];
@@ -9002,18 +9146,21 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     &mut effect_scale,
                     &mut rot_deg,
                 );
+                let (model, size) = song_lua_projected_sprite_geometry(
+                    state,
+                    state.size.unwrap_or([1.0, 1.0]),
+                    [x_scale, y_scale],
+                    effect_offset,
+                    rot_deg,
+                    effect_scale,
+                )?;
                 let actor = song_lua_projected_overlay_actor(
                     white_texture_key(),
                     tint,
                     overlay_blend,
                     z,
-                    [
-                        effect_offset[0].mul_add(x_scale, center[0]),
-                        effect_offset[1].mul_add(y_scale, center[1]),
-                        effect_offset[2],
-                    ],
-                    [size[0] * effect_scale[0], size[1] * effect_scale[1]],
-                    rot_deg,
+                    model,
+                    size,
                     song_lua_overlay_uvs(
                         state,
                         None,

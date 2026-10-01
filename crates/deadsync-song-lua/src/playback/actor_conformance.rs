@@ -103,6 +103,17 @@ pub fn sprite_matrix(
 }
 
 #[must_use]
+pub fn overlay_sprite_matrix(state: SongLuaOverlayState, size: [f32; 2]) -> [[f32; 4]; 4] {
+    matrix_rows(song_lua_overlay_sprite_matrix(
+        state,
+        size,
+        [state.x, state.y, state.z],
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+        [1.0; 3],
+    ))
+}
+
+#[must_use]
 pub fn multiply_matrices(left: [[f32; 4]; 4], right: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
     matrix_rows(matrix_from_rows(left) * matrix_from_rows(right))
 }
@@ -120,24 +131,27 @@ fn matrix_from_rows(rows: [[f32; 4]; 4]) -> Matrix4 {
 }
 
 #[must_use]
-pub fn view_projection(screen: [u32; 2], fov: f32, vanishpoint: [f32; 2]) -> [[f32; 4]; 4] {
+pub fn view_projection(
+    screen: [u32; 2],
+    fov: f32,
+    vanishpoint: [f32; 2],
+) -> ([[f32; 4]; 4], [[f32; 4]; 4]) {
     deadlib_present::space::set_current_window_px(screen[0], screen[1]);
     deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
         screen[0] as f32,
         screen[1] as f32,
     ));
-    matrix_rows(
-        song_lua_overlay_view_proj(
-            SongLuaOverlayState {
-                fov: Some(fov),
-                vanishpoint: Some(vanishpoint),
-                ..SongLuaOverlayState::default()
-            },
-            screen[0] as f32,
-            screen[1] as f32,
-        )
-        .expect("valid conformance camera"),
+    let (view, projection) = song_lua_overlay_view_proj(
+        SongLuaOverlayState {
+            fov: Some(fov),
+            vanishpoint: Some(vanishpoint),
+            ..SongLuaOverlayState::default()
+        },
+        screen[0] as f32,
+        screen[1] as f32,
     )
+    .expect("valid conformance camera");
+    (matrix_rows(view), matrix_rows(projection))
 }
 
 #[must_use]

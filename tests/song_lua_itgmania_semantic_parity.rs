@@ -11,7 +11,7 @@ use deadsync_assets::song_lua::{
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use deadsync_song_lua::playback::actor_conformance::compose_overlay_states;
-use deadsync_song_lua::{overlay_state_axis_scale, song_beat_at_elapsed_seconds};
+use deadsync_song_lua::song_beat_at_elapsed_seconds;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -3220,19 +3220,70 @@ fn native_screen_vertices(sample: &[Value]) -> Option<Vec<[f32; 2]>> {
 fn compiled_world_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -> [[f32; 4]; 4] {
     use deadsync_song_lua::playback::actor_conformance as actor;
     let size = state.size.unwrap_or(texture_size);
-    let [sx, sy] = overlay_state_axis_scale(state);
-    let matrix = actor::sprite_matrix(
-        [state.x, state.y, state.z],
-        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
-        [0.0; 3],
-        [sx, sy, deadsync_song_lua::overlay_state_z_scale(state)],
-        [1.0; 3],
-        size,
-        [state.halign, state.valign],
-        [state.skew_x, state.skew_y],
-    );
+    let matrix = actor::overlay_sprite_matrix(state, size);
     [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
         .map(|[x, y]| actor::project_world(matrix, [x * size[0], y * size[1], 0.0, 1.0]))
+}
+
+#[test]
+fn perspective_float_matches_native_drawing() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Perspective Float");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 83.7;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join("perspective-float.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile perspective fixture");
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            root.join("tests/fixtures/itgmania-song-lua-micro/perspective-float-native.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let second = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(&compiled[0], &context, second, second);
+        for actor in sample["actors"].as_array().unwrap().iter().filter(|actor| {
+            actor["draws"]
+                .as_array()
+                .is_some_and(|draws| !draws.is_empty())
+        }) {
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == actor["name"].as_str())
+                .unwrap();
+            let mut state = states[index];
+            let effect = deadsync_song_lua::playback::actor_conformance::effect_sample(
+                state, second, second,
+            );
+            [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
+            let vertices =
+                compiled_perspective_vertices(&compiled[0], &states, index, state, [64.0, 32.0])
+                    .expect("finite perspective vertices");
+            for (corner, actual) in vertices.iter().enumerate() {
+                let vertex = &actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]];
+                for axis in 0..2 {
+                    let expected = vertex["screen"][axis].as_f64().unwrap() as f32;
+                    assert!(
+                        (expected - actual[axis]).abs() <= 0.75,
+                        "{} corner {corner} axis {axis}: {expected} vs {actual:?}",
+                        actor["name"]
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 112);
 }
 
 fn compiled_perspective_vertices(
@@ -3272,13 +3323,13 @@ fn compiled_perspective_vertices(
         }
         parent = compiled.overlays[index].parent_index;
     }
-    let projection = actor::view_projection(
+    let (view, projection) = actor::view_projection(
         screen.map(|axis| axis as u32),
         camera.fov?,
         camera.vanishpoint.unwrap_or(screen.map(|axis| axis * 0.5)),
     );
     let corners = compiled_world_vertices(state, texture_size)
-        .map(|world| actor::project_world(projection, world));
+        .map(|world| actor::project_world(projection, actor::project_world(view, world)));
     // The reference records projected corners before GPU clipping, including
     // negative W. Only an undefined perspective divide prevents comparison.
     if corners.iter().any(|corner| {
@@ -3287,9 +3338,10 @@ fn compiled_perspective_vertices(
         return None;
     }
     Some(corners.map(|[x, y, _, w]| {
+        let inverse_w = w.recip();
         [
-            (x / w + 1.0) * viewport[0] * 0.5,
-            (1.0 - y / w) * viewport[1] * 0.5,
+            (x * inverse_w + 1.0) * viewport[0] * 0.5,
+            (1.0 - y * inverse_w) * viewport[1] * 0.5,
         ]
     }))
 }

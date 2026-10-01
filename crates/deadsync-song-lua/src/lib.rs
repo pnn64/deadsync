@@ -2505,6 +2505,9 @@ pub struct SongLuaOverlayState {
     pub basezoom_x: f32,
     pub basezoom_y: f32,
     pub basezoom_z: f32,
+    /// Ancestor and local scales retained in native matrix multiplication order.
+    /// Present only when composition can preserve unrotated ancestor scaling.
+    pub scale_factors: Option<[[f32; 3]; 2]>,
     pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
@@ -2591,6 +2594,7 @@ impl Default for SongLuaOverlayState {
             basezoom_x: 1.0,
             basezoom_y: 1.0,
             basezoom_z: 1.0,
+            scale_factors: None,
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,

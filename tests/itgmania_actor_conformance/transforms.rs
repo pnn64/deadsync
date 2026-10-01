@@ -20,7 +20,7 @@ fn root_actor_translation_rotation_and_zoom_match_itgmania() {
 fn projected_vertex_clip_coordinates_match_itgmania() {
     let oracle = fixture("transform-projection");
     let sample = &oracle["samples"][0];
-    let view_projection = view_projection([640, 480], 45.0, [280.0, 210.0]);
+    let (view, projection) = view_projection([640, 480], 45.0, [280.0, 210.0]);
     let projected = actor(sample, "projected");
     for (index, vertex) in projected["draws"][0]["vertices"]
         .as_array()
@@ -31,7 +31,7 @@ fn projected_vertex_clip_coordinates_match_itgmania() {
         let world = f32_array(&vertex["world"]);
         let expected = f32_array(&vertex["clip"]);
         assert_array_ulp(
-            project_world(view_projection, world),
+            project_world(projection, project_world(view, world)),
             expected,
             64,
             &format!("projected clip vertex {index}"),

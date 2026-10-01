@@ -2945,7 +2945,7 @@ fn song_lua_projection_preserves_vertices_behind_camera_for_gpu_clipping() {
     ];
     let mut crosses_camera = false;
     for corner in corners {
-        let native_clip = view_proj * model * corner;
+        let native_clip = view_proj.1 * (view_proj.0 * model) * corner;
         let rendered_clip = screen_projection * local_transform * corner;
         crosses_camera |= native_clip.w <= 0.0;
         assert!((native_clip - rendered_clip).abs().max_element() <= 0.000_2);
@@ -3010,13 +3010,14 @@ fn song_lua_projection_matches_step_your_game_up_fixture() {
     for (world, expected) in world.iter().zip(expected_clip) {
         let world = world.as_array().expect("world vertex is not an array");
         let expected = expected.as_array().expect("clip vertex is not an array");
-        let actual = view_proj
-            * Vector4::new(
-                world[0].as_f64().expect("world X is not numeric") as f32,
-                world[1].as_f64().expect("world Y is not numeric") as f32,
-                world[2].as_f64().expect("world Z is not numeric") as f32,
-                1.0,
-            );
+        let actual = view_proj.1
+            * (view_proj.0
+                * Vector4::new(
+                    world[0].as_f64().expect("world X is not numeric") as f32,
+                    world[1].as_f64().expect("world Y is not numeric") as f32,
+                    world[2].as_f64().expect("world Z is not numeric") as f32,
+                    1.0,
+                ));
         let expected = Vector4::new(
             expected[0].as_f64().expect("clip X is not numeric") as f32,
             expected[1].as_f64().expect("clip Y is not numeric") as f32,
@@ -8447,6 +8448,97 @@ fn song_lua_overlay_wraps_runtime_actors_with_glow() {
         quad_actors.is_none(),
         "transparent glowshift must not emit a glow pass"
     );
+}
+
+#[test]
+fn projected_sprite_keeps_native_zoom_and_uvs() {
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-song-lua-micro/perspective-float-native.json"
+    )))
+    .expect("native perspective fixture");
+    let mirrored = native["samples"][0]["actors"]
+        .as_array()
+        .expect("native actors")
+        .iter()
+        .find(|actor| actor["name"] == "Mirrored")
+        .expect("native mirrored sprite");
+    let key = "native-mirrored.png";
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(64, 32));
+    let overlay = SongLuaOverlayActor {
+        kind: test_sprite_kind(key),
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let state = SongLuaOverlayState {
+        x: 320.0,
+        y: 150.0,
+        z: 40.0,
+        zoom_x: -0.8,
+        zoom_y: 1.2,
+        rot_x_deg: 15.0,
+        rot_y_deg: 20.0,
+        rot_z_deg: 30.0,
+        halign: 0.25,
+        valign: 0.75,
+        ..SongLuaOverlayState::default()
+    };
+    let actor = build_song_lua_overlay_actor(
+        &overlay,
+        state,
+        Some(SongLuaOverlayState {
+            fov: Some(120.0),
+            vanishpoint: Some([427.0, 240.0]),
+            ..SongLuaOverlayState::default()
+        }),
+        &assets,
+        0,
+        854.0,
+        480.0,
+        0.0,
+        0.0,
+        0.0,
+    )
+    .expect_actor("mirrored sprite renders");
+    let Actor::TexturedMesh {
+        local_transform,
+        vertices,
+        ..
+    } = actor
+    else {
+        panic!("expected projected textured mesh");
+    };
+    assert_eq!(vertices.len(), 6);
+    let projection =
+        glam::camera::rh::proj::opengl::orthographic(0.0, 854.0, 480.0, 0.0, -1.0, 1.0);
+    for (vertex, corner) in vertices.iter().zip([0, 3, 2, 0, 2, 1]) {
+        let expected = &mirrored["draws"][0]["vertices"][corner];
+        for axis in 0..2 {
+            assert_eq!(
+                vertex.uv[axis],
+                expected["uv"][axis].as_f64().expect("native UV") as f32
+            );
+        }
+        let clip = projection
+            * local_transform
+            * Vector4::new(vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0);
+        for axis in 0..4 {
+            let expected = expected["clip"][axis]
+                .as_f64()
+                .expect("native clip coordinate") as f32;
+            assert!(
+                (clip[axis] - expected).abs() <= 0.002,
+                "axis {axis}: {} vs {expected}",
+                clip[axis]
+            );
+        }
+    }
 }
 
 #[test]

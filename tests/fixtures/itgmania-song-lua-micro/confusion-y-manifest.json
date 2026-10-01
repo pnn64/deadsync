@@ -1,0 +1,37 @@
+{
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 1,
+  "harness_version": "0.1.0",
+  "itgmania": {
+    "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+    "git_dirty": "false",
+    "execution": "embedded_bundled_lua",
+    "launches_executable": false
+  },
+  "context": {
+    "players": [
+      "PLAYER_1",
+      "PLAYER_2"
+    ],
+    "preferred_difficulty": "Challenge",
+    "preferred_steps_type": "dance-single",
+    "screen": [
+      854,
+      480
+    ],
+    "beat_step": 0.03125,
+    "max_events": 20000,
+    "random_seed": 1
+  },
+  "simfiles": [
+    {
+      "simfile": "fixture.ssc",
+      "fixture": "confusion-y-native.json",
+      "title": "Confusion Y",
+      "lua_entries": 1,
+      "status": "ok",
+      "capture_fixture": "fixture.ssc.semantic.json",
+      "sha256": "76e0f35c4671f98d2e9e64b832b2971e3b8b5738ec5e724a12d5a5478a673bfe"
+    }
+  ]
+}

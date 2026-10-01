@@ -2269,6 +2269,12 @@ pub(super) fn compare_runtime_modifiers(
                             .total_cmp(&(b.0 - b.1.unwrap_or(f32::NAN)).abs())
                     })
                     .expect("two perspective angles")
+            } else if write.key == "confusionyoffset" {
+                // PlayerOptions stores radians; the notefield consumes degrees.
+                (
+                    expected,
+                    Some(transforms[write.player].confusion_y_offset.to_radians()),
+                )
             } else {
                 (
                     expected,
@@ -2328,6 +2334,29 @@ fn native_modifier_values_match_deadsync() {
     assert!(parity.checks() > 0, "fixture contains no modifier writes");
     eprintln!("{}", parity.summary(&trace.title));
     parity.assert_complete("runtime modifier");
+}
+
+#[test]
+fn confusion_y_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("confusion-y.lua");
+    let trace: NativeTrace = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/confusion-y-native.json"))
+            .expect("native confusion fixture"),
+    )
+    .expect("valid native confusion fixture");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Confusion Y");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile confusion fixture");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 260);
+    parity.assert_complete("confusion Y");
 }
 
 #[test]
