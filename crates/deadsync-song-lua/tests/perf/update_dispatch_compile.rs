@@ -121,6 +121,7 @@ impl Fixture {
                 &mut self.overlays,
                 &[],
                 &[],
+                &mut Vec::new(),
             )
         }
         .unwrap()

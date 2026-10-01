@@ -120,6 +120,14 @@ struct NativeChild {
 struct NativeActor {
     id: String,
     path: String,
+    #[serde(default)]
+    final_render_state: Option<NativeRenderSnapshot>,
+}
+
+#[derive(Deserialize)]
+struct NativeRenderSnapshot {
+    alpha: Option<f32>,
+    visible: bool,
 }
 
 #[derive(Deserialize)]
@@ -761,6 +769,19 @@ fn native_final_render_state(
         .runtime_actors
         .first()
         .map_or(definition.id.as_str(), String::as_str);
+    if let Some(snapshot) = trace
+        .runtime_actors
+        .iter()
+        .find(|runtime| runtime.id == actor)
+        .and_then(|runtime| runtime.final_render_state.as_ref())
+    {
+        return NativeFinalRenderState {
+            alpha: snapshot.alpha.unwrap_or(1.0),
+            visible: snapshot.visible,
+            wrote_alpha: snapshot.alpha.is_some(),
+            wrote_visible: true,
+        };
+    }
     let mut operations = trace
         .tween_tracks
         .iter()

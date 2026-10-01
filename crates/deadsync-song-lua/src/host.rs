@@ -1080,6 +1080,7 @@ fn record_song_lua_sound_path(
 
     let key = path.to_string_lossy().into_owned();
     if capture_call {
+        crate::lua_util::capture_runtime_sound(lua, path.clone());
         if let Some(calls) = lua
             .globals()
             .get::<Option<Table>>(SONG_LUA_SOUND_CALLS_KEY)?

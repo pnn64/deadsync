@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1667"
+version = "0.5.1668"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1776,7 +1776,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1667"
+version = "0.5.1668"
 dependencies = [
  "bitflags 2.13.2",
  "chrono",
@@ -1844,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1667"
+version = "0.5.1668"
 dependencies = [
  "log",
  "semver",
@@ -2418,9 +2418,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.33.11"
+version = "0.33.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35b4e837a1d133645d1dcf283e146a4b9901e390a1c13545f959cfed3a72f24f"
+checksum = "37bfe73dc8ec21f54d181e5a60554327ec3f1c600c455a75ccbfc65d2106a6c4"
 
 [[package]]
 name = "glow"
@@ -2970,9 +2970,9 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "lazy_static"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "lebe"
@@ -4616,8 +4616,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.268"
-source = "git+https://github.com/pnn64/rssp?branch=main#c9a370b2b57a15deba1661f301031f4dd6975cd8"
+version = "0.4.270"
+source = "git+https://github.com/pnn64/rssp?branch=main#e50d963012ec50127d75f3f0e766f6c8871f035a"
 dependencies = [
  "foldhash",
  "memchr",
@@ -4628,8 +4628,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.268"
-source = "git+https://github.com/pnn64/rssp?branch=main#c9a370b2b57a15deba1661f301031f4dd6975cd8"
+version = "0.4.270"
+source = "git+https://github.com/pnn64/rssp?branch=main#e50d963012ec50127d75f3f0e766f6c8871f035a"
 dependencies = [
  "memchr",
 ]
@@ -4642,9 +4642,9 @@ checksum = "9278fb35b3e730abe136e9b395b5b81b96d06b9f5478a50f0c8430a2237b22de"
 
 [[package]]
 name = "rubato"
-version = "5.0.0"
+version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7cb1ffaf8738df50aab642a7f6465df81c6ba9e2818268053487165298114be"
+checksum = "cc1e951b9f5432ec1422f4dcfa5733fc501265902612edf5ef8bd8ecdd960930"
 dependencies = [
  "audioadapter",
  "audioadapter-buffers",
@@ -6567,9 +6567,9 @@ dependencies = [
 
 [[package]]
 name = "yoke-derive"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33811428bee40dbceb6d545e95754741d17a6aef9a4849f0fd62e2ba4f412a78"
+checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
 dependencies = [
  "proc-macro2",
  "quote",

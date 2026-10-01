@@ -21,10 +21,9 @@ use crate::{
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_runtime_mod_eases, read_song_lua_sound_paths,
     read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
-    read_update_function_overlay_compile_actor_actions, read_update_function_tables,
-    read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
-    restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
-    run_actor_startup_commands, run_actor_update_functions_with_delta,
+    read_update_function_tables, read_xero_runtime_mod_eases_for_overlay_actors,
+    register_loaded_easing_names, restore_compile_globals, run_actor_draw_functions,
+    run_actor_init_commands, run_actor_startup_commands, run_actor_update_functions_with_delta,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
     update_tree_reads_global,
 };
@@ -288,6 +287,7 @@ where
     run_actor_draw_functions(&lua, &root);
     compile_timer.push_stage("draw_functions");
     let mut startup_broadcasts = crate::lua_util::runtime_broadcast_captures(&lua);
+    let mut startup_sounds = crate::lua_util::take_runtime_sounds(&lua);
     crate::lua_util::end_overlay_update_capture(&lua);
     // Actor::UpdateTweening needs positive delta. Match the first-frame clock
     // used when restoring the state before queued startup commands.
@@ -297,6 +297,11 @@ where
     );
     for (beat, _, _) in &mut startup_broadcasts {
         *beat = startup_beat;
+    }
+    for event in &mut startup_sounds {
+        if event.queued_startup {
+            event.beat = startup_beat;
+        }
     }
     register_loaded_easing_names(&lua, &mut host).map_err(|err| err.to_string())?;
     compile_timer.push_stage("easing_names");
@@ -343,37 +348,6 @@ where
                 .map(|(message, path)| (layer, message, path)),
         );
     }
-    for (layer, message, sound_path) in message_sounds {
-        let table = create_dummy_actor(&lua, "Sound").map_err(|err| err.to_string())?;
-        table
-            .set(COMPILE_LAYER_KEY, layer)
-            .map_err(|err| err.to_string())?;
-        overlays.push(crate::SongLuaOverlayCompileActor {
-            table,
-            message_sounds: Vec::new(),
-            actor: SongLuaOverlayActor {
-                kind: SongLuaOverlayKind::Sound { sound_path },
-                name: None,
-                parent_index: None,
-                initial_state: SongLuaOverlayState::default(),
-                message_commands: vec![SongLuaOverlayMessageCommand {
-                    message,
-                    aux: None,
-                    blocks: vec![SongLuaOverlayCommandBlock {
-                        start: 0.0,
-                        duration: 0.0,
-                        easing: None,
-                        opt1: None,
-                        opt2: None,
-                        delta: SongLuaOverlayStateDelta {
-                            sound_play: Some(true),
-                            ..SongLuaOverlayStateDelta::default()
-                        },
-                    }],
-                }],
-            },
-        });
-    }
     compile_timer.push_stage("read_overlays");
     let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)?;
     let mut hidden_players = std::array::from_fn(|player| {
@@ -382,7 +356,7 @@ where
             .is_some_and(|tracked| !tracked.actor.initial_state.visible)
     });
     let mut overlay_trigger_counter = 0usize;
-    let mut sound_events = Vec::new();
+    let mut sound_events = startup_sounds;
     let prefix_perframes = globals
         .get::<Option<Table>>("prefix_globals")
         .map_err(|err| err.to_string())?
@@ -445,7 +419,6 @@ where
             &mut sound_events,
             &mut overlay_trigger_counter,
             &mut out.info,
-            false,
         )?;
         compile_timer.push_stage("prefix_actions");
     }
@@ -576,76 +549,23 @@ where
             .any(|runtime| runtime.to_pointer() == global.to_pointer())
             || (update_reads_global_actions && initialized_global_actions.is_some())
     });
-    let runtime_message_count = out.messages.len();
-    let runtime_overlay_command_counts = overlays
-        .iter()
-        .map(|overlay| overlay.actor.message_commands.len())
-        .collect::<Vec<_>>();
-    let runtime_tracked_command_counts = tracked_actors
-        .iter()
-        .map(|actor| actor.actor.message_commands.len())
-        .collect::<Vec<_>>();
-    read_overlay_compile_actor_actions(
-        &lua,
-        global_actions,
-        &mut overlays,
-        &mut tracked_actors,
-        &mut out.messages,
-        &mut sound_events,
-        &mut overlay_trigger_counter,
-        &mut out.info,
-        global_actions_are_runtime,
-    )?;
-    compile_timer.push_stage("global_actions");
-    if global_actions_are_runtime {
-        // The sampled update loop is the timing authority for function actions.
-        // Keep named broadcasts: the renderer still needs their message events
-        // to drive actors which are not otherwise touched by the update capture.
-        // Only generated function-action commands would queue tweens twice.
-        let retained_messages = out
-            .messages
-            .drain(runtime_message_count..)
-            .filter(|event| !event.message.starts_with("__songlua_overlay_fn_action_"))
-            .collect::<Vec<_>>();
-        out.messages.extend(retained_messages);
-        for (overlay, count) in overlays.iter_mut().zip(runtime_overlay_command_counts) {
-            let retained_commands = overlay
-                .actor
-                .message_commands
-                .drain(count..)
-                .filter(|command| !command.message.starts_with("__songlua_overlay_fn_action_"))
-                .collect::<Vec<_>>();
-            overlay.actor.message_commands.extend(retained_commands);
-        }
-        for (actor, count) in tracked_actors
-            .iter_mut()
-            .zip(runtime_tracked_command_counts)
-        {
-            let retained_commands = actor
-                .actor
-                .message_commands
-                .drain(count..)
-                .filter(|command| !command.message.starts_with("__songlua_overlay_fn_action_"))
-                .collect::<Vec<_>>();
-            actor.actor.message_commands.extend(retained_commands);
-        }
+    if !global_actions_are_runtime {
+        read_overlay_compile_actor_actions(
+            &lua,
+            global_actions,
+            &mut overlays,
+            &mut tracked_actors,
+            &mut out.messages,
+            &mut sound_events,
+            &mut overlay_trigger_counter,
+            &mut out.info,
+        )?;
     }
-    let runtime_action_message_start = if global_actions_are_runtime {
-        runtime_message_count
-    } else {
-        out.messages.len()
-    };
-    read_update_function_overlay_compile_actor_actions(
-        &lua,
-        &root,
-        &mut overlays,
-        &mut tracked_actors,
-        &mut out.messages,
-        &mut sound_events,
-        &mut overlay_trigger_counter,
-        &mut out.info,
-    )?;
-    compile_timer.push_stage("update_actions");
+    // The sampled reader owns callbacks and named actions. Probing callbacks
+    // changes nested tables, upvalues and random state; emitting named actions
+    // speculatively also plays schedules the reader never reaches.
+    let runtime_action_message_start = out.messages.len();
+    compile_timer.push_stage("global_actions");
     let (perframe_eases, perframe_overlay_eases, perframe_info) = compile_perframes(
         &lua,
         prefix_perframes,
@@ -706,6 +626,7 @@ where
                 &mut overlays,
                 &tracked_actors,
                 &out.messages,
+                &mut sound_events,
             )?
         }
     };
@@ -727,6 +648,12 @@ where
         out.stateful_message_captures.push(capture);
     }
     out.column_offsets.extend(update_column_transforms);
+    if let Some(errors) = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>() {
+        out.info.unsupported_perframes += errors.0.len();
+        for detail in errors.0 {
+            push_unique_compile_detail(&mut out.info.unsupported_perframe_captures, detail);
+        }
+    }
     compile_timer.push_stage("update_overlays");
     resolve_late_proxy_targets(&mut overlays, &mut hidden_players)?;
     crate::perframe::apply_startup_states(
@@ -753,6 +680,38 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
+    for (layer, message, sound_path) in message_sounds {
+        // Runtime listener calls were captured at their actual frame. Do not
+        // also play the speculative sound attached to the named message.
+        if sound_events
+            .iter()
+            .any(|event| event.source_message.as_deref() == Some(message.as_str()))
+        {
+            continue;
+        }
+        out.overlays.push(SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sound { sound_path },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: vec![SongLuaOverlayMessageCommand {
+                message,
+                aux: None,
+                blocks: vec![SongLuaOverlayCommandBlock {
+                    start: 0.0,
+                    duration: 0.0,
+                    easing: None,
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        sound_play: Some(true),
+                        ..SongLuaOverlayStateDelta::default()
+                    },
+                }],
+            }],
+        });
+        overlay_layers.push(layer);
+    }
     for (index, event) in sound_events.into_iter().enumerate() {
         let message = format!("__songlua_sound_call_{index}");
         out.messages.push(crate::SongLuaMessageEvent {

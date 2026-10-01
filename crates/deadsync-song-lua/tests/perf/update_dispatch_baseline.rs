@@ -110,7 +110,7 @@ pub(super) fn run_recurring_update(
         .unwrap_or(0.0);
     if interval <= f64::EPSILON {
         if let Err(err) = run_actor_named_command(lua, actor, &command) {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
+            report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
         }
         return Ok(());
     }
@@ -138,7 +138,7 @@ pub(super) fn run_recurring_update(
         }
 
         if let Err(err) = run_actor_named_command(lua, actor, &command) {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
+            report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
         }
         runs += 1;
         interval = actor

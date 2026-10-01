@@ -35,10 +35,6 @@ pub(super) fn capture_function_action_blocks_inner(
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     let globals = lua.globals();
-    let column_writes_before = globals
-        .raw_get::<Option<u64>>("__songlua_column_writes")
-        .map_err(|err| err.to_string())?
-        .unwrap_or(0);
     let column_snapshot = snapshot_note_field_columns(lua).map_err(|err| err.to_string())?;
     let previous_broadcasts = globals
         .get::<Value>(SONG_LUA_BROADCASTS_KEY)
@@ -95,11 +91,6 @@ pub(super) fn capture_function_action_blocks_inner(
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
     let sound_paths = read_path_table(&sound_calls);
-    let column_writes = globals
-        .raw_get::<Option<u64>>("__songlua_column_writes")
-        .map_err(|err| err.to_string())?
-        .unwrap_or(0)
-        > column_writes_before;
     restore_note_field_columns(lua, column_snapshot).map_err(|err| err.to_string())?;
     let saw_side_effect =
         song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
@@ -134,6 +125,5 @@ pub(super) fn capture_function_action_blocks_inner(
         broadcasts,
         sound_paths,
         saw_side_effect,
-        column_writes,
     })
 }

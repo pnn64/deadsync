@@ -202,6 +202,7 @@ struct SongLuaOverlayUpdateCapture {
     active_broadcast_command: Option<mlua::LuaString>,
     active_broadcast_params: bool,
     runtime_broadcasts: Vec<(f32, String, bool)>,
+    runtime_sounds: Vec<SongLuaSoundEvent>,
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
@@ -213,6 +214,7 @@ struct SongLuaOverlayUpdateCapture {
 
 struct SongLuaProbeCaptureActive;
 struct SongLuaActionCaptureActive;
+pub(crate) struct SongLuaUpdateErrors(pub Vec<String>);
 
 #[derive(Clone)]
 pub struct SongLuaScheduledOverlayUpdate {
@@ -233,6 +235,7 @@ impl SongLuaOverlayUpdateCapture {
             active_broadcast_command: None,
             active_broadcast_params: false,
             runtime_broadcasts: Vec::new(),
+            runtime_sounds: Vec::new(),
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
             values: (0..actor_count).map(|_| Vec::new()).collect(),
@@ -448,6 +451,26 @@ pub fn stateful_message_captures(lua: &Lua) -> Vec<SongLuaStatefulMessageCapture
 pub fn runtime_broadcast_captures(lua: &Lua) -> Vec<(f32, String, bool)> {
     lua.app_data_ref::<SongLuaOverlayUpdateCapture>()
         .map(|capture| capture.runtime_broadcasts.clone())
+        .unwrap_or_default()
+}
+
+pub(crate) fn capture_runtime_sound(lua: &Lua, path: PathBuf) {
+    let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
+    let queued_startup = lua.app_data_ref::<SongLuaQueuedStartup>().is_some();
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        let source_message = capture.active_broadcast.clone();
+        capture.runtime_sounds.push(SongLuaSoundEvent {
+            beat,
+            path,
+            source_message,
+            queued_startup,
+        });
+    }
+}
+
+pub(crate) fn take_runtime_sounds(lua: &Lua) -> Vec<SongLuaSoundEvent> {
+    lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .map(|mut capture| std::mem::take(&mut capture.runtime_sounds))
         .unwrap_or_default()
 }
 
@@ -8242,6 +8265,7 @@ pub fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
 }
 
 struct SongLuaStartupQueues(Vec<Table>);
+struct SongLuaQueuedStartup;
 
 fn collect_startup_states(
     actor: &Table,
@@ -8282,9 +8306,13 @@ pub fn run_actor_startup_commands(
         // Actor::UpdateTweening requires positive delta time. Keep the state
         // after On but before queued commands for the compiled beat-zero frame.
         collect_startup_states(root, &mut states)?;
-        for actor in queued.0 {
-            drain_actor_command_queue(lua, &actor)?;
-        }
+        lua.set_app_data(SongLuaQueuedStartup);
+        let result = queued
+            .0
+            .into_iter()
+            .try_for_each(|actor| drain_actor_command_queue(lua, &actor));
+        lua.remove_app_data::<SongLuaQueuedStartup>();
+        result?;
         let mut ready = HashMap::with_capacity(states.len());
         collect_startup_states(root, &mut ready)?;
         states.retain(|actor, initial| ready.get(actor).is_some_and(|state| state != initial));
@@ -8475,6 +8503,7 @@ fn actor_update_rate(actor: &Table) -> mlua::Result<f64> {
 }
 
 fn report_update_error(
+    lua: &Lua,
     actor: &Table,
     reported_key: &'static str,
     callback: &str,
@@ -8484,6 +8513,16 @@ fn report_update_error(
         return Ok(());
     }
     actor.set(reported_key, true)?;
+    let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
+    let detail = format!(
+        "{callback} for {} at beat {beat:.3}: {err}",
+        actor_debug_label(actor)
+    );
+    if let Some(mut errors) = lua.app_data_mut::<SongLuaUpdateErrors>() {
+        errors.0.push(detail);
+    } else {
+        lua.set_app_data(SongLuaUpdateErrors(vec![detail]));
+    }
     log::debug!(
         "Song lua {callback} failed for {}; preserving partial update state: {err}",
         actor_debug_label(actor),
@@ -8511,7 +8550,7 @@ fn run_recurring_update(
         .unwrap_or(0.0);
     if interval <= f64::EPSILON {
         if let Err(err) = run_actor_named_command(lua, actor, command) {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
+            report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
         }
         return Ok(());
     }
@@ -8539,7 +8578,7 @@ fn run_recurring_update(
         }
 
         if let Err(err) = run_actor_named_command(lua, actor, command) {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
+            report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
         }
         runs += 1;
         interval = actor
@@ -8562,10 +8601,10 @@ fn run_update_callback(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Re
         call_actor_function(lua, actor, &update, Some(Value::Number(delta_seconds)));
     let drain_result = drain_actor_command_queue(lua, actor);
     if let Err(err) = update_result {
-        report_update_error(actor, UPDATE_FN_ERROR_KEY, "update function", &err)?;
+        report_update_error(lua, actor, UPDATE_FN_ERROR_KEY, "update function", &err)?;
     }
     if let Err(err) = drain_result {
-        report_update_error(actor, UPDATE_QUEUE_ERROR_KEY, "update queue", &err)?;
+        report_update_error(lua, actor, UPDATE_QUEUE_ERROR_KEY, "update queue", &err)?;
     }
     Ok(())
 }
@@ -9623,14 +9662,9 @@ pub fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
         "SetSplineMode",
         lua.create_function({
             let handler = handler.clone();
-            move |lua, args: MultiValue| {
+            move |_, args: MultiValue| {
                 if let Some(mode) = args.get(1).cloned().and_then(read_string) {
                     handler.set("__songlua_spline_mode", mode)?;
-                    let globals = lua.globals();
-                    let writes = globals
-                        .raw_get::<Option<u64>>("__songlua_column_writes")?
-                        .unwrap_or(0);
-                    globals.raw_set("__songlua_column_writes", writes + 1)?;
                 }
                 Ok(handler.clone())
             }
@@ -11053,7 +11087,6 @@ pub struct SongLuaFunctionActionCapture {
     pub broadcasts: Vec<(String, bool)>,
     pub sound_paths: Vec<PathBuf>,
     pub saw_side_effect: bool,
-    pub column_writes: bool,
 }
 
 struct FunctionActionTableSnapshot {
@@ -11180,10 +11213,6 @@ fn capture_function_action_blocks_inner(
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     let globals = lua.globals();
-    let column_writes_before = globals
-        .raw_get::<Option<u64>>("__songlua_column_writes")
-        .map_err(|err| err.to_string())?
-        .unwrap_or(0);
     let column_snapshot = snapshot_note_field_columns(lua).map_err(|err| err.to_string())?;
     let previous_broadcasts = globals
         .get::<Value>(SONG_LUA_BROADCASTS_KEY)
@@ -11244,11 +11273,6 @@ fn capture_function_action_blocks_inner(
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
     let sound_paths = read_path_table(&sound_calls);
-    let column_writes = globals
-        .raw_get::<Option<u64>>("__songlua_column_writes")
-        .map_err(|err| err.to_string())?
-        .unwrap_or(0)
-        > column_writes_before;
     restore_note_field_columns(lua, column_snapshot).map_err(|err| err.to_string())?;
     let saw_side_effect =
         song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
@@ -11283,7 +11307,6 @@ fn capture_function_action_blocks_inner(
         broadcasts,
         sound_paths,
         saw_side_effect,
-        column_writes,
     })
 }
 
@@ -11497,7 +11520,6 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
     counter: &mut usize,
     messages: &mut Vec<SongLuaMessageEvent>,
     sound_events: &mut Vec<SongLuaSoundEvent>,
-    runtime: bool,
 ) -> Result<bool, String> {
     let capture = capture_overlay_compile_actor_function_action_blocks(
         lua,
@@ -11511,7 +11533,12 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
             .sound_paths
             .iter()
             .cloned()
-            .map(|path| SongLuaSoundEvent { beat, path }),
+            .map(|path| SongLuaSoundEvent {
+                beat,
+                path,
+                source_message: None,
+                queued_startup: false,
+            }),
     );
     let mut handled_broadcast = false;
     if !capture.broadcasts.is_empty()
@@ -11540,7 +11567,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         return Ok(true);
     }
     if !has_direct_effects {
-        return Ok(capture.saw_side_effect || (runtime && capture.column_writes));
+        return Ok(capture.saw_side_effect);
     }
 
     let message = format!("__songlua_overlay_fn_action_{counter}");
@@ -11598,7 +11625,6 @@ pub fn read_overlay_compile_actor_actions<Kind>(
     sound_events: &mut Vec<SongLuaSoundEvent>,
     counter: &mut usize,
     info: &mut SongLuaCompileInfo,
-    runtime: bool,
 ) -> Result<(), String> {
     read_actions_with_function_capture(table, messages, |input, messages| {
         if !matches!(
@@ -11612,7 +11638,6 @@ pub fn read_overlay_compile_actor_actions<Kind>(
                 counter,
                 messages,
                 sound_events,
-                runtime,
             ),
             Ok(true)
         ) {
@@ -11622,32 +11647,6 @@ pub fn read_overlay_compile_actor_actions<Kind>(
         }
         Ok(())
     })
-}
-
-pub fn read_update_function_overlay_compile_actor_actions<Kind>(
-    lua: &Lua,
-    root: &Value,
-    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
-    tracked_actors: &mut [SongLuaTrackedActor],
-    messages: &mut Vec<SongLuaMessageEvent>,
-    sound_events: &mut Vec<SongLuaSoundEvent>,
-    counter: &mut usize,
-    info: &mut SongLuaCompileInfo,
-) -> Result<(), String> {
-    for table in read_update_function_tables(lua, root, &["mod_actions", "actions"])? {
-        read_overlay_compile_actor_actions(
-            lua,
-            Some(table),
-            overlays,
-            tracked_actors,
-            messages,
-            sound_events,
-            counter,
-            info,
-            true,
-        )?;
-    }
-    Ok(())
 }
 
 fn overlay_compile_actors_have_message_listener<Kind>(

@@ -160,17 +160,16 @@ pub use lua_util::{
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
     read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
-    read_update_function_overlay_compile_actor_actions, read_update_function_tables,
-    read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
-    remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
-    reset_indexed_actor_capture_tables, reset_overlay_compile_actor_capture_tables,
-    reset_tracked_capture_tables, resolve_actor_asset_path, restore_action_capture_scope,
-    restore_actor_mutable_state, restore_actors_semantic_state, restore_note_column_handlers,
-    restore_note_field_columns, rolling_numbers_text, run_actor_draw_functions,
-    run_actor_draw_functions_for_table, run_actor_init_commands, run_actor_init_commands_for_table,
-    run_actor_named_command, run_actor_named_command_with_drain,
-    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
-    run_actor_startup_commands_for_table, run_actor_update_functions,
+    read_update_function_tables, read_vertex_colors_value, record_probe_method_call,
+    register_song_lua_actor, remove_actor_child, remove_all_actor_children, reset_actor_capture,
+    reset_actor_capture_tables, reset_indexed_actor_capture_tables,
+    reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
+    resolve_actor_asset_path, restore_action_capture_scope, restore_actor_mutable_state,
+    restore_actors_semantic_state, restore_note_column_handlers, restore_note_field_columns,
+    rolling_numbers_text, run_actor_draw_functions, run_actor_draw_functions_for_table,
+    run_actor_init_commands, run_actor_init_commands_for_table, run_actor_named_command,
+    run_actor_named_command_with_drain, run_actor_named_command_with_drain_and_params,
+    run_actor_startup_commands, run_actor_startup_commands_for_table, run_actor_update_functions,
     run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
     run_added_actor_child_commands, run_command_on_leaves,
     run_named_command_on_children_recursively, run_named_command_on_leaves,
@@ -1706,6 +1705,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
 pub struct SongLuaSoundEvent {
     pub beat: f32,
     pub path: PathBuf,
+    pub source_message: Option<String>,
+    pub queued_startup: bool,
 }
 
 pub fn push_startup_message_if_listened<'a>(
@@ -8888,20 +8889,28 @@ return Def.ActorFrame{
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Local Update Mod Actions"),
-        )
-        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Local Update Mod Actions");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 4.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.info.unsupported_function_actions, 0);
-        assert_eq!(compiled.player_actors[0].message_commands.len(), 1);
-        assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].beat, 2.0);
-        let block = &compiled.player_actors[0].message_commands[0].blocks[0];
-        assert_eq!(block.delta.x, Some(344.0));
-        assert_eq!(block.delta.z, Some(3.0));
-        assert_eq!(block.delta.zoom, Some(0.5));
-        assert_eq!(block.delta.rot_z_deg, Some(20.0));
+        assert!(compiled.player_actors[0].message_commands.is_empty());
+        assert!(compiled.messages.is_empty());
+        for (target, expected) in [
+            (SongLuaEaseTarget::PlayerX, 344.0),
+            (SongLuaEaseTarget::PlayerZ, 3.0),
+            (SongLuaEaseTarget::PlayerZoomX, 0.5),
+            (SongLuaEaseTarget::PlayerRotationZ, 20.0),
+        ] {
+            let ease = compiled
+                .eases
+                .iter()
+                .rev()
+                .find(|ease| ease.player == Some(1) && ease.target == target)
+                .expect("sampled player action");
+            assert_eq!(ease.to, expected);
+            assert!(ease.start >= 2.0);
+        }
     }
 
     #[test]
@@ -9074,6 +9083,326 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_runs_pool_actions_in_order() {
+        for scope in ["", "local "] {
+            let song_dir = test_dir(if scope.is_empty() {
+                "global-pool-actions"
+            } else {
+                "local-pool-actions"
+            });
+            let entry = song_dir.join("default.lua");
+            let script = r#"
+local target
+local pool = {}
+local calls = 0
+local next_action = 1
+SCOPE mod_actions = {
+    {0.5, function()
+        calls = calls + 1
+        pool[1].value = pool[1].value + calls
+        target:x(pool[1].value):y(calls)
+    end},
+    {1, function()
+        calls = calls + 1
+        pool[1].value = pool[1].value + calls
+        target:x(pool[1].value):y(calls)
+    end},
+}
+return Def.ActorFrame{
+    Def.Quad{InitCommand=function(self) target=self end},
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            if beat > 0.2 and not pool[1] then pool[1]={value=10} end
+            while next_action <= #mod_actions and beat >= mod_actions[next_action][1] do
+                mod_actions[next_action][2]()
+                next_action = next_action + 1
+            end
+        end)
+    end,
+}
+"#
+            .replace("SCOPE ", scope);
+            fs::write(&entry, script).unwrap();
+            let mut context = SongLuaCompileContext::new(&song_dir, "Pool Actions");
+            context.song_display_bpms = [60.0, 60.0];
+            context.music_length_seconds = 1.5;
+            let compiled = test_compile_song_lua(&entry, &context).unwrap();
+            assert!(
+                compiled
+                    .info
+                    .unsupported_function_action_captures
+                    .is_empty()
+            );
+            for (target, expected) in [
+                (SongLuaOverlayUpdateTarget::X, vec![11.0, 13.0]),
+                (SongLuaOverlayUpdateTarget::Y, vec![1.0, 2.0]),
+            ] {
+                let track = compiled
+                    .overlay_updates
+                    .iter()
+                    .find(|track| track.target == target)
+                    .expect("pool action track");
+                let values = track
+                    .samples
+                    .iter()
+                    .filter_map(|sample| match sample.value {
+                        SongLuaOverlayUpdateValue::F32(value) if value != 0.0 => Some(value),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                assert!(
+                    expected.iter().all(|value| values.contains(value)),
+                    "{scope}{target:?}: {values:?}"
+                );
+                assert_eq!(values.last(), expected.last());
+            }
+        }
+    }
+
+    #[test]
+    fn compile_song_lua_times_runtime_sound_calls() {
+        let song_dir = test_dir("runtime-action-sound");
+        fs::write(song_dir.join("effect.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local action = 1
+mod_actions = {{0.51, function()
+    SOUND:PlayOnce("effect.ogg")
+    SOUND:PlayOnce("effect.ogg")
+end}}
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            while action <= #mod_actions and GAMESTATE:GetSongBeat() >= mod_actions[action][1] do
+                mod_actions[action][2]()
+                action = action + 1
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Sound");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let events = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message.starts_with("__songlua_sound_call_"))
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].beat, events[1].beat);
+        assert!((events[0].beat - 31.0 / 60.0).abs() < 0.000_001);
+        assert_eq!(compiled.sound_paths, vec![song_dir.join("effect.ogg")]);
+    }
+
+    #[test]
+    fn compile_song_lua_captures_runtime_message_sounds_once() {
+        let song_dir = test_dir("runtime-message-sound-once");
+        fs::write(song_dir.join("effect.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local action = 1
+mod_actions={{0.51, "Hit", true}}
+return Def.ActorFrame{
+    HitMessageCommand=function(self) SOUND:PlayOnce("effect.ogg") end,
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            while action <= #mod_actions and GAMESTATE:GetSongBeat() >= mod_actions[action][1] do
+                MESSAGEMAN:Broadcast(mod_actions[action][2])
+                action = action + 1
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Message Sound");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let sounds = compiled
+            .overlays
+            .iter()
+            .filter(|overlay| matches!(overlay.kind, SongLuaOverlayKind::Sound { .. }))
+            .collect::<Vec<_>>();
+        assert_eq!(sounds.len(), 1);
+        assert_eq!(sounds[0].message_commands.len(), 1);
+        assert!(
+            sounds[0].message_commands[0]
+                .message
+                .starts_with("__songlua_sound_call_")
+        );
+        let event = compiled
+            .messages
+            .iter()
+            .find(|event| event.message == sounds[0].message_commands[0].message)
+            .unwrap();
+        assert!((event.beat - 31.0 / 60.0).abs() < 0.000_001);
+    }
+
+    #[test]
+    fn compile_song_lua_reports_runtime_action_errors() {
+        let song_dir = test_dir("runtime-action-error");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+local action = 1
+mod_actions={{0.5, function()
+    target:x(7)
+    error("broken pool callback")
+end}}
+return Def.ActorFrame{
+    Def.Quad{InitCommand=function(self) target=self end},
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            while action <= #mod_actions and GAMESTATE:GetSongBeat() >= mod_actions[action][1] do
+                mod_actions[action][2]()
+                action = action + 1
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Action Error");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 1);
+        assert_eq!(compiled.info.unsupported_perframe_captures.len(), 1);
+        assert!(compiled.info.unsupported_perframe_captures[0].contains("broken pool callback"));
+        let track = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
+            .unwrap();
+        assert_eq!(
+            track.samples.last().unwrap().value,
+            SongLuaOverlayUpdateValue::F32(7.0)
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_omits_unreached_runtime_actions() {
+        let song_dir = test_dir("unreached-runtime-actions");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions={{0.5, "Show", true}}
+return Def.ActorFrame{
+    Def.Quad{
+        InitCommand=function(self) self:visible(false) end,
+        ShowMessageCommand=function(self) self:visible(true) end,
+    },
+    OnCommand=function(self)
+        self:SetUpdateFunction(function(self)
+            if GAMESTATE:GetSongBeat() > 0.2 then self:SetUpdateFunction(nil) end
+            for _, action in ipairs(mod_actions) do
+                if GAMESTATE:GetSongBeat() >= action[1] then MESSAGEMAN:Broadcast(action[2]) end
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Unreached Runtime Actions");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(compiled.messages.is_empty());
+        assert!(!compiled.overlays[0].initial_state.visible);
+        assert!(
+            compiled
+                .overlay_updates
+                .iter()
+                .all(|track| track.target != SongLuaOverlayUpdateTarget::Visible)
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_captures_queued_startup_sound_once() {
+        let song_dir = test_dir("queued-startup-sound");
+        fs::write(song_dir.join("effect.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local action = 1
+mod_actions={{0, function() SOUND:PlayOnce("effect.ogg") end}}
+return Def.ActorFrame{
+    OnCommand=function(self) self:queuecommand("Update") end,
+    UpdateCommand=function(self)
+        while action <= #mod_actions and GAMESTATE:GetSongBeat() >= mod_actions[action][1] do
+            mod_actions[action][2]()
+            action = action + 1
+        end
+        self:sleep(1/60):queuecommand("Update")
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Queued Startup Sound");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let events = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message.starts_with("__songlua_sound_call_"))
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 1);
+        assert!((events[0].beat - 1.0 / 60.0).abs() < 0.000_001);
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_immediate_startup_sound_time() {
+        let song_dir = test_dir("immediate-startup-sound");
+        fs::write(song_dir.join("effect.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local sent = false
+return Def.ActorFrame{
+    OnCommand=function(self)
+        SOUND:PlayOnce("effect.ogg")
+        self:SetUpdateFunction(function()
+            if not sent then SOUND:PlayOnce("effect.ogg"); sent = true end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Immediate Startup Sound");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 0.5;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let events = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message.starts_with("__songlua_sound_call_"))
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 2);
+        assert!(events.iter().all(|event| event.beat == 0.0));
+    }
+
+    #[test]
     fn compile_song_lua_does_not_replay_global_actions_before_update_loop() {
         let song_dir = test_dir("global-actions-update-authority");
         let entry = song_dir.join("default.lua");
@@ -9141,7 +9470,8 @@ return Def.ActorFrame{
             compiled
                 .messages
                 .iter()
-                .any(|event| event.message == "BossOn" && event.beat == 0.0),
+                .any(|event| event.message == "BossOn"
+                    && (event.beat - 1.0 / 60.0).abs() < 0.000_001),
             "named broadcasts must remain available to the renderer"
         );
         let target_index = compiled

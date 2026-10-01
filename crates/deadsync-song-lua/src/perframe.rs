@@ -2404,6 +2404,7 @@ pub fn compile_update_functions<Kind>(
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     tracked_actors: &[SongLuaTrackedActor],
     messages: &[SongLuaMessageEvent],
+    sound_events: &mut Vec<crate::SongLuaSoundEvent>,
 ) -> Result<
     (
         Vec<SongLuaEaseWindow>,
@@ -2708,6 +2709,7 @@ pub fn compile_update_functions<Kind>(
     );
     let stateful_messages = crate::lua_util::stateful_message_captures(lua);
     let runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
+    sound_events.extend(crate::lua_util::take_runtime_sounds(lua));
     crate::lua_util::end_overlay_update_capture(lua);
     Ok((
         eases,
