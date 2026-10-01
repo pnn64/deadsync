@@ -465,15 +465,6 @@ where
     let global_mod_eases = globals
         .get::<Option<Table>>("mods_ease")
         .map_err(|err| err.to_string())?;
-    let (global_eases, global_overlay_eases, global_column_offsets, global_info) =
-        read_eases_for_overlay_actors(
-            &lua,
-            global_mod_eases.clone(),
-            SongLuaTimeUnit::Beat,
-            &host.easing_names,
-            &mut overlays,
-        )?;
-    merge_compile_info(&mut out.info, global_info);
     let runtime_mod_ease_tables = read_update_function_tables(&lua, &root, &["mods_ease"])?;
     let update_reads_global_mod_eases =
         update_tree_reads_global(&lua, &root, "mods_ease").map_err(|err| err.to_string())?;
@@ -483,35 +474,18 @@ where
             .any(|runtime| runtime.to_pointer() == global.to_pointer())
             || (update_reads_global_mod_eases && initialized_global_mod_eases.is_some())
     });
-    // Column callbacks and actions share mutable spline state; their sampled
-    // writes already capture the final value from each update.
-    if !global_mod_eases_are_runtime || global_column_offsets.is_empty() {
-        out.eases.extend(global_eases.into_iter().filter(|ease| {
-            !global_mod_eases_are_runtime
-                || !matches!(ease.target, crate::SongLuaEaseTarget::Mod(_))
-        }));
-        out.overlay_eases.extend(global_overlay_eases);
-        out.column_offsets.extend(global_column_offsets);
-    }
-    for table in &runtime_mod_ease_tables {
-        if global_mod_eases
-            .as_ref()
-            .is_some_and(|global| global.to_pointer() == table.to_pointer())
-        {
-            continue;
-        }
+    // The recurring reader owns every callback in its ease table. Probing
+    // endpoints first mutates shared upvalues and bypasses its write order;
+    // table setters also appear unsupported despite being captured in replay.
+    if !global_mod_eases_are_runtime {
         let (eases, overlay_eases, column_offsets, info) = read_eases_for_overlay_actors(
             &lua,
-            Some(table.clone()),
+            global_mod_eases,
             SongLuaTimeUnit::Beat,
             &host.easing_names,
             &mut overlays,
         )?;
-        out.eases.extend(
-            eases
-                .into_iter()
-                .filter(|ease| !matches!(ease.target, crate::SongLuaEaseTarget::Mod(_))),
-        );
+        out.eases.extend(eases);
         out.overlay_eases.extend(overlay_eases);
         out.column_offsets.extend(column_offsets);
         merge_compile_info(&mut out.info, info);

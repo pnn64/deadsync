@@ -975,6 +975,56 @@ fn compare_final_render_states(
 }
 
 #[test]
+fn recurring_ease_tables_match_native_shared_state() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/recurring-ease-table.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, trace.title.clone());
+    context.screen_width = trace.display.logical_width;
+    context.screen_height = trace.display.logical_height;
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join("recurring-ease-table.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile recurring ease tables");
+    let mut parity = compare_semantics(&trace, &compiled, 0, &context);
+    assert_eq!(parity.checks(), 110);
+    parity.section("shared ease state");
+    for track in &trace.operation_tracks {
+        let target = match track.operation.as_str() {
+            "Quad.x" => SongLuaOverlayUpdateTarget::X,
+            "Quad.y" => SongLuaOverlayUpdateTarget::Y,
+            _ => continue,
+        };
+        let index = if track.actor == "def-0002" { 0 } else { 1 };
+        for (_, beat, seconds, args) in &track.samples {
+            let state = compiled_local_states_at(&compiled[0], &context, *beat, *seconds)[index];
+            let actual = if target == SongLuaOverlayUpdateTarget::X {
+                state.x
+            } else {
+                state.y
+            };
+            let expected = value_f32(args.first()).expect("native scalar write");
+            parity.check((actual - expected).abs() < 1e-5, || {
+                format!(
+                    "{} {} at {beat}: expected {expected}, got {actual:?}",
+                    track.actor, track.operation
+                )
+            });
+        }
+    }
+    assert_eq!(parity.checks(), 182);
+    parity.assert_complete("recurring ease table shared state");
+}
+
+#[test]
 fn final_render_samples_unfinished_native_fade() {
     crate::paths::init();
     let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
