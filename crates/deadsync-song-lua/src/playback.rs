@@ -2214,11 +2214,8 @@ fn song_lua_overlay_capture_index_by_name<S: NoteskinSlot + Clone>(
     capture_name: &str,
 ) -> Option<usize> {
     overlays.iter().position(|overlay| {
-        matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. })
-            && overlay
-                .name
-                .as_deref()
-                .is_some_and(|name| name.eq_ignore_ascii_case(capture_name))
+        matches!(&overlay.kind, SongLuaOverlayKind::ActorFrameTexture { capture_name: name, .. }
+            if name.eq_ignore_ascii_case(capture_name))
     })
 }
 
@@ -10823,6 +10820,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                 alpha_buffer,
                 depth_buffer,
                 preserve_texture,
+                ..
             } => {
                 if !overlay_state.visible {
                     continue;

@@ -101,6 +101,22 @@ const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "skew_x",
     "skew_y",
 ];
+const PLAYER_TRANSFORM_TARGETS: [SongLuaOverlayUpdateTarget; 11] = {
+    use SongLuaOverlayUpdateTarget as Target;
+    [
+        Target::X,
+        Target::Y,
+        Target::Z,
+        Target::RotationX,
+        Target::RotationZ,
+        Target::RotationY,
+        Target::ZoomX,
+        Target::ZoomY,
+        Target::ZoomZ,
+        Target::SkewX,
+        Target::SkewY,
+    ]
+};
 
 pub struct SongLuaPerframeEntry {
     pub start: f32,
@@ -521,24 +537,8 @@ fn actor_transform_mask(lua: &Lua, actor: &Table) -> Result<u16, String> {
             mask |= capture_transform_mask(&block.map_err(|err| err.to_string())?)?;
         }
     }
-    use SongLuaOverlayUpdateTarget as Target;
     let captured = crate::lua_util::captured_update_target_mask(lua, actor);
-    for (index, target) in [
-        Target::X,
-        Target::Y,
-        Target::Z,
-        Target::RotationX,
-        Target::RotationZ,
-        Target::RotationY,
-        Target::ZoomX,
-        Target::ZoomY,
-        Target::ZoomZ,
-        Target::SkewX,
-        Target::SkewY,
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    for (index, target) in PLAYER_TRANSFORM_TARGETS.into_iter().enumerate() {
         if captured & (1_u128 << target as usize) != 0 {
             mask |= 1 << index;
         }
@@ -1771,6 +1771,84 @@ struct OverlaySampleScratch {
         SongLuaOverlayUpdateValue,
         SongLuaOverlayUpdateValue,
     )>,
+    retargeted_states: Vec<(usize, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>,
+}
+
+fn retarget_player_tween(
+    scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
+    overlay_index: usize,
+    target: SongLuaOverlayUpdateTarget,
+    value: &SongLuaOverlayUpdateValue,
+    current: &SongLuaOverlayState,
+    seconds: f64,
+) -> Option<SongLuaOverlayUpdateValue> {
+    // Keep current-state sampling, back-tween mutation and inherited axes in
+    // one state transition: a setter must never restart the active tween.
+    if target != SongLuaOverlayUpdateTarget::Zoom && !PLAYER_TRANSFORM_TARGETS.contains(&target) {
+        return None;
+    }
+    let pending = scheduled.iter().rposition(|sample| {
+        sample.overlay_index == overlay_index && sample.end_seconds > seconds
+    })?;
+    let (start, end) = (
+        scheduled[pending].start_seconds,
+        scheduled[pending].end_seconds,
+    );
+    let rendered = scheduled
+        .iter()
+        .rev()
+        .find(|sample| {
+            sample.overlay_index == overlay_index
+                && sample.target == target
+                && sample.start_seconds <= seconds
+                && sample.end_seconds > seconds
+        })
+        .map_or_else(
+            || overlay_state_update_value(current, target),
+            |sample| {
+                lerp_scheduled_value(
+                    &sample.from,
+                    &sample.value,
+                    scheduled_overlay_factor(sample, seconds),
+                )
+            },
+        );
+    if let Some(sample) = scheduled.iter_mut().rev().find(|sample| {
+        sample.overlay_index == overlay_index
+            && sample.target == target
+            && sample.start_seconds == start
+            && sample.end_seconds == end
+    }) {
+        sample.value = value.clone();
+        return Some(rendered);
+    }
+    let pending = &scheduled[pending];
+    let from = scheduled
+        .iter()
+        .rev()
+        .find(|sample| {
+            sample.overlay_index == overlay_index
+                && sample.target == target
+                && sample.end_seconds <= pending.start_seconds
+        })
+        .map_or_else(
+            || overlay_state_update_value(current, target),
+            |sample| sample.value.clone(),
+        );
+    let replacement = SongLuaScheduledOverlaySample {
+        overlay_index,
+        target,
+        start_seconds: pending.start_seconds,
+        end_seconds: pending.end_seconds,
+        start_beat: pending.start_beat,
+        end_beat: pending.end_beat,
+        easing: pending.easing.clone(),
+        opt1: pending.opt1,
+        from,
+        value: value.clone(),
+    };
+    scheduled.push(replacement);
+    Some(rendered)
 }
 
 fn append_scheduled_overlay_updates(
@@ -1921,10 +1999,12 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
     scratch.captured_tracks.clear();
     scratch.captured_tracks.resize(tracks.len(), false);
     scratch.message_targets.clear();
+    scratch.retargeted_states.clear();
     let OverlaySampleScratch {
         reset_indices,
         captured_tracks,
         message_targets,
+        retargeted_states,
         ..
     } = scratch;
     crate::lua_util::drain_overlay_update_capture(
@@ -1948,6 +2028,18 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                 // Player Lua getters retain destinations. Their render state
                 // must also retain immediate writes before a delayed return.
                 for (target, value) in values {
+                    if let Some(rendered) = retarget_player_tween(
+                        scheduled_samples,
+                        overlay_index,
+                        *target,
+                        value,
+                        &from_states[overlay_index],
+                        next_seconds,
+                    ) {
+                        // Actor setters modify the back tween's destination.
+                        // This frame has already advanced its current state.
+                        retargeted_states.push((overlay_index, *target, rendered));
+                    }
                     set_overlay_state_update_value(
                         &mut update_states[overlay_index],
                         *target,
@@ -2673,6 +2765,9 @@ pub fn compile_update_functions<Kind>(
             &scheduled_overlay_samples,
             seconds,
         )?;
+        for (index, target, value) in overlay_sample_scratch.retargeted_states.drain(..) {
+            set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
+        }
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         let mut next_players = current_perframe_player_states(&player_tables)?;

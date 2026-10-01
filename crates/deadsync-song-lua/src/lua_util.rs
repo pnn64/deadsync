@@ -13293,14 +13293,8 @@ fn global_actor_references(lua: &Lua) -> Result<HashSet<usize>, String> {
 }
 
 pub fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
-    if let Some(capture_name) = actor
-        .get::<Option<String>>("__songlua_aft_capture_name")?
-        .filter(|name| !name.trim().is_empty())
-    {
-        return Ok(Some(capture_name));
-    }
     Ok(actor
-        .get::<Option<String>>("Name")?
+        .get::<Option<String>>("__songlua_aft_capture_name")?
         .filter(|name| !name.trim().is_empty()))
 }
 
@@ -13456,7 +13450,7 @@ where
     }
     let message_commands = captured_commands.commands;
     let message_sounds = captured_commands.sounds;
-    let mut name = actor
+    let name = actor
         .get::<Option<String>>("Name")
         .map_err(|err| err.to_string())?;
 
@@ -13486,8 +13480,10 @@ where
         }
         SongLuaOverlayKind::ActorFrame
     } else if actor_type.eq_ignore_ascii_case("ActorFrameTexture") {
-        name = actor_aft_capture_name(actor).map_err(|err| err.to_string())?;
         SongLuaOverlayKind::ActorFrameTexture {
+            capture_name: actor_aft_capture_name(actor)
+                .map_err(|err| err.to_string())?
+                .ok_or_else(|| "ActorFrameTexture has no texture name".to_string())?,
             alpha_buffer: actor
                 .get::<Option<bool>>("__songlua_aft_alpha_buffer")
                 .map_err(|err| err.to_string())?

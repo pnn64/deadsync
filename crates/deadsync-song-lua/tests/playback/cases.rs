@@ -1405,11 +1405,12 @@ fn test_proxy_overlay(player_index: usize) -> SongLuaOverlayActor {
 fn test_capture_overlay(name: &str) -> SongLuaOverlayActor {
     SongLuaOverlayActor {
         kind: SongLuaOverlayKind::ActorFrameTexture {
+            capture_name: name.to_string(),
             alpha_buffer: false,
             depth_buffer: false,
             preserve_texture: false,
         },
-        name: Some(name.to_string()),
+        name: Some(format!("{name} actor")),
         parent_index: None,
         initial_state: SongLuaOverlayState::default(),
         message_commands: Vec::new(),
@@ -1419,6 +1420,7 @@ fn test_capture_overlay(name: &str) -> SongLuaOverlayActor {
 fn test_alpha_capture_overlay(name: &str) -> SongLuaOverlayActor {
     let mut overlay = test_capture_overlay(name);
     overlay.kind = SongLuaOverlayKind::ActorFrameTexture {
+        capture_name: name.to_string(),
         alpha_buffer: true,
         depth_buffer: false,
         preserve_texture: false,
@@ -1664,6 +1666,7 @@ fn partial_translucent_and_alpha_afts_keep_original_screen_sources() {
     assert!(!requests_for(&overlays, &mut visits).underlay);
     overlays[4].initial_state.depth_test = false;
     overlays[0].kind = SongLuaOverlayKind::ActorFrameTexture {
+        capture_name: "ScreenCapture".to_string(),
         alpha_buffer: true,
         depth_buffer: false,
         preserve_texture: false,

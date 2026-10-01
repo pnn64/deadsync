@@ -1890,6 +1890,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         tracks: Vec<SongLuaOverlayRuntimeUpdateTrack>,
     },
     ActorFrameTexture {
+        capture_name: String,
         alpha_buffer: bool,
         depth_buffer: bool,
         preserve_texture: bool,
@@ -7805,6 +7806,42 @@ return Def.ActorFrame{
         ]) {
             let state = &overlay.initial_state;
             assert_eq!([state.x, state.y, state.z, state.zoom], expected);
+        }
+    }
+
+    #[test]
+    fn compile_song_lua_retargets_player_tween_destinations() {
+        let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua")
+            .canonicalize()
+            .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Player Tween Destinations");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 4.0;
+        let compiled =
+            test_compile_song_lua(&song_dir.join("player-tween-destination.lua"), &context)
+                .unwrap();
+        for (beat, zoom_x, zoom_y) in [
+            (1.5, 1.375, 1.0),
+            (2.0, 1.25, 1.0),
+            (2.5, 0.5625, 0.625),
+            (3.5, 0.25, 0.5),
+        ] {
+            for (target, expected) in [
+                (SongLuaEaseTarget::PlayerZoomX, zoom_x),
+                (SongLuaEaseTarget::PlayerZoomY, zoom_y),
+            ] {
+                let ease = compiled.eases.iter().find(|ease| {
+                    ease.player == Some(1)
+                        && ease.target == target
+                        && (ease.start - beat).abs() < 0.00001
+                });
+                let actual = ease.map_or(1.0, |ease| ease.from);
+                assert!(
+                    (actual - expected).abs() < 0.00001,
+                    "{target:?} at {beat}: {ease:?}"
+                );
+            }
         }
     }
 
@@ -18129,6 +18166,7 @@ return Def.ActorFrame{
                 alpha_buffer: true,
                 depth_buffer: true,
                 preserve_texture: true,
+                ..
             }
         ));
         assert!(matches!(
@@ -18140,7 +18178,7 @@ return Def.ActorFrame{
         assert!(matches!(
             compiled.overlays[2].kind,
             SongLuaOverlayKind::AftSprite { ref capture_name }
-                if capture_name == "CaptureAFT"
+                if capture_name == "ActorFrameTexture 1"
         ));
         assert_eq!(
             compiled.overlays[2].initial_state.blend,
@@ -18151,6 +18189,58 @@ return Def.ActorFrame{
             compiled.overlays[2].initial_state.effect_magnitude,
             [8.0, 4.0, 0.0]
         );
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_aft_actor_and_texture_names() {
+        let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua")
+            .canonicalize()
+            .unwrap();
+        let compiled = test_compile_song_lua(
+            &song_dir.join("aft-identity.lua"),
+            &SongLuaCompileContext::new(&song_dir, "AFT identity"),
+        )
+        .unwrap();
+        let captures = compiled
+            .overlays
+            .iter()
+            .filter_map(|overlay| {
+                let SongLuaOverlayKind::ActorFrameTexture { capture_name, .. } = &overlay.kind
+                else {
+                    return None;
+                };
+                Some((overlay.name.as_deref(), capture_name.as_str()))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            captures,
+            [
+                (Some("ActorLabel"), "TextureLabel"),
+                (None, "ActorFrameTexture 2")
+            ]
+        );
+        for (name, expected) in [("NamedLength", 10.0), ("AnonymousLength", 0.0)] {
+            let overlay = compiled
+                .overlays
+                .iter()
+                .find(|overlay| overlay.name.as_deref() == Some(name))
+                .unwrap();
+            assert_eq!(overlay.initial_state.x, expected);
+        }
+        for (name, expected) in [
+            ("NamedTexture", "TextureLabel"),
+            ("AnonymousTexture", "ActorFrameTexture 2"),
+        ] {
+            let overlay = compiled
+                .overlays
+                .iter()
+                .find(|overlay| overlay.name.as_deref() == Some(name))
+                .unwrap();
+            assert!(
+                matches!(&overlay.kind, SongLuaOverlayKind::AftSprite { capture_name } if capture_name == expected)
+            );
+        }
     }
 
     #[test]
@@ -18215,10 +18305,12 @@ return Def.ActorFrame{
             panic!("expected anonymous AFT output sprite");
         };
         assert!(capture_name.starts_with("ActorFrameTexture "));
-        assert_eq!(
-            compiled.overlays[0].name.as_deref(),
-            Some(capture_name.as_str())
-        );
+        assert_eq!(compiled.overlays[0].name, None);
+        assert!(matches!(
+            &compiled.overlays[0].kind,
+            SongLuaOverlayKind::ActorFrameTexture { capture_name: target, .. }
+                if target == capture_name
+        ));
     }
 
     #[test]
