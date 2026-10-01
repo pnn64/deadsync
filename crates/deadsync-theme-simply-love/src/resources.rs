@@ -268,6 +268,26 @@ pub const GRADE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("grades/goldstar (stretch).png"),
 ];
 
+/// The Content Browser's tab icons and its two placeholder graphics.
+///
+/// One per tab, in the tab strip's own order, plus the download arrow the
+/// detail page's button carries, the site's stand-in for a song with no
+/// jacket, and the page dot under the featured grid. All 96x96 and drawn far
+/// smaller -- together they are under ten kilobytes.
+pub const CONTENT_BROWSER_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
+    texture_asset("content_browser/search.png"),
+    texture_asset("content_browser/pad.png"),
+    texture_asset("content_browser/keyboard.png"),
+    texture_asset("content_browser/doubles.png"),
+    texture_asset("content_browser/stamina.png"),
+    texture_asset("content_browser/tech.png"),
+    texture_asset("content_browser/year.png"),
+    texture_asset("content_browser/installed.png"),
+    texture_asset("content_browser/download.png"),
+    texture_asset("content_browser/nobanner.png"),
+    texture_asset("content_browser/dot.png"),
+];
+
 pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("submit/LoadingSpinner_10x3.png"),
     texture_asset("submit/Hourglass_10x3.png"),
@@ -672,6 +692,7 @@ pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
         .chain(SRPG10_EVAL_TEXTURES.into_iter().map(texture_asset))
         .chain(GRADE_TEXTURE_ASSETS.iter().copied())
         .chain(SUBMIT_TEXTURE_ASSETS.iter().copied())
+        .chain(CONTENT_BROWSER_TEXTURE_ASSETS.iter().copied())
 }
 
 #[inline(always)]

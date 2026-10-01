@@ -81,6 +81,14 @@ pub(crate) struct Service {
 }
 
 impl Service {
+    /// Whether a job is running. A new one is refused until it has finished
+    /// and been read to the end, so a caller with work to hand over waits.
+    pub(crate) const fn is_busy(&self) -> bool {
+        self.rx.is_some()
+    }
+}
+
+impl Service {
     pub(crate) fn start_initialization(
         &mut self,
         songs_root: PathBuf,
@@ -630,6 +638,327 @@ pub(crate) fn delete_song(
         ));
     }
     Ok(deadsync_simfile::runtime_cache::get_song_cache().clone())
+}
+
+/// What actually happened when a pack was deleted.
+///
+/// Deleting a pack is N directory removals, and any of them can fail on its
+/// own -- a locked handle on the song being previewed is the ordinary case. So
+/// this reports rather than pretending it is all-or-nothing.
+pub(crate) struct PackDeletion {
+    pub(crate) removed: usize,
+    /// Songs that were left where they were, and why.
+    pub(crate) kept: Vec<String>,
+}
+
+/// Permanently delete one installed pack.
+///
+/// Addressed by group name rather than by path: the caller is a theme screen,
+/// and a request carrying a path would let a caller-supplied string reach
+/// `remove_dir_all`. The name is resolved against the live catalog here, and
+/// every directory removed is one the catalog already knew about.
+///
+/// Songs go first, each through the same guards a single-song delete uses --
+/// so a read-only additional folder is refused per song, exactly as it is
+/// there. The pack's own directory is only removed once its songs are gone,
+/// and only if it passes a containment check of its own.
+///
+/// `bundled_roots` is the program's own song folder, which is scanned like
+/// any other but is never the player's to delete from.
+pub(crate) fn delete_pack(
+    group_name: &str,
+    song_scan_roots: &[PathBuf],
+    bundled_roots: &[PathBuf],
+) -> Result<PackDeletion, String> {
+    let wanted = group_name.to_lowercase();
+    let simfiles: Vec<PathBuf> = {
+        let cache = deadsync_simfile::runtime_cache::get_song_cache();
+        let pack = cache
+            .iter()
+            .find(|pack| pack.group_name.to_lowercase() == wanted)
+            .ok_or_else(|| format!("no pack named '{group_name}' in the live catalog"))?;
+        pack.songs
+            .iter()
+            .map(|song| song.simfile_path.clone())
+            .collect()
+    };
+
+    let mut removed = 0usize;
+    let mut kept: Vec<String> = Vec::new();
+    let mut pack_dirs: Vec<PathBuf> = Vec::new();
+
+    for simfile in &simfiles {
+        if !deadsync_config::runtime::song_path_is_writable(simfile) {
+            kept.push(format!("{} (read-only song folder)", simfile.display()));
+            continue;
+        }
+        let song_dir = match validated_song_dir(simfile, song_scan_roots) {
+            Ok(dir) => dir,
+            Err(error) => {
+                kept.push(error);
+                continue;
+            }
+        };
+        if let Err(error) = std::fs::remove_dir_all(&song_dir) {
+            kept.push(format!("{} ({error})", song_dir.display()));
+            continue;
+        }
+        // Only tell the catalog about what actually left the disk.
+        deadsync_simfile::runtime_cache::remove_song(simfile);
+        removed += 1;
+        if let Some(parent) = song_dir.parent()
+            && !pack_dirs.contains(&parent.to_path_buf())
+        {
+            pack_dirs.push(parent.to_path_buf());
+        }
+    }
+
+    // The pack folder itself, and whatever else was loose in it -- a banner, a
+    // Pack.ini. Only once every song under it is gone: a pack that kept a song
+    // back is a pack that still exists.
+    if kept.is_empty() {
+        for dir in &pack_dirs {
+            match validated_pack_dir(dir, song_scan_roots, bundled_roots) {
+                Ok(dir) => {
+                    if let Err(error) = std::fs::remove_dir_all(&dir) {
+                        kept.push(format!("{} ({error})", dir.display()));
+                    }
+                }
+                Err(error) => kept.push(error),
+            }
+        }
+    }
+
+    // No cache handed back: `remove_song` bumps the cache generation itself,
+    // and the browser rebuilds its library list from that. Returning a
+    // snapshot as well would give it two sources for one fact.
+    Ok(PackDeletion { removed, kept })
+}
+
+/// Record how a pack was synced, by writing its `Pack.ini`.
+///
+/// The engine reads `SyncOffset` from there and shifts the pack's timing by
+/// -9 ms for `ITG`. Two details are load-bearing and easy to get wrong:
+/// `rssp` throws the whole file away unless `Version=` is non-empty, and it
+/// matches only the exact strings `NULL` and `ITG`.
+///
+/// An existing file is edited rather than replaced -- it may carry a display
+/// title or a series that somebody meant to keep.
+pub(crate) fn set_pack_sync(
+    group_name: &str,
+    itg: bool,
+    song_scan_roots: &[PathBuf],
+    bundled_roots: &[PathBuf],
+) -> Result<PathBuf, String> {
+    let simfile = {
+        let cache = deadsync_simfile::runtime_cache::get_song_cache();
+        let pack = cache
+            .iter()
+            .find(|pack| pack.group_name.to_lowercase() == group_name.to_lowercase())
+            .ok_or_else(|| format!("no pack named '{group_name}' in the live catalog"))?;
+        pack.songs
+            .first()
+            .map(|song| song.simfile_path.clone())
+            .ok_or_else(|| format!("pack '{group_name}' has no songs to locate it by"))?
+    };
+    if !deadsync_config::runtime::song_path_is_writable(&simfile) {
+        return Err(format!("'{group_name}' is in a read-only song folder"));
+    }
+
+    // Located the same way a delete locates it: from a song the catalog
+    // already holds, resolved, and proved to sit directly inside a song root.
+    let song_dir = validated_song_dir(&simfile, song_scan_roots)?;
+    let pack_dir = song_dir
+        .parent()
+        .ok_or_else(|| format!("song has no pack folder: {}", song_dir.display()))?;
+    let pack_dir = validated_pack_dir(pack_dir, song_scan_roots, bundled_roots)?;
+
+    let path = pack_dir.join("Pack.ini");
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let updated = pack_ini_with_sync(existing.as_str(), group_name, itg);
+    std::fs::write(&path, updated)
+        .map_err(|error| format!("could not write '{}': {error}", path.display()))?;
+    Ok(pack_dir)
+}
+
+/// The `Pack.ini` text for a pack, with its `SyncOffset` set.
+///
+/// Written as a small line editor rather than a template so an existing file
+/// keeps everything else it had.
+fn pack_ini_with_sync(existing: &str, pack_name: &str, itg: bool) -> String {
+    let wanted = if itg { "ITG" } else { "NULL" };
+    if existing.trim().is_empty() {
+        // A minimal file the parser will accept. `Version` is not decoration:
+        // without it the whole file is discarded and the sync value with it.
+        return format!("[Group]\nVersion=1\nDisplayTitle={pack_name}\nSyncOffset={wanted}\n");
+    }
+
+    let mut out = String::with_capacity(existing.len() + 32);
+    let mut wrote_sync = false;
+    let mut has_version = false;
+    for line in existing.lines() {
+        let key = line.split('=').next().unwrap_or("").trim();
+        if key.eq_ignore_ascii_case("SyncOffset") {
+            out.push_str(format!("SyncOffset={wanted}").as_str());
+            out.push('\n');
+            wrote_sync = true;
+            continue;
+        }
+        if key.eq_ignore_ascii_case("Version") {
+            has_version = !line.split('=').nth(1).unwrap_or("").trim().is_empty();
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if !has_version {
+        out.push_str("Version=1\n");
+    }
+    if !wrote_sync {
+        out.push_str(format!("SyncOffset={wanted}\n").as_str());
+    }
+    out
+}
+
+#[cfg(test)]
+mod pack_sync_tests {
+    use super::pack_ini_with_sync;
+
+    /// `rssp` throws the whole file away unless `Version=` is non-empty, so a
+    /// file written without one records the sync value and loses it.
+    #[test]
+    fn a_new_file_carries_the_version_the_parser_demands() {
+        let text = pack_ini_with_sync("", "Some Pack", true);
+        assert!(text.starts_with("[Group]\n"));
+        assert!(text.contains("\nVersion=1\n"), "or the file is discarded");
+        assert!(text.contains("\nSyncOffset=ITG\n"));
+        assert!(text.contains("DisplayTitle=Some Pack"));
+    }
+
+    /// The parser matches only the exact strings `NULL` and `ITG`; anything
+    /// else falls through to Default and the pack goes back to the machine
+    /// setting without saying so.
+    #[test]
+    fn the_value_is_spelled_the_only_way_the_parser_accepts() {
+        assert!(pack_ini_with_sync("", "P", false).contains("SyncOffset=NULL"));
+        assert!(pack_ini_with_sync("", "P", true).contains("SyncOffset=ITG"));
+    }
+
+    /// An existing file is edited, not replaced: it may carry a display title
+    /// or a series somebody meant to keep.
+    #[test]
+    fn an_existing_file_keeps_everything_but_its_sync_line() {
+        let existing =
+            "[Group]\nVersion=1\nDisplayTitle=Kept Title\nSeries=Kept Series\nSyncOffset=NULL\n";
+        let text = pack_ini_with_sync(existing, "Ignored", true);
+        assert!(text.contains("DisplayTitle=Kept Title"));
+        assert!(text.contains("Series=Kept Series"));
+        assert!(text.contains("SyncOffset=ITG"));
+        assert!(!text.contains("SyncOffset=NULL"), "the old value is gone");
+        assert_eq!(text.matches("SyncOffset=").count(), 1, "and not doubled");
+    }
+
+    /// A file that never declared a sync gains one; a file whose `Version` is
+    /// empty gains that too, because without it nothing else in it counts.
+    #[test]
+    fn a_file_missing_either_key_gains_it() {
+        let text = pack_ini_with_sync("[Group]\nVersion=1\nDisplayTitle=X\n", "X", false);
+        assert!(text.contains("SyncOffset=NULL"));
+
+        let text = pack_ini_with_sync("[Group]\nVersion=\nDisplayTitle=X\n", "X", true);
+        assert!(
+            text.contains("\nVersion=1\n"),
+            "an empty Version is no Version"
+        );
+        assert!(text.contains("SyncOffset=ITG"));
+    }
+
+    /// The key is matched without regard to case, as the parser matches it.
+    #[test]
+    fn an_oddly_cased_key_is_replaced_rather_than_duplicated() {
+        let text = pack_ini_with_sync("[Group]\nVersion=1\nsyncoffset=NULL\n", "X", true);
+        assert_eq!(text.to_lowercase().matches("syncoffset=").count(), 1);
+        assert!(text.contains("SyncOffset=ITG"));
+    }
+}
+
+/// Resolve a pack directory and prove it is one, before anything is removed.
+///
+/// `strip_prefix` is purely lexical, which is the trap here: `{songs}/Pack/..`
+/// strips to `Pack/..` -- two components, and it would sail through a naive
+/// depth test while pointing at the songs root itself. So the path is resolved
+/// first and a failure to resolve is fatal, never a fall back to the raw path.
+fn validated_pack_dir(
+    candidate: &Path,
+    song_scan_roots: &[PathBuf],
+    bundled_roots: &[PathBuf],
+) -> Result<PathBuf, String> {
+    // A link is not the thing it points at. Refused before resolving, because
+    // resolving is exactly what would hide it.
+    if std::fs::symlink_metadata(candidate)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        return Err(format!(
+            "pack directory is a link, not a folder: {}",
+            candidate.display()
+        ));
+    }
+    let pack_dir = std::fs::canonicalize(candidate).map_err(|error| {
+        format!(
+            "could not resolve pack directory '{}': {error}",
+            candidate.display()
+        )
+    })?;
+
+    // App-bundled content. It sits inside a scan root and is writable, but it
+    // belongs to the install rather than to the player's library, and "delete
+    // my pack" never means "modify the installed program".
+    for bundled in bundled_roots {
+        if let Ok(bundled) = std::fs::canonicalize(bundled)
+            && pack_dir.starts_with(&bundled)
+        {
+            return Err(format!(
+                "pack is part of the installed program: {}",
+                pack_dir.display()
+            ));
+        }
+    }
+
+    let mut roots: Vec<PathBuf> = Vec::with_capacity(song_scan_roots.len());
+    for root in song_scan_roots {
+        if let Ok(root) = std::fs::canonicalize(root) {
+            roots.push(root);
+        }
+    }
+    // A scan root is never a pack, however it is reached. Song folders may be
+    // nested inside one another as configured roots, so this is checked
+    // against every root rather than only the one it is measured from.
+    if roots.contains(&pack_dir) {
+        return Err(format!(
+            "refusing to delete a song folder root: {}",
+            pack_dir.display()
+        ));
+    }
+
+    for root in &roots {
+        let Ok(relative) = pack_dir.strip_prefix(root) else {
+            continue;
+        };
+        // Exactly root/pack, and every step of it an ordinary name.
+        let mut parts = relative.components();
+        let Some(std::path::Component::Normal(_)) = parts.next() else {
+            continue;
+        };
+        if parts.next().is_some() {
+            continue;
+        }
+        return Ok(pack_dir);
+    }
+
+    Err(format!(
+        "pack directory is not directly inside a song folder: {}",
+        pack_dir.display()
+    ))
 }
 
 fn validated_song_dir(simfile_path: &Path, song_scan_roots: &[PathBuf]) -> Result<PathBuf, String> {

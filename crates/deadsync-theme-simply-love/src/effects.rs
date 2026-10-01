@@ -59,6 +59,23 @@ pub enum SimplyLoveContentRequest {
     DeleteSong {
         simfile_path: PathBuf,
     },
+    /// Permanently delete an installed pack.
+    ///
+    /// Carries the group name and never a path: the shell resolves it against
+    /// the live catalog, so nothing a screen can compose reaches the
+    /// filesystem.
+    DeletePack {
+        group_name: String,
+    },
+    /// Write a `Pack.ini` `SyncOffset` for an installed pack, so the engine
+    /// knows whether it was authored ITG-synced or null-synced.
+    ///
+    /// Same rule as the delete above: a group name, never a path.
+    SetPackSync {
+        group_name: String,
+        /// `true` writes `SyncOffset=ITG`, `false` writes `SyncOffset=NULL`.
+        itg: bool,
+    },
     /// Ask the shell to cut short the in-progress startup `ReplayGain` analysis
     /// so the loading screen can advance without waiting for every song.
     SkipReplayGain,
@@ -243,6 +260,8 @@ pub enum SimplyLoveOnlineRequest {
     RetryUnlockDownloads,
     EnsureStepManiaOnlineCatalog,
     RefreshStepManiaOnlineCatalog,
+    /// Ask the catalogue for the next page of packs, newest first.
+    LoadMoreStepManiaOnlinePacks,
     DownloadStepManiaOnlinePack {
         pack_id: u64,
     },
