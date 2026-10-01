@@ -2,10 +2,13 @@ pub mod arrowcloud;
 pub mod downloads;
 pub mod groovestats;
 pub mod lobbies;
+pub mod pack_page;
 pub mod player_leaderboards;
 pub mod runtime;
 pub mod score_compat;
 pub mod score_import;
+pub mod smo_details;
+pub mod smo_search;
 pub mod srpg_shop;
 pub mod stepmaniaonline;
 
