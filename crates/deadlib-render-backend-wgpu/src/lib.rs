@@ -3443,7 +3443,9 @@ fn build_tmesh_pipeline(
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: use_depth.then_some(wgpu::Face::Back),
+            // Culling is selected per instance in the fragment shader.
+            // Hold strips use depth testing while remaining two-sided.
+            cull_mode: None,
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
@@ -3809,11 +3811,11 @@ mod tests {
         let mut vertices = Vec::new();
         for (points, uv) in [
             (
-                [[-0.8, -0.8, 0.2], [0.8, -0.8, 0.2], [0.0, 0.8, 0.2]],
+                [[-0.8, -0.8, 0.0], [0.8, -0.8, 0.0], [0.0, 0.8, 0.0]],
                 [0.25, 0.5],
             ),
             (
-                [[-0.8, -0.8, -0.2], [0.0, 0.8, -0.2], [0.8, -0.8, -0.2]],
+                [[-0.8, -0.8, 0.0], [0.0, 0.8, 0.0], [0.8, -0.8, 0.0]],
                 [0.75, 0.5],
             ),
         ] {
@@ -3857,29 +3859,37 @@ mod tests {
                 clear_depth: false,
             })],
         };
-        for (transform, expected) in [
-            (Matrix4::IDENTITY, [0, 255, 0]),
-            (
-                Matrix4::from_rotation_z(std::f32::consts::FRAC_PI_2),
-                [0, 255, 0],
-            ),
-            (Matrix4::from_rotation_y(std::f32::consts::PI), [255; 3]),
-        ] {
-            for cull in [false, true] {
-                let mut instance = TexturedMeshInstanceRaw::new(
-                    transform, [1.0; 4], [1.0; 2], [0.0; 2], [0.0; 2], false,
-                );
-                instance.cull_back = f32::from(cull);
-                frame.tmesh_instances[0] = instance;
-                request_screenshot(&mut state);
-                draw(&mut state, &frame, &textures, false).expect("render fixture");
-                let captured = capture_frame(&mut state).expect("read fixture pixels");
-                assert_eq!(
-                    captured
-                        .get_pixel(captured.width() / 2, captured.height() / 2)
-                        .0[..3],
-                    if cull { expected } else { [255; 3] }
-                );
+        // Depth testing must preserve the same per-instance cull choice.
+        for depth in [false, true] {
+            let DrawOp::TexturedMesh(run) = &mut frame.ops[0] else {
+                unreachable!()
+            };
+            run.depth_test = depth;
+            for (transform, expected) in [
+                (Matrix4::IDENTITY, [0, 255, 0]),
+                (
+                    Matrix4::from_rotation_z(std::f32::consts::FRAC_PI_2),
+                    [0, 255, 0],
+                ),
+                (Matrix4::from_rotation_y(std::f32::consts::PI), [255; 3]),
+            ] {
+                for cull in [false, true] {
+                    let mut instance = TexturedMeshInstanceRaw::new(
+                        transform, [1.0; 4], [1.0; 2], [0.0; 2], [0.0; 2], false,
+                    );
+                    instance.cull_back = f32::from(cull);
+                    frame.tmesh_instances[0] = instance;
+                    request_screenshot(&mut state);
+                    draw(&mut state, &frame, &textures, false).expect("render fixture");
+                    let captured = capture_frame(&mut state).expect("read fixture pixels");
+                    assert_eq!(
+                        captured
+                            .get_pixel(captured.width() / 2, captured.height() / 2)
+                            .0[..3],
+                        if cull { expected } else { [255; 3] },
+                        "depth={depth} cull={cull} transform={transform:?}"
+                    );
+                }
             }
         }
     }

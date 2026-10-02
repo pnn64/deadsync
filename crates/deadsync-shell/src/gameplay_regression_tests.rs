@@ -3844,6 +3844,179 @@ return Def.ActorFrame{
         }
     }
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires the local lua-songs corpus and a GPU with surface readback"]
+    fn lake_hold_bodies_draw_under_lua_player_callback() {
+        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../lua-songs/Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc");
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("capture event loop");
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    winit::window::Window::default_attributes()
+                        .with_visible(false)
+                        .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720)),
+                )
+                .expect("hidden capture window"),
+        );
+        let backend_type = std::env::var("DEADSYNC_LAKE_BACKEND")
+            .unwrap_or_else(|_| "vulkan-wgpu".to_owned())
+            .parse::<deadlib_render_core::BackendType>()
+            .expect("capture backend");
+        let mut backend = deadlib_render::create_backend(
+            backend_type,
+            window,
+            space::Metrics::centered(854.0, 480.0).projection(),
+            false,
+            deadlib_render_core::PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .expect("capture backend");
+        for skin in ["cel", "lambda"] {
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    let metrics = space::Metrics::centered(854.0, 480.0);
+                    space::set_current_metrics(metrics);
+                    space::set_current_window_px(1280, 720);
+                    space::set_overscan(0, 0, 0, 0);
+                    let mut profiles = [
+                        profile_data::Profile::default(),
+                        profile_data::Profile::default(),
+                    ];
+                    profiles[0].noteskin = profile_data::NoteSkin::new(skin);
+                    profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                    let mut state = build_test_state(
+                        &simfile,
+                        GameplayViewport::new(1280.0, 720.0),
+                        GameplaySession::default(),
+                        profiles,
+                    );
+                    let index = state
+                        .chart_runtime
+                        .notes
+                        .iter()
+                        .position(|note| note.note_type == NoteType::Hold)
+                        .expect("Lake hold");
+                    let head_ns = state.chart_runtime.note_time_cache_ns[index];
+                    let tail_ns =
+                        cached_hold_end_time_ns(state.chart_runtime.hold_end_time_cache_ns[index])
+                            .expect("hold tail");
+                    let column = state.chart_runtime.notes[index].column;
+                    let mut assets = fixture_assets();
+                    prewarm_gpu_noteskins(&state, &mut assets, &mut backend)
+                        .expect("noteskin textures");
+                    let mut body_handles = Vec::new();
+                    for visual in &state.noteskin_assets.noteskin[0]
+                        .as_ref()
+                        .expect("noteskin")
+                        .hold_columns
+                    {
+                        for slot in [visual.body_inactive.as_ref(), visual.body_active.as_ref()]
+                            .into_iter()
+                            .flatten()
+                        {
+                            body_handles
+                                .push(assets.texture_context().texture_handle(slot.texture_key()));
+                        }
+                    }
+                    for held in [false, true] {
+                        let now_ns = head_ns + if held { 100_000_000 } else { -100_000_000 };
+                        set_fixture_time(&mut state, now_ns as f32 / 1_000_000_000.0);
+                        state.set_active_hold(
+                            column,
+                            held.then_some(deadsync_gameplay::ActiveHold {
+                                note_index: index,
+                                start_time_ns: head_ns,
+                                end_time_ns: tail_ns,
+                                note_type: NoteType::Hold,
+                                let_go: false,
+                                is_pressed: true,
+                                life: 1.0,
+                                last_update_time_ns: now_ns,
+                            }),
+                        );
+                        let mut frame = compose_fixture_frame_with_textures(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut Vec::new(),
+                            &mut compose::TextLayoutCache::default(),
+                            &mut compose::ComposeScratch::default(),
+                            assets.texture_context(),
+                        );
+                        let bodies = frame
+                            .ops
+                            .iter()
+                            .filter(|op| match op {
+                                DrawOp::Sprite(run) => body_handles.contains(&run.texture_handle),
+                                DrawOp::TexturedMesh(run) => {
+                                    body_handles.contains(&run.texture_handle)
+                                }
+                                _ => false,
+                            })
+                            .count();
+                        assert!(
+                            bodies > 0,
+                            "Lake {skin} held={held}: no hold body reaches the renderer"
+                        );
+                        backend.request_screenshot();
+                        backend
+                            .draw(&frame, assets.textures(), false)
+                            .expect("draw Lake");
+                        let image = backend.capture_frame().expect("Lake pixels");
+                        if let Some(output) = std::env::var_os("DEADSYNC_LAKE_CAPTURE_DIR") {
+                            let output = PathBuf::from(output);
+                            fs::create_dir_all(&output).expect("capture directory");
+                            image
+                                .save(
+                                    output.join(format!(
+                                        "lake-hold-{skin}-{backend_type}-{held}.png"
+                                    )),
+                                )
+                                .expect("save capture");
+                        }
+                        frame.ops.retain(|op| match op {
+                            DrawOp::Sprite(run) => !body_handles.contains(&run.texture_handle),
+                            DrawOp::TexturedMesh(run) => {
+                                !body_handles.contains(&run.texture_handle)
+                            }
+                            _ => true,
+                        });
+                        backend.request_screenshot();
+                        backend
+                            .draw(&frame, assets.textures(), false)
+                            .expect("draw without bodies");
+                        let without = backend.capture_frame().expect("without body pixels");
+                        let changed = image
+                            .pixels()
+                            .zip(without.pixels())
+                            .filter(|(a, b)| a != b)
+                            .count();
+                        eprintln!("Lake {skin} {backend_type} held={held}: {changed} body pixels");
+                        assert!(
+                            changed > 0,
+                            "Lake {skin} {backend_type} held={held}: composed hold bodies draw no pixels"
+                        );
+                    }
+                    let mut textures = assets.take_textures();
+                    backend.dispose_textures(&mut textures);
+                },
+            );
+        }
+        backend.cleanup();
+    }
+
     #[test]
     #[ignore = "requires the local lua-songs reference corpus"]
     fn delightful_day_player_proxy_draws_noteskin_instances() {
