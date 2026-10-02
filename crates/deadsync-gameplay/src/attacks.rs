@@ -321,13 +321,16 @@ pub fn build_attack_mask_windows_for_mode(
         let Some(raw) = chart_attacks else {
             return Vec::new();
         };
-        let mut windows = Vec::with_capacity(ChartAttackChunks::new(raw).count());
+        let mut windows = Vec::new();
         for attack in ChartAttackChunks::new(raw).filter_map(parse_chart_attack_chunk) {
             if let Some(window) = attack_mask_window_from_values(
                 attack.start_second,
                 attack.len_seconds,
                 parse_attack_mods(attack.mods),
             ) {
+                if windows.is_empty() {
+                    windows.reserve_exact(ChartAttackChunks::new(raw).count());
+                }
                 windows.push(window);
             }
         }
@@ -3529,55 +3532,83 @@ fn song_lua_extend_column_offset_tails_nonfinite(out: &mut [SongLuaColumnOffsetW
 }
 
 pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
-    const SAME_TICK_EPSILON: f32 = 0.001;
-
     if out.iter().any(|window| !window.start_second.is_finite()) {
         song_lua_extend_column_offset_tails_nonfinite(out);
         return;
     }
-
-    with_song_lua_tail_indices(out.len(), |indices| {
-        indices.sort_unstable_by(|&left, &right| {
-            out[left]
-                .column
-                .cmp(&out[right].column)
-                .then_with(|| out[left].target.cmp(&out[right].target))
-                .then_with(|| out[left].start_second.total_cmp(&out[right].start_second))
-                .then_with(|| left.cmp(&right))
+    let compare = |left: &SongLuaColumnOffsetWindowRuntime,
+                   right: &SongLuaColumnOffsetWindowRuntime| {
+        left.column
+            .cmp(&right.column)
+            .then_with(|| left.target.cmp(&right.target))
+            .then_with(|| left.start_second.total_cmp(&right.start_second))
+    };
+    // Ordered input already has the original-index tie order. Extend tails
+    // directly, without creating an identity index vector.
+    if out
+        .windows(2)
+        .all(|pair| compare(&pair[0], &pair[1]) != std::cmp::Ordering::Greater)
+    {
+        song_lua_extend_column_offset_tails_ordered(out, |position| position);
+    } else {
+        with_song_lua_tail_indices(out.len(), |indices| {
+            indices.sort_unstable_by(|&left, &right| {
+                compare(&out[left], &out[right]).then_with(|| left.cmp(&right))
+            });
+            song_lua_extend_column_offset_tails_ordered(out, |position| indices[position]);
         });
-        let mut group_start = 0;
-        while group_start < indices.len() {
-            let column = out[indices[group_start]].column;
-            let target = out[indices[group_start]].target;
-            let group_end = indices[group_start..].partition_point(|&index| {
-                out[index].column == column && out[index].target == target
-            }) + group_start;
-            let mut next = group_start + 1;
-            for position in group_start..group_end {
-                next = next.max(position + 1);
-                let index = indices[position];
-                let start_second = out[index].start_second;
-                while next < group_end
-                    && out[indices[next]].start_second <= start_second + SAME_TICK_EPSILON
-                {
-                    next += 1;
-                }
-                let window = &out[index];
-                let default_end =
-                    if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
-                        window.sustain_end_second
-                    } else {
-                        f32::MAX
-                    };
-                out[index].sustain_end_second = if next < group_end {
-                    default_end.min(out[indices[next]].start_second)
-                } else {
-                    default_end
-                };
+    }
+}
+
+fn song_lua_extend_column_offset_tails_ordered(
+    out: &mut [SongLuaColumnOffsetWindowRuntime],
+    index_at: impl Fn(usize) -> usize,
+) {
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    let mut group_start = 0;
+    while group_start < out.len() {
+        let column = out[index_at(group_start)].column;
+        let target = out[index_at(group_start)].target;
+        // Groups are contiguous in both traversal orders. Find their end
+        // with the parent's binary partition rather than rescanning them.
+        let mut group_end = group_start;
+        let mut remaining = out.len() - group_start;
+        while remaining > 0 {
+            let half = remaining / 2;
+            let middle = group_end + half;
+            let window = &out[index_at(middle)];
+            if window.column == column && window.target == target {
+                group_end = middle + 1;
+                remaining -= half + 1;
+            } else {
+                remaining = half;
             }
-            group_start = group_end;
         }
-    });
+        let mut next = group_start + 1;
+        for position in group_start..group_end {
+            next = next.max(position + 1);
+            let index = index_at(position);
+            let start_second = out[index].start_second;
+            while next < group_end
+                && out[index_at(next)].start_second <= start_second + SAME_TICK_EPSILON
+            {
+                next += 1;
+            }
+            let window = &out[index];
+            let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
+                window.sustain_end_second
+            } else {
+                f32::MAX
+            };
+            out[index].sustain_end_second = if next < group_end {
+                default_end.min(out[index_at(next)].start_second)
+            } else {
+                default_end
+            };
+        }
+        group_start = group_end;
+    }
 }
 
 #[inline(always)]
@@ -6571,7 +6602,7 @@ pub const fn turn_option_bits(turn: GameplayTurnOption) -> u16 {
 const ATTACK_KEY_STACK_BYTES: usize = 128;
 
 enum BufferedAttackKey<'a> {
-    Stack(&'a str),
+    Borrowed(&'a str),
     Heap(String),
 }
 
@@ -6579,16 +6610,25 @@ impl BufferedAttackKey<'_> {
     #[inline(always)]
     fn as_str(&self) -> &str {
         match self {
-            Self::Stack(key) => key,
+            Self::Borrowed(key) => key,
             Self::Heap(key) => key,
         }
     }
 }
 
 fn buffered_attack_token_key<'a>(
-    token: &str,
+    token: &'a str,
     buffer: &'a mut [u8; ATTACK_KEY_STACK_BYTES],
 ) -> BufferedAttackKey<'a> {
+    if token.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+        && token
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+    {
+        // Already normalized names can be borrowed, including those larger
+        // than the stack buffer. Preserve filtering for every other spelling.
+        return BufferedAttackKey::Borrowed(token);
+    }
     let mut len = 0usize;
     for byte in token.bytes().filter(u8::is_ascii_alphanumeric) {
         if len == 0 && byte.is_ascii_digit() {
@@ -6600,7 +6640,7 @@ fn buffered_attack_token_key<'a>(
         buffer[len] = byte.to_ascii_lowercase();
         len += 1;
     }
-    BufferedAttackKey::Stack(
+    BufferedAttackKey::Borrowed(
         std::str::from_utf8(&buffer[..len]).expect("attack keys contain only ASCII bytes"),
     )
 }
@@ -7335,7 +7375,7 @@ fn parse_song_lua_mod_amount(word: &str) -> Option<f32> {
 }
 
 fn song_lua_runtime_attack_key<'a, const BUFFERED: bool>(
-    token: &str,
+    token: &'a str,
     buffer: &'a mut [u8; ATTACK_KEY_STACK_BYTES],
 ) -> BufferedAttackKey<'a> {
     if BUFFERED {
