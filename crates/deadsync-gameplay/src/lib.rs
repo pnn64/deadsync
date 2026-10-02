@@ -166,3 +166,7 @@ mod perf;
 #[cfg(test)]
 #[path = "../tests/perf/spline_preparation.rs"]
 mod load_preparation_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/spline_solver.rs"]
+mod spline_solver_perf;

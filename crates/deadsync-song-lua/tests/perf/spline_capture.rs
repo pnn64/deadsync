@@ -7,7 +7,7 @@ use std::sync::Arc;
 #[path = "spline_capture_baseline.rs"]
 mod baseline;
 
-fn fixture(lanes: usize, size: usize) -> (Lua, Vec<Table>) {
+pub(super) fn fixture(lanes: usize, size: usize) -> (Lua, Vec<Table>) {
     let lua = Lua::new();
     let columns = lua.create_table().unwrap();
     let mut actors = Vec::new();
@@ -51,7 +51,7 @@ fn fixture(lanes: usize, size: usize) -> (Lua, Vec<Table>) {
     field.set("__songlua_note_columns", columns).unwrap();
     let children = lua.create_table().unwrap();
     children.set("NoteField", field).unwrap();
-    let player = lua.create_table().unwrap();
+    let player = crate::lua_util::create_dummy_actor(&lua, "PlayerActor", |_, _| Ok(())).unwrap();
     player.set("__songlua_children", children).unwrap();
     lua.globals()
         .set("__songlua_top_screen_player_1", player)
@@ -103,7 +103,7 @@ fn assert_spline(a: &Option<SongLuaSplineData>, b: &Option<SongLuaSplineData>) {
     }
 }
 
-fn assert_frames(a: &[SongLuaColumnSplineFrame], b: &[SongLuaColumnSplineFrame]) {
+pub(super) fn assert_frames(a: &[SongLuaColumnSplineFrame], b: &[SongLuaColumnSplineFrame]) {
     assert_eq!(a.len(), b.len());
     for (a, b) in a.iter().zip(b) {
         assert_float(a.second, b.second);
@@ -122,7 +122,7 @@ fn compare(
     assert_eq!(new.bytes, old.bytes);
     assert_eq!(new.lanes.len(), old.lanes.len());
     for (key, frames) in &new.lanes {
-        assert_frames(frames, &old.lanes[key]);
+        assert_frames(&frames.frames, &old.lanes[key]);
     }
 }
 
@@ -133,7 +133,7 @@ fn unchanged_capture_and_metadata_changes_reuse_spline_storage() {
     let mut old = baseline::ColumnSplineCapture::default();
     compare(&mut new, &mut old, &lua, 0.0);
     let coefficients = Arc::clone(
-        &new.lanes[&(0, 0)][0]
+        &new.lanes[&(0, 0)].frames[0]
             .position
             .as_ref()
             .unwrap()
@@ -141,24 +141,23 @@ fn unchanged_capture_and_metadata_changes_reuse_spline_storage() {
     );
     // Warm mlua's reference slots before counting Rust allocator calls.
     new.capture(&lua, 0.5).unwrap();
-    // Named-child lookup still creates two small Lua table allocations per
-    // sample. Stop collection so previous Lua garbage cannot enter the budget.
+    // Stop collection so previous Lua garbage cannot enter the budget.
     lua.gc_stop();
-    crate::perf::assert_churn_budget(32, 1280, || {
+    crate::perf::assert_no_churn(|| {
         for i in 1..=16 {
             new.capture(&lua, i as f32).unwrap();
         }
     });
     compare(&mut new, &mut old, &lua, 17.0);
-    assert_eq!(new.lanes[&(0, 0)].len(), 1);
+    assert_eq!(new.lanes[&(0, 0)].frames.len(), 1);
     handler(&actors[0])
         .set("__songlua_receptor_t", -0.5)
         .unwrap();
     compare(&mut new, &mut old, &lua, 18.0);
-    assert_eq!(new.lanes[&(0, 0)].len(), 2);
+    assert_eq!(new.lanes[&(0, 0)].frames.len(), 2);
     assert!(Arc::ptr_eq(
         &coefficients,
-        &new.lanes[&(0, 0)][1]
+        &new.lanes[&(0, 0)].frames[1]
             .position
             .as_ref()
             .unwrap()
@@ -307,7 +306,7 @@ fn capture_keeps_player_lane_identity_missing_axes_and_mode_conversion_errors() 
     }
 }
 
-fn change(actors: &[Table], step: usize, mode: &str) {
+pub(super) fn change(actors: &[Table], step: usize, mode: &str) {
     match mode {
         "metadata" => {
             for actor in actors {

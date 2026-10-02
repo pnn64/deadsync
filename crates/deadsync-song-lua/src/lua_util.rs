@@ -10043,10 +10043,8 @@ pub fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindo
         else {
             continue;
         };
-        let Some(note_field) = actor_named_children(lua, &player_actor)
-            .map_err(|err| err.to_string())?
-            .get::<Option<Table>>("NoteField")
-            .map_err(|err| err.to_string())?
+        let Some(note_field) =
+            note_field_table(lua, &player_actor).map_err(|err| err.to_string())?
         else {
             continue;
         };
@@ -10132,6 +10130,20 @@ pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
     Ok(if valid { first_y } else { None })
 }
 
+// A stored registry without sequence children needs no merge. Raw lookup
+// matches copying registry entries into a fresh table without its metatable.
+// sequence_values also uses raw access, so actor metatables do not affect this.
+// Scripted registry getters/setters can add sequence children; retain the full
+// merge path when the registry is not already stored on the actor.
+fn note_field_table(lua: &Lua, player_actor: &Table) -> mlua::Result<Option<Table>> {
+    if player_actor.raw_len() == 0
+        && let Some(children) = player_actor.raw_get::<Option<Table>>("__songlua_children")?
+    {
+        return children.raw_get("NoteField");
+    }
+    actor_named_children(lua, player_actor)?.get("NoteField")
+}
+
 fn for_each_note_field(
     lua: &Lua,
     mut visit: impl FnMut(Table) -> mlua::Result<()>,
@@ -10146,9 +10158,7 @@ fn for_each_note_field(
         let Some(player_actor) = globals.get::<Option<Table>>(key)? else {
             continue;
         };
-        let Some(note_field) =
-            actor_named_children(lua, &player_actor)?.get::<Option<Table>>("NoteField")?
-        else {
+        let Some(note_field) = note_field_table(lua, &player_actor)? else {
             continue;
         };
         visit(note_field)?;
@@ -10731,8 +10741,7 @@ pub fn snapshot_note_field_columns(lua: &Lua) -> mlua::Result<Vec<SongLuaNoteFie
         let Some(player_actor) = globals.get::<Option<Table>>(key)? else {
             continue;
         };
-        let note_field =
-            actor_named_children(lua, &player_actor)?.get::<Option<Table>>("NoteField")?;
+        let note_field = note_field_table(lua, &player_actor)?;
         let columns = match &note_field {
             Some(note_field) => note_field.get::<Option<Table>>("__songlua_note_columns")?,
             None => None,
@@ -15455,3 +15464,7 @@ mod upvalue_output_perf;
 #[cfg(test)]
 #[path = "../tests/perf/broadcast_storage.rs"]
 mod broadcast_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/note_field_lookup.rs"]
+mod note_field_lookup_perf;
