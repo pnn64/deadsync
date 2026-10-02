@@ -3737,6 +3737,74 @@ mod tests {
     }
 
     #[test]
+    fn digital_and_zigzag_keep_units_approaches_and_reset() {
+        let mods = parse_attack_mods(
+            "*2 50% digital,*4 300% digitalsteps,\
+            *6 3200% digitaloffset,*8 -100% digitalperiod,*10 300% zigzagz,\
+            *12 -75% zigzagzoffset,*14 150% zigzagzperiod",
+        );
+        assert_eq!(
+            [
+                mods.visual.digital,
+                mods.visual.digital_steps,
+                mods.visual.digital_offset,
+                mods.visual.digital_period,
+                mods.visual.zigzag_z,
+                mods.visual.zigzag_z_offset,
+                mods.visual.zigzag_z_period
+            ],
+            [
+                Some(0.5),
+                Some(3.0),
+                Some(32.0),
+                Some(-1.0),
+                Some(3.0),
+                Some(-0.75),
+                Some(1.5)
+            ]
+        );
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        let merged = merge_attack_visual_effects(VisualEffects::default(), current);
+        assert_eq!(
+            [
+                merged.digital,
+                merged.digital_steps,
+                merged.digital_offset,
+                merged.digital_period,
+                merged.zigzag_z,
+                merged.zigzag_z_offset,
+                merged.zigzag_z_period
+            ],
+            [0.5, 1.0, 1.5, -1.0, 2.5, -0.75, 1.5]
+        );
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
+        assert!(!current.any());
+        let cleared = parse_attack_mods(
+            "no digital,no digitalsteps,no digitaloffset,\
+            no digitalperiod,no zigzagz,no zigzagzoffset,no zigzagzperiod",
+        );
+        assert_eq!(
+            [
+                cleared.visual.digital,
+                cleared.visual.digital_steps,
+                cleared.visual.digital_offset,
+                cleared.visual.digital_period,
+                cleared.visual.zigzag_z,
+                cleared.visual.zigzag_z_offset,
+                cleared.visual.zigzag_z_period
+            ],
+            [Some(0.0); 7]
+        );
+    }
+
+    #[test]
     fn square_family_keeps_native_units_speeds_and_reset() {
         let mods = parse_attack_mods(
             "*2 -250% square,*4 3200% squareoffset,*6 -100% squareperiod,\

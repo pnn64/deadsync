@@ -60,8 +60,11 @@ pub(crate) struct VisualEffectParams {
     pub twirl: f32,
     pub parabola_z: f32,
     pub square_z: f32,
+    pub zigzag_z: f32,
     pub square_z_offset: f32,
+    pub zigzag_z_offset: f32,
     pub square_z_period: f32,
+    pub zigzag_z_period: f32,
     pub rotate_z: f32,
 }
 
@@ -75,8 +78,11 @@ pub(crate) struct LaneNoteTransformCache {
     bumpy_amplitude: f32,
     parabola_z: f32,
     square_z: f32,
+    zigzag_z: f32,
     square_z_offset: f32,
+    zigzag_z_offset: f32,
     square_z_period: f32,
+    zigzag_z_period: f32,
     tiny_zoom: f32,
     pulse_active: bool,
     pulse_constant: bool,
@@ -207,8 +213,12 @@ pub(crate) struct NoteXParams {
     pub beat: f32,
     pub parabola_x: f32,
     pub square: f32,
+    pub digital: f32,
     pub square_offset: f32,
+    pub digital_offset: f32,
+    pub digital_steps: f32,
     pub square_period: f32,
+    pub digital_period: f32,
     pub xmode: f32,
     pub player_p2: bool,
     pub double_style: bool,
@@ -550,6 +560,47 @@ pub(crate) fn apply_accel_y_cached(
 ) -> f32 {
     apply_accel_y_with_peak_cached(raw_y, effect_height, screen_height, accel, cache).0
 }
+pub(crate) fn digital_wave_offset(
+    y: f32,
+    amount: f32,
+    offset: f32,
+    period: f32,
+    steps: f32,
+) -> f32 {
+    if amount == 0.0 || !amount.is_finite() {
+        return 0.0;
+    }
+    // ArrowEffects::CalculateDigitalAngle/GetXPos quantizes the sine wave
+    // with C++ round (half away from zero), before Tiny scales lane spacing.
+    let angle = std::f32::consts::PI * (y + offset)
+        / (ARROW_EFFECT_PIXEL_SIZE + period * ARROW_EFFECT_PIXEL_SIZE);
+    amount * ARROW_EFFECT_PIXEL_SIZE * 0.5 * ((steps + 1.0) * angle.sin()).round() / (steps + 1.0)
+}
+
+pub(crate) fn triangle_wave_offset(y: f32, amount: f32, offset: f32, period: f32) -> f32 {
+    if amount == 0.0 || !amount.is_finite() {
+        return 0.0;
+    }
+    // ArrowEffects::GetZPos and RageTriangle wrap negative phases before
+    // evaluating the three linear parts of the triangle wave.
+    let angle = std::f32::consts::PI
+        * (1.0 / (period + 1.0))
+        * ((y + 100.0 * offset) / ARROW_EFFECT_PIXEL_SIZE);
+    let mut phase = angle % std::f32::consts::TAU;
+    if phase < 0.0 {
+        phase += std::f32::consts::TAU;
+    }
+    let phase = f64::from(phase * (1.0 / std::f32::consts::PI));
+    let wave = if phase < 0.5 {
+        phase * 2.0
+    } else if phase < 1.5 {
+        1.0 - (phase - 0.5) * 2.0
+    } else {
+        -4.0 + phase * 2.0
+    };
+    amount * ARROW_EFFECT_PIXEL_SIZE / 2.0 * wave as f32
+}
+
 // ArrowEffects::GetXPos/GetZPos and RageMath::RageSquare. The 0.01
 // transition prevents hold flicker at the receptor; negative fmod results
 // must be corrected before deciding the sign. A period of -1 deliberately
@@ -609,6 +660,12 @@ pub(crate) fn note_world_z_cached(
         true,
         lane_cache.cosecant,
     );
+    z += triangle_wave_offset(
+        y,
+        lane_cache.zigzag_z,
+        lane_cache.zigzag_z_offset,
+        lane_cache.zigzag_z_period,
+    );
     z += square_wave_offset(
         y,
         lane_cache.square_z,
@@ -645,6 +702,7 @@ pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> boo
     signed_effect_active(params.bumpy)
         || (params.twirl.is_finite() && params.twirl != 0.0)
         || (params.parabola_z.is_finite() && params.parabola_z != 0.0)
+        || (params.zigzag_z.is_finite() && params.zigzag_z != 0.0)
         || (params.square_z.is_finite() && params.square_z != 0.0)
 }
 
@@ -781,8 +839,11 @@ pub(crate) fn lane_note_transform_cache(
             0.0
         },
         square_z: params.square_z,
+        zigzag_z: params.zigzag_z,
         square_z_offset: params.square_z_offset,
+        zigzag_z_offset: params.zigzag_z_offset,
         square_z_period: params.square_z_period,
+        zigzag_z_period: params.zigzag_z_period,
         tiny_zoom: visual_tiny_zoom(params),
         pulse_active,
         pulse_constant: pulse_active && pulse_outer == 0.0,
@@ -918,8 +979,11 @@ pub(crate) fn gameplay_visual_effect_params(
             tan_drunk_z_speed: visual.tan_drunk_z_speed,
             tan_drunk_z_period: visual.tan_drunk_z_period,
             square_z: visual.square_z,
+            zigzag_z: visual.zigzag_z,
             square_z_offset: visual.square_z_offset,
+            zigzag_z_offset: visual.zigzag_z_offset,
             square_z_period: visual.square_z_period,
+            zigzag_z_period: visual.zigzag_z_period,
             bumpy: visual.bumpy,
             tan_bumpy: visual.tan_bumpy,
             tan_bumpy_offset: visual.tan_bumpy_offset,
@@ -1285,6 +1349,13 @@ pub(crate) fn note_x_extra(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    out += digital_wave_offset(
+        y,
+        params.digital,
+        params.digital_offset,
+        params.digital_period,
+        params.digital_steps,
+    );
     out += square_wave_offset(y, params.square, params.square_offset, params.square_period);
     out += xmode_x_extra(local_col, y, col_offsets.len(), params);
     out
@@ -1396,6 +1467,13 @@ pub(crate) fn note_x_offset_cached(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    extra += digital_wave_offset(
+        y,
+        params.digital,
+        params.digital_offset,
+        params.digital_period,
+        params.digital_steps,
+    );
     extra += square_wave_offset(y, params.square, params.square_offset, params.square_period);
     extra += xmode_x_extra(local_col, y, col_offsets.len(), params);
     let base = base_x + extra;
@@ -1420,6 +1498,7 @@ pub(crate) fn fill_static_note_x_offsets(
         || signed_effect_active(params.beat)
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
         || (params.xmode.is_finite() && params.xmode != 0.0)
+        || (params.digital.is_finite() && params.digital != 0.0)
         || (params.square.is_finite() && params.square != 0.0)
     {
         return false;

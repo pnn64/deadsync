@@ -12,7 +12,7 @@ fn snapshot(
     if old {
         baseline::snapshot_function_action_tables(lua, function)
     } else {
-        snapshot_function_action_tables(lua, function)
+        snapshot_function_action_tables(lua, function).map(|snapshot| snapshot.tables)
     }
 }
 
@@ -128,7 +128,14 @@ fn lua_capture_action_snapshot_preserves_targets_entries_and_rollback() {
                 for snapshot in &snapshots {
                     snapshot.table.raw_set("temporary", 99).unwrap();
                 }
-                restore_function_action_tables(snapshots).unwrap();
+                restore_function_action_tables(
+                    &lua,
+                    FunctionActionSnapshot {
+                        tables: snapshots,
+                        cells: Vec::new(),
+                    },
+                )
+                .unwrap();
                 let restored = snapshot(&lua, &function, false).unwrap();
                 assert_eq!(restored.iter().map(entries).collect::<Vec<_>>(), expected);
                 assert_eq!(globals.metatable().unwrap().to_pointer(), mt.to_pointer());
@@ -192,7 +199,14 @@ fn lua_capture_action_snapshot_owns_shallow_values_and_exact_outer_capacity() {
         assert_eq!(snapshots.capacity(), snapshots.len());
         nested.raw_set("mutated", 7).unwrap();
         lua.globals().raw_remove("nested").unwrap();
-        restore_function_action_tables(snapshots).unwrap();
+        restore_function_action_tables(
+            &lua,
+            FunctionActionSnapshot {
+                tables: snapshots,
+                cells: Vec::new(),
+            },
+        )
+        .unwrap();
         assert_eq!(
             lua.globals()
                 .raw_get::<Table>("nested")
@@ -206,8 +220,8 @@ fn lua_capture_action_snapshot_owns_shallow_values_and_exact_outer_capacity() {
     let function = fixture(&lua, "native", 0);
     snapshot(&lua, &function, false).unwrap();
     crate::perf::assert_churn_budget(
-        1,
-        std::mem::size_of::<FunctionActionTableSnapshot>(),
+        2,
+        std::mem::size_of::<FunctionActionTableSnapshot>() + std::mem::size_of::<Function>(),
         || {
             drop(snapshot(&lua, &function, false).unwrap());
         },
@@ -218,12 +232,13 @@ fn lua_capture_action_snapshot_owns_shallow_values_and_exact_outer_capacity() {
             .unwrap();
     }
     snapshot(&lua, &function, false).unwrap();
-    // Only the outer snapshot and entry buffers allocate; no per-key cursor
-    // handles are needed even though these are reference-valued keys/values.
+    // The outer snapshot and entries allocate, plus one transient Lua handle
+    // for the C-closure predicate. No per-key cursor handles are needed.
     crate::perf::assert_churn_budget(
-        2,
+        3,
         std::mem::size_of::<FunctionActionTableSnapshot>()
-            + 4 * std::mem::size_of::<(Value, Value)>(),
+            + 4 * std::mem::size_of::<(Value, Value)>()
+            + std::mem::size_of::<Function>(),
         || drop(snapshot(&lua, &function, false).unwrap()),
     );
 }

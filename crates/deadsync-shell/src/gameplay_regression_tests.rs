@@ -3178,6 +3178,80 @@ return Def.ActorFrame{
 "#
     }
 
+    #[test]
+    fn song_lua_conditional_spawn_skips_probed_receiver() {
+        let simfile = write_fixture("conditional-spawn", generated_pipeline_song_lua_simfile());
+        let lua_dir = simfile.parent().expect("fixture folder").join("lua");
+        fs::create_dir_all(&lua_dir).expect("Lua fixture folder");
+        fs::write(
+            lua_dir.join("default.lua"),
+            r#"
+local account, fired = 1, false
+local root = Def.ActorFrame {
+    OnCommand=function(self)
+        self:sleep(1000)
+        self:SetUpdateFunction(function()
+            if not fired and GAMESTATE:GetSongBeat() >= 1 then
+                fired = true
+                MESSAGEMAN:Broadcast("Spawn")
+            end
+        end)
+    end,
+    SpawnMessageCommand=function(self) account = account + 1 end,
+}
+for index=1,2 do
+    local number = index
+    root[#root+1] = Def.ActorProxy {
+        OnCommand=function(self)
+            self:SetTarget(SCREENMAN:GetTopScreen():GetChild("PlayerP1"))
+            self:visible(false)
+        end,
+        SpawnMessageCommand=function(self)
+            if number == account then self:visible(true) end
+        end,
+    }
+end
+return root
+"#,
+        )
+        .expect("conditional Spawn fixture");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
+                space::set_current_window_px(640, 480);
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    GameplaySession::default(),
+                    std::array::from_fn(|_| profile_data::Profile::default()),
+                );
+                let assets = fixture_assets();
+                let mut actors = Vec::new();
+                for (seconds, proxies) in [(0.25, 0), (0.6, 1), (2.0, 1), (0.25, 0)] {
+                    set_fixture_time(&mut state, seconds);
+                    actors.clear();
+                    let segments = crate::gameplay_runtime::push_actors(
+                        &mut actors,
+                        &mut state,
+                        &assets,
+                        screen_gameplay::ActorViewOverride::default(),
+                        123.0,
+                        deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                    );
+                    assert_eq!(
+                        segments.direct_field_proxy_count(state.song_frame()),
+                        proxies,
+                        "conditional receiver at {seconds}s"
+                    );
+                }
+            },
+        );
+    }
+
     fn write_pipeline_song_lua_fixture() -> PathBuf {
         let simfile = write_fixture("f0-song-lua", generated_pipeline_song_lua_simfile());
         let lua_dir = simfile
@@ -4091,6 +4165,202 @@ return Def.ActorFrame{
                 },
             );
         }
+        backend.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the local lua-songs corpus and GPU readback on Windows"]
+    fn bank_account_draws_complete_proxy_stack() {
+        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../lua-songs/Bank Account/Bank Account.ssc");
+        with_session(
+            profile_data::PlayStyle::Versus,
+            profile_data::PlayerSide::P1,
+            true,
+            true,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                for skin in ["cel", "lambda"] {
+                    let profiles = std::array::from_fn(|_| profile_data::Profile {
+                        noteskin: profile_data::NoteSkin::new(skin),
+                        scroll_speed: ScrollSpeedSetting::XMod(1.0),
+                        ..Default::default()
+                    });
+                    let mut state = build_test_state(
+                        &simfile,
+                        GameplayViewport::new(854.0, 480.0),
+                        GameplaySession {
+                            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+                            joined_sides: [true, true],
+                            ..Default::default()
+                        },
+                        profiles,
+                    );
+                    let assets = fixture_assets();
+                    let mut actors = Vec::new();
+                    let mut tick = 0;
+                    // Native capture: first spawn selects #2, Despawn clears all,
+                    // and the final spawn leaves #1..#62 visible for both players.
+                    for (seconds, proxies) in [(18.2, 2), (46.2, 0), (83.0, 124)] {
+                        // Advance the approach rates at the reference's 60 Hz;
+                        // a direct seek leaves slow Mini transitions frozen.
+                        while tick < (seconds * 60.0) as u32 {
+                            tick += 1;
+                            set_fixture_time(&mut state, tick as f32 / 60.0);
+                            refresh_active_attack_masks(&mut state.gameplay, 1.0 / 60.0);
+                        }
+                        set_fixture_time(&mut state, seconds);
+                        state.gameplay.refresh_live_notefield_options(106.0);
+                        if seconds == 83.0 {
+                            for player in 0..2 {
+                                let mini = deadsync_gameplay::effective_mini_percent_for_player(
+                                    &state.gameplay,
+                                    player,
+                                );
+                                assert!(
+                                    (mini - 155.0).abs() < 0.1,
+                                    "{skin} P{player} Mini: {mini}"
+                                );
+                                assert!((state.field_zoom_for_player(player) - 0.225).abs() < 0.001);
+                            }
+                        }
+                        actors.clear();
+                        let segments = crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride::default(),
+                            123.0,
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(
+                            ),
+                        );
+                        assert_eq!(
+                            segments.direct_field_proxy_count(state.song_frame()),
+                            proxies,
+                            "{skin} at {seconds}s"
+                        );
+                        let frame = compose::build_passes(
+                            segments.segments(state.song_frame(), &actors),
+                            state.render_targets(),
+                            [0.0, 0.0, 0.0, 1.0],
+                            &metrics,
+                            assets.fonts(),
+                            seconds,
+                            &mut compose::TextLayoutCache::default(),
+                            &mut compose::ComposeScratch::default(),
+                            &FIXTURE_TEXTURES,
+                            Some(state.actor_resources()),
+                        );
+                        let mut handles = Vec::new();
+                        for noteskin in state.noteskin_assets.noteskin.iter().flatten() {
+                            noteskin.for_each_slot(|slot| {
+                                handles.push(FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                            });
+                        }
+                        let count: u32 = frame
+                            .ops
+                            .iter()
+                            .filter_map(|op| match op {
+                                DrawOp::Sprite(run) if handles.contains(&run.texture_handle) => {
+                                    Some(run.instance_count)
+                                }
+                                _ => None,
+                            })
+                            .sum();
+                        assert!(
+                            count >= (proxies as u32).max(1) * 4,
+                            "{skin} at {seconds}s: {count} noteskin sprites for {proxies} proxies"
+                        );
+                        eprintln!(
+                            "Bank Account {skin} at {seconds}s: {proxies} proxies, {count} note sprites"
+                        );
+                    }
+                    #[cfg(target_os = "windows")]
+                    if skin == "cel" {
+                        assert_bank_stack_pixels(&mut state, &metrics);
+                    }
+                }
+            },
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    fn assert_bank_stack_pixels(state: &mut screen_gameplay::State, metrics: &space::Metrics) {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("capture loop");
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    winit::window::Window::default_attributes()
+                        .with_visible(false)
+                        .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720)),
+                )
+                .expect("capture window"),
+        );
+        let mut backend = deadlib_render::create_backend(
+            deadlib_render_core::BackendType::VulkanWgpu,
+            window,
+            metrics.projection(),
+            false,
+            deadlib_render_core::PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .expect("capture renderer");
+        let mut assets = deadlib_assets::AssetManager::new();
+        load_gpu_capture_assets(&mut assets, &mut backend).expect("theme textures and fonts");
+        prewarm_gpu_noteskins(state, &mut assets, &mut backend).expect("note textures");
+        let mut frame = compose_fixture_frame_with_textures(
+            state,
+            &assets,
+            metrics,
+            &mut Vec::new(),
+            &mut compose::TextLayoutCache::default(),
+            &mut compose::ComposeScratch::default(),
+            assets.texture_context(),
+        );
+        let mut handles = Vec::new();
+        for noteskin in state.noteskin_assets.noteskin.iter().flatten() {
+            noteskin.for_each_slot(|slot| {
+                handles.push(assets.texture_context().texture_handle(slot.texture_key()))
+            });
+        }
+        backend.request_screenshot();
+        backend
+            .draw(&frame, assets.textures(), false)
+            .expect("draw Bank Account");
+        let image = backend.capture_frame().expect("Bank Account pixels");
+        if let Some(output) = std::env::var_os("DEADSYNC_BANK_CAPTURE") {
+            image.save(output).expect("save Bank Account capture");
+        }
+        frame.ops.retain(|op| match op {
+            DrawOp::Sprite(run) => !handles.contains(&run.texture_handle),
+            DrawOp::TexturedMesh(run) => !handles.contains(&run.texture_handle),
+            _ => true,
+        });
+        backend.request_screenshot();
+        backend
+            .draw(&frame, assets.textures(), false)
+            .expect("draw without notes");
+        let without = backend.capture_frame().expect("pixels without notes");
+        let changed = image
+            .pixels()
+            .zip(without.pixels())
+            .filter(|(a, b)| a != b)
+            .count();
+        assert!(
+            changed > 500,
+            "Bank Account stack draws only {changed} note pixels"
+        );
+        eprintln!("Bank Account stack changes {changed} GPU pixels");
+        let mut textures = assets.take_textures();
+        backend.dispose_textures(&mut textures);
         backend.cleanup();
     }
 

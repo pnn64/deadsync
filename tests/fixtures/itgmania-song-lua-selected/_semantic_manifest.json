@@ -358,7 +358,7 @@
     {
       "simfile": "And Drugs/and drugs.ssc",
       "fixture": "And Drugs/and drugs.ssc.semantic.json",
-      "title": "And Drugs↑↑",
+      "title": "And Drugs\u2191\u2191",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -429,7 +429,44 @@
       "fixture": "Bank Account/Bank Account.ssc.semantic.json",
       "title": "Bank Account",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000
+        },
+        "random_seed": 1,
+        "update_frames": 5300,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "110bf6e54259eb40dd3c42ec1ccc6dbe6fbe2f2892c1ce60c526b267ffb0601d",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade"
+        },
+        "source_files_sha256": {
+          "lua-songs/Bank Account/Bank Account.ssc": "92b09483a60ce1e1a1f6d9c2dcb6b00d4db1382e8c5faaa2a8a087106d1ba7ed",
+          "lua-songs/Bank Account/lua/default.lua": "e391ffc29e9fe7822b96fd40a28a6822b064ffcec1def2a1533d782c62679539"
+        },
+        "sha256": "fbe3498e4075023ca8ef7fb5bf32b22be882bbb534882c3ca62ad3737d07e280",
+        "uncompressed_bytes": 2227648
+      }
     },
     {
       "simfile": "Brain Power - [Cardboard Box]/Brain Power.ssc",
@@ -636,7 +673,7 @@
     {
       "simfile": "Igaku/Igaku.ssc",
       "fixture": "Igaku/Igaku.ssc.semantic.json",
-      "title": "ã‚¤ã‚¬ã‚¯",
+      "title": "\u00e3\u201a\u00a4\u00e3\u201a\u00ac\u00e3\u201a\u00af",
       "lua_entries": 2,
       "status": "ok"
     },
@@ -762,7 +799,7 @@
     {
       "simfile": "Someone Special - hubert/Someone Special.ssc",
       "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json.zst",
-      "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
+      "title": "\uff33\uff4f\uff4d\uff45\uff4f\uff4e\uff45 \uff33\uff50\uff45\uff43\uff49\uff41\uff4c",
       "lua_entries": 1,
       "status": "ok",
       "reference": {
@@ -1056,7 +1093,7 @@
     {
       "simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
       "fixture": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc.semantic.json",
-      "title": "[FULL SONG] 花月ノ夢",
+      "title": "[FULL SONG] \u82b1\u6708\u30ce\u5922",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -1070,7 +1107,7 @@
     {
       "simfile": "broadcast/broadcast.ssc",
       "fixture": "broadcast/broadcast.ssc.semantic.json",
-      "title": "放送",
+      "title": "\u653e\u9001",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -1084,7 +1121,7 @@
     {
       "simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
       "fixture": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc.semantic.json",
-      "title": "​#feelyourtouch e.d.e.n",
+      "title": "\u200b#feelyourtouch e.d.e.n",
       "lua_entries": 1,
       "status": "ok"
     },

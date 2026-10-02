@@ -1346,7 +1346,6 @@ fn make_actor_ctor(
         install_actor_methods(lua, &table)?;
         install_actor_metatable(lua, &table)?;
         reset_actor_capture(lua, &table)?;
-        register_song_lua_actor(lua, &table)?;
         if actor_type.eq_ignore_ascii_case("GraphDisplay") {
             let [width, height] = graph_display_body_size(human_player_count);
             let size = lua.create_table()?;
@@ -3011,6 +3010,13 @@ pub fn capture_actor_command_preserving_state(
     actor: &Table,
     command_name: &str,
 ) -> Result<Vec<SongLuaOverlayCommandBlock>, String> {
+    let Some(command) = actor
+        .get::<Option<Function>>(command_name)
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(Vec::new());
+    };
+    let locals = snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
     let snapshot = snapshot_actor_mutable_state(lua, actor).map_err(|err| err.to_string())?;
     let globals_snapshot = snapshot_scalar_globals(lua).map_err(|err| err.to_string())?;
     let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
@@ -3023,6 +3029,7 @@ pub fn capture_actor_command_preserving_state(
     restore_actors_semantic_state(touched_snapshots?).map_err(|err| err.to_string())?;
     restore_scalar_globals(lua, globals_snapshot).map_err(|err| err.to_string())?;
     restore_actor_mutable_state(actor, snapshot).map_err(|err| err.to_string())?;
+    restore_function_action_tables(lua, locals).map_err(|err| err.to_string())?;
     captured
 }
 
@@ -8715,6 +8722,9 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         return Ok(());
     }
     compact_actor_children(actor)?;
+    // Def tables are constructed children first. Native actors subscribe as
+    // the definition tree loads, with parents before their children.
+    register_song_lua_actor(lua, actor)?;
     run_actor_named_command(lua, actor, "InitCommand")?;
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
@@ -12350,6 +12360,11 @@ struct FunctionActionTableSnapshot {
     entries: Vec<(Value, Value)>,
 }
 
+struct FunctionActionSnapshot {
+    tables: Vec<FunctionActionTableSnapshot>,
+    cells: Vec<(Function, usize, Value)>,
+}
+
 fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTableSnapshot> {
     let mut entries = Vec::new();
     // Keep the traversal key on Lua's stack. `pairs` clones it for its Rust
@@ -12364,7 +12379,7 @@ fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTa
 fn snapshot_function_action_tables(
     lua: &Lua,
     function: &Function,
-) -> mlua::Result<Vec<FunctionActionTableSnapshot>> {
+) -> mlua::Result<FunctionActionSnapshot> {
     let globals = lua.globals();
     // Resolve the environment before snapshotting either table, preserving
     // lookup/error order. The function environment may alias the globals.
@@ -12377,15 +12392,104 @@ fn snapshot_function_action_tables(
         None
     };
     let mut snapshots = Vec::with_capacity(1 + usize::from(target.is_some()));
-    snapshots.push(snapshot_function_action_table(globals)?);
+    snapshots.push(snapshot_function_action_table(globals.clone())?);
     if let Some(target) = target {
         snapshots.push(snapshot_function_action_table(target)?);
     }
-    Ok(snapshots)
+    // Host closures have no song locals. Keep their common snapshot path
+    // limited to the original shallow table snapshots.
+    // SAFETY: exec_raw owns a frame containing this function. The predicate
+    // reads its type and replaces the frame with one boolean return value.
+    let is_c = unsafe {
+        lua.exec_raw::<bool>(function.clone(), |state| {
+            let is_c = ffi::lua_iscfunction(state, 1);
+            ffi::lua_settop(state, 0);
+            ffi::lua_pushboolean(state, is_c);
+        })?
+    };
+    if is_c {
+        return Ok(FunctionActionSnapshot {
+            tables: snapshots,
+            cells: Vec::new(),
+        });
+    }
+    // Command probes may edit shared local tables or replace upvalue cells.
+    // Preserve their identities, including cycles and aliases. Actor state
+    // belongs to the existing action capture scope; C closures own host data.
+    let mut cells = Vec::new();
+    let mut seen = HashSet::new();
+    for snapshot in &snapshots {
+        seen.insert(snapshot.table.to_pointer() as usize);
+    }
+    let mut pending = vec![Value::Function(function.clone())];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::Function(function)
+                if function.info().what != "C" && seen.insert(function.to_pointer() as usize) =>
+            {
+                for index in 1..=function.info().num_upvalues {
+                    let (name, value) = read_function_upvalue(lua, function.clone(), index.into())?;
+                    if matches!(&name, Value::String(name) if name.to_str()?.as_ref() == "_ENV") {
+                        continue;
+                    }
+                    pending.push(value.clone());
+                    cells.push((function.clone(), index as usize, value));
+                }
+            }
+            Value::Table(table)
+                if seen.insert(table.to_pointer() as usize)
+                    && table.raw_get::<Value>("__songlua_actor_type")?.is_nil() =>
+            {
+                let snapshot = snapshot_function_action_table(table)?;
+                pending.extend(snapshot.entries.iter().map(|(_, value)| value.clone()));
+                snapshots.push(snapshot);
+            }
+            _ => {}
+        }
+    }
+    Ok(FunctionActionSnapshot {
+        tables: snapshots,
+        cells,
+    })
 }
 
-fn restore_function_action_tables(snapshots: Vec<FunctionActionTableSnapshot>) -> mlua::Result<()> {
-    for snapshot in snapshots {
+fn read_function_upvalue(
+    lua: &Lua,
+    function: Function,
+    index: i64,
+) -> mlua::Result<(Value, Value)> {
+    // SAFETY: exec_raw owns this frame. Lua's debug API reads a pushed
+    // function/index pair and returns a copied name/value pair. No pointers
+    // or stack references survive the conversion to mlua Values.
+    unsafe {
+        lua.exec_raw((function, index), |state| {
+            let name = ffi::lua_getupvalue(state, 1, ffi::lua_tointeger(state, 2) as c_int);
+            ffi::lua_remove(state, 2);
+            ffi::lua_remove(state, 1);
+            if name.is_null() {
+                ffi::lua_pushnil(state);
+                ffi::lua_pushnil(state);
+                return;
+            }
+            ffi::lua_pushstring(state, name);
+            ffi::lua_insert(state, -2);
+        })
+    }
+}
+
+fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
+    for (function, index, value) in snapshot.cells {
+        // SAFETY: exec_raw owns the function, index and saved value on its
+        // stack. lua_setupvalue consumes only the saved value; no Lua stack
+        // references escape this call.
+        unsafe {
+            lua.exec_raw::<()>((function, index, value), |state| {
+                ffi::lua_setupvalue(state, 1, ffi::lua_tointeger(state, 2) as c_int);
+                ffi::lua_settop(state, 0);
+            })?;
+        }
+    }
+    for snapshot in snapshot.tables {
         snapshot.table.clear()?;
         for (key, value) in snapshot.entries {
             snapshot.table.raw_set(key, value)?;
@@ -12548,7 +12652,7 @@ fn capture_function_action_blocks_inner(
         .map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     if let Some(table_snapshots) = table_snapshots {
-        restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+        restore_function_action_tables(lua, table_snapshots).map_err(|err| err.to_string())?;
     }
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;
@@ -12731,7 +12835,7 @@ pub(crate) fn capture_deferred_messages<Kind>(
                 false,
             )
         });
-        restore_function_action_tables(snapshots).map_err(|err| err.to_string())?;
+        restore_function_action_tables(lua, snapshots).map_err(|err| err.to_string())?;
         let (Ok(first), Some(Ok(second))) = (first, second) else {
             continue;
         };
@@ -12823,7 +12927,7 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
         let second = first.as_ref().ok().map(|_| {
             capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false)
         });
-        restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+        restore_function_action_tables(lua, table_snapshots).map_err(|err| err.to_string())?;
         let Ok(first) = first else {
             // The ordinary per-actor capture already records this command as
             // skipped. Cross-actor probing must not turn that into a hard error.
@@ -16190,25 +16294,7 @@ pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
             }) else {
                 return Ok((Value::Nil, Value::Nil));
             };
-            // SAFETY: exec_raw owns the temporary stack frame for this call. We only
-            // read the pushed function/index arguments, call Lua's debug API to fetch
-            // a single upvalue, then replace the frame contents with plain Lua return
-            // values before exec_raw converts them back into mlua Values.
-            unsafe {
-                lua.exec_raw((function, index), |state| {
-                    let upvalue_index = ffi::lua_tointeger(state, 2) as c_int;
-                    let name = ffi::lua_getupvalue(state, 1, upvalue_index);
-                    ffi::lua_remove(state, 2);
-                    ffi::lua_remove(state, 1);
-                    if name.is_null() {
-                        ffi::lua_pushnil(state);
-                        ffi::lua_pushnil(state);
-                        return;
-                    }
-                    ffi::lua_pushstring(state, name);
-                    ffi::lua_insert(state, -2);
-                })
-            }
+            read_function_upvalue(lua, function, index)
         })?,
     )?;
     debug.set(

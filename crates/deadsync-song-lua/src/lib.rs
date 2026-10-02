@@ -10766,6 +10766,103 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn broadcast_load_order_and_probes_preserve_local_state() {
+        let song_dir = test_dir("broadcast-locals");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local account = {nested={value=1}}
+account.self = account
+local original = account
+local count = 0
+local checked = false
+local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+return Def.ActorFrame{
+    SpawnMessageCommand=function(self)
+        count = count + 1
+        account.nested.value = account.nested.value + 1
+    end,
+    OnCommand=function(self)
+        assert(count == 0 and account == original and account.self == account)
+        assert(account.nested.value == 1 and options:Mini() == 0)
+        MESSAGEMAN:Broadcast("Spawn")
+        self:SetUpdateFunction(function(self)
+            if not checked then
+                assert(count == 1 and account == original and account.self == account)
+                assert(account.nested.value == 2 and math.abs(options:Mini() - 0.025) < 0.00001)
+                checked = true
+            end
+        end)
+    end,
+    Def.Quad{
+        InitCommand=function(self) self:visible(false) end,
+        SpawnMessageCommand=function(self)
+            if account.nested.value == 2 then
+                self:visible(true):x(count * 42)
+                options:Mini(options:Mini() + 0.025)
+            end
+        end,
+    },
+}
+"#,
+        )
+        .expect("write broadcast fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Broadcast Locals");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile broadcast fixture");
+        assert!(compiled.overlays[0].initial_state.visible);
+        assert_eq!(compiled.overlays[0].initial_state.x, 42.0);
+    }
+
+    #[test]
+    fn options_string_retains_initial_profile_speed() {
+        let song_dir = test_dir("options-initial-speed");
+        let entry = song_dir.join("default.lua");
+        for (speed, token, method, value) in [
+            (SongLuaSpeedMod::X(2.5), "2.5x", "XMod", 2.5),
+            (SongLuaSpeedMod::C(600.0), "C600", "CMod", 600.0),
+            (SongLuaSpeedMod::M(700.0), "m700", "MMod", 700.0),
+        ] {
+            fs::write(&entry, format!(r#"
+local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+local po = ps:GetPlayerOptions("ModsLevel_Song")
+assert(ps:GetPlayerOptionsString("ModsLevel_Song") == "NoHideLights, {token}, Overhead")
+ps:SetPlayerOptions("ModsLevel_Song", ps:GetPlayerOptionsString("ModsLevel_Song") .. ", 50% Digital")
+assert(po:{method}() == {value})
+return Def.Quad{{}}
+"#)).expect("write profile speed fixture");
+            let mut context = SongLuaCompileContext::new(&song_dir, "Profile Speed");
+            context.players[0].speedmod = speed;
+            test_compile_song_lua(&entry, &context).expect("compile profile speed fixture");
+        }
+    }
+
+    #[test]
+    fn options_string_reads_live_targets_and_native_percentages() {
+        let song_dir = test_dir("options-live-string");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+local po = ps:GetPlayerOptions("ModsLevel_Song")
+po:Mini(0.425, 0.05)
+assert(ps:GetPlayerOptionsString("ModsLevel_Song") == "NoHideLights, 42% Mini, Overhead")
+assert(GetPlayerOptionsString(PLAYER_1) == ps:GetPlayerOptionsString("ModsLevel_Song"))
+ps:SetPlayerOptions("ModsLevel_Song", ps:GetPlayerOptionsString("ModsLevel_Song") .. ", *5 50% Digital")
+assert(math.abs(po:Mini() - 0.42) < 0.00001)
+assert(po:Digital() == 0.5)
+local mods = ps:GetPlayerOptionsArray("ModsLevel_Song")
+assert(table.concat(mods, ", ") == "NoHideLights, 42% Mini, 50% Digital, Overhead")
+return Def.Quad{}
+"#).expect("write live option fixture");
+        test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Live Options"),
+        )
+        .expect("compile live option fixture");
+    }
+
+    #[test]
     fn compile_song_lua_runs_messageman_broadcast_during_startup() {
         let song_dir = test_dir("broadcast-startup");
         let entry = song_dir.join("default.lua");
@@ -11398,7 +11495,7 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "6:1x, Overhead");
+        assert_eq!(compiled.messages[0].message, "6:NoHideLights, 1x, Overhead");
     }
 
     #[test]
@@ -16408,7 +16505,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "3.5:3.5:0.50:true:true|nil:650:true|nil:700:true:0.25:M700, Shuffle, 25% Tiny"
+            "3.5:3.5:0.50:true:true|nil:650:true|nil:700:true:0.25:NoHideLights, m700, 25% Tiny, Shuffle, Overhead"
         );
     }
 
@@ -17983,8 +18080,8 @@ assert(Var("LoadingScreen") == "LoadingScreen")
 local ps = GAMESTATE:GetPlayerState(PLAYER_1)
 ps:SetPlayerOptions("ModsLevel_Preferred", "1x, Overhead, 50% Mini")
 local options = ps:GetPlayerOptionsArray("ModsLevel_Preferred")
-assert(#options == 3 and options[2] == "Overhead")
-assert(GetPlayerOptionsString(PLAYER_1) == "1x, Overhead, 50% Mini")
+assert(#options == 4 and options[3] == "50% Mini" and options[4] == "Overhead")
+assert(GetPlayerOptionsString(PLAYER_1) == "NoHideLights, 1x, 50% Mini, Overhead")
 
 mod_actions = {
     {1, function()
@@ -20135,7 +20232,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "50|5|2|0|1|Love|None|None|None|None|4|4|0|false|false||0|0|__songlua_theme_path"
+            "50|5|2|0|1|Love|None|None|None|None|4|4|0|false|false|NoHideLights, Overhead|0|0|__songlua_theme_path"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }

@@ -226,11 +226,18 @@ pub struct VisualOverrides {
     pub draw_size: Option<f32>,
     pub draw_size_back: Option<f32>,
     pub square: Option<f32>,
+    pub digital: Option<f32>,
     pub square_offset: Option<f32>,
+    pub digital_steps: Option<f32>,
+    pub digital_offset: Option<f32>,
     pub square_period: Option<f32>,
+    pub digital_period: Option<f32>,
     pub square_z: Option<f32>,
+    pub zigzag_z: Option<f32>,
     pub square_z_offset: Option<f32>,
+    pub zigzag_z_offset: Option<f32>,
     pub square_z_period: Option<f32>,
+    pub zigzag_z_period: Option<f32>,
     pub xmode: Option<f32>,
     pub parabola_z: Option<f32>,
     pub confusion: Option<f32>,
@@ -299,11 +306,18 @@ impl Default for VisualOverrides {
             draw_size: None,
             draw_size_back: None,
             square: None,
+            digital: None,
             square_offset: None,
+            digital_steps: None,
+            digital_offset: None,
             square_period: None,
+            digital_period: None,
             square_z: None,
+            zigzag_z: None,
             square_z_offset: None,
+            zigzag_z_offset: None,
             square_z_period: None,
+            zigzag_z_period: None,
             xmode: None,
             parabola_z: None,
             confusion: None,
@@ -374,11 +388,18 @@ impl VisualOverrides {
             || self.draw_size.is_some()
             || self.draw_size_back.is_some()
             || self.square.is_some()
+            || self.digital.is_some()
             || self.square_offset.is_some()
+            || self.digital_steps.is_some()
+            || self.digital_offset.is_some()
             || self.square_period.is_some()
+            || self.digital_period.is_some()
             || self.square_z.is_some()
+            || self.zigzag_z.is_some()
             || self.square_z_offset.is_some()
+            || self.zigzag_z_offset.is_some()
             || self.square_z_period.is_some()
+            || self.zigzag_z_period.is_some()
             || self.xmode.is_some()
             || self.parabola_z.is_some()
             || self.confusion.is_some()
@@ -555,11 +576,18 @@ pub struct VisualEffects {
     pub draw_size: f32,
     pub draw_size_back: f32,
     pub square: f32,
+    pub digital: f32,
     pub square_offset: f32,
+    pub digital_steps: f32,
+    pub digital_offset: f32,
     pub square_period: f32,
+    pub digital_period: f32,
     pub square_z: f32,
+    pub zigzag_z: f32,
     pub square_z_offset: f32,
+    pub zigzag_z_offset: f32,
     pub square_z_period: f32,
+    pub zigzag_z_period: f32,
     pub xmode: f32,
     pub parabola_z: f32,
     pub confusion: f32,
@@ -636,11 +664,18 @@ impl VisualEffects {
             draw_size: 0.0,
             draw_size_back: 0.0,
             square: 0.0,
+            digital: 0.0,
             square_offset: 0.0,
+            digital_steps: 0.0,
+            digital_offset: 0.0,
             square_period: 0.0,
+            digital_period: 0.0,
             square_z: 0.0,
+            zigzag_z: 0.0,
             square_z_offset: 0.0,
+            zigzag_z_offset: 0.0,
             square_z_period: 0.0,
+            zigzag_z_period: 0.0,
             xmode: 0.0,
             parabola_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
@@ -795,11 +830,18 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.draw_size, base.draw_size, step);
     approach_optional_visual(&mut visual.draw_size_back, base.draw_size_back, step);
     approach_optional_visual(&mut visual.square, base.square, step);
+    approach_optional_visual(&mut visual.digital, base.digital, step);
     approach_optional_visual(&mut visual.square_offset, base.square_offset, step);
+    approach_optional_visual(&mut visual.digital_steps, base.digital_steps, step);
+    approach_optional_visual(&mut visual.digital_offset, base.digital_offset, step);
     approach_optional_visual(&mut visual.square_period, base.square_period, step);
+    approach_optional_visual(&mut visual.digital_period, base.digital_period, step);
     approach_optional_visual(&mut visual.square_z, base.square_z, step);
+    approach_optional_visual(&mut visual.zigzag_z, base.zigzag_z, step);
     approach_optional_visual(&mut visual.square_z_offset, base.square_z_offset, step);
+    approach_optional_visual(&mut visual.zigzag_z_offset, base.zigzag_z_offset, step);
     approach_optional_visual(&mut visual.square_z_period, base.square_z_period, step);
+    approach_optional_visual(&mut visual.zigzag_z_period, base.zigzag_z_period, step);
     approach_optional_visual(&mut visual.xmode, base.xmode, step);
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
@@ -1128,10 +1170,34 @@ pub fn approach_visual_overrides_to_target(
         1.0,
     );
     approach_attack_value(
+        &mut current.digital,
+        target.digital,
+        base.digital,
+        speed.digital,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
         &mut current.square_offset,
         target.square_offset,
         base.square_offset,
         speed.square_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_steps,
+        target.digital_steps,
+        base.digital_steps,
+        speed.digital_steps,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_offset,
+        target.digital_offset,
+        base.digital_offset,
+        speed.digital_offset,
         delta_time,
         1.0,
     );
@@ -1144,10 +1210,26 @@ pub fn approach_visual_overrides_to_target(
         1.0,
     );
     approach_attack_value(
+        &mut current.digital_period,
+        target.digital_period,
+        base.digital_period,
+        speed.digital_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
         &mut current.square_z,
         target.square_z,
         base.square_z,
         speed.square_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.zigzag_z,
+        target.zigzag_z,
+        base.zigzag_z,
+        speed.zigzag_z,
         delta_time,
         1.0,
     );
@@ -1160,10 +1242,26 @@ pub fn approach_visual_overrides_to_target(
         1.0,
     );
     approach_attack_value(
+        &mut current.zigzag_z_offset,
+        target.zigzag_z_offset,
+        base.zigzag_z_offset,
+        speed.zigzag_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
         &mut current.square_z_period,
         target.square_z_period,
         base.square_z_period,
         speed.square_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.zigzag_z_period,
+        target.zigzag_z_period,
+        base.zigzag_z_period,
+        speed.zigzag_z_period,
         delta_time,
         1.0,
     );

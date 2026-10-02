@@ -1411,9 +1411,10 @@ pub fn install_game_state_globals(
             let Some(player) = args.front().and_then(player_index_from_value) else {
                 return Ok(String::new());
             };
-            Ok(global_player_states[player]
-                .get::<Option<String>>("__songlua_player_options_string")?
-                .unwrap_or_default())
+            let state = &global_player_states[player];
+            state
+                .get::<Function>("GetPlayerOptionsString")?
+                .call::<String>((state.clone(), "ModsLevel_Preferred"))
         })?,
     )?;
     let current_steps = lua.create_table()?;

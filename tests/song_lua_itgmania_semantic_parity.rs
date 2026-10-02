@@ -2323,6 +2323,23 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
     }
     for command in &mut out {
         command.blocks.sort_by_key(|(seq, _)| *seq);
+        // Actor::SetVisible updates a non-tweened field immediately, even if
+        // the recorder attaches its setter to the current tween segment.
+        let immediate = command
+            .blocks
+            .iter_mut()
+            .filter_map(|(seq, block)| {
+                block.visible.take().map(|visible| {
+                    (
+                        *seq,
+                        ExpectedBlock {
+                            visible: Some(visible),
+                            ..ExpectedBlock::default()
+                        },
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
         let mut start = 0.0;
         command.blocks.retain_mut(|(_, block)| {
             if block.sleep {
@@ -2336,6 +2353,7 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
             start += block.duration;
             expected_block_has_effect(block)
         });
+        command.blocks.extend(immediate);
     }
     out.retain(|command| !command.blocks.is_empty());
     out
@@ -4899,6 +4917,23 @@ fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
             }),
         "Cuphead fixture never records the cannongirl's inherited vibration"
     );
+}
+
+#[test]
+fn bank_account_complete_semantics_match_itgmania() {
+    crate::paths::init();
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+        "tests/fixtures/itgmania-song-lua-selected/Bank Account/Bank Account.ssc.semantic.json",
+    ));
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(
+        parity.checks(),
+        1153,
+        "proxy and modifier coverage must remain complete"
+    );
+    parity.assert_complete("Bank Account complete semantics");
 }
 
 #[test]

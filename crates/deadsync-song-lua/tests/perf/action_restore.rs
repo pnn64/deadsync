@@ -4,11 +4,17 @@ use std::hint::black_box;
 #[path = "action_restore_baseline.rs"]
 mod baseline;
 
-fn restore(snapshots: Vec<FunctionActionTableSnapshot>, old: bool) -> mlua::Result<()> {
+fn restore(lua: &Lua, snapshots: Vec<FunctionActionTableSnapshot>, old: bool) -> mlua::Result<()> {
     if old {
         baseline::restore_function_action_tables(snapshots)
     } else {
-        restore_function_action_tables(snapshots)
+        restore_function_action_tables(
+            lua,
+            FunctionActionSnapshot {
+                tables: snapshots,
+                cells: Vec::new(),
+            },
+        )
     }
 }
 
@@ -67,7 +73,7 @@ fn lua_read_restore_preserves_mixed_keys_values_aliases_and_metatables() {
         table
             .raw_set("temporary", lua.create_table().unwrap())
             .unwrap();
-        restore(snapshots, old).unwrap();
+        restore(&lua, snapshots, old).unwrap();
         assert_eq!(table.to_pointer(), alias.to_pointer());
         assert_eq!(fingerprint(Value::Table(alias.clone())), expected);
         assert_eq!(table.metatable().unwrap().to_pointer(), mt.to_pointer());
@@ -111,7 +117,7 @@ fn lua_read_restore_matches_empty_dense_sparse_and_multiple_tables() {
                 table.raw_set("temporary", true).unwrap();
                 table.raw_set(10_000, 12).unwrap();
             }
-            restore(snapshots, old).unwrap();
+            restore(&lua, snapshots, old).unwrap();
             assert_eq!(
                 tables
                     .iter()
@@ -138,7 +144,7 @@ fn lua_read_restore_preserves_order_for_repeated_table_snapshots() {
         let last = snapshot_function_action_table(table.clone()).unwrap();
         table.raw_set(3, "temporary").unwrap();
         other.raw_set(2, "temporary").unwrap();
-        restore(vec![first, middle, last], old).unwrap();
+        restore(&lua, vec![first, middle, last], old).unwrap();
         assert_eq!(table.raw_get::<String>(1).unwrap(), "last");
         assert_eq!(table.raw_get::<i32>(2).unwrap(), 42);
         assert!(matches!(table.raw_get::<Value>(3).unwrap(), Value::Nil));
@@ -159,12 +165,14 @@ fn lua_read_restore_roundtrips_function_environment_and_globals() {
             .eval::<Function>()
             .unwrap();
         lua.globals().set("sentinel", 12).unwrap();
-        let snapshots = snapshot_function_action_tables(&lua, &function).unwrap();
+        let snapshots = snapshot_function_action_tables(&lua, &function)
+            .unwrap()
+            .tables;
         assert_eq!(snapshots.len(), 2);
         function.call::<()>(()).unwrap();
         lua.globals().set("sentinel", 55).unwrap();
         lua.globals().set("new_global", true).unwrap();
-        restore(snapshots, old).unwrap();
+        restore(&lua, snapshots, old).unwrap();
         assert_eq!(environment.get::<i32>("original").unwrap(), 7);
         assert!(matches!(
             environment.get::<Value>("added").unwrap(),
@@ -200,7 +208,7 @@ fn lua_read_bench_restore() {
             let roundtrip = |old| {
                 let snapshot = snapshot_function_action_table(table.clone()).unwrap();
                 table.raw_set("temporary", 42).unwrap();
-                restore(vec![snapshot], old).unwrap();
+                restore(&lua, vec![snapshot], old).unwrap();
             };
             for old in [true, false] {
                 roundtrip(old);

@@ -2084,6 +2084,98 @@ mod tests {
     }
 
     #[test]
+    fn digital_and_zigzag_match_native_travel_vectors() {
+        // Digital values come from ArrowEffects.cpp compiled with MSVC;
+        // Zigzag values call the linked reference RageMath::RageTriangle.
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        let inverse = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        for (amount, y, offset, period, steps, expected) in [
+            (0.5, 0.0, 0.0, 0.0, 0.0, 0.0),
+            (0.5, 10.0, 0.0, 0.0, 0.0, 0.0),
+            (0.5, 11.0, 0.0, 0.0, 0.0, 16.0),
+            (0.5, 32.0, 0.0, 0.0, 0.0, 16.0),
+            (0.5, 64.0, 0.0, 0.0, 0.0, 0.0),
+            (0.5, -11.0, 0.0, 0.0, 0.0, -16.0),
+            (0.5, -32.0, 0.0, 0.0, 0.0, -16.0),
+            (-2.5, 17.3, 0.0, 0.0, 3.0, -60.0),
+            (0.5, 73.25, 11.0, 1.5, 2.0, 16.0),
+            (0.5, -200.0, -0.75, -2.0, 1.0, -8.0),
+        ] {
+            let params = NoteXParams {
+                digital: amount,
+                digital_offset: offset,
+                digital_period: period,
+                digital_steps: steps,
+                ..NoteXParams::default()
+            };
+            let expected = (-96.0 + expected) * 0.5 + 32.0;
+            assert_eq!(
+                note_x_offset(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado, &[0.5; 4], params, 1.0
+                ),
+                expected
+            );
+            assert_eq!(
+                super::note_x_offset_cached(
+                    0,
+                    y,
+                    0.0,
+                    0.0,
+                    &columns,
+                    &inverse,
+                    &tornado,
+                    &[],
+                    &[32.0; 4],
+                    params,
+                    0.5
+                ),
+                expected
+            );
+            assert!(!super::fill_static_note_x_offsets(
+                4,
+                &columns,
+                &inverse,
+                &tornado,
+                &[0.0; 4],
+                params,
+                1.0,
+                &mut [0.0; 4]
+            ));
+        }
+        for (amount, y, offset, period, expected) in [
+            (3.0, 0.0, 0.0, 0.0, 0.0),
+            (3.0, 16.0, 0.0, 0.0, 48.0),
+            (3.0, 32.0, 0.0, 0.0, 96.0),
+            (3.0, 64.0, 0.0, 0.0, 0.0),
+            (3.0, 96.0, 0.0, 0.0, -96.0),
+            (3.0, 128.0, 0.0, 0.0, 0.0),
+            (3.0, -16.0, 0.0, 0.0, -48.0),
+            (3.0, -96.0, 0.0, 0.0, 95.999985),
+            (-2.5, 73.25, 0.25, 1.5, -61.75),
+            (0.5, -200.0, -0.75, -2.0, 9.499997),
+        ] {
+            let params = VisualEffectParams {
+                zigzag_z: amount,
+                zigzag_z_offset: offset,
+                zigzag_z_period: period,
+                tiny: 1.0,
+                ..VisualEffectParams::default()
+            };
+            let actual = note_world_z_cached(
+                y,
+                super::note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, params),
+            );
+            assert!(
+                (actual - expected).abs() < 0.00002,
+                "y={y}: {actual} vs {expected}"
+            );
+            assert!(visual_hold_body_needs_z_buffer(params));
+        }
+    }
+
+    #[test]
     fn square_matches_native_ragesquare_vectors_and_tiny_order() {
         // Expected values were obtained by linking the checked-out ITGmania
         // RageMath.cpp and calling RageSquare, including its receptor hack.

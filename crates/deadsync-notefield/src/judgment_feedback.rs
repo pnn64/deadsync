@@ -323,8 +323,12 @@ fn indicator_x(
             beat: request.visual.beat,
             parabola_x: request.visual.parabola_x,
             square: request.visual.square,
+            digital: request.visual.digital,
             square_offset: request.visual.square_offset,
+            digital_offset: request.visual.digital_offset,
+            digital_steps: request.visual.digital_steps,
             square_period: request.visual.square_period,
+            digital_period: request.visual.digital_period,
             ..NoteXParams::default()
         },
         request.visual.tiny,
@@ -878,8 +882,12 @@ mod tests {
             beat: request.visual.beat,
             parabola_x: request.visual.parabola_x,
             square: request.visual.square,
+            digital: request.visual.digital,
             square_offset: request.visual.square_offset,
+            digital_offset: request.visual.digital_offset,
+            digital_steps: request.visual.digital_steps,
             square_period: request.visual.square_period,
+            digital_period: request.visual.digital_period,
             ..NoteXParams::default()
         };
         let expected = hold_indicator_column_x(

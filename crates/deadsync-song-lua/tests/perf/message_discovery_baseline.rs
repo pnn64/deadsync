@@ -135,7 +135,7 @@ pub(super) fn capture_stable_cross_actor_message_commands<Kind>(
         let second = first.as_ref().ok().map(|_| {
             capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false)
         });
-        restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+        restore_function_action_tables(lua, table_snapshots).map_err(|err| err.to_string())?;
         let Ok(first) = first else {
             // The ordinary per-actor capture already records this command as
             // skipped. Cross-actor probing must not turn that into a hard error.

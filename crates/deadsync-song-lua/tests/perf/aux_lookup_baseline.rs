@@ -110,7 +110,7 @@ pub(super) fn capture_function_action_blocks_inner(
         .map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     if let Some(table_snapshots) = table_snapshots {
-        restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+        restore_function_action_tables(lua, table_snapshots).map_err(|err| err.to_string())?;
     }
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;

@@ -134,7 +134,9 @@ fn lua_state_message_capture_preserves_sorted_snapshot_mutation_and_errors() {
         ));
     }
     assert_eq!(outcomes[0], outcomes[1]);
-    assert_eq!(outcomes[1].1, ["A", "Repeat", "Z"]);
+    // Discovery executes dry probes; their shared local event table must be
+    // restored while the captured commands retain their sorted effects.
+    assert!(outcomes[1].1.is_empty());
 }
 
 #[test]

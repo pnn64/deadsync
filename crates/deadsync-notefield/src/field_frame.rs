@@ -302,8 +302,12 @@ fn compose_field_contents<S, F>(
         beat: visual.beat,
         parabola_x: visual.parabola_x,
         square: visual.square,
+        digital: visual.digital,
         square_offset: visual.square_offset,
+        digital_offset: visual.digital_offset,
+        digital_steps: visual.digital_steps,
         square_period: visual.square_period,
+        digital_period: visual.digital_period,
         xmode: visual.xmode,
         player_p2: matches!(request.placement, crate::FieldPlacement::P2),
         double_style: request.geometry.double_style,
@@ -1700,6 +1704,7 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
             bumpy: visual.bumpy,
             parabola_z: visual.parabola_z,
             square_z: visual.square_z,
+            zigzag_z: visual.zigzag_z,
             twirl: visual.twirl,
             ..VisualEffectParams::default()
         })
@@ -1726,6 +1731,8 @@ fn hold_lane_frame(
             && visual.parabola_x == 0.0
             && visual.xmode == 0.0
             && visual.parabola_z == 0.0
+            && visual.digital == 0.0
+            && visual.zigzag_z == 0.0
             && visual.square == 0.0
             && visual.square_z == 0.0
             && visual.drunk_z == 0.0

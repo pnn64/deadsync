@@ -675,14 +675,33 @@ pub fn build_song_lua_overlay_message_events_with_seconds<Kind>(
     compiled: &crate::CompiledSongLua<crate::SongLuaOverlayActor<Kind>>,
     message_seconds: &[Option<f32>],
 ) -> Vec<Vec<deadsync_gameplay::SongLuaOverlayMessageRuntime>> {
+    // Runtime broadcasts have already baked their conditional writes and
+    // tween queues into update tracks. A static probe can take a branch that
+    // the actual receiver never takes (Bank Account's first Spawn proxy).
+    let messages = compiled
+        .messages
+        .iter()
+        .enumerate()
+        .filter(|(_, message)| {
+            !compiled
+                .stateful_message_captures
+                .iter()
+                .any(|capture| capture.message == message.message)
+        })
+        .map(|(index, message)| (index, message.message.as_str()))
+        .collect::<Vec<_>>();
     compiled
         .overlays
         .iter()
         .map(|overlay| {
-            build_song_lua_actor_message_events_for_commands(
-                &compiled.messages,
+            deadsync_gameplay::build_song_lua_actor_message_events_with_seconds(
+                messages.iter().copied(),
                 message_seconds,
-                &overlay.message_commands,
+                overlay
+                    .message_commands
+                    .iter()
+                    .enumerate()
+                    .map(|(index, command)| (index, command.message.as_str())),
             )
         })
         .collect()

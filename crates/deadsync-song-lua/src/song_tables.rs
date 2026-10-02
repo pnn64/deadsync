@@ -101,13 +101,14 @@ fn create_player_state_table(
     let options = create_player_options_table(lua, player)?;
     let song_position = create_song_position_table(lua, song_runtime)?;
     let table = lua.create_table()?;
-    table.set("__songlua_player_options_string", String::new())?;
     set_string_method(lua, &table, "GetPlayerController", controller)?;
     set_string_method(lua, &table, "GetHealthState", health_state)?;
     set_string_method(lua, &table, "GetPlayerNumber", player_number)?;
     let options_for_get = options.clone();
     let options_for_current = options.clone();
     let options_for_set = options.clone();
+    let options_for_string = options.clone();
+    let options_for_array = options.clone();
     table.set(
         "GetPlayerOptions",
         lua.create_function(move |_, _self: Option<Value>| Ok(options_for_get.clone()))?,
@@ -122,45 +123,27 @@ fn create_player_state_table(
     )?;
     table.set(
         "GetPlayerOptionsString",
-        lua.create_function(|_, args: MultiValue| {
-            let Some(owner) = args.front().and_then(|value| match value {
-                Value::Table(table) => Some(table.clone()),
-                _ => None,
-            }) else {
-                return Ok(String::new());
-            };
-            Ok(owner
-                .get::<Option<String>>("__songlua_player_options_string")?
-                .unwrap_or_default())
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(player_options_parts(lua, &options_for_string)?.join(", "))
         })?,
     )?;
     table.set(
         "GetPlayerOptionsArray",
-        lua.create_function(|lua, args: MultiValue| {
-            let Some(owner) = args.front().and_then(|value| match value {
-                Value::Table(table) => Some(table.clone()),
-                _ => None,
-            }) else {
-                return lua.create_table();
-            };
-            create_player_options_array(lua, &owner)
+        lua.create_function(move |lua, _args: MultiValue| {
+            lua.create_sequence_from(player_options_parts(lua, &options_for_array)?)
         })?,
     )?;
     table.set(
         "SetPlayerOptions",
         lua.create_function({
             move |lua, args: MultiValue| {
-                let Some(owner) = args.front().and_then(|value| match value {
-                    Value::Table(table) => Some(table.clone()),
-                    _ => None,
-                }) else {
+                let Some(Value::Table(_)) = args.front() else {
                     return Ok(());
                 };
                 let options_text = method_arg(&args, 1)
                     .cloned()
                     .and_then(read_string)
                     .unwrap_or_default();
-                owner.set("__songlua_player_options_string", options_text.clone())?;
                 // LunaPlayerState::SetPlayerOptions parses a fresh PlayerOptions
                 // and assigns it. Keep the table identity held by Lua readers,
                 // but reset prior targets and approach speeds before parsing.
@@ -174,20 +157,102 @@ fn create_player_state_table(
     Ok((table, options))
 }
 
-fn create_player_options_array(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
-    let text = owner
-        .get::<Option<String>>("__songlua_player_options_string")?
-        .unwrap_or_default();
-    let table = lua.create_table()?;
-    for (index, option) in text
-        .split(',')
-        .map(str::trim)
-        .filter(|option| !option.is_empty())
-        .enumerate()
-    {
-        table.raw_set(index + 1, option)?;
+fn option_string_part(parts: &mut Vec<String>, name: &str, value: f32) {
+    if value != 0.0 && value.is_finite() {
+        parts.push(if value == 1.0 {
+            name.to_string()
+        } else {
+            // Native AddPart uses lrint on a float percentage, including ties
+            // to even. Round-tripping the string intentionally quantizes it.
+            format!("{:.0}% {name}", (value * 100.0).round_ties_even())
+        });
     }
-    Ok(table)
+}
+
+fn player_options_parts(lua: &Lua, owner: &Table) -> mlua::Result<Vec<String>> {
+    let state = player_option_state(lua, owner)?;
+    let mut parts = vec!["NoHideLights".to_string()];
+    if let Some(mode) = owner.raw_get::<Option<String>>("__songlua_speedmod_active")? {
+        let value = owner.raw_get::<Option<f32>>(format!("__songlua_speedmod_{mode}"))?;
+        let explicit = owner
+            .raw_get::<Option<bool>>("__songlua_speedmod_explicit")?
+            .unwrap_or(true);
+        if let Some(value) = value.filter(|value| mode != "xmod" || *value != 1.0 || explicit) {
+            parts.push(match mode.as_str() {
+                "cmod" => format!("C{value:.0}"),
+                "mmod" => format!("m{value:.0}"),
+                "amod" => format!("A{value:.0}"),
+                "camod" => format!("CA{value:.0}"),
+                _ => format!(
+                    "{}x",
+                    format!("{value:.2}")
+                        .trim_end_matches('0')
+                        .trim_end_matches('.')
+                ),
+            });
+        }
+    }
+    if let Some(mode) = state.raw_get::<Option<usize>>("modtimersetting")?
+        && let Some(name) = ["ModTimerGame", "ModTimerBeat", "ModTimerSong"].get(mode)
+    {
+        parts.push((*name).to_string());
+    }
+    for name in crate::player_options::OPTION_STRING_NAMES {
+        let key = match *name {
+            "RandomAttacks" => "randattack".to_string(),
+            "NoAttacks" => "noattack".to_string(),
+            _ => name.to_ascii_lowercase(),
+        };
+        let value = match state.raw_get::<Value>(key)? {
+            Value::Boolean(value) => f32::from(value),
+            value => read_f32(value).unwrap_or(0.0),
+        };
+        option_string_part(&mut parts, name, value);
+        if *name == "Cosecant" {
+            for col in 1..=16 {
+                for prefix in crate::player_options::SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES {
+                    let name = format!("{prefix}{col}");
+                    let value = state
+                        .raw_get::<Option<f32>>(name.to_ascii_lowercase())?
+                        .unwrap_or(0.0);
+                    option_string_part(&mut parts, &name, value);
+                }
+            }
+        }
+    }
+    for name in SONG_LUA_PLAYER_OPTION_CAPABILITIES
+        .iter()
+        .filter(|name| player_option_uses_bool(&name.to_ascii_lowercase()))
+    {
+        if !crate::player_options::OPTION_STRING_NAMES.contains(name)
+            && state
+                .raw_get::<Option<bool>>(name.to_ascii_lowercase())?
+                .unwrap_or(false)
+        {
+            parts.push((*name).to_string());
+        }
+    }
+    let tilt = state.raw_get::<Option<f32>>("tilt")?.unwrap_or(0.0);
+    let skew = state.raw_get::<Option<f32>>("skew")?.unwrap_or(0.0);
+    match (tilt, skew) {
+        (0.0, 0.0) => parts.push("Overhead".to_string()),
+        (tilt, 0.0) => option_string_part(
+            &mut parts,
+            if tilt > 0.0 { "Distant" } else { "Hallway" },
+            tilt.abs(),
+        ),
+        (tilt, skew) if (tilt - skew).abs() < 0.0001 => {
+            option_string_part(&mut parts, "Space", skew)
+        }
+        (tilt, skew) if (tilt + skew).abs() < 0.0001 => {
+            option_string_part(&mut parts, "Incoming", skew)
+        }
+        _ => {
+            option_string_part(&mut parts, "Skew", skew);
+            option_string_part(&mut parts, "Tilt", tilt);
+        }
+    }
+    Ok(parts)
 }
 
 pub fn create_steps_table(
@@ -259,6 +324,17 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     install_speedmod_method(lua, &table, "MMod", player.speedmod, SongLuaSpeedMod::M)?;
     install_speedmod_method(lua, &table, "AMod", player.speedmod, SongLuaSpeedMod::A)?;
     install_speedmod_method(lua, &table, "XMod", player.speedmod, SongLuaSpeedMod::X)?;
+    // Native GetMods includes the initial profile speed. Default 1x is
+    // omitted until explicitly set; later string round-trips must keep C/M/X.
+    match player.speedmod {
+        SongLuaSpeedMod::X(value) if value != 1.0 => {
+            set_player_speedmod(&table, "xmod", Some(value))?
+        }
+        SongLuaSpeedMod::C(value) => set_player_speedmod(&table, "cmod", Some(value))?,
+        SongLuaSpeedMod::M(value) => set_player_speedmod(&table, "mmod", Some(value))?,
+        SongLuaSpeedMod::A(value) => set_player_speedmod(&table, "amod", Some(value))?,
+        _ => {}
+    }
     table.set(
         "FromString",
         lua.create_function({
@@ -694,6 +770,7 @@ fn reset_player_options(lua: &Lua, owner: &Table) -> mlua::Result<()> {
         }
     }
     set_player_speedmod(owner, "xmod", Some(1.0))?;
+    owner.raw_set("__songlua_speedmod_explicit", false)?;
     set_player_speed_approaches(lua, owner, Some(1.0))
 }
 
@@ -977,6 +1054,7 @@ fn set_player_speedmod_with_key(
     if let Some(value) = value {
         owner.raw_set("__songlua_speedmod_active", key)?;
         owner.raw_set(value_key, value)?;
+        owner.raw_set("__songlua_speedmod_explicit", Value::Nil)?;
     } else {
         owner.raw_set("__songlua_speedmod_active", "none")?;
         owner.raw_set(value_key, Value::Nil)?;
