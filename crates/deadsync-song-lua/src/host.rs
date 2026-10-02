@@ -1505,7 +1505,9 @@ pub fn install_game_state_globals(
         "GetSongBeat",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_BEAT_KEY)
+            // ITGmania's SongPosition exposes a float, even though Lua numbers
+            // and the compile clock retain double precision.
+            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
         })?,
     )?;
     let song_bps = song_display_bps(context);

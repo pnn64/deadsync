@@ -60,10 +60,45 @@
     },
     {
       "simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
-      "fixture": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.semantic.json",
+      "fixture": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.semantic.json.zst",
       "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.25,
+          "max_events": 500000
+        },
+        "random_seed": 1,
+        "update_frames": 8084,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9516d886ae110b489aa550969d85c599278dcdfa58d4c942da47bc01945f03fe",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        },
+        "sha256": "ac5db008b49d512bca7e3065c2df12f014590453436673378dd14d559485e9a1",
+        "uncompressed_sha256": "70466c8eb04938270434f2b36718abb456d6782abee613d197e32a0f5d437284",
+        "compressed_bytes": 816506,
+        "uncompressed_bytes": 11701208
+      }
     },
     {
       "simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",

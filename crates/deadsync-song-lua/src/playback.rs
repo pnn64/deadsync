@@ -5206,7 +5206,8 @@ fn song_lua_overlay_update_snap(
     None
 }
 
-fn apply_song_lua_overlay_update_value(
+/// Apply a captured actor property using gameplay's playback rules.
+pub fn apply_overlay_update(
     state: &mut SongLuaOverlayState,
     target: crate::SongLuaOverlayUpdateTarget,
     value: &crate::SongLuaOverlayUpdateValue,
@@ -5361,7 +5362,7 @@ fn apply_song_lua_overlay_runtime_updates_for(
             t = snap.t;
         }
         let value = from.value.lerp(&to.value, t);
-        apply_song_lua_overlay_update_value(current, track.target, &value);
+        apply_overlay_update(current, track.target, &value);
         if track.target == crate::SongLuaOverlayUpdateTarget::SpriteStateIndex {
             current.sprite_animation_epoch = Some(if t >= 1.0 - f32::EPSILON {
                 to.second

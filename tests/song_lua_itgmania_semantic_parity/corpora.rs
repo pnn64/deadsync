@@ -75,6 +75,17 @@ mod allowed {
 mod lua_songs {
     use super::*;
 
+    #[test]
+    #[ignore = "compiles Ultimate taste's reduced-mod difficulty and reports every semantic check"]
+    fn ultimate_taste_medium() {
+        let trace = read_trace_file(
+            &fixture_root(&CORPUS)
+                .join("Ultimate taste/Ultimate taste.ssc.medium.semantic.json.zst"),
+        );
+        assert_eq!(trace.difficulty, "Difficulty_Medium");
+        assert_trace_parity(&CORPUS, "Ultimate taste/Ultimate taste.ssc", &trace);
+    }
+
     corpus_tests! {
         CORPUS, "tests/fixtures/itgmania-song-lua-selected", "lua-songs", false,
         botanic_panic => "Cuphead [TaroNuke]/botanic.sm",
@@ -180,16 +191,21 @@ fn assert_song_parity(corpus: &Corpus, simfile: &str) {
         .unwrap_or_else(|| panic!("{simfile} has no fixture in {}", corpus.fixtures));
     assert_eq!(entry.status, "ok", "incomplete fixture: {simfile}");
     let trace = read_trace_file(&fixture_root(corpus).join(&entry.fixture));
+    assert_trace_parity(corpus, simfile, &trace);
+}
+
+fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let (compiled, primary_index, context) =
-        compile_trace_song_at(&trace, &corpus_root(corpus).join(simfile));
-    let mut parity = compare_semantics(&trace, &compiled, primary_index, &context);
-    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+        compile_trace_song_at(trace, &corpus_root(corpus).join(simfile));
+    let mut parity = compare_semantics(trace, &compiled, primary_index, &context);
+    runtime_modifiers::compare_runtime_modifiers(trace, &compiled, &context, &mut parity);
     // Written past libtest's output capture so passing songs report their
     // tally as well, not only the failing ones.
-    writeln!(std::io::stderr().lock(), "\n{}", parity.summary(simfile))
+    let label = format!("{simfile} ({})", trace.difficulty);
+    writeln!(std::io::stderr().lock(), "\n{}", parity.summary(&label))
         .expect("stderr accepts the parity summary");
-    parity.assert_complete(simfile);
+    parity.assert_complete(&label);
 }
 
 fn assert_corpus_coverage(corpus: &Corpus) {

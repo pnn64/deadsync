@@ -222,6 +222,8 @@ struct NativeOperationTrack {
 
 #[derive(Deserialize)]
 struct NativePosition {
+    #[serde(default)]
+    beat: Option<f32>,
     seconds: f32,
 }
 
@@ -955,7 +957,10 @@ fn compare_final_render_states(
             continue;
         }
         let seconds = trace.end_position.seconds;
-        let beat = song_beat_at_elapsed_seconds(seconds, context);
+        let beat = trace
+            .end_position
+            .beat
+            .unwrap_or_else(|| song_beat_at_elapsed_seconds(seconds, context));
         let final_states = compiled_local_states_at(compiled, context, beat, seconds);
         for (definition, overlay_index) in native.into_iter().zip(deadsync) {
             let expected = native_final_render_state(trace, definition);
@@ -2862,6 +2867,9 @@ fn compiled_command_state_at(
     seconds: f32,
 ) -> SongLuaOverlayState {
     let overlay = &compiled.overlays[overlay_index];
+    if overlay.message_commands.is_empty() {
+        return overlay.initial_state;
+    }
     let mut current = overlay.initial_state;
     let mut active = None::<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)>;
     for event in compiled.messages.iter().filter(|event| event.beat <= beat) {
@@ -3058,56 +3066,13 @@ fn apply_runtime_updates(
     beat: f32,
     state: &mut SongLuaOverlayState,
 ) {
-    use SongLuaOverlayUpdateTarget as Target;
-    use SongLuaOverlayUpdateValue as UpdateValue;
     for track in compiled
         .overlay_updates
         .iter()
         .filter(|track| track.overlay_index == overlay_index)
     {
-        let Some(value) = compiled_update_value_at(compiled, overlay_index, track.target, beat)
-        else {
-            continue;
-        };
-        match (track.target, value) {
-            (Target::X, UpdateValue::F32(value)) => state.x = value,
-            (Target::Y, UpdateValue::F32(value)) => state.y = value,
-            (Target::Z, UpdateValue::F32(value)) => state.z = value,
-            (Target::ZBias, UpdateValue::F32(value)) => state.z_bias = value,
-            (Target::Zoom, UpdateValue::F32(value)) => state.zoom = value,
-            (Target::ZoomX, UpdateValue::F32(value)) => state.zoom_x = value,
-            (Target::ZoomY, UpdateValue::F32(value)) => state.zoom_y = value,
-            (Target::ZoomZ, UpdateValue::F32(value)) => state.zoom_z = value,
-            (Target::BaseZoom, UpdateValue::F32(value)) => state.basezoom = value,
-            (Target::BaseZoomX, UpdateValue::F32(value)) => state.basezoom_x = value,
-            (Target::BaseZoomY, UpdateValue::F32(value)) => state.basezoom_y = value,
-            (Target::BaseZoomZ, UpdateValue::F32(value)) => state.basezoom_z = value,
-            (Target::RotationX, UpdateValue::F32(value)) => state.rot_x_deg = value,
-            (Target::RotationY, UpdateValue::F32(value)) => state.rot_y_deg = value,
-            (Target::RotationZ, UpdateValue::F32(value)) => state.rot_z_deg = value,
-            (Target::SkewX, UpdateValue::F32(value)) => state.skew_x = value,
-            (Target::SkewY, UpdateValue::F32(value)) => state.skew_y = value,
-            (Target::Visible, UpdateValue::Bool(value)) => state.visible = value,
-            (Target::Diffuse, UpdateValue::Vec4(value)) => state.diffuse = value,
-            (Target::Glow, UpdateValue::Vec4(value)) => state.glow = value,
-            (Target::CropLeft, UpdateValue::F32(value)) => state.cropleft = value,
-            (Target::CropRight, UpdateValue::F32(value)) => state.cropright = value,
-            (Target::CropTop, UpdateValue::F32(value)) => state.croptop = value,
-            (Target::CropBottom, UpdateValue::F32(value)) => state.cropbottom = value,
-            (Target::FadeLeft, UpdateValue::F32(value)) => state.fadeleft = value,
-            (Target::FadeRight, UpdateValue::F32(value)) => state.faderight = value,
-            (Target::FadeTop, UpdateValue::F32(value)) => state.fadetop = value,
-            (Target::FadeBottom, UpdateValue::F32(value)) => state.fadebottom = value,
-            (Target::Vibrate, UpdateValue::Bool(value)) => state.vibrate = value,
-            (Target::EffectMagnitude, UpdateValue::Vec3(value)) => {
-                state.effect_magnitude = value;
-            }
-            (Target::EffectMode, UpdateValue::EffectMode(value)) => state.effect_mode = value,
-            (Target::EffectPeriod, UpdateValue::F32(value)) => state.effect_period = value,
-            (Target::EffectOffset, UpdateValue::F32(value)) => state.effect_offset = value,
-            (Target::Fov, UpdateValue::F32(value)) => state.fov = Some(value),
-            (Target::Vanishpoint, UpdateValue::Vec2(value)) => state.vanishpoint = Some(value),
-            _ => {}
+        if let Some(value) = compiled_update_value_at(compiled, overlay_index, track.target, beat) {
+            deadsync_song_lua::playback::apply_overlay_update(state, track.target, &value);
         }
     }
 }
@@ -3223,6 +3188,108 @@ fn compiled_world_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -
     let matrix = actor::overlay_sprite_matrix(state, size);
     [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
         .map(|[x, y]| actor::project_world(matrix, [x * size[0], y * size[1], 0.0, 1.0]))
+}
+
+#[test]
+fn song_position_keeps_strict_beat_boundaries() {
+    crate::paths::init();
+    let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Beat Boundary");
+    context.song_timing_bpms = vec![(0.0, 200.0)];
+    context.music_length_seconds = 18.7;
+    let compiled =
+        deadsync_assets::song_lua::compile_song_lua(&song_dir.join("beat-boundary.lua"), &context)
+            .unwrap();
+    for (name, expected) in [("Strict", 0.0), ("Inclusive", 1.0), ("Position", 0.0)] {
+        let index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some(name))
+            .unwrap();
+        let at_boundary = compiled_local_states_at(&compiled, &context, 62.0, 18.6)[index].x;
+        assert_eq!(at_boundary, expected, "{name} at beat 62");
+        assert_eq!(
+            compiled_local_states_at(&compiled, &context, 62.05556, 18.616667)[index].x,
+            1.0,
+            "{name} on the next frame"
+        );
+    }
+}
+
+#[test]
+fn runtime_size_zoom_matches_native_drawing() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Size Zoom");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 1.5;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join("runtime-size-zoom.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile runtime size fixture");
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            root.join("tests/fixtures/itgmania-song-lua-micro/runtime-size-zoom-native.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let second = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(&compiled[0], &context, second, second);
+        for actor in sample["actors"].as_array().unwrap().iter().skip(1) {
+            let name = actor["name"].as_str().unwrap();
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == Some(name))
+                .unwrap();
+            let state = states[index];
+            if name == "Resized" {
+                let expected =
+                    std::array::from_fn(|axis| actor["size"][axis].as_f64().unwrap() as f32);
+                assert_eq!(state.size, Some(expected), "size at {second}");
+            }
+            let zoom = actor["current"]["zoom"].as_array().unwrap();
+            for (axis, actual) in [state.zoom_x, state.zoom_y, state.zoom_z]
+                .into_iter()
+                .enumerate()
+            {
+                let expected = zoom[axis].as_f64().unwrap() as f32;
+                assert!(
+                    (actual - expected).abs() <= 0.002,
+                    "{name} zoom {axis} at {second}: {expected} vs {actual}"
+                );
+                checks += 1;
+            }
+            let Some(draw) = actor["draws"].as_array().and_then(|draws| draws.first()) else {
+                continue;
+            };
+            let size = if name == "Beat" {
+                [64.0, 32.0]
+            } else {
+                [1280.0, 720.0]
+            };
+            let vertices = compiled_world_vertices(state, size);
+            for (corner, actual) in vertices.iter().enumerate() {
+                let vertex = &draw["vertices"][[0, 3, 2, 1][corner]];
+                for axis in 0..2 {
+                    let expected = vertex["screen"][axis].as_f64().unwrap() as f32;
+                    assert!(
+                        (expected - actual[axis]).abs() <= 0.75,
+                        "{name} corner {corner} at {second}: {expected} vs {actual:?}"
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 176);
 }
 
 #[test]

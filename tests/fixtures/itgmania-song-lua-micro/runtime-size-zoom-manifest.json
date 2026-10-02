@@ -1,0 +1,28 @@
+{
+  "fixture_schema_version": 1,
+  "oracle": "embedded_native_sources",
+  "itgmania_git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+  "screen": [
+    854,
+    480
+  ],
+  "samples": [
+    0,
+    0.1,
+    0.3,
+    0.5833333333333334,
+    0.6,
+    1.1,
+    1.2,
+    1.5
+  ],
+  "sha256": {
+    "itgmania-harness-rs/fixtures/actors/runtime-size-zoom.json": "bcad7647627a2f912eb4ab5596c936a8ca6a752bba2d882e07cef1297c7aa908",
+    "deadsync/tests/fixtures/song-lua/runtime-size-zoom.lua": "9d85cc4e3d3dd8164cc2c54bb6c09de42712a72b50220a60deb38cf494b48778",
+    "itgmania-harness-rs/tests/fixtures/song-lua-headless/runtime-size-zoom.lua": "9d85cc4e3d3dd8164cc2c54bb6c09de42712a72b50220a60deb38cf494b48778",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/runtime-size-zoom-native.json": "31510a015c339a8f193429dcc16f1359e99aa7f42406ebccf1ecd3969e496998",
+    "deadsync/tests/fixtures/song-lua/beat-boundary.lua": "9cf3b59b5bec4fca7dc3fca05fa76399f3f3cd9b96767d77a459245c97e6950b",
+    "itgmania-harness-rs/tests/fixtures/song-lua-headless/beat-boundary.lua": "9cf3b59b5bec4fca7dc3fca05fa76399f3f3cd9b96767d77a459245c97e6950b"
+  },
+  "comparisons": 176
+}

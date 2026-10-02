@@ -193,10 +193,45 @@
     },
     {
       "simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
-      "fixture": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc.semantic.json",
+      "fixture": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc.semantic.json.zst",
       "title": "Lake of Lost Nostalgia",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.25,
+          "max_events": 500000
+        },
+        "random_seed": 1,
+        "update_frames": 7801,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9516d886ae110b489aa550969d85c599278dcdfa58d4c942da47bc01945f03fe",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        },
+        "sha256": "e3e95c6ffb5fdb4910b2336ba4a08b1ba4e07af90a529bcc1d33f37f3e29ce60",
+        "uncompressed_sha256": "8df7a5542444dc516278668853aaa32d911744af1aae897efba58eb7ecfc5843",
+        "compressed_bytes": 88491,
+        "uncompressed_bytes": 747729
+      }
     },
     {
       "simfile": "Levels/levels-fakemines.ssc",
@@ -306,18 +341,100 @@
         },
         "random_seed": 1,
         "update_frames": 8960,
-        "sha256": "d3d3041ebebb0166d2c3811fb456f9b161d038a38262574889f367f7f40ca329",
-        "uncompressed_sha256": "2fee4f5384b739a59d5a631a2ca252ce37c8c7cd697f899ae93a0e863b65d4d1",
-        "compressed_bytes": 9491019,
-        "uncompressed_bytes": 66260525
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9516d886ae110b489aa550969d85c599278dcdfa58d4c942da47bc01945f03fe",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        },
+        "sha256": "b0893c362da66de0236d9517cb7f3af3fa7cef2ace45d8fc36d0c4b3cc8dcb24",
+        "uncompressed_sha256": "9000a4d802a722f00b523b3cd3c489f3a503a6284c614c28659ff5620fc33aa5",
+        "compressed_bytes": 9542582,
+        "uncompressed_bytes": 66260622
       }
     },
     {
       "simfile": "Ultimate taste/Ultimate taste.ssc",
-      "fixture": "Ultimate taste/Ultimate taste.ssc.semantic.json",
+      "fixture": "Ultimate taste/Ultimate taste.ssc.semantic.json.zst",
       "title": "Ultimate taste",
       "lua_entries": 2,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.03125,
+          "max_events": 5000000
+        },
+        "random_seed": 1,
+        "update_frames": 15626,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9516d886ae110b489aa550969d85c599278dcdfa58d4c942da47bc01945f03fe",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        },
+        "sha256": "b21c1299e9af586849bb92438ea8cd6338d551e8fe91b7bb3bc9fdc60ae6c1a6",
+        "uncompressed_sha256": "84552ab051aefef91eb26ffc5b15b2fd4c61969bc99784c223d08f1a6b4b5375",
+        "compressed_bytes": 1370157,
+        "uncompressed_bytes": 33864162
+      },
+      "contexts": [
+        {
+          "difficulty": "Medium",
+          "fixture": "Ultimate taste/Ultimate taste.ssc.medium.semantic.json.zst",
+          "status": "ok",
+          "runtime_errors": 0,
+          "dropped_events": 0,
+          "reference": {
+            "itgmania": {
+              "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+              "git_dirty": "false",
+              "execution": "embedded_bundled_lua",
+              "launches_executable": false
+            },
+            "context": {
+              "players": [
+                "PLAYER_1",
+                "PLAYER_2"
+              ],
+              "preferred_difficulty": "Medium",
+              "preferred_steps_type": "dance-single",
+              "screen": [
+                854,
+                480
+              ],
+              "beat_step": 0.03125,
+              "max_events": 5000000
+            },
+            "random_seed": 1,
+            "update_frames": 15626,
+            "lua_song_beat_precision": "native_float",
+            "harness_sources_sha256": {
+              "itgmania-harness-rs/semantic_host.lua": "9516d886ae110b489aa550969d85c599278dcdfa58d4c942da47bc01945f03fe",
+              "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+            },
+            "sha256": "6d421126dc41e4b2f5e009af3c3e54efb05b0b957f1cb42b982eaee9b1946a18",
+            "uncompressed_sha256": "45e1d5ad018297c9de13aca4d65d85b79dabf4a3f0f4fea7dc330e7e159729c3",
+            "compressed_bytes": 1263252,
+            "uncompressed_bytes": 32884709
+          }
+        }
+      ]
     },
     {
       "simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
