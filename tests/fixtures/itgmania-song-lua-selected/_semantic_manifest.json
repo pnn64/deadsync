@@ -364,10 +364,58 @@
     },
     {
       "simfile": "Apollo/Apollo.ssc",
-      "fixture": "Apollo/Apollo.ssc.semantic.json",
+      "fixture": "Apollo/Apollo.ssc.semantic.json.zst",
       "title": "Apollo",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000
+        },
+        "random_seed": 1,
+        "update_frames": 9207,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "cf30bd85521051fca5b1fcd9349677465975db46e9789401188d6650746c8020",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade",
+          "itgmania-harness-rs/native/runtime_stubs.cpp": "e1d580e7997822304d0a52fee7a0f98591b6f559cf5a368032b49fbde21dfe25"
+        },
+        "source_files_sha256": {
+          "lua-songs/Apollo/Apollo.ogg": "433ea1ca3d1114adf065378fb6e435a2b4101aac24b7123921262f681db74181",
+          "lua-songs/Apollo/Apollo.sm": "415084485199d886c19862c31e59f0331e3e03b5dd2816c9f8e9b02a984ca828",
+          "lua-songs/Apollo/Apollo.ssc": "dc4b926e7a0687cf4a7576292592ae518dba636cabba234c8c95fb502f0a4e5f",
+          "lua-songs/Apollo/bg.png": "030f87a38972a48f3bef6ac4e9c289bcad0d7b7b5e69a37b627d11a5a24bc0e8",
+          "lua-songs/Apollo/bn.png": "1594b1f5a16b484c5ba47b367a5766ee06ca77a48a8cde64547f5f17aa635629",
+          "lua-songs/Apollo/lua/default.lua": "05650b50ec86df0181cb4f967eb2658d28863a6df00eaa7e8c9021a44af41348",
+          "lua-songs/Apollo/lua/default.xml": "32da95142ee3788ff4e89f0cf55341606fb28ac2d7f723a046407a4c7e1f807f",
+          "lua-songs/Apollo/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+          "lua-songs/Apollo/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+          "lua-songs/Apollo/lua/mods.lua": "89732b26e007e879d5166a9cc68fa1d9aaad5b5d8fcc556c2acea2a2785a0ba5"
+        },
+        "sha256": "fc5b8f982dbb399c074d32f87d2d9eb632bab1c62ac4c8ffd8e8360aa2d08050",
+        "uncompressed_sha256": "8234cbdf40695041b4748c6943ab7714b6e3f727c701ff61129c4e4bc85570b8",
+        "compressed_bytes": 624170,
+        "uncompressed_bytes": 6817571
+      }
     },
     {
       "simfile": "Bad Apple!!/Bad Apple!!.sm",

@@ -3550,6 +3550,7 @@ fn queued_commands_match_native() {
         "queued-chain",
         "callback-phase",
         "finish-queue",
+        "late-texture",
     ] {
         let trace = read_trace_file(&root.join(format!(
             "tests/fixtures/itgmania-song-lua-micro/{name}.json"
@@ -3980,7 +3981,8 @@ fn compare_projected_geometry(
                 );
                 [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
             }
-            let actual_visible = state.visible && state.diffuse[3] > 0.000_001;
+            let actual_visible =
+                state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
             let visibility_matches = native_visible == actual_visible || {
                 let probe_beat = (beat
                     + if native_visible {

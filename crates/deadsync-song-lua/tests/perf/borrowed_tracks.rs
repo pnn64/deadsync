@@ -79,6 +79,7 @@ fn borrowed_track_comparisons_match_owned_values_for_all_targets_and_nan_colors(
         SongLuaOverlayUpdateTarget::TextDistortion,
         SongLuaOverlayUpdateTarget::TextGlowMode,
         SongLuaOverlayUpdateTarget::MultAttrsWithDiffuse,
+        SongLuaOverlayUpdateTarget::SpriteTexture,
         SongLuaOverlayUpdateTarget::SpriteAnimate,
         SongLuaOverlayUpdateTarget::SpriteLoop,
         SongLuaOverlayUpdateTarget::SpritePlaybackRate,

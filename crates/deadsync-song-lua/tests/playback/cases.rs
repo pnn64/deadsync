@@ -796,6 +796,7 @@ fn song_lua_tween_playback_matches_native() {
         "queued-chain",
         "callback-phase",
         "finish-queue",
+        "late-texture",
     ] {
         let mut context =
             deadsync_song_lua::SongLuaCompileContext::new(&dir.join("song-lua"), name);
@@ -880,7 +881,7 @@ fn song_lua_tween_playback_matches_native() {
                     None,
                     &mut state,
                 );
-                let visible = state.visible && state.diffuse[3] > 0.000_001;
+                let visible = state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
                 assert_eq!(
                     visible,
                     sample[2].as_bool().unwrap(),
@@ -899,12 +900,17 @@ fn song_lua_tween_playback_matches_native() {
                     number(1, 0) - number(0, 0),
                     number(2, 1) - number(0, 1),
                 ];
-                let size = state.size.expect("native Quad fixtures declare their size");
+                let size = state.size.unwrap_or_else(|| {
+                    [
+                        track["texture_size"][0].as_f64().unwrap() as f32,
+                        track["texture_size"][1].as_f64().unwrap() as f32,
+                    ]
+                });
                 let actual = [
                     state.x,
                     state.y,
-                    size[0] * state.zoom_x,
-                    size[1] * state.zoom_y,
+                    size[0] * state.zoom_x * state.basezoom_x,
+                    size[1] * state.zoom_y * state.basezoom_y,
                 ];
                 for (actual, expected) in actual.into_iter().zip(expected) {
                     assert!(
@@ -912,6 +918,26 @@ fn song_lua_tween_playback_matches_native() {
                         "{name}/{actor_name} at {time}: {actual} vs {expected}"
                     );
                     checks += 1;
+                }
+                assert!(
+                    (state.diffuse[3] - sample[3].as_f64().unwrap() as f32).abs() < 0.001,
+                    "{name}/{actor_name} alpha at {time}"
+                );
+                if name == "late-texture" {
+                    assert!(
+                        !actor.initial_state.sprite_texture,
+                        "late sprite must remain untextured before its binding"
+                    );
+                    let mut initial = actor.initial_state;
+                    apply_song_lua_overlay_runtime_updates_for(
+                        0.19,
+                        &updates,
+                        0..updates.len(),
+                        &mut cursors,
+                        None,
+                        &mut initial,
+                    );
+                    assert!(!initial.sprite_texture, "texture appears before Bind");
                 }
             }
         }

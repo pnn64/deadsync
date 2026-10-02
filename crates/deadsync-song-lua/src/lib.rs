@@ -2552,6 +2552,8 @@ pub struct SongLuaOverlayState {
     pub text_distortion: f32,
     pub text_glow_mode: SongLuaTextGlowMode,
     pub mult_attrs_with_diffuse: bool,
+    // A delayed first binding must not draw its preloaded texture early.
+    pub sprite_texture: bool,
     pub sprite_animate: bool,
     pub sprite_loop: bool,
     pub sprite_playback_rate: f32,
@@ -2638,6 +2640,7 @@ impl Default for SongLuaOverlayState {
             text_distortion: 0.0,
             text_glow_mode: SongLuaTextGlowMode::Both,
             mult_attrs_with_diffuse: false,
+            sprite_texture: true,
             sprite_animate: false,
             sprite_loop: true,
             sprite_playback_rate: 1.0,
@@ -2780,6 +2783,7 @@ pub struct SongLuaOverlayStateDelta {
     pub text_distortion: Option<f32>,
     pub text_glow_mode: Option<SongLuaTextGlowMode>,
     pub mult_attrs_with_diffuse: Option<bool>,
+    pub sprite_texture: Option<bool>,
     pub sprite_animate: Option<bool>,
     pub sprite_loop: Option<bool>,
     pub sprite_playback_rate: Option<f32>,
@@ -2865,6 +2869,7 @@ impl SongLuaOverlayStateDelta {
             Target::TextDistortion => self.text_distortion.is_some(),
             Target::TextGlowMode => self.text_glow_mode.is_some(),
             Target::MultAttrsWithDiffuse => self.mult_attrs_with_diffuse.is_some(),
+            Target::SpriteTexture => self.sprite_texture.is_some(),
             Target::SpriteAnimate => self.sprite_animate.is_some(),
             Target::SpriteLoop => self.sprite_loop.is_some(),
             Target::SpritePlaybackRate => self.sprite_playback_rate.is_some(),
@@ -3227,6 +3232,9 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.mult_attrs_with_diffuse {
         state.mult_attrs_with_diffuse = value;
+    }
+    if let Some(value) = delta.sprite_texture {
+        state.sprite_texture = value;
     }
     if let Some(value) = delta.sprite_animate {
         state.sprite_animate = value;
@@ -3619,6 +3627,11 @@ pub fn overlay_state_lerp(
     {
         from.mult_attrs_with_diffuse = to;
     }
+    if let Some(to) = delta.sprite_texture
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.sprite_texture = to;
+    }
     if let Some(to) = delta.sprite_animate
         && t >= 1.0 - f32::EPSILON
     {
@@ -3705,6 +3718,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.text_distortion.is_none()
         && delta.text_glow_mode.is_none()
         && delta.mult_attrs_with_diffuse.is_none()
+        && delta.sprite_texture.is_none()
         && delta.sprite_animate.is_none()
         && delta.sprite_loop.is_none()
         && delta.sprite_playback_rate.is_none()
@@ -3920,6 +3934,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     if from.mult_attrs_with_diffuse.is_some() {
         into.mult_attrs_with_diffuse = from.mult_attrs_with_diffuse;
     }
+    if from.sprite_texture.is_some() {
+        into.sprite_texture = from.sprite_texture;
+    }
     if from.sprite_animate.is_some() {
         into.sprite_animate = from.sprite_animate;
     }
@@ -4066,6 +4083,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(text_distortion);
     copy_pair!(text_glow_mode);
     copy_pair!(mult_attrs_with_diffuse);
+    copy_pair!(sprite_texture);
     copy_pair!(sprite_animate);
     copy_pair!(sprite_loop);
     copy_pair!(sprite_playback_rate);
@@ -4440,6 +4458,7 @@ pub enum SongLuaOverlayUpdateTarget {
     TextDistortion,
     TextGlowMode,
     MultAttrsWithDiffuse,
+    SpriteTexture,
     SpriteAnimate,
     SpriteLoop,
     SpritePlaybackRate,

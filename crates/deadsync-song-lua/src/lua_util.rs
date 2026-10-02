@@ -725,6 +725,7 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "text_distortion" => Target::TextDistortion,
         "text_glow_mode" => Target::TextGlowMode,
         "mult_attrs_with_diffuse" => Target::MultAttrsWithDiffuse,
+        "sprite_texture" => Target::SpriteTexture,
         "sprite_animate" => Target::SpriteAnimate,
         "sprite_loop" => Target::SpriteLoop,
         "sprite_playback_rate" => Target::SpritePlaybackRate,
@@ -3437,6 +3438,7 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "text_jitter" => "__songlua_state_text_jitter",
         "text_distortion" => "__songlua_state_text_distortion",
         "mult_attrs_with_diffuse" => "__songlua_state_mult_attrs_with_diffuse",
+        "sprite_texture" => "__songlua_state_sprite_texture",
         "sprite_animate" => "__songlua_state_sprite_animate",
         "sprite_loop" => "__songlua_state_sprite_loop",
         "sprite_playback_rate" => "__songlua_state_sprite_playback_rate",
@@ -4416,6 +4418,11 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         if let Some(capture_name) = actor_aft_capture_name(actor)? {
             texture.set("__songlua_aft_capture_name", capture_name)?;
         }
+        let (screen_width, screen_height) = actor
+            .get::<Option<Table>>("__songlua_state_size")?
+            .and_then(|size| table_vec2(&size))
+            .map(|[width, height]| (width, height))
+            .unwrap_or((screen_width, screen_height));
         install_texture_proxy_methods(
             lua,
             &texture,
@@ -5238,8 +5245,37 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "SetTexture",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
+                prepare_capture_scope_actor(lua, &actor)?;
                 set_actor_texture_from_value(&actor, method_arg(&args, 0), false)?;
+                let size = match method_arg(&args, 0) {
+                    Some(Value::Table(texture)) => {
+                        let width = texture
+                            .get::<Option<Function>>("GetSourceFrameWidth")?
+                            .or(texture.get::<Option<Function>>("GetSourceWidth")?);
+                        let height = texture
+                            .get::<Option<Function>>("GetSourceFrameHeight")?
+                            .or(texture.get::<Option<Function>>("GetSourceHeight")?);
+                        width
+                            .zip(height)
+                            .map(|(width, height)| {
+                                Ok::<_, mlua::Error>((
+                                    width.call::<f32>(texture.clone())?,
+                                    height.call::<f32>(texture.clone())?,
+                                ))
+                            })
+                            .transpose()?
+                    }
+                    _ => actor_image_frame_size(&actor)?,
+                };
+                if let Some((width, height)) = size {
+                    capture_block_set_size(lua, &actor, [width, height])?;
+                }
+                if actor_aft_capture_name(&actor)?.is_some()
+                    || actor_texture_path(&actor)?.is_some()
+                {
+                    capture_block_set_bool(lua, &actor, "sprite_texture", true)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -13149,6 +13185,9 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                 mult_attrs_with_diffuse: block
                     .get::<Option<bool>>("mult_attrs_with_diffuse")
                     .map_err(|err| err.to_string())?,
+                sprite_texture: block
+                    .get::<Option<bool>>("sprite_texture")
+                    .map_err(|err| err.to_string())?,
                 sprite_animate: block
                     .get::<Option<bool>>("sprite_animate")
                     .map_err(|err| err.to_string())?,
@@ -13222,6 +13261,22 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
 
 pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
     let mut state = SongLuaOverlayState::default();
+    state.sprite_texture = actor
+        .raw_get::<Option<bool>>("__songlua_state_sprite_texture")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(
+            !actor
+                .raw_get::<Option<String>>("__songlua_actor_type")
+                .map_err(|err| err.to_string())?
+                .is_some_and(|kind| kind.eq_ignore_ascii_case("Sprite"))
+                || actor
+                    .get::<Option<String>>("Texture")
+                    .map_err(|err| err.to_string())?
+                    .is_some()
+                || actor_aft_capture_name(actor)
+                    .map_err(|err| err.to_string())?
+                    .is_some(),
+        );
     if let Some(visible) = actor
         .get::<Option<bool>>("__songlua_visible")
         .map_err(|err| err.to_string())?
@@ -13737,6 +13792,7 @@ pub fn set_actor_overlay_getter_state(
         };
     }
     set!("__songlua_visible", state.visible);
+    set!("__songlua_state_sprite_texture", state.sprite_texture);
     set!("__songlua_state_x", state.x);
     set!("__songlua_state_y", state.y);
     set!("__songlua_state_z", state.z);
@@ -14479,26 +14535,29 @@ where
         {
             SongLuaOverlayKind::AftSprite { capture_name }
         } else {
-            let Some(texture) = actor
+            let texture = actor
                 .get::<Option<String>>("Texture")
-                .map_err(|err| err.to_string())?
-            else {
-                return Ok(None);
-            };
-            if aft_capture_names.contains(&texture) {
-                SongLuaOverlayKind::AftSprite {
-                    capture_name: texture,
+                .map_err(|err| err.to_string())?;
+            if let Some(texture) = texture {
+                if aft_capture_names.contains(&texture) {
+                    SongLuaOverlayKind::AftSprite {
+                        capture_name: texture,
+                    }
+                } else {
+                    let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
+                        return Ok(None);
+                    };
+                    let texture_key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
+                    SongLuaOverlayKind::Sprite {
+                        texture_path,
+                        texture_key,
+                        states: read_sprite_states(actor)?.into(),
+                    }
                 }
             } else {
-                let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
-                    return Ok(None);
-                };
-                let texture_key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
-                SongLuaOverlayKind::Sprite {
-                    texture_path,
-                    texture_key,
-                    states: read_sprite_states(actor)?.into(),
-                }
+                // A message or recurring command can bind a texture later.
+                // Keep the actor's slot so its updates and proxy targets survive.
+                SongLuaOverlayKind::Actor
             }
         }
     } else if actor_type.eq_ignore_ascii_case("Sound") {
@@ -14604,7 +14663,7 @@ where
     }))
 }
 
-fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
+pub(crate) fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
     let mut states = Vec::new();
     let mut key = [0u8; 16];
     for index in 0i32.. {

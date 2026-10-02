@@ -6,7 +6,7 @@ use std::hint::black_box;
 mod baseline;
 
 // Insert the complete enum order from the existing behavior fixture below.
-const TARGETS: [SongLuaOverlayUpdateTarget; 77] = [
+const TARGETS: [SongLuaOverlayUpdateTarget; 78] = [
     SongLuaOverlayUpdateTarget::X,
     SongLuaOverlayUpdateTarget::Y,
     SongLuaOverlayUpdateTarget::Z,
@@ -65,6 +65,7 @@ const TARGETS: [SongLuaOverlayUpdateTarget; 77] = [
     SongLuaOverlayUpdateTarget::TextDistortion,
     SongLuaOverlayUpdateTarget::TextGlowMode,
     SongLuaOverlayUpdateTarget::MultAttrsWithDiffuse,
+    SongLuaOverlayUpdateTarget::SpriteTexture,
     SongLuaOverlayUpdateTarget::SpriteAnimate,
     SongLuaOverlayUpdateTarget::SpriteLoop,
     SongLuaOverlayUpdateTarget::SpritePlaybackRate,
@@ -337,7 +338,11 @@ fn writes(count: usize, late: bool) -> Vec<SongLuaScheduledOverlayUpdate> {
             duration_seconds: 1.0,
             easing: None,
             opt1: None,
-            target: TARGETS[if late { i / 16 % 77 } else { i % 77 }],
+            target: TARGETS[if late {
+                i / 16 % TARGETS.len()
+            } else {
+                i % TARGETS.len()
+            }],
             value: SongLuaOverlayUpdateValue::F32(i as f32),
         })
         .collect()
@@ -382,8 +387,8 @@ fn captured_final_target_mask_matches_frozen_loop_for_every_target_duplicates_an
             (target, value)
         })
         .collect();
-    for count in [0, 1, 4, 5, 15, 16, 17, 77, 256, 1232] {
-        for width in [0, 1, 4, 5, 15, 16, 17, 32, 77] {
+    for count in [0, 1, 4, 5, 15, 16, 17, TARGETS.len(), 256, 1232] {
+        for width in [0, 1, 4, 5, 15, 16, 17, 32, TARGETS.len()] {
             for index in [0, 1, 3, usize::MAX] {
                 for restored in [&[][..], &[0, 2][..], &[1, 3, usize::MAX][..]] {
                     let scheduled = writes(count, true);
@@ -645,8 +650,8 @@ fn tween_replay_bench() {
         (17, 17, false),
         (32, 0, false),
         (32, 32, false),
-        (77, 77, false),
-        (77, 1232, true),
+        (TARGETS.len(), TARGETS.len(), false),
+        (TARGETS.len(), 1232, true),
     ] {
         let input = writes(count, late);
         let state = SongLuaOverlayState::default();

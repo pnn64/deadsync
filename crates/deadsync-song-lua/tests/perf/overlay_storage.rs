@@ -67,6 +67,7 @@ const TARGETS: &[SongLuaOverlayUpdateTarget] = &[
     SongLuaOverlayUpdateTarget::TextDistortion,
     SongLuaOverlayUpdateTarget::TextGlowMode,
     SongLuaOverlayUpdateTarget::MultAttrsWithDiffuse,
+    SongLuaOverlayUpdateTarget::SpriteTexture,
     SongLuaOverlayUpdateTarget::SpriteAnimate,
     SongLuaOverlayUpdateTarget::SpriteLoop,
     SongLuaOverlayUpdateTarget::SpritePlaybackRate,
@@ -177,7 +178,7 @@ fn scheduled_lookup_matches_parent_for_every_target_duplicates_missing_states_an
         vertex_colors: Some([[0.25; 4]; 4]),
         ..Default::default()
     }; 2];
-    for count in [0, 1, 16, 77, 256] {
+    for count in [0, 1, 16, TARGETS.len(), 256] {
         for seed in 0..8 {
             let mut input = updates(count, TARGETS.len(), false);
             for (index, update) in input.iter_mut().enumerate() {
@@ -602,7 +603,7 @@ fn overlay_storage_bench_perframe() {
         (16, 1, false),
         (128, 1, false),
         (128, 16, false),
-        (512, 77, false),
+        (512, TARGETS.len(), false),
         (128, 1, true),
         (128, 16, true),
     ] {

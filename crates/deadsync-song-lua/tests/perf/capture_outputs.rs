@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[path = "capture_outputs_baseline.rs"]
 mod baseline;
 
-const TARGETS: [SongLuaOverlayUpdateTarget; 77] = [
+const TARGETS: [SongLuaOverlayUpdateTarget; 78] = [
     SongLuaOverlayUpdateTarget::X,
     SongLuaOverlayUpdateTarget::Y,
     SongLuaOverlayUpdateTarget::Z,
@@ -65,6 +65,7 @@ const TARGETS: [SongLuaOverlayUpdateTarget; 77] = [
     SongLuaOverlayUpdateTarget::TextDistortion,
     SongLuaOverlayUpdateTarget::TextGlowMode,
     SongLuaOverlayUpdateTarget::MultAttrsWithDiffuse,
+    SongLuaOverlayUpdateTarget::SpriteTexture,
     SongLuaOverlayUpdateTarget::SpriteAnimate,
     SongLuaOverlayUpdateTarget::SpriteLoop,
     SongLuaOverlayUpdateTarget::SpritePlaybackRate,

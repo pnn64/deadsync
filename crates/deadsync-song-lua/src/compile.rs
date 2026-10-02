@@ -672,7 +672,7 @@ where
         message_sounds.push((layer, message, path));
     }
     compile_timer.push_stage("deferred_messages");
-    resolve_late_proxy_targets(&mut overlays, &mut hidden_players)?;
+    resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
     crate::perframe::apply_startup_states(
         context,
         &mut overlays,
@@ -883,7 +883,7 @@ fn merge_runtime_messages(
     }
 }
 
-fn resolve_late_proxy_targets<NoteskinSlot, ModelVertex>(
+fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
     overlays: &mut [crate::SongLuaOverlayCompileActor<
         SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
     >],
@@ -895,6 +895,31 @@ fn resolve_late_proxy_targets<NoteskinSlot, ModelVertex>(
         .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
         .collect::<std::collections::HashMap<_, _>>();
     for overlay in overlays {
+        if matches!(overlay.actor.kind, SongLuaOverlayKind::Actor)
+            && overlay
+                .table
+                .get::<Option<String>>("__songlua_actor_type")
+                .map_err(|err| err.to_string())?
+                .is_some_and(|kind| kind.eq_ignore_ascii_case("Sprite"))
+        {
+            if let Some(capture_name) = crate::lua_util::actor_aft_capture_name(&overlay.table)
+                .map_err(|err| err.to_string())?
+            {
+                overlay.actor.kind = SongLuaOverlayKind::AftSprite { capture_name };
+            } else if let Some(texture) = overlay
+                .table
+                .get::<Option<String>>("Texture")
+                .map_err(|err| err.to_string())?
+            {
+                let texture_path =
+                    crate::lua_util::resolve_actor_asset_path(&overlay.table, &texture)?;
+                overlay.actor.kind = SongLuaOverlayKind::Sprite {
+                    texture_key: std::sync::Arc::from(texture_path.to_string_lossy().into_owned()),
+                    texture_path,
+                    states: crate::lua_util::read_sprite_states(&overlay.table)?.into(),
+                };
+            }
+        }
         let SongLuaOverlayKind::ActorProxy { target } = &mut overlay.actor.kind else {
             continue;
         };

@@ -1575,6 +1575,7 @@ fn overlay_state_update_value(
         Target::TextDistortion => value!(F32, text_distortion),
         Target::TextGlowMode => value!(TextGlowMode, text_glow_mode),
         Target::MultAttrsWithDiffuse => value!(Bool, mult_attrs_with_diffuse),
+        Target::SpriteTexture => value!(Bool, sprite_texture),
         Target::SpriteAnimate => value!(Bool, sprite_animate),
         Target::SpriteLoop => value!(Bool, sprite_loop),
         Target::SpritePlaybackRate => value!(F32, sprite_playback_rate),
@@ -1709,6 +1710,7 @@ fn set_overlay_state_update_value(
     set_value!(TextDistortion, F32, text_distortion);
     set_value!(TextGlowMode, TextGlowMode, text_glow_mode);
     set_value!(MultAttrsWithDiffuse, Bool, mult_attrs_with_diffuse);
+    set_value!(SpriteTexture, Bool, sprite_texture);
     set_value!(SpriteAnimate, Bool, sprite_animate);
     set_value!(SpriteLoop, Bool, sprite_loop);
     set_value!(SpritePlaybackRate, F32, sprite_playback_rate);

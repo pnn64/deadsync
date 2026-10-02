@@ -2921,7 +2921,7 @@ struct SongLuaCaptureTransform {
 
 #[inline(always)]
 fn song_lua_overlay_is_visible(state: SongLuaOverlayState) -> bool {
-    state.visible && state.diffuse[3] > f32::EPSILON
+    state.sprite_texture && state.visible && state.diffuse[3] > f32::EPSILON
 }
 
 #[inline(always)]
@@ -5304,6 +5304,7 @@ pub fn apply_overlay_update(
     set_value!(TextDistortion, F32, text_distortion);
     set_value!(TextGlowMode, TextGlowMode, text_glow_mode);
     set_value!(MultAttrsWithDiffuse, Bool, mult_attrs_with_diffuse);
+    set_value!(SpriteTexture, Bool, sprite_texture);
     set_value!(SpriteAnimate, Bool, sprite_animate);
     set_value!(SpriteLoop, Bool, sprite_loop);
     set_value!(SpritePlaybackRate, F32, sprite_playback_rate);
