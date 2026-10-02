@@ -122,11 +122,40 @@ pub fn player_changes_chart<Profile: GameplayProfileData>(
 
 #[inline]
 fn find_attack_time(raw: &[u8], start: usize) -> Option<usize> {
-    const TIME: &[u8; 5] = b"TIME=";
-    raw.get(start..)?
-        .windows(TIME.len())
-        .position(|window| window.eq_ignore_ascii_case(TIME))
-        .map(|offset| start + offset)
+    let raw = raw.get(start..)?;
+    let mut windows = raw.windows(5);
+    // Check the common immediate hit before setting up the byte search.
+    if windows.next()?.eq_ignore_ascii_case(b"TIME=") {
+        return Some(start);
+    }
+    if raw.len() > 32 {
+        return find_attack_time_long(raw).map(|offset| start + offset);
+    }
+    windows
+        .position(|window| window.eq_ignore_ascii_case(b"TIME="))
+        .map(|offset| start + 1 + offset)
+}
+
+// Keep bulk-search setup out of the small immediate-hit path, including LTO.
+#[inline(never)]
+fn find_attack_time_long(raw: &[u8]) -> Option<usize> {
+    let mut previous = raw[0].eq_ignore_ascii_case(&b't').then_some(0);
+    for relative in memchr::memchr2_iter(b'T', b't', &raw[1..raw.len() - 4]) {
+        let offset = relative + 1;
+        if raw[offset + 1..offset + 5].eq_ignore_ascii_case(b"IME=") {
+            return Some(offset);
+        }
+        // Dense false initials make repeated byte searches more expensive
+        // than the original scalar scan. Resume after this rejected window.
+        if previous.is_some_and(|previous| offset - previous <= 8) {
+            return raw[offset + 1..]
+                .windows(5)
+                .position(|window| window.eq_ignore_ascii_case(b"TIME="))
+                .map(|relative| offset + 1 + relative);
+        }
+        previous = Some(offset);
+    }
+    None
 }
 
 #[derive(Clone, Copy)]
@@ -6680,16 +6709,17 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
     if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
         return Some(ScrollSpeedSetting::XMod(v));
     }
-    let (&kind, value) = trimmed.as_bytes().split_first()?;
-    let value = std::str::from_utf8(value)
-        .ok()?
-        .trim()
-        .parse::<f32>()
-        .ok()?;
+    let kind = trimmed.as_bytes().first()?.to_ascii_lowercase();
+    if !matches!(kind, b'c' | b'x' | b'm') {
+        return None;
+    }
+    // An ASCII prefix ends on a UTF-8 boundary. Ordinary modifier names
+    // need no floating-point parse or validation of the rest of the token.
+    let value = trimmed[1..].trim().parse::<f32>().ok()?;
     if value <= 0.0 {
         return None;
     }
-    match kind.to_ascii_lowercase() {
+    match kind {
         b'c' => Some(ScrollSpeedSetting::CMod(value)),
         b'x' => Some(ScrollSpeedSetting::XMod(value)),
         b'm' => Some(ScrollSpeedSetting::MMod(value)),

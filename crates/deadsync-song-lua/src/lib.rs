@@ -1988,6 +1988,19 @@ const OVERLAY_PARSE_KEY_STACK_BYTES: usize = 32;
 
 #[inline]
 fn with_ascii_lowercase_overlay_key<T>(raw: &str, use_key: impl FnOnce(&str) -> T) -> T {
+    let has_uppercase = if raw.len() <= OVERLAY_PARSE_KEY_STACK_BYTES {
+        raw.bytes().any(|byte| byte.is_ascii_uppercase())
+    } else {
+        // Title-case names can use the existing fallback immediately. For
+        // long folded names, a full reduction lets LLVM scan bytes in bulk.
+        raw.as_bytes()[0].is_ascii_uppercase()
+            || raw.bytes().fold(false, |has_uppercase, byte| {
+                has_uppercase | byte.is_ascii_uppercase()
+            })
+    };
+    if !has_uppercase {
+        return use_key(raw);
+    }
     if raw.len() <= OVERLAY_PARSE_KEY_STACK_BYTES {
         let mut key = [0u8; OVERLAY_PARSE_KEY_STACK_BYTES];
         key[..raw.len()].copy_from_slice(raw.as_bytes());
@@ -22867,6 +22880,10 @@ mod alignment_access_perf;
 #[cfg(test)]
 #[path = "../tests/perf/lua_integration.rs"]
 mod lua_integration_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/key_dispatch.rs"]
+mod key_dispatch_perf;
 
 mod method_args;
 

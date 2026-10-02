@@ -191,3 +191,7 @@ mod window_batches_perf;
 #[cfg(test)]
 #[path = "../tests/perf/attack_preparation.rs"]
 mod attack_preparation_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/parser_dispatch.rs"]
+mod parser_dispatch_perf;
