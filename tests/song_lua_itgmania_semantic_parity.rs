@@ -2500,59 +2500,6 @@ fn stateful_command_matches(
         .all(|(_, block)| stateful_block_matches(writes, overlay_index, targets, block))
 }
 
-fn expected_blocks_summary(expected: &ExpectedCommand) -> String {
-    expected
-        .blocks
-        .iter()
-        .map(|(_, block)| {
-            format!(
-                "({:.3}+{:.3},{:?},a={:?},v={:?},x={:?},y={:?},z={:?},zx={:?},zy={:?},r={:?},cl={:?},cr={:?},s={:?})",
-                block.start,
-                block.duration,
-                block.easing,
-                block.alpha,
-                block.visible,
-                block.x,
-                block.y,
-                block.zoom,
-                block.zoom_x,
-                block.zoom_y,
-                block.rot_z,
-                block.crop_left,
-                block.crop_right,
-                block.sprite_state
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn actual_blocks_summary(actual: &[SongLuaOverlayCommandBlock]) -> String {
-    actual
-        .iter()
-        .map(|block| {
-            format!(
-                "({:.3}+{:.3},{:?},a={:?},v={:?},x={:?},y={:?},z={:?},zx={:?},zy={:?},r={:?},cl={:?},cr={:?},s={:?})",
-                block.start,
-                block.duration,
-                block.easing,
-                block.delta.diffuse.map(|color| color[3]),
-                block.delta.visible,
-                block.delta.x,
-                block.delta.y,
-                block.delta.zoom,
-                block.delta.zoom_x,
-                block.delta.zoom_y,
-                block.delta.rot_z_deg
-                ,block.delta.cropleft,
-                block.delta.cropright,
-                block.delta.sprite_state_index
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
 fn compare_commands(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -2603,25 +2550,14 @@ fn compare_commands(
             parity.check(true, String::new);
             continue;
         }
-        let Some((_, actual)) = candidates
-            .iter()
-            .find(|(_, command)| command.message == expected.message)
-        else {
-            missing.entry(expected.message.clone()).or_default().push((
-                label,
-                expected.target.clone(),
-                expected,
-            ));
-            continue;
-        };
-        parity.check(false, || {
-            format!(
-                "{}MessageCommand differs on {label}: ITGmania [{}], DeadSync [{}]",
-                expected.message,
-                expected_blocks_summary(&expected),
-                actual_blocks_summary(&actual.blocks)
-            )
-        });
+        // A receiver may depend on callback state and therefore have runtime
+        // captures alongside other actors' static commands for this message.
+        // Try those recorded writes before declaring a static mismatch.
+        missing.entry(expected.message.clone()).or_default().push((
+            label,
+            expected.target.clone(),
+            expected,
+        ));
     }
     for (message, targets) in missing {
         let mut used_dynamic = HashSet::new();
@@ -3502,6 +3438,75 @@ fn fallback_tweens_match_native_drawing() {
 }
 
 #[test]
+fn spin_tweens_match_native_rotation() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&dir, "Spin Tweens");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 2.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("spin-tween.lua").as_path()], 0, &context).unwrap();
+    let native: Value = serde_json::from_reader(
+        zstd::stream::read::Decoder::new(
+            fs::File::open(
+                root.join("tests/fixtures/itgmania-song-lua-micro/spin-tween-native.json.zst"),
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let time = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(&compiled[0], &context, time, time);
+        for actor in sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["kind"] == "sprite")
+        {
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == actor["name"].as_str())
+                .unwrap();
+            let mut state = states[index];
+            assert!(state.spin_baked);
+            let rendered =
+                deadsync_song_lua::playback::actor_conformance::effect_sample(state, time, time);
+            [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = rendered.rotation;
+            let expected = actor["current"]["rotation"][2].as_f64().unwrap() as f32;
+            assert!(
+                (state.rot_z_deg - expected).abs() <= 0.001,
+                "{} at {time}: {} vs {expected}",
+                actor["name"],
+                state.rot_z_deg
+            );
+            let vertices = compiled_world_vertices(state, [64.0, 32.0]);
+            for corner in 0..4 {
+                for axis in 0..2 {
+                    let expected = actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["screen"]
+                        [axis]
+                        .as_f64()
+                        .unwrap() as f32;
+                    assert!(
+                        (vertices[corner][axis] - expected).abs() <= 0.002,
+                        "{} at {time}: {} vs {expected}",
+                        actor["name"],
+                        vertices[corner][axis]
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 1936);
+}
+
+#[test]
 fn queued_update_matches_native_order() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -3551,6 +3556,7 @@ fn queued_commands_match_native() {
         "callback-phase",
         "finish-queue",
         "late-texture",
+        "spin-update",
     ] {
         let trace = read_trace_file(&root.join(format!(
             "tests/fixtures/itgmania-song-lua-micro/{name}.json"
@@ -3563,6 +3569,38 @@ fn queued_commands_match_native() {
         let compiled =
             compile_song_lua_layers(&[dir.join(format!("{name}.lua")).as_path()], 0, &context)
                 .unwrap();
+        if name == "spin-update" {
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some("Spinning"))
+                .unwrap();
+            assert!(
+                compiled[0].overlays[index]
+                    .message_commands
+                    .iter()
+                    .all(|command| command.message != "Context")
+            );
+            let mut incorrect = compiled.clone();
+            let write = incorrect[0]
+                .stateful_message_captures
+                .iter_mut()
+                .find(|capture| capture.message == "Context")
+                .unwrap()
+                .writes
+                .iter_mut()
+                .find(|write| {
+                    write.overlay_index == index && write.target == SongLuaOverlayUpdateTarget::Zoom
+                })
+                .unwrap();
+            write.value = deadsync_song_lua::SongLuaOverlayUpdateValue::F32(999.0);
+            let mut rejected = Parity::default();
+            compare_commands(&trace, &incorrect, 0, &mut rejected);
+            assert!(
+                !rejected.gaps.is_empty(),
+                "incorrect callback-dependent message must fail"
+            );
+        }
         let parity = compare_semantics(&trace, &compiled, 0, &context);
         eprintln!("{}", parity.summary(&trace.title));
         parity.assert_complete(name);
