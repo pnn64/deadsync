@@ -1,0 +1,28 @@
+{
+  "fixture_schema_version": 1,
+  "itgmania": {
+    "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+    "git_dirty": "false",
+    "execution": "embedded_bundled_lua",
+    "launches_executable": false
+  },
+  "harness_sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+  },
+  "files_sha256": {
+    "deadsync/tests/fixtures/song-lua/bpm-fade.lua": "e064588d8d520f2d90d5b22b3baec8ed4f69b609ae59e9c737f5c32d3a886373",
+    "itgmania-harness-rs/tests/fixtures/song-lua-headless/bpm-fade.lua": "e064588d8d520f2d90d5b22b3baec8ed4f69b609ae59e9c737f5c32d3a886373",
+    "itgmania-harness-rs/fixtures/actors/bpm-fade.json": "eba690030dcfca644225a011f09f75b861901e978d30af8511e97b9f9424dbff",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/bpm-fade.json": "3308585e541709366cd44e13c6a87b19547c525222444c17745fd31030c4c4d2",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/bpm-fade-native.json": "8efa53d2ebb9412a1e801392c8d041a944b369c5446525d75cd2711b3c44085d"
+  },
+  "native_alpha_checks": 9,
+  "regression": "seconds-based duplicate fades spanning a BPM change",
+  "native_actor": {
+    "execution": "embedded_native_sources",
+    "git_dirty": "false",
+    "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+    "oracle": "itgmania_native_actor_conformance"
+  }
+}

@@ -123,10 +123,202 @@
     },
     {
       "simfile": "666/666.ssc",
-      "fixture": "666/666.ssc.semantic.json",
+      "fixture": "666/666.ssc.semantic.json.zst",
       "title": "666",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.03125,
+          "max_events": 5000000
+        },
+        "random_seed": 1,
+        "update_frames": 7093,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00"
+        },
+        "sha256": "8f2839665bb9493a46188291d8bf1c6fd7a4c70f03a0801a7eb6d343aa6442fa",
+        "uncompressed_sha256": "c900d3df3fa4d24dfea5964a543cab7829ebce833e9fc59b35e4fe9ecdca071e",
+        "compressed_bytes": 295767,
+        "uncompressed_bytes": 6910310
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "contexts": [
+        {
+          "difficulty": "Hard",
+          "fixture": "666/666.ssc.hard.semantic.json.zst",
+          "status": "ok",
+          "runtime_errors": 0,
+          "dropped_events": 0,
+          "reference": {
+            "itgmania": {
+              "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+              "git_dirty": "false",
+              "execution": "embedded_bundled_lua",
+              "launches_executable": false
+            },
+            "context": {
+              "players": [
+                "PLAYER_1",
+                "PLAYER_2"
+              ],
+              "preferred_difficulty": "Hard",
+              "preferred_steps_type": "dance-single",
+              "screen": [
+                854,
+                480
+              ],
+              "beat_step": 0.03125,
+              "max_events": 5000000
+            },
+            "random_seed": 1,
+            "update_frames": 7093,
+            "lua_song_beat_precision": "native_float",
+            "harness_sources_sha256": {
+              "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00"
+            },
+            "sha256": "419889449cb68384369501b2ae1892049d5a8f2943d4ee5e9daee53636469129",
+            "uncompressed_sha256": "2b3a7dc38ddb101c005d38f45adcb602d42ed6c511f6e4a3d1c1f70ba9df11a9",
+            "compressed_bytes": 295882,
+            "uncompressed_bytes": 6910303
+          }
+        },
+        {
+          "difficulty": "Medium",
+          "fixture": "666/666.ssc.medium.semantic.json.zst",
+          "status": "ok",
+          "runtime_errors": 0,
+          "dropped_events": 0,
+          "reference": {
+            "itgmania": {
+              "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+              "git_dirty": "false",
+              "execution": "embedded_bundled_lua",
+              "launches_executable": false
+            },
+            "context": {
+              "players": [
+                "PLAYER_1",
+                "PLAYER_2"
+              ],
+              "preferred_difficulty": "Medium",
+              "preferred_steps_type": "dance-single",
+              "screen": [
+                854,
+                480
+              ],
+              "beat_step": 0.03125,
+              "max_events": 5000000
+            },
+            "random_seed": 1,
+            "update_frames": 7093,
+            "lua_song_beat_precision": "native_float",
+            "harness_sources_sha256": {
+              "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00"
+            },
+            "sha256": "ec3408f96f22fe1194bde2a199541e6db33caf9c151178b3fdc201c8abbc91fb",
+            "uncompressed_sha256": "a8af27839091df83780d033a0c29ca1cf531a0fd69ae07ec6a3afeeb366a9ee0",
+            "compressed_bytes": 209611,
+            "uncompressed_bytes": 5917127
+          }
+        },
+        {
+          "difficulty": "Easy",
+          "fixture": "666/666.ssc.easy.semantic.json.zst",
+          "status": "ok",
+          "runtime_errors": 0,
+          "dropped_events": 0,
+          "reference": {
+            "itgmania": {
+              "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+              "git_dirty": "false",
+              "execution": "embedded_bundled_lua",
+              "launches_executable": false
+            },
+            "context": {
+              "players": [
+                "PLAYER_1",
+                "PLAYER_2"
+              ],
+              "preferred_difficulty": "Easy",
+              "preferred_steps_type": "dance-single",
+              "screen": [
+                854,
+                480
+              ],
+              "beat_step": 0.03125,
+              "max_events": 5000000
+            },
+            "random_seed": 1,
+            "update_frames": 7093,
+            "lua_song_beat_precision": "native_float",
+            "harness_sources_sha256": {
+              "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00"
+            },
+            "sha256": "0a49a303cd9049be21ac23b1e9c35ba5ff50cf410fb6f260a0639a793832742c",
+            "uncompressed_sha256": "7649ae924c6e596d5a3b72d9dd69e8447cc1e6a4f2d1390aaa0e598bed76588a",
+            "compressed_bytes": 209604,
+            "uncompressed_bytes": 5917127
+          }
+        },
+        {
+          "difficulty": "Beginner",
+          "fixture": "666/666.ssc.beginner.semantic.json.zst",
+          "status": "ok",
+          "runtime_errors": 0,
+          "dropped_events": 0,
+          "reference": {
+            "itgmania": {
+              "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+              "git_dirty": "false",
+              "execution": "embedded_bundled_lua",
+              "launches_executable": false
+            },
+            "context": {
+              "players": [
+                "PLAYER_1",
+                "PLAYER_2"
+              ],
+              "preferred_difficulty": "Beginner",
+              "preferred_steps_type": "dance-single",
+              "screen": [
+                854,
+                480
+              ],
+              "beat_step": 0.03125,
+              "max_events": 5000000
+            },
+            "random_seed": 1,
+            "update_frames": 7050,
+            "lua_song_beat_precision": "native_float",
+            "harness_sources_sha256": {
+              "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00"
+            },
+            "sha256": "76c95e77b90799c3d67b3d40a446b8b5366a51a8b4068ef7aabe93cb92c37fd3",
+            "uncompressed_sha256": "5fca7561cd502ed86b4544e0d5d6d6918048e5919dc0ebd08758149e27442209",
+            "compressed_bytes": 208533,
+            "uncompressed_bytes": 5881534
+          }
+        }
+      ]
     },
     {
       "simfile": "7th Gear/7th Gear.ssc",

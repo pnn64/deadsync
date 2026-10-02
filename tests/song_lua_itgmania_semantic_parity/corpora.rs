@@ -76,6 +76,19 @@ mod lua_songs {
     use super::*;
 
     #[test]
+    #[ignore = "compiles every other 666 difficulty and reports all semantic checks"]
+    fn song_666_other_difficulties() {
+        for difficulty in ["Hard", "Medium", "Easy", "Beginner"] {
+            let trace = read_trace_file(&fixture_root(&CORPUS).join(format!(
+                "666/666.ssc.{}.semantic.json.zst",
+                difficulty.to_ascii_lowercase()
+            )));
+            assert_eq!(trace.difficulty, format!("Difficulty_{difficulty}"));
+            assert_trace_parity(&CORPUS, "666/666.ssc", &trace);
+        }
+    }
+
+    #[test]
     #[ignore = "compiles Waltz's non-Challenge branch and reports every semantic check"]
     fn waltz_capriccio_medium() {
         let trace = read_trace_file(
