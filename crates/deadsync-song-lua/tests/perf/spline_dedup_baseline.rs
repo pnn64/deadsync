@@ -5,7 +5,7 @@ use super::*;
 /// and one sample buffer for the authored lanes. Coefficients are shared only
 /// with the preceding lane frame; there is no global cache or eviction policy.
 pub(super) struct ColumnSplineCapture {
-    points: Vec<[f32; 3]>,
+    points: crate::lua_util::ColumnSplineReadScratch,
     sampled: Vec<(usize, usize, deadsync_gameplay::SongLuaColumnSplineFrame)>,
     pub(super) lanes: BTreeMap<(usize, usize), Vec<deadsync_gameplay::SongLuaColumnSplineFrame>>,
     pub(super) bytes: usize,

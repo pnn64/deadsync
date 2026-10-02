@@ -761,15 +761,43 @@ pub struct SongLuaSplineData {
 
 /// Solve native non-looping cubic coefficients at the load boundary.
 pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
+    let mut out = Vec::new();
+    solve_song_lua_spline_into(points, &mut out, &mut Vec::new());
+    out
+}
+
+/// Load-lifetime spline workspace. A solve within retained capacity allocates
+/// nothing; callers copy its borrowed coefficients into song-owned storage.
+/// Buffers are released with the workspace, with no global cache or locking.
+#[derive(Default)]
+pub struct SongLuaSplineSolver {
+    coefficients: Vec<[[f32; 4]; 3]>,
+    diagonals: Vec<f32>,
+}
+
+impl SongLuaSplineSolver {
+    pub fn solve(&mut self, points: &[[f32; 3]]) -> &[[[f32; 4]; 3]] {
+        solve_song_lua_spline_into(points, &mut self.coefficients, &mut self.diagonals);
+        &self.coefficients
+    }
+}
+
+fn solve_song_lua_spline_into(
+    points: &[[f32; 3]],
+    out: &mut Vec<[[f32; 4]; 3]>,
+    diagonals: &mut Vec<f32>,
+) {
     let size = points.len();
-    let mut out = vec![[[0.0; 4]; 3]; size];
+    out.clear();
+    out.reserve_exact(size);
+    out.resize(size, [[0.0; 4]; 3]);
     for (coefficients, point) in out.iter_mut().zip(points) {
         for axis in 0..3 {
             coefficients[axis][0] = point[axis];
         }
     }
     if size < 2 {
-        return out;
+        return;
     }
     let active = std::array::from_fn::<_, 3, _>(|axis| {
         !points.iter().all(|point| point[axis] == points[0][axis])
@@ -781,14 +809,16 @@ pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
                 out[1][axis][1] = -out[0][axis][1];
             }
         }
-        return out;
+        return;
     }
     if !active.iter().any(|&axis| axis) {
-        return out;
+        return;
     }
     // The three axes share the same tridiagonal matrix. Factor it once,
     // keeping each axis's slopes in its already allocated output coefficient.
-    let mut diagonals = vec![4.0_f32; size];
+    diagonals.clear();
+    diagonals.reserve_exact(size);
+    diagonals.resize(size, 4.0);
     diagonals[0] = 2.0;
     diagonals[size - 1] = 2.0;
     if active.iter().filter(|&&axis| axis).count() == 1 {
@@ -819,7 +849,7 @@ pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
             out[i][axis][2] = 3.0 * diff - 2.0 * slope - next_slope;
             out[i][axis][3] = -2.0 * diff + slope + next_slope;
         }
-        return out;
+        return;
     }
     for axis in 0..3 {
         if !active[axis] {
@@ -867,7 +897,6 @@ pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
             }
         }
     }
-    out
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -7,7 +7,7 @@ use std::sync::Arc;
 #[path = "spline_capture_baseline.rs"]
 mod baseline;
 
-pub(super) fn fixture(lanes: usize, size: usize) -> (Lua, Vec<Table>) {
+pub(crate) fn fixture(lanes: usize, size: usize) -> (Lua, Vec<Table>) {
     let lua = Lua::new();
     let columns = lua.create_table().unwrap();
     let mut actors = Vec::new();

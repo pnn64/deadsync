@@ -2536,24 +2536,37 @@ pub fn call_update_functions_at(
 struct ColumnSplineLane {
     frames: Vec<deadsync_gameplay::SongLuaColumnSplineFrame>,
     // NaN coefficients are deliberately non-reflexive under PartialEq.
-    // Cache this property once per solved buffer, including across metadata edits.
-    reflexive: [bool; 2],
+    // Inspect a solved buffer only on its first identity comparison.
+    // Geometry that changes every sample never needs this scan.
+    reflexive: [Option<bool>; 2],
 }
 
 fn captured_spline_matches(
     previous: &Option<deadsync_gameplay::SongLuaSplineData>,
     next: &Option<deadsync_gameplay::SongLuaSplineData>,
-    reflexive: bool,
+    reflexive: &mut Option<bool>,
 ) -> bool {
     match (previous, next) {
         (Some(previous), Some(next)) => {
-            previous.constant == next.constant
-                && previous.beats_per_t == next.beats_per_t
-                && previous.receptor_t == next.receptor_t
-                && previous.subtract_song_beat == next.subtract_song_beat
-                && ((reflexive
-                    && std::sync::Arc::ptr_eq(&previous.coefficients, &next.coefficients))
-                    || previous.coefficients == next.coefficients)
+            if previous.constant != next.constant
+                || previous.beats_per_t != next.beats_per_t
+                || previous.receptor_t != next.receptor_t
+                || previous.subtract_song_beat != next.subtract_song_beat
+            {
+                return false;
+            }
+            if std::sync::Arc::ptr_eq(&previous.coefficients, &next.coefficients) {
+                *reflexive.get_or_insert_with(|| {
+                    previous
+                        .coefficients
+                        .iter()
+                        .flatten()
+                        .flatten()
+                        .all(|value| !value.is_nan())
+                })
+            } else {
+                previous.coefficients == next.coefficients
+            }
         }
         (None, None) => true,
         _ => false,
@@ -2563,30 +2576,27 @@ fn captured_spline_matches(
 fn captured_spline_reflexive(
     next: &Option<deadsync_gameplay::SongLuaSplineData>,
     previous: Option<&Option<deadsync_gameplay::SongLuaSplineData>>,
-    previous_reflexive: bool,
-) -> bool {
-    let Some(next) = next else {
-        return true;
-    };
+    previous_reflexive: Option<bool>,
+) -> Option<bool> {
     if previous
         .and_then(Option::as_ref)
-        .is_some_and(|previous| std::sync::Arc::ptr_eq(&previous.coefficients, &next.coefficients))
+        .zip(next.as_ref())
+        .is_some_and(|(previous, next)| {
+            std::sync::Arc::ptr_eq(&previous.coefficients, &next.coefficients)
+        })
     {
-        return previous_reflexive;
+        previous_reflexive
+    } else {
+        None
     }
-    next.coefficients
-        .iter()
-        .flatten()
-        .flatten()
-        .all(|value| !value.is_nan())
 }
 
 #[derive(Default)]
-/// Compile-lifetime scratch: one point buffer (at most 65536 coordinates)
-/// and one sample buffer for the authored lanes. Coefficients are shared only
-/// with the preceding lane frame; there is no global cache or eviction policy.
+/// Compile-lifetime reader/solver buffers and one sample buffer for the lanes.
+/// Equal geometry shares immutable coefficients after validating Lua reads.
+/// One recent buffer is retained; there is no global cache or eviction policy.
 struct ColumnSplineCapture {
-    points: Vec<[f32; 3]>,
+    points: crate::lua_util::ColumnSplineReadScratch,
     sampled: Vec<(usize, usize, deadsync_gameplay::SongLuaColumnSplineFrame)>,
     lanes: BTreeMap<(usize, usize), ColumnSplineLane>,
     bytes: usize,
@@ -2608,8 +2618,8 @@ impl ColumnSplineCapture {
             let lane = self.lanes.entry((player, column)).or_default();
             let last = lane.frames.last();
             if last.is_some_and(|last| {
-                captured_spline_matches(&last.position, &frame.position, lane.reflexive[0])
-                    && captured_spline_matches(&last.zoom, &frame.zoom, lane.reflexive[1])
+                captured_spline_matches(&last.position, &frame.position, &mut lane.reflexive[0])
+                    && captured_spline_matches(&last.zoom, &frame.zoom, &mut lane.reflexive[1])
             }) {
                 continue;
             }
@@ -3567,8 +3577,12 @@ mod tween_replay_perf;
 
 #[cfg(test)]
 #[path = "../tests/perf/spline_capture.rs"]
-mod spline_capture_perf;
+pub(crate) mod spline_capture_perf;
 
 #[cfg(test)]
 #[path = "../tests/perf/spline_dedup.rs"]
 mod spline_dedup_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/spline_workspace_capture.rs"]
+mod spline_workspace_capture_perf;

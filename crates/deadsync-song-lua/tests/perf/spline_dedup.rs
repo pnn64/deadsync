@@ -19,16 +19,16 @@ fn spline(value: f32) -> deadsync_gameplay::SongLuaSplineData {
 fn identity_shortcut_preserves_partial_equality_and_nan_non_reflexivity() {
     for value in [1.0, -0.0, f32::INFINITY, f32::NEG_INFINITY, f32::NAN] {
         let previous = Some(spline(value));
-        let reflexive = captured_spline_reflexive(&previous, None, false);
+        let mut reflexive = None;
         let mut next = previous.clone();
         assert_eq!(
-            captured_spline_matches(&previous, &next, reflexive),
+            captured_spline_matches(&previous, &next, &mut reflexive),
             previous == next
         );
         let original = Arc::clone(&next.as_ref().unwrap().coefficients);
         next.as_mut().unwrap().receptor_t = 3.0;
         assert_eq!(
-            captured_spline_matches(&previous, &next, reflexive),
+            captured_spline_matches(&previous, &next, &mut reflexive),
             previous == next
         );
         assert_eq!(
@@ -38,12 +38,16 @@ fn identity_shortcut_preserves_partial_equality_and_nan_non_reflexivity() {
         next.as_mut().unwrap().receptor_t = 0.0;
         next.as_mut().unwrap().coefficients = original.to_vec().into();
         assert_eq!(
-            captured_spline_matches(&previous, &next, reflexive),
+            captured_spline_matches(&previous, &next, &mut reflexive),
             previous == next
         );
     }
-    assert!(captured_spline_matches(&None, &None, false));
-    assert!(!captured_spline_matches(&None, &Some(spline(1.0)), true));
+    assert!(captured_spline_matches(&None, &None, &mut None));
+    assert!(!captured_spline_matches(
+        &None,
+        &Some(spline(1.0)),
+        &mut None
+    ));
 }
 
 #[test]
@@ -87,7 +91,7 @@ fn benchmark_spline_dedup() {
         data.coefficients = vec![[[1.0; 4]; 3]; size].into();
         let previous = Some(data);
         let next = previous.clone();
-        let reflexive = captured_spline_reflexive(&previous, None, false);
+        let mut reflexive = None;
         for old in if reverse {
             [false, true]
         } else {
@@ -102,7 +106,7 @@ fn benchmark_spline_dedup() {
                         captured_spline_matches(
                             black_box(&previous),
                             black_box(&next),
-                            black_box(reflexive),
+                            black_box(&mut reflexive),
                         )
                     });
                 }

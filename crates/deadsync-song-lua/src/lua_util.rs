@@ -10187,11 +10187,35 @@ pub fn read_note_column_transform_samples(
     )
 }
 
+/// Compile-lifetime buffers and one recent geometry (at most 65536 points).
+/// Coordinates are read and validated before reuse, including in-place edits.
+/// No table identity or metadata is used to skip Lua reads. All storage is
+/// released after capture; the existing logical track-byte limit is unchanged.
+#[derive(Default)]
+pub(crate) struct ColumnSplineReadScratch {
+    points: Vec<[f32; 3]>,
+    solver: deadsync_gameplay::SongLuaSplineSolver,
+    recent: Option<std::sync::Arc<[[[f32; 4]; 3]]>>,
+}
+
+fn spline_points_match(points: &[[f32; 3]], coefficients: &[[[f32; 4]; 3]]) -> bool {
+    points.len() == coefficients.len()
+        && points
+            .iter()
+            .zip(coefficients)
+            .all(|(point, coefficients)| {
+                point
+                    .iter()
+                    .zip(coefficients)
+                    .all(|(value, axis)| value.to_bits() == axis[0].to_bits())
+            })
+}
+
 fn read_position_spline(
     column: &Table,
     key: &str,
     previous: Option<&deadsync_gameplay::SongLuaSplineData>,
-    points: &mut Vec<[f32; 3]>,
+    scratch: &mut ColumnSplineReadScratch,
 ) -> Result<Option<deadsync_gameplay::SongLuaSplineData>, String> {
     let Some(handler) = column
         .get::<Option<Table>>(key)
@@ -10232,6 +10256,7 @@ fn read_position_spline(
     let table = spline
         .get::<Table>("__songlua_spline_points")
         .map_err(|err| err.to_string())?;
+    let points = &mut scratch.points;
     points.clear();
     points.reserve_exact(size);
     let mut unchanged = previous.is_some_and(|spline| spline.coefficients.len() == size);
@@ -10262,11 +10287,15 @@ fn read_position_spline(
                 });
         points.push(values);
     }
-    Ok(Some(deadsync_gameplay::SongLuaSplineData {
+    let result = deadsync_gameplay::SongLuaSplineData {
         coefficients: if unchanged {
             std::sync::Arc::clone(&previous.expect("matching spline exists").coefficients)
+        } else if let Some(recent) = &scratch.recent
+            && spline_points_match(points, recent)
+        {
+            std::sync::Arc::clone(recent)
         } else {
-            deadsync_gameplay::solve_song_lua_spline(points).into()
+            std::sync::Arc::from(scratch.solver.solve(points))
         },
         constant: points.iter().all(|point| *point == points[0]),
         beats_per_t,
@@ -10274,7 +10303,18 @@ fn read_position_spline(
         subtract_song_beat: handler
             .get::<bool>("__songlua_subtract_song_beat")
             .map_err(|err| err.to_string())?,
-    }))
+    };
+    // A preceding-frame hit needs no change to the recent-geometry slot.
+    // Avoid cloning/dropping that reference for every steady lane read.
+    if !unchanged
+        && !scratch
+            .recent
+            .as_ref()
+            .is_some_and(|recent| std::sync::Arc::ptr_eq(recent, &result.coefficients))
+    {
+        scratch.recent = Some(std::sync::Arc::clone(&result.coefficients));
+    }
+    Ok(Some(result))
 }
 
 /// Reuse capture scratch and the preceding frame's immutable coefficients.
@@ -10282,7 +10322,7 @@ fn read_position_spline(
 pub(crate) fn read_column_position_splines<'a>(
     lua: &Lua,
     mut previous: impl FnMut(usize, usize) -> Option<&'a deadsync_gameplay::SongLuaColumnSplineFrame>,
-    points: &mut Vec<[f32; 3]>,
+    scratch: &mut ColumnSplineReadScratch,
     out: &mut Vec<(usize, usize, deadsync_gameplay::SongLuaColumnSplineFrame)>,
 ) -> Result<(), String> {
     out.clear();
@@ -10317,13 +10357,13 @@ pub(crate) fn read_column_position_splines<'a>(
                         &column,
                         "__songlua_pos_handler",
                         last.and_then(|frame| frame.position.as_ref()),
-                        points,
+                        scratch,
                     )?,
                     zoom: read_position_spline(
                         &column,
                         "__songlua_zoom_handler",
                         last.and_then(|frame| frame.zoom.as_ref()),
-                        points,
+                        scratch,
                     )?,
                 },
             ));
@@ -15468,3 +15508,7 @@ mod broadcast_storage_perf;
 #[cfg(test)]
 #[path = "../tests/perf/note_field_lookup.rs"]
 mod note_field_lookup_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/spline_workspace_reader.rs"]
+pub(crate) mod spline_workspace_reader_perf;
