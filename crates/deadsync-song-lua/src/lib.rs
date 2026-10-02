@@ -20932,6 +20932,142 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn spline_witness_edits() {
+        let lua = Lua::new();
+        let field = lua.create_table().unwrap();
+        let columns = test_note_field_column_actors(&lua, &field).unwrap();
+        lua.globals().set("columns", columns).unwrap();
+        lua.load(
+            r#"
+            local handler = columns[1]:GetZoomHandler()
+            handler:SetSplineMode("NoteColumnSplineMode_Offset")
+            spline = handler:GetSpline()
+            spline:SetSize(8)
+            for i=1,8 do spline:SetPoint(i, {0, 0, 0}) end
+            spline:SetPoint(8, {-1, 0, 0})
+        "#,
+        )
+        .exec()
+        .unwrap();
+        let zoom = || {
+            crate::lua_util::read_note_column_transform_samples_for_fields(vec![field.clone()])
+                .unwrap()
+                .into_iter()
+                .find(|sample| {
+                    sample.column == 0 && sample.target == SongLuaColumnTransformTarget::Zoom
+                })
+                .map(|sample| sample.value)
+        };
+        assert_eq!(zoom(), None);
+        assert_eq!(zoom(), None);
+        // Mutate existing point tables without SetPoint or Solve.
+        let spline: Table = lua.globals().get("spline").unwrap();
+        let points: Table = spline.get("__songlua_spline_points").unwrap();
+        let point: Table = points.raw_get(8).unwrap();
+        point.raw_set(1, 0.0).unwrap();
+        assert_eq!(zoom(), Some(1.0));
+        let point: Table = points.raw_get(4).unwrap();
+        point.raw_set(1, -0.5).unwrap();
+        assert_eq!(zoom(), None);
+        assert_eq!(zoom(), None);
+        lua.load("spline:SetSize(3)").exec().unwrap();
+        assert_eq!(zoom(), Some(1.0));
+        let first: Table = points.raw_get(1).unwrap();
+        first.raw_set(1, 0.5).unwrap();
+        assert_eq!(zoom(), None);
+        for i in 2..=3 {
+            let point: Table = points.raw_get(i).unwrap();
+            point.raw_set(1, 0.5).unwrap();
+        }
+        assert_eq!(zoom(), Some(1.5));
+    }
+
+    #[test]
+    fn mixed_multitap_callbacks() {
+        let song_dir = test_dir("mixed-multitap-callbacks");
+        let entry = song_dir.join("default.lua");
+        let script = r#"
+multitaps = {Challenge = {{lane=1, taps={1, 2}}}}
+local phase
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song"):Drunk(beat)
+            player:rotationz(beat * 10)
+            phase:y(beat * 20)
+            local handler = player:GetChild("NoteField"):GetColumnActors()[1]:GetPosHandler()
+            handler:SetSplineMode("NoteColumnSplineMode_Offset")
+            local spline = handler:GetSpline()
+            spline:SetSize(2)
+            spline:SetPoint(1, {0, beat, 0})
+            spline:SetPoint(2, {0, beat, 0})
+            spline:Solve()
+        end)
+    end,
+    Def.ActorFrame{
+        Name="MultitapFrameP1",
+        Def.ActorFrame{
+            Name="MultitapP1_1",
+            InitCommand=function(self) phase = self end,
+            Def.Quad{Name="MultitapArrowP1_1"},
+            Def.BitmapText{Name="MultitapTextP1_1", Text=""},
+        },
+    },
+    Def.ActorFrame{
+        Name="Update",
+        InitCommand=function(self)
+            __child_update__
+        end,
+    },
+}
+"#;
+        for callback in [
+            "self:SetUpdateFunction(function() phase:z(GAMESTATE:GetSongBeat() * 30) end)",
+            "",
+        ] {
+            fs::write(&entry, script.replace("__child_update__", callback)).unwrap();
+            let mut context = SongLuaCompileContext::new(&song_dir, "Mixed Multitap Callbacks");
+            context.players[1].enabled = false;
+            context.music_length_seconds = 0.5;
+            context.song_timing_bpms = vec![(0.0, 120.0)];
+            let compiled = test_compile_song_lua(&entry, &context).unwrap();
+            assert!(compiled.info.unsupported_perframe_captures.is_empty());
+            assert!(compiled.eases.iter().any(|ease| {
+                ease.target == SongLuaEaseTarget::Mod("drunk".into()) && ease.to > 0.5
+            }));
+            assert!(compiled.eases.iter().any(|ease| {
+                ease.target == SongLuaEaseTarget::PlayerRotationZ && ease.to > 5.0
+            }));
+            assert!(compiled.column_offsets.iter().any(|window| {
+                window.target == SongLuaColumnTransformTarget::PositionPoint { point: 0, axis: 1 }
+                    && window.to_y > 0.5
+            }));
+            let phase = compiled
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some("MultitapP1_1"))
+                .unwrap();
+            assert!(compiled.overlay_updates.iter().any(|track| {
+                track.overlay_index == phase
+                && track.target == SongLuaOverlayUpdateTarget::Y
+                && track.samples.iter().any(
+                    |sample| matches!(sample.value, SongLuaOverlayUpdateValue::F32(y) if y > 10.0),
+                )
+            }));
+            if !callback.is_empty() {
+                assert!(compiled.overlay_updates.iter().any(|track| {
+                    track.overlay_index == phase && track.target == SongLuaOverlayUpdateTarget::Z
+                    && track.samples.iter().any(|sample| {
+                        matches!(sample.value, SongLuaOverlayUpdateValue::F32(z) if z > 15.0)
+                    })
+                }));
+            }
+        }
+    }
+
+    #[test]
     fn multitap_sample_eases_step_visibility_edges() {
         let baseline = SongLuaOverlayState {
             visible: false,

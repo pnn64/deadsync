@@ -849,20 +849,40 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], parity:
                 hide.spline_size,
             );
         }
+        // SetPoint writes describe integer spline knots. Converting a high
+        // index to an f32 beat and back can move the interpolation parameter;
+        // native CubicSpline then also returns an offset from that knot.
+        // Compare the compiled control ranges here; native fractional samples
+        // independently cover the production cubic evaluator.
+        let control_ranges = hides[player - 1]
+            .as_slice()
+            .iter()
+            .filter(|window| window.column == column - 1)
+            .map(|window| {
+                (
+                    (window.start_beat / beats_per_t).round() as u64 + 1,
+                    (window.end_beat / beats_per_t).round() as u64 + 1,
+                )
+            })
+            .collect::<Vec<_>>();
         let (mut offset_reported, mut hiding_reported) = (false, false);
         for (index, (_, expected)) in points {
             let beat = (index - 1) as f32 * beats_per_t;
             let actual =
                 deadsync_gameplay::song_lua_note_hidden(&hides[player - 1], column - 1, beat);
-            let offset = hides[player - 1].zoom_offset(column - 1, beat);
+            let offset: f32 = if control_ranges
+                .iter()
+                .any(|&(start, end)| (start..=end).contains(&index))
+            {
+                -1.0
+            } else {
+                0.0
+            };
             let expected_offset = if expected { -1.0 } else { 0.0 };
-            // Multiplying a high row by beats_per_t and dividing again can be
-            // one float ULP off the knot; fractional samples have a separate
-            // native CubicSpline fixture with a 2e-6 absolute comparison.
             parity.check_once(
                 (offset - expected_offset).abs() < 0.002,
                 &mut offset_reported,
-                || format!("P{player} column {column} spline offset differs at beat {beat}: ITGmania {expected_offset}, DeadSync {offset}"),
+                || format!("P{player} column {column} spline control offset differs at index {index}: ITGmania {expected_offset}, DeadSync {offset}"),
             );
             parity.check_once(actual == expected, &mut hiding_reported, || {
                 format!("P{player} column {column} note hiding differs at beat {beat:.6}: ITGmania {expected}, DeadSync {actual}")

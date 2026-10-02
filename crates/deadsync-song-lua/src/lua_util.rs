@@ -8627,6 +8627,20 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Rc<[SongLuaCompi
         .unwrap_or_default())
 }
 
+pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlua::Result<bool> {
+    let Value::Table(root) = root else {
+        return Ok(false);
+    };
+    let jobs = compile_update_jobs(lua, root)?;
+    match jobs.as_ref() {
+        [] => Ok(true),
+        [SongLuaCompileUpdateJob::Callback { actor, .. }] => {
+            Ok(actor.get::<Option<String>>("Name")?.as_deref() == Some(name))
+        }
+        _ => Ok(false),
+    }
+}
+
 pub fn run_actor_compile_update_functions_with_delta(
     lua: &Lua,
     root: &Value,
@@ -10538,6 +10552,34 @@ fn note_column_handler_uniform_component(
         };
         return Ok(point.raw_get::<Value>(component).ok().and_then(read_f32));
     }
+    // Compile-session, single-thread hint: one index per XYZ component, warmed
+    // by the first scan and destroyed with the Lua spline. Re-read both points
+    // on every use, so in-place edits remain visible. A valid witness proves
+    // nonuniformity with two reads; a miss scans at most the declared size.
+    let witness_key = match component {
+        1 => "__songlua_nonuniform_x",
+        2 => "__songlua_nonuniform_y",
+        _ => "__songlua_nonuniform_z",
+    };
+    if let Some(index) = spline
+        .get::<Option<usize>>(witness_key)
+        .map_err(|err| err.to_string())?
+        && index <= size
+    {
+        let value_at = |index| -> Option<f32> {
+            points
+                .raw_get::<Table>(index)
+                .ok()?
+                .raw_get::<Value>(component)
+                .ok()
+                .and_then(read_f32)
+        };
+        if let Some((first, other)) = value_at(1).zip(value_at(index))
+            && (other - first).abs() > EPS
+        {
+            return Ok(None);
+        }
+    }
     let mut uniform = None::<f32>;
     for index in 1..=size {
         let Some(point) = points
@@ -10551,6 +10593,7 @@ fn note_column_handler_uniform_component(
         };
         if let Some(prior) = uniform {
             if (value - prior).abs() > EPS {
+                spline.set(witness_key, index).map_err(|err| err.to_string())?;
                 return Ok(None);
             }
         } else {

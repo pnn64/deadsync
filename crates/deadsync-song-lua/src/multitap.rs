@@ -398,6 +398,7 @@ fn split_multitap_y_eases(out: &mut Vec<SongLuaOverlayEase>, first_ease: usize, 
 
 pub fn compile_multitap_update_overlays_for_actors<Slot, Vertex, Attribute, EnsureArrowVisual>(
     lua: &Lua,
+    root: &Value,
     context: &SongLuaCompileContext,
     overlays: &mut Vec<SongLuaOverlayCompileActor<SongLuaOverlayKind<Slot, Vertex, Attribute>>>,
     noteskin_resolver: SongLuaNoteskinResolver,
@@ -410,6 +411,11 @@ where
         &str,
     ) -> Result<(), String>,
 {
+    // An omitted root frame can own additional callbacks. Check the complete
+    // update plan before replacing the factory's sampled replay.
+    if !crate::lua_util::actor_tree_update_only(lua, root, "Update").map_err(|err| err.to_string())? {
+        return Ok(None);
+    }
     let Some(multitaps) = read_multitap_descs(lua, context)? else {
         return Ok(None);
     };

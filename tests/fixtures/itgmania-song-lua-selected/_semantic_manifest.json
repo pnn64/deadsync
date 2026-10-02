@@ -574,10 +574,59 @@
     },
     {
       "simfile": "Someone Special - hubert/Someone Special.ssc",
-      "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json",
+      "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json.zst",
       "title": "\uff33\uff4f\uff4d\uff45\uff4f\uff4e\uff45 \uff33\uff50\uff45\uff43\uff49\uff41\uff4c",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.03125,
+          "max_events": 5000000
+        },
+        "random_seed": 1,
+        "update_frames": 8720,
+        "lua_song_beat_precision": "native_float",
+        "arrow_timing": "native",
+        "noteskin": "cel",
+        "description": "Hubert x Crash Cringle",
+        "end_position": {
+          "beat": 352,
+          "seconds": 145.30443146289736
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        },
+        "source_files_sha256": {
+          "Someone Special - hubert/Someone Special.ssc": "b279384ecd66c19bd62f6969503bb0c93854027ec88fbf6e21d59fe361116cf2",
+          "Someone Special - hubert/lua/default.lua": "fc0e5549d7f6b235175e71e73e42faf8edc6754cc629e0faf806398984d83c08",
+          "Someone Special - hubert/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "Someone Special - hubert/lua/multitap_data.lua": "0a0c6079f135cd13170e504d431034a93df7d4c2d25d4d9bd9d423798cc5ed15"
+        },
+        "raw_capture_sha256": "d9a9a276005401520cef0da02fa2db40ffe1ac4cfe0f62c02543ab7cf8998cea",
+        "sha256": "a2034ff4c9fecca22d6dcf445fabc27b1ce4e793f692b1e90b96a4a82d17a0b4",
+        "uncompressed_sha256": "d9a9a276005401520cef0da02fa2db40ffe1ac4cfe0f62c02543ab7cf8998cea",
+        "compressed_bytes": 3196439,
+        "uncompressed_bytes": 44767266
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",

@@ -587,6 +587,7 @@ where
         runtime_broadcasts,
     ) = match compile_multitap_update_overlays_for_actors(
         &lua,
+        &root,
         context,
         &mut overlays,
         noteskin_resolver,
