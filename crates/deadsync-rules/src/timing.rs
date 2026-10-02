@@ -1063,6 +1063,38 @@ impl TimingData {
         timing_ns_to_seconds(time.saturating_sub(self.global_offset_ns))
     }
 
+    /// Convert a batch of continuous beats, retaining the event cursor for
+    /// large BPM-only maps with unique, usable, row-aligned BPM changes.
+    /// Other maps keep independent conversions. The iterator borrows the
+    /// immutable timing data and holds only stack state; rewinds reset it.
+    pub fn get_times_for_beats_exact<I>(&self, beats: I) -> impl Iterator<Item = f32>
+    where
+        I: Iterator<Item = f32>,
+    {
+        let cached = self.beat_to_time.len() > 8
+            && self.stops.is_empty()
+            && self.delays.is_empty()
+            && self.warps.is_empty()
+            && self.supports_row_time_cache();
+        let origin = GetBeatStarts {
+            last_time_ns: self.beat_start_time_ns(),
+            ..GetBeatStarts::default()
+        };
+        let mut start = origin;
+        let mut last_beat = f32::NEG_INFINITY;
+        beats.map(move |beat| {
+            if !cached || !beat.is_finite() {
+                return self.get_time_for_beat_exact(beat);
+            }
+            if beat < last_beat {
+                start = origin;
+            }
+            last_beat = beat;
+            let time = self.get_elapsed_time_internal_mut(&mut start, beat, usize::MAX, true);
+            timing_ns_to_seconds(time.saturating_sub(self.global_offset_ns))
+        })
+    }
+
     /// Whether this beat map shares a continuous BPM-only clock. Offsets may
     /// differ: callers anchor that clock at this map's time for beat zero.
     #[must_use]

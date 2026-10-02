@@ -178,3 +178,8 @@ mod spline_workspace_perf;
 #[cfg(test)]
 #[path = "../tests/perf/message_lookup.rs"]
 mod message_lookup_perf;
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+#[path = "../tests/perf/event_preparation.rs"]
+mod event_preparation_perf;

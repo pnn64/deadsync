@@ -1485,9 +1485,15 @@ pub fn build_song_lua_message_seconds(
     timing_player: &TimingData,
     global_offset_seconds: f32,
 ) -> Vec<Option<f32>> {
-    beats
-        .into_iter()
-        .map(|beat| song_lua_message_second(beat, timing_player, global_offset_seconds))
+    if !timing_player.has_bpm_changes() {
+        return beats
+            .into_iter()
+            .map(|beat| song_lua_message_second(beat, timing_player, global_offset_seconds))
+            .collect();
+    }
+    timing_player
+        .get_times_for_beats_exact(beats.into_iter())
+        .map(|second| second.is_finite().then_some(second))
         .collect()
 }
 
@@ -1974,7 +1980,11 @@ fn push_song_lua_ease_target(
     easing: Option<&str>,
     opt1: Option<f32>,
     opt2: Option<f32>,
+    capacity_hint: usize,
 ) {
+    if capacity_hint != 0 && out.is_empty() {
+        out.reserve_exact(capacity_hint);
+    }
     out.push(SongLuaEaseMaskWindow {
         approach_speed: None,
         start_second,
@@ -2001,6 +2011,35 @@ pub fn append_song_lua_ease_targets(
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> bool {
+    append_song_lua_ease_targets_reserved(
+        out,
+        start_second,
+        end_second,
+        sustain_end_second,
+        target_name,
+        from,
+        to,
+        easing,
+        opt1,
+        opt2,
+        0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_ease_targets_reserved(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    target_name: &str,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+    capacity_hint: usize,
+) -> bool {
     let mut key_buffer = [0u8; ATTACK_KEY_STACK_BYTES];
     let key = buffered_attack_token_key(target_name, &mut key_buffer);
     append_song_lua_ease_targets_key(
@@ -2014,6 +2053,7 @@ pub fn append_song_lua_ease_targets(
         easing,
         opt1,
         opt2,
+        capacity_hint,
     )
 }
 
@@ -2029,6 +2069,7 @@ fn append_song_lua_ease_targets_key(
     easing: Option<&str>,
     opt1: Option<f32>,
     opt2: Option<f32>,
+    capacity_hint: usize,
 ) -> bool {
     if key.is_empty() {
         return false;
@@ -2047,6 +2088,7 @@ fn append_song_lua_ease_targets_key(
             easing,
             opt1,
             opt2,
+            capacity_hint,
         );
     };
 
@@ -2311,9 +2353,38 @@ pub fn append_song_lua_runtime_ease_window(
     opt1: Option<f32>,
     opt2: Option<f32>,
 ) -> SongLuaRuntimeEaseAppend {
+    append_song_lua_runtime_ease_window_reserved(
+        out,
+        start_second,
+        end_second,
+        sustain_end_second,
+        target,
+        from,
+        to,
+        easing,
+        opt1,
+        opt2,
+        0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_runtime_ease_window_reserved(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    target: SongLuaRuntimeEaseTarget<'_>,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+    capacity_hint: usize,
+) -> SongLuaRuntimeEaseAppend {
     match target {
         SongLuaRuntimeEaseTarget::Mod(target_name) => {
-            if append_song_lua_ease_targets(
+            if append_song_lua_ease_targets_reserved(
                 out,
                 start_second,
                 end_second,
@@ -2324,6 +2395,7 @@ pub fn append_song_lua_runtime_ease_window(
                 easing,
                 opt1,
                 opt2,
+                capacity_hint,
             ) {
                 SongLuaRuntimeEaseAppend::Appended
             } else {
@@ -2342,6 +2414,7 @@ pub fn append_song_lua_runtime_ease_window(
                 easing,
                 opt1,
                 opt2,
+                capacity_hint,
             );
             SongLuaRuntimeEaseAppend::Appended
         }
@@ -2364,7 +2437,39 @@ pub fn append_song_lua_runtime_ease_window_like<Target>(
 where
     Target: SongLuaRuntimeEaseTargetLike + ?Sized,
 {
-    append_song_lua_runtime_ease_window(
+    append_song_lua_runtime_ease_window_like_reserved(
+        out,
+        start_second,
+        end_second,
+        sustain_end_second,
+        target,
+        from,
+        to,
+        easing,
+        opt1,
+        opt2,
+        0,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_song_lua_runtime_ease_window_like_reserved<Target>(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    start_second: f32,
+    end_second: f32,
+    sustain_end_second: f32,
+    target: &Target,
+    from: f32,
+    to: f32,
+    easing: Option<&str>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+    capacity_hint: usize,
+) -> SongLuaRuntimeEaseAppend
+where
+    Target: SongLuaRuntimeEaseTargetLike + ?Sized,
+{
+    append_song_lua_runtime_ease_window_reserved(
         out,
         start_second,
         end_second,
@@ -2375,6 +2480,7 @@ where
         easing,
         opt1,
         opt2,
+        capacity_hint,
     )
 }
 
@@ -2493,6 +2599,19 @@ pub fn append_song_lua_ease_window_for<Window>(
 where
     Window: SongLuaEaseWindowLike,
 {
+    append_song_lua_ease_window_for_reserved(out, window, timing_player, global_offset_seconds, 0)
+}
+
+fn append_song_lua_ease_window_for_reserved<Window>(
+    out: &mut Vec<SongLuaEaseMaskWindow>,
+    window: &Window,
+    timing_player: &TimingData,
+    global_offset_seconds: f32,
+    capacity_hint: usize,
+) -> SongLuaRuntimeEaseAppend
+where
+    Window: SongLuaEaseWindowLike,
+{
     let Some((start_second, end_second)) = song_lua_window_seconds(
         window.unit(),
         window.start(),
@@ -2517,7 +2636,7 @@ where
         return SongLuaRuntimeEaseAppend::Ignored;
     }
     let first = out.len();
-    let result = append_song_lua_runtime_ease_window_like(
+    let result = append_song_lua_runtime_ease_window_like_reserved(
         out,
         start_second,
         end_second,
@@ -2528,6 +2647,7 @@ where
         window.easing(),
         window.opt1(),
         window.opt2(),
+        capacity_hint,
     );
     for compiled in &mut out[first..] {
         compiled.approach_speed = window.approach_speed();
@@ -2546,14 +2666,20 @@ pub fn build_song_lua_ease_windows_for_player<Window>(
 where
     Window: SongLuaEaseWindowLike,
 {
-    let mut out = Vec::with_capacity(windows.len().saturating_mul(2));
+    let capacity = windows.len().saturating_mul(2);
+    let mut out = Vec::new();
     let mut unsupported_targets = 0usize;
     for window in windows {
         if !song_lua_target_matches_player(window.player(), player) {
             continue;
         }
-        if append_song_lua_ease_window_for(&mut out, window, timing_player, global_offset_seconds)
-            == SongLuaRuntimeEaseAppend::Unsupported
+        if append_song_lua_ease_window_for_reserved(
+            &mut out,
+            window,
+            timing_player,
+            global_offset_seconds,
+            capacity,
+        ) == SongLuaRuntimeEaseAppend::Unsupported
         {
             unsupported_targets += 1;
             unsupported_window(window);
@@ -2579,14 +2705,19 @@ where
     let windows = windows.into_iter();
     let (lower, upper) = windows.size_hint();
     let capacity = upper.unwrap_or(lower).saturating_mul(2);
-    let mut out = Vec::with_capacity(capacity);
+    let mut out = Vec::new();
     let mut unsupported_targets = 0usize;
     for window in windows {
         if !song_lua_target_matches_player(window.player(), player) {
             continue;
         }
-        if append_song_lua_ease_window_for(&mut out, &window, timing_player, global_offset_seconds)
-            == SongLuaRuntimeEaseAppend::Unsupported
+        if append_song_lua_ease_window_for_reserved(
+            &mut out,
+            &window,
+            timing_player,
+            global_offset_seconds,
+            capacity,
+        ) == SongLuaRuntimeEaseAppend::Unsupported
         {
             unsupported_targets += 1;
             unsupported_window(&window);
@@ -3418,13 +3549,45 @@ pub fn group_song_lua_overlay_eases<StateDelta>(
     Vec<std::ops::Range<usize>>,
 ) {
     overlay_eases.retain(|ease| ease.overlay_index < overlay_count);
-    overlay_eases.sort_by(|left, right| {
+    let compare = |left: &SongLuaOverlayEaseWindowRuntime<StateDelta>,
+                   right: &SongLuaOverlayEaseWindowRuntime<StateDelta>| {
         left.overlay_index
             .cmp(&right.overlay_index)
             .then_with(|| left.start_second.total_cmp(&right.start_second))
             .then_with(|| left.end_second.total_cmp(&right.end_second))
             .then_with(|| left.sustain_end_second.total_cmp(&right.sustain_end_second))
-    });
+    };
+    if overlay_eases.len() >= 64
+        && std::mem::size_of::<SongLuaOverlayEaseWindowRuntime<StateDelta>>() >= 128
+    {
+        // Sort compact indices rather than copying large state deltas through
+        // stable-sort scratch. Original indices preserve the order of ties.
+        if !overlay_eases
+            .windows(2)
+            .all(|pair| compare(&pair[0], &pair[1]) != std::cmp::Ordering::Greater)
+        {
+            let mut order: Vec<usize> = (0..overlay_eases.len()).collect();
+            order.sort_unstable_by(|&left, &right| {
+                compare(&overlay_eases[left], &overlay_eases[right]).then_with(|| left.cmp(&right))
+            });
+            // Apply each gather cycle in place, marking visited indices with
+            // their identity. StateDelta needs neither Clone nor Copy.
+            for first in 0..order.len() {
+                let mut current = first;
+                loop {
+                    let next = order[current];
+                    order[current] = current;
+                    if next == first {
+                        break;
+                    }
+                    overlay_eases.swap(current, next);
+                    current = next;
+                }
+            }
+        }
+    } else {
+        overlay_eases.sort_by(compare);
+    }
     let mut ranges = Vec::with_capacity(overlay_count);
     let mut end = 0;
     for overlay_index in 0..overlay_count {
