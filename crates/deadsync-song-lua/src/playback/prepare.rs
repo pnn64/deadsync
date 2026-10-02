@@ -751,6 +751,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
         std::array::from_fn(|_| Vec::new());
     let mut player_combo_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
+    let mut screen_overlay_index = None;
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
@@ -771,6 +772,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             ease_windows,
             deadsync_gameplay::build_song_lua_runtime_visuals(
                 overlays,
+                screen_overlay_index,
                 overlay_eases,
                 overlay_ease_ranges,
                 overlay_events,
@@ -858,6 +860,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 )
             },
         );
+        screen_overlay_index = compiled.screen_overlay_index;
         song_foreground = compiled.song_foreground.clone();
         song_foreground_events = crate::gameplay::build_song_lua_actor_message_events_for_commands(
             &compiled.messages,
@@ -997,6 +1000,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
         ease_windows,
         deadsync_gameplay::build_song_lua_runtime_visuals(
             overlays,
+            screen_overlay_index,
             overlay_eases,
             overlay_ease_ranges,
             overlay_events,

@@ -1975,13 +1975,16 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
     } = scratch;
     crate::lua_util::drain_overlay_update_capture(
         lua,
-        |overlay_index, values, scheduled, final_values| {
+        |overlay_index, values, scheduled, final_values, tween_reset| {
             let Some(baseline) = baseline.get(overlay_index) else {
                 return Ok(());
             };
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
             let actor = overlays[overlay_index].borrow();
+            if tween_reset {
+                scheduled_samples.retain(|sample| sample.overlay_index != overlay_index);
+            }
             if actor
                 .raw_get::<Option<i64>>("__songlua_player_index")
                 .map_err(|err| err.to_string())?
@@ -2847,6 +2850,13 @@ pub fn compile_update_functions<Kind>(
             &scheduled_overlay_samples,
             seconds,
         )?;
+        crate::lua_util::set_pending_tweens(
+            lua,
+            scheduled_overlay_samples
+                .iter()
+                .filter(|sample| sample.end_seconds > seconds)
+                .map(|sample| (sample.overlay_index, sample.target, sample.value.clone())),
+        );
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, delta_seconds)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);

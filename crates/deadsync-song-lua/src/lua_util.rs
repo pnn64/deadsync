@@ -215,6 +215,8 @@ struct SongLuaOverlayUpdateCapture {
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
     final_values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
     scheduled: Vec<Vec<SongLuaScheduledOverlayUpdate>>,
+    pending_tweens: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
+    tween_resets: Vec<bool>,
     stateful_messages: BTreeMap<String, BTreeMap<usize, BTreeSet<SongLuaOverlayUpdateTarget>>>,
     stateful_writes: BTreeMap<String, Vec<SongLuaStatefulMessageWrite>>,
 }
@@ -269,6 +271,8 @@ impl SongLuaOverlayUpdateCapture {
             values: (0..actor_count).map(|_| Vec::new()).collect(),
             final_values: (0..actor_count).map(|_| Vec::new()).collect(),
             scheduled: (0..actor_count).map(|_| Vec::new()).collect(),
+            pending_tweens: (0..actor_count).map(|_| Vec::new()).collect(),
+            tween_resets: vec![false; actor_count],
             stateful_messages: BTreeMap::new(),
             stateful_writes: BTreeMap::new(),
         }
@@ -430,6 +434,7 @@ pub fn drain_overlay_update_capture(
         &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
         &[SongLuaScheduledOverlayUpdate],
         &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
+        bool,
     ) -> Result<(), String>,
 ) -> Result<(), String> {
     let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
@@ -442,6 +447,7 @@ pub fn drain_overlay_update_capture(
             &capture.values[index],
             &capture.scheduled[index],
             &capture.final_values[index],
+            capture.tween_resets[index],
         )?;
     }
     for position in 0..capture.touched.len() {
@@ -449,6 +455,7 @@ pub fn drain_overlay_update_capture(
         capture.values[index].clear();
         capture.final_values[index].clear();
         capture.scheduled[index].clear();
+        capture.tween_resets[index] = false;
         capture.touched_flags[index] = false;
     }
     capture.touched.clear();
@@ -457,6 +464,58 @@ pub fn drain_overlay_update_capture(
 
 pub fn end_overlay_update_capture(lua: &Lua) {
     lua.remove_app_data::<SongLuaOverlayUpdateCapture>();
+}
+
+pub(crate) fn set_pending_tweens(
+    lua: &Lua,
+    values: impl IntoIterator<Item = (usize, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>,
+) {
+    let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
+        return;
+    };
+    for pending in &mut capture.pending_tweens {
+        pending.clear();
+    }
+    for (index, target, value) in values {
+        let pending = &mut capture.pending_tweens[index];
+        if let Some((_, dest)) = pending.iter_mut().find(|(key, _)| *key == target) {
+            *dest = value;
+        } else {
+            pending.push((target, value));
+        }
+    }
+}
+
+fn finish_pending_tweens(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let values = {
+        let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
+            return Ok(());
+        };
+        let Some(index) = capture.touch(actor) else {
+            return Ok(());
+        };
+        capture.tween_resets[index] = true;
+        let mut values = capture.pending_tweens[index].clone();
+        for update in &capture.scheduled[index] {
+            if let Some((_, dest)) = values.iter_mut().find(|(key, _)| *key == update.target) {
+                *dest = update.value.clone();
+            } else {
+                values.push((update.target, update.value.clone()));
+            }
+        }
+        capture.pending_tweens[index].clear();
+        capture.scheduled[index].clear();
+        values
+    };
+    let beat = compile_song_runtime_values(lua)?.0;
+    for (target, value) in values {
+        set_actor_overlay_update_getter_value(lua, actor, target, &value)
+            .map_err(mlua::Error::runtime)?;
+        if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+            capture.record(actor, beat, target, value);
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn captured_update_target_mask(lua: &Lua, actor: &Table) -> u128 {
@@ -12251,6 +12310,7 @@ fn is_capture_block_meta_key(key: &str) -> bool {
 
 pub fn finish_actor_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     flush_actor_capture(actor)?;
+    finish_pending_tweens(lua, actor)?;
     let final_block = lua.create_table()?;
     let mut has_changes = false;
     if let Some(blocks) = actor.get::<Option<Table>>("__songlua_capture_blocks")? {

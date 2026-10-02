@@ -330,6 +330,25 @@ where
     );
     restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;
     let mut overlays = overlays?;
+    let screen_index = overlays.len();
+    let screen = globals
+        .get::<Table>("__songlua_top_screen")
+        .map_err(|err| err.to_string())?;
+    screen
+        .set(COMPILE_LAYER_KEY, primary_index)
+        .map_err(|err| err.to_string())?;
+    overlays.push(crate::lua_util::SongLuaOverlayCompileActor {
+        actor: SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrame,
+            name: Some("ScreenGameplay".to_owned()),
+            parent_index: None,
+            initial_state: crate::lua_util::actor_overlay_initial_state(&screen)?,
+            message_commands: Vec::new(),
+        },
+        table: screen,
+        message_sounds: Vec::new(),
+    });
+    out.screen_overlay_index = Some(screen_index);
     capture_stable_cross_actor_message_commands(&lua, &mut overlays, |skipped| {
         push_unique_compile_detail(&mut out.info.skipped_message_command_captures, skipped);
     })?;
@@ -662,6 +681,51 @@ where
             .iter()
             .map(|overlay| overlay.actor.message_commands.as_slice()),
     );
+    // Leave ordinary song trees unchanged when no script touches the screen.
+    if overlays[screen_index].actor.initial_state == crate::SongLuaOverlayState::default()
+        && overlays[screen_index].actor.message_commands.is_empty()
+        && !out
+            .overlay_eases
+            .iter()
+            .any(|ease| ease.overlay_index == screen_index)
+        && !out
+            .overlay_updates
+            .iter()
+            .any(|track| track.overlay_index == screen_index)
+    {
+        overlays.remove(screen_index);
+        out.screen_overlay_index = None;
+        let remap = |index: &mut usize| {
+            if *index > screen_index {
+                *index -= 1;
+            }
+        };
+        for overlay in &mut overlays {
+            if let Some(parent) = &mut overlay.actor.parent_index {
+                remap(parent);
+            }
+            if let SongLuaOverlayKind::ActorProxy {
+                target: crate::SongLuaProxyTarget::Actor { overlay_index },
+            } = &mut overlay.actor.kind
+            {
+                remap(overlay_index);
+            }
+        }
+        for ease in &mut out.overlay_eases {
+            remap(&mut ease.overlay_index);
+        }
+        for track in &mut out.overlay_updates {
+            remap(&mut track.overlay_index);
+        }
+        for capture in &mut out.stateful_message_captures {
+            for (index, _) in &mut capture.overlay_targets {
+                remap(index);
+            }
+            for write in &mut capture.writes {
+                remap(&mut write.overlay_index);
+            }
+        }
+    }
     let mut overlay_layers = overlays
         .iter()
         .map(|overlay| {
@@ -909,6 +973,11 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
             ..DefaultCompiledSongLua::default()
         })
         .collect::<Vec<_>>();
+
+    if let Some(index) = compiled.screen_overlay_index {
+        let (layer, local) = overlay_map[index];
+        outputs[layer].screen_overlay_index = Some(local);
+    }
 
     for (global_index, mut overlay) in compiled.overlays.drain(..).enumerate() {
         let (layer, _) = overlay_map[global_index];

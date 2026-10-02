@@ -9111,6 +9111,7 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
         message_commands: Vec::new(),
     };
     let visuals = SongLuaRuntimeVisuals {
+        screen_overlay_index: None,
         overlays: Vec::new(),
         overlay_eases: Vec::new(),
         overlay_ease_ranges: Vec::new(),

@@ -1603,6 +1603,7 @@ pub struct SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta> {
 #[derive(Clone, Debug)]
 pub struct SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     pub overlays: Vec<OverlayActor>,
+    pub screen_overlay_index: Option<usize>,
     pub overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
     pub overlay_ease_ranges: Vec<std::ops::Range<usize>>,
     pub overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
@@ -1633,6 +1634,7 @@ pub type SongLuaRuntimeBuildOutput<OverlayActor, CapturedActor, StateDelta> = (
 
 pub const fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
     overlays: Vec<OverlayActor>,
+    screen_overlay_index: Option<usize>,
     overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
     overlay_ease_ranges: Vec<std::ops::Range<usize>>,
     overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
@@ -1658,6 +1660,7 @@ pub const fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDe
 ) -> SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     SongLuaRuntimeVisuals {
         overlays,
+        screen_overlay_index,
         overlay_eases,
         overlay_ease_ranges,
         overlay_events,

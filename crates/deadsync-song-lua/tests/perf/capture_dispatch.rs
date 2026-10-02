@@ -48,7 +48,7 @@ impl Fixture {
     }
 
     fn clear(&self) {
-        drain_overlay_update_capture(&self.lua, |_, _, _, _| Ok(())).unwrap();
+        drain_overlay_update_capture(&self.lua, |_, _, _, _, _| Ok(())).unwrap();
         let mut capture = self
             .lua
             .app_data_mut::<SongLuaOverlayUpdateCapture>()

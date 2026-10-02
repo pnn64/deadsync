@@ -39,10 +39,87 @@
     },
     {
       "simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
-      "fixture": "(R6) Waltz Capriccio/waltz_capriccio.ssc.semantic.json",
+      "fixture": "(R6) Waltz Capriccio/waltz_capriccio.ssc.semantic.json.zst",
       "title": "Waltz Capriccio",
       "lua_entries": 2,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.03125,
+          "max_events": 5000000
+        },
+        "random_seed": 1,
+        "update_frames": 8462,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        },
+        "sha256": "5705a1b250530a8c686f0c011cd601980e35105ac1488de827e17466eb7bc100",
+        "uncompressed_sha256": "f41c97eecef7e08888fc75ea967bf860ccbfada6f8c4e346acdba439d75cf7fe",
+        "compressed_bytes": 3102941,
+        "uncompressed_bytes": 53440829
+      },
+      "contexts": [
+        {
+          "difficulty": "Medium",
+          "fixture": "(R6) Waltz Capriccio/waltz_capriccio.ssc.medium.semantic.json.zst",
+          "status": "ok",
+          "runtime_errors": 0,
+          "dropped_events": 0,
+          "reference": {
+            "itgmania": {
+              "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+              "git_dirty": "false",
+              "execution": "embedded_bundled_lua",
+              "launches_executable": false
+            },
+            "context": {
+              "players": [
+                "PLAYER_1",
+                "PLAYER_2"
+              ],
+              "preferred_difficulty": "Medium",
+              "preferred_steps_type": "dance-single",
+              "screen": [
+                854,
+                480
+              ],
+              "beat_step": 0.03125,
+              "max_events": 5000000
+            },
+            "random_seed": 1,
+            "update_frames": 7764,
+            "lua_song_beat_precision": "native_float",
+            "harness_sources_sha256": {
+              "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00",
+              "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+            },
+            "sha256": "04ee5230c7254d3621564c18d58b699195d866ed4894ba7f83f31957996bdfec",
+            "uncompressed_sha256": "34b10bdbf34fdb7cf19e7b9f366420a99817bb29fe2682f5f39a49f341aeeb46",
+            "compressed_bytes": 321127,
+            "uncompressed_bytes": 4444294
+          }
+        }
+      ]
     },
     {
       "simfile": "666/666.ssc",

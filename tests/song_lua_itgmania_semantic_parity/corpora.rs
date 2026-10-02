@@ -76,6 +76,17 @@ mod lua_songs {
     use super::*;
 
     #[test]
+    #[ignore = "compiles Waltz's non-Challenge branch and reports every semantic check"]
+    fn waltz_capriccio_medium() {
+        let trace = read_trace_file(
+            &fixture_root(&CORPUS)
+                .join("(R6) Waltz Capriccio/waltz_capriccio.ssc.medium.semantic.json.zst"),
+        );
+        assert_eq!(trace.difficulty, "Difficulty_Medium");
+        assert_trace_parity(&CORPUS, "(R6) Waltz Capriccio/waltz_capriccio.ssc", &trace);
+    }
+
+    #[test]
     #[ignore = "compiles Ultimate taste's reduced-mod difficulty and reports every semantic check"]
     fn ultimate_taste_medium() {
         let trace = read_trace_file(

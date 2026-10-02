@@ -252,6 +252,7 @@ mod runtime_regression_tests {
                 std::array::from_fn(|_| Vec::new()),
                 build_song_lua_runtime_visuals(
                     Vec::new(),
+                    None,
                     Vec::new(),
                     Vec::new(),
                     Vec::new(),

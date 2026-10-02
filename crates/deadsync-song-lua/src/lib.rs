@@ -1678,6 +1678,8 @@ pub struct CompiledSongLua<OverlayActor> {
     pub messages: Vec<SongLuaMessageEvent>,
     pub sound_paths: Vec<PathBuf>,
     pub overlays: Vec<OverlayActor>,
+    /// Captured ScreenGameplay translation and vibration shared by all screen draws.
+    pub screen_overlay_index: Option<usize>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
     pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
@@ -1705,6 +1707,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             messages: Vec::new(),
             sound_paths: Vec::new(),
             overlays: Vec::new(),
+            screen_overlay_index: None,
             overlay_eases: Vec::new(),
             overlay_updates: Vec::new(),
             stateful_message_captures: Vec::new(),

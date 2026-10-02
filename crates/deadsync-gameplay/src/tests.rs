@@ -1000,6 +1000,7 @@ mod tests {
         assert_eq!(layer.overlay_eases[0].to, 2);
 
         let visuals = SongLuaRuntimeVisuals {
+            screen_overlay_index: None,
             overlays: vec![3_u8],
             overlay_eases: layer.overlay_eases.clone(),
             overlay_ease_ranges: vec![0..1],

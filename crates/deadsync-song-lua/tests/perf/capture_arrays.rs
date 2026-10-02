@@ -172,7 +172,7 @@ fn lua_transfer_capture_arrays_preserve_active_updates_and_nonfinite_values() {
                 let (lua, actor) = fixture(true);
                 write(&lua, &actor, kind, v, old).unwrap();
                 let mut updates = Vec::new();
-                drain_overlay_update_capture(&lua, |index, values, scheduled, final_values| {
+                drain_overlay_update_capture(&lua, |index, values, scheduled, final_values, _| {
                     let scheduled: Vec<_> = scheduled
                         .iter()
                         .map(|update| {

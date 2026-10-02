@@ -1935,11 +1935,14 @@ fn compare_update_render_values(
         let mut native = Vec::new();
         collect_native_overlay_definitions(root, &definitions, &mut native);
         let native_len = native.len();
-        let pairs = if native_len == compiled.overlays.len() {
+        let overlay_indices = (0..compiled.overlays.len())
+            .filter(|index| Some(*index) != compiled.screen_overlay_index)
+            .collect::<Vec<_>>();
+        let pairs = if native_len == overlay_indices.len() {
             native
                 .into_iter()
-                .enumerate()
-                .map(|(index, definition)| (index, definition))
+                .zip(overlay_indices)
+                .map(|(definition, index)| (index, definition))
                 .collect::<Vec<_>>()
         } else {
             let mut native_drawables = Vec::new();
@@ -3293,6 +3296,80 @@ fn runtime_size_zoom_matches_native_drawing() {
 }
 
 #[test]
+fn waltz_runtime_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/waltz-runtime.json"));
+    let mut context = SongLuaCompileContext::new(&song_dir, trace.title.clone());
+    context.screen_width = 854.0;
+    context.music_length_seconds = 3.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[song_dir.join("waltz-runtime.lua").as_path()], 0, &context)
+            .expect("compile Waltz runtime fixture");
+    let mut parity = compare_semantics(&trace, &compiled, 0, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Waltz runtime"));
+    assert_eq!(parity.checks(), 287);
+    parity.assert_complete("Waltz runtime");
+    let layer = &compiled[0];
+    let screen = layer.screen_overlay_index.expect("captured top screen");
+    let before = compiled_local_states_at(layer, &context, 1.5, 1.5)[screen];
+    assert!(before.vibrate);
+    assert_eq!(before.effect_magnitude, [20.0, 20.0, 0.0]);
+    let after = compiled_local_states_at(layer, &context, 2.1, 2.1)[screen];
+    assert_eq!(after.effect_magnitude, [0.0; 3]);
+    let helper = layer
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Helper"))
+        .unwrap();
+    for second in [2.0, 2.1, 2.5, 3.0] {
+        assert_eq!(
+            compiled_local_states_at(layer, &context, second, second)[helper].y,
+            0.0
+        );
+    }
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/waltz-base-zoom-native.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    let sprite = layer
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Sprite"))
+        .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let second = sample["time"].as_f64().unwrap() as f32;
+        let state = compiled_overlay_states_at(layer, &context, second, second)[sprite];
+        let actual = compiled_world_vertices(state, [64.0, 32.0]);
+        let actor = sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|actor| actor["name"] == "Sprite")
+            .unwrap();
+        for corner in 0..4 {
+            for axis in 0..2 {
+                let expected = actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["screen"][axis]
+                    .as_f64()
+                    .unwrap() as f32;
+                assert!(
+                    (actual[corner][axis] - expected).abs() <= 0.002,
+                    "base zoom at {second}: {actual:?} vs {expected}"
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert_eq!(checks, 56);
+}
+
+#[test]
 fn perspective_float_matches_native_drawing() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -3808,6 +3885,18 @@ fn compare_projected_vibration_coverage(
                     }
                 }
                 current = overlay.parent_index;
+            }
+            for screen_layer in compiled {
+                if let Some(index) = screen_layer.screen_overlay_index {
+                    let mut screen =
+                        compiled_command_state_at(context, screen_layer, index, beat, seconds);
+                    apply_runtime_updates(screen_layer, index, beat, &mut screen);
+                    if screen.vibrate {
+                        for axis in 0..3 {
+                            actual[axis] += screen.effect_magnitude[axis];
+                        }
+                    }
+                }
             }
             parity.check(
                 native

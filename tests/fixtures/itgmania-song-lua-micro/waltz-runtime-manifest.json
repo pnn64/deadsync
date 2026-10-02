@@ -1,0 +1,26 @@
+{
+  "fixture_schema_version": 1,
+  "itgmania": {
+    "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+    "git_dirty": "false",
+    "execution": "embedded_bundled_lua",
+    "launches_executable": false
+  },
+  "harness_sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+  },
+  "files_sha256": {
+    "deadsync/tests/fixtures/song-lua/waltz-runtime.lua": "a840b484546276f4c98dcb4f28543641fa1725c0e034b4b00c012ee62fb0d5fb",
+    "itgmania-harness-rs/tests/fixtures/song-lua-headless/waltz-runtime.lua": "a840b484546276f4c98dcb4f28543641fa1725c0e034b4b00c012ee62fb0d5fb",
+    "itgmania-harness-rs/fixtures/actors/waltz-base-zoom.json": "63fb955363a038e4397b98af427e5da14e407c22317a8dafd518fcec3cd0d1ac",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/waltz-runtime.json": "a9f1e1b03ab8045066063833d5127e0bcb53ed666e430c2f71b2ccaeed55ccd4",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/waltz-base-zoom-native.json": "aab3138f169c86988b70ed7c5269dd3a0ec8464697eb1ee55f321a880cedd752"
+  },
+  "native_vertex_checks": 56,
+  "regressions": [
+    "immediate base zoom outside tween state",
+    "interrupted helper tween destination",
+    "shared screen vibration"
+  ]
+}

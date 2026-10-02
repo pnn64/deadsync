@@ -674,9 +674,7 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
 pub struct ActorSegment<'a> {
     source: ActorSegmentSource<'a>,
     cameras: [Option<&'a Matrix4>; 3],
-    flat_proxy_style: Option<&'a FlatProxyStyle>,
     z_shift: i16,
-    tint: &'a [f32; 4],
     blend: Option<BlendMode>,
     placement: ActorSegmentPlacement,
 }
@@ -685,15 +683,20 @@ const IDENTITY_TINT: [f32; 4] = [1.0; 4];
 
 #[derive(Clone, Copy, Debug)]
 enum ActorSegmentSource<'a> {
-    Actors(&'a [actors::Actor]),
-    ActorsFlat {
+    Actors {
         actors: &'a [actors::Actor],
         draws: &'a [actors::FlatDraw],
+        tint: &'a [f32; 4],
     },
-    Flat(&'a [actors::FlatDraw]),
-    FlatPair {
+    Flat {
         draws: &'a [actors::FlatDraw],
         tail: &'a [actors::FlatDraw],
+        tint: &'a [f32; 4],
+    },
+    StyledFlat {
+        draws: &'a [actors::FlatDraw],
+        tail: &'a [actors::FlatDraw],
+        style: &'a FlatProxyStyle,
     },
 }
 
@@ -742,7 +745,9 @@ struct ActorSegmentCamera<'a> {
 #[derive(Clone, Copy, Debug)]
 enum ActorSegmentPlacement {
     None,
+    Offset([f32; 2]),
     XFold(ActorXFold),
+    XFoldOffset(ActorXFold, [f32; 2]),
     FlatOffset([f32; 2]),
 }
 
@@ -813,14 +818,37 @@ impl ActorXFold {
 }
 
 impl<'a> ActorSegment<'a> {
+    /// Translates this fragment, including its flat draw tail, without cloning actors.
+    #[must_use]
+    pub fn with_offset(mut self, offset: [f32; 2]) -> Self {
+        if offset == [0.0; 2] {
+            return self;
+        }
+        let add = |a: [f32; 2]| [a[0] + offset[0], a[1] + offset[1]];
+        self.placement = match self.placement {
+            ActorSegmentPlacement::None => ActorSegmentPlacement::Offset(offset),
+            ActorSegmentPlacement::Offset(prior) => ActorSegmentPlacement::Offset(add(prior)),
+            ActorSegmentPlacement::XFold(fold) => ActorSegmentPlacement::XFoldOffset(fold, offset),
+            ActorSegmentPlacement::XFoldOffset(fold, prior) => {
+                ActorSegmentPlacement::XFoldOffset(fold, add(prior))
+            }
+            ActorSegmentPlacement::FlatOffset(prior) => {
+                ActorSegmentPlacement::FlatOffset(add(prior))
+            }
+        };
+        self
+    }
+
     #[must_use]
     pub const fn new(actors: &'a [actors::Actor]) -> Self {
         Self {
-            source: ActorSegmentSource::Actors(actors),
+            source: ActorSegmentSource::Actors {
+                actors,
+                draws: &[],
+                tint: &IDENTITY_TINT,
+            },
             cameras: [None; 3],
-            flat_proxy_style: None,
             z_shift: 0,
-            tint: &IDENTITY_TINT,
             blend: None,
             placement: ActorSegmentPlacement::None,
         }
@@ -829,11 +857,13 @@ impl<'a> ActorSegment<'a> {
     #[must_use]
     pub const fn shifted(actors: &'a [actors::Actor], z_shift: i16) -> Self {
         Self {
-            source: ActorSegmentSource::Actors(actors),
+            source: ActorSegmentSource::Actors {
+                actors,
+                draws: &[],
+                tint: &IDENTITY_TINT,
+            },
             cameras: [None; 3],
-            flat_proxy_style: None,
             z_shift,
-            tint: &IDENTITY_TINT,
             blend: None,
             placement: ActorSegmentPlacement::None,
         }
@@ -842,11 +872,13 @@ impl<'a> ActorSegment<'a> {
     #[must_use]
     pub const fn folded(actors: &'a [actors::Actor], z_shift: i16, x_fold: ActorXFold) -> Self {
         Self {
-            source: ActorSegmentSource::Actors(actors),
+            source: ActorSegmentSource::Actors {
+                actors,
+                draws: &[],
+                tint: &IDENTITY_TINT,
+            },
             cameras: [None; 3],
-            flat_proxy_style: None,
             z_shift,
-            tint: &IDENTITY_TINT,
             blend: None,
             placement: ActorSegmentPlacement::XFold(x_fold),
         }
@@ -863,11 +895,13 @@ impl<'a> ActorSegment<'a> {
         x_fold: Option<ActorXFold>,
     ) -> Self {
         Self {
-            source: ActorSegmentSource::Actors(actors),
+            source: ActorSegmentSource::Actors {
+                actors,
+                draws: &[],
+                tint,
+            },
             cameras: [Some(root_camera), Some(camera_suffix), None],
-            flat_proxy_style: None,
             z_shift,
-            tint,
             blend,
             placement: match x_fold {
                 Some(x_fold) => ActorSegmentPlacement::XFold(x_fold),
@@ -886,10 +920,14 @@ impl<'a> ActorSegment<'a> {
         camera: Option<&'a Matrix4>,
     ) -> Self {
         self.source = match self.source {
-            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
-                ActorSegmentSource::ActorsFlat { actors, draws }
+            ActorSegmentSource::Actors { actors, tint, .. } => ActorSegmentSource::Actors {
+                actors,
+                draws,
+                tint,
+            },
+            source @ (ActorSegmentSource::Flat { .. } | ActorSegmentSource::StyledFlat { .. }) => {
+                source
             }
-            source @ (ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. }) => source,
         };
         self.cameras[2] = camera;
         self
@@ -939,11 +977,13 @@ impl<'a> ActorSegment<'a> {
         source_camera: Option<&'a Matrix4>,
     ) -> Self {
         Self {
-            source: ActorSegmentSource::Flat(draws),
+            source: ActorSegmentSource::Flat {
+                draws,
+                tail: &[],
+                tint,
+            },
             cameras: [enclosing_camera, source_camera, None],
-            flat_proxy_style: None,
             z_shift: z,
-            tint,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
@@ -963,11 +1003,13 @@ impl<'a> ActorSegment<'a> {
         source_camera: Option<&'a Matrix4>,
     ) -> Self {
         Self {
-            source: ActorSegmentSource::Flat(draws),
+            source: ActorSegmentSource::StyledFlat {
+                draws,
+                tail: &[],
+                style: proxy_style,
+            },
             cameras: [enclosing_camera, source_camera, None],
-            flat_proxy_style: Some(proxy_style),
             z_shift: z,
-            tint: &IDENTITY_TINT,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
@@ -989,14 +1031,13 @@ impl<'a> ActorSegment<'a> {
         cameras: [Option<&'a Matrix4>; 2],
     ) -> Self {
         Self {
-            source: ActorSegmentSource::FlatPair {
+            source: ActorSegmentSource::Flat {
                 draws,
                 tail: tail_draws,
+                tint,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
-            flat_proxy_style: None,
             z_shift: z,
-            tint,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
@@ -1017,14 +1058,13 @@ impl<'a> ActorSegment<'a> {
         cameras: [Option<&'a Matrix4>; 2],
     ) -> Self {
         Self {
-            source: ActorSegmentSource::FlatPair {
+            source: ActorSegmentSource::StyledFlat {
                 draws,
                 tail: tail_draws,
+                style: proxy_style,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
-            flat_proxy_style: Some(proxy_style),
             z_shift: z,
-            tint: &IDENTITY_TINT,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
         }
@@ -1165,12 +1205,11 @@ where
     let object_capacity = actor_segments
         .clone()
         .fold(0usize, |count, segment| match segment.source {
-            ActorSegmentSource::Actors(actors) => count.saturating_add(actors.len()),
-            ActorSegmentSource::ActorsFlat { actors, draws } => count
+            ActorSegmentSource::Actors { actors, draws, .. } => count
                 .saturating_add(actors.len())
                 .saturating_add(draws.len()),
-            ActorSegmentSource::Flat(draws) => count.saturating_add(draws.len()),
-            ActorSegmentSource::FlatPair { draws, tail } => {
+            ActorSegmentSource::Flat { draws, tail, .. }
+            | ActorSegmentSource::StyledFlat { draws, tail, .. } => {
                 count.saturating_add(draws.len()).saturating_add(tail.len())
             }
         })
@@ -1213,18 +1252,20 @@ where
 
     let mut sequence = ActorSequenceState::new(camera);
     for segment in actor_segments {
-        let actors = match segment.source {
-            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
-                actors
+        let offset = match segment.placement {
+            ActorSegmentPlacement::Offset(offset)
+            | ActorSegmentPlacement::XFoldOffset(_, offset) => offset,
+            _ => [0.0; 2],
+        };
+        let (actors, tint) = match segment.source {
+            ActorSegmentSource::Actors { actors, tint, .. } => (actors, *tint),
+            ActorSegmentSource::Flat { .. } | ActorSegmentSource::StyledFlat { .. } => {
+                (&[][..], IDENTITY_TINT)
             }
-            ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. } => &[],
         };
         let segment_camera = match (segment.cameras[0], segment.cameras[1]) {
             (Some(root), Some(suffix))
-                if matches!(
-                    segment.source,
-                    ActorSegmentSource::Actors(_) | ActorSegmentSource::ActorsFlat { .. }
-                ) =>
+                if matches!(segment.source, ActorSegmentSource::Actors { .. }) =>
             {
                 Some(ActorSegmentCamera { root, suffix })
             }
@@ -1234,12 +1275,15 @@ where
             actors.iter().map(|actor| {
                 let base_z = segment.z_shift;
                 let style = ComposeStyle {
-                    tint: *segment.tint,
+                    tint,
                     blend: segment.blend,
                 };
                 let x_fold = match segment.placement {
-                    ActorSegmentPlacement::XFold(x_fold) => Some(x_fold),
-                    ActorSegmentPlacement::None | ActorSegmentPlacement::FlatOffset(_) => None,
+                    ActorSegmentPlacement::XFold(x_fold)
+                    | ActorSegmentPlacement::XFoldOffset(x_fold, _) => Some(x_fold),
+                    ActorSegmentPlacement::None
+                    | ActorSegmentPlacement::Offset(_)
+                    | ActorSegmentPlacement::FlatOffset(_) => None,
                 };
                 ActorBuild {
                     actor,
@@ -1249,7 +1293,11 @@ where
                 }
             }),
             segment_camera.as_ref(),
-            root_rect,
+            SmRect {
+                x: root_rect.x + offset[0],
+                y: root_rect.y + offset[1],
+                ..root_rect
+            },
             m,
             fonts,
             scratch,
@@ -1267,11 +1315,11 @@ where
             None,
         );
         let has_flat_draws = match segment.source {
-            ActorSegmentSource::Actors(_) => false,
-            ActorSegmentSource::ActorsFlat { draws, .. } | ActorSegmentSource::Flat(draws) => {
-                !draws.is_empty()
+            ActorSegmentSource::Actors { draws, .. } => !draws.is_empty(),
+            ActorSegmentSource::Flat { draws, tail, .. }
+            | ActorSegmentSource::StyledFlat { draws, tail, .. } => {
+                !draws.is_empty() || !tail.is_empty()
             }
-            ActorSegmentSource::FlatPair { draws, tail } => !draws.is_empty() || !tail.is_empty(),
         };
         debug_assert!(
             !has_flat_draws || sequence.camera_stack.is_empty(),
@@ -5905,18 +5953,24 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     actor_textures: Option<&[Arc<str>]>,
     total_elapsed: f32,
 ) {
-    let (enclosing_matrix, fragments) = match segment.source {
-        ActorSegmentSource::Actors(_) => return,
-        ActorSegmentSource::ActorsFlat { draws, .. } => {
-            (None, [(draws, segment.cameras[2]), (&[][..], None)])
-        }
-        ActorSegmentSource::Flat(draws) => (
-            segment.cameras[0],
-            [(draws, segment.cameras[1]), (&[][..], None)],
+    let (enclosing_matrix, fragments, proxy_style, tint) = match segment.source {
+        ActorSegmentSource::Actors { draws, tint, .. } => (
+            None,
+            [(draws, segment.cameras[2]), (&[][..], None)],
+            None,
+            *tint,
         ),
-        ActorSegmentSource::FlatPair { draws, tail } => (
+        ActorSegmentSource::Flat { draws, tail, tint } => (
             segment.cameras[0],
             [(draws, segment.cameras[1]), (tail, segment.cameras[2])],
+            None,
+            *tint,
+        ),
+        ActorSegmentSource::StyledFlat { draws, tail, style } => (
+            segment.cameras[0],
+            [(draws, segment.cameras[1]), (tail, segment.cameras[2])],
+            Some(*style),
+            IDENTITY_TINT,
         ),
     };
     if fragments.iter().all(|(draws, _)| draws.is_empty()) {
@@ -5928,10 +5982,9 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
         sequence.last_root_camera = Some((*matrix, id));
         id
     });
-    let proxy_style = segment.flat_proxy_style.copied();
     let tints = proxy_style.map_or(
         FlatTintStack {
-            stages: [*segment.tint, [1.0; 4], [1.0; 4]],
+            stages: [tint, [1.0; 4], [1.0; 4]],
             len: 1,
         },
         |style| style.tints,
@@ -5942,7 +5995,9 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     };
     let (flat_offset, fixed_z, x_fold) = match segment.placement {
         ActorSegmentPlacement::None => ([0.0, 0.0], false, None),
+        ActorSegmentPlacement::Offset(offset) => (offset, false, None),
         ActorSegmentPlacement::XFold(x_fold) => ([0.0, 0.0], false, Some(x_fold)),
+        ActorSegmentPlacement::XFoldOffset(x_fold, offset) => (offset, false, Some(x_fold)),
         ActorSegmentPlacement::FlatOffset(offset) => {
             (offset, true, proxy_style.and_then(|style| style.x_fold))
         }
@@ -14108,6 +14163,85 @@ mod tests {
             panic!("flat draw should preserve reusable renderer storage");
         };
         assert!(Arc::ptr_eq(render_vertices, &vertices));
+    }
+
+    #[test]
+    fn translated_segments_move_actor_and_flat_draws() {
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let source = SpriteSource::static_texture("translated-sprite");
+        let mut child = test_sprite(source.clone());
+        let Actor::Sprite { z, .. } = &mut child else {
+            unreachable!()
+        };
+        *z = 17;
+        let actors = [child.clone()];
+        let wrapped = [Actor::Frame {
+            align: [0.0; 2],
+            offset: [10.0, -3.0],
+            size: [SizeSpec::Fill; 2],
+            children: vec![child.clone(), child],
+            background: None,
+            z: 0,
+        }];
+        let draws = [FlatDraw::Sprite(FlatSprite {
+            center: [12.0, 24.0],
+            world_z: 0.0,
+            size: [16.0, 32.0],
+            source,
+            tint: [0.8, 0.6, 0.4, 1.0],
+            glow: [0.0; 4],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            fade: [0.0; 4],
+            blend: BlendMode::Alpha,
+            rot_x_deg: 0.0,
+            rot_y_deg: 0.0,
+            rot_z_deg: 0.0,
+            z: 17,
+        })];
+        let resources = ActorResourceArena::new(0);
+        let compose = |segment| {
+            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[segment],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                0.0,
+                &mut TextLayoutCache::default(),
+                &mut ComposeScratch::default(),
+                &TestDrawTextureContext,
+                &resources,
+            )
+        };
+        let expected = compose(ActorSegment::new(&wrapped));
+        let actual = compose(
+            ActorSegment::new(&actors)
+                .with_flat_draws(&draws, None)
+                .with_offset([10.0, -3.0]),
+        );
+        assert_eq!(actual.ops, expected.ops);
+        assert_eq!(actual.sprite_instances, expected.sprite_instances);
+        assert_eq!(actual.cameras, expected.cameras);
+        for segment in [
+            ActorSegment::folded(&actors, 0, ActorXFold::new(100.0, 0.75))
+                .with_flat_draws(&draws, None),
+            ActorSegment::flat_proxy(&draws, [5.0, 7.0], 17, &[1.0; 4], BlendMode::Alpha),
+        ] {
+            let mut expected = compose(segment);
+            for instance in &mut expected.sprite_instances {
+                instance.center[0] += 10.0;
+                instance.center[1] += 3.0;
+            }
+            let actual = compose(segment.with_offset([4.0, -1.0]).with_offset([6.0, -2.0]));
+            assert_eq!(actual.ops, expected.ops);
+            assert_eq!(actual.sprite_instances, expected.sprite_instances);
+        }
     }
 
     #[test]

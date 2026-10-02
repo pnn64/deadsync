@@ -99,7 +99,7 @@ pub(super) fn capture_update_overlay_samples<Kind>(
     } = scratch;
     crate::lua_util::drain_overlay_update_capture(
         lua,
-        |overlay_index, values, scheduled, final_values| {
+        |overlay_index, values, scheduled, final_values, _| {
             let Some(baseline) = baseline.get(overlay_index) else {
                 return Ok(());
             };

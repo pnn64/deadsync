@@ -10384,6 +10384,7 @@ pub struct GameplayActorSegments {
     insert: usize,
     players: [Option<PlayerActorSegment>; 2],
     direct_proxy_len: usize,
+    screen_offset: [f32; 2],
 }
 
 impl GameplayActorSegments {
@@ -10447,6 +10448,7 @@ impl GameplayActorSegments {
             proxy_draw: false,
             actor_start: self.insert.min(actors.len()),
         }
+        .map(|segment| segment.with_offset(self.screen_offset))
     }
 }
 
@@ -12795,10 +12797,19 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         draw_layer(ScreenLayer::System, actors, layout);
     }
     let direct_proxy_len = song_lua_direct_proxies.len();
+    let screen_offset = song_lua_visuals
+        .screen_overlay_index
+        .and_then(|index| song_lua_overlay_state_scratch.get(index))
+        .filter(|_| show_song_visuals)
+        .map_or([0.0; 2], |screen| {
+            let screen = song_lua_proxy_effect(*screen, song_lua_now, state.current_beat(), 0);
+            [screen.x, screen.y]
+        });
     GameplayActorSegments {
         insert: segment_insert,
         players: segment_players,
         direct_proxy_len,
+        screen_offset,
     }
 }
 
