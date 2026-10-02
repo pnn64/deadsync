@@ -154,22 +154,22 @@ pub use lua_util::{
     read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
     read_model_path, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
-    read_note_column_transform_samples,
-    read_note_column_transform_samples_for_fields, read_note_column_zoom_hides,
-    read_note_column_zoom_hides_for_actor, read_noteskin_tap_actor_model,
-    read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
-    read_proxy_target_kind, read_song_lua_sound_paths, read_song_meter_display_state,
-    read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
-    read_update_function_tables, read_vertex_colors_value, record_probe_method_call,
-    register_song_lua_actor, remove_actor_child, remove_all_actor_children, reset_actor_capture,
-    reset_actor_capture_tables, reset_indexed_actor_capture_tables,
-    reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
-    resolve_actor_asset_path, restore_action_capture_scope, restore_actor_mutable_state,
-    restore_actors_semantic_state, restore_note_column_handlers, restore_note_field_columns,
-    rolling_numbers_text, run_actor_draw_functions, run_actor_draw_functions_for_table,
-    run_actor_init_commands, run_actor_init_commands_for_table, run_actor_named_command,
-    run_actor_named_command_with_drain, run_actor_named_command_with_drain_and_params,
-    run_actor_startup_commands, run_actor_startup_commands_for_table, run_actor_update_functions,
+    read_note_column_transform_samples, read_note_column_transform_samples_for_fields,
+    read_note_column_zoom_hides, read_note_column_zoom_hides_for_actor,
+    read_noteskin_tap_actor_model, read_noteskin_tap_actor_slots,
+    read_overlay_compile_actor_actions, read_overlay_compile_actors, read_proxy_target_kind,
+    read_song_lua_sound_paths, read_song_meter_display_state, read_tracked_compile_actors,
+    read_update_function_nested_tables, read_update_function_tables, read_vertex_colors_value,
+    record_probe_method_call, register_song_lua_actor, remove_actor_child,
+    remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
+    reset_indexed_actor_capture_tables, reset_overlay_compile_actor_capture_tables,
+    reset_tracked_capture_tables, resolve_actor_asset_path, restore_action_capture_scope,
+    restore_actor_mutable_state, restore_actors_semantic_state, restore_note_column_handlers,
+    restore_note_field_columns, rolling_numbers_text, run_actor_draw_functions,
+    run_actor_draw_functions_for_table, run_actor_init_commands, run_actor_init_commands_for_table,
+    run_actor_named_command, run_actor_named_command_with_drain,
+    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
+    run_actor_startup_commands_for_table, run_actor_update_functions,
     run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
     run_added_actor_child_commands, run_command_on_leaves,
     run_named_command_on_children_recursively, run_named_command_on_leaves,
@@ -1688,8 +1688,9 @@ pub struct CompiledSongLua<OverlayActor> {
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
+    /// Underlay, Overlay, and SongBackground retain their own visibility/tweens.
+    pub screen_layers: [SongLuaCapturedActor; 3],
     pub hidden_players: [bool; LUA_PLAYERS],
-    pub hidden_screen_layers: [bool; 2],
     pub note_hides: Vec<SongLuaNoteHideWindow>,
     pub column_offsets: Vec<SongLuaColumnOffsetWindow>,
     pub column_splines: Vec<deadsync_gameplay::SongLuaColumnSplineTrack>,
@@ -1718,8 +1719,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             stateful_message_captures: Vec::new(),
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
+            screen_layers: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             hidden_players: [false; LUA_PLAYERS],
-            hidden_screen_layers: [false; 2],
             note_hides: Vec::new(),
             column_offsets: Vec::new(),
             column_splines: Vec::new(),
@@ -1806,6 +1807,7 @@ pub enum SongLuaProxyTarget {
     NoteField { player_index: usize },
     Judgment { player_index: usize },
     Combo { player_index: usize },
+    Score { player_index: usize },
     Underlay { hidden: bool },
     Overlay { hidden: bool },
     Actor { overlay_index: usize },
@@ -2552,6 +2554,8 @@ pub struct SongLuaOverlayState {
     pub text_distortion: f32,
     pub text_glow_mode: SongLuaTextGlowMode,
     pub mult_attrs_with_diffuse: bool,
+    // Chronological compilation has already accumulated native spin rotation.
+    pub spin_baked: bool,
     // A delayed first binding must not draw its preloaded texture early.
     pub sprite_texture: bool,
     pub sprite_animate: bool,
@@ -2640,6 +2644,7 @@ impl Default for SongLuaOverlayState {
             text_distortion: 0.0,
             text_glow_mode: SongLuaTextGlowMode::Both,
             mult_attrs_with_diffuse: false,
+            spin_baked: false,
             sprite_texture: true,
             sprite_animate: false,
             sprite_loop: true,
@@ -4601,6 +4606,7 @@ pub enum SongLuaTrackedActorTarget {
     PlayerJudgment(usize),
     PlayerCombo(usize),
     SongForeground,
+    ScreenLayer(usize),
 }
 
 pub struct SongLuaTrackedActor {
@@ -10256,11 +10262,25 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Tween Time Left"),
         )
         .unwrap();
-        assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "0.00:0.50:0.75:0.00:0.125");
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .any(|event| event.message == "0.00:0.50:0.75:0.00:0.125")
+        );
         assert_eq!(compiled.overlays.len(), 1);
-        assert_eq!(compiled.overlays[0].initial_state.x, 10.0);
-        assert_eq!(compiled.overlays[0].initial_state.diffuse[3], 0.5);
+        let overlay = &compiled.overlays[0];
+        assert_eq!(overlay.initial_state.x, 0.0);
+        assert_eq!(overlay.initial_state.diffuse[3], 1.0);
+        let startup = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message == "__songlua_actor_startup")
+            .expect("startup bounce tween");
+        assert_eq!(
+            overlay_state_after_blocks(overlay.initial_state, &startup.blocks, 0.125).diffuse[3],
+            0.5
+        );
     }
 
     #[test]
@@ -11798,7 +11818,8 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Hidden Gameplay Layers"),
         )
         .unwrap();
-        assert_eq!(compiled.hidden_screen_layers, [true, true]);
+        assert!(!compiled.screen_layers[0].initial_state.visible);
+        assert!(!compiled.screen_layers[1].initial_state.visible);
     }
 
     #[test]
@@ -16720,6 +16741,63 @@ return Def.ActorFrame{
             "BPMDisplay:120 - 180:Theme Actor Shapes:Difficulty_Hard:P1Score:0.00%:Theme Actor Shapes:SongMeterDisplayP1:Stream:Overlay"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_score_targets_and_layer_tweens() {
+        let song_dir = test_dir("theme-score-layer-targets");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local score
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local top = SCREENMAN:GetTopScreen()
+        local underlay = top:GetChild("Underlay")
+        underlay:visible(false)
+        score = underlay:GetChild("P1Score")
+        score:visible(true):diffusealpha(1)
+        top:GetChild("Overlay"):smooth(1.5):diffusealpha(0)
+        top:GetChild("SongBackground"):visible(false)
+    end,
+    Def.ActorProxy{
+        OnCommand=function(self) self:queuecommand("Set") end,
+        SetCommand=function(self) self:SetTarget(score) end,
+    },
+}
+"#,
+        )
+        .expect("write score/layer fixture");
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Layer Targets"),
+        )
+        .expect("compile score/layer fixture");
+        assert!(compiled.overlays.iter().any(|actor| matches!(
+            actor.kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Score { player_index: 0 }
+            }
+        )));
+        assert!(!compiled.overlays.iter().any(|actor| matches!(
+            actor.kind,
+            SongLuaOverlayKind::ActorProxy {
+                target: SongLuaProxyTarget::Underlay { .. }
+            }
+        )));
+        assert!(!compiled.screen_layers[0].initial_state.visible);
+        assert!(!compiled.screen_layers[2].initial_state.visible);
+        let overlay = &compiled.screen_layers[1];
+        assert_eq!(overlay.initial_state.diffuse[3], 1.0);
+        assert!(
+            overlay
+                .message_commands
+                .iter()
+                .flat_map(|command| &command.blocks)
+                .any(|block| block.duration == 1.5
+                    && block.delta.diffuse.is_some_and(|color| color[3] == 0.0))
+        );
     }
 
     #[test]

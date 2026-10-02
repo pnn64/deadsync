@@ -19,6 +19,7 @@ glam = "0.33.11"
 twox-hash = "2.1.4"
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
+deadlib-video = { path = "../deadlib-video" }
 deadsync-rules = { path = "../deadsync-rules" }
 chrono = "0.4.45"
 image = "0.25.10"

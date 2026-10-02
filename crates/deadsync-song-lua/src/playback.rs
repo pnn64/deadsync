@@ -2116,7 +2116,8 @@ fn song_lua_proxy_target_has_source(
         }
         SongLuaProxyTarget::Underlay { .. }
         | SongLuaProxyTarget::Overlay { .. }
-        | SongLuaProxyTarget::Actor { .. } => false,
+        | SongLuaProxyTarget::Actor { .. }
+        | SongLuaProxyTarget::Score { .. } => false,
     }
 }
 fn song_lua_proxy_active_players_indexed<S: NoteskinSlot + Clone>(
@@ -2417,6 +2418,7 @@ struct SongLuaPlayerProxyRequests {
 #[derive(Clone, Copy, Default)]
 struct SongLuaScreenProxySources<'a> {
     players: [SongLuaPlayerProxySources<'a>; 2],
+    scores: [Option<&'a [Arc<[Actor]>]>; MAX_PLAYERS],
     direct_players: [Option<SongLuaDirectPlayerSource>; 2],
     direct_note_fields: [Option<SongLuaDirectProxySource>; 2],
     direct_judgments: [Option<SongLuaDirectProxySource>; 2],
@@ -2428,6 +2430,7 @@ struct SongLuaScreenProxySources<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct SongLuaScreenProxyRequests {
     players: [SongLuaPlayerProxyRequests; 2],
+    scores: [bool; MAX_PLAYERS],
     underlay: bool,
     overlay: bool,
     hide_underlay: bool,
@@ -2516,7 +2519,9 @@ const fn song_lua_proxy_pool_class(target: &SongLuaProxyTarget) -> usize {
         SongLuaProxyTarget::Underlay { .. } | SongLuaProxyTarget::Overlay { .. } => {
             SONG_LUA_MULTI_PROXY_CLASS
         }
-        SongLuaProxyTarget::Actor { .. } => SONG_LUA_SMALL_PROXY_CLASS,
+        SongLuaProxyTarget::Actor { .. } | SongLuaProxyTarget::Score { .. } => {
+            SONG_LUA_SMALL_PROXY_CLASS
+        }
     }
 }
 
@@ -3328,6 +3333,12 @@ fn song_lua_proxy_source<'a>(
             .players
             .get(*player_index)
             .and_then(|sources| sources.combo.filter(|source| !source.is_empty())),
+        SongLuaProxyTarget::Score { player_index } => proxy_sources
+            .scores
+            .get(*player_index)
+            .copied()
+            .flatten()
+            .map(SongLuaProxySource::new),
         SongLuaProxyTarget::Underlay { .. } => proxy_sources
             .underlay
             .filter(|segments| !segments.is_empty())
@@ -3364,6 +3375,11 @@ fn song_lua_mark_proxy_target(
         SongLuaProxyTarget::Combo { player_index } => {
             if let Some(player) = requests.players.get_mut(*player_index) {
                 player.combo = true;
+            }
+        }
+        SongLuaProxyTarget::Score { player_index } => {
+            if let Some(score) = requests.scores.get_mut(*player_index) {
+                *score = true;
             }
         }
         SongLuaProxyTarget::Underlay { hidden } => {
@@ -3835,6 +3851,7 @@ fn song_lua_merge_proxy_requests(
         into.players[player_index].note_field |= from.players[player_index].note_field;
         into.players[player_index].judgment |= from.players[player_index].judgment;
         into.players[player_index].combo |= from.players[player_index].combo;
+        into.scores[player_index] |= from.scores[player_index];
     }
     into.underlay |= from.underlay;
     into.overlay |= from.overlay;
@@ -4079,7 +4096,8 @@ fn song_lua_direct_proxy_source(
         SongLuaProxyTarget::Player { .. }
         | SongLuaProxyTarget::Underlay { .. }
         | SongLuaProxyTarget::Overlay { .. }
-        | SongLuaProxyTarget::Actor { .. } => None,
+        | SongLuaProxyTarget::Actor { .. }
+        | SongLuaProxyTarget::Score { .. } => None,
     }
 }
 
@@ -6000,7 +6018,11 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
     let period = state.effect_period.max(f32::EPSILON);
     EffectState {
         clock: state.effect_clock,
-        mode: state.effect_mode,
+        mode: if state.spin_baked && state.effect_mode == deadlib_present::anim::EffectMode::Spin {
+            deadlib_present::anim::EffectMode::None
+        } else {
+            state.effect_mode
+        },
         color1: state.effect_color1,
         color2: state.effect_color2,
         period,
@@ -11153,6 +11175,7 @@ pub struct FrameScratch {
     song_lua_player_judgment_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
     song_lua_player_combo_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
     song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache,
+    screen_layer_caches: [SongLuaMessageStateCache; 3],
     song_lua_background_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
     song_lua_foreground_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
     song_lua_local_state_scratch: Vec<SongLuaOverlayState>,
@@ -11395,6 +11418,7 @@ impl FrameScratch {
             song_lua_player_combo_message_state_cache: [SongLuaMessageStateCache::default();
                 MAX_PLAYERS],
             song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache::default(),
+            screen_layer_caches: std::array::from_fn(|_| SongLuaMessageStateCache::default()),
             song_lua_background_song_foreground_message_state_cache,
             song_lua_foreground_song_foreground_message_state_cache,
             song_lua_local_state_scratch,
@@ -11605,6 +11629,7 @@ pub enum ScreenLayer {
     Filter,
     Header,
     Hud,
+    Score(usize),
     System,
 }
 
@@ -11678,6 +11703,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         song_lua_player_judgment_message_state_cache,
         song_lua_player_combo_message_state_cache,
         song_lua_song_foreground_message_state_cache,
+        screen_layer_caches,
         song_lua_background_song_foreground_message_state_cache,
         song_lua_foreground_song_foreground_message_state_cache,
         song_lua_local_state_scratch,
@@ -11716,14 +11742,24 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     let runtime_player_is_p2 =
         deadsync_gameplay::gameplay_runtime_player_is_p2(play_style, player_side);
     let song_lua_visuals = state.song_lua_visuals();
-    let hidden_song_layers = if show_song_visuals {
-        song_lua_visuals.hidden_screen_layers
-    } else {
-        [false; 2]
-    };
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let song_lua_now = state.current_music_time_display();
+    let screen_layers: [SongLuaOverlayState; 3] = std::array::from_fn(|index| {
+        if !show_song_visuals {
+            return SongLuaOverlayState::default();
+        }
+        song_lua_captured_actor_state_from(
+            song_lua_now,
+            &song_lua_visuals.screen_layers[index],
+            Some(&song_lua_visuals.screen_layer_events[index]),
+            &mut screen_layer_caches[index],
+        )
+    });
+    let hidden_song_layers = std::array::from_fn(|index| {
+        show_song_visuals
+            && (!screen_layers[index].visible || screen_layers[index].diffuse[3] <= f32::EPSILON)
+    });
     song_lua_overlay_state_sets_from_into(
         song_lua_now,
         &song_lua_visuals.overlays,
@@ -11881,12 +11917,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         );
         song_lua_merge_proxy_requests(&mut covering_proxy_requests, covering);
     }
-    let retain_underlay_original = !song_lua_visuals.hidden_screen_layers[0]
+    let retain_underlay_original = !hidden_song_layers[0]
         && !proxy_requests.hide_underlay
         && !covering_proxy_requests.underlay;
-    let retain_overlay_original = !song_lua_visuals.hidden_screen_layers[1]
-        && !proxy_requests.hide_overlay
-        && !covering_proxy_requests.overlay;
+    let retain_overlay_original =
+        !hidden_song_layers[1] && !proxy_requests.hide_overlay && !covering_proxy_requests.overlay;
     let direct_player_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_players[player] != 0
             && !proxy_analysis.captured.players[player].player
@@ -11918,8 +11953,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         .then_some(SongLuaActorSegments::new());
     // --- Background and Filter ---
     let underlay_start = actors.len();
-    if show_song_visuals {
+    if show_song_visuals && screen_layers[2].visible && screen_layers[2].diffuse[3] > f32::EPSILON {
         draw_layer(ScreenLayer::Background, actors, FieldLayout::default());
+        for actor in &mut actors[underlay_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[2].diffuse, None, 0);
+        }
     }
     for &layer_idx in song_lua_background_active_layers {
         let layer = &song_lua_visuals.background_visual_layers[layer_idx];
@@ -12033,6 +12071,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     if !hide_overlay_hud {
         let overlay_start = actors.len();
         draw_layer(ScreenLayer::ExitPrompt, actors, FieldLayout::default());
+        for actor in &mut actors[overlay_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[1].diffuse, None, 0);
+        }
         song_lua_capture_new_actors(
             &mut overlay_proxy_source,
             actors,
@@ -12045,6 +12086,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     if !hide_overlay_hud {
         let overlay_start = actors.len();
         draw_layer(ScreenLayer::Lobby, actors, FieldLayout::default());
+        for actor in &mut actors[overlay_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[1].diffuse, None, 0);
+        }
         song_lua_capture_new_actors(
             &mut overlay_proxy_source,
             actors,
@@ -12057,6 +12101,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     // Exit visuals participate in the Overlay capture target.
     let overlay_start = actors.len();
     draw_layer(ScreenLayer::ExitFade, actors, FieldLayout::default());
+    for actor in &mut actors[overlay_start..] {
+        song_lua_style_capture_actor_in_place(actor, screen_layers[1].diffuse, None, 0);
+    }
     song_lua_capture_new_actors(
         &mut overlay_proxy_source,
         actors,
@@ -12615,6 +12662,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     if !hide_underlay_hud {
         let underlay_start = actors.len();
         draw_layer(ScreenLayer::Danger, actors, layout);
+        for actor in &mut actors[underlay_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[0].diffuse, None, 0);
+        }
         song_lua_capture_new_actors(
             &mut underlay_proxy_source,
             actors,
@@ -12624,21 +12674,29 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         );
     }
 
-    // Per-player filtering is part of the Underlay capture target.
-    let underlay_start = actors.len();
-    draw_layer(ScreenLayer::Filter, actors, layout);
-    song_lua_capture_new_actors(
-        &mut underlay_proxy_source,
-        actors,
-        underlay_start,
-        song_lua_proxy_actor_scratch.as_mut(),
-        retain_underlay_original,
-    );
+    if !hide_underlay_hud {
+        // Per-player filtering is part of the Underlay capture target.
+        let underlay_start = actors.len();
+        draw_layer(ScreenLayer::Filter, actors, layout);
+        for actor in &mut actors[underlay_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[0].diffuse, None, 0);
+        }
+        song_lua_capture_new_actors(
+            &mut underlay_proxy_source,
+            actors,
+            underlay_start,
+            song_lua_proxy_actor_scratch.as_mut(),
+            retain_underlay_original,
+        );
+    }
 
     // Header and HUD fragments belong to Underlay, before foreground Lua.
     if !hide_underlay_hud {
         let underlay_start = actors.len();
         draw_layer(ScreenLayer::Header, actors, layout);
+        for actor in &mut actors[underlay_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[0].diffuse, None, 0);
+        }
         song_lua_capture_new_actors(
             &mut underlay_proxy_source,
             actors,
@@ -12687,6 +12745,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     if !hide_underlay_hud {
         let underlay_tail_start = actors.len();
         draw_layer(ScreenLayer::Hud, actors, layout);
+        for actor in &mut actors[underlay_tail_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[0].diffuse, None, 0);
+        }
         song_lua_capture_new_actors(
             &mut underlay_proxy_source,
             actors,
@@ -12697,12 +12758,30 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     }
     let song_foreground_state =
         song_lua_song_foreground_state(state, song_lua_song_foreground_message_state_cache);
+    let score_sources: [Option<SongLuaActorSegments>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            if !proxy_requests.scores[player] {
+                return None;
+            }
+            let start = actors.len();
+            draw_layer(ScreenLayer::Score(player), actors, layout);
+            let mut source = Some(SongLuaActorSegments::new());
+            song_lua_capture_new_actors(
+                &mut source,
+                actors,
+                start,
+                song_lua_proxy_actor_scratch.as_mut(),
+                false,
+            );
+            source
+        });
     let underlay_proxy_slice = underlay_proxy_source.as_deref();
     let overlay_proxy_slice = overlay_proxy_source.as_deref();
     let proxy_sources = SongLuaScreenProxySources {
         // The same prepared views the replacement analysis read; the prepared
         // sources are not modified in between.
         players: replacement_proxy_sources,
+        scores: std::array::from_fn(|player| score_sources[player].as_deref()),
         direct_players: [p1_direct_player, p2_direct_player],
         direct_note_fields: [p1_direct_note_field, p2_direct_note_field],
         direct_judgments: [p1_direct_judgment, p2_direct_judgment],
@@ -12802,11 +12881,15 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             SONG_LUA_FOREGROUND_DEPTH,
         );
     }
-    if !hide_gameplay_hud {
+    if !hide_overlay_hud {
         // These are separate top-screen actors in ITGmania. Append them only
         // after every ScreenGameplay/song-local layer so ActorProxy/AFT effects
         // cannot capture or post-process them.
+        let system_start = actors.len();
         draw_layer(ScreenLayer::System, actors, layout);
+        for actor in &mut actors[system_start..] {
+            song_lua_style_capture_actor_in_place(actor, screen_layers[1].diffuse, None, 0);
+        }
     }
     let direct_proxy_len = song_lua_direct_proxies.len();
     let screen_offset = song_lua_visuals

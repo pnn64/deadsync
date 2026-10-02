@@ -1138,8 +1138,9 @@ L000
                     &mut text_cache,
                     &mut compose_scratch,
                 );
+                // Batch merging can reduce draw operations without removing
+                // visible sprites; coverage belongs to the instance payload.
                 assert!(expected.sprite_instances.len() >= 240);
-                assert!(expected.ops.len() >= 120);
                 let player = &mut state.players_runtime.players[0];
                 player.combo = 0;
                 player.last_judgment = None;
@@ -3844,6 +3845,82 @@ return Def.ActorFrame{
         }
     }
 
+    #[test]
+    fn hidden_score_proxy_keeps_overlay_fade() {
+        let simfile = write_fixture("hidden-score-fade", generated_pipeline_song_lua_simfile());
+        let dir = simfile.parent().expect("song directory").join("lua");
+        fs::create_dir_all(&dir).expect("Lua directory");
+        fs::write(
+            dir.join("default.lua"),
+            r#"
+local player, score
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local top = SCREENMAN:GetTopScreen()
+        player = top:GetChild("PlayerP1")
+        player:visible(false)
+        local underlay = top:GetChild("Underlay")
+        underlay:visible(false)
+        score = underlay:GetChild("P1Score")
+        score:visible(true):diffusealpha(1)
+        top:GetChild("Overlay"):smooth(1.5):diffusealpha(0)
+    end,
+    Def.ActorProxy{
+        OnCommand=function(self) self:queuecommand("Set") end,
+        SetCommand=function(self) self:SetTarget(score) end,
+    },
+    Def.ActorProxy{
+        OnCommand=function(self) self:queuecommand("Set") end,
+        SetCommand=function(self) self:SetTarget(player) end,
+    },
+}
+"#,
+        )
+        .expect("score/fade Lua");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+                space::set_current_window_px(1280, 720);
+                let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                let assets = fixture_assets();
+                for (time, alpha) in [(0.0, 1.0), (0.75, 0.5), (2.5, 0.0), (0.75, 0.5)] {
+                    set_fixture_time(&mut state, time);
+                    let mut actors = Vec::new();
+                    let segments = crate::gameplay_runtime::push_actors(
+                        &mut actors,
+                        &mut state,
+                        &assets,
+                        screen_gameplay::ActorViewOverride::default(),
+                        123.0,
+                        deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                    );
+                    assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                    assert!(!actor_tree_has_text(&actors, &state.song().title));
+                    if time > 0.0 {
+                        assert!(actor_tree_has_text(&actors, "."));
+                    }
+                    let actual = top_screen_text_draw(&actors, "EVENT", 0, 1.0)
+                        .map_or(0.0, |(_, alpha)| alpha);
+                    assert!(
+                        (actual - alpha).abs() < 0.02,
+                        "footer fade at {time}: {actual} != {alpha}"
+                    );
+                }
+            },
+        );
+    }
+
     #[cfg(target_os = "windows")]
     #[test]
     #[ignore = "requires the local lua-songs corpus and a GPU with surface readback"]
@@ -4025,6 +4102,235 @@ return Def.ActorFrame{
         for skin in ["lambda", "cel"] {
             assert_proxy_note_draws(&simfile, skin, 15.0);
         }
+    }
+
+    #[test]
+    #[ignore = "requires the local lua-songs corpus, ffmpeg/ffprobe and GPU readback on Windows"]
+    fn delightful_day_hides_theme_and_keeps_video() {
+        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../lua-songs/Delightful Day/Delightful Day.ssc");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                let profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, 30.0);
+                let visuals = state.song_lua_visuals();
+                assert!(!visuals.screen_layers[0].initial_state.visible);
+                let score_targets = visuals
+                    .overlays
+                    .iter()
+                    .filter(|overlay| {
+                        matches!(
+                            overlay.kind,
+                            deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
+                                target: deadsync_assets::song_lua::SongLuaProxyTarget::Score { .. }
+                            }
+                        )
+                    })
+                    .count();
+                assert_eq!(
+                    score_targets, 2,
+                    "score children must not proxy the entire Underlay"
+                );
+                assert_eq!(
+                    state.song_media.video_paths().len(),
+                    1,
+                    "both sprites share the movie texture"
+                );
+                let assets = fixture_assets();
+                let mut actors = Vec::new();
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride::default(),
+                    123.0,
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert_eq!(segments.direct_proxy_count(), 1);
+                assert!(
+                    !actor_tree_has_text(&actors, &state.song().title),
+                    "hidden song HUD is still drawn"
+                );
+                assert!(
+                    !actor_tree_has_text(&actors, "EVENT"),
+                    "faded stage/footer is still drawn"
+                );
+                let frame = compose::build_passes(
+                    segments.segments(state.song_frame(), &actors),
+                    state.render_targets(),
+                    [0.0, 0.0, 0.0, 1.0],
+                    &metrics,
+                    assets.fonts(),
+                    30.0,
+                    &mut compose::TextLayoutCache::default(),
+                    &mut compose::ComposeScratch::default(),
+                    &FIXTURE_TEXTURES,
+                    Some(state.actor_resources()),
+                );
+                assert!(
+                    !frame
+                        .sprite_instances
+                        .iter()
+                        .any(|instance| instance.center[2] == -99.0),
+                    "hidden note field filter reaches the renderer"
+                );
+                assert!(
+                    actor_tree_has_text(&actors, "."),
+                    "the independently proxied score must remain visible"
+                );
+                #[cfg(target_os = "windows")]
+                assert_delightful_video_pixels(&mut state, &metrics);
+            },
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    fn assert_delightful_video_pixels(
+        state: &mut screen_gameplay::State,
+        metrics: &space::Metrics,
+    ) {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("capture loop");
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    winit::window::Window::default_attributes()
+                        .with_visible(false)
+                        .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720)),
+                )
+                .expect("capture window"),
+        );
+        let mut backend = deadlib_render::create_backend(
+            deadlib_render_core::BackendType::VulkanWgpu,
+            window,
+            metrics.projection(),
+            false,
+            deadlib_render_core::PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .expect("capture renderer");
+        let movie = state.song_media.video_paths()[0].clone();
+        // Decode a known lyric-bearing frame at the movie's actual source size.
+        let output = std::process::Command::new("ffmpeg")
+            .args(["-v", "error", "-ss", "30", "-i"])
+            .arg(&movie)
+            .args([
+                "-an",
+                "-frames:v",
+                "1",
+                "-f",
+                "image2pipe",
+                "-c:v",
+                "png",
+                "-",
+            ])
+            .output()
+            .expect("decode lyric frame");
+        assert!(output.status.success(), "lyric frame decode failed");
+        let image = image::load_from_memory(&output.stdout)
+            .expect("lyric pixels")
+            .into_rgba8();
+        assert_eq!(image.dimensions(), (1920, 1080));
+        let key = movie.to_string_lossy().into_owned();
+        let mut assets = deadlib_assets::AssetManager::new();
+        load_gpu_capture_assets(&mut assets, &mut backend).expect("theme textures and fonts");
+        prewarm_gpu_noteskins(state, &mut assets, &mut backend).expect("note textures");
+        let texture = backend
+            .create_texture(&image, deadlib_render_core::SamplerDesc::default())
+            .expect("movie texture");
+        assets.set_texture_for_key(
+            &mut backend,
+            key.clone(),
+            texture,
+            image.width(),
+            image.height(),
+        );
+        let handle = assets.texture_context().texture_handle(&key);
+        let mut frame = compose_fixture_frame_with_textures(
+            state,
+            &assets,
+            metrics,
+            &mut Vec::new(),
+            &mut compose::TextLayoutCache::default(),
+            &mut compose::ComposeScratch::default(),
+            assets.texture_context(),
+        );
+        let movie_runs: Vec<_> = frame
+            .ops
+            .iter()
+            .filter_map(|op| match op {
+                DrawOp::Sprite(run) if run.texture_handle == handle => Some(run),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            movie_runs.iter().map(|run| run.instance_count).sum::<u32>(),
+            2
+        );
+        for run in movie_runs {
+            for sprite in &frame.sprite_instances
+                [run.instance_start as usize..(run.instance_start + run.instance_count) as usize]
+            {
+                assert!(
+                    (sprite.size[0] - 854.0).abs() < 2.0,
+                    "movie is enlarged: {:?}",
+                    sprite.size
+                );
+                assert!(
+                    (sprite.size[1] - 480.0).abs() < 2.0,
+                    "lyrics are cropped: {:?}",
+                    sprite.size
+                );
+            }
+        }
+        backend.request_screenshot();
+        backend
+            .draw(&frame, assets.textures(), false)
+            .expect("draw lyric frame");
+        let image = backend.capture_frame().expect("lyric frame pixels");
+        if let Some(path) = std::env::var_os("DEADSYNC_DELIGHTFUL_CAPTURE") {
+            image.save(path).expect("save lyric frame");
+        }
+        frame
+            .ops
+            .retain(|op| !matches!(op, DrawOp::Sprite(run) if run.texture_handle == handle));
+        backend.request_screenshot();
+        backend
+            .draw(&frame, assets.textures(), false)
+            .expect("draw without movie");
+        let without = backend.capture_frame().expect("without movie pixels");
+        let y0 = image.height() * 82 / 100;
+        let y1 = image.height() * 96 / 100;
+        let changed = (y0..y1)
+            .flat_map(|y| (0..image.width()).map(move |x| (x, y)))
+            .filter(|&(x, y)| image.get_pixel(x, y) != without.get_pixel(x, y))
+            .count();
+        assert!(
+            changed > 10_000,
+            "movie/lyric region is absent: {changed} pixels"
+        );
+        eprintln!("Delightful Day: {changed} movie pixels in the lyric band");
+        let mut textures = assets.take_textures();
+        backend.dispose_textures(&mut textures);
+        backend.cleanup();
     }
 
     #[test]
@@ -4450,16 +4756,14 @@ return Def.ActorFrame{
                             })
                             .expect("anonymous AFT sprite should compile");
                         assert!(capture_name.starts_with("ActorFrameTexture "));
-                        assert!(
-                            visuals.overlays.iter().any(|overlay| {
-                                matches!(
-                                overlay.kind,
+                        assert!(visuals.overlays.iter().any(|overlay| {
+                            matches!(
+                                &overlay.kind,
                                 deadsync_assets::song_lua::SongLuaOverlayKind::ActorFrameTexture {
-                                    ..
-                                }
-                            ) && overlay.name.as_deref() == Some(capture_name)
-                            })
-                        );
+                                    capture_name: name, ..
+                                } if name == capture_name
+                            )
+                        }));
 
                         let assets = fixture_assets();
                         let mut actors = Vec::with_capacity(512);

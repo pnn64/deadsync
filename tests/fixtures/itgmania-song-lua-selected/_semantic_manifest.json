@@ -565,7 +565,45 @@
       "fixture": "Delightful Day/Delightful Day.ssc.semantic.json",
       "title": "Delightful Day",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000
+        },
+        "random_seed": 1,
+        "update_frames": 12740,
+        "lua_song_beat_precision": "native_float",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "110bf6e54259eb40dd3c42ec1ccc6dbe6fbe2f2892c1ce60c526b267ffb0601d",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade"
+        },
+        "source_files_sha256": {
+          "lua-songs/Delightful Day/Delightful Day.ssc": "2d808912da5ba2aca675a03b69e4a8a8f24cfda55e7df641988d6b53a336a5f0",
+          "lua-songs/Delightful Day/lua/default.lua": "b28f593751566699dfc367bb22555200dba8ee30427fcc2ccf1adb95b3ee130f",
+          "lua-songs/Delightful Day/lua/Delightful Day.mp4": "9cd8bb32d589f2c6566cc8fa4f47e0864eafa244f01f0179cbd0efd5698dbd32"
+        },
+        "sha256": "91e27de4068bbb1850f996c241c53440810c5f6543a28e521a28859ae37ef08f",
+        "uncompressed_bytes": 577168
+      }
     },
     {
       "simfile": "Do the Mario/DoTheMario.ssc",

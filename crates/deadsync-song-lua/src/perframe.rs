@@ -44,37 +44,11 @@ pub(crate) fn apply_startup_states<Kind>(
         let Some(startup) = states.get(&(overlay.table.to_pointer() as usize)) else {
             continue;
         };
-        let initial = startup.initial;
-        let ready = overlay.actor.initial_state;
-        let mut blocks = startup.blocks.clone();
-        if blocks.is_empty() {
-            let Some((_, delta)) = overlay_delta_pair_from_states(initial, ready, ready) else {
-                continue;
-            };
-            blocks.push(crate::SongLuaOverlayCommandBlock {
-                start: 0.0,
-                duration: 0.0,
-                easing: None,
-                opt1: None,
-                opt2: None,
-                delta,
-            });
-        }
-        // Native zero-time queues consume the first positive frame's delta.
-        // Keep that frame as the trigger, and preserve the original queue clock.
-        for block in &mut blocks {
-            block.start -= 1.0 / SONG_LUA_UPDATE_REFERENCE_FPS;
-        }
-        overlay.actor.initial_state = initial;
-        overlay
-            .actor
-            .message_commands
-            .push(crate::SongLuaOverlayMessageCommand {
-                frame_advance: 0.0,
-                message: MESSAGE.to_string(),
-                aux: None,
-                blocks,
-            });
+        let Some(command) = startup_command(startup, overlay.actor.initial_state) else {
+            continue;
+        };
+        overlay.actor.initial_state = startup.initial;
+        overlay.actor.message_commands.push(command);
         for track in tracks
             .iter_mut()
             .filter(|track| track.overlay_index == index)
@@ -99,6 +73,115 @@ pub(crate) fn apply_startup_states<Kind>(
         });
     }
 }
+pub(crate) fn apply_layer_startup(
+    actors: &mut [SongLuaTrackedActor],
+    states: &std::collections::HashMap<usize, crate::lua_util::SongLuaStartupState>,
+    messages: &mut Vec<SongLuaMessageEvent>,
+) {
+    let mut changed = false;
+    for actor in actors
+        .iter_mut()
+        .filter(|actor| matches!(actor.target, SongLuaTrackedActorTarget::ScreenLayer(_)))
+    {
+        let Some(startup) = states.get(&(actor.table.to_pointer() as usize)) else {
+            continue;
+        };
+        if startup.blocks.is_empty() {
+            continue;
+        }
+        // Screen children are outside the song actor tree. Their OnCommand
+        // tweens start at time zero, while immediate hides already apply there.
+        actor.actor.initial_state =
+            overlay_state_after_blocks(startup.initial, &startup.blocks, 0.0);
+        actor
+            .actor
+            .message_commands
+            .push(crate::SongLuaOverlayMessageCommand {
+                frame_advance: 0.0,
+                message: "__songlua_screen_startup".to_string(),
+                aux: None,
+                blocks: startup.blocks.clone(),
+            });
+        changed = true;
+    }
+    if changed
+        && !messages
+            .iter()
+            .any(|message| message.message == "__songlua_screen_startup")
+    {
+        messages.push(SongLuaMessageEvent {
+            beat: 0.0,
+            message: "__songlua_screen_startup".to_string(),
+            persists: true,
+        });
+    }
+}
+
+pub(crate) fn apply_startup_tweens<Kind>(
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    states: &std::collections::HashMap<usize, crate::lua_util::SongLuaStartupState>,
+    messages: &mut Vec<SongLuaMessageEvent>,
+) {
+    let mut changed = false;
+    for overlay in overlays {
+        let Some(startup) = states.get(&(overlay.table.to_pointer() as usize)) else {
+            continue;
+        };
+        if !startup.blocks.iter().any(|block| {
+            block.duration > 0.0 && block.delta != crate::SongLuaOverlayStateDelta::default()
+        }) {
+            continue;
+        }
+        overlay.actor.initial_state =
+            overlay_state_after_blocks(startup.initial, &startup.blocks, 0.0);
+        overlay
+            .actor
+            .message_commands
+            .push(crate::SongLuaOverlayMessageCommand {
+                frame_advance: 0.0,
+                message: "__songlua_actor_startup".to_string(),
+                aux: None,
+                blocks: startup.blocks.clone(),
+            });
+        changed = true;
+    }
+    if changed {
+        messages.push(SongLuaMessageEvent {
+            beat: 0.0,
+            message: "__songlua_actor_startup".to_string(),
+            persists: true,
+        });
+    }
+}
+
+fn startup_command(
+    startup: &crate::lua_util::SongLuaStartupState,
+    ready: SongLuaOverlayState,
+) -> Option<crate::SongLuaOverlayMessageCommand> {
+    let mut blocks = startup.blocks.clone();
+    if blocks.is_empty() {
+        let (_, delta) = overlay_delta_pair_from_states(startup.initial, ready, ready)?;
+        blocks.push(crate::SongLuaOverlayCommandBlock {
+            start: 0.0,
+            duration: 0.0,
+            easing: None,
+            opt1: None,
+            opt2: None,
+            delta,
+        });
+    }
+    // Native zero-time queues consume the first positive frame's delta.
+    for block in &mut blocks {
+        block.start -= 1.0 / SONG_LUA_UPDATE_REFERENCE_FPS;
+    }
+    Some(crate::SongLuaOverlayMessageCommand {
+        frame_advance: 0.0,
+        message: "__songlua_queued_startup".to_string(),
+        aux: None,
+        blocks,
+    })
+}
+
 const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "x",
     "y",
@@ -3073,6 +3156,41 @@ pub fn compile_update_functions<Kind>(
         }
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
+        for (index, actor) in capture_actors.iter().enumerate() {
+            if let Some(rotation) =
+                crate::lua_util::spin_render_pose(actor).map_err(|err| err.to_string())?
+            {
+                for player in 0..LUA_PLAYERS {
+                    if player_capture_indices[player] == Some(index) {
+                        player_capture_masks[player] |= (1 << 3) | (1 << 4) | (1 << 5);
+                    }
+                }
+                for (target, angle) in [
+                    SongLuaOverlayUpdateTarget::RotationX,
+                    SongLuaOverlayUpdateTarget::RotationY,
+                    SongLuaOverlayUpdateTarget::RotationZ,
+                ]
+                .into_iter()
+                .zip(rotation)
+                {
+                    let value = SongLuaOverlayUpdateValue::F32(angle);
+                    set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
+                    if !overlay_state_matches_update_value(&current_overlays[index], target, &value)
+                    {
+                        push_captured_overlay_value(
+                            &mut overlay_tracks,
+                            &mut overlay_track_indices,
+                            index,
+                            target,
+                            beat,
+                            &current_overlays[index],
+                            next_beat,
+                            &value,
+                        );
+                    }
+                }
+            }
+        }
         let mut next_players = current_perframe_player_states(&player_tables)?;
         for player in 0..LUA_PLAYERS {
             player_capture_masks[player] |= next_masks[player];

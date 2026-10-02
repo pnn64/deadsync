@@ -20,10 +20,10 @@ use crate::{
     read_global_function_nested_tables, read_mod_windows, read_note_column_zoom_hides,
     read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
     read_proxy_target_kind, read_runtime_mod_eases, read_song_lua_sound_paths,
-    read_top_screen_hidden_layers, read_tracked_compile_actors, read_update_function_nested_tables,
-    read_update_function_tables, read_xero_runtime_mod_eases_for_overlay_actors,
-    register_loaded_easing_names, restore_compile_globals, run_actor_draw_functions,
-    run_actor_init_commands, run_actor_startup_commands, run_actor_update_functions_with_delta,
+    read_tracked_compile_actors, read_update_function_nested_tables, read_update_function_tables,
+    read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
+    restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
+    run_actor_startup_commands, run_actor_update_functions_with_delta,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
     update_tree_reads_global,
 };
@@ -232,10 +232,15 @@ where
     )
     .map_err(|err| err.to_string())?;
     compile_timer.push_stage("host");
+    let screen_layer_states =
+        crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
     let roots = lua.create_table().map_err(|err| err.to_string())?;
+    let mut initial_actor_states = std::collections::HashMap::new();
     for (index, entry_path) in entry_paths.iter().enumerate() {
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+        crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
+            .map_err(|err| err.to_string())?;
         run_actor_init_commands(&lua, &root).map_err(|err| {
             format!(
                 "failed to run actor init commands for '{}': {err}",
@@ -267,13 +272,15 @@ where
     // Startup queues and the initial update can consume one-shot broadcasts
     // before the sampled replay starts. Retain their events as well.
     crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
-    let startup_states = run_actor_startup_commands(&lua, &root).map_err(|err| {
-        format!(
-            "failed to run actor startup commands for song lua session '{}': {err}",
-            trace_entry_path.display()
-        )
-    })?;
+    let (startup_states, startup_tweens) =
+        run_actor_startup_commands(&lua, &root, initial_actor_states).map_err(|err| {
+            format!(
+                "failed to run actor startup commands for song lua session '{}': {err}",
+                trace_entry_path.display()
+            )
+        })?;
     compile_timer.push_stage("startup_commands");
+    let screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
     // Later sampled callbacks must not retroactively change the skin/lead-in
     // selected for the transition into gameplay.
     let startup = read_startup(&lua, context).map_err(|err| err.to_string())?;
@@ -662,6 +669,7 @@ where
         &lua,
         &mut overlays,
         &mut tracked_actors,
+        &out.stateful_message_captures,
         &mut out.info.skipped_message_command_captures,
     )? {
         let layer = overlays[index]
@@ -680,6 +688,22 @@ where
         &mut out.overlay_updates,
         &mut out.messages,
     );
+    crate::perframe::apply_startup_tweens(&mut overlays, &startup_tweens, &mut out.messages);
+    crate::perframe::apply_layer_startup(
+        &mut tracked_actors,
+        &screen_layer_startup,
+        &mut out.messages,
+    );
+    for overlay in &mut overlays {
+        overlay.actor.initial_state.spin_baked = crate::lua_util::spin_render_pose(&overlay.table)
+            .map_err(|err| err.to_string())?
+            .is_some();
+    }
+    for tracked in &mut tracked_actors {
+        tracked.actor.initial_state.spin_baked = crate::lua_util::spin_render_pose(&tracked.table)
+            .map_err(|err| err.to_string())?
+            .is_some();
+    }
     push_startup_message_if_listened(
         &mut out.messages,
         overlays
@@ -828,10 +852,12 @@ where
                 };
             }
             TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
+            TrackedCompileActorTarget::ScreenLayer(index) => {
+                out.screen_layers[index] = tracked.actor
+            }
         }
     }
     out.hidden_players = hidden_players;
-    out.hidden_screen_layers = read_top_screen_hidden_layers(&lua)?;
 
     sort_compiled_song_lua(&mut out);
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
@@ -1093,8 +1119,8 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     primary.eases = compiled.eases;
     primary.player_actors = compiled.player_actors;
     primary.song_foreground = compiled.song_foreground;
+    primary.screen_layers = compiled.screen_layers;
     primary.hidden_players = compiled.hidden_players;
-    primary.hidden_screen_layers = compiled.hidden_screen_layers;
     primary.note_hides = compiled.note_hides;
     primary.column_offsets = compiled.column_offsets;
     primary.column_splines = compiled.column_splines;

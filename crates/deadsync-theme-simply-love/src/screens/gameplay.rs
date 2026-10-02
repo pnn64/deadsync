@@ -4518,21 +4518,7 @@ pub fn frame_layers<'a>(
                             player_blue_window_ms(state, player_idx),
                         )
                     });
-                    let (score_value, mut score_color) = if let Some(ex_score) = &ex_score {
-                        let ex_percent = deadsync_gameplay::display_ex_score_percent_for_mode(
-                            ex_score, score_mode,
-                        );
-                        (
-                            ex_percent.max(0.0),
-                            state
-                                .judgment_palette(player_idx)
-                                .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue),
-                        )
-                    } else {
-                        let score_percent =
-                            state.display_gameplay_itg_score_percent(player_idx, score_mode);
-                        (score_percent, [1.0, 1.0, 1.0, 1.0])
-                    };
+                    let (score_value, mut score_color) = score_value_color(state, player_idx);
                     score_color[3] *= score_alphas[player_idx];
 
                     let is_p2_side = player_side == profile_data::PlayerSide::P2;
@@ -5029,11 +5015,59 @@ pub fn frame_layers<'a>(
             }
             gameplay_stats::push_heart_rates(actors, state, playfield_center_x);
         }
+        ScreenLayer::Score(player) => {
+            if player >= state.num_players() {
+                return;
+            }
+            let (value, color) = score_value_color(state, player);
+            let width = screen_width().clamp(640.0, 854.0);
+            let p2 = if play_style.is_versus() {
+                player == 1
+            } else {
+                runtime_player_is_p2
+            };
+            push_score_counter(
+                actors,
+                asset_manager.fonts(),
+                ScoreCounterParams {
+                    value,
+                    color,
+                    font: machine_font_key(state.machine_font(), FontRole::Numbers),
+                    position: [
+                        screen_center_x() + if p2 { width / 2.75 } else { -width / 4.3 },
+                        56.0,
+                    ],
+                    align: [1.0, 1.0],
+                    text_align: TextAlign::Right,
+                    zoom: 0.5,
+                    z: 90,
+                },
+            );
+        }
         ScreenLayer::System => {
             push_system_stage_label(actors, state, asset_manager);
             push_system_profile_footer(actors, state, visual_policy, presentation_skeleton);
             push_sync_overlay(actors, state);
         }
+    }
+}
+
+fn score_value_color(state: &State, player: usize) -> (f64, [f32; 4]) {
+    let profile = &state.profiles()[player];
+    let mode = score_display_mode_from_profile(profile.score_display_mode);
+    if profile.show_ex_score {
+        let data = state.display_scored_ex_score_data(player, player_blue_window_ms(state, player));
+        (
+            deadsync_gameplay::display_ex_score_percent_for_mode(&data, mode).max(0.0),
+            state
+                .judgment_palette(player)
+                .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue),
+        )
+    } else {
+        (
+            state.display_gameplay_itg_score_percent(player, mode),
+            [1.0; 4],
+        )
     }
 }
 

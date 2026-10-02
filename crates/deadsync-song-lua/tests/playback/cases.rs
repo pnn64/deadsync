@@ -797,6 +797,7 @@ fn song_lua_tween_playback_matches_native() {
         "callback-phase",
         "finish-queue",
         "late-texture",
+        "spin-update",
     ] {
         let mut context =
             deadsync_song_lua::SongLuaCompileContext::new(&dir.join("song-lua"), name);
@@ -889,6 +890,42 @@ fn song_lua_tween_playback_matches_native() {
                 );
                 checks += 1;
                 if !visible {
+                    continue;
+                }
+                if name == "spin-update" {
+                    let rendered = song_lua_proxy_effect(state, time, time, 0);
+                    let size = rendered.size.expect("quad size");
+                    let matrix =
+                        Matrix4::from_translation(Vector3::new(rendered.x, rendered.y, rendered.z))
+                            * song_lua_overlay_local_transform(
+                                [rendered.rot_x_deg, rendered.rot_y_deg, rendered.rot_z_deg],
+                                0.0,
+                                0.0,
+                            )
+                            * Matrix4::from_scale(Vector3::new(
+                                rendered.zoom_x,
+                                rendered.zoom_y,
+                                rendered.zoom_z,
+                            ));
+                    for (corner, [x, y]) in [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        let actual =
+                            matrix.transform_point3(Vector3::new(x * size[0], y * size[1], 0.0));
+                        for (axis, actual) in [actual.x, actual.y].into_iter().enumerate() {
+                            let expected = sample[6][corner][axis].as_f64().unwrap() as f32;
+                            assert!(
+                                (actual - expected).abs() < 0.002,
+                                "{actor_name} at {time}: {actual} vs {expected}"
+                            );
+                            checks += 1;
+                        }
+                    }
+                    assert!((state.diffuse[3] - sample[3].as_f64().unwrap() as f32).abs() < 0.001);
+                    if actor_name != "StaticReceiver" {
+                        assert!(state.spin_baked);
+                    }
                     continue;
                 }
                 let vertices = sample[6].as_array().unwrap();
@@ -9370,7 +9407,8 @@ fn song_lua_foreground_owner_index_matches_visibility_and_layer_start() {
         song_foreground: SongLuaCapturedActor::default(),
         song_foreground_events: Vec::new(),
         hidden_players: [false; MAX_PLAYERS],
-        hidden_screen_layers: [false; 2],
+        screen_layers: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        screen_layer_events: std::array::from_fn(|_| Vec::new()),
         note_hides: std::array::from_fn(|_| deadsync_gameplay::SongLuaNoteHideWindows::default()),
         column_offsets: std::array::from_fn(|_| Vec::new()),
         column_splines: std::array::from_fn(|_| Vec::new()),

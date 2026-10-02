@@ -4902,12 +4902,73 @@ fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
 }
 
 #[test]
-fn delightful_day_player_proxy_sources_match_itgmania() {
+fn delightful_day_movie_and_hidden_layers_match_itgmania() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
         "tests/fixtures/itgmania-song-lua-selected/Delightful Day/Delightful Day.ssc.semantic.json",
     ));
-    let (compiled, _, _) = compile_trace_song(&trace);
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut complete = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut complete);
+    assert_eq!(
+        complete.checks(),
+        1351,
+        "movie geometry must remain covered"
+    );
+    complete.assert_complete("Delightful Day complete rendering semantics");
+    let layer = &compiled[primary];
+    for (index, path) in [
+        (0, "ScreenGameplay/Underlay"),
+        (2, "ScreenGameplay/SongBackground"),
+    ] {
+        let native = trace
+            .external_actors
+            .iter()
+            .find(|actor| actor.path == path)
+            .expect("native screen layer");
+        assert!(trace.operation_tracks.iter().any(|track| {
+            track.actor == native.id
+                && track.operation.ends_with(".visible")
+                && track
+                    .samples
+                    .iter()
+                    .any(|sample| sample.3.first() == Some(&Value::Bool(false)))
+        }));
+        assert!(
+            !layer.screen_layers[index].initial_state.visible,
+            "{path} must be hidden"
+        );
+    }
+    let native_overlay = trace
+        .external_actors
+        .iter()
+        .find(|actor| actor.path == "ScreenGameplay/Overlay")
+        .expect("native Overlay");
+    let fade = trace
+        .tween_tracks
+        .iter()
+        .find(|track| {
+            track.actor == native_overlay.id
+                && track.kind == "tween"
+                && track.easing.as_deref() == Some("smooth")
+        })
+        .expect("native HUD fade");
+    assert!(
+        layer.screen_layers[1]
+            .message_commands
+            .iter()
+            .flat_map(|command| &command.blocks)
+            .any(|block| block.duration == fade.segments[0].duration
+                && block.easing.as_deref() == Some("smooth")
+                && block.delta.diffuse.is_some_and(|color| color[3] == 0.0))
+    );
+    for player in 0..2 {
+        assert!(layer.overlays.iter().any(
+            |actor| matches!(actor.kind, SongLuaOverlayKind::ActorProxy {
+            target: deadsync_assets::song_lua::SongLuaProxyTarget::Score { player_index }
+        } if player_index == player)
+        ));
+    }
     let mut parity = Parity::default();
     compare_player_proxy_sources(&trace, &compiled, &mut parity);
     assert_eq!(

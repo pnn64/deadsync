@@ -755,7 +755,8 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
-    let mut hidden_screen_layers = [false; 2];
+    let mut screen_layers = std::array::from_fn(|_| SongLuaCapturedActor::default());
+    let mut screen_layer_events = std::array::from_fn(|_| Vec::new());
     let mut note_hides: [deadsync_gameplay::SongLuaNoteHideWindows; MAX_PLAYERS] =
         std::array::from_fn(|_| deadsync_gameplay::SongLuaNoteHideWindows::default());
     let mut column_offsets: [Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime>;
@@ -785,7 +786,8 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 song_foreground,
                 song_foreground_events,
                 hidden_players,
-                hidden_screen_layers,
+                screen_layers,
+                screen_layer_events,
                 note_hides,
                 column_offsets,
                 column_splines,
@@ -868,7 +870,14 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             &compiled.song_foreground.message_commands,
         );
         hidden_players = deadsync_gameplay::build_song_lua_hidden_players(&compiled.hidden_players);
-        hidden_screen_layers = compiled.hidden_screen_layers;
+        screen_layers = compiled.screen_layers.clone();
+        screen_layer_events = std::array::from_fn(|index| {
+            crate::gameplay::build_song_lua_actor_message_events_for_commands(
+                &compiled.messages,
+                &message_seconds,
+                &compiled.screen_layers[index].message_commands,
+            )
+        });
         note_hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
             compiled
                 .note_hides
@@ -1013,7 +1022,8 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             song_foreground,
             song_foreground_events,
             hidden_players,
-            hidden_screen_layers,
+            screen_layers,
+            screen_layer_events,
             note_hides,
             column_offsets,
             column_splines,
