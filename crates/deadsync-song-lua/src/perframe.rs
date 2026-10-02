@@ -2533,14 +2533,29 @@ pub fn call_update_functions_at(
 }
 
 #[derive(Default)]
+/// Compile-lifetime scratch: one point buffer (at most 65536 coordinates)
+/// and one sample buffer for the authored lanes. Coefficients are shared only
+/// with the preceding lane frame; there is no global cache or eviction policy.
 struct ColumnSplineCapture {
+    points: Vec<[f32; 3]>,
+    sampled: Vec<(usize, usize, deadsync_gameplay::SongLuaColumnSplineFrame)>,
     lanes: BTreeMap<(usize, usize), Vec<deadsync_gameplay::SongLuaColumnSplineFrame>>,
     bytes: usize,
 }
 
 impl ColumnSplineCapture {
     fn capture(&mut self, lua: &Lua, second: f32) -> Result<(), String> {
-        for (player, column, mut frame) in crate::lua_util::read_column_position_splines(lua)? {
+        crate::lua_util::read_column_position_splines(
+            lua,
+            |player, column| {
+                self.lanes
+                    .get(&(player, column))
+                    .and_then(|frames| frames.last())
+            },
+            &mut self.points,
+            &mut self.sampled,
+        )?;
+        for (player, column, mut frame) in self.sampled.drain(..) {
             let frames = self.lanes.entry((player, column)).or_default();
             if frames
                 .last()
@@ -3483,3 +3498,7 @@ mod scheduled_merge_perf;
 #[cfg(test)]
 #[path = "../tests/perf/tween_replay.rs"]
 mod tween_replay_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/spline_capture.rs"]
+mod spline_capture_perf;

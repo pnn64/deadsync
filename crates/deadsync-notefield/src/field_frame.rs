@@ -661,16 +661,15 @@ fn compose_field_contents<S, F>(
                 body_head_beat
                     + (hold.end_beat - body_head_beat) * ((screen_y - y_head) / (y_tail - y_head))
             };
-            let (_, derivative) = prepared.spline_offsets(local_col, beat);
             let center_x = lane_center_x_from_adjusted_travel(local_col, adjusted_travel);
             let world_z = world_z_for_adjusted_travel(local_col, adjusted_travel);
             let base = [center_x, screen_y, world_z];
-            let position = prepared.spline_position(local_col, beat, base);
+            let (position, derivative) = prepared.spline_path(local_col, beat, base);
             let offset = std::array::from_fn(|axis| position[axis] - base[axis]);
             HoldPathSample {
                 adjusted_travel,
-                center_x: lane_center_x_from_adjusted_travel(local_col, adjusted_travel),
-                world_z: world_z_for_adjusted_travel(local_col, adjusted_travel),
+                center_x,
+                world_z,
                 position_offset: offset,
                 spline_derivative: derivative,
                 spline_step: if position_splines[local_col].enabled {

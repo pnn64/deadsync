@@ -260,7 +260,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             crate::lane_note_transform_cache(current_beat, effect),
         );
         let spline = prepared.column_position_splines[local_col];
-        let spline_z = spline.receptor(current_beat)[2] * field_zoom;
+        let spline_z = prepared.column_spline_receptors[local_col][2] * field_zoom;
         lane_depths[local_col] = if spline.enabled && spline.absolute {
             spline_z
         } else {
@@ -1157,6 +1157,67 @@ mod tests {
             edit_measure_text_slot_base: 0,
             arrow_effect_time_s: 0.1,
             music_time_s: 0.1,
+        }
+    }
+
+    #[test]
+    fn prepared_spline_receptors_follow_clock_track_changes_and_rewinds() {
+        use deadsync_gameplay::{
+            SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
+        };
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let data = |points: &[[f32; 3]]| SongLuaSplineData {
+            coefficients: deadsync_gameplay::solve_song_lua_spline(points).into(),
+            constant: false,
+            beats_per_t: 0.5,
+            receptor_t: 0.25,
+            subtract_song_beat: false,
+        };
+        let tracks = [SongLuaColumnSplineTrack {
+            player: 0,
+            column: 0,
+            time_offset: 0.0,
+            frames: vec![
+                SongLuaColumnSplineFrame {
+                    second: 0.0,
+                    position: Some(data(&[[0.0; 3], [32.0, 64.0, 16.0], [0.0, 128.0, 0.0]])),
+                    zoom: None,
+                },
+                SongLuaColumnSplineFrame {
+                    second: 2.0,
+                    position: None,
+                    zoom: None,
+                },
+                SongLuaColumnSplineFrame {
+                    second: 4.0,
+                    position: Some(data(&[[12.0, 24.0, 6.0], [-12.0, -24.0, -6.0]])),
+                    zoom: None,
+                },
+            ]
+            .into(),
+        }];
+        let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+        request.song_lua.column_splines = &tracks;
+        request.geometry.field_zoom = 0.75;
+        for (seconds, beat) in [(0, 0.125), (1, 0.25), (3, 1.75), (5, 0.375), (0, 0.125)] {
+            request.chart.visible_music_time_ns = seconds * 1_000_000_000;
+            request.chart.visible_beat = beat;
+            let prepared = prepare_notefield(&request).unwrap();
+            let spline = prepared.column_position_splines[0];
+            let expected = spline.receptor(beat);
+            assert_eq!(
+                prepared.column_spline_receptors[0].map(f32::to_bits),
+                expected.map(f32::to_bits)
+            );
+            assert_eq!(prepared.column_spline_receptors[1], [0.0; 3]);
+            if spline.enabled && spline.absolute {
+                assert_eq!(
+                    prepared.field.column_receptor_ys[0].to_bits(),
+                    (prepared.spline_origin_y + expected[1] * prepared.field_zoom).to_bits()
+                );
+            }
         }
     }
 

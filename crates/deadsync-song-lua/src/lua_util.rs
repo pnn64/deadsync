@@ -10132,9 +10132,11 @@ pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
     Ok(if valid { first_y } else { None })
 }
 
-pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
+fn for_each_note_field(
+    lua: &Lua,
+    mut visit: impl FnMut(Table) -> mlua::Result<()>,
+) -> mlua::Result<()> {
     let globals = lua.globals();
-    let mut out = Vec::new();
     for player in 0..LUA_PLAYERS {
         let key = if player == 0 {
             "__songlua_top_screen_player_1"
@@ -10149,8 +10151,17 @@ pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
         else {
             continue;
         };
-        out.push(note_field);
+        visit(note_field)?;
     }
+    Ok(())
+}
+
+pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
+    let mut out = Vec::new();
+    for_each_note_field(lua, |field| {
+        out.push(field);
+        Ok(())
+    })?;
     Ok(out)
 }
 
@@ -10169,6 +10180,8 @@ pub fn read_note_column_transform_samples(
 fn read_position_spline(
     column: &Table,
     key: &str,
+    previous: Option<&deadsync_gameplay::SongLuaSplineData>,
+    points: &mut Vec<[f32; 3]>,
 ) -> Result<Option<deadsync_gameplay::SongLuaSplineData>, String> {
     let Some(handler) = column
         .get::<Option<Table>>(key)
@@ -10177,9 +10190,12 @@ fn read_position_spline(
         return Ok(None);
     };
     let mode = handler
-        .get::<String>("__songlua_spline_mode")
+        .get::<LuaFieldText<32>>("__songlua_spline_mode")
         .map_err(|err| err.to_string())?;
-    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position") {
+    if !mode
+        .as_str()
+        .eq_ignore_ascii_case("NoteColumnSplineMode_Position")
+    {
         return Ok(None);
     }
     let spline = handler
@@ -10206,7 +10222,9 @@ fn read_position_spline(
     let table = spline
         .get::<Table>("__songlua_spline_points")
         .map_err(|err| err.to_string())?;
-    let mut points = Vec::with_capacity(size);
+    points.clear();
+    points.reserve_exact(size);
+    let mut unchanged = previous.is_some_and(|spline| spline.coefficients.len() == size);
     for index in 1..=size {
         let point = table
             .raw_get::<Table>(index)
@@ -10221,10 +10239,25 @@ fn read_position_spline(
                 return Err("Position spline contains a nonfinite point".into());
             }
         }
+        // Compare authored coordinates, not table identity: Lua can mutate a
+        // point in place. Bits preserve signed zero even when metadata changes.
+        unchanged = unchanged
+            && previous
+                .and_then(|spline| spline.coefficients.get(index - 1))
+                .is_some_and(|coefficients| {
+                    values
+                        .iter()
+                        .zip(coefficients)
+                        .all(|(value, axis)| value.to_bits() == axis[0].to_bits())
+                });
         points.push(values);
     }
     Ok(Some(deadsync_gameplay::SongLuaSplineData {
-        coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
+        coefficients: if unchanged {
+            std::sync::Arc::clone(&previous.expect("matching spline exists").coefficients)
+        } else {
+            deadsync_gameplay::solve_song_lua_spline(points).into()
+        },
         constant: points.iter().all(|point| *point == points[0]),
         beats_per_t,
         receptor_t,
@@ -10234,11 +10267,22 @@ fn read_position_spline(
     }))
 }
 
-pub(crate) fn read_column_position_splines(
+/// Reuse capture scratch and the preceding frame's immutable coefficients.
+/// Every Lua field and coordinate is still read and validated on every sample.
+pub(crate) fn read_column_position_splines<'a>(
     lua: &Lua,
-) -> Result<Vec<(usize, usize, deadsync_gameplay::SongLuaColumnSplineFrame)>, String> {
-    let mut out = Vec::new();
-    for field in note_field_tables(lua).map_err(|err| err.to_string())? {
+    mut previous: impl FnMut(usize, usize) -> Option<&'a deadsync_gameplay::SongLuaColumnSplineFrame>,
+    points: &mut Vec<[f32; 3]>,
+    out: &mut Vec<(usize, usize, deadsync_gameplay::SongLuaColumnSplineFrame)>,
+) -> Result<(), String> {
+    out.clear();
+    let mut fields = smallvec::SmallVec::<[Table; LUA_PLAYERS]>::new();
+    for_each_note_field(lua, |field| {
+        fields.push(field);
+        Ok(())
+    })
+    .map_err(|err| err.to_string())?;
+    for field in fields {
         let Some(columns) = field
             .get::<Option<Table>>("__songlua_note_columns")
             .map_err(|err| err.to_string())?
@@ -10253,18 +10297,29 @@ pub(crate) fn read_column_position_splines(
             let local_col = column
                 .get::<usize>("__songlua_column_index")
                 .map_err(|err| err.to_string())?;
+            let last = previous(player, local_col);
             out.push((
                 player,
                 local_col,
                 deadsync_gameplay::SongLuaColumnSplineFrame {
                     second: 0.0,
-                    position: read_position_spline(&column, "__songlua_pos_handler")?,
-                    zoom: read_position_spline(&column, "__songlua_zoom_handler")?,
+                    position: read_position_spline(
+                        &column,
+                        "__songlua_pos_handler",
+                        last.and_then(|frame| frame.position.as_ref()),
+                        points,
+                    )?,
+                    zoom: read_position_spline(
+                        &column,
+                        "__songlua_zoom_handler",
+                        last.and_then(|frame| frame.zoom.as_ref()),
+                        points,
+                    )?,
                 },
             ));
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 pub fn compile_note_column_pos_function_ease(

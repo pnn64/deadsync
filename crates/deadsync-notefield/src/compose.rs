@@ -344,6 +344,8 @@ pub struct PreparedNotefield<'a, S> {
     pub column_x_offsets: [f32; MAX_COLS],
     pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
     pub column_zoom_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    // Resolved once for each lane by prepare_notefield, valid for this frame.
+    pub(crate) column_spline_receptors: [[f32; 3]; MAX_COLS],
     pub spline_origin_y: f32,
     pub column_zooms: [f32; MAX_COLS],
     pub column_rotations_deg: [f32; MAX_COLS],
@@ -366,6 +368,33 @@ impl<S> PreparedNotefield<'_, S> {
         }
     }
 
+    /// Resolve hold position and direction from a single spline evaluation.
+    pub(crate) fn spline_path(
+        &self,
+        col: usize,
+        beat: f32,
+        base: [f32; 3],
+    ) -> ([f32; 3], [f32; 3]) {
+        let spline = self.column_position_splines[col];
+        if spline.enabled && spline.absolute {
+            let (position, derivative) = spline.sample(self.current_beat, beat);
+            (
+                [
+                    self.field.playfield_center_x + position[0] * self.field_zoom,
+                    self.spline_origin_y + position[1] * self.field_zoom,
+                    position[2] * self.field_zoom,
+                ],
+                derivative,
+            )
+        } else {
+            let (offset, derivative) = self.spline_offsets(col, beat);
+            (
+                std::array::from_fn(|axis| base[axis] + offset[axis]),
+                derivative,
+            )
+        }
+    }
+
     pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
         let spline = self.column_zoom_splines[col];
         if spline.enabled {
@@ -378,7 +407,7 @@ impl<S> PreparedNotefield<'_, S> {
     pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
         let spline = self.column_position_splines[col];
         let (position, derivative) = spline.sample(self.current_beat, beat);
-        let receptor = spline.receptor(self.current_beat);
+        let receptor = self.column_spline_receptors[col];
         (
             std::array::from_fn(|axis| {
                 (position[axis] - if axis < 2 { receptor[axis] } else { 0.0 }) * self.field_zoom
@@ -441,8 +470,10 @@ pub fn prepare_notefield<'a, S>(
                 .map_or_else(Default::default, |zoom| zoom.view());
         }
     }
+    let mut column_spline_receptors = [[0.0; 3]; MAX_COLS];
     for col in 0..frame_plan.num_cols {
         let receptor = column_position_splines[col].receptor(request.chart.visible_beat);
+        column_spline_receptors[col] = receptor;
         if !column_position_splines[col].absolute {
             column_x_offsets[col] += receptor[0] * field_zoom;
             column_y_offsets[col] += receptor[1];
@@ -457,7 +488,7 @@ pub fn prepare_notefield<'a, S>(
     {
         if spline.enabled && spline.absolute {
             field.column_receptor_ys[col] =
-                spline_origin_y + spline.receptor(request.chart.visible_beat)[1] * field_zoom;
+                spline_origin_y + column_spline_receptors[col][1] * field_zoom;
         }
     }
     let mini = effective_mini_value(
@@ -506,6 +537,7 @@ pub fn prepare_notefield<'a, S>(
         column_x_offsets,
         column_position_splines,
         column_zoom_splines,
+        column_spline_receptors,
         spline_origin_y,
         column_zooms,
         column_rotations_deg,
@@ -1058,3 +1090,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/spline_sampling/mod.rs"]
+mod spline_sampling_perf;
