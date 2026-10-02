@@ -575,6 +575,7 @@ pub fn install_stdlib_compat(
 // ITGmania's _fallback/Scripts/00 init.lua replaces Lua's generator with
 // RageUtil/RandomNumbers.cpp. Keep its MT19937 state local to this song VM;
 // compilation and cached playback must not consume another song's stream.
+#[derive(Clone)]
 struct SongLuaRandom {
     words: [u32; 624],
     index: usize,
@@ -676,8 +677,30 @@ fn random_int_arg(lua: &Lua, args: &MultiValue, index: usize) -> mlua::Result<i3
     Ok(value as i32)
 }
 
+struct SongLuaRandomState(Rc<RefCell<SongLuaRandom>>);
+
+pub(crate) struct RandomSnapshot {
+    state: Rc<RefCell<SongLuaRandom>>,
+    previous: SongLuaRandom,
+}
+
+impl Drop for RandomSnapshot {
+    fn drop(&mut self) {
+        *self.state.borrow_mut() = self.previous.clone();
+    }
+}
+
+pub(crate) fn preserve_random(lua: &Lua) -> Option<RandomSnapshot> {
+    let state = lua.app_data_ref::<SongLuaRandomState>()?;
+    Some(RandomSnapshot {
+        previous: state.0.borrow().clone(),
+        state: Rc::clone(&state.0),
+    })
+}
+
 fn install_random_compat(lua: &Lua) -> mlua::Result<()> {
     let state = Rc::new(RefCell::new(SongLuaRandom::seeded(1)));
+    lua.set_app_data(SongLuaRandomState(Rc::clone(&state)));
     let seed_state = state.clone();
     let seed = lua.create_function(move |lua, args: MultiValue| {
         let seed = random_int_arg(lua, &args, 0)?;

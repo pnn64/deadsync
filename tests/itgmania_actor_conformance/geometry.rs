@@ -131,3 +131,47 @@ fn glow_color_matches_itgmania_byte_conversion() {
         );
     }
 }
+
+#[test]
+fn lua_align_matches_native() {
+    use deadsync_assets::song_lua::{SongLuaCompileContext, compile_song_lua_layers};
+    use std::path::Path;
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let entry = dir.join("layout-alignment.lua");
+    let context = SongLuaCompileContext::new(&dir, "Layout Alignment");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert_eq!(compiled.overlays.len(), 6);
+    let oracle = fixture("layout-alignment");
+    for overlay in &compiled.overlays {
+        let name = overlay.name.as_deref().expect("alignment actor name");
+        let native = actor(&oracle["samples"][0], name);
+        assert_eq!(
+            [overlay.initial_state.halign, overlay.initial_state.valign],
+            f32_array::<2>(&native["alignment"]),
+            "{name}"
+        );
+        let mut actual =
+            crop_fade_vertices(overlay.initial_state, overlay.initial_state.size.unwrap());
+        actual.sort_by(|a, b| {
+            a.position[1]
+                .total_cmp(&b.position[1])
+                .then(a.position[0].total_cmp(&b.position[0]))
+        });
+        let mut expected = native["draws"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|draw| draw["texture_mode"] == "modulate")
+            .flat_map(|draw| {
+                [0, 3, 2, 0, 2, 1].map(|index| f32_array::<3>(&draw["vertices"][index]["screen"]))
+            })
+            .collect::<Vec<_>>();
+        expected.sort_by(|a, b| a[1].total_cmp(&b[1]).then(a[0].total_cmp(&b[0])));
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_array_ulp(actual.position, expected, 4, name);
+        }
+    }
+}

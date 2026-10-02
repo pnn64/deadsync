@@ -358,7 +358,7 @@
     {
       "simfile": "And Drugs/and drugs.ssc",
       "fixture": "And Drugs/and drugs.ssc.semantic.json",
-      "title": "And Drugs\u2191\u2191",
+      "title": "And Drugs↑↑",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -406,10 +406,60 @@
     },
     {
       "simfile": "Cuphead [TaroNuke]/botanic.sm",
-      "fixture": "Cuphead [TaroNuke]/botanic.sm.semantic.json",
+      "fixture": "Cuphead [TaroNuke]/botanic.sm.semantic.json.zst",
       "title": "Botanic Panic",
       "lua_entries": 2,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000
+        },
+        "random_seed": 1,
+        "update_frames": 8154,
+        "lua_song_beat_precision": "native_float",
+        "arrow_timing": "native",
+        "noteskin": "cel",
+        "description": "TaroNuke",
+        "end_position": {
+          "beat": 362,
+          "seconds": 135.87825149525844
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "0bd7bf6a820fc1056545629ae39cce8e86bfd56012e98f54ad4237f10c6d39cb",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade"
+        },
+        "source_files_sha256": {
+          "Cuphead [TaroNuke]/botanic.sm": "6d4f35389c80992011e7b143c5959d32fb5887dfc189975153fbab4885aacd96",
+          "Cuphead [TaroNuke]/bg/default.lua": "80d99a5610f9d660a7c44edfcab1567e63331ef1e677fb69316d2b69caeae3d2",
+          "Cuphead [TaroNuke]/lua/default.lua": "c395acae5d4c77d822418a4ecdc1ca48533b1c7d6ced79e08d18e633ebe7156f",
+          "Cuphead [TaroNuke]/lua/modhelpers.lua": "86e7105441fff23c0e75c8c948c14739b350df4f76349a02be28c54b6e2eff14",
+          "Cuphead [TaroNuke]/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+        },
+        "raw_capture_sha256": "568ce1ac7c217c3519b8670d59d19a730861b51bf6e34630d4f436044c8591fa",
+        "sha256": "69a83be6f337cfc6842b45533173d443d5393cf400ee129250413b77a6e7110f",
+        "uncompressed_sha256": "568ce1ac7c217c3519b8670d59d19a730861b51bf6e34630d4f436044c8591fa",
+        "compressed_bytes": 2733715,
+        "uncompressed_bytes": 45214673
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Delightful Day/Delightful Day.ssc",
@@ -449,7 +499,7 @@
     {
       "simfile": "Igaku/Igaku.ssc",
       "fixture": "Igaku/Igaku.ssc.semantic.json",
-      "title": "\u00e3\u201a\u00a4\u00e3\u201a\u00ac\u00e3\u201a\u00af",
+      "title": "ã‚¤ã‚¬ã‚¯",
       "lua_entries": 2,
       "status": "ok"
     },
@@ -575,7 +625,7 @@
     {
       "simfile": "Someone Special - hubert/Someone Special.ssc",
       "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json.zst",
-      "title": "\uff33\uff4f\uff4d\uff45\uff4f\uff4e\uff45 \uff33\uff50\uff45\uff43\uff49\uff41\uff4c",
+      "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "lua_entries": 1,
       "status": "ok",
       "reference": {
@@ -778,7 +828,7 @@
     {
       "simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
       "fixture": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc.semantic.json",
-      "title": "[FULL SONG] \u82b1\u6708\u30ce\u5922",
+      "title": "[FULL SONG] 花月ノ夢",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -792,7 +842,7 @@
     {
       "simfile": "broadcast/broadcast.ssc",
       "fixture": "broadcast/broadcast.ssc.semantic.json",
-      "title": "\u653e\u9001",
+      "title": "放送",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -806,7 +856,7 @@
     {
       "simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
       "fixture": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc.semantic.json",
-      "title": "\u200b#feelyourtouch e.d.e.n",
+      "title": "​#feelyourtouch e.d.e.n",
       "lua_entries": 1,
       "status": "ok"
     },

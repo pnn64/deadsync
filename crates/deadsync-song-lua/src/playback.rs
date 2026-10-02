@@ -5556,7 +5556,7 @@ fn replay_song_lua_message_state(
         return initial_state;
     };
     let mut current = initial_state;
-    let mut active: Option<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)> = None;
+    let mut active: Option<(&SongLuaOverlayMessageCommand, SongLuaOverlayState, f32)> = None;
     for event in events {
         let event_second = event.event_second;
         if event_second > now {
@@ -5565,21 +5565,29 @@ fn replay_song_lua_message_state(
         let Some(command) = message_commands.get(event.command_index) else {
             continue;
         };
-        if let Some((blocks, base, start_second)) = active.take() {
-            let elapsed = event_second - start_second;
+        if let Some((command, base, start_second)) = active.take() {
+            let blocks = &command.blocks;
+            let elapsed = event_second - start_second + command.frame_advance;
             current = song_lua_overlay_apply_blocks(base, blocks, elapsed);
-            if let Some(epoch) = song_lua_sprite_animation_epoch(blocks, elapsed, start_second) {
+            if let Some(epoch) = song_lua_sprite_animation_epoch(
+                blocks,
+                elapsed,
+                start_second - command.frame_advance,
+            ) {
                 current.sprite_animation_epoch = Some(epoch);
             }
         }
         let base = current;
-        current = song_lua_overlay_apply_blocks(base, &command.blocks, 0.0);
-        active = Some((&command.blocks, base, event_second));
+        current = song_lua_overlay_apply_blocks(base, &command.blocks, command.frame_advance);
+        active = Some((command, base, event_second));
     }
-    if let Some((blocks, base, start_second)) = active {
-        let elapsed = now - start_second;
+    if let Some((command, base, start_second)) = active {
+        let blocks = &command.blocks;
+        let elapsed = now - start_second + command.frame_advance;
         current = song_lua_overlay_apply_blocks(base, blocks, elapsed);
-        if let Some(epoch) = song_lua_sprite_animation_epoch(blocks, elapsed, start_second) {
+        if let Some(epoch) =
+            song_lua_sprite_animation_epoch(blocks, elapsed, start_second - command.frame_advance)
+        {
             current.sprite_animation_epoch = Some(epoch);
         }
     }
@@ -5629,7 +5637,8 @@ fn song_lua_message_state_cached(
             && let Some(active_command) = message_commands.get(active_command_index)
         {
             let command_base = cache.base_state;
-            let elapsed = event.event_second - cache.active_start_second;
+            let elapsed =
+                event.event_second - cache.active_start_second + active_command.frame_advance;
             cache.base_state = song_lua_overlay_apply_blocks_cached(
                 command_base,
                 &active_command.blocks,
@@ -5642,7 +5651,7 @@ fn song_lua_message_state_cached(
             if let Some(epoch) = song_lua_sprite_animation_epoch(
                 &active_command.blocks,
                 elapsed,
-                cache.active_start_second,
+                cache.active_start_second - active_command.frame_advance,
             ) {
                 cache.base_state.sprite_animation_epoch = Some(epoch);
             }
@@ -5658,7 +5667,7 @@ fn song_lua_message_state_cached(
     else {
         return cache.base_state;
     };
-    let elapsed = now - cache.active_start_second;
+    let elapsed = now - cache.active_start_second + command.frame_advance;
     let mut current = song_lua_overlay_apply_blocks_cached(
         cache.base_state,
         &command.blocks,
@@ -5668,9 +5677,11 @@ fn song_lua_message_state_cached(
         &mut cache.active_block_state,
         &mut cache.active_last_elapsed,
     );
-    if let Some(epoch) =
-        song_lua_sprite_animation_epoch(&command.blocks, elapsed, cache.active_start_second)
-    {
+    if let Some(epoch) = song_lua_sprite_animation_epoch(
+        &command.blocks,
+        elapsed,
+        cache.active_start_second - command.frame_advance,
+    ) {
         current.sprite_animation_epoch = Some(epoch);
     }
     current

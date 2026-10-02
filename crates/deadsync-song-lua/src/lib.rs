@@ -1682,6 +1682,9 @@ pub struct CompiledSongLua<OverlayActor> {
     pub screen_overlay_index: Option<usize>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
     pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
+    /// Setter arguments retained only for reference audits; rendered tracks may tween them.
+    #[cfg(feature = "test-support")]
+    pub overlay_writes: Vec<SongLuaOverlayUpdateTrack>,
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
@@ -1710,6 +1713,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             screen_overlay_index: None,
             overlay_eases: Vec::new(),
             overlay_updates: Vec::new(),
+            #[cfg(feature = "test-support")]
+            overlay_writes: Vec::new(),
             stateful_message_captures: Vec::new(),
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
@@ -2927,6 +2932,37 @@ fn overlay_command_out_bounce(t: f32) -> f32 {
     }
 }
 
+const fn bezier_coeff(points: [f32; 4]) -> [f32; 4] {
+    let c = 3.0 * (points[1] - points[0]);
+    let b = 3.0 * (points[2] - points[1]) - c;
+    [points[3] - points[0] - c - b, b, c, points[0]]
+}
+
+fn actor_bounce_factor(t: f32, end: bool) -> f32 {
+    // _fallback/02 Actor.lua uses these 2D Beziers. Match RageBezier2D's
+    // float Newton iteration and error threshold, including the overshoot.
+    const BEGIN: [[f32; 4]; 2] = [
+        bezier_coeff([0.0, 0.42, 2.0 / 3.0, 1.0]),
+        bezier_coeff([0.0, -0.42, 0.3, 1.0]),
+    ];
+    const END: [[f32; 4]; 2] = [
+        bezier_coeff([0.0, 1.0 / 3.0, 0.58, 1.0]),
+        bezier_coeff([0.0, 0.7, 1.42, 1.0]),
+    ];
+    let [x, y] = if end { END } else { BEGIN };
+    let evaluate = |v: [f32; 4], t: f32| ((v[0] * t + v[1]) * t + v[2]) * t + v[3];
+    let mut parameter = t;
+    for _ in 0..100 {
+        let error = t - evaluate(x, parameter);
+        if error.abs() < 0.0001 {
+            break;
+        }
+        let slope = 3.0 * x[0] * parameter * parameter + 2.0 * x[1] * parameter + x[2];
+        parameter += error / slope;
+    }
+    evaluate(y, parameter)
+}
+
 fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) -> f32 {
     let t = t.clamp(0.0, 1.0);
     match easing.unwrap_or("linear") {
@@ -2956,6 +2992,8 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
                     .mul_add(((t - period * 0.25) * tau).sin(), 1.0)
             }
         }
+        "bouncebegin" => actor_bounce_factor(t, false),
+        "bounceend" => actor_bounce_factor(t, true),
         "inBounce" => 1.0 - overlay_command_out_bounce(1.0 - t),
         "outBounce" => overlay_command_out_bounce(t),
         _ => t,
@@ -4110,6 +4148,8 @@ pub fn overlay_eases_from_captures(
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayMessageCommand {
+    /// Frame delta consumed by a receiver updated after the broadcaster.
+    pub frame_advance: f32,
     pub message: String,
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
     pub aux: Option<f32>,
@@ -7521,7 +7561,7 @@ return Def.ActorFrame{
             sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
         }));
         assert!(visible.samples.iter().any(|sample| {
-            (sample.beat - 1.5).abs() <= 1.0e-4
+            (sample.beat - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Bool(false)
         }));
         let diffuse = compiled
@@ -10128,7 +10168,7 @@ return Def.ActorFrame{
         assert_eq!(overlay.message_commands[0].blocks.len(), 3);
         assert_eq!(
             overlay.message_commands[0].blocks[0].easing.as_deref(),
-            Some("inBounce")
+            Some("bouncebegin")
         );
         assert_eq!(overlay.message_commands[0].blocks[0].duration, 0.2);
         assert_eq!(
@@ -10137,7 +10177,7 @@ return Def.ActorFrame{
         );
         assert_eq!(
             overlay.message_commands[0].blocks[1].easing.as_deref(),
-            Some("outBounce")
+            Some("bounceend")
         );
         assert_eq!(overlay.message_commands[0].blocks[1].start, 0.2);
         assert_eq!(overlay.message_commands[0].blocks[1].duration, 0.25);
@@ -19396,14 +19436,40 @@ return Def.ActorFrame{
                 && block.delta.vibrate == Some(false)
                 && block.delta.effect_mode == Some(EffectMode::None)
         }));
-        assert!(!compiled.overlay_updates.iter().any(|track| {
-            track.overlay_index == 0
-                && matches!(
-                    track.target,
-                    SongLuaOverlayUpdateTarget::Vibrate
-                        | SongLuaOverlayUpdateTarget::EffectMagnitude
-                )
-        }));
+        let index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Cala"))
+            .expect("Cala was compiled");
+        let vibration = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Vibrate
+            })
+            .expect("queued effects are captured at their dispatch frames");
+        for value in [true, false] {
+            assert!(
+                vibration
+                    .samples
+                    .iter()
+                    .any(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(value))
+            );
+        }
+        let magnitude = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == index
+                    && track.target == SongLuaOverlayUpdateTarget::EffectMagnitude
+            })
+            .expect("queued magnitude is captured");
+        assert!(
+            magnitude
+                .samples
+                .iter()
+                .any(|sample| sample.value == SongLuaOverlayUpdateValue::Vec3([10.0, 10.0, 0.0]))
+        );
     }
 
     #[test]
@@ -22221,11 +22287,13 @@ end
     #[test]
     fn message_command_lists_have_listener_matches_command_name() {
         let first = vec![SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
             message: "Alpha".to_string(),
             blocks: Vec::new(),
             aux: None,
         }];
         let second = vec![SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
             message: "Beta".to_string(),
             blocks: Vec::new(),
             aux: None,
@@ -22244,6 +22312,7 @@ end
     #[test]
     fn push_startup_message_if_listened_adds_zero_beat_event() {
         let commands = vec![SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
             message: SONG_LUA_STARTUP_MESSAGE.to_string(),
             blocks: Vec::new(),
             aux: None,

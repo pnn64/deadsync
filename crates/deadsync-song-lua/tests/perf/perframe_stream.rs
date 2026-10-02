@@ -101,6 +101,7 @@ impl Fixture {
                         initial_state: SongLuaOverlayState::default(),
                         message_commands: if messages {
                             vec![crate::SongLuaOverlayMessageCommand {
+                                frame_advance: 0.0,
                                 message: "Pulse".into(),
                                 aux: Some(3.0),
                                 blocks: vec![crate::SongLuaOverlayCommandBlock {

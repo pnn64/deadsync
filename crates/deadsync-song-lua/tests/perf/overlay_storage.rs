@@ -150,6 +150,8 @@ fn assert_scheduled(
 fn updates(count: usize, distinct: usize, colors: bool) -> Vec<SongLuaScheduledOverlayUpdate> {
     (0..count)
         .map(|index| SongLuaScheduledOverlayUpdate {
+            dispatch_seconds: None,
+            frame_advance: 0.0,
             initial_value: None,
             delay_seconds: index as f32 * 0.125,
             duration_seconds: 0.5,
@@ -233,6 +235,7 @@ fn scheduled_lookup_keeps_prior_values_per_actor_and_reuses_output_without_churn
 
 fn command(message: &str, x: f32, duration: f32) -> crate::SongLuaOverlayMessageCommand {
     crate::SongLuaOverlayMessageCommand {
+        frame_advance: 0.0,
         message: message.to_owned(),
         aux: Some(x),
         blocks: vec![crate::SongLuaOverlayCommandBlock {

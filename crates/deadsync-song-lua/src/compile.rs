@@ -628,6 +628,10 @@ where
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
     out.overlay_updates.extend(update_overlay_tracks);
+    #[cfg(feature = "test-support")]
+    if let Some(writes) = lua.remove_app_data::<crate::lua_util::SongLuaOverlayWrites>() {
+        out.overlay_writes = writes.0;
+    }
     merge_runtime_messages(
         &mut out.messages,
         runtime_action_message_start,
@@ -718,6 +722,10 @@ where
         for track in &mut out.overlay_updates {
             remap(&mut track.overlay_index);
         }
+        #[cfg(feature = "test-support")]
+        for track in &mut out.overlay_writes {
+            remap(&mut track.overlay_index);
+        }
         for capture in &mut out.stateful_message_captures {
             for (index, _) in &mut capture.overlay_targets {
                 remap(index);
@@ -753,6 +761,7 @@ where
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
             message_commands: vec![SongLuaOverlayMessageCommand {
+                frame_advance: 0.0,
                 message,
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
@@ -785,6 +794,7 @@ where
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),
             message_commands: vec![SongLuaOverlayMessageCommand {
+                frame_advance: 0.0,
                 message,
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
@@ -1012,6 +1022,14 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         };
         update.overlay_index = local;
         outputs[layer].overlay_updates.push(update);
+    }
+    #[cfg(feature = "test-support")]
+    for mut write in compiled.overlay_writes.drain(..) {
+        let Some(&(layer, local)) = overlay_map.get(write.overlay_index) else {
+            continue;
+        };
+        write.overlay_index = local;
+        outputs[layer].overlay_writes.push(write);
     }
     for capture in compiled.stateful_message_captures.drain(..) {
         let mut targets_by_layer = vec![Vec::new(); outputs.len()];

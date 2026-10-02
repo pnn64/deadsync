@@ -607,6 +607,7 @@ fn install_multitap_explosion_messages<Kind>(
                     .actor
                     .message_commands
                     .push(SongLuaOverlayMessageCommand {
+                        frame_advance: 0.0,
                         message,
                         blocks,
                         aux: None,

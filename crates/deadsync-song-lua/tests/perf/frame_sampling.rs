@@ -365,6 +365,7 @@ impl CompileFixture {
                         parent_index: None,
                         initial_state: SongLuaOverlayState::default(),
                         message_commands: vec![crate::SongLuaOverlayMessageCommand {
+                            frame_advance: 0.0,
                             message: "Pulse".into(),
                             aux: None,
                             blocks: vec![crate::SongLuaOverlayCommandBlock {

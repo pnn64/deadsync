@@ -116,6 +116,8 @@ fn scheduled(
     value: SongLuaOverlayUpdateValue,
 ) -> SongLuaScheduledOverlaySample {
     SongLuaScheduledOverlaySample {
+        dispatch_seconds: None,
+        frame_advance: 0.0,
         overlay_index: actor,
         target,
         start_seconds: f64::from(start),

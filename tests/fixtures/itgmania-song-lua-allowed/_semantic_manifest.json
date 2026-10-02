@@ -35,7 +35,53 @@
       "fixture": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc.semantic.json",
       "title": "[1115] [07] Spooky (Medium)",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.25,
+          "max_events": 500000
+        },
+        "random_seed": 1,
+        "update_frames": 7082,
+        "lua_song_beat_precision": "native_float",
+        "arrow_timing": "native",
+        "noteskin": "cel",
+        "end_position": {
+          "beat": 275.3541564941406,
+          "seconds": 118.00892421177456
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "0bd7bf6a820fc1056545629ae39cce8e86bfd56012e98f54ad4237f10c6d39cb",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade"
+        },
+        "source_files_sha256": {
+          "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc": "0855d937dccea4c96aeb0744cc24f496eee8875c6290d73646914a21a2b84f4c",
+          "[07] Spooky (SM) [Scrypts]/lua/default.lua": "9c70b3d3b1f7392eadd7d37143d8875da541f3420bedbda663c5bcb4464c5d29",
+          "[07] Spooky (SM) [Scrypts]/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+          "[07] Spooky (SM) [Scrypts]/lua/modhelpers.lua": "50503adf228f5b3a200be92674e36a87e3494a5ba0d681b123a4c989f6c5fa45",
+          "[07] Spooky (SM) [Scrypts]/lua/mods.lua": "cddc8734f41e533cd05152a26dce036dfe62edde4babdd57672adc9ba7f8ddb5"
+        },
+        "sha256": "2785c5d29b91cc078445f04d7a032279557cd671192b82d1562a33a639ef695a",
+        "uncompressed_bytes": 495516
+      }
     },
     {
       "simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",

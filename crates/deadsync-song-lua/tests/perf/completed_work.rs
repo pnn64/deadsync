@@ -10,6 +10,8 @@ type TrackIndex = HashMap<(usize, SongLuaOverlayUpdateTarget), usize>;
 
 fn sample(index: usize, start: f32, end: f32) -> SongLuaScheduledOverlaySample {
     SongLuaScheduledOverlaySample {
+        dispatch_seconds: None,
+        frame_advance: 0.0,
         overlay_index: index % 3,
         target: [SongLuaOverlayUpdateTarget::X, SongLuaOverlayUpdateTarget::Y][index % 2],
         start_seconds: f64::from(start),

@@ -282,6 +282,7 @@ fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
         parent_index: None,
         initial_state: initial,
         message_commands: vec![SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
             message: "__songlua_tap_1_3_W1".into(),
             aux: None,
             blocks: vec![SongLuaOverlayCommandBlock {
@@ -342,6 +343,7 @@ fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
         parent_index: None,
         initial_state: initial,
         message_commands: vec![SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
             message: "__songlua_tap_2_1_W1".into(),
             aux: None,
             blocks: [(0.0, 1.0), (0.5, 0.0)]
@@ -689,6 +691,7 @@ fn test_sprite_path_kind(path: std::path::PathBuf) -> SongLuaOverlayKind {
 
 fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessageCommand {
     SongLuaOverlayMessageCommand {
+        frame_advance: 0.0,
         message: String::new(),
         aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
@@ -700,6 +703,220 @@ fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessag
             delta,
         }],
     }
+}
+
+#[test]
+fn song_lua_message_advance_matches_native() {
+    crate::tests::init_paths();
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let mut context =
+        deadsync_song_lua::SongLuaCompileContext::new(&dir.join("song-lua"), "Phase Update");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua(&dir.join("song-lua/phase-update.lua"), &context).unwrap();
+    let native: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(dir.join("itgmania-song-lua-micro/phase-update.json")).unwrap(),
+    )
+    .unwrap();
+    let mut checks = 0;
+    for (name, id, advance) in [
+        ("Before", "def-0002", 0.0),
+        ("After", "def-0004", 1.0 / 60.0),
+    ] {
+        let actor = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some(name))
+            .unwrap();
+        let command_index = actor
+            .message_commands
+            .iter()
+            .position(|command| command.message == "Kick")
+            .unwrap();
+        assert!((actor.message_commands[command_index].frame_advance - advance).abs() < 1e-7);
+        let events = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message == "Kick")
+            .map(|event| SongLuaOverlayMessageRuntime {
+                event_second: deadsync_song_lua::song_elapsed_seconds_at(event.beat, &context),
+                command_index,
+            })
+            .collect::<Vec<_>>();
+        let track = native["projected_vertex_tracks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|track| track["actor"] == id)
+            .unwrap();
+        let samples = track["samples"].as_array().unwrap();
+        let mut cache = SongLuaMessageStateCache::default();
+        for sample in samples.iter().chain(samples.iter().rev()) {
+            let time = sample[1].as_f64().unwrap() as f32;
+            let expected = ((sample[6][0][0].as_f64().unwrap() + sample[6][1][0].as_f64().unwrap())
+                * 0.5) as f32;
+            let cached = song_lua_message_state_cached(
+                time,
+                actor.initial_state,
+                &actor.message_commands,
+                Some(&events),
+                &mut cache,
+            );
+            let replay = replay_song_lua_message_state(
+                time,
+                actor.initial_state,
+                &actor.message_commands,
+                Some(&events),
+            );
+            for actual in [cached, replay] {
+                assert!(
+                    (actual.x - expected).abs() < 1e-4,
+                    "{name} at {time}: {} vs {expected}",
+                    actual.x
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert!(checks >= 20);
+}
+
+#[test]
+fn song_lua_tween_playback_matches_native() {
+    crate::tests::init_paths();
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let mut checks = 0;
+    for name in [
+        "phase-update",
+        "retarget-update",
+        "queued-effects",
+        "queued-fade",
+        "queued-chain",
+        "callback-phase",
+        "finish-queue",
+    ] {
+        let mut context =
+            deadsync_song_lua::SongLuaCompileContext::new(&dir.join("song-lua"), name);
+        context.screen_width = 854.0;
+        context.music_length_seconds = 4.0;
+        context.song_display_bpms = [60.0; 2];
+        context.song_timing_bpms = vec![(0.0, 60.0)];
+        let compiled =
+            compile_song_lua(&dir.join(format!("song-lua/{name}.lua")), &context).unwrap();
+        let native: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(dir.join(format!("itgmania-song-lua-micro/{name}.json"))).unwrap(),
+        )
+        .unwrap();
+        for track in native["projected_vertex_tracks"].as_array().unwrap() {
+            let definition = native["actor_definitions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|d| d["id"] == track["definition_id"])
+                .unwrap();
+            let Some(actor_name) = definition["name"].as_str() else {
+                continue;
+            };
+            let Some(index) = compiled
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == Some(actor_name))
+            else {
+                continue;
+            };
+            let actor = &compiled.overlays[index];
+            let events = compiled
+                .messages
+                .iter()
+                .filter_map(|event| {
+                    actor
+                        .message_commands
+                        .iter()
+                        .position(|c| c.message == event.message)
+                        .map(|command_index| SongLuaOverlayMessageRuntime {
+                            event_second: deadsync_song_lua::song_elapsed_seconds_at(
+                                event.beat, &context,
+                            ),
+                            command_index,
+                        })
+                })
+                .collect::<Vec<_>>();
+            let updates = compiled
+                .overlay_updates
+                .iter()
+                .filter(|t| t.overlay_index == index)
+                .map(|t| deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack {
+                    overlay_index: index,
+                    target: t.target,
+                    samples: t
+                        .samples
+                        .iter()
+                        .map(|s| deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
+                            second: deadsync_song_lua::song_elapsed_seconds_at(s.beat, &context),
+                            value: s.value.clone(),
+                        })
+                        .collect(),
+                })
+                .collect::<Vec<_>>();
+            let mut cursors = vec![0; updates.len()];
+            let mut cache = SongLuaMessageStateCache::default();
+            let samples = track["samples"].as_array().unwrap();
+            for sample in samples.iter().chain(samples.iter().rev()) {
+                let time = sample[1].as_f64().unwrap() as f32;
+                let mut state = song_lua_message_state_cached(
+                    time,
+                    actor.initial_state,
+                    &actor.message_commands,
+                    Some(&events),
+                    &mut cache,
+                );
+                apply_song_lua_overlay_runtime_updates_for(
+                    time,
+                    &updates,
+                    0..updates.len(),
+                    &mut cursors,
+                    None,
+                    &mut state,
+                );
+                let visible = state.visible && state.diffuse[3] > 0.000_001;
+                assert_eq!(
+                    visible,
+                    sample[2].as_bool().unwrap(),
+                    "{name}/{actor_name} at {time}"
+                );
+                checks += 1;
+                if !visible {
+                    continue;
+                }
+                let vertices = sample[6].as_array().unwrap();
+                let number =
+                    |vertex: usize, axis: usize| vertices[vertex][axis].as_f64().unwrap() as f32;
+                let expected = [
+                    (number(0, 0) + number(1, 0)) * 0.5,
+                    (number(0, 1) + number(2, 1)) * 0.5,
+                    number(1, 0) - number(0, 0),
+                    number(2, 1) - number(0, 1),
+                ];
+                let size = state.size.expect("native Quad fixtures declare their size");
+                let actual = [
+                    state.x,
+                    state.y,
+                    size[0] * state.zoom_x,
+                    size[1] * state.zoom_y,
+                ];
+                for (actual, expected) in actual.into_iter().zip(expected) {
+                    assert!(
+                        (actual - expected).abs() < 0.001,
+                        "{name}/{actor_name} at {time}: {actual} vs {expected}"
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert!(checks > 500);
 }
 
 #[test]
@@ -740,6 +957,7 @@ fn song_lua_message_state_cache_matches_replay_across_advances_and_seeks() {
 #[test]
 fn song_lua_cached_tween_applies_terminal_flags_and_rewinds() {
     let commands = [SongLuaOverlayMessageCommand {
+        frame_advance: 0.0,
         message: "show".to_owned(),
         aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
@@ -1100,6 +1318,7 @@ fn empty_song_lua_layer_skips_preparation_without_changing_output() {
 #[test]
 fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
     let command = SongLuaOverlayMessageCommand {
+        frame_advance: 0.0,
         message: "LongCommand".to_string(),
         aux: None,
         blocks: (0..128)

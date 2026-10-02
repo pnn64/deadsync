@@ -70,6 +70,7 @@ pub(crate) fn apply_startup_states<Kind>(
             .actor
             .message_commands
             .push(crate::SongLuaOverlayMessageCommand {
+                frame_advance: 0.0,
                 message: MESSAGE.to_string(),
                 aux: None,
                 blocks,
@@ -1471,7 +1472,12 @@ fn push_captured_overlay_value(
             return index;
         }
     };
-    if overlay_state_matches_update_value(current, target, next) {
+    if overlay_state_matches_update_value(current, target, next)
+        && tracks[track_index]
+            .samples
+            .last()
+            .is_some_and(|sample| &sample.value == next)
+    {
         return track_index;
     }
     let track = &mut tracks[track_index];
@@ -1740,7 +1746,7 @@ struct OverlaySampleScratch {
     retargeted_states: Vec<(usize, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>,
 }
 
-fn retarget_player_tween(
+fn retarget_actor_tween(
     scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
@@ -1754,7 +1760,7 @@ fn retarget_player_tween(
         return None;
     }
     let pending = scheduled.iter().rposition(|sample| {
-        sample.overlay_index == overlay_index && sample.end_seconds > seconds
+        sample.overlay_index == overlay_index && sample.end_seconds > seconds + 0.000_000_1
     })?;
     let (start, end) = (
         scheduled[pending].start_seconds,
@@ -1766,16 +1772,23 @@ fn retarget_player_tween(
         .find(|sample| {
             sample.overlay_index == overlay_index
                 && sample.target == target
-                && sample.start_seconds <= seconds
-                && sample.end_seconds > seconds
+                && sample
+                    .dispatch_seconds
+                    .is_none_or(|dispatch| dispatch <= seconds + 1.0e-7)
+                && sample.start_seconds <= seconds + f64::from(sample.frame_advance)
+                && sample.end_seconds > seconds + 0.000_000_1
         })
         .map_or_else(
             || overlay_state_update_value(current, target),
             |sample| {
                 lerp_scheduled_value(
                     &sample.from,
-                    &sample.value,
-                    scheduled_overlay_factor(sample, seconds),
+                    if sample.frame_advance > 0.0 {
+                        value
+                    } else {
+                        &sample.value
+                    },
+                    scheduled_overlay_factor(sample, seconds + f64::from(sample.frame_advance)),
                 )
             },
         );
@@ -1802,6 +1815,8 @@ fn retarget_player_tween(
             |sample| sample.value.clone(),
         );
     let replacement = SongLuaScheduledOverlaySample {
+        dispatch_seconds: pending.dispatch_seconds,
+        frame_advance: pending.frame_advance,
         overlay_index,
         target,
         start_seconds: pending.start_seconds,
@@ -1814,6 +1829,17 @@ fn retarget_player_tween(
         value: value.clone(),
     };
     scheduled.push(replacement);
+    if scheduled
+        .last()
+        .is_some_and(|sample| sample.frame_advance > 0.0)
+    {
+        let sample = scheduled.last().expect("replacement appended");
+        return Some(lerp_scheduled_value(
+            &sample.from,
+            &sample.value,
+            scheduled_overlay_factor(sample, seconds + f64::from(sample.frame_advance)),
+        ));
+    }
     Some(rendered)
 }
 
@@ -1838,8 +1864,8 @@ fn append_scheduled_overlay_updates(
     for update in scheduled {
         let start_seconds = message_seconds + f64::from(update.delay_seconds);
         let end_seconds = start_seconds + f64::from(update.duration_seconds);
-        let start = start_seconds as f32;
-        let end = end_seconds as f32;
+        let start = (start_seconds - f64::from(update.frame_advance)) as f32;
+        let end = (end_seconds - f64::from(update.frame_advance)) as f32;
         let time_bits = (start.to_bits(), end.to_bits());
         // Adjacent properties in one tween share their time bounds. Keep only
         // the preceding pair, keyed by bits to retain signed zero and NaNs.
@@ -1871,6 +1897,8 @@ fn append_scheduled_overlay_updates(
             })
             .unwrap_or(SongLuaOverlayUpdateValue::None);
         scheduled_samples.push(SongLuaScheduledOverlaySample {
+            dispatch_seconds: update.dispatch_seconds,
+            frame_advance: update.frame_advance,
             overlay_index,
             target: update.target,
             start_seconds,
@@ -1951,16 +1979,57 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
     scratch: &mut OverlaySampleScratch,
 ) -> Result<(), String> {
-    merge_completed_scheduled_overlay_samples_into(
-        tracks,
-        track_indices,
-        baseline,
-        update_states,
-        to_states,
-        scheduled_samples,
-        next_seconds,
-        &mut scratch.completed,
-    );
+    if lua
+        .app_data_ref::<crate::lua_util::SongLuaCompileFrames>()
+        .is_some()
+    {
+        scratch.completed.clear();
+        scratch
+            .completed
+            .extend(scheduled_samples.extract_if(.., |sample| {
+                sample
+                    .dispatch_seconds
+                    .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
+                    && sample.end_seconds
+                        <= next_seconds + f64::from(sample.frame_advance.min(0.0)) + 1.0e-7
+            }));
+        scratch
+            .completed
+            .sort_by(|a, b| a.end_seconds.total_cmp(&b.end_seconds));
+        for sample in &scratch.completed {
+            set_overlay_state_update_value(
+                &mut update_states[sample.overlay_index],
+                sample.target,
+                &sample.value,
+            );
+            set_overlay_state_update_value(
+                &mut to_states[sample.overlay_index],
+                sample.target,
+                &sample.value,
+            );
+            push_captured_overlay_value(
+                tracks,
+                track_indices,
+                sample.overlay_index,
+                sample.target,
+                beat,
+                &from_states[sample.overlay_index],
+                next_beat,
+                &sample.value,
+            );
+        }
+    } else {
+        merge_completed_scheduled_overlay_samples_into(
+            tracks,
+            track_indices,
+            baseline,
+            update_states,
+            to_states,
+            scheduled_samples,
+            next_seconds,
+            &mut scratch.completed,
+        );
+    }
     scratch.reset_indices.clear();
     scratch.captured_tracks.clear();
     scratch.captured_tracks.resize(tracks.len(), false);
@@ -1981,40 +2050,44 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
             };
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
-            let actor = overlays[overlay_index].borrow();
             if tween_reset {
                 scheduled_samples.retain(|sample| sample.overlay_index != overlay_index);
             }
-            if actor
+            let actor = overlays[overlay_index].borrow();
+            let player = actor
                 .raw_get::<Option<i64>>("__songlua_player_index")
                 .map_err(|err| err.to_string())?
                 .is_some()
                 && actor
                     .raw_get::<Option<String>>("__songlua_player_child_name")
                     .map_err(|err| err.to_string())?
-                    .is_none()
+                    .is_none();
+            if player
+                || lua
+                    .app_data_ref::<crate::lua_util::SongLuaCompileFrames>()
+                    .is_some()
             {
                 // Player Lua getters retain destinations. Their render state
                 // must also retain immediate writes before a delayed return.
                 for (target, value) in values {
-                    if let Some(rendered) = retarget_player_tween(
+                    if let Some(rendered) = retarget_actor_tween(
                         scheduled_samples,
                         overlay_index,
                         *target,
                         value,
-                        &from_states[overlay_index],
+                        from_states.get(overlay_index).unwrap_or(baseline),
                         next_seconds,
                     ) {
                         // Actor setters modify the back tween's destination.
                         // This frame has already advanced its current state.
                         retargeted_states.push((overlay_index, *target, rendered));
                     }
-                    set_overlay_state_update_value(
-                        &mut update_states[overlay_index],
-                        *target,
-                        value,
-                    );
-                    set_overlay_state_update_value(&mut to_states[overlay_index], *target, value);
+                    if let Some(state) = update_states.get_mut(overlay_index) {
+                        set_overlay_state_update_value(state, *target, value);
+                    }
+                    if let Some(state) = to_states.get_mut(overlay_index) {
+                        set_overlay_state_update_value(state, *target, value);
+                    }
                 }
             }
             apply_captured_final_values(
@@ -2027,6 +2100,12 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
             );
             for (target, next) in values {
                 let current = from_states.get(overlay_index).unwrap_or(baseline);
+                let rendered = retargeted_states
+                    .iter()
+                    .rev()
+                    .find(|(index, property, _)| *index == overlay_index && *property == *target)
+                    .map(|(_, _, value)| value);
+                let next = rendered.unwrap_or(next);
                 let track_index = push_captured_overlay_value(
                     tracks,
                     track_indices,
@@ -2102,6 +2181,8 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
 
 #[cfg_attr(test, derive(Clone))]
 struct SongLuaScheduledOverlaySample {
+    dispatch_seconds: Option<f64>,
+    frame_advance: f32,
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
     start_seconds: f64,
@@ -2166,7 +2247,11 @@ fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
     seconds: f64,
 ) -> Result<(), String> {
     for sample in scheduled {
-        if seconds + f64::EPSILON < sample.start_seconds {
+        if sample
+            .dispatch_seconds
+            .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
+            || seconds + f64::EPSILON < sample.start_seconds
+        {
             continue;
         }
         let linear_factor = if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
@@ -2221,7 +2306,11 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
     }
     let mut last_factor: Option<(&SongLuaScheduledOverlaySample, u8, f32)> = None;
     for sample in scheduled {
-        if seconds + f64::EPSILON < sample.start_seconds {
+        if sample
+            .dispatch_seconds
+            .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
+            || seconds + f64::EPSILON < sample.start_seconds
+        {
             continue;
         }
         // Spring/elastic curves use transcendental functions. Adjacent
@@ -2312,8 +2401,12 @@ fn merge_completed_scheduled_overlay_samples_into(
     // Keep pending tweens (and their capacity) in place across sample ticks.
     // The common case where none have completed does not allocate or move them.
     // Beats do not advance during a pause. Actor delays and tweens still do.
-    completed
-        .extend(scheduled.extract_if(.., |sample| sample.end_seconds <= seconds + f64::EPSILON));
+    completed.extend(scheduled.extract_if(.., |sample| {
+        sample.end_seconds <= seconds + 0.000_000_1
+            && sample
+                .dispatch_seconds
+                .is_none_or(|dispatch| dispatch <= seconds + 1.0e-7)
+    }));
     if !completed.is_empty() {
         completed.sort_by(|left, right| left.end_seconds.total_cmp(&right.end_seconds));
         for sample in completed.iter() {
@@ -2359,6 +2452,7 @@ fn append_ordered_overlay_sample(
     }
 }
 
+#[cfg(test)]
 fn merge_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<
@@ -2827,9 +2921,11 @@ pub fn compile_update_functions<Kind>(
     let mut transform_masks = player_transform_masks(lua, &player_tables)?;
     let mut player_capture_masks = transform_masks;
     let mut frame_count = 0;
+    crate::lua_util::set_compile_frames(lua, replay.iter().map(|(_, delta)| *delta));
     for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
         let next_beat = exact_beat as f32;
         frame_count += 1;
+        crate::lua_util::set_compile_frame(lua, frame_count);
         let delta_beats = next_beat - beat;
         seconds += delta_seconds;
         let stage = profile.then(Instant::now);
@@ -2892,17 +2988,46 @@ pub fn compile_update_functions<Kind>(
             &scheduled_overlay_samples,
             seconds,
         )?;
+        // The Lua getter clock observes the receiver before its later update.
+        // Rendering observes that receiver after consuming this frame's delta.
+        for sample in &scheduled_overlay_samples {
+            let clock = seconds + f64::from(sample.frame_advance);
+            if sample
+                .dispatch_seconds
+                .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
+                || clock + 1.0e-7 < sample.start_seconds
+            {
+                continue;
+            }
+            let value = lerp_scheduled_value(
+                &sample.from,
+                &sample.value,
+                scheduled_overlay_factor(sample, clock),
+            );
+            set_overlay_state_update_value(
+                &mut replay_overlays[sample.overlay_index],
+                sample.target,
+                &value,
+            );
+        }
         for (index, target, value) in overlay_sample_scratch.retargeted_states.drain(..) {
             set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
+            push_captured_overlay_value(
+                &mut overlay_tracks,
+                &mut overlay_track_indices,
+                index,
+                target,
+                beat,
+                &current_overlays[index],
+                next_beat,
+                &value,
+            );
         }
-        // Endpoint-only tracks turn nonlinear tweens into straight lines.
-        // Bake their rendered values at the same load-time replay frames;
-        // later endpoint merges retain these samples, including interrupted fades.
+        // Bake current render values, including linear queues whose destinations
+        // can be edited by subsequent callbacks. Endpoint merges retain them.
         for sample in &scheduled_overlay_samples {
             if sample.overlay_index >= overlay_count
-                || seconds < sample.start_seconds
-                || seconds > sample.end_seconds
-                || matches!(sample.easing.as_deref(), None | Some("linear" | "instant"))
+                || seconds + f64::from(sample.frame_advance) > sample.end_seconds
             {
                 continue;
             }
@@ -2915,6 +3040,31 @@ pub fn compile_update_functions<Kind>(
                 sample.target,
                 beat,
                 &current_overlays[sample.overlay_index],
+                next_beat,
+                &value,
+            );
+        }
+        // Preserve the intervening frames of directly written transforms.
+        // A recurring command can skip a frame; that frame holds its last value.
+        for index in 0..overlay_tracks.len() {
+            let (actor_index, target) = (
+                overlay_tracks[index].overlay_index,
+                overlay_tracks[index].target,
+            );
+            if actor_index >= overlay_count
+                || (target != SongLuaOverlayUpdateTarget::Zoom
+                    && !PLAYER_TRANSFORM_TARGETS.contains(&target))
+            {
+                continue;
+            }
+            let value = overlay_state_update_value(&replay_overlays[actor_index], target);
+            push_captured_overlay_value(
+                &mut overlay_tracks,
+                &mut overlay_track_indices,
+                actor_index,
+                target,
+                beat,
+                &current_overlays[actor_index],
                 next_beat,
                 &value,
             );
@@ -3103,12 +3253,12 @@ pub fn compile_update_functions<Kind>(
             },
         );
     }
-    merge_scheduled_overlay_samples(
-        &mut overlay_tracks,
-        &mut overlay_track_indices,
-        &baseline_overlays,
-        scheduled_overlay_samples,
-    );
+    // Replay captured every rendered frame; future queued work lies beyond
+    // this song and must not introduce interpolated endpoints into its tracks.
+    for track in &mut overlay_tracks {
+        sort_overlay_update_samples(&mut track.samples);
+    }
+
     overlay_tracks.retain(|track| track.overlay_index < overlay_count);
     let mut stateful_messages = crate::lua_util::stateful_message_captures(lua);
     for capture in &mut stateful_messages {
@@ -3124,6 +3274,8 @@ pub fn compile_update_functions<Kind>(
     let runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
     spline_capture.finish(column_splines);
     sound_events.extend(crate::lua_util::take_runtime_sounds(lua));
+    crate::lua_util::apply_message_advances(lua, overlays);
+    lua.remove_app_data::<crate::lua_util::SongLuaCompileFrames>();
     crate::lua_util::end_overlay_update_capture(lua);
     Ok((
         eases,
@@ -3514,6 +3666,8 @@ mod tests {
         let mut tracks = Vec::new();
         let mut track_indices = std::collections::HashMap::new();
         let mut scheduled = vec![SongLuaScheduledOverlaySample {
+            dispatch_seconds: None,
+            frame_advance: 0.0,
             overlay_index: 0,
             target: SongLuaOverlayUpdateTarget::X,
             start_seconds: 1.0,

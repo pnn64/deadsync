@@ -52,6 +52,7 @@ pub(super) fn capture_actor_message_commands(
             .extend(sounds?.into_iter().map(|path| (message.clone(), path)));
         if !blocks.is_empty() {
             out.commands.push(SongLuaOverlayMessageCommand {
+                frame_advance: 0.0,
                 message,
                 blocks,
                 aux: None,
@@ -65,6 +66,7 @@ pub(super) fn capture_actor_message_commands(
         .collect();
     if !startup_sound_blocks.is_empty() {
         out.commands.push(SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
             message: SONG_LUA_STARTUP_MESSAGE.to_string(),
             blocks: startup_sound_blocks,
             aux: None,
@@ -167,6 +169,7 @@ pub(super) fn capture_stable_cross_actor_message_commands<Kind>(
             (
                 target,
                 SongLuaOverlayMessageCommand {
+                    frame_advance: 0.0,
                     message: message.clone(),
                     blocks,
                     aux,

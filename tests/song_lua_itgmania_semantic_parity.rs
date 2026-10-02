@@ -1566,6 +1566,7 @@ struct NativeRenderWrite {
     beat: f32,
     target: SongLuaOverlayUpdateTarget,
     value: SongLuaOverlayUpdateValue,
+    relative: bool,
 }
 
 fn native_render_values(
@@ -1587,9 +1588,9 @@ fn native_render_values(
             .unwrap_or_default()
     };
     match method.as_str() {
-        "x" => scalar(Target::X, 0),
-        "y" => scalar(Target::Y, 0),
-        "z" => scalar(Target::Z, 0),
+        "x" | "addx" => scalar(Target::X, 0),
+        "y" | "addy" => scalar(Target::Y, 0),
+        "z" | "addz" => scalar(Target::Z, 0),
         "xy" => match (number(0), number(1)) {
             (Some(x), Some(y)) => vec![
                 (Target::X, UpdateValue::F32(x)),
@@ -1620,9 +1621,9 @@ fn native_render_values(
         "basezoomx" => scalar(Target::BaseZoomX, 0),
         "basezoomy" => scalar(Target::BaseZoomY, 0),
         "basezoomz" => scalar(Target::BaseZoomZ, 0),
-        "rotationx" | "baserotationx" => scalar(Target::RotationX, 0),
-        "rotationy" | "baserotationy" => scalar(Target::RotationY, 0),
-        "rotationz" | "baserotationz" => scalar(Target::RotationZ, 0),
+        "rotationx" | "baserotationx" | "addrotationx" => scalar(Target::RotationX, 0),
+        "rotationy" | "baserotationy" | "addrotationy" => scalar(Target::RotationY, 0),
+        "rotationz" | "baserotationz" | "addrotationz" => scalar(Target::RotationZ, 0),
         "skewx" => scalar(Target::SkewX, 0),
         "skewy" => scalar(Target::SkewY, 0),
         "fov" | "setfov" => scalar(Target::Fov, 0),
@@ -1706,36 +1707,61 @@ fn native_update_render_writes_all(
         .runtime_actors
         .first()
         .map_or(definition.id.as_str(), String::as_str);
-    let mut writes = trace
-        .tween_tracks
-        .iter()
-        .filter(|track| {
-            track.actor == actor
-                && track.command.as_deref() == Some("UpdateCommand")
-                && track.kind == "immediate"
-        })
-        .flat_map(|track| &track.segments)
-        .flat_map(|segment| {
-            segment.operations.iter().flat_map(move |operation| {
-                native_render_values(operation)
-                    .into_iter()
-                    .map(move |(target, value)| NativeRenderWrite {
-                        seq: operation.seq,
-                        beat: segment.beat,
-                        target,
-                        value,
-                    })
+    let mut writes =
+        trace
+            .tween_tracks
+            .iter()
+            .filter(|track| {
+                track.actor == actor
+                    && track.command.as_deref() == Some("UpdateCommand")
+                    && track.kind == "immediate"
             })
-        })
-        .collect::<Vec<_>>();
+            .flat_map(|track| &track.segments)
+            .flat_map(|segment| {
+                segment.operations.iter().flat_map(move |operation| {
+                    native_render_values(operation)
+                        .into_iter()
+                        .map(move |(target, value)| NativeRenderWrite {
+                            seq: operation.seq,
+                            beat: segment.beat,
+                            target,
+                            value,
+                            relative: operation.operation.rsplit('.').next().is_some_and(
+                                |method| {
+                                    matches!(
+                                        method.to_ascii_lowercase().as_str(),
+                                        "addx"
+                                            | "addy"
+                                            | "addz"
+                                            | "addrotationx"
+                                            | "addrotationy"
+                                            | "addrotationz"
+                                    )
+                                },
+                            ),
+                        })
+                })
+            })
+            .collect::<Vec<_>>();
     writes.sort_by_key(|write| write.seq);
     let mut merged = Vec::<NativeRenderWrite>::with_capacity(writes.len());
-    for write in writes {
+    for mut write in writes {
         if let Some(index) = merged.iter().position(|current| {
             current.target == write.target && (current.beat - write.beat).abs() <= EPSILON
         }) {
+            // Compare the completed frame: y(base); addy(offset) leaves their
+            // sum, not the earlier setter argument. Unanchored additions have
+            // no absolute value here and remain covered by projected geometry.
+            if write.relative
+                && let (
+                    SongLuaOverlayUpdateValue::F32(base),
+                    SongLuaOverlayUpdateValue::F32(offset),
+                ) = (&merged[index].value, &mut write.value)
+            {
+                *offset += *base;
+            }
             merged[index] = write;
-        } else {
+        } else if !write.relative {
             merged.push(write);
         }
     }
@@ -1781,11 +1807,7 @@ fn compiled_update_value_at(
             .abs()
             .total_cmp(&(right.beat - beat).abs())
     })?;
-    let frame_epsilon = if span <= 0.125 {
-        (span * 0.51).max(EPSILON)
-    } else {
-        EPSILON
-    };
+    let frame_epsilon = EPSILON;
     if (nearest.beat - beat).abs() <= frame_epsilon {
         return Some(nearest.value.clone());
     }
@@ -1969,24 +1991,39 @@ fn compare_update_render_values(
                 if exact_ease_is_authoritative {
                     continue;
                 }
-                let actual = compiled_update_value_at(
-                    context,
-                    compiled,
-                    overlay_index,
-                    write.target,
-                    write.beat,
-                )
-                .or_else(|| {
-                    let seconds = song_elapsed_seconds_at(write.beat, context);
-                    let state = compiled_message_state_at(
-                        context,
-                        compiled,
-                        overlay_index,
-                        write.beat,
-                        seconds,
-                    );
-                    overlay_state_render_value(&state, write.target)
-                });
+                let actual = compiled
+                    .overlay_writes
+                    .iter()
+                    .find(|track| {
+                        track.overlay_index == overlay_index && track.target == write.target
+                    })
+                    .and_then(|track| {
+                        track
+                            .samples
+                            .iter()
+                            .find(|sample| (sample.beat - write.beat).abs() <= EPSILON)
+                    })
+                    .map(|sample| sample.value.clone())
+                    .or_else(|| {
+                        compiled_update_value_at(
+                            context,
+                            compiled,
+                            overlay_index,
+                            write.target,
+                            write.beat,
+                        )
+                    })
+                    .or_else(|| {
+                        let seconds = song_elapsed_seconds_at(write.beat, context);
+                        let state = compiled_message_state_at(
+                            context,
+                            compiled,
+                            overlay_index,
+                            write.beat,
+                            seconds,
+                        );
+                        overlay_state_render_value(&state, write.target)
+                    });
                 let Some(actual) = actual else {
                     parity.check(false, || {
                         format!(
@@ -2143,8 +2180,8 @@ fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> Exp
         Some("decelerate") => Some("outQuad"),
         Some("smooth") => Some("smooth"),
         Some("spring") => Some("spring"),
-        Some("bouncebegin") => Some("inBounce"),
-        Some("bounceend") => Some("outBounce"),
+        Some("bouncebegin") => Some("bouncebegin"),
+        Some("bounceend") => Some("bounceend"),
         _ => None,
     };
     let mut block = ExpectedBlock {
@@ -2853,7 +2890,7 @@ fn compiled_command_state_at(
         return overlay.initial_state;
     }
     let mut current = overlay.initial_state;
-    let mut active = None::<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)>;
+    let mut active = None::<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32, f32)>;
     for event in compiled.messages.iter().filter(|event| event.beat <= beat) {
         let Some(command) = overlay
             .message_commands
@@ -2863,15 +2900,16 @@ fn compiled_command_state_at(
             continue;
         };
         let event_seconds = song_elapsed_seconds_at(event.beat, context);
-        if let Some((blocks, base, start_seconds)) = active.take() {
-            current = overlay_state_after_blocks(base, blocks, event_seconds - start_seconds);
+        if let Some((blocks, base, start_seconds, advance)) = active.take() {
+            current =
+                overlay_state_after_blocks(base, blocks, event_seconds - start_seconds + advance);
         }
         let base = current;
-        current = overlay_state_after_blocks(base, &command.blocks, 0.0);
-        active = Some((&command.blocks, base, event_seconds));
+        current = overlay_state_after_blocks(base, &command.blocks, command.frame_advance);
+        active = Some((&command.blocks, base, event_seconds, command.frame_advance));
     }
-    if let Some((blocks, base, start_seconds)) = active {
-        current = overlay_state_after_blocks(base, blocks, seconds - start_seconds);
+    if let Some((blocks, base, start_seconds, advance)) = active {
+        current = overlay_state_after_blocks(base, blocks, seconds - start_seconds + advance);
     }
     current
 }
@@ -3402,7 +3440,213 @@ fn waltz_runtime_matches_native() {
 }
 
 #[test]
+fn fallback_tweens_match_native_drawing() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&dir, "Fallback Tweens");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 0.5;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("fallback-tweens.lua").as_path()], 0, &context).unwrap();
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-actors/fallback-tweens.json")).unwrap(),
+    )
+    .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let time = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(&compiled[0], &context, time, time);
+        for actor in sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["kind"] == "sprite")
+        {
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == actor["name"].as_str())
+                .unwrap();
+            let state = states[index];
+            assert_eq!(
+                state.visible,
+                actor["visible"].as_bool().unwrap(),
+                "{} at {time}",
+                actor["name"]
+            );
+            checks += 1;
+            if !state.visible {
+                continue;
+            }
+            let vertices = compiled_world_vertices(state, [64.0, 32.0]);
+            for corner in 0..4 {
+                for axis in 0..2 {
+                    let expected = actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["screen"]
+                        [axis]
+                        .as_f64()
+                        .unwrap() as f32;
+                    let actual = vertices[corner][axis];
+                    assert!(
+                        (expected - actual).abs() <= 0.002,
+                        "{} at {time}: {expected} vs {actual}",
+                        actor["name"]
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 184);
+}
+
+#[test]
+fn queued_update_matches_native_order() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/phase-update.json"));
+    let mut context = SongLuaCompileContext::new(&dir, "Phase Update");
+    context.screen_width = 854.0;
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("phase-update.lua").as_path()], 0, &context).unwrap();
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native queued update order");
+}
+
+#[test]
+fn retarget_update_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/retarget-update.json"));
+    let mut context = SongLuaCompileContext::new(&dir, "Retarget Update");
+    context.screen_width = 854.0;
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("retarget-update.lua").as_path()], 0, &context).unwrap();
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native overlay destination changes");
+}
+
+#[test]
+fn queued_commands_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    for name in [
+        "queued-effects",
+        "queued-fade",
+        "queued-chain",
+        "callback-phase",
+        "finish-queue",
+    ] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json"
+        )));
+        let mut context = SongLuaCompileContext::new(&dir, &trace.title);
+        context.screen_width = 854.0;
+        context.music_length_seconds = trace.end_position.seconds;
+        context.song_display_bpms = [60.0; 2];
+        context.song_timing_bpms = vec![(0.0, 60.0)];
+        let compiled =
+            compile_song_lua_layers(&[dir.join(format!("{name}.lua")).as_path()], 0, &context)
+                .unwrap();
+        let parity = compare_semantics(&trace, &compiled, 0, &context);
+        eprintln!("{}", parity.summary(&trace.title));
+        parity.assert_complete(name);
+    }
+}
+
+#[test]
+fn random_probe_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/random-probe.json"));
+    let mut context = SongLuaCompileContext::new(&dir, "Random Probe");
+    context.screen_width = 854.0;
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("random-probe.lua").as_path()], 0, &context).unwrap();
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    assert!(
+        parity
+            .sections
+            .iter()
+            .map(|section| section.checks)
+            .sum::<usize>()
+            > 300,
+        "native random probe fixture lost its writes"
+    );
+    parity.assert_complete("native random probe");
+}
+
+#[test]
+fn additive_update_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/additive-update.json"));
+    let mut context = SongLuaCompileContext::new(&dir, "Additive Update");
+    context.screen_width = 854.0;
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("additive-update.lua").as_path()], 0, &context).unwrap();
+    let definition = trace
+        .actor_definitions
+        .iter()
+        .find(|a| a.name.as_deref() == Some("SetterAdd"))
+        .unwrap();
+    let writes = native_update_render_writes_all(&trace, definition);
+    use SongLuaOverlayUpdateTarget as Target;
+    for (target, expected) in [
+        (Target::X, 105.0),
+        (Target::Y, 160.0),
+        (Target::Z, 3.0),
+        (Target::RotationX, 12.0),
+        (Target::RotationY, 17.0),
+        (Target::RotationZ, 34.0),
+    ] {
+        let write = writes.iter().find(|w| w.target == target).unwrap();
+        assert_eq!(
+            write.value,
+            SongLuaOverlayUpdateValue::F32(expected),
+            "{target:?}"
+        );
+    }
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    assert!(parity.checks() > 500);
+    parity.assert_complete("native additive update");
+}
+
+#[test]
 fn perspective_float_matches_native_drawing() {
+    compare_lua_perspective("perspective-float.lua");
+}
+
+#[test]
+fn perspective_fields_match_native_drawing() {
+    compare_lua_perspective("perspective-fields.lua");
+}
+
+fn compare_lua_perspective(entry: &str) {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let song_dir = root.join("tests/fixtures/song-lua");
@@ -3410,12 +3654,8 @@ fn perspective_float_matches_native_drawing() {
     context.screen_width = 854.0;
     context.music_length_seconds = 83.7;
     context.song_timing_bpms = vec![(0.0, 60.0)];
-    let compiled = compile_song_lua_layers(
-        &[song_dir.join("perspective-float.lua").as_path()],
-        0,
-        &context,
-    )
-    .expect("compile perspective fixture");
+    let compiled = compile_song_lua_layers(&[song_dir.join(entry).as_path()], 0, &context)
+        .expect("compile perspective fixture");
     let native: Value = serde_json::from_slice(
         &fs::read(
             root.join("tests/fixtures/itgmania-song-lua-micro/perspective-float-native.json"),
