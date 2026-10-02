@@ -174,3 +174,7 @@ mod spline_solver_perf;
 #[cfg(test)]
 #[path = "../tests/perf/spline_workspace.rs"]
 mod spline_workspace_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/message_lookup.rs"]
+mod message_lookup_perf;

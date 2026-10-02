@@ -1453,12 +1453,25 @@ pub fn song_lua_message_command_index(
     message: &str,
 ) -> Option<usize> {
     let found = if message.bytes().any(|byte| byte.is_ascii_uppercase()) {
-        indices.entries.binary_search_by(|entry| {
-            song_lua_message_key(&indices.keys, entry)
-                .iter()
-                .copied()
-                .cmp(message.bytes().map(|byte| byte.to_ascii_lowercase()))
-        })
+        if message.len() <= 128 {
+            let mut folded = [0u8; 128];
+            for (out, byte) in folded.iter_mut().zip(message.bytes()) {
+                *out = byte.to_ascii_lowercase();
+            }
+            let key = &folded[..message.len()];
+            indices
+                .entries
+                .binary_search_by(|entry| song_lua_message_key(&indices.keys, entry).cmp(key))
+        } else {
+            // Long authored names keep the original streaming comparison,
+            // without allocating temporary storage or imposing a new limit.
+            indices.entries.binary_search_by(|entry| {
+                song_lua_message_key(&indices.keys, entry)
+                    .iter()
+                    .copied()
+                    .cmp(message.bytes().map(|byte| byte.to_ascii_lowercase()))
+            })
+        }
     } else {
         indices.entries.binary_search_by(|entry| {
             song_lua_message_key(&indices.keys, entry).cmp(message.as_bytes())

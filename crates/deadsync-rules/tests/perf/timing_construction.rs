@@ -66,6 +66,8 @@ impl TimingData {
             fakes,
             speed_runtime: Arc::default(),
             scroll_prefix: Arc::default(),
+            pause_rows_sorted: [false; 2],
+            scroll_prefix_sorted: false,
             global_offset_sec,
             global_offset_ns,
             max_bpm,
@@ -155,7 +157,11 @@ fn construction_fixture(count: usize, modifiers: bool) -> TimingSegments {
 }
 
 fn assert_same_timing(old: &TimingData, new: &TimingData) {
-    assert_eq!(format!("{old:?}"), format!("{new:?}"));
+    let mut old_tables = old.clone();
+    // Advisory lookup metadata is deliberately absent from the legacy constructor.
+    old_tables.pause_rows_sorted = new.pause_rows_sorted;
+    old_tables.scroll_prefix_sorted = new.scroll_prefix_sorted;
+    assert_eq!(format!("{old_tables:?}"), format!("{new:?}"));
     for (a, b) in old.beat_to_time.iter().zip(new.beat_to_time.iter()) {
         assert_eq!(
             (a.beat.to_bits(), a.time_ns, a.bpm.to_bits()),
@@ -336,7 +342,7 @@ fn row_time_cache_requires_usable_unique_grid_aligned_bpms() {
         };
         let old = TimingData::legacy_from_segments(0.0, 0.0, &segments, &[]);
         let new = TimingData::from_segments(0.0, 0.0, &segments, &[]);
-        assert_eq!(format!("{old:?}"), format!("{new:?}"));
+        assert_same_timing(&old, &new);
         assert_eq!(new.supports_row_time_cache(), supported);
     }
 }

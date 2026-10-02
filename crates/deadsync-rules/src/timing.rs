@@ -392,6 +392,8 @@ pub struct TimingData {
     fakes: Arc<[FakeSegment]>,
     speed_runtime: Arc<[SpeedRuntime]>,
     scroll_prefix: Arc<[ScrollPrefix]>,
+    pause_rows_sorted: [bool; 2],
+    scroll_prefix_sorted: bool,
     global_offset_sec: f32,
     global_offset_ns: TimingNs,
     max_bpm: f32,
@@ -498,9 +500,9 @@ impl BeatTimeCache {
 
 /// Game-thread cursor for nondecreasing displayed-beat queries.
 ///
-/// The cursor borrows no storage and allocates nothing. Rewinds restart its
-/// linear scroll-prefix scan; ordinary chart-order queries advance each prefix
-/// at most once during the load-time batch.
+/// The cursor borrows no storage and allocates nothing. Initial queries and
+/// rewinds search validated scroll prefixes; ordinary chart-order queries
+/// advance each prefix at most once during the batch.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DisplayedBeatCache {
     next_prefix: usize,
@@ -602,6 +604,32 @@ fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[
     unsafe { output.assume_init() }
 }
 
+// Stop/delay tables are private and immutable. Validate row order at load,
+// retaining the original scan for malformed tables and tiny inputs.
+#[inline(always)]
+fn pause_at_row<T>(
+    segments: &[T],
+    row: i32,
+    sorted: bool,
+    value: impl Fn(&T) -> (f32, f32),
+) -> bool {
+    let matches = |segment: &T| {
+        let (beat, duration) = value(segment);
+        beat_to_note_row(beat) == row && duration.is_finite() && duration != 0.0
+    };
+    if segments.len() <= 8 || !sorted {
+        return segments.iter().any(matches);
+    }
+    if matches(&segments[0]) {
+        return true;
+    }
+    let start = segments.partition_point(|segment| beat_to_note_row(value(segment).0) < row);
+    segments[start..]
+        .iter()
+        .take_while(|segment| beat_to_note_row(value(segment).0) == row)
+        .any(matches)
+}
+
 impl TimingData {
     #[must_use]
     pub fn from_segments(
@@ -653,6 +681,14 @@ impl TimingData {
             last_bpm = bpm;
         }
 
+        // sorted_timing_table orders non-NaN beats. Row rounding and the
+        // saturating float-to-int cast are monotonic, including infinities.
+        // NaNs can break that order, so those tables retain the scan.
+        let pause_rows_sorted = [
+            stops.len() > 8 && stops.iter().all(|segment| !segment.beat.is_nan()),
+            delays.len() > 8 && delays.iter().all(|segment| !segment.beat.is_nan()),
+        ];
+        let scroll_prefix_sorted = scrolls.windows(2).all(|pair| pair[0].beat <= pair[1].beat);
         let mut timing_with_stops = Self {
             row_to_beat: Arc::new(row_to_beat.to_vec()),
             beat_to_time: Arc::new(beat_to_time),
@@ -664,6 +700,8 @@ impl TimingData {
             fakes,
             speed_runtime: Arc::default(),
             scroll_prefix: Arc::default(),
+            pause_rows_sorted,
+            scroll_prefix_sorted,
             global_offset_sec,
             global_offset_ns,
             max_bpm,
@@ -736,10 +774,17 @@ impl TimingData {
 
     #[inline(always)]
     fn has_stop_or_delay_at_row(&self, row: i32) -> bool {
-        self.stops.iter().any(|seg| {
-            beat_to_note_row(seg.beat) == row && seg.duration.is_finite() && seg.duration != 0.0
-        }) || self.delays.iter().any(|seg| {
-            beat_to_note_row(seg.beat) == row && seg.duration.is_finite() && seg.duration != 0.0
+        if self.stops.len() <= 8 && self.delays.len() <= 8 {
+            return self.stops.iter().any(|seg| {
+                beat_to_note_row(seg.beat) == row && seg.duration.is_finite() && seg.duration != 0.0
+            }) || self.delays.iter().any(|seg| {
+                beat_to_note_row(seg.beat) == row && seg.duration.is_finite() && seg.duration != 0.0
+            });
+        }
+        pause_at_row(&self.stops, row, self.pause_rows_sorted[0], |seg| {
+            (seg.beat, seg.duration)
+        }) || pause_at_row(&self.delays, row, self.pause_rows_sorted[1], |seg| {
+            (seg.beat, seg.duration)
         })
     }
 
@@ -1468,9 +1513,17 @@ impl TimingData {
             return self.get_displayed_beat(beat);
         }
         if cache.next_prefix > self.scroll_prefix.len()
-            || (cache.initialized && beat < cache.last_beat)
+            || !cache.initialized
+            || beat < cache.last_beat
         {
             cache.reset();
+            if self.scroll_prefix.len() > 8 && self.scroll_prefix_sorted {
+                // Initial queries and rewinds can start deep into a large table.
+                // Keep this search in the reset branch, off the forward path.
+                cache.next_prefix = self
+                    .scroll_prefix
+                    .partition_point(|prefix| prefix.beat <= beat);
+            }
         }
         while cache.next_prefix < self.scroll_prefix.len()
             && self.scroll_prefix[cache.next_prefix].beat <= beat
@@ -3609,3 +3662,7 @@ mod histogram_storage_perf;
 #[cfg(test)]
 #[path = "../tests/perf/row_traversal.rs"]
 mod row_traversal_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/timing_queries.rs"]
+mod timing_queries_perf;
