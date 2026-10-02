@@ -183,3 +183,7 @@ mod message_lookup_perf;
 #[allow(clippy::too_many_arguments)]
 #[path = "../tests/perf/event_preparation.rs"]
 mod event_preparation_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/window_batches.rs"]
+mod window_batches_perf;

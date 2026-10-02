@@ -1208,15 +1208,25 @@ impl SongLuaNoteHideWindows {
             return;
         }
         let mut points = vec![[0.0; 4]; size];
+        let mut filled_end = 0;
         for window in self.column_windows(column) {
             if !window.start_beat.is_finite() || !window.end_beat.is_finite() {
                 continue;
             }
-            let start = (window.start_beat / beats_per_t).round().max(0.0) as usize;
-            let end = (window.end_beat / beats_per_t).round().max(0.0) as usize;
-            for point in points.iter_mut().take(end.saturating_add(1)).skip(start) {
+            // Lane windows are ordered by start beat. Paint only the uncovered
+            // suffix of overlapping ranges, preserving inclusive rounded ends.
+            let start =
+                ((window.start_beat / beats_per_t).round().max(0.0) as usize).max(filled_end);
+            let end = ((window.end_beat / beats_per_t).round().max(0.0) as usize)
+                .saturating_add(1)
+                .min(size);
+            if start >= end {
+                continue;
+            }
+            for point in &mut points[start..end] {
                 point[0] = -1.0;
             }
+            filled_end = end;
         }
         if size == 2 {
             points[0][1] = points[1][0] - points[0][0];
@@ -3364,60 +3374,122 @@ pub fn song_lua_extend_ease_tails(
     out: &mut [SongLuaEaseMaskWindow],
     constants: &[AttackMaskWindow],
 ) {
-    const SAME_TICK_EPSILON: f32 = 0.001;
-
     if out.iter().any(|window| !window.start_second.is_finite()) {
         song_lua_extend_ease_tails_nonfinite(out, constants);
         return;
     }
-
-    with_song_lua_tail_indices(out.len(), |indices| {
-        indices.sort_unstable_by(|&left, &right| {
-            out[left]
-                .target
-                .cmp(&out[right].target)
-                .then_with(|| out[left].start_second.total_cmp(&out[right].start_second))
-                .then_with(|| left.cmp(&right))
+    let compare = |left: &SongLuaEaseMaskWindow, right: &SongLuaEaseMaskWindow| {
+        left.target
+            .cmp(&right.target)
+            .then_with(|| left.start_second.total_cmp(&right.start_second))
+    };
+    // Existing order already includes stable original-index ties. Reuse it
+    // directly instead of allocating and sorting an identity permutation.
+    if out
+        .windows(2)
+        .all(|pair| compare(&pair[0], &pair[1]) != std::cmp::Ordering::Greater)
+    {
+        song_lua_extend_ease_tails_ordered(out, constants, |position| position);
+    } else {
+        with_song_lua_tail_indices(out.len(), |indices| {
+            indices.sort_unstable_by(|&left, &right| {
+                compare(&out[left], &out[right]).then_with(|| left.cmp(&right))
+            });
+            song_lua_extend_ease_tails_ordered(out, constants, |position| indices[position]);
         });
-        let mut group_start = 0;
-        while group_start < indices.len() {
-            let target = out[indices[group_start]].target;
-            let group_end = indices[group_start..]
-                .partition_point(|&index| out[index].target == target)
-                + group_start;
-            let mut next = group_start + 1;
-            for position in group_start..group_end {
-                next = next.max(position + 1);
-                let index = indices[position];
-                let start_second = out[index].start_second;
-                while next < group_end
-                    && out[indices[next]].start_second <= start_second + SAME_TICK_EPSILON
-                {
-                    next += 1;
-                }
+    }
+}
 
-                let window = &out[index];
-                let default_end =
-                    if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
-                        window.sustain_end_second
-                    } else {
-                        f32::MAX
-                    };
-                let next_start = (next < group_end).then(|| out[indices[next]].start_second);
-                let cutoff_second = constants
+fn song_lua_extend_ease_tails_ordered(
+    out: &mut [SongLuaEaseMaskWindow],
+    constants: &[AttackMaskWindow],
+    index_at: impl Fn(usize) -> usize,
+) {
+    const SAME_TICK_EPSILON: f32 = 0.001;
+
+    // Bounded stack scratch avoids adding heap traffic to preparation.
+    // Larger constant sets retain the scalar scan.
+    let mut cutoffs = [(0.0f32, 0.0f32); SONG_LUA_TAIL_STACK_CAPACITY];
+    let mut group_start = 0;
+    while group_start < out.len() {
+        let target = out[index_at(group_start)].target;
+        let mut group_end = group_start + 1;
+        while group_end < out.len() && out[index_at(group_end)].target == target {
+            group_end += 1;
+        }
+        let indexed_constants = (8..=SONG_LUA_TAIL_STACK_CAPACITY).contains(&constants.len())
+            && group_end - group_start >= 32;
+        let mut cutoff_len = 0;
+        if indexed_constants {
+            for constant in constants {
+                if constant.start_second.is_finite()
+                    && constant.end_second.is_finite()
+                    && song_lua_constant_sets_target(constant, target)
+                {
+                    cutoffs[cutoff_len] = (constant.end_second, constant.start_second);
+                    cutoff_len += 1;
+                }
+            }
+            cutoffs[..cutoff_len].sort_unstable_by(|left, right| left.0.total_cmp(&right.0));
+            let mut earliest = f32::INFINITY;
+            for cutoff in cutoffs[..cutoff_len].iter_mut().rev() {
+                earliest = earliest.min(cutoff.1);
+                cutoff.1 = earliest;
+            }
+        }
+        let mut next = group_start + 1;
+        for position in group_start..group_end {
+            next = next.max(position + 1);
+            let index = index_at(position);
+            let start_second = out[index].start_second;
+            while next < group_end
+                && out[index_at(next)].start_second <= start_second + SAME_TICK_EPSILON
+            {
+                next += 1;
+            }
+
+            let window = &out[index];
+            let default_end = if window.sustain_end_second > window.end_second + SAME_TICK_EPSILON {
+                window.sustain_end_second
+            } else {
+                f32::MAX
+            };
+            let next_start = (next < group_end).then(|| out[index_at(next)].start_second);
+            let cutoff_second = if indexed_constants && window.end_second.is_finite() {
+                let boundary = window.end_second + SAME_TICK_EPSILON;
+                let first = cutoffs[..cutoff_len].partition_point(|cutoff| cutoff.0 <= boundary);
+                let earliest = cutoffs[..cutoff_len].get(first).map(|cutoff| cutoff.1);
+                match earliest {
+                    Some(start) if start <= boundary => Some(
+                        next_start.map_or(window.end_second, |next| next.min(window.end_second)),
+                    ),
+                    // Retain original fold order for opposite signed zeros.
+                    Some(0.0) => constants
+                        .iter()
+                        .filter_map(|constant| {
+                            song_lua_constant_cutoff_second(constant, window, SAME_TICK_EPSILON)
+                        })
+                        .fold(next_start, |acc, start| {
+                            Some(acc.map_or(start, |current| current.min(start)))
+                        }),
+                    Some(start) => Some(next_start.map_or(start, |next| next.min(start))),
+                    None => next_start,
+                }
+            } else {
+                constants
                     .iter()
                     .filter_map(|constant| {
                         song_lua_constant_cutoff_second(constant, window, SAME_TICK_EPSILON)
                     })
                     .fold(next_start, |acc, start| {
                         Some(acc.map_or(start, |current| current.min(start)))
-                    });
-                out[index].sustain_end_second =
-                    cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
-            }
-            group_start = group_end;
+                    })
+            };
+            out[index].sustain_end_second =
+                cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
         }
-    });
+        group_start = group_end;
+    }
 }
 
 fn song_lua_extend_column_offset_tails_nonfinite(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
@@ -4844,6 +4916,10 @@ impl ActiveWindowIndex {
             return;
         }
 
+        // Small crossings keep individual insertion. After 32 out-of-order
+        // activations, append the rest and sort once to bound vector shifting.
+        let mut individual_insertions = 0;
+        let mut needs_sort = false;
         while self.next_start_second <= now {
             let index = self.start_order[self.next_start];
             self.next_start += 1;
@@ -4854,14 +4930,21 @@ impl ActiveWindowIndex {
             if is_active(&windows[index], now) {
                 if self.active.last().is_none_or(|&last| last < index) {
                     self.active.push(index);
+                } else if needs_sort || individual_insertions == 32 {
+                    self.active.push(index);
+                    needs_sort = true;
                 } else {
                     let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
                     self.active.insert(insert_at, index);
+                    individual_insertions += 1;
                 }
                 self.next_expiry_second =
                     self.next_expiry_second.min(expiry_second(&windows[index]));
                 self.stats.activations = self.stats.activations.saturating_add(1);
             }
+        }
+        if needs_sort {
+            self.active.sort_unstable();
         }
         if self.next_expiry_second <= now {
             let previous_len = self.active.len();
