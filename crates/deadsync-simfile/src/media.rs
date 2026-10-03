@@ -225,14 +225,13 @@ pub fn resolve_foreground_media_dir(dir: &Path) -> Option<PathBuf> {
         return None;
     };
     let mut best: Option<(u8, PathBuf)> = None;
-    for path in read_dir
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-    {
+    for path in read_dir.flatten().map(|entry| entry.path()) {
         let Some(rank) = foreground_media_ext_rank(&path) else {
             continue;
         };
+        if !path.is_file() {
+            continue;
+        }
         if best.as_ref().is_none_or(|(best_rank, best_path)| {
             foreground_media_candidate_cmp(rank, &path, *best_rank, best_path).is_lt()
         }) {
@@ -288,6 +287,10 @@ pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
             .map(|index| index as u8 + 1)
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/foreground_filtering.rs"]
+mod foreground_filtering_perf;
 
 #[must_use]
 pub fn is_bgchange_movie_path(path: &Path) -> bool {

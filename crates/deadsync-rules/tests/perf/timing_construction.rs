@@ -1,3 +1,4 @@
+// Private BPM table initializers adapted to Arc slices for regression compatibility.
 // Reference routines frozen from c4aeed4fe / 0.5.1135.
 use super::*;
 use std::hint::black_box;
@@ -57,7 +58,7 @@ impl TimingData {
 
         let mut timing_with_stops = Self {
             row_to_beat: Arc::new(vec![]),
-            beat_to_time: Arc::new(beat_to_time),
+            beat_to_time: Arc::from(beat_to_time),
             stops,
             delays,
             warps,
@@ -84,7 +85,7 @@ impl TimingData {
                 new_point
             })
             .collect();
-        timing_with_stops.beat_to_time = Arc::new(re_beat_to_time);
+        timing_with_stops.beat_to_time = Arc::from(re_beat_to_time);
 
         timing_with_stops.rebuild_speed_runtime();
 

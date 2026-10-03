@@ -1,3 +1,4 @@
+// Private BPM table initializers adapted to Arc slices for regression compatibility.
 // Frozen from 5abf1dd0b (0.5.1684), with new metadata defaulted for layout compatibility.
 use super::*;
 impl TimingData {
@@ -53,7 +54,7 @@ impl TimingData {
 
         let mut timing_with_stops = Self {
             row_to_beat: Arc::new(row_to_beat.to_vec()),
-            beat_to_time: Arc::new(beat_to_time),
+            beat_to_time: Arc::from(beat_to_time),
             stops,
             delays,
             warps,

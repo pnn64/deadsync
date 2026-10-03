@@ -380,7 +380,7 @@ pub struct TimingData {
     /// A pre-calculated mapping from a note row index to its precise beat.
     row_to_beat: Arc<Vec<f32>>,
     /// A pre-calculated mapping from a beat to its precise time in seconds.
-    beat_to_time: Arc<Vec<BeatTimePoint>>,
+    beat_to_time: Arc<[BeatTimePoint]>,
     // Song-lifetime, exact-size tables built at chart load. They are immutable
     // during play, shared by TimingData clones, and freed with the last clone.
     // Reads never allocate, miss, evict, prune, or require synchronization.
@@ -604,6 +604,31 @@ fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[
     unsafe { output.assume_init() }
 }
 
+fn beat_time_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BeatTimePoint]>, f32) {
+    let mut current_time = 0.0;
+    let mut last_beat = 0.0;
+    let mut last_bpm = bpms[0].1;
+    let mut max_bpm = 0.0;
+    let points = exact_arc(bpms.len(), |index| {
+        let (beat, bpm) = bpms[index];
+        if beat > last_beat && last_bpm > 0.0 {
+            current_time = (beat - last_beat).mul_add(60.0 / last_bpm, current_time);
+        }
+        let point = BeatTimePoint {
+            beat,
+            time_ns: timing_ns_add_seconds(song_offset_ns, current_time),
+            bpm,
+        };
+        if bpm.is_finite() && bpm > max_bpm {
+            max_bpm = bpm;
+        }
+        last_beat = beat;
+        last_bpm = bpm;
+        point
+    });
+    (points, max_bpm)
+}
+
 // Stop/delay tables are private and immutable. Validate row order at load,
 // retaining the original scan for malformed tables and tiny inputs.
 #[inline(always)]
@@ -659,27 +684,7 @@ impl TimingData {
         let song_offset_ns = timing_ns_from_seconds(song_offset_sec);
         let global_offset_ns = timing_ns_from_seconds(global_offset_sec);
 
-        let mut beat_to_time = Vec::with_capacity(parsed_bpms.len());
-        let mut current_time = 0.0;
-        let mut last_beat = 0.0;
-        let mut last_bpm = parsed_bpms[0].1;
-        let mut max_bpm = 0.0;
-
-        for &(beat, bpm) in parsed_bpms.as_ref() {
-            if beat > last_beat && last_bpm > 0.0 {
-                current_time = (beat - last_beat).mul_add(60.0 / last_bpm, current_time);
-            }
-            beat_to_time.push(BeatTimePoint {
-                beat,
-                time_ns: timing_ns_add_seconds(song_offset_ns, current_time),
-                bpm,
-            });
-            if bpm.is_finite() && bpm > max_bpm {
-                max_bpm = bpm;
-            }
-            last_beat = beat;
-            last_bpm = bpm;
-        }
+        let (beat_to_time, max_bpm) = beat_time_points(&parsed_bpms, song_offset_ns);
 
         // sorted_timing_table orders non-NaN beats. Row rounding and the
         // saturating float-to-int cast are monotonic, including infinities.
@@ -691,7 +696,7 @@ impl TimingData {
         let scroll_prefix_sorted = scrolls.windows(2).all(|pair| pair[0].beat <= pair[1].beat);
         let mut timing_with_stops = Self {
             row_to_beat: Arc::new(row_to_beat.to_vec()),
-            beat_to_time: Arc::new(beat_to_time),
+            beat_to_time,
             stops,
             delays,
             warps,
@@ -1637,7 +1642,7 @@ fn find_event(
     start: GetBeatStarts,
     beat: f32,
     find_marker: bool,
-    bpms: &Arc<Vec<BeatTimePoint>>,
+    bpms: &[BeatTimePoint],
     warps: &[WarpSegment],
     stops: &[StopSegment],
     delays: &[DelaySegment],
@@ -3698,3 +3703,11 @@ mod row_traversal_perf;
 #[cfg(test)]
 #[path = "../tests/perf/timing_queries.rs"]
 mod timing_queries_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/timing_storage.rs"]
+mod timing_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/timing_full.rs"]
+mod timing_full_perf;
