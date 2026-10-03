@@ -1233,8 +1233,18 @@
       "dropped_events": 0,
       "trace_until_beat": 836,
       "runtime_actor_ids": "unique per occurrence",
-      "uncompressed_sha256": "123fdd5c599807f307d133aa66b4b1edfe327495de88e09db636072fb0ee419d",
-      "semantic_host_sha256": "e9cbacb902bd4193771014e1e1c96bdc22137f4513784331d563568778b6ec00"
+      "uncompressed_sha256": "e16dbaf5b1e109b51de64e60e2506a8ee07c7c602f7e22be99871a1253472f92",
+      "semantic_host_sha256": "bf85a744dc0ebdf2c4417b652ddaf01476fab6d8de4d3ebbcc5f8d9d3f077d45",
+      "reference_theme": {
+        "name": "Simply Love",
+        "metrics_source": "Simply-Love-SM5-8ms-iamchris4life/metrics.ini",
+        "metrics_source_sha256": "21216ff26ae7687a2faa39cf317a031a84948e1403ed4ca512f0f65d32ed6d00",
+        "player_metrics": {
+          "ReceptorArrowsYStandard": -125,
+          "ReceptorArrowsYReverse": 145
+        },
+        "correction": "Replace the semantic host's missing-metric zero fallback."
+      }
     }
   ]
 }

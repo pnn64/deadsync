@@ -4784,6 +4784,21 @@ fn recurring_stop_matches_native() {
 }
 
 #[test]
+fn simply_love_receptor_metrics_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/receptor-metrics.json.zst"),
+    );
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/receptor-metrics.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Receptor metrics"));
+    assert_eq!(parity.checks(), 20);
+    parity.assert_complete("Receptor metrics");
+}
+
+#[test]
 fn recurring_follow_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

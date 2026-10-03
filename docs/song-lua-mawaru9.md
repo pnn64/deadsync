@@ -79,7 +79,7 @@ limit. Its per-entry provenance is recorded in the selected manifest;
 older entries keep their original provenance.
 
 Decompressed SHA256:
-`123fdd5c599807f307d133aa66b4b1edfe327495de88e09db636072fb0ee419d`.
+`e16dbaf5b1e109b51de64e60e2506a8ee07c7c602f7e22be99871a1253472f92`.
 Compression was checked with an exact byte-for-byte round trip.
 
 Regenerate from the workspace root after a relevant oracle or song change:
@@ -87,7 +87,7 @@ Regenerate from the workspace root after a relevant oracle or song change:
 ```powershell
 $env:ITGMANIA_SONG_LUA_NOTESKIN_ROOT = (Resolve-Path deadsync/assets/noteskins).Path
 $env:ITGMANIA_SONG_LUA_NOTESKIN = 'cyber'
-cargo run --release --manifest-path itgmania-harness-rs/Cargo.toml -- song-lua-semantic-baseline lua-songs/mawaru9 --out .tmp/mawaru9-native-instances --beat-step 0.25 --max-events 2000000
+cargo run --release --manifest-path itgmania-harness-rs/Cargo.toml -- song-lua-semantic-baseline lua-songs/mawaru9 --out .tmp/mawaru9-native-receptor-metrics --beat-step 0.25 --max-events 2000000
 ```
 
 Run the complete comparison from `deadsync/`:
@@ -198,7 +198,7 @@ contain `allowed/` and `lua-songs/`; use the workspace override for those tests.
 
 ## Complete song audit
 
-After these fixes: **112,165 / 117,302 checks pass (95.62%)**. The ignored
+With the corrected theme reference: **114,093 / 117,302 checks pass (97.26%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -211,7 +211,7 @@ DeadSync comparison.
 | Render persistence | 6,571 / 6,581 |
 | Update values | 23,052 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 58,885 / 63,862 |
+| Projected geometry | 60,813 / 63,862 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 223 / 224 |
 | Message commands | 226 / 227 |
@@ -220,10 +220,11 @@ DeadSync comparison.
 The former Sprite/Model ordering difference came from unpinned noteskins;
 all four layer-order checks pass with Cyber. The complete capture and
 instance-aware comparison still report the remaining gaps rather than
-changing expected values or omitting checks. The native capture is unchanged.
+changing comparator tolerances or omitting checks. The native capture was
+regenerated for the receptor metric correction documented below.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 5,137, with 571 detailed gap reports. Before the affine
+checks are now 3,209, with 393 detailed gap reports. Before the affine
 fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
 geometry checks. The parent-translation pass retained 106,321 passing checks;
 the ancestor-scale pass added another 25 without changing the reference.
@@ -250,7 +251,7 @@ gaps include Reisen pool writes and visibility, projected sprite bounds, one pla
 range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
 beat 540.076 and stateful `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru-recurring-follow-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-receptor-metrics-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -495,7 +496,7 @@ cargo test --test song_lua_itgmania_semantic_parity recurring_follow_matches_nat
 The 0.5.1721 complete audit took **376.80 seconds**: 296.69 seconds compiling,
 50.29 seconds comparing projected geometry and 21.50 seconds comparing
 vibration. It passes 112,165/117,302, adding only eight passing geometry checks
-to the complete song with the same native reference and denominator. The
+to the complete song with the same original native reference and denominator. The
 isolated Reisen result does not establish parity for its full-song context:
 pooled arrows still differ in visibility, selected targets and raw writes.
 Investigate the preceding shared state and random-call sequence before
@@ -506,6 +507,63 @@ both repositories. The regular follow test checks both fixtures, totaling
 1,748 independent native comparisons. Native expectations, comparator
 tolerances and the full-song reference are unchanged. These timings measure
 the debug audit, not gameplay performance.
+
+## Receptor metric reference correction
+
+The semantic host advertised Simply Love but omitted
+`Player/ReceptorArrowsYStandard` and `Player/ReceptorArrowsYReverse`.
+Its `THEME:GetMetric` fallback returned zero. The checked-out
+`Simply-Love-SM5-8ms-iamchris4life/metrics.ini`, lines 2344-2345, defines
+**-125 and 145**. Its SHA256 is
+`21216ff26ae7687a2faa39cf317a031a84948e1403ed4ca512f0f65d32ed6d00`.
+
+Mawaru9 computes `mawaru9_receptmove = standard + 125` and broadcasts
+`SetNoteField`. The missing metric therefore moved the native reference's
+Reisen receptors and their arrows down by 125 pixels. DeadSync already
+exposes the checked-out theme's values. This is an oracle correction; changing
+DeadSync to match the zero fallback would introduce a gameplay error.
+
+The harness now exposes both metrics through `GetMetric` and `HasMetric`.
+Its modifier-query regression checks their presence and exact values. All
+119 regular harness tests pass. The portable `receptor-metrics` fixture
+checks standard and reverse Lua field offsets against a new native capture;
+all **20/20** comparisons pass. Both its native capture and the theme source
+are independent of DeadSync's implementation. The capture has zero errors
+or dropped events and an exact compression round trip: 16,512 bytes to 3,332,
+decoded SHA256
+`981b279dd0f5041aa2d4c93dc7d866766996f670f4d22603c7c2653346395142`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity simply_love_receptor_metrics_match_native -- --exact --nocapture
+```
+
+Other metric-reading song references, including Someone Special, Igaku and
+kaboooooom!, require review after this host correction. Their previous
+passing status does not prove parity with the corrected theme environment.
+
+The replacement full-song capture retains all 2,431 unique actors and 17,930
+frames through beat 836, with zero errors or dropped events. The exact
+compression round trip is 32,629,977 bytes to 1,642,932. Its decoded SHA256
+is recorded above; the former capture's decoded SHA256 was
+`123fdd5c599807f307d133aa66b4b1edfe327495de88e09db636072fb0ee419d`.
+Only four of 8,431 tween tracks and 140 of 1,671 projected vertex tracks
+change; all other trace sections are identical. At beat 141.526, the native
+`def-0762` receptor center moves from Y=240 to the correct Y=115.
+The selected manifest records the metric source, its hash and both values.
+No expected coordinates were edited by hand. The new local capture is
+`.tmp/mawaru9-native-receptor-metrics`; the previous one remains in
+`.tmp/mawaru9-native-instances` for comparison.
+
+The 0.5.1722 complete audit passes **114,093/117,302**, with 60,813/63,862
+projected geometry checks and 393 gap reports. The corrected reference removes
+**1,928 false geometry failures** with the same denominator and unchanged
+DeadSync runtime code and comparator tolerances. It does not resolve the
+remaining Reisen pool writes or visibility: all other comparator tallies are
+unchanged. Overall, 3,209 checks still fail. This full audit took **326.81
+seconds**: 248.56 seconds compiling, 49.50 seconds comparing geometry and
+20.58 seconds comparing vibration. All 80 regular semantic tests pass in both
+repositories, including the new 20-check fixture. Fresh selected-corpus
+coverage checks pass in both copies after the reference replacement.
 
 ## Project scope
 
