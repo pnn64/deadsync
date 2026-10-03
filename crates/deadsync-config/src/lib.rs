@@ -31,3 +31,7 @@ mod writer;
 #[allow(dead_code)]
 #[path = "../../../tests/support/perf.rs"]
 mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/list_writes.rs"]
+mod list_writes_perf;

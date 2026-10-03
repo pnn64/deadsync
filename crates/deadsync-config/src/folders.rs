@@ -1,6 +1,6 @@
 use crate::ini::SimpleIni;
-use crate::writer::push_line;
-use std::path::{Path, PathBuf};
+use std::borrow::Cow;
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdditionalSongFolder {
@@ -46,39 +46,45 @@ fn push_additional_song_folders(raw: &str, writable: bool, out: &mut Vec<Additio
 #[must_use]
 pub fn additional_song_folder_paths(folders: &[AdditionalSongFolder], writable: bool) -> String {
     let mut out = String::new();
+    append_additional_song_folder_paths(&mut out, folders, writable);
+    out
+}
+
+fn append_additional_song_folder_paths(
+    out: &mut String,
+    folders: &[AdditionalSongFolder],
+    writable: bool,
+) {
+    let start = out.len();
     for folder in folders.iter().filter(|folder| folder.writable == writable) {
-        if !out.is_empty() {
+        if out.len() != start {
             out.push(',');
         }
         out.push_str(folder.path.as_str());
     }
-    out
 }
 
 pub fn push_additional_song_folder_option_lines(
     content: &mut String,
     folders: &[AdditionalSongFolder],
 ) {
-    push_line(content, "AdditionalSongFolders", "");
-    push_line(
-        content,
-        "AdditionalSongFoldersWritable",
-        additional_song_folder_paths(folders, true),
-    );
-    push_line(
-        content,
-        "AdditionalSongFoldersReadOnly",
-        additional_song_folder_paths(folders, false),
-    );
+    content.push_str("AdditionalSongFolders=\nAdditionalSongFoldersWritable=");
+    append_additional_song_folder_paths(content, folders, true);
+    content.push_str("\nAdditionalSongFoldersReadOnly=");
+    append_additional_song_folder_paths(content, folders, false);
+    content.push('\n');
 }
 
 #[must_use]
 pub fn song_path_is_writable_for_roots(path: &Path, roots: &[AdditionalSongFolder]) -> bool {
+    if roots.is_empty() {
+        return true;
+    }
     let path = canonical_or_raw(path);
     let mut best: Option<(usize, bool)> = None;
     for root in roots {
         let root_path = canonical_or_raw(Path::new(root.path.as_str()));
-        let Some(len) = root_prefix_len(path.as_path(), root_path.as_path()) else {
+        let Some(len) = root_prefix_len(path.as_ref(), root_path.as_ref()) else {
             continue;
         };
         if best.is_none_or(|(best_len, _)| len >= best_len) {
@@ -88,9 +94,13 @@ pub fn song_path_is_writable_for_roots(path: &Path, roots: &[AdditionalSongFolde
     best.is_none_or(|(_, writable)| writable)
 }
 
-fn canonical_or_raw(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+fn canonical_or_raw(path: &Path) -> Cow<'_, Path> {
+    std::fs::canonicalize(path).map_or(Cow::Borrowed(path), Cow::Owned)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/writable_paths.rs"]
+mod writable_paths_perf;
 
 fn root_prefix_len(path: &Path, root: &Path) -> Option<usize> {
     let mut path_components = path.components();

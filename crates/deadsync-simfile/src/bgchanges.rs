@@ -181,16 +181,15 @@ fn skip_newline_sequence(input: &[u8], index: &mut usize) {
 
 #[must_use]
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
-    contains_ignore_ascii_case(field, ".ini") || contains_ignore_ascii_case(field, ".xml")
+    field
+        .as_bytes()
+        .windows(4)
+        .any(|window| window.eq_ignore_ascii_case(b".ini") || window.eq_ignore_ascii_case(b".xml"))
 }
 
-#[inline]
-fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
-    haystack
-        .as_bytes()
-        .windows(needle.len())
-        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
-}
+#[cfg(test)]
+#[path = "../tests/perf/bg_field_filter.rs"]
+mod bg_field_filter_perf;
 
 #[must_use]
 pub fn parse_bgchange_rate(field: Option<&str>) -> f32 {

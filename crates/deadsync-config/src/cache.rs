@@ -1,5 +1,4 @@
 use crate::ini::SimpleIni;
-use crate::writer::push_line;
 
 pub fn load_never_cache_list(conf: &SimpleIni) -> Vec<String> {
     conf.get("Options", "NeverCacheList")
@@ -12,11 +11,6 @@ pub fn load_never_cache_list(conf: &SimpleIni) -> Vec<String> {
 }
 
 #[must_use]
-pub fn never_cache_list_value(list: &[String]) -> String {
-    list.join(",")
-}
-
-#[must_use]
 pub fn group_is_never_cached(list: &[String], group: &str) -> bool {
     let group = group.trim();
     if group.is_empty() {
@@ -26,7 +20,14 @@ pub fn group_is_never_cached(list: &[String], group: &str) -> bool {
 }
 
 pub fn push_never_cache_list_option_line(content: &mut String, list: &[String]) {
-    push_line(content, "NeverCacheList", never_cache_list_value(list));
+    content.push_str("NeverCacheList=");
+    for (index, entry) in list.iter().enumerate() {
+        if index != 0 {
+            content.push(',');
+        }
+        content.push_str(entry);
+    }
+    content.push('\n');
 }
 
 #[cfg(test)]
@@ -53,14 +54,6 @@ mod tests {
     fn never_cache_list_empty_when_missing_or_blank() {
         assert!(load_never_cache_list(&ini("[Options]\n")).is_empty());
         assert!(load_never_cache_list(&ini("[Options]\nNeverCacheList=\n")).is_empty());
-    }
-
-    #[test]
-    fn never_cache_list_value_joins_entries() {
-        assert_eq!(
-            never_cache_list_value(&["Pack A".to_string(), "Pack B".to_string()]),
-            "Pack A,Pack B"
-        );
     }
 
     #[test]
