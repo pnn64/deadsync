@@ -226,7 +226,10 @@ struct SongLuaOverlayUpdateCapture {
 }
 
 struct SongLuaProbeCaptureActive;
-struct SongLuaActionCaptureActive;
+struct SongLuaActionCaptureActive {
+    functions: HashSet<usize>,
+    locals: Vec<FunctionActionSnapshot>,
+}
 pub(crate) struct SongLuaUpdateErrors(pub Vec<String>);
 
 struct SongLuaDeferredMessage {
@@ -2767,6 +2770,18 @@ pub fn call_actor_function(
     command: &Function,
     params: Option<Value>,
 ) -> mlua::Result<()> {
+    // A probe can reach a command through playcommand, a broadcast or a queue,
+    // even when its closure is absent from the entry command's upvalues.
+    let preserve = lua
+        .app_data_mut::<SongLuaActionCaptureActive>()
+        .is_some_and(|mut scope| scope.functions.insert(command.to_pointer() as usize));
+    if preserve {
+        let locals = snapshot_function_locals(lua, command, Vec::new())?;
+        lua.app_data_mut::<SongLuaActionCaptureActive>()
+            .expect("capture scope remains active while snapshotting")
+            .locals
+            .push(locals);
+    }
     let call = || match params {
         Some(params) => command.call::<()>((actor, params)),
         None => command.call::<()>((actor,)),
@@ -12349,6 +12364,7 @@ pub struct SongLuaActionCaptureScope {
     pub previous_actors: Value,
     pub previous_actor_set: Value,
     pub previous_snapshots: Value,
+    previous_capture: Option<SongLuaActionCaptureActive>,
     random: Option<crate::compat::RandomSnapshot>,
 }
 
@@ -12362,13 +12378,18 @@ pub fn begin_action_capture_scope(lua: &Lua) -> mlua::Result<SongLuaActionCaptur
     globals.set(SONG_LUA_CAPTURE_ACTORS_KEY, actors.clone())?;
     globals.set(SONG_LUA_CAPTURE_ACTOR_SET_KEY, lua.create_table()?)?;
     globals.set(SONG_LUA_CAPTURE_SNAPSHOTS_KEY, snapshots.clone())?;
-    lua.set_app_data(SongLuaActionCaptureActive);
+    let previous_capture = lua.remove_app_data::<SongLuaActionCaptureActive>();
+    lua.set_app_data(SongLuaActionCaptureActive {
+        functions: HashSet::new(),
+        locals: Vec::new(),
+    });
     Ok(SongLuaActionCaptureScope {
         actors,
         snapshots,
         previous_actors,
         previous_actor_set,
         previous_snapshots,
+        previous_capture,
         random: crate::compat::preserve_random(lua),
     })
 }
@@ -12377,7 +12398,22 @@ pub fn restore_action_capture_scope(
     lua: &Lua,
     scope: SongLuaActionCaptureScope,
 ) -> mlua::Result<()> {
-    lua.remove_app_data::<SongLuaActionCaptureActive>();
+    let capture = lua.remove_app_data::<SongLuaActionCaptureActive>();
+    if let Some(mut previous) = scope.previous_capture {
+        // Stability probes intentionally run twice with changing locals. A
+        // nested scope restores actor captures but defers locals to its owner.
+        if let Some(capture) = capture {
+            previous.functions.extend(capture.functions);
+            previous.locals.extend(capture.locals);
+        }
+        lua.set_app_data(previous);
+    } else if let Some(capture) = capture {
+        // Shared cells may be encountered by several commands. Undo the last
+        // snapshot first so the earliest value wins, retaining table identity.
+        for locals in capture.locals.into_iter().rev() {
+            restore_function_action_tables(lua, locals)?;
+        }
+    }
     let globals = lua.globals();
     globals.set(SONG_LUA_CAPTURE_ACTORS_KEY, scope.previous_actors)?;
     globals.set(SONG_LUA_CAPTURE_ACTOR_SET_KEY, scope.previous_actor_set)?;
@@ -12664,6 +12700,14 @@ fn snapshot_function_action_tables(
     if let Some(target) = target {
         snapshots.push(snapshot_function_action_table(target)?);
     }
+    snapshot_function_locals(lua, function, snapshots)
+}
+
+fn snapshot_function_locals(
+    lua: &Lua,
+    function: &Function,
+    mut snapshots: Vec<FunctionActionTableSnapshot>,
+) -> mlua::Result<FunctionActionSnapshot> {
     // Host closures have no song locals. Keep their common snapshot path
     // limited to the original shallow table snapshots.
     // SAFETY: exec_raw owns a frame containing this function. The predicate
@@ -12686,6 +12730,9 @@ fn snapshot_function_action_tables(
     // belongs to the existing action capture scope; C closures own host data.
     let mut cells = Vec::new();
     let mut seen = HashSet::new();
+    // Globals are restored by the outer probe. Following _G from a nested
+    // local would traverse host APIs and actor command tables unnecessarily.
+    seen.insert(lua.globals().to_pointer() as usize);
     for snapshot in &snapshots {
         seen.insert(snapshot.table.to_pointer() as usize);
     }
@@ -13085,6 +13132,7 @@ pub(crate) fn capture_deferred_messages<Kind>(
             &drain_tables,
         )
         .map_err(|err| err.to_string())?;
+        let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
         let first = capture_function_action_blocks_inner(
             lua,
             &overlay_tables,
@@ -13103,6 +13151,7 @@ pub(crate) fn capture_deferred_messages<Kind>(
                 false,
             )
         });
+        restore_action_capture_scope(lua, local_scope).map_err(|err| err.to_string())?;
         restore_function_action_tables(lua, snapshots).map_err(|err| err.to_string())?;
         let (Ok(first), Some(Ok(second))) = (first, second) else {
             continue;
@@ -13190,11 +13239,13 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
             snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
         let runner = message_capture_runner(lua, &source, &command_name, &command, &drain_tables)
             .map_err(|err| err.to_string())?;
+        let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
         let first =
             capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false);
         let second = first.as_ref().ok().map(|_| {
             capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false)
         });
+        restore_action_capture_scope(lua, local_scope).map_err(|err| err.to_string())?;
         restore_function_action_tables(lua, table_snapshots).map_err(|err| err.to_string())?;
         let Ok(first) = first else {
             // The ordinary per-actor capture already records this command as

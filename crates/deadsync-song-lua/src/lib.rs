@@ -12023,9 +12023,10 @@ return Def.ActorFrame{
     fn compile_song_lua_reports_stateful_cross_actor_messages() {
         let song_dir = test_dir("stateful-cross-actor-message");
         let entry = song_dir.join("default.lua");
-        fs::write(
-            &entry,
-            r#"
+        for indirect in [false, true] {
+            fs::write(
+                &entry,
+                r#"
 local targets={}
 local cursor=1
 return Def.ActorFrame{
@@ -12045,31 +12046,39 @@ return Def.ActorFrame{
         end,
     },
 }
-"#,
-        )
-        .unwrap();
+"#.replace(
+                    "FireMessageCommand=function(self)",
+                    if indirect {
+                        "FireMessageCommand=function(self) self:playcommand('Select') end, SelectCommand=function(self)"
+                    } else {
+                        "FireMessageCommand=function(self)"
+                    },
+                ),
+            )
+            .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Stateful Cross Actor Message"),
-        )
-        .unwrap();
-        assert!(compiled.overlays.iter().all(|actor| {
-            actor.name.as_deref().is_none_or(|name| {
-                !name.starts_with("Target")
-                    || actor
-                        .message_commands
-                        .iter()
-                        .all(|command| command.message != "Fire")
-            })
-        }));
-        assert!(
-            compiled
-                .info
-                .skipped_message_command_captures
-                .iter()
-                .any(|detail| detail.contains("FireMessageCommand changes cross-actor"))
-        );
+            let compiled = test_compile_song_lua(
+                &entry,
+                &SongLuaCompileContext::new(&song_dir, "Stateful Cross Actor Message"),
+            )
+            .unwrap();
+            assert!(compiled.overlays.iter().all(|actor| {
+                actor.name.as_deref().is_none_or(|name| {
+                    !name.starts_with("Target")
+                        || actor
+                            .message_commands
+                            .iter()
+                            .all(|command| command.message != "Fire")
+                })
+            }));
+            assert!(
+                compiled
+                    .info
+                    .skipped_message_command_captures
+                    .iter()
+                    .any(|detail| detail.contains("FireMessageCommand changes cross-actor"))
+            );
+        }
     }
 
     #[test]

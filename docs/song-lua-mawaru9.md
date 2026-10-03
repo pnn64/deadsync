@@ -48,6 +48,9 @@ Challenge, description `TaroNuke`.
 - Static message probes identify queued render blocks. When runtime replay
   supplies the command's writes, those speculative blocks are removed so they
   cannot override the correctly timed render state.
+- Indirect command probes restore shared local cells and tables after the
+  capture. Stateful command detection retains changes across its two probe
+  runs and restores them after the pair.
 
 ## Native reference
 
@@ -79,6 +82,10 @@ cargo test --test song_lua_itgmania_semantic_parity corpora::lua_songs::mawaru9 
 ```
 
 ## Verification
+
+The 0.5.1715 probe pass reran all 962 Lua/profile gameplay tests and all 71
+regular semantic tests successfully in both repositories. The stateful
+cross-actor regression now checks both direct and indirect commands.
 
 - Harness: 119 regular tests pass, including separate instances, unique IDs,
   parent-specific draw order, chart identity and Init queue regressions.
@@ -145,7 +152,7 @@ The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
 trigger beat near 87.050. Its state changes are now deferred as well. Remaining
 gaps include trail opacity/visibility, projected sprite bounds, one player
-range, two vibration stops near beat 104.012, the `ChanceTime` broadcast near
+range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
 beat 540.076 and stateful `ToshiUp` and `TVGrow` target writes.
 
 Local detailed audit output: `.tmp/mawaru9-deferred-final.log` at the workspace
@@ -155,15 +162,41 @@ reference song files or ITGmania source files were modified.
 ## Next investigations
 
 The full debug comparison took 2,530.60 seconds (42 minutes), versus roughly
-five minutes before deferred execution. Profile replay and comparison stages
-before attributing the increase to gameplay or song loading. This pass checks
-semantic correctness; it does not establish acceptable loading performance.
+five minutes before deferred execution. A bounded 55-second replay, without
+comparators, took 40.15 seconds: 28.88 seconds in frame replay, including
+24.54 seconds in command/update execution, and 6.19 seconds reading overlays.
+These timings used `DEADSYNC_SONG_LUA_TIMING_STDERR=1` on the 0.5.1714
+implementation. Profile the full replay separately before attributing the
+remaining audit time to gameplay or song loading.
 
-The highest remaining failure count is projected geometry. The two missing
-vibration stops and `ChanceTime` give smaller, frame-specific reproductions to
-investigate alongside the trail fades. Static indirect message probes can also
-leak local Lua upvalue changes; the fixed queued-state fixture deliberately
-uses a global flag and does not claim that separate probe problem is resolved.
+The same implementation's full replay, without comparators, took 422.46
+seconds. Frame replay took 410.08 seconds, including 321.84 seconds in
+command/update execution and 63.83 seconds capturing overlay states. The
+earlier 2,530.60-second full audit therefore needs comparator profiling too;
+these separate runs establish the scale but are not a subtraction of timings
+from the same process.
+
+The highest remaining failure count is projected geometry. The two vibration
+mismatches and `ChanceTime` give smaller, frame-specific reproductions to
+investigate alongside the trail fades.
+
+The native trace runs `WallCommand` on `def-0441` at beat 103.820473 and
+`StopVibCommand` at 104.203804. The child vibration mismatch at 104.012138
+occurs before that stop; investigate the intervening `TVShrink` and body-score
+state changes and their projection rather than assuming early queue dispatch.
+
+Static indirect message probes previously leaked local Lua upvalue changes.
+The new `queued-local-state` fixture reproduces the failure at beat 0.017,
+before the queued command's native dispatch. Probe scopes now preserve locals
+in commands reached through `playcommand`, broadcasts and queues, and restore
+snapshots in reverse order. The fixture also checks nested tables, cycles,
+aliases and cells shared by different commands. ITGmania's independently
+captured trace passes 27/27 checks, as does the existing global-state fixture.
+The two runs used to identify stateful cross-actor commands share an outer
+scope, allowing their locals to evolve before restoring them after the pair.
+This regression is covered by the regular queue-state test below; the full
+Mawaru9 tally above is from the preceding pass and has not been rerun for this
+probe fix.
 
 The previously failing queue-state regression is now enabled:
 

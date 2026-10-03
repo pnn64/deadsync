@@ -4436,12 +4436,16 @@ fn queued_broadcasts_match_native_frames() {
 fn queued_lua_state_matches_native_dispatch() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let trace =
-        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/queued-state.json"));
-    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/queued-state.sm");
-    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
-    let parity = compare_semantics(&trace, &compiled, primary, &context);
-    parity.assert_complete(&trace.title);
+    for name in ["queued-state", "queued-local-state"] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json"
+        )));
+        let simfile = root.join(format!("crates/deadsync-song-lua/tests/fixtures/{name}.sm"));
+        let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        parity.assert_complete(name);
+    }
 }
 
 #[test]
