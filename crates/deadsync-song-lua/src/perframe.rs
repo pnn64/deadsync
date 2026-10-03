@@ -34,13 +34,12 @@ pub(crate) fn apply_startup_states<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     states: &std::collections::HashMap<usize, crate::lua_util::SongLuaStartupState>,
-    tracks: &mut [SongLuaOverlayUpdateTrack],
     messages: &mut Vec<SongLuaMessageEvent>,
 ) {
     const MESSAGE: &str = "__songlua_queued_startup";
     let beat = song_beat_at_elapsed_seconds(1.0 / SONG_LUA_UPDATE_REFERENCE_FPS, context);
     let mut changed = false;
-    for (index, overlay) in overlays.iter_mut().enumerate() {
+    for overlay in overlays.iter_mut() {
         let Some(startup) = states.get(&(overlay.table.to_pointer() as usize)) else {
             continue;
         };
@@ -49,20 +48,6 @@ pub(crate) fn apply_startup_states<Kind>(
         };
         overlay.actor.initial_state = startup.initial;
         overlay.actor.message_commands.push(command);
-        for track in tracks
-            .iter_mut()
-            .filter(|track| track.overlay_index == index)
-        {
-            // A zero-time update runs after queued setup during compilation.
-            // Its samples must not overwrite the state before that setup.
-            for sample in track
-                .samples
-                .iter_mut()
-                .take_while(|sample| sample.beat < beat)
-            {
-                sample.beat = beat;
-            }
-        }
         changed = true;
     }
     if changed {
@@ -2076,8 +2061,7 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                 sample
                     .dispatch_seconds
                     .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
-                    && sample.end_seconds
-                        <= next_seconds + f64::from(sample.frame_advance.min(0.0)) + 1.0e-7
+                    && sample.end_seconds <= next_seconds + f64::from(sample.frame_advance) + 1.0e-7
             }));
         scratch
             .completed
@@ -2372,17 +2356,22 @@ fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
     seconds: f64,
 ) -> Result<(), String> {
     for sample in scheduled {
+        let clock = if sample.frame_advance == 0.0 {
+            seconds
+        } else {
+            seconds + f64::from(sample.frame_advance)
+        };
         if sample
             .dispatch_seconds
             .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
-            || seconds + f64::EPSILON < sample.start_seconds
+            || clock + f64::EPSILON < sample.start_seconds
         {
             continue;
         }
         let linear_factor = if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
             1.0
         } else {
-            ((seconds - sample.start_seconds) / (sample.end_seconds - sample.start_seconds))
+            ((clock - sample.start_seconds) / (sample.end_seconds - sample.start_seconds))
                 .clamp(0.0, 1.0) as f32
         };
         let factor = crate::overlay_command_ease_factor(
@@ -2431,10 +2420,15 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
     }
     let mut last_factor: Option<(&SongLuaScheduledOverlaySample, u8, f32)> = None;
     for sample in scheduled {
+        let clock = if sample.frame_advance == 0.0 {
+            seconds
+        } else {
+            seconds + f64::from(sample.frame_advance)
+        };
         if sample
             .dispatch_seconds
             .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
-            || seconds + f64::EPSILON < sample.start_seconds
+            || clock + f64::EPSILON < sample.start_seconds
         {
             continue;
         }
@@ -2449,17 +2443,18 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
             if let Some((previous, previous_curve, factor)) = last_factor
                 && previous.start_seconds.to_bits() == sample.start_seconds.to_bits()
                 && previous.end_seconds.to_bits() == sample.end_seconds.to_bits()
+                && previous.frame_advance == sample.frame_advance
                 && previous_curve == curve
                 && (curve == 1 || previous.opt1.map(f32::to_bits) == sample.opt1.map(f32::to_bits))
             {
                 factor
             } else {
-                let factor = scheduled_overlay_factor(sample, seconds);
+                let factor = scheduled_overlay_factor(sample, clock);
                 last_factor = Some((sample, curve, factor));
                 factor
             }
         } else {
-            scheduled_overlay_factor(sample, seconds)
+            scheduled_overlay_factor(sample, clock)
         };
         let Some(state) = states.get_mut(sample.overlay_index) else {
             continue;
@@ -3078,6 +3073,7 @@ pub fn compile_update_functions<Kind>(
                 .filter(|sample| sample.end_seconds > seconds)
                 .map(|sample| (sample.overlay_index, sample.target, sample.value.clone())),
         );
+        crate::lua_util::set_prior_positions(lua, &current_overlays);
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, delta_seconds)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
@@ -3113,28 +3109,6 @@ pub fn compile_update_functions<Kind>(
             &scheduled_overlay_samples,
             seconds,
         )?;
-        // The Lua getter clock observes the receiver before its later update.
-        // Rendering observes that receiver after consuming this frame's delta.
-        for sample in &scheduled_overlay_samples {
-            let clock = seconds + f64::from(sample.frame_advance);
-            if sample
-                .dispatch_seconds
-                .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
-                || clock + 1.0e-7 < sample.start_seconds
-            {
-                continue;
-            }
-            let value = lerp_scheduled_value(
-                &sample.from,
-                &sample.value,
-                scheduled_overlay_factor(sample, clock),
-            );
-            set_overlay_state_update_value(
-                &mut replay_overlays[sample.overlay_index],
-                sample.target,
-                &value,
-            );
-        }
         for (index, target, value) in overlay_sample_scratch.retargeted_states.drain(..) {
             set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
             push_captured_overlay_value(

@@ -133,8 +133,9 @@ The 0.5.1718 scale pass reran all 962 Lua/profile gameplay tests and all 75
 regular semantic tests in both repositories. Its complete Mawaru9 audit took
 721.50 seconds: 480.29 seconds compiling, 201.92 seconds comparing projected
 geometry and 29.96 seconds comparing vibration. It adds 25 passing geometry
-checks with the same reference and denominator. The portable road-loop test
-below is explicitly ignored because it still reproduces a remaining gap.
+checks with the same reference and denominator. At that checkpoint, the
+portable road-loop test still reproduced a gap; the subsequent fix below
+now enables it as a regular regression.
 
 Regenerate this additional native drawing from the workspace root:
 
@@ -166,7 +167,7 @@ and top alignment.
 - Model parser: 19 tests pass, including separate files with a materials
   directory and a bone rotation animation.
 - Selected corpus coverage passes with Mawaru9 registered.
-- Semantic harness checks: 73 regular tests pass in both repositories. The
+- Semantic harness checks: 77 regular tests pass in both repositories. The
   shared-actor native
   regression passes all 20 checks, including each instance's final alpha and
   projected position. It failed before the loader and verifier fixes.
@@ -189,11 +190,11 @@ cargo test --test song_lua_itgmania_semantic_parity
 
 Without the override, the default remains the repository's parent. The original
 real-repository attempt failed seven corpus checks because its parent did not
-contain `allowed/` and `lua-songs/`; all 73 current tests pass with the existing workspace data.
+contain `allowed/` and `lua-songs/`; all 77 current tests pass with the existing workspace data.
 
 ## Complete song audit
 
-After these fixes: **106,346 / 117,464 checks pass (90.53%)**. The ignored
+After these fixes: **111,857 / 117,464 checks pass (95.23%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -203,10 +204,10 @@ DeadSync comparison.
 | Compile info | 12 / 12 |
 | Layer order | 4 / 4 |
 | Final render | 3,566 / 3,748 |
-| Render persistence | 6,507 / 6,587 |
+| Render persistence | 6,584 / 6,587 |
 | Update values | 23,065 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 53,300 / 64,018 |
+| Projected geometry | 58,734 / 64,018 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 223 / 224 |
 | Message commands | 225 / 227 |
@@ -218,10 +219,14 @@ instance-aware comparison still report the remaining gaps rather than
 changing expected values or omitting checks. The native capture is unchanged.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 11,118, with 1,025 detailed gap reports. Before the affine
+checks are now 5,607, with 739 detailed gap reports. Before the affine
 fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
 geometry checks. The parent-translation pass retained 106,321 passing checks;
-the ancestor-scale pass adds another 25 without changing the reference.
+the ancestor-scale pass added another 25 without changing the reference.
+The recurring-tween pass adds **5,511**: 5,434 in projected geometry and 77 in
+render persistence. Its final audit retains the previous 23,065/23,197 raw
+update checks after correcting the 320 visibility-write mismatches found
+in its first complete run. Other section counts are unchanged.
 
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
@@ -286,22 +291,44 @@ addresses that loss. The same diagnostic reported the loop's local Y as
 
 The portable `road-loop` fixture isolates the exact looping tween:
 `linear((480/115)/2):y(-1024):sleep(0):y(0):queuecommand("Loop")`.
-It also has a following sibling that reads `road:GetY()`. A native capture
-of 12 four-beat measures through beat/second 47 completes without dropped
-events or runtime errors. The comparison passes 1,164/1,900 and still fails,
-without any 3D transforms. At beat 2.25,
-the road's native Y is -80 while DeadSync's is -73.6; at beat 0.25, the
-native witness X is -122.666664 while DeadSync's is zero. This gives separate
-reproductions for cycle frame advance and current-position getter updates.
-Its source and simfile live in the Lua crate's `tests/fixtures/`; its unchanged
-native capture is retained at
-`tests/fixtures/itgmania-song-lua-micro/road-loop.json.zst`. Compression reduced
-264,161 bytes to 26,743 and was checked with an exact round trip. The decoded
-SHA256 is `308aa5e04ab50c002bbb4fcea9ec753f4752134c10889f44acb8ecf08c5e00ea`.
-The ignored `recurring_road_loop_matches_native` test reports all four gaps:
+It also has a following sibling that reads `road:GetY()`. The independently
+captured native trace covers 12 four-beat measures through beat/second 47,
+with zero dropped events or runtime errors. Before this fix, it passed
+1,164/1,900: at beat 2.25 the native road Y was -80 while DeadSync returned
+-73.6; at beat 0.25 the witness's native X was -122.666664 while DeadSync
+returned zero. It now passes **1,900/1,900**, including every projected sample.
+The original native capture is unchanged. Its decoded SHA256 remains
+`308aa5e04ab50c002bbb4fcea9ec753f4752134c10889f44acb8ecf08c5e00ea`.
+
+Startup tween commands now enter the per-frame replay before update callbacks
+run. Recurring commands retain the delta left after the preceding cycle,
+and retire that cycle's captured queue tail rather than advancing it twice.
+Getter sampling and tween completion use the same advanced clock as rendering.
+The redundant separate render-only sampling loop has been removed.
+
+`road-loop-order` adds a preceding sibling, which must see the road before
+its own update. At beat 0.25 the native earlier sibling sees -114.48889,
+while the following sibling sees -122.666664. The fixed replay retains the
+preceding frame's positions for actors whose update has not yet run, and
+advances newly queued position tweens before later callbacks read them.
+This independently captured native fixture passes **2,847/2,847**; it has
+zero errors or dropped events. Its decoded SHA256 is
+`dd567084ba8945375237248e43c521efbc5a5e4bebbc86f9d8d09a466fe20e11`.
+Compression was checked with an exact round trip: 354,531 bytes to 36,197.
+`road-loop-parent` additionally checks a parent's callback after its children
+have advanced. It passes **3,794/3,794**, including the same-frame restart.
+Its decoded SHA256 is
+`eae76349c6662d8247e25389f17209f949412ac9f7a1b14d42d0ccbecf6aaad2`;
+it has zero errors or dropped events, and compression was verified by an
+exact round trip (438,908 bytes to 36,852).
+All three fixtures' Lua/simfiles and compressed native captures live inside
+DeadSync, so the test works without the sibling harness checkout.
+
+The formerly ignored road-loop regression is now enabled and checks all
+**8,541** comparisons across all three fixtures:
 
 ```powershell
-cargo test --test song_lua_itgmania_semantic_parity recurring_road_loop_matches_native -- --exact --ignored --nocapture
+cargo test --test song_lua_itgmania_semantic_parity recurring_road_loop_matches_native -- --exact --nocapture
 ```
 
 The native trace runs `WallCommand` on `def-0441` at beat 103.820473 and
@@ -329,6 +356,57 @@ cargo test --test song_lua_itgmania_semantic_parity queued_lua_state_matches_nat
 
 Its Lua, simfile and native trace are retained inside DeadSync. The command
 passes without an ignore flag and without changing the native expected trace.
+
+The first complete audit of the recurring-tween fix found 320 additional raw
+visibility-write mismatches for five actors: `def-0442` (36), `def-0447` (15),
+`def-0450` (51), `def-1818` (109) and `def-1835` (109). The native
+`Actor::SetVisible` setter changes `m_bVisible` immediately. Recording an
+immediate setter through a queued-command scope must therefore preserve the
+last same-frame write, rather than the first scheduled destination.
+
+The independent `recurring-visible` fixture reproduces `visible(false)` then
+`visible(true)` on siblings before and after a recurring driver. It failed
+26/114 before the capture correction, including 88 of its 90 update-write
+checks. It now passes **114/114** in both repositories. This correction is in
+`test-support` raw-write capture; the chronological render samples retain
+actual queue-dispatch timing. Its native trace has zero runtime errors or
+dropped events. Compression was verified by an exact round trip (59,067 bytes
+to 6,362); decoded SHA256:
+`2412809986827b848a1b61e4e0275fb04cb2c14e7ed275c3e109b870e35031de`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity recurring_visibility_matches_native -- --exact --nocapture
+```
+
+The 0.5.1719 recurring-tween pass retains the original native road capture,
+adds sibling/parent callback coverage and enables the formerly ignored test.
+The additional visibility regression preserves immediate raw-write semantics.
+All 962 Lua/profile tests and all 77 regular semantic tests pass in both
+repositories. The curve replay test retains signed-zero behavior when its
+frame advance is zero; the retarget fixture still passes all 1,640 native
+checks, including raw destinations written by recurring callbacks.
+
+The final 0.5.1719 audit took **751.51 seconds**: 501.61 seconds compiling,
+209.90 seconds comparing projected geometry and 30.46 seconds comparing
+vibration. It passes 111,857/117,464 with the same native capture and
+comparison tolerances. The intermediate run, before the immediate-write
+capture correction, passed 111,537/117,464 in 780.10 seconds. Keep that
+intermediate result separate from the final checkpoint above.
+
+Remaining geometry reports start with two background bounds at beat zero
+(`def-0002` and `def-0006`) and then body actors such as `def-0263` near
+beat 100.275. The backgrounds were newly reported by this pass and need
+investigation of startup placement. Trail alpha/visibility, stateful
+message results, one player range, two vibration samples and `ChanceTime`
+still require independent reproductions. The road-loop regression passes;
+the complete Mawaru9 test remains correctly ignored and failing.
+
+The trail script's reproduction target is a reused actor that receives
+`finishtweening`, immediate visibility/color/position writes, then
+`linear(0.3):addz(50):diffusealpha(0):zoom(-0.1):queuecommand("Hide")`.
+`HideCommand` sets visibility false and queues `aux(0)` after `sleep(0)`.
+Check this pool lifecycle independently against native before changing
+capture or queue behavior for the remaining trail failures.
 
 ## Project scope
 

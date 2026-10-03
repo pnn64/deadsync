@@ -566,6 +566,13 @@ where
     // speculatively also plays schedules the reader never reaches.
     let runtime_action_message_start = out.messages.len();
     compile_timer.push_stage("global_actions");
+    crate::perframe::apply_startup_states(
+        context,
+        &mut overlays,
+        &startup_states,
+        &mut out.messages,
+    );
+    crate::perframe::apply_startup_tweens(&mut overlays, &startup_tweens, &mut out.messages);
     let (perframe_eases, perframe_overlay_eases, perframe_info) = compile_perframes(
         &lua,
         prefix_perframes,
@@ -691,14 +698,24 @@ where
         }
     }
     resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
-    crate::perframe::apply_startup_states(
+    let startup_beat = crate::song_beat_at_elapsed_seconds(
+        1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS,
         context,
-        &mut overlays,
-        &startup_states,
-        &mut out.overlay_updates,
-        &mut out.messages,
     );
-    crate::perframe::apply_startup_tweens(&mut overlays, &startup_tweens, &mut out.messages);
+    for track in &mut out.overlay_updates {
+        if startup_states.contains_key(&(overlays[track.overlay_index].table.to_pointer() as usize))
+        {
+            // Zero-time callbacks run after queued startup; retain the state
+            // before setup until the first positive update frame.
+            for sample in track
+                .samples
+                .iter_mut()
+                .take_while(|sample| sample.beat < startup_beat)
+            {
+                sample.beat = startup_beat;
+            }
+        }
+    }
     crate::perframe::apply_layer_startup(
         &mut tracked_actors,
         &screen_layer_startup,

@@ -221,6 +221,9 @@ struct SongLuaOverlayUpdateCapture {
     scheduled: Vec<Vec<SongLuaScheduledOverlayUpdate>>,
     pending_tweens: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
     tween_resets: Vec<bool>,
+    // One load-time replay owns this fixed actor-indexed buffer. Reuse it each
+    // frame so callbacks can read actors whose update has not happened yet.
+    prior_positions: Vec<Option<[f32; 3]>>,
     stateful_messages: BTreeMap<String, BTreeMap<usize, BTreeSet<SongLuaOverlayUpdateTarget>>>,
     stateful_writes: BTreeMap<String, Vec<SongLuaStatefulMessageWrite>>,
 }
@@ -289,6 +292,7 @@ impl SongLuaOverlayUpdateCapture {
             scheduled: (0..actor_count).map(|_| Vec::new()).collect(),
             pending_tweens: (0..actor_count).map(|_| Vec::new()).collect(),
             tween_resets: vec![false; actor_count],
+            prior_positions: vec![None; actor_count],
             stateful_messages: BTreeMap::new(),
             stateful_writes: BTreeMap::new(),
         }
@@ -573,6 +577,96 @@ pub(crate) fn set_pending_tweens(
             pending.push((target, value));
         }
     }
+}
+
+const POSITION_CURRENT_KEYS: [&str; 3] = [
+    "__songlua_current_x",
+    "__songlua_current_y",
+    "__songlua_current_z",
+];
+const POSITION_DEST_KEYS: [&str; 3] = [
+    "__songlua_state_x",
+    "__songlua_state_y",
+    "__songlua_state_z",
+];
+
+pub(crate) fn set_prior_positions(lua: &Lua, states: &[SongLuaOverlayState]) {
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        for (position, state) in capture.prior_positions.iter_mut().zip(states) {
+            *position = Some([state.x, state.y, state.z]);
+        }
+    }
+}
+
+fn actor_current_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result<f32> {
+    if lua
+        .app_data_ref::<SongLuaCompileUpdatePhase>()
+        .is_some_and(|phase| {
+            phase.active && queue_actor_order(lua, actor.to_pointer() as usize) > phase.order
+        })
+    {
+        if let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() {
+            if let Some(position) = capture
+                .actor_indices
+                .get(&(actor.to_pointer() as usize))
+                .and_then(|index| capture.prior_positions[*index])
+            {
+                return Ok(position[axis]);
+            }
+        }
+    }
+    Ok(actor
+        .get::<Option<f32>>(POSITION_CURRENT_KEYS[axis])?
+        .or(actor.get::<Option<f32>>(POSITION_DEST_KEYS[axis])?)
+        .unwrap_or(0.0))
+}
+
+fn advance_capture_position(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
+        return Ok(());
+    };
+    let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) else {
+        return Ok(());
+    };
+    let mut destinations = [None; 3];
+    for update in &capture.scheduled[index] {
+        let axis = match update.target {
+            SongLuaOverlayUpdateTarget::X => 0,
+            SongLuaOverlayUpdateTarget::Y => 1,
+            SongLuaOverlayUpdateTarget::Z => 2,
+            _ => continue,
+        };
+        let SongLuaOverlayUpdateValue::F32(to) = update.value else {
+            continue;
+        };
+        let from = destinations[axis]
+            .or_else(|| match update.initial_value {
+                Some(SongLuaOverlayUpdateValue::F32(value)) => Some(value),
+                _ => None,
+            })
+            .unwrap_or(
+                actor
+                    .get::<Option<f32>>(POSITION_CURRENT_KEYS[axis])?
+                    .unwrap_or(0.0),
+            );
+        destinations[axis] = Some(to);
+        if update.frame_advance + 1.0e-7 < update.delay_seconds {
+            continue;
+        }
+        let factor = if update.duration_seconds <= f32::EPSILON {
+            1.0
+        } else {
+            ((update.frame_advance - update.delay_seconds) / update.duration_seconds)
+                .clamp(0.0, 1.0)
+        };
+        let factor =
+            crate::overlay_command_ease_factor(update.easing.as_deref(), factor, update.opt1);
+        actor.set(
+            POSITION_CURRENT_KEYS[axis],
+            (to - from).mul_add(factor, from),
+        )?;
+    }
+    Ok(())
 }
 
 fn finish_pending_tweens(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -943,6 +1037,13 @@ fn record_overlay_update_capture_immediate(
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|mut capture| {
             if let Some(scope) = queued {
+                // These setters bypass the tween queue. Preserve their final
+                // same-frame write even though dispatch uses a scheduled sample.
+                #[cfg(feature = "test-support")]
+                {
+                    let index = capture.actor_indices[&(actor.to_pointer() as usize)];
+                    capture.record_write(index, beat, target, &value, false);
+                }
                 let recorded = capture.record_scheduled(
                     actor,
                     beat,
@@ -2995,6 +3096,7 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 .0 = previous;
         }
         result?;
+        advance_capture_position(lua, actor)?;
         if !recurring
             && actor
                 .get::<Option<String>>("__songlua_recurring_update_command")?
@@ -3605,6 +3707,17 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
             }
         } else {
             actor.set(current_key, value)?;
+            if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+                if let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) {
+                    if let Some(position) = &mut capture.prior_positions[index] {
+                        position[match key {
+                            "x" => 0,
+                            "y" => 1,
+                            _ => 2,
+                        }] = value;
+                    }
+                }
+            }
         }
     }
     Ok(())
@@ -8582,12 +8695,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_current_x")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_x")?)
-                    .unwrap_or(0.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_current_position(lua, &actor, 0)
         })?,
     )?;
     actor.set(
@@ -8605,12 +8713,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_current_y")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_y")?)
-                    .unwrap_or(0.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_current_position(lua, &actor, 1)
         })?,
     )?;
     actor.set(
@@ -8676,12 +8779,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_current_z")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_z")?)
-                    .unwrap_or(0.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_current_position(lua, &actor, 2)
         })?,
     )?;
     actor.set(
@@ -9769,6 +9867,7 @@ pub fn run_actor_compile_update_functions_with_delta(
             match job {
                 SongLuaCompileUpdateJob::Advance { actor, rate, .. } => {
                     advance_spin_pose(lua, actor, delta_seconds * rate)?;
+                    advance_capture_position(lua, actor)?;
                     let ready = lua
                         .app_data_ref::<SongLuaCompileFrames>()
                         .is_some_and(|frames| {
@@ -9973,7 +10072,29 @@ fn run_recurring_update(
         }
 
         reset_actor_capture(lua, actor)?;
-        if let Err(err) = run_actor_named_command(lua, actor, command) {
+        // The preceding cycle has drained this actor's queue. Do not carry its
+        // captured tail forward and advance the same durations a second time.
+        if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
+            frames.clocks.remove(&(actor.to_pointer() as usize));
+        }
+        // A recurring command is the next queued command. Its new tween must
+        // consume the delta left after finishing the preceding cycle.
+        let time = lua
+            .app_data_ref::<SongLuaCompileFrames>()
+            .map(|frames| (frames.frame, delta));
+        let prior_queue = lua.remove_app_data::<SongLuaQueuedCommand>();
+        lua.set_app_data(SongLuaQueuedCommand {
+            start: 0.0,
+            actor: actor.to_pointer() as usize,
+            time,
+        });
+        let result = run_actor_named_command(lua, actor, command)
+            .and_then(|()| advance_capture_position(lua, actor));
+        lua.remove_app_data::<SongLuaQueuedCommand>();
+        if let Some(prior) = prior_queue {
+            lua.set_app_data(prior);
+        }
+        if let Err(err) = result {
             report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
         }
         runs += 1;
