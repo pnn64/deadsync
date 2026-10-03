@@ -445,6 +445,13 @@ impl SongLuaOverlayUpdateCapture {
         let initial_value = self.values[index]
             .iter()
             .find(|(property, _)| *property == target)
+            // BeginTweening copies the back tween's destination. Starting
+            // from its current interpolated pose adds lag to repeated tweens.
+            .or_else(|| {
+                self.pending_tweens[index]
+                    .iter()
+                    .find(|(property, _)| *property == target)
+            })
             .map(|(_, value)| value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
             dispatch_seconds: None,
@@ -458,6 +465,36 @@ impl SongLuaOverlayUpdateCapture {
             value,
         });
         true
+    }
+
+    fn set_scheduled_time(
+        &mut self,
+        index: usize,
+        dispatch_seconds: Option<f64>,
+        frame_advance: f32,
+    ) {
+        let updates = &mut self.scheduled[index];
+        let Some((last, prior)) = updates.split_last_mut() else {
+            return;
+        };
+        last.dispatch_seconds = dispatch_seconds;
+        last.frame_advance = frame_advance;
+        // Setters mutate one back tween state. Repeated property writes in
+        // that state replace its destination while retaining its starting pose.
+        let duplicate = prior.iter().rposition(|update| {
+            update.target == last.target
+                && update.dispatch_seconds == last.dispatch_seconds
+                && update.frame_advance == last.frame_advance
+                && update.delay_seconds == last.delay_seconds
+                && update.duration_seconds == last.duration_seconds
+                && update.easing == last.easing
+                && update.opt1 == last.opt1
+        });
+        if let Some(previous) = duplicate
+            && let Some(last) = updates.pop()
+        {
+            updates[previous].value = last.value;
+        }
     }
 }
 
@@ -960,10 +997,7 @@ fn record_overlay_update_capture(
                     .record_scheduled(actor, beat, cursor, duration, easing, opt1, target, value);
                 if recorded {
                     let index = capture.actor_indices[&(actor.to_pointer() as usize)];
-                    if let Some(update) = capture.scheduled[index].last_mut() {
-                        update.frame_advance = frame_advance;
-                        update.dispatch_seconds = dispatch_seconds;
-                    }
+                    capture.set_scheduled_time(index, dispatch_seconds, frame_advance);
                 }
                 recorded
             } else {
@@ -1056,10 +1090,7 @@ fn record_overlay_update_capture_immediate(
                 );
                 if recorded {
                     let index = capture.actor_indices[&(actor.to_pointer() as usize)];
-                    if let Some(update) = capture.scheduled[index].last_mut() {
-                        update.frame_advance = advance;
-                        update.dispatch_seconds = dispatch_seconds;
-                    }
+                    capture.set_scheduled_time(index, dispatch_seconds, advance);
                 }
                 recorded
             } else {

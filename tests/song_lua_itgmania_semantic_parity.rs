@@ -4784,6 +4784,23 @@ fn recurring_stop_matches_native() {
 }
 
 #[test]
+fn recurring_follow_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for name in ["recurring-follow", "recurring-follow-offset"] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+        )));
+        let simfile = root.join(format!("crates/deadsync-song-lua/tests/fixtures/{name}.sm"));
+        let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        assert_eq!(parity.checks(), 874);
+        parity.assert_complete(name);
+    }
+}
+
+#[test]
 fn finite_queue_controls_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

@@ -198,7 +198,7 @@ contain `allowed/` and `lua-songs/`; use the workspace override for those tests.
 
 ## Complete song audit
 
-After these fixes: **112,157 / 117,302 checks pass (95.61%)**. The ignored
+After these fixes: **112,165 / 117,302 checks pass (95.62%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -211,7 +211,7 @@ DeadSync comparison.
 | Render persistence | 6,571 / 6,581 |
 | Update values | 23,052 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 58,877 / 63,862 |
+| Projected geometry | 58,885 / 63,862 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 223 / 224 |
 | Message commands | 226 / 227 |
@@ -223,7 +223,7 @@ instance-aware comparison still report the remaining gaps rather than
 changing expected values or omitting checks. The native capture is unchanged.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 5,145, with 571 detailed gap reports. Before the affine
+checks are now 5,137, with 571 detailed gap reports. Before the affine
 fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
 geometry checks. The parent-translation pass retained 106,321 passing checks;
 the ancestor-scale pass added another 25 without changing the reference.
@@ -237,8 +237,8 @@ checks pass, including the formerly persistent trail pools. `ToshiUp` also
 matches. The denominator decreases by 162 with unchanged native data and
 comparison code: persistence probes require an active compiled update track,
 and projected alpha/bounds checks require visibility in both engines. Stopped
-loops remove stale tracks and alter which geometry checks run. The latest
-audit therefore has 300 more passing checks and 462 fewer failing checks;
+loops remove stale tracks and alter which geometry checks run. That pass's
+audit therefore had 300 more passing checks and 462 fewer failing checks;
 these are not 462 identical comparisons newly passing. Persistence and raw
 update failures increased by 7 and 13 respectively, primarily in Reisen's
 pooled arrows. Investigate their lifecycle and dispatch timing independently.
@@ -250,7 +250,7 @@ gaps include Reisen pool writes and visibility, projected sprite bounds, one pla
 range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
 beat 540.076 and stateful `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru-recurring-stop-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-recurring-follow-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -457,6 +457,55 @@ and all 78 regular semantic tests. The synthetic dispatch benchmark fixtures
 now explicitly schedule their next cycle instead of assuming a command
 repeats without another queue; their frozen comparison implementations remain
 unchanged. These timings measure the debug audit, not gameplay performance.
+
+The Reisen investigation isolates its original Lua scene and chart tables in
+`.tmp/reisen-probe`. Its setter comparisons all pass, but the original
+comparison failed 2,096 geometry checks (7,962/10,058 overall). Two independent
+capture errors explain that motion discrepancy:
+
+- An appended tween must begin from the previous queued destination, as native
+  `Actor::BeginTweening` copies the back tween's state. Using the current
+  interpolated pose adds lag when a recurring driver writes an earlier sibling.
+- Repeated setters in one tween mutate that state's destination. Reisen writes
+  `y(...)` then `addy(...)`; treating the second write as another interpolation
+  flattens the motion. Capture now retains the first starting pose and replaces
+  the destination for writes with the same target and queue timing.
+
+The portable `recurring-follow` fixtures place targets before and after the
+driver, with four visible witnesses reading their current Y before and after
+each write. Both include a repeated Y setter: `addy(0)` in the first fixture,
+and `y(y - 7):addy(7)` in the second. Against the 0.5.1720 executable they failed
+694/874 and 490/874 respectively. Both now pass **874/874**, including all 96
+getter writes and 608 geometry checks in each case. The isolated original
+Reisen scene now passes **10,058/10,058** against its unchanged native capture.
+
+The portable fixtures and their native captures are retained inside DeadSync.
+Both native captures have zero errors or dropped events. Compression was
+verified with exact byte-for-byte round trips:
+
+- `recurring-follow`: 143,440 bytes to 12,748, decoded SHA256
+  `3f01e56721681a5a9b70a1005132255195ce76c1f0cd002e4a0b9f58e054e836`.
+- `recurring-follow-offset`: 143,764 bytes to 12,718, decoded SHA256
+  `527a91ff5aed31f3d70f329f8b24c913f101eac31808f8823430ce049ce2abe3`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity recurring_follow_matches_native -- --exact --nocapture
+```
+
+The 0.5.1721 complete audit took **376.80 seconds**: 296.69 seconds compiling,
+50.29 seconds comparing projected geometry and 21.50 seconds comparing
+vibration. It passes 112,165/117,302, adding only eight passing geometry checks
+to the complete song with the same native reference and denominator. The
+isolated Reisen result does not establish parity for its full-song context:
+pooled arrows still differ in visibility, selected targets and raw writes.
+Investigate the preceding shared state and random-call sequence before
+attributing those remaining differences to the corrected interpolation.
+
+All 962 Lua/profile gameplay tests and all 79 regular semantic tests pass in
+both repositories. The regular follow test checks both fixtures, totaling
+1,748 independent native comparisons. Native expectations, comparator
+tolerances and the full-song reference are unchanged. These timings measure
+the debug audit, not gameplay performance.
 
 ## Project scope
 
