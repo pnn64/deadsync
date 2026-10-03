@@ -294,7 +294,12 @@ impl AppDirs {
             Some(self.data_dir.join(dirname)),
             Some(self.exe_dir.join(dirname)),
             cwd.map(|path| path.join(dirname)),
-            cwd.map(|path| path.join("deadsync").join(dirname)),
+            cwd.map(|path| {
+                let mut root = path.join("deadsync");
+                root.reserve_exact(dirname.len() + 1);
+                root.push(dirname);
+                root
+            }),
         ];
         for root in candidates.into_iter().flatten() {
             if !roots.contains(&root) {
@@ -360,6 +365,10 @@ impl AppDirs {
         self.data_dir.join("fsrdump.txt")
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/media_roots.rs"]
+mod media_roots_perf;
 
 /// Paths retained by the game asset subsystem, without config/profile/song layout.
 #[derive(Clone, Debug)]

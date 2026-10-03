@@ -524,6 +524,37 @@ impl From<&TimingSegments> for CachedTimingSegments {
 }
 
 impl CachedTimingSegments {
+    // Song bounds query elapsed time only. Leave unrelated tables empty instead
+    // of cloning them and building visual runtime caches that are discarded.
+    #[inline(never)]
+    fn elapsed_time_segments(&self) -> TimingSegments {
+        TimingSegments {
+            beat0_offset_adjust: self.beat0_offset_adjust,
+            bpms: self.bpms.clone(),
+            stops: self
+                .stops
+                .iter()
+                .map(|&(beat, duration)| StopSegment { beat, duration })
+                .collect(),
+            delays: self
+                .delays
+                .iter()
+                .map(|&(beat, duration)| DelaySegment { beat, duration })
+                .collect(),
+            warps: self
+                .warps
+                .iter()
+                .map(|&(beat, length)| WarpSegment { beat, length })
+                .collect(),
+            fakes: Vec::new(),
+            speeds: Vec::new(),
+            scrolls: Vec::new(),
+            time_signatures: Vec::new(),
+            tickcounts: Vec::new(),
+            combos: Vec::new(),
+        }
+    }
+
     pub(crate) fn from_rssp(
         segments: &rssp::timing::TimingSegments,
         time_signatures: Vec<(f32, i32, i32)>,
@@ -894,7 +925,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         let Some(beat) = chart.row_to_beat.get(row).copied() else {
             continue;
         };
-        let timing_segments: TimingSegments = chart.timing_segments.clone().into();
+        let timing_segments = chart.timing_segments.elapsed_time_segments();
         // Only the two resolved beats are queried; this temporary timing does
         // not need its own copy of the chart's full row table.
         let timing =
@@ -3448,6 +3479,13 @@ mod tests {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/perf/gameplay_note_loading.rs"
+        ));
+    }
+
+    mod metadata_timing_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/metadata_timing.rs"
         ));
     }
 

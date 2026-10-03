@@ -250,32 +250,32 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 
 #[inline]
 fn joined_contains_ignore_ascii_case(left: &str, right: &str, needle: &str) -> bool {
-    let right = (!right.trim().is_empty()).then_some(right);
-    let joined_len = left
-        .len()
-        .saturating_add(right.map_or(0, |value| value.len().saturating_add(1)));
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
+    if contains_ignore_ascii_case(left, needle) {
         return true;
     }
-    if needle.len() > joined_len {
+    if right.trim().is_empty() {
         return false;
     }
+    if contains_ignore_ascii_case(right, needle) {
+        return true;
+    }
+    let joined_len = left.len().saturating_add(right.len().saturating_add(1));
+    let Some(last_start) = joined_len.checked_sub(needle.len()) else {
+        return false;
+    };
 
+    // Only matches crossing the inserted space remain. Compare the two slices
+    // directly instead of selecting a virtual joined byte for every character.
     let left = left.as_bytes();
-    let right = right.map(str::as_bytes).unwrap_or_default();
-    (0..=joined_len - needle.len()).any(|start| {
-        needle.iter().enumerate().all(|(offset, expected)| {
-            let index = start + offset;
-            let actual = if index < left.len() {
-                left[index]
-            } else if index == left.len() {
-                b' '
-            } else {
-                right[index - left.len() - 1]
-            };
-            actual.eq_ignore_ascii_case(expected)
-        })
+    let right = right.as_bytes();
+    let needle = needle.as_bytes();
+    let first_start = left.len().saturating_sub(needle.len() - 1);
+    (first_start..=last_start.min(left.len())).any(|start| {
+        let prefix_len = left.len() - start;
+        needle[prefix_len] == b' '
+            && left[start..].eq_ignore_ascii_case(&needle[..prefix_len])
+            && right[..needle.len() - prefix_len - 1]
+                .eq_ignore_ascii_case(&needle[prefix_len + 1..])
     })
 }
 
@@ -403,6 +403,13 @@ mod tests {
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 
     use super::*;
+
+    mod title_search_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/title_search.rs"
+        ));
+    }
 
     fn test_song(title: &str, subtitle: &str) -> Arc<SongData> {
         Arc::new(SongData {
