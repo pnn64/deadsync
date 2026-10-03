@@ -3,6 +3,7 @@ use std::hint::black_box;
 
 fn blocks(dense: bool) -> Vec<SongLuaOverlayCommandBlock> {
     vec![SongLuaOverlayCommandBlock {
+        queued: false,
         start: 0.0,
         duration: 1.0,
         easing: Some("linear".into()),

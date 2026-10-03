@@ -286,6 +286,7 @@ fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
             message: "__songlua_tap_1_3_W1".into(),
             aux: None,
             blocks: vec![SongLuaOverlayCommandBlock {
+                queued: false,
                 start: 0.0,
                 duration: 0.0,
                 easing: None,
@@ -349,6 +350,7 @@ fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
             blocks: [(0.0, 1.0), (0.5, 0.0)]
                 .into_iter()
                 .map(|(duration, alpha)| SongLuaOverlayCommandBlock {
+                    queued: false,
                     start: 0.0,
                     duration,
                     easing: Some("linear".into()),
@@ -695,6 +697,7 @@ fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessag
         message: String::new(),
         aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
+            queued: false,
             start: 0.0,
             duration: 0.75,
             easing: Some("inOutQuad".to_string()),
@@ -1024,6 +1027,7 @@ fn song_lua_cached_tween_applies_terminal_flags_and_rewinds() {
         message: "show".to_owned(),
         aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
+            queued: false,
             start: 0.0,
             duration: 1.0,
             easing: Some("instant".to_owned()),
@@ -1386,6 +1390,7 @@ fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
         aux: None,
         blocks: (0..128)
             .map(|index| SongLuaOverlayCommandBlock {
+                queued: false,
                 start: index as f32 * 0.25,
                 duration: 0.2,
                 easing: Some("inOutQuad".to_string()),

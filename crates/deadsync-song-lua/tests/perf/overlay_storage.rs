@@ -240,6 +240,7 @@ fn command(message: &str, x: f32, duration: f32) -> crate::SongLuaOverlayMessage
         message: message.to_owned(),
         aux: Some(x),
         blocks: vec![crate::SongLuaOverlayCommandBlock {
+            queued: false,
             start: 0.0,
             duration,
             easing: None,

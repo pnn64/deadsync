@@ -369,6 +369,7 @@ impl CompileFixture {
                             message: "Pulse".into(),
                             aux: None,
                             blocks: vec![crate::SongLuaOverlayCommandBlock {
+                                queued: false,
                                 start: 0.0,
                                 duration: 0.1,
                                 easing: Some("linear".into()),

@@ -71,6 +71,8 @@ struct NativeTrace {
     actor_definitions: Vec<NativeDefinition>,
     runtime_actors: Vec<NativeActor>,
     timeline_tracks: Vec<NativeTimelineTrack>,
+    #[serde(default)]
+    command_tracks: Vec<NativeCommandTrack>,
     tween_tracks: Vec<NativeTweenTrack>,
     #[serde(default)]
     operation_tracks: Vec<NativeOperationTrack>,
@@ -198,6 +200,12 @@ struct NativeTweenTrack {
     kind: String,
     easing: Option<String>,
     segments: Vec<NativeTweenSegment>,
+}
+
+#[derive(Deserialize)]
+struct NativeCommandTrack {
+    command: String,
+    runs: Vec<(u64, Option<f32>, Option<f32>)>,
 }
 
 #[derive(Deserialize)]
@@ -402,6 +410,9 @@ fn parity_status(passed: usize, checks: usize) -> String {
 }
 
 fn workspace_root() -> PathBuf {
+    if let Some(path) = std::env::var_os("ITGMANIA_SONG_LUA_WORKSPACE") {
+        return PathBuf::from(path);
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("deadsync should have a workspace parent")
@@ -912,6 +923,7 @@ fn apply_compiled_delta(
     overlay_state_after_blocks(
         state,
         &[SongLuaOverlayCommandBlock {
+            queued: false,
             start: 0.0,
             duration: 0.0,
             easing: None,
@@ -4421,7 +4433,6 @@ fn queued_broadcasts_match_native_frames() {
 }
 
 #[test]
-#[ignore = "queued commands still mutate Lua state before their native dispatch frame"]
 fn queued_lua_state_matches_native_dispatch() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -4431,6 +4442,56 @@ fn queued_lua_state_matches_native_dispatch() {
     let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     parity.assert_complete(&trace.title);
+}
+
+#[test]
+fn finite_queue_controls_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for name in ["queue-control", "queue-recurring", "queue-vibration"] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json"
+        )));
+        let simfile = root.join(format!("crates/deadsync-song-lua/tests/fixtures/{name}.sm"));
+        let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+        if name == "queue-vibration" {
+            let actor = compiled[primary]
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some("Cala"))
+                .expect("native effect actor");
+            let vibration = compiled[primary]
+                .overlay_updates
+                .iter()
+                .find(|track| {
+                    track.overlay_index == actor
+                        && track.target == SongLuaOverlayUpdateTarget::Vibrate
+                })
+                .expect("runtime vibration track");
+            for (command, enabled) in [("MainCommand", true), ("DoneCommand", false)] {
+                let native = trace
+                    .command_tracks
+                    .iter()
+                    .find(|track| track.command == command)
+                    .and_then(|track| track.runs.first())
+                    .and_then(|run| run.1)
+                    .expect("native effect dispatch");
+                let actual = vibration
+                    .samples
+                    .iter()
+                    .find(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(enabled))
+                    .expect("compiled effect transition")
+                    .beat;
+                assert!(
+                    (native - actual).abs() < 0.0001,
+                    "{command}: {native} vs {actual}"
+                );
+            }
+        }
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(&trace.title));
+        parity.assert_complete(&trace.title);
+    }
 }
 
 #[test]

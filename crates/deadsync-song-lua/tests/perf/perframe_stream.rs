@@ -105,6 +105,7 @@ impl Fixture {
                                 message: "Pulse".into(),
                                 aux: Some(3.0),
                                 blocks: vec![crate::SongLuaOverlayCommandBlock {
+                                    queued: false,
                                     start: 0.0,
                                     duration: 0.3,
                                     easing: Some("linear".into()),

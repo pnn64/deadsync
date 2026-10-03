@@ -680,6 +680,16 @@ where
         message_sounds.push((layer, message, path));
     }
     compile_timer.push_stage("deferred_messages");
+    for overlay in &mut overlays {
+        for command in &mut overlay.actor.message_commands {
+            if runtime_broadcasts
+                .iter()
+                .any(|(_, message, _)| message == &command.message)
+            {
+                command.blocks.retain(|block| !block.queued);
+            }
+        }
+    }
     resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
     crate::perframe::apply_startup_states(
         context,
@@ -789,6 +799,7 @@ where
                 message,
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    queued: false,
                     start: 0.0,
                     duration: 0.0,
                     easing: None,
@@ -822,6 +833,7 @@ where
                 message,
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    queued: false,
                     start: 0.0,
                     duration: 0.0,
                     easing: None,

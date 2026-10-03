@@ -2917,6 +2917,8 @@ pub fn overlay_delta_uses_nearest_sampler(delta: &SongLuaOverlayStateDelta) -> b
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayCommandBlock {
+    /// Writes from queued commands are replayed at their actual dispatch frames.
+    pub queued: bool,
     pub start: f32,
     pub duration: f32,
     pub easing: Option<String>,
@@ -3011,9 +3013,9 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
 }
 
 #[must_use]
-pub fn overlay_state_after_blocks(
+pub fn overlay_state_after_blocks<'a>(
     mut state: SongLuaOverlayState,
-    blocks: &[SongLuaOverlayCommandBlock],
+    blocks: impl IntoIterator<Item = &'a SongLuaOverlayCommandBlock>,
     elapsed: f32,
 ) -> SongLuaOverlayState {
     if !elapsed.is_finite() {
@@ -19757,38 +19759,12 @@ return Def.ActorFrame{
     fn compile_song_lua_captures_queued_parent_vibration() {
         let song_dir = test_dir("queued-parent-vibration");
         let entry = song_dir.join("default.lua");
-        fs::write(
-            &entry,
-            r#"
-mod_actions={{1, "CalaFire", true}}
-local fired = false
-return Def.ActorFrame{
-    OnCommand=function(self)
-        self:SetUpdateFunction(function()
-            if not fired and GAMESTATE:GetSongBeat() >= 1 then
-                fired = true
-                MESSAGEMAN:Broadcast("CalaFire")
-            end
-        end)
-    end,
-    Def.ActorFrame{
-        Name="Cala",
-        CalaFireMessageCommand=cmd(playcommand,"Fire";sleep,0.5;queuecommand,"Main"),
-        MainCommand=cmd(vibrate;effectmagnitude,10,10,0;sleep,0.3;queuecommand,"Done"),
-        DoneCommand=cmd(stopeffect;queuecommand,"FinishFire"),
-        Def.Sprite{
-            Name="Body",
-            FireCommand=cmd(visible,false),
-            FinishFireCommand=cmd(visible,true),
-        },
-    },
-}
-"#,
-        )
-        .unwrap();
+        fs::write(&entry, include_str!("../tests/fixtures/queue-vibration.lua"))
+            .expect("native queued vibration fixture");
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Queued Parent Vibration");
         context.music_length_seconds = 3.0;
+        context.song_display_bpms = [60.0; 2];
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         let actor = compiled
             .overlays
@@ -19800,16 +19776,7 @@ return Def.ActorFrame{
             .iter()
             .find(|command| command.message == "CalaFire")
             .unwrap();
-        assert!(fire.blocks.iter().any(|block| {
-            (block.start - 0.5).abs() <= f32::EPSILON
-                && block.delta.vibrate == Some(true)
-                && block.delta.effect_magnitude == Some([10.0, 10.0, 0.0])
-        }));
-        assert!(fire.blocks.iter().any(|block| {
-            (block.start - 0.8).abs() <= f32::EPSILON
-                && block.delta.vibrate == Some(false)
-                && block.delta.effect_mode == Some(EffectMode::None)
-        }));
+        assert!(fire.blocks.iter().all(|block| !block.queued));
         let index = compiled
             .overlays
             .iter()
@@ -19822,13 +19789,13 @@ return Def.ActorFrame{
                 track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Vibrate
             })
             .expect("queued effects are captured at their dispatch frames");
-        for value in [true, false] {
-            assert!(
-                vibration
-                    .samples
-                    .iter()
-                    .any(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(value))
-            );
+        for (value, native_beat) in [(true, 1.5166667), (false, 1.8)] {
+            let sample = vibration
+                .samples
+                .iter()
+                .find(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(value))
+                .expect("native vibration transition");
+            assert!((sample.beat - native_beat).abs() < 0.0001, "{sample:?}");
         }
         let magnitude = compiled
             .overlay_updates
@@ -23217,6 +23184,7 @@ end
             opt2: Some(2.0),
         };
         let block = |delta: SongLuaOverlayStateDelta| SongLuaOverlayCommandBlock {
+            queued: false,
             start: 0.0,
             duration: 0.0,
             easing: None,

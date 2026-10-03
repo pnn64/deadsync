@@ -376,6 +376,7 @@ fn song_lua_overlay_eases_stop_after_later_message_blocks() {
                 message: "ResetBlack".to_string(),
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    queued: false,
                     start: 0.0,
                     duration: 0.0,
                     easing: None,
@@ -437,6 +438,7 @@ fn song_lua_overlay_eases_ignore_same_timestamp_setup_blocks() {
                 message: "SetupZoom".to_string(),
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    queued: false,
                     start: 0.0,
                     duration: 0.0,
                     easing: None,
@@ -498,6 +500,7 @@ fn song_lua_overlay_eases_stop_persisting_after_later_reset_messages() {
                 message: "ResetBlack".to_string(),
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    queued: false,
                     start: 0.0,
                     duration: 0.0,
                     easing: None,

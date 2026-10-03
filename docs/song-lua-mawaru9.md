@@ -37,6 +37,17 @@ Challenge, description `TaroNuke`.
 - Broadcasts from finite queued commands use the dispatch frame's actual beat
   rather than the callback beat that scheduled them. The frame map retains
   the sampled song clock, including timing stops.
+- Finite commands now execute their Lua state changes on the dispatch frame.
+  Queue clocks keep pending commands until the owning actor advances, including
+  child commands submitted through nested `playcommand` calls.
+- A queued command starts from the remaining tween tail, not an old callback's
+  capture cursor. A newly activated recurring command consumes the current
+  frame's remaining delta before its next update.
+- Stop and finish clear pending Lua commands and recurring loops. Stop keeps
+  the current interpolated position; finish applies the destination.
+- Static message probes identify queued render blocks. When runtime replay
+  supplies the command's writes, those speculative blocks are removed so they
+  cannot override the correctly timed render state.
 
 ## Native reference
 
@@ -71,21 +82,39 @@ cargo test --test song_lua_itgmania_semantic_parity corpora::lua_songs::mawaru9 
 
 - Harness: 119 regular tests pass, including separate instances, unique IDs,
   parent-specific draw order, chart identity and Init queue regressions.
-- DeadSync Lua and profile gameplay: 962 tests pass. The real repository also
-  passes all 943 Lua crate tests using its own fixture files.
+- DeadSync Lua and profile gameplay: 962 tests pass in both repositories,
+  including all 943 Lua crate tests using repository-local fixture files.
 - Model parser: 19 tests pass, including separate files with a materials
   directory and a bone rotation animation.
 - Selected corpus coverage passes with Mawaru9 registered.
-- Semantic harness checks: 69 regular tests pass. The shared-actor native
+- Semantic harness checks: 71 regular tests pass in both repositories. The
+  shared-actor native
   regression passes all 20 checks, including each instance's final alpha and
   projected position. It failed before the loader and verifier fixes.
 - Nested queued-broadcast fixtures pass 39/39 checks with a continuous clock
   and 34/34 with a timing stop. The continuous fixture failed its message
   timing check before the fix. Both compare exact native dispatch beats.
+- The former ignored queued Lua state regression now passes as a regular test.
+  Native queue-control and recurring-loop fixtures pass 69/69 and 107/107
+  checks. They cover appending behind a pending command, ordered state changes,
+  cancellation, tween endpoints and the first recurring update's remaining delta.
+- Queued parent vibration passes 38/38 native checks, including exact
+  on/off dispatch beats 1.516667 and 1.8 rather than predicted static blocks.
+
+The real repository uses the external song packs without copying them:
+
+```powershell
+$env:ITGMANIA_SONG_LUA_WORKSPACE = 'C:/GitHub/rework'
+cargo test --test song_lua_itgmania_semantic_parity
+```
+
+Without the override, the default remains the repository's parent. The original
+real-repository attempt failed seven corpus checks because its parent did not
+contain `allowed/` and `lua-songs/`; all 71 pass with the existing workspace data.
 
 ## Complete song audit
 
-After these fixes: **67,430 / 88,316 checks pass (76.35%)**. The ignored
+After these fixes: **102,190 / 117,365 checks pass (87.07%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -94,51 +123,56 @@ DeadSync comparison.
 | --- | --- |
 | Compile info | 12 / 12 |
 | Layer order | 4 / 4 |
-| Final render | 3,477 / 3,748 |
-| Render persistence | 3,529 / 3,917 |
-| Update values | 18,611 / 23,197 |
+| Final render | 3,566 / 3,748 |
+| Render persistence | 6,507 / 6,587 |
+| Update values | 23,053 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 21,930 / 37,540 |
-| Projected vibration | 19,383 / 19,387 |
-| Timeline | 210 / 224 |
-| Message commands | 215 / 227 |
+| Projected geometry | 49,156 / 63,919 |
+| Projected vibration | 19,385 / 19,387 |
+| Timeline | 223 / 224 |
+| Message commands | 225 / 227 |
 | Runtime modifiers | 46 / 46 |
 
 The former Sprite/Model ordering difference came from unpinned noteskins;
 all four layer-order checks pass with Cyber. The complete capture and
 instance-aware comparison still report the remaining gaps rather than
-changing expected values or omitting checks.
+changing expected values or omitting checks. The native capture is unchanged.
+The previous result was 67,430/88,316; more visible state and runtime message
+effects now enter the comparison, so the totals differ. Remaining failing
+checks fell from 20,886 to 15,175, with 1,156 detailed gap reports.
 
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
-trigger beat near 87.050. This resolves that timeline failure. The trail actors
-`def-0227` through `def-0258` finish transparent in ITGmania and opaque in
-DeadSync; their positions and visibility also differ during play. Other
-remaining gaps include gameplay message sequences such as `MawaWrongP1/P2`,
-`KillPatient3P1/P2` and `AndersDieFrontP1/P2`.
+trigger beat near 87.050. Its state changes are now deferred as well. Remaining
+gaps include trail opacity/visibility, projected sprite bounds, one player
+range, two vibration stops near beat 104.012, the `ChanceTime` broadcast near
+beat 540.076 and stateful `ToshiUp` and `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru9-queued-broadcast-parity.log` at the workspace
+Local detailed audit output: `.tmp/mawaru9-deferred-final.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
-## Next reproducible gap
+## Next investigations
 
-Finite queued commands still execute their Lua variable changes ahead of
-their dispatch frame during compilation. Correcting a broadcast's timestamp
-does not defer those changes. The native-backed `queued-state` fixture sets a
-flag in a delayed command and checks it from an update callback: native
-ITGmania completes without errors, while DeadSync reports an early state
-change at beat 1.017. This is a candidate cause of Mawaru9's remaining body
-simulation differences, not yet a proven explanation for every render gap.
+The full debug comparison took 2,530.60 seconds (42 minutes), versus roughly
+five minutes before deferred execution. Profile replay and comparison stages
+before attributing the increase to gameplay or song loading. This pass checks
+semantic correctness; it does not establish acceptable loading performance.
 
-The failing regression is explicitly registered with an ignore reason:
+The highest remaining failure count is projected geometry. The two missing
+vibration stops and `ChanceTime` give smaller, frame-specific reproductions to
+investigate alongside the trail fades. Static indirect message probes can also
+leak local Lua upvalue changes; the fixed queued-state fixture deliberately
+uses a global flag and does not claim that separate probe problem is resolved.
+
+The previously failing queue-state regression is now enabled:
 
 ```powershell
-cargo test --test song_lua_itgmania_semantic_parity queued_lua_state_matches_native_dispatch -- --exact --ignored --nocapture
+cargo test --test song_lua_itgmania_semantic_parity queued_lua_state_matches_native_dispatch -- --exact --nocapture
 ```
 
-Its Lua, simfile and native trace are retained inside DeadSync. Fix the queue
-execution timing and enable this regression before declaring that gap closed.
+Its Lua, simfile and native trace are retained inside DeadSync. The command
+passes without an ignore flag and without changing the native expected trace.
 
 ## Project scope
 

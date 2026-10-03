@@ -162,6 +162,7 @@ fn startup_command(
     if blocks.is_empty() {
         let (_, delta) = overlay_delta_pair_from_states(startup.initial, ready, ready)?;
         blocks.push(crate::SongLuaOverlayCommandBlock {
+            queued: false,
             start: 0.0,
             duration: 0.0,
             easing: None,
@@ -2136,6 +2137,45 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
             if tween_reset {
+                for sample in scheduled_samples
+                    .iter()
+                    .filter(|sample| sample.overlay_index == overlay_index)
+                {
+                    let clock = next_seconds + f64::from(sample.frame_advance);
+                    let current = if clock >= sample.start_seconds
+                        && sample
+                            .dispatch_seconds
+                            .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
+                    {
+                        lerp_scheduled_value(
+                            &sample.from,
+                            &sample.value,
+                            scheduled_overlay_factor(sample, clock),
+                        )
+                    } else {
+                        overlay_state_update_value(&from_states[overlay_index], sample.target)
+                    };
+                    set_overlay_state_update_value(
+                        &mut update_states[overlay_index],
+                        sample.target,
+                        &current,
+                    );
+                    set_overlay_state_update_value(
+                        &mut to_states[overlay_index],
+                        sample.target,
+                        &current,
+                    );
+                    push_captured_overlay_value(
+                        tracks,
+                        track_indices,
+                        overlay_index,
+                        sample.target,
+                        beat,
+                        &from_states[overlay_index],
+                        next_beat,
+                        &current,
+                    );
+                }
                 scheduled_samples.retain(|sample| sample.overlay_index != overlay_index);
             }
             let actor = overlays[overlay_index].borrow();
@@ -3577,11 +3617,16 @@ fn apply_perframe_active_message<Kind>(
         return Ok(());
     };
     let elapsed = beat_span_seconds(context, message.start_beat, beat);
-    let state = overlay_state_after_blocks(message.base, &command.blocks, elapsed);
+    let keep = |block: &&crate::SongLuaOverlayCommandBlock| {
+        !block.queued || command.message.starts_with("__songlua_")
+    };
+    let state =
+        overlay_state_after_blocks(message.base, command.blocks.iter().filter(keep), elapsed);
     set_actor_overlay_getter_state(lua, &overlay.table, state)?;
     let duration = command
         .blocks
         .iter()
+        .filter(keep)
         .map(|block| block.start + block.duration.max(0.0))
         .fold(0.0_f32, f32::max);
     if elapsed >= duration {
