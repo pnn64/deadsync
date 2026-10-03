@@ -65,6 +65,8 @@ impl Fixture {
                         lua.create_function(|lua, actor: Table| {
                             let (beat, _) = compile_song_runtime_values(lua)?;
                             crate::lua_util::capture_block_set_f32(lua, &actor, "y", beat * 2.0)?;
+                            // Synthetic actors schedule their next cycle directly.
+                            actor.raw_set("__songlua_recurring_update_command", "TickCommand")?;
                             Ok(())
                         })
                         .unwrap(),

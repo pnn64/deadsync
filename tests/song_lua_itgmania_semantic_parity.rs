@@ -4752,6 +4752,38 @@ fn recurring_visibility_matches_native() {
 }
 
 #[test]
+fn recurring_stop_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/recurring-stop.json.zst"),
+    );
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/recurring-stop.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let driver = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Driver"))
+        .expect("recurring driver");
+    let x = compiled[primary]
+        .overlay_updates
+        .iter()
+        .find(|track| {
+            track.overlay_index == driver && track.target == SongLuaOverlayUpdateTarget::X
+        })
+        .expect("driver call count");
+    assert_eq!(
+        x.samples.last().expect("last driver position").value,
+        SongLuaOverlayUpdateValue::F32(151.0),
+        "native stops after 151 calls, without an explicit stoptweening"
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Recurring stop"));
+    assert_eq!(parity.checks(), 737);
+    parity.assert_complete("Recurring stop");
+}
+
+#[test]
 fn finite_queue_controls_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

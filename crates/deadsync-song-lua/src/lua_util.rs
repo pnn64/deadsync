@@ -9470,17 +9470,10 @@ pub fn run_actor_startup_commands(
         for (pointer, (actor, initial)) in initial_states {
             flush_actor_capture(&actor)?;
             let blocks = read_actor_capture_blocks(&actor).map_err(mlua::Error::external)?;
-            let mut state = initial;
-            let changes = blocks.iter().any(|block| {
-                let previous = state;
-                crate::apply_overlay_delta(&mut state, &block.delta);
-                state != previous
-            });
-            if changes
-                || actor_overlay_initial_state(&actor).map_err(mlua::Error::external)? != initial
-            {
-                states.insert(pointer, SongLuaStartupState { initial, blocks });
-            }
+            // The initial zero-delta callback can copy a queued actor's state
+            // into an otherwise untouched sibling. Keep its pre-queue state
+            // too; startup_command filters unchanged actors after that callback.
+            states.insert(pointer, SongLuaStartupState { initial, blocks });
         }
     }
     Ok((states, startup_tweens))
@@ -10043,6 +10036,8 @@ fn run_recurring_update(
         .unwrap_or(0.0);
     if interval <= f64::EPSILON {
         reset_actor_capture(lua, actor)?;
+        actor.set("__songlua_recurring_update_command", Value::Nil)?;
+        invalidate_compile_update_plan(lua);
         if let Err(err) = run_actor_named_command(lua, actor, command) {
             report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
         }
@@ -10072,6 +10067,10 @@ fn run_recurring_update(
         }
 
         reset_actor_capture(lua, actor)?;
+        // Consume the pending command. Only a new self-queue keeps this loop
+        // alive; a conditional command can finish without scheduling a cycle.
+        actor.set("__songlua_recurring_update_command", Value::Nil)?;
+        invalidate_compile_update_plan(lua);
         // The preceding cycle has drained this actor's queue. Do not carry its
         // captured tail forward and advance the same durations a second time.
         if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
@@ -10096,6 +10095,13 @@ fn run_recurring_update(
         }
         if let Err(err) = result {
             report_update_error(lua, actor, UPDATE_CMD_ERROR_KEY, command, &err)?;
+        }
+        if actor
+            .get::<Option<LuaFieldText<128>>>("__songlua_recurring_update_command")?
+            .is_none()
+        {
+            actor.set("__songlua_recurring_update_time_left", Value::Nil)?;
+            return Ok(());
         }
         runs += 1;
         interval = actor

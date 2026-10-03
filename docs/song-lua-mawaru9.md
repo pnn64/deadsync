@@ -1,6 +1,6 @@
 # Mawaru9 compatibility checkpoint
 
-Updated 2026-10-03. Song: `lua-songs/mawaru9/mawaru9.sm`, dance-single
+Updated 2026-10-04. Song: `lua-songs/mawaru9/mawaru9.sm`, dance-single
 Challenge, description `TaroNuke`.
 
 ## Resolved blockers
@@ -62,6 +62,10 @@ Challenge, description `TaroNuke`.
   parent's rotation. Dropping the scale factors at an intermediate frame
   moved ancestor Z scale after the road's X rotation, distorting both the
   sprite and the next child offset.
+- Recurring commands consume their pending marker before dispatch. A command
+  that finishes without self-queuing stops; its finite tween tail still runs.
+- Pre-queue snapshots retain untouched siblings until the initial getter
+  callback runs, preventing copied queued state from appearing at beat zero.
 
 ## Native reference
 
@@ -190,11 +194,11 @@ cargo test --test song_lua_itgmania_semantic_parity
 
 Without the override, the default remains the repository's parent. The original
 real-repository attempt failed seven corpus checks because its parent did not
-contain `allowed/` and `lua-songs/`; all 77 current tests pass with the existing workspace data.
+contain `allowed/` and `lua-songs/`; use the workspace override for those tests.
 
 ## Complete song audit
 
-After these fixes: **111,857 / 117,464 checks pass (95.23%)**. The ignored
+After these fixes: **112,157 / 117,302 checks pass (95.61%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -203,14 +207,14 @@ DeadSync comparison.
 | --- | --- |
 | Compile info | 12 / 12 |
 | Layer order | 4 / 4 |
-| Final render | 3,566 / 3,748 |
-| Render persistence | 6,584 / 6,587 |
-| Update values | 23,065 / 23,197 |
+| Final render | 3,748 / 3,748 |
+| Render persistence | 6,571 / 6,581 |
+| Update values | 23,052 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 58,734 / 64,018 |
+| Projected geometry | 58,877 / 63,862 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 223 / 224 |
-| Message commands | 225 / 227 |
+| Message commands | 226 / 227 |
 | Runtime modifiers | 46 / 46 |
 
 The former Sprite/Model ordering difference came from unpinned noteskins;
@@ -219,23 +223,34 @@ instance-aware comparison still report the remaining gaps rather than
 changing expected values or omitting checks. The native capture is unchanged.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 5,607, with 739 detailed gap reports. Before the affine
+checks are now 5,145, with 571 detailed gap reports. Before the affine
 fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
 geometry checks. The parent-translation pass retained 106,321 passing checks;
 the ancestor-scale pass added another 25 without changing the reference.
-The recurring-tween pass adds **5,511**: 5,434 in projected geometry and 77 in
+The 0.5.1719 recurring-tween pass added **5,511**: 5,434 in projected geometry and 77 in
 render persistence. Its final audit retains the previous 23,065/23,197 raw
 update checks after correcting the 320 visibility-write mismatches found
-in its first complete run. Other section counts are unchanged.
+in its first complete run. That checkpoint passed 111,857/117,464.
+
+The 0.5.1720 conditional-loop correction makes all final alpha/visibility
+checks pass, including the formerly persistent trail pools. `ToshiUp` also
+matches. The denominator decreases by 162 with unchanged native data and
+comparison code: persistence probes require an active compiled update track,
+and projected alpha/bounds checks require visibility in both engines. Stopped
+loops remove stale tracks and alter which geometry checks run. The latest
+audit therefore has 300 more passing checks and 462 fewer failing checks;
+these are not 462 identical comparisons newly passing. Persistence and raw
+update failures increased by 7 and 13 respectively, primarily in Reisen's
+pooled arrows. Investigate their lifecycle and dispatch timing independently.
 
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
 trigger beat near 87.050. Its state changes are now deferred as well. Remaining
-gaps include trail opacity/visibility, projected sprite bounds, one player
+gaps include Reisen pool writes and visibility, projected sprite bounds, one player
 range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
-beat 540.076 and stateful `ToshiUp` and `TVGrow` target writes.
+beat 540.076 and stateful `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru-ancestor-scale-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-recurring-stop-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -393,7 +408,7 @@ comparison tolerances. The intermediate run, before the immediate-write
 capture correction, passed 111,537/117,464 in 780.10 seconds. Keep that
 intermediate result separate from the final checkpoint above.
 
-Remaining geometry reports start with two background bounds at beat zero
+At the 0.5.1719 checkpoint, remaining geometry reports started with two background bounds at beat zero
 (`def-0002` and `def-0006`) and then body actors such as `def-0263` near
 beat 100.275. The backgrounds were newly reported by this pass and need
 investigation of startup placement. Trail alpha/visibility, stateful
@@ -407,6 +422,41 @@ The trail script's reproduction target is a reused actor that receives
 `HideCommand` sets visibility false and queues `aux(0)` after `sleep(0)`.
 Check this pool lifecycle independently against native before changing
 capture or queue behavior for the remaining trail failures.
+
+The isolated pooled-trail lifecycle passes 565/565 native comparisons. The
+remaining trail failure instead reproduces when the driver conditionally
+stops requeuing itself. Body `UpdateCommand` only queues its next cycle while
+`mawaru_curgame == 2`. The compiled recurring-command runner previously kept
+its old pending-command marker when a callback finished without another queue,
+so it continued spawning trails after native stopped.
+
+The runner now consumes that marker before dispatch. A callback must actually
+self-queue to schedule another cycle. When it stops, the update plan is
+invalidated while any finite tween and queued tail command remain intact.
+The old startup-state filter also discarded untouched siblings before the
+initial getter callback copied a queued actor's state into them. Retaining
+their pre-queue snapshots prevents that first result appearing at beat zero;
+the later startup-command construction still filters actors without changes.
+
+The portable `recurring-stop` fixture checks two reused pools, a visible getter
+witness, termination without `stoptweening`, exactly 151 driver calls, and the
+final finite tween. It failed 712/737 before both corrections and now passes
+**737/737** against the unchanged native capture. Native reports zero errors
+or dropped events. Compression was verified by an exact round trip (172,371
+bytes to 15,965); decoded SHA256:
+`3365340d046a26cac3d21a9a74680fb9b72e5280b610c86a37e130905420b152`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity recurring_stop_matches_native -- --exact --nocapture
+```
+
+The 0.5.1720 complete audit took **419.22 seconds**: 332.73 seconds compiling,
+54.91 seconds comparing projected geometry and 23.18 seconds comparing
+vibration. The regular regression passes alongside all 962 Lua/profile tests
+and all 78 regular semantic tests. The synthetic dispatch benchmark fixtures
+now explicitly schedule their next cycle instead of assuming a command
+repeats without another queue; their frozen comparison implementations remain
+unchanged. These timings measure the debug audit, not gameplay performance.
 
 ## Project scope
 

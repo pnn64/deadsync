@@ -119,7 +119,10 @@ fn update_dispatch_keeps_recurring_preorder_callback_postorder_and_rates() {
                 a.__songlua_actor_type='ActorFrame'
                 a.__songlua_update_rate=rate
                 a.__songlua_recurring_update_command='Tick'
-                a.Tick=function() events[#events+1]=name..':tick' end
+                a.Tick=function(self)
+                    events[#events+1]=name..':tick'
+                    self.__songlua_recurring_update_command='Tick'
+                end
                 a.__songlua_update_function=function(_,dt) events[#events+1]=name..':'..dt end
                 return a
             end
@@ -217,7 +220,8 @@ fn update_dispatch_recurring_keeps_boundaries_caps_changes_and_command_errors() 
                 .raw_set("__songlua_recurring_update_interval", 0.25)
                 .unwrap();
             actor.raw_set("runs", 0).unwrap();
-            actor.raw_set(name.as_str(), lua.load("return function(self) self.runs=self.runs+1; if self.runs==2 then self.__songlua_recurring_update_interval=0.125 end; if self.runs==3 then error('sentinel',0) end end").eval::<Function>().unwrap()).unwrap();
+            actor.raw_set("command_name", name.as_str()).unwrap();
+            actor.raw_set(name.as_str(), lua.load("return function(self) self.runs=self.runs+1; self.__songlua_recurring_update_command=self.command_name; if self.runs==2 then self.__songlua_recurring_update_interval=0.125 end; if self.runs==3 then error('sentinel',0) end end").eval::<Function>().unwrap()).unwrap();
             let mut trace = Vec::new();
             for delta in [0.0, -1.0, 0.25, 0.001, 0.5, 100.0] {
                 recurring(&lua, &actor, delta, true, old).unwrap();
@@ -274,6 +278,12 @@ impl Fixture {
             .load("return function(self) self.ticks=self.ticks+1 end")
             .eval()
             .unwrap();
+        // Synthetic actors have no queuecommand method. Explicitly schedule
+        // the next cycle so the benchmark measures an actual recurring loop.
+        let recurring_tick: Function = lua
+            .load("return function(self) self.ticks=self.ticks+1; self.__songlua_recurring_update_command='Tick' end")
+            .eval()
+            .unwrap();
         for i in 1..=count {
             let actor = lua.create_table().unwrap();
             actor.raw_set("__songlua_actor_type", "Actor").unwrap();
@@ -287,7 +297,7 @@ impl Fixture {
                 actor
                     .raw_set("__songlua_recurring_update_interval", 0.25)
                     .unwrap();
-                actor.raw_set("Tick", &tick).unwrap();
+                actor.raw_set("Tick", &recurring_tick).unwrap();
             }
             actor.raw_set("Pulse", &tick).unwrap();
             actor_active_commands(&lua, &actor).unwrap();
