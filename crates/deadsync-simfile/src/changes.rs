@@ -522,7 +522,7 @@ fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| {
-            !is_mac_resource_fork(path) && path.is_file() && is_bgchange_movie_path(path)
+            !is_mac_resource_fork(path) && is_bgchange_movie_path(path) && path.is_file()
         })
         .collect::<Vec<_>>();
     files.sort_by_cached_key(|path| {
@@ -944,3 +944,7 @@ mod tests {
         dir
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/movie_filtering.rs"]
+mod movie_filtering_perf;

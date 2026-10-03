@@ -359,7 +359,7 @@ fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {
-            !is_mac_resource_fork(path) && path.is_file() && is_bgchange_movie_path(path)
+            !is_mac_resource_fork(path) && is_bgchange_movie_path(path) && path.is_file()
         })
         .collect::<Vec<_>>();
     paths.sort_by(|left, right| random_movie_path_cmp(left, right));

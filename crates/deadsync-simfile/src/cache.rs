@@ -1489,17 +1489,26 @@ fn build_gameplay_chart_from_ref(
     chart: &SerializableChartData,
     global_offset_seconds: f32,
 ) -> GameplayChartData {
-    build_gameplay_chart_from_payload(
-        CachedChartPayload {
-            offset: chart.offset,
-            notes: chart.notes.clone(),
-            parsed_notes: chart.parsed_notes.clone(),
-            row_to_beat: chart.row_to_beat.clone(),
-            timing_segments: chart.timing_segments.clone(),
-            chart_attacks: chart.chart_attacks.clone(),
-        },
+    let timing_segments: TimingSegments = chart.timing_segments.clone().into();
+    let timing = TimingData::from_segments(
+        -chart.offset,
         global_offset_seconds,
-    )
+        &timing_segments,
+        &chart.row_to_beat,
+    );
+    GameplayChartData {
+        notes: chart.notes.clone(),
+        parsed_notes: chart
+            .parsed_notes
+            .iter()
+            .cloned()
+            .map(ParsedNote::from)
+            .collect(),
+        row_to_beat: chart.row_to_beat.clone(),
+        timing_segments,
+        timing,
+        chart_attacks: chart.chart_attacks.clone(),
+    }
 }
 
 pub fn build_requested_gameplay_charts(
@@ -3432,6 +3441,13 @@ mod tests {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/perf/chart_metadata.rs"
+        ));
+    }
+
+    mod gameplay_note_loading_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/gameplay_note_loading.rs"
         ));
     }
 

@@ -126,7 +126,7 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     let mut paths = read_dir
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| !is_mac_resource_fork(path) && path.is_file() && is_song_art_image(path))
+        .filter(|path| !is_mac_resource_fork(path) && is_song_art_image(path) && path.is_file())
         .collect::<Vec<_>>();
     sort_song_art_paths(&mut paths);
     paths
@@ -415,3 +415,7 @@ mod tests {
         dir
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/asset_filtering.rs"]
+mod asset_filtering_perf;
