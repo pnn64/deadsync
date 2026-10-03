@@ -2333,7 +2333,16 @@ pub fn broadcast_song_lua_message(
     }
     let command = ActorCommandName::new(message, "MessageCommand");
     let globals = lua.globals();
-    let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
+    // A queued command can be captured ahead of the current callback. Use
+    // its native dispatch frame, including pauses and split chart timing.
+    let beat = lua
+        .app_data_ref::<SongLuaQueuedCommand>()
+        .and_then(|scope| scope.time.map(|(frame, _)| frame))
+        .and_then(|frame| {
+            lua.app_data_ref::<SongLuaCompileFrames>()
+                .and_then(|frames| frames.beats.get(frame).copied())
+        })
+        .unwrap_or_else(|| compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat));
     // Synchronous On broadcasts are already part of the startup snapshot.
     // Queued startup commands run after this scope, on the first update.
     let on_startup = lua.app_data_ref::<SongLuaStartupQueues>().is_some();
@@ -8940,6 +8949,7 @@ struct SongLuaQueueClock {
 
 pub(crate) struct SongLuaCompileFrames {
     times: Vec<f64>,
+    beats: Vec<f32>,
     frame: usize,
     epoch: usize,
     clocks: FxHashMap<usize, SongLuaQueueClock>,
@@ -8960,16 +8970,17 @@ impl SongLuaCompileFrames {
     }
 }
 
-pub(crate) fn set_compile_frames(lua: &Lua, deltas: impl Iterator<Item = f64>) {
+pub(crate) fn set_compile_frames(lua: &Lua, frames: impl Iterator<Item = (f64, f64)>) {
     let mut seconds = 0.0;
-    let times = deltas
-        .map(|delta| {
+    let (beats, times) = frames
+        .map(|(beat, delta)| {
             seconds += delta;
-            seconds
+            (beat as f32, seconds)
         })
-        .collect();
+        .unzip();
     lua.set_app_data(SongLuaCompileFrames {
         times,
+        beats,
         frame: 0,
         epoch: 0,
         clocks: FxHashMap::default(),

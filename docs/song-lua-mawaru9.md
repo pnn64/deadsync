@@ -34,6 +34,9 @@ Challenge, description `TaroNuke`.
   DeadSync verifier no longer collapse instances into one definition ID.
 - Init queue and shared-actor regression fixtures live inside the Lua crate,
   so the real repository's tests do not depend on a sibling harness checkout.
+- Broadcasts from finite queued commands use the dispatch frame's actual beat
+  rather than the callback beat that scheduled them. The frame map retains
+  the sampled song clock, including timing stops.
 
 ## Native reference
 
@@ -68,18 +71,21 @@ cargo test --test song_lua_itgmania_semantic_parity corpora::lua_songs::mawaru9 
 
 - Harness: 119 regular tests pass, including separate instances, unique IDs,
   parent-specific draw order, chart identity and Init queue regressions.
-- DeadSync Lua and profile gameplay: 961 tests pass. The real repository also
-  passes all 942 Lua crate tests using its own fixture files.
+- DeadSync Lua and profile gameplay: 962 tests pass. The real repository also
+  passes all 943 Lua crate tests using its own fixture files.
 - Model parser: 19 tests pass, including separate files with a materials
   directory and a bone rotation animation.
 - Selected corpus coverage passes with Mawaru9 registered.
-- Semantic harness checks: 68 regular tests pass. The shared-actor native
+- Semantic harness checks: 69 regular tests pass. The shared-actor native
   regression passes all 20 checks, including each instance's final alpha and
   projected position. It failed before the loader and verifier fixes.
+- Nested queued-broadcast fixtures pass 39/39 checks with a continuous clock
+  and 34/34 with a timing stop. The continuous fixture failed its message
+  timing check before the fix. Both compare exact native dispatch beats.
 
 ## Complete song audit
 
-After these fixes: **67,429 / 88,316 checks pass (76.35%)**. The ignored
+After these fixes: **67,430 / 88,316 checks pass (76.35%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -94,7 +100,7 @@ DeadSync comparison.
 | Player ranges | 13 / 14 |
 | Projected geometry | 21,930 / 37,540 |
 | Projected vibration | 19,383 / 19,387 |
-| Timeline | 209 / 224 |
+| Timeline | 210 / 224 |
 | Message commands | 215 / 227 |
 | Runtime modifiers | 46 / 46 |
 
@@ -103,17 +109,36 @@ all four layer-order checks pass with Cyber. The complete capture and
 instance-aware comparison still report the remaining gaps rather than
 changing expected values or omitting checks.
 
-Start further investigation with the queued `Start -> SpawnPlayers ->
-SetControlling` sequence in `lua/body/default.lua`: DeadSync is missing the
-resulting `BodyRotateBuildings` message near beat 89.701. The trail actors
+The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
+`BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
+trigger beat near 87.050. This resolves that timeline failure. The trail actors
 `def-0227` through `def-0258` finish transparent in ITGmania and opaque in
 DeadSync; their positions and visibility also differ during play. Other
 remaining gaps include gameplay message sequences such as `MawaWrongP1/P2`,
 `KillPatient3P1/P2` and `AndersDieFrontP1/P2`.
 
-Local detailed audit output: `.tmp/mawaru9-instance-parity-final.log` at the workspace
+Local detailed audit output: `.tmp/mawaru9-queued-broadcast-parity.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
+
+## Next reproducible gap
+
+Finite queued commands still execute their Lua variable changes ahead of
+their dispatch frame during compilation. Correcting a broadcast's timestamp
+does not defer those changes. The native-backed `queued-state` fixture sets a
+flag in a delayed command and checks it from an update callback: native
+ITGmania completes without errors, while DeadSync reports an early state
+change at beat 1.017. This is a candidate cause of Mawaru9's remaining body
+simulation differences, not yet a proven explanation for every render gap.
+
+The failing regression is explicitly registered with an ignore reason:
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity queued_lua_state_matches_native_dispatch -- --exact --ignored --nocapture
+```
+
+Its Lua, simfile and native trace are retained inside DeadSync. Fix the queue
+execution timing and enable this regression before declaring that gap closed.
 
 ## Project scope
 

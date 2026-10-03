@@ -4382,6 +4382,58 @@ fn native_song_lua_semantics_match_deadsync() {
 }
 
 #[test]
+fn queued_broadcasts_match_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (name, checks) in [("nested-start", 39), ("nested-start-stop", 34)] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json"
+        )));
+        let simfile = root.join(format!("crates/deadsync-song-lua/tests/fixtures/{name}.sm"));
+        let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+        let native = trace
+            .timeline_tracks
+            .iter()
+            .flat_map(|track| &track.samples)
+            .find(|sample| {
+                sample
+                    .3
+                    .first()
+                    .is_some_and(|name| name == "BodyRotateBuildings")
+            })
+            .expect("native queued broadcast")
+            .1
+            .expect("native broadcast beat");
+        let actual = compiled[primary]
+            .messages
+            .iter()
+            .find(|message| message.message == "BodyRotateBuildings")
+            .expect("compiled queued broadcast")
+            .beat;
+        assert!(
+            (native - actual).abs() <= 0.0001,
+            "{name}: {native} vs {actual}"
+        );
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        assert_eq!(parity.checks(), checks);
+        parity.assert_complete(&trace.title);
+    }
+}
+
+#[test]
+#[ignore = "queued commands still mutate Lua state before their native dispatch frame"]
+fn queued_lua_state_matches_native_dispatch() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/queued-state.json"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/queued-state.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    parity.assert_complete(&trace.title);
+}
+
+#[test]
 #[ignore = "compiles the complete Cuphead song-Lua runtime at 60 Hz"]
 fn cuphead_stateful_fire_message_matches_itgmania() {
     crate::paths::init();

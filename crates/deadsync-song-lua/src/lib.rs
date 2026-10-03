@@ -7618,6 +7618,21 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn queued_broadcasts_keep_the_dispatch_beat() {
+        let song_dir = test_dir("queued-broadcast-beat");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../tests/fixtures/nested-start.lua"))
+            .expect("write queued broadcast fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Queued Broadcast Beat");
+        context.song_display_bpms = [60.0; 2];
+        context.music_length_seconds = 4.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile queued broadcast");
+        let event = compiled.messages.iter().find(|event| event.message == "BodyRotateBuildings")
+            .expect("queued broadcast");
+        assert!((event.beat - 1.7666667).abs() < 0.0001);
+    }
+
+    #[test]
     fn compile_song_lua_propagates_actorframe_play_and_queued_commands() {
         let song_dir = test_dir("actorframe-command-propagation");
         let entry = song_dir.join("default.lua");

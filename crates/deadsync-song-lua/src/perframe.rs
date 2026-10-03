@@ -3006,7 +3006,7 @@ pub fn compile_update_functions<Kind>(
     let mut transform_masks = player_transform_masks(lua, &player_tables)?;
     let mut player_capture_masks = transform_masks;
     let mut frame_count = 0;
-    crate::lua_util::set_compile_frames(lua, replay.iter().map(|(_, delta)| *delta));
+    crate::lua_util::set_compile_frames(lua, replay.iter().copied());
     for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
         let next_beat = exact_beat as f32;
         frame_count += 1;
