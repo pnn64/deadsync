@@ -327,6 +327,7 @@ struct SemanticManifestEntry {
 struct Parity {
     sections: Vec<ParitySection>,
     gaps: Vec<String>,
+    stage_started: Option<std::time::Instant>,
 }
 
 struct ParitySection {
@@ -337,11 +338,25 @@ struct ParitySection {
 
 impl Parity {
     fn section(&mut self, name: &'static str) {
+        self.log_stage();
+        if std::env::var_os("DEADSYNC_SONG_LUA_TIMING_STDERR").is_some() {
+            self.stage_started = Some(std::time::Instant::now());
+        }
         self.sections.push(ParitySection {
             name,
             checks: 0,
             failed: 0,
         });
+    }
+
+    fn log_stage(&self) {
+        if let (Some(start), Some(section)) = (self.stage_started, self.sections.last()) {
+            eprintln!(
+                "Song lua semantic timing: {} elapsed_ms={:.3}",
+                section.name,
+                start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
     }
 
     fn check(&mut self, ok: bool, gap: impl FnOnce() -> String) {
@@ -380,6 +395,7 @@ impl Parity {
     }
 
     fn summary(&self, title: &str) -> String {
+        self.log_stage();
         let mut out = format!("{title}: {}", parity_status(self.passed(), self.checks()));
         let sections = self.sections.iter().filter(|section| section.checks > 0);
         let width = sections.clone().map(|section| section.name.len()).max();
@@ -1846,6 +1862,14 @@ fn compiled_update_value_at(
                     .is_some_and(|sample| sample.beat <= beat)
         })?
         .samples;
+    sample_update_track(context, samples, beat)
+}
+
+fn sample_update_track(
+    context: &SongLuaCompileContext,
+    samples: &[deadsync_song_lua::SongLuaOverlayUpdateSample],
+    beat: f32,
+) -> Option<SongLuaOverlayUpdateValue> {
     let next_index = samples.partition_point(|sample| sample.beat <= beat);
     if next_index == 0 {
         return None;
@@ -3159,8 +3183,27 @@ fn compiled_local_states_at(
     for ease in &compiled.overlay_eases {
         apply_compiled_ease(context, ease, seconds, &mut local[ease.overlay_index]);
     }
-    for (index, state) in local.iter_mut().enumerate() {
-        apply_runtime_updates(context, compiled, index, beat, state);
+    // Resolve the last active track per actor/property once. Applying the
+    // original track order retains interactions such as size versus stretch,
+    // including repeated targets and tracks that have not started yet.
+    let mut updates = HashMap::with_capacity(compiled.overlay_updates.len());
+    for track in compiled.overlay_updates.iter().rev() {
+        if track
+            .samples
+            .first()
+            .is_some_and(|sample| sample.beat <= beat)
+        {
+            updates
+                .entry((track.overlay_index, track.target))
+                .or_insert_with(|| sample_update_track(context, &track.samples, beat));
+        }
+    }
+    for track in &compiled.overlay_updates {
+        if let Some(Some(value)) = updates.get(&(track.overlay_index, track.target))
+            && let Some(state) = local.get_mut(track.overlay_index)
+        {
+            deadsync_song_lua::playback::apply_overlay_update(state, track.target, value);
+        }
     }
     local
 }
@@ -3177,6 +3220,164 @@ fn compiled_overlay_states_at(
         &local,
         [compiled.screen_width, compiled.screen_height],
     )
+}
+
+#[test]
+fn frame_updates_keep_track_precedence() {
+    use SongLuaOverlayUpdateTarget as Target;
+    use SongLuaOverlayUpdateValue as Update;
+    use deadsync_song_lua::{
+        SongLuaOverlayActor, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack,
+    };
+    let track = |overlay_index, target, values: &[(f32, Update)]| SongLuaOverlayUpdateTrack {
+        overlay_index,
+        target,
+        samples: values
+            .iter()
+            .map(|(beat, value)| SongLuaOverlayUpdateSample {
+                beat: *beat,
+                value: value.clone(),
+            })
+            .collect(),
+    };
+    let compiled = CompiledSongLua {
+        overlays: (0..2)
+            .map(|_| SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            })
+            .collect(),
+        overlay_updates: vec![
+            track(
+                0,
+                Target::X,
+                &[(0.0, Update::F32(0.0)), (2.0, Update::F32(20.0))],
+            ),
+            track(
+                1,
+                Target::X,
+                &[(0.0, Update::F32(100.0)), (2.0, Update::F32(200.0))],
+            ),
+            track(
+                0,
+                Target::Visible,
+                &[(0.0, Update::Bool(true)), (1.0, Update::Bool(false))],
+            ),
+            track(
+                0,
+                Target::StretchRect,
+                &[(0.0, Update::Vec4([0.0, 0.0, 64.0, 64.0]))],
+            ),
+            track(0, Target::Size, &[(0.0, Update::Vec2([8.0, 16.0]))]),
+            track(
+                0,
+                Target::StretchRect,
+                &[(1.0, Update::Vec4([5.0, 6.0, 25.0, 46.0]))],
+            ),
+            track(
+                0,
+                Target::X,
+                &[(1.0, Update::F32(500.0)), (2.0, Update::F32(600.0))],
+            ),
+            track(0, Target::X, &[]),
+            track(9, Target::X, &[(0.0, Update::F32(42.0))]),
+        ],
+        ..CompiledSongLua::default()
+    };
+    let mut context = SongLuaCompileContext::new("", "Track precedence");
+    context.song_timing_bpms = vec![(0.0, 60.0), (1.0, 120.0)];
+    for beat in [-0.1, 0.0, 0.5, 0.999, 1.0, 1.001, 1.5, 2.0, 3.0] {
+        let mut expected = compiled
+            .overlays
+            .iter()
+            .map(|actor| actor.initial_state)
+            .collect::<Vec<_>>();
+        for (index, state) in expected.iter_mut().enumerate() {
+            apply_runtime_updates(&context, &compiled, index, beat, state);
+        }
+        let actual = compiled_local_states_at(
+            &compiled,
+            &context,
+            beat,
+            song_elapsed_seconds_at(beat, &context),
+        );
+        assert_eq!(actual, expected, "all fields at beat {beat}");
+        if beat == 1.5 {
+            assert_eq!(actual[0].x, 550.0);
+            assert!((actual[1].x - 183.33333).abs() < 0.0001);
+            assert!(!actual[0].visible);
+        }
+    }
+}
+
+#[test]
+#[ignore = "benchmarks frame sampling against the per-actor sampler"]
+fn frame_track_sampling_benchmark() {
+    use SongLuaOverlayUpdateTarget as Target;
+    use deadsync_song_lua::{
+        SongLuaOverlayActor, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTrack,
+    };
+    let compiled = CompiledSongLua {
+        overlays: (0..2_000)
+            .map(|_| SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            })
+            .collect(),
+        overlay_updates: (0..2_000)
+            .flat_map(|overlay_index| {
+                [
+                    Target::X,
+                    Target::Y,
+                    Target::Z,
+                    Target::ZoomX,
+                    Target::RotationX,
+                    Target::RotationY,
+                    Target::RotationZ,
+                    Target::EffectPeriod,
+                ]
+                .map(|target| SongLuaOverlayUpdateTrack {
+                    overlay_index,
+                    target,
+                    samples: [0.0, 2.0]
+                        .map(|beat| SongLuaOverlayUpdateSample {
+                            beat,
+                            value: SongLuaOverlayUpdateValue::F32(beat + overlay_index as f32),
+                        })
+                        .into(),
+                })
+            })
+            .collect(),
+        ..CompiledSongLua::default()
+    };
+    let mut context = SongLuaCompileContext::new("", "Large field sampling");
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let mut expected = compiled
+        .overlays
+        .iter()
+        .map(|actor| actor.initial_state)
+        .collect::<Vec<_>>();
+    let start = std::time::Instant::now();
+    for (index, state) in expected.iter_mut().enumerate() {
+        apply_runtime_updates(&context, &compiled, index, 1.0, state);
+    }
+    let per_actor = start.elapsed();
+    let start = std::time::Instant::now();
+    let actual = compiled_local_states_at(&compiled, &context, 1.0, 1.0);
+    let per_frame = start.elapsed();
+    assert_eq!(
+        actual, expected,
+        "all 2,000 actors must retain identical state"
+    );
+    eprintln!(
+        "Frame sampling: actors=2000 tracks=16000 per_actor={per_actor:?} per_frame={per_frame:?}"
+    );
 }
 
 fn native_screen_vertices(sample: &[Value]) -> Option<Vec<[f32; 2]>> {
@@ -3299,6 +3500,53 @@ fn runtime_size_zoom_matches_native_drawing() {
         }
     }
     assert_eq!(checks, 176);
+}
+
+#[test]
+fn affine_skew_matches_native_drawing() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Affine skew");
+    context.screen_width = 854.0;
+    let compiled =
+        compile_song_lua_layers(&[song_dir.join("affine-skew.lua").as_path()], 0, &context)
+            .expect("compile nested skew fixture");
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/affine-skew-native.json"))
+            .expect("native skew drawing"),
+    )
+    .expect("native actor fixture");
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let states = compiled_overlay_states_at(&compiled[0], &context, 0.0, 0.0);
+    let mut checks = 0;
+    for actor in native["samples"][0]["actors"]
+        .as_array()
+        .expect("native actors")
+        .iter()
+        .filter(|actor| actor["kind"] == "sprite")
+    {
+        let name = actor["name"].as_str().expect("sprite name");
+        let index = compiled[0]
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(name))
+            .expect("compiled sprite");
+        let actual = compiled_world_vertices(states[index], [64.0, 32.0]);
+        for (corner, actual) in actual.iter().enumerate() {
+            let expected = &actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["world"];
+            for axis in 0..3 {
+                let expected = expected[axis].as_f64().expect("world coordinate") as f32;
+                assert!(
+                    (actual[axis] - expected).abs() < 0.0001,
+                    "{name} corner {corner} axis {axis}: {} vs {expected}",
+                    actual[axis]
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert_eq!(checks, 36);
 }
 
 #[test]

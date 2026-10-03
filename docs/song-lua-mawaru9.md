@@ -51,6 +51,9 @@ Challenge, description `TaroNuke`.
 - Indirect command probes restore shared local cells and tables after the
   capture. Stateful command detection retains changes across its two probe
   runs and restores them after the pair.
+- Two-dimensional parent composition applies scale before skew, matching
+  native `Actor::BeginDraw`. The affine decomposition derives X shear from
+  X scale. The previous ordering widened sprites under nonuniform scale.
 
 ## Native reference
 
@@ -87,6 +90,19 @@ The 0.5.1715 probe pass reran all 962 Lua/profile gameplay tests and all 71
 regular semantic tests successfully in both repositories. The stateful
 cross-actor regression now checks both direct and indirect commands.
 
+The 0.5.1716 affine pass reran all 962 Lua/profile gameplay tests and all 73
+regular semantic tests successfully in both repositories. Its full Mawaru9
+audit took 635.76 seconds: 422.97 seconds compiling, 177.04 seconds comparing
+geometry and 28.07 seconds comparing vibration. The audit remains failing.
+
+The affine regression uses actual native Actor/Sprite drawing, rather than
+the Lua semantic host's transform reconstruction. Its input is retained as
+`tests/fixtures/itgmania-song-lua-micro/affine-skew.request.json` and its
+native output as `affine-skew-native.json`. Before the fix, the curtain's
+first corner X was 103.02903 rather than native 101.60125. All 36 world
+coordinates now pass, covering nonuniform scale, skew, rotation, reflection
+and top alignment.
+
 - Harness: 119 regular tests pass, including separate instances, unique IDs,
   parent-specific draw order, chart identity and Init queue regressions.
 - DeadSync Lua and profile gameplay: 962 tests pass in both repositories,
@@ -94,7 +110,7 @@ cross-actor regression now checks both direct and indirect commands.
 - Model parser: 19 tests pass, including separate files with a materials
   directory and a bone rotation animation.
 - Selected corpus coverage passes with Mawaru9 registered.
-- Semantic harness checks: 71 regular tests pass in both repositories. The
+- Semantic harness checks: 73 regular tests pass in both repositories. The
   shared-actor native
   regression passes all 20 checks, including each instance's final alpha and
   projected position. It failed before the loader and verifier fixes.
@@ -117,11 +133,11 @@ cargo test --test song_lua_itgmania_semantic_parity
 
 Without the override, the default remains the repository's parent. The original
 real-repository attempt failed seven corpus checks because its parent did not
-contain `allowed/` and `lua-songs/`; all 71 pass with the existing workspace data.
+contain `allowed/` and `lua-songs/`; all 73 current tests pass with the existing workspace data.
 
 ## Complete song audit
 
-After these fixes: **102,190 / 117,365 checks pass (87.07%)**. The ignored
+After these fixes: **106,321 / 117,464 checks pass (90.51%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -132,9 +148,9 @@ DeadSync comparison.
 | Layer order | 4 / 4 |
 | Final render | 3,566 / 3,748 |
 | Render persistence | 6,507 / 6,587 |
-| Update values | 23,053 / 23,197 |
+| Update values | 23,065 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 49,156 / 63,919 |
+| Projected geometry | 53,275 / 64,018 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 223 / 224 |
 | Message commands | 225 / 227 |
@@ -146,7 +162,9 @@ instance-aware comparison still report the remaining gaps rather than
 changing expected values or omitting checks. The native capture is unchanged.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks fell from 20,886 to 15,175, with 1,156 detailed gap reports.
+checks are now 11,143, with 1,025 detailed gap reports. The immediately
+preceding audit used the same 117,464 checks and passed 104,988; the affine
+fix adds 1,333 passing geometry checks without changing the reference.
 
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
@@ -155,7 +173,7 @@ gaps include trail opacity/visibility, projected sprite bounds, one player
 range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
 beat 540.076 and stateful `ToshiUp` and `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru9-deferred-final.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-affine-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -176,6 +194,21 @@ earlier 2,530.60-second full audit therefore needs comparator profiling too;
 these separate runs establish the scale but are not a subtraction of timings
 from the same process.
 
+The verifier now resolves active update tracks once per frame while retaining
+the original write order and last-active-track precedence. Its regression
+checks duplicate, empty, future and out-of-range tracks across a BPM change.
+The ignored `frame_track_sampling_benchmark` compares every state field for
+2,000 actors with 16,000 tracks. The per-actor sampler took 2.880 seconds;
+the frame sampler took 21.15 milliseconds, with identical output. This is
+a verifier benchmark, not a gameplay frametime measurement.
+
+After the probe fix and before the affine rendering fix, the complete
+Mawaru9 audit took 566.30 seconds and passed 104,988/117,464 checks. Its
+measured stages were 344.23 seconds compiling, 185.43 seconds comparing
+projected geometry and 29.24 seconds comparing vibration. Enabling
+`DEADSYNC_SONG_LUA_TIMING_STDERR=1` now reports each semantic section too.
+Native expected values and comparator tolerances are unchanged.
+
 The highest remaining failure count is projected geometry. The two vibration
 mismatches and `ChanceTime` give smaller, frame-specific reproductions to
 investigate alongside the trail fades.
@@ -194,9 +227,8 @@ aliases and cells shared by different commands. ITGmania's independently
 captured trace passes 27/27 checks, as does the existing global-state fixture.
 The two runs used to identify stateful cross-actor commands share an outer
 scope, allowing their locals to evolve before restoring them after the pair.
-This regression is covered by the regular queue-state test below; the full
-Mawaru9 tally above is from the preceding pass and has not been rerun for this
-probe fix.
+This regression is covered by the regular queue-state test below. The full
+Mawaru9 tally above includes both the probe fix and the affine rendering fix.
 
 The previously failing queue-state regression is now enabled:
 

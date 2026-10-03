@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "name": "affine-skew",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "frame",
+        "name": "CurtainParent",
+        "state": {
+          "position": [
+            100,
+            80,
+            0
+          ],
+          "zoom": [
+            1.334375,
+            1,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "skew": [
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Curtain",
+            "size": [
+              64,
+              32
+            ],
+            "alignment": [
+              0.5,
+              0
+            ],
+            "state": {
+              "position": [
+                30,
+                -20,
+                0
+              ],
+              "zoom": [
+                1,
+                1,
+                1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "skew": [
+                -0.2,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "SkewedParent",
+        "state": {
+          "position": [
+            350,
+            180,
+            0
+          ],
+          "zoom": [
+            1.3,
+            0.7,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            20
+          ],
+          "skew": [
+            0.15,
+            -0.2
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Skewed",
+            "size": [
+              64,
+              32
+            ],
+            "alignment": [
+              0.5,
+              0.5
+            ],
+            "state": {
+              "position": [
+                30,
+                -20,
+                0
+              ],
+              "zoom": [
+                0.8,
+                1.2,
+                1
+              ],
+              "rotation": [
+                0,
+                0,
+                30
+              ],
+              "skew": [
+                -0.1,
+                0.04
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "ReflectedParent",
+        "state": {
+          "position": [
+            600,
+            280,
+            0
+          ],
+          "zoom": [
+            -1.5,
+            0.7,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            45
+          ],
+          "skew": [
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Reflected",
+            "size": [
+              64,
+              32
+            ],
+            "alignment": [
+              0.5,
+              0.5
+            ],
+            "state": {
+              "position": [
+                30,
+                -20,
+                0
+              ],
+              "zoom": [
+                0.8,
+                1.2,
+                1
+              ],
+              "rotation": [
+                0,
+                0,
+                -20
+              ],
+              "skew": [
+                0.12,
+                0.03
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

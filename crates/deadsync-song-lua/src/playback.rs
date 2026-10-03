@@ -1587,9 +1587,9 @@ fn song_lua_overlay_linear_2d(state: SongLuaOverlayState) -> Matrix2 {
     let skew_x = Matrix2::from_cols_array(&[1.0, 0.0, state.skew_x, 1.0]);
     let skew_y = Matrix2::from_cols_array(&[1.0, state.skew_y, 0.0, 1.0]);
     Matrix2::from_angle(state.rot_z_deg.to_radians())
+        * Matrix2::from_diagonal(Vector2::new(scale_x, scale_y))
         * skew_x
         * skew_y
-        * Matrix2::from_diagonal(Vector2::new(scale_x, scale_y))
 }
 
 fn song_lua_overlay_set_linear_2d(
@@ -1613,7 +1613,9 @@ fn song_lua_overlay_set_linear_2d(
     }
 
     state.rot_z_deg = rotation.to_degrees();
-    state.skew_x = local.y_axis.x / scale_y;
+    // Actor::BeginDraw applies scale before skew. The X shear coefficient
+    // therefore divides the off-diagonal entry by X scale, not Y scale.
+    state.skew_x = local.y_axis.x / scale_x;
     state.skew_y = 0.0;
     state.basezoom = 1.0;
     state.zoom = 1.0;
