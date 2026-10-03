@@ -599,13 +599,13 @@ fn start_download_worker() -> Result<SyncSender<DownloadJob>, String> {
 }
 
 fn queue_install_snapshot(runtime: &mut RuntimeState, pack: &PackInfo) -> Result<(), String> {
-    let mut snapshot = (*runtime.snapshot).clone();
-    if let Some(install) = snapshot
+    if let Some(index) = runtime
+        .snapshot
         .installs
-        .iter_mut()
-        .find(|install| install.pack_id == pack.id)
+        .iter()
+        .position(|install| install.pack_id == pack.id)
     {
-        match install.phase {
+        match runtime.snapshot.installs[index].phase {
             InstallPhase::Queued | InstallPhase::Downloading | InstallPhase::Extracting => {
                 return Err(format!("'{}' is already queued.", pack.name));
             }
@@ -616,19 +616,26 @@ fn queue_install_snapshot(runtime: &mut RuntimeState, pack: &PackInfo) -> Result
                 ));
             }
             InstallPhase::Error => {
-                *install = queued_install(pack);
-                runtime.snapshot = Arc::new(snapshot);
+                let snapshot = Arc::make_mut(&mut runtime.snapshot);
+                snapshot.installs[index] = queued_install(pack);
+                snapshot.installs.shrink_to_fit();
                 return Ok(());
             }
         }
     }
-    if snapshot.installs.len() == MAX_INSTALLS {
-        let terminal = snapshot.installs.iter().position(|install| {
+    let evict = if runtime.snapshot.installs.len() == MAX_INSTALLS {
+        let terminal = runtime.snapshot.installs.iter().position(|install| {
             matches!(install.phase, InstallPhase::Installed | InstallPhase::Error)
         });
         let Some(index) = terminal else {
             return Err("Too many pack installs are active.".to_string());
         };
+        Some(index)
+    } else {
+        None
+    };
+    let snapshot = Arc::make_mut(&mut runtime.snapshot);
+    if let Some(index) = evict {
         let evicted = snapshot.installs.remove(index);
         log::debug!(
             "Evicted terminal StepManiaOnline install history for pack {}.",
@@ -636,7 +643,20 @@ fn queue_install_snapshot(runtime: &mut RuntimeState, pack: &PackInfo) -> Result
         );
     }
     snapshot.installs.push(queued_install(pack));
-    runtime.snapshot = Arc::new(snapshot);
+    // Reuse must not retain more install storage than rebuilding the list.
+    let max_capacity = if evict.is_some() {
+        snapshot.installs.len()
+    } else {
+        snapshot
+            .installs
+            .len()
+            .saturating_sub(1)
+            .saturating_mul(2)
+            .max(4)
+    };
+    if snapshot.installs.capacity() > max_capacity {
+        snapshot.installs.shrink_to_fit();
+    }
     Ok(())
 }
 
@@ -1532,3 +1552,7 @@ mod preparation_perf {
         "/tests/perf/smo_preparation.rs"
     ));
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/install_queue.rs"]
+mod install_queue_perf;

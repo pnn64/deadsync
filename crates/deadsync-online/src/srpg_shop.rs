@@ -708,8 +708,8 @@ fn parse_downloads(body: &str) -> Result<Vec<ParsedDownload>, SrpgShopError> {
         .filter(|row| row.url.contains(".zip"))
         .map(|row| ParsedDownload {
             item_id: value_text(&row.id),
-            name: clean_cell(&row.song),
-            details: clean_cell(&row.data),
+            name: clean_cell(&row.song).into_owned(),
+            details: clean_cell(&row.data).into_owned(),
             url: absolutize_url(&row.url),
             site_downloaded: row.dled != 0,
         })
@@ -904,12 +904,12 @@ fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<Srpg
         name: if censor {
             "???".to_string()
         } else {
-            clean_cell(cell(2).as_ref())
+            clean_cell(cell(2).as_ref()).into_owned()
         },
         description: if censor {
             "Reach the required lifetime Jej total to reveal this song.".to_string()
         } else {
-            clean_cell(cell(3).as_ref())
+            clean_cell(cell(3).as_ref()).into_owned()
         },
         effect: if censor {
             "Difficulty: ???  •  Speed Tier: ???".to_string()
@@ -936,14 +936,19 @@ fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<Srpg
 }
 
 fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDownload> {
-    let url = object_text(map, &["url", "href", "download_url"])?;
+    let url = value_text_ref(Some(object_text_value(
+        map,
+        &["url", "href", "download_url"],
+    )?));
     if !url.contains(".zip") {
         return None;
     }
     Some(ParsedDownload {
-        item_id: object_text(map, &["id", "cid", "itemid"]).unwrap_or_default(),
-        name: object_text(map, &["song", "title", "name"])
-            .map(|name| clean_cell(&name))
+        item_id: object_text_value(map, &["id", "cid", "itemid"])
+            .map(value_text)
+            .unwrap_or_default(),
+        name: object_text_value(map, &["song", "title", "name"])
+            .map(|name| clean_cell(value_text_ref(Some(name)).as_ref()).into_owned())
             .unwrap_or_else(|| "SRPG10 unlock".to_string()),
         details: String::new(),
         url: absolutize_url(&url),
@@ -1066,12 +1071,16 @@ fn object_array<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a Ve
     })
 }
 
-fn object_text(map: &Map<String, Value>, keys: &[&str]) -> Option<String> {
+fn object_text_value<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a Value> {
     keys.iter().find_map(|wanted| {
         map.iter()
             .find(|(key, _)| key.eq_ignore_ascii_case(wanted))
-            .map(|(_, value)| value_text(value))
-            .filter(|value| !value.is_empty())
+            .map(|(_, value)| value)
+            .filter(|value| match value {
+                Value::String(text) => !text.is_empty(),
+                Value::Number(_) | Value::Bool(_) => true,
+                _ => false,
+            })
     })
 }
 
@@ -1089,11 +1098,36 @@ fn value_text_ref(value: Option<&Value>) -> Cow<'_, str> {
     }
 }
 
-fn clean_cell(text: &str) -> String {
+fn clean_cell(text: &str) -> Cow<'_, str> {
+    let mut previous_space = true;
+    let prefix_end = if text
+        .as_bytes()
+        .first()
+        .is_some_and(|byte| matches!(byte, b'<' | b'>' | b'&'))
+    {
+        0
+    } else {
+        text.char_indices()
+            .find_map(|(index, ch)| {
+                let needs_cleanup = matches!(ch, '<' | '>' | '&')
+                    || (ch.is_whitespace() && (ch != ' ' || previous_space));
+                previous_space = ch == ' ';
+                needs_cleanup.then_some(index)
+            })
+            .unwrap_or(text.len())
+    };
+    // Delay a trailing space until the next visible character needs it.
+    let prefix = text[..prefix_end]
+        .strip_suffix(' ')
+        .unwrap_or(&text[..prefix_end]);
+    if prefix_end == text.len() {
+        return Cow::Borrowed(prefix);
+    }
     let mut out = String::with_capacity(text.len());
+    out.push_str(prefix);
     let mut in_tag = false;
-    let mut pending_space = false;
-    let mut rest = text;
+    let mut pending_space = prefix.len() < prefix_end;
+    let mut rest = &text[prefix_end..];
     while !rest.is_empty() {
         // The legacy replacement order decodes these two nested forms because
         // `&amp;` is replaced before the later `&lt;`/`&gt;` passes.
@@ -1133,7 +1167,7 @@ fn clean_cell(text: &str) -> String {
             _ => {}
         }
     }
-    out
+    Cow::Owned(out)
 }
 
 fn absolutize_url(url: &str) -> String {
@@ -1478,3 +1512,11 @@ mod preparation_perf {
         "/tests/perf/srpg_shop.rs"
     ));
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/shop_effects.rs"]
+mod shop_effects_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/shop_objects.rs"]
+mod shop_objects_perf;
