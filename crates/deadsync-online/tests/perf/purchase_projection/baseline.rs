@@ -45,3 +45,14 @@ pub(super) fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDow
         site_downloaded: false,
     })
 }
+
+fn absolutize_url(url: &str) -> String {
+    let url = url.replace("\\/", "/");
+    if url.starts_with("https://") || url.starts_with("http://") {
+        url
+    } else if url.starts_with('/') {
+        format!("{BASE_ORIGIN}{url}")
+    } else {
+        format!("{BASE_ORIGIN}/{}", url.trim_start_matches("./"))
+    }
+}

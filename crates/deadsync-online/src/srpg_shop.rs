@@ -588,7 +588,16 @@ fn collect_simfile_titles(song_dir: &Path, keys: &mut HashSet<String>) {
         let Ok(file) = File::open(path) else {
             continue;
         };
-        for line in BufReader::new(file).lines().take(64).map_while(Result::ok) {
+        let mut reader = BufReader::new(file);
+        let mut line = String::new();
+        for _ in 0..64 {
+            line.clear();
+            if matches!(reader.read_line(&mut line), Ok(0) | Err(_)) {
+                break;
+            }
+            let line = line.strip_suffix('\n').map_or(line.as_str(), |line| {
+                line.strip_suffix('\r').unwrap_or(line)
+            });
             let Some(title) = line.trim_start().strip_prefix("#TITLE:") else {
                 continue;
             };
@@ -713,7 +722,7 @@ fn parse_downloads(body: &str) -> Result<Vec<ParsedDownload>, SrpgShopError> {
             },
             name: clean_owned_cell(row.song),
             details: clean_owned_cell(row.data),
-            url: absolutize_url(&row.url),
+            url: absolutize_url(row.url),
             site_downloaded: row.dled != 0,
         })
         .collect())
@@ -1179,9 +1188,23 @@ fn clean_cell(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
-fn absolutize_url(url: &str) -> String {
-    let url = url.replace("\\/", "/");
+fn absolutize_url(url: String) -> String {
+    let mut url = if url.contains('\\') {
+        let mut bytes = url.into_bytes();
+        bytes.dedup_by(|current, previous| {
+            if *current == b'/' && *previous == b'\\' {
+                *previous = b'/';
+                true
+            } else {
+                false
+            }
+        });
+        String::from_utf8(bytes).expect("removing ASCII backslashes preserves UTF-8")
+    } else {
+        url
+    };
     if url.starts_with("https://") || url.starts_with("http://") {
+        url.shrink_to_fit();
         url
     } else if url.starts_with('/') {
         format!("{BASE_ORIGIN}{url}")
@@ -1537,3 +1560,11 @@ mod owned_download_rows_perf;
 #[cfg(test)]
 #[path = "../tests/perf/purchase_projection.rs"]
 mod purchase_projection_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/owned_download_urls.rs"]
+mod owned_download_urls_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/simfile_titles.rs"]
+mod simfile_titles_perf;

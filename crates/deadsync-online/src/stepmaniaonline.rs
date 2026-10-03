@@ -115,11 +115,22 @@ fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (usize
             .sum::<usize>()
         + 21;
     let mut search_text = String::with_capacity(capacity);
-    search_text.extend(name.chars().flat_map(char::to_lowercase));
+    if name.is_ascii() {
+        search_text.push_str(name);
+        search_text.make_ascii_lowercase();
+    } else {
+        search_text.extend(name.chars().flat_map(char::to_lowercase));
+    }
     let normalized_name_len = search_text.len();
     for value in metadata.into_iter().flatten() {
         search_text.push(' ');
-        search_text.extend(value.chars().flat_map(char::to_lowercase));
+        if value.is_ascii() {
+            let start = search_text.len();
+            search_text.push_str(value);
+            search_text[start..].make_ascii_lowercase();
+        } else {
+            search_text.extend(value.chars().flat_map(char::to_lowercase));
+        }
     }
     search_text.push(' ');
     write!(&mut search_text, "{id}").expect("writing to a String cannot fail");
@@ -1560,3 +1571,7 @@ mod install_queue_perf;
 #[cfg(test)]
 #[path = "../tests/perf/catalog_completion.rs"]
 mod catalog_completion_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/pack_index.rs"]
+mod pack_index_perf;
