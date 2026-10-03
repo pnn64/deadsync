@@ -58,7 +58,7 @@ pub fn compile_song_lua(
         entry_path,
         context,
         song_lua_noteskin_resolver(),
-        crate::noteskin::load_itg_model_slots_from_path,
+        crate::noteskin::load_itg_model_slots,
         model_layer_from_slot,
         |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
     )
@@ -74,7 +74,7 @@ pub fn compile_song_lua_layers(
         primary_index,
         context,
         song_lua_noteskin_resolver(),
-        crate::noteskin::load_itg_model_slots_from_path,
+        crate::noteskin::load_itg_model_slots,
         model_layer_from_slot,
         |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
     )

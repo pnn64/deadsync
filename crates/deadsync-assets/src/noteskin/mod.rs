@@ -2,7 +2,7 @@ mod mask;
 mod texture;
 
 pub use self::texture::{
-    SpriteSlot, SpriteSource, build_model_geometry, load_itg_model_slots_from_path, test_model_slot,
+    SpriteSlot, SpriteSource, build_model_geometry, load_itg_model_slots, test_model_slot,
 };
 use self::texture::{
     apply_model_slot_plan, itg_apply_frame_override, itg_apply_state_properties_from_commands,
@@ -572,8 +572,8 @@ mod tests {
         AnimationRate, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS, NoteAnimPart,
         NoteColorType, Quantization, ReceptorIdleGlow, SpriteSlot, SpriteSource, Style,
         clear_itg_runtime_caches, itg_apply_state_properties_from_script,
-        itg_register_texture_dims_for_path, load_itg, load_itg_model_slots_from_path,
-        load_itg_skin, noteskin_itg,
+        itg_register_texture_dims_for_path, load_itg, load_itg_model_slots, load_itg_skin,
+        noteskin_itg,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -2085,7 +2085,7 @@ Bones: 0
 "#,
         )
         .unwrap();
-        let slots = load_itg_model_slots_from_path(&path).unwrap();
+        let slots = load_itg_model_slots(&path, &path, &path).unwrap();
         assert_eq!(slots.len(), 1);
         assert_eq!(slots[0].texture_key(), deadlib_assets::WHITE_TEXTURE_KEY);
         let mesh = slots[0].model.as_ref().unwrap();
@@ -2096,10 +2096,9 @@ Bones: 0
     #[test]
     fn shared_background_arrow_model_loads_with_texture_scroll() {
         init_asset_paths();
-        let slots = load_itg_model_slots_from_path(Path::new(
-            "assets/graphics/menu_bg_technique/arrow_model.txt",
-        ))
-        .expect("technique arrow model should load");
+        let path = Path::new("assets/graphics/menu_bg_technique/arrow_model.txt");
+        let slots =
+            load_itg_model_slots(path, path, path).expect("technique arrow model should load");
         assert_eq!(slots.len(), 1, "expected one arrow model layer");
         let slot = &slots[0];
         assert!(
@@ -2121,10 +2120,9 @@ Bones: 0
     #[test]
     fn shared_background_arrow_model_uv_scroll_uses_animation_cycle() {
         init_asset_paths();
-        let slots = load_itg_model_slots_from_path(Path::new(
-            "assets/graphics/menu_bg_technique/arrow_model.txt",
-        ))
-        .expect("technique arrow model should load");
+        let path = Path::new("assets/graphics/menu_bg_technique/arrow_model.txt");
+        let slots =
+            load_itg_model_slots(path, path, path).expect("technique arrow model should load");
         let slot = &slots[0];
         let uv_0 = slot.uv_for_frame_at(0, 0.0);
         let uv_5 = slot.uv_for_frame_at(0, 5.0);

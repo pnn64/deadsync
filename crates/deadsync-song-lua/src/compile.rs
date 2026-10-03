@@ -38,7 +38,7 @@ pub fn compile_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArr
     entry_path: &Path,
     context: &SongLuaCompileContext,
     noteskin_resolver: SongLuaNoteskinResolver,
-    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
     model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
     multitap_arrow_visual_spec: MultitapArrowVisualSpec,
 ) -> Result<
@@ -78,7 +78,7 @@ pub fn compile_song_lua_layers_with_default_host<
     primary_index: usize,
     context: &SongLuaCompileContext,
     noteskin_resolver: SongLuaNoteskinResolver,
-    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
     model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
     multitap_arrow_visual_spec: MultitapArrowVisualSpec,
 ) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String>
@@ -145,7 +145,7 @@ pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisu
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
-    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
     model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
     multitap_arrow_visual_spec: MultitapArrowVisualSpec,
 ) -> Result<
@@ -188,7 +188,7 @@ pub fn compile_song_lua_layers_with_actors<NoteskinSlot, ModelVertex, MultitapAr
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
-    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    read_model_slots: fn(&Path, &Path, &Path) -> Result<Arc<[NoteskinSlot]>, String>,
     model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
     mut multitap_arrow_visual_spec: MultitapArrowVisualSpec,
 ) -> Result<Vec<DefaultCompiledSongLua<NoteskinSlot, ModelVertex>>, String>

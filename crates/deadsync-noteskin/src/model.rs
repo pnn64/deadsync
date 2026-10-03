@@ -474,19 +474,23 @@ impl ItgModelSlotPlan {
     }
 }
 
-pub fn itg_load_model_slots_from_path<T>(
-    model_path: &Path,
+pub fn itg_load_model_slots<T>(
+    meshes_path: &Path,
+    materials_path: &Path,
+    bones_path: &Path,
     mut slot_from_texture_path: impl FnMut(&Path) -> Option<T>,
     mut apply_slot_plan: impl FnMut(&mut T, ItgModelSlotPlan),
 ) -> Result<Vec<T>, String> {
-    if !model_path.is_file() {
-        return Err(format!("model '{}' was not found", model_path.display()));
+    for path in [meshes_path, materials_path, bones_path] {
+        if !path.is_file() {
+            return Err(format!("model '{}' was not found", path.display()));
+        }
     }
 
-    let Some(search_dir) = model_path.parent() else {
+    let Some(search_dir) = materials_path.parent() else {
         return Err(format!(
             "model '{}' has no parent directory",
-            model_path.display()
+            materials_path.display()
         ));
     };
     let data = noteskin_itg::NoteskinData {
@@ -495,10 +499,11 @@ pub fn itg_load_model_slots_from_path<T>(
         metrics: noteskin_itg::IniData::default(),
         search_dirs: vec![search_dir.to_path_buf()],
     };
-    let model_auto_rot = itg_parse_milkshape_model_auto_rot(model_path);
+    let model_auto_rot = itg_parse_milkshape_model_auto_rot(bones_path);
     let mut slots = Vec::new();
 
-    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, model_path, model_path) {
+    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, meshes_path, materials_path)
+    {
         for layer in model_layers {
             let Some(mut slot) = slot_from_texture_path(&layer.texture.texture_path) else {
                 continue;
@@ -518,10 +523,10 @@ pub fn itg_load_model_slots_from_path<T>(
     }
 
     if slots.is_empty() {
-        let Some(model_texture) = itg_resolve_model_texture_path(&data, model_path) else {
+        let Some(model_texture) = itg_resolve_model_texture_path(&data, materials_path) else {
             return Err(format!(
                 "model '{}' did not resolve a texture",
-                model_path.display()
+                materials_path.display()
             ));
         };
         let Some(mut slot) = slot_from_texture_path(&model_texture.texture_path) else {
@@ -530,11 +535,11 @@ pub fn itg_load_model_slots_from_path<T>(
                 model_texture.texture_path.display()
             ));
         };
-        let model = itg_parse_milkshape_model(&data, model_path);
+        let model = itg_parse_milkshape_model(&data, meshes_path);
         if model.is_none() {
             return Err(format!(
                 "model '{}' did not produce any geometry",
-                model_path.display()
+                meshes_path.display()
             ));
         }
         apply_slot_plan(
@@ -1293,7 +1298,9 @@ Materials: 1
         )
         .unwrap();
 
-        let slots = itg_load_model_slots_from_path(
+        let slots = itg_load_model_slots(
+            &model_path,
+            &model_path,
             &model_path,
             |path| {
                 assert_eq!(path, texture_path.as_path());
@@ -1309,6 +1316,57 @@ Materials: 1
         .expect("model slot loader should build one layer-backed slot");
 
         assert_eq!(slots, ["tap:model"]);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_model_slots_reads_separate_pieces() {
+        let root = temp_model_root("model-pieces");
+        let material_dir = root.join("materials");
+        fs::create_dir(&material_dir).unwrap();
+        let texture_path = material_dir.join("tap.png");
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255]))
+            .save(&texture_path)
+            .unwrap();
+        let meshes = root.join("meshes.txt");
+        let materials = material_dir.join("materials.txt");
+        let bones = root.join("bones.txt");
+        fs::write(
+            &meshes,
+            "// MilkShape 3D ASCII\nMeshes: 1\n\"mesh\" 0 0\n3\n\
+             0 -1 -1 0 0 0 0\n0 1 -1 0 1 0 0\n0 0 1 0 0 1 0\n\
+             0\n1\n0 0 1 2 0 0 0 1\n",
+        )
+        .unwrap();
+        fs::write(
+            &materials,
+            "Materials: 1\n\"mat\"\n0 0 0 1\n1 1 1 1\n0 0 0 1\n\
+             0 0 0 1\n0\n1\n\"tap.png\"\n\"\"\n",
+        )
+        .unwrap();
+        fs::write(
+            &bones,
+            "Bones: 1\n\"rotor\"\n\"\"\n0 0 0 0 0 0 0\n0\n2\n\
+             0 0 0 0\n30 0 0 1.570796327\n",
+        )
+        .unwrap();
+        let slots = itg_load_model_slots(
+            &meshes,
+            &materials,
+            &bones,
+            |path| {
+                assert_eq!(path, texture_path);
+                Some(None)
+            },
+            |slot, plan| *slot = Some(plan),
+        )
+        .expect("load separate mesh, material and bone files");
+        assert_eq!(slots.len(), 1);
+        let plan = slots[0].as_ref().unwrap();
+        assert_eq!(plan.model.as_ref().unwrap().vertices.len(), 3);
+        assert_eq!(plan.model_auto_rot_total_frames, 30.0);
+        assert_eq!(plan.model_auto_rot_z_keys.len(), 2);
+        assert!((plan.model_auto_rot_z_keys[1].z_deg - 90.0).abs() < 1e-4);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -1332,7 +1390,9 @@ Materials: 1
              0 0 0 0\n30 0 0 1.570796327\n60 0 0 3.141592654\n",
         );
         fs::write(&path, source).unwrap();
-        let slots = itg_load_model_slots_from_path(
+        let slots = itg_load_model_slots(
+            &path,
+            &path,
             &path,
             |texture| {
                 assert_eq!(texture, Path::new(MODEL_WHITE_TEXTURE));

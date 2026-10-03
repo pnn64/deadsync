@@ -6086,10 +6086,9 @@ fn song_lua_model_builds_textured_mesh_layers() {
 #[test]
 fn song_lua_multitap_model_preserves_vertical_squash_in_all_lanes() {
     crate::tests::init_paths();
-    let slots = deadsync_assets::noteskin::load_itg_model_slots_from_path(
-        &workspace_root().join("assets/noteskins/dance/cyber/_down tap note model.txt"),
-    )
-    .expect("cyber tap model should load");
+    let path = workspace_root().join("assets/noteskins/dance/cyber/_down tap note model.txt");
+    let slots = deadsync_assets::noteskin::load_itg_model_slots(&path, &path, &path)
+        .expect("cyber tap model should load");
     let mut assets = AssetManager::new();
     for slot in slots.iter() {
         assets.queue_texture_upload(slot.texture_key().to_owned(), image::RgbaImage::new(16, 16));
@@ -6153,8 +6152,9 @@ fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
     crate::tests::init_paths();
     let model_path =
         workspace_root().join("assets/noteskins/dance/ddr-note/_down tap note model.txt");
-    let slots = deadsync_assets::noteskin::load_itg_model_slots_from_path(&model_path)
-        .expect("ddr-note tap model should load");
+    let slots =
+        deadsync_assets::noteskin::load_itg_model_slots(&model_path, &model_path, &model_path)
+            .expect("ddr-note tap model should load");
     let mut rotated_slots = slots.iter().cloned().collect::<Vec<_>>();
     for slot in &mut rotated_slots {
         slot.set_rotation_deg(90);

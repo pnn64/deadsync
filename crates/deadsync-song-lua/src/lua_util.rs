@@ -265,7 +265,9 @@ pub struct SongLuaScheduledOverlayUpdate {
 
 impl SongLuaOverlayUpdateCapture {
     fn new(actor_indices: FxHashMap<usize, usize>) -> Self {
-        let actor_count = actor_indices.len();
+        // Shared actor tables can replace earlier map entries without changing
+        // their overlay indices. Size storage by the index domain, not key count.
+        let actor_count = actor_indices.values().max().map_or(0, |index| index + 1);
         Self {
             actor_indices,
             active_broadcast: None,
@@ -1215,11 +1217,48 @@ pub fn install_def_globals(
     }
     globals.set("Def", def)?;
     globals.set("ActorFrame", create_actorframe_class_table(lua)?)?;
-    let player = lua.create_table()?;
-    let parent = lua.create_table()?;
-    parent.set("__index", globals.get::<Table>("ActorFrame")?)?;
-    player.set_metatable(Some(parent))?;
-    globals.set("Player", player)?;
+    // Native Player/NoteField classes inherit ActorFrame. Their own method
+    // inventories also keep SM5.2-only feature probes absent on ITGmania.
+    for (name, methods) in [
+        (
+            "Player",
+            &[
+                "SetLife",
+                "ChangeLife",
+                "SetActorWithJudgmentPosition",
+                "SetActorWithComboPosition",
+                "GetPlayerTimingData",
+                "get_oitg_zoom_mode",
+                "set_oitg_zoom_mode",
+            ][..],
+        ),
+        (
+            "NoteField",
+            &[
+                "set_step_callback",
+                "set_set_pressed_callback",
+                "set_did_tap_note_callback",
+                "set_did_hold_note_callback",
+                "step",
+                "set_pressed",
+                "did_tap_note",
+                "did_hold_note",
+                "get_column_actors",
+                "GetBeatBars",
+                "SetBeatBars",
+                "SetBeatBarsAlpha",
+            ][..],
+        ),
+    ] {
+        let class = lua.create_table()?;
+        for method in methods {
+            set_actor_class_forwarder(lua, &class, method)?;
+        }
+        let parent = lua.create_table()?;
+        parent.set("__index", globals.get::<Table>("ActorFrame")?)?;
+        class.set_metatable(Some(parent))?;
+        globals.set(name, class)?;
+    }
     globals.set("Sprite", create_sprite_class_table(lua)?)?;
     globals.set(
         "LoadFont",
@@ -1874,6 +1913,8 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
         || key.starts_with("__songlua_capture_")
         || key.starts_with("__songlua_graph_display_")
         || key.starts_with("__songlua_scroller_")
+        || key.starts_with("__songlua_command_queue")
+        || key.starts_with("__songlua_recurring_update_")
         || matches!(
             key,
             "__songlua_visible"
@@ -8725,7 +8766,9 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     // Def tables are constructed children first. Native actors subscribe as
     // the definition tree loads, with parents before their children.
     register_song_lua_actor(lua, actor)?;
-    run_actor_named_command(lua, actor, "InitCommand")?;
+    // Native QueueCommand appends a tween; Init does not advance its queue.
+    // Leave queued work until all actors have received OnCommand.
+    run_actor_named_command_with_drain(lua, actor, "InitCommand", false)?;
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
             continue;
@@ -8791,6 +8834,11 @@ pub fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
     let Value::Table(root) = root else {
         return Ok(());
     };
+    // Retain queues across all layer Init passes, including nested playcommand
+    // calls. Startup releases them only after every layer's On pass.
+    if lua.app_data_ref::<SongLuaStartupQueues>().is_none() {
+        lua.set_app_data(SongLuaStartupQueues(Vec::new()));
+    }
     run_actor_init_commands_for_table(lua, root)
 }
 
@@ -9097,7 +9145,9 @@ pub fn run_actor_startup_commands(
     let Value::Table(root) = root else {
         return Ok((HashMap::new(), HashMap::new()));
     };
-    lua.set_app_data(SongLuaStartupQueues(Vec::new()));
+    if lua.app_data_ref::<SongLuaStartupQueues>().is_none() {
+        lua.set_app_data(SongLuaStartupQueues(Vec::new()));
+    }
     let result = run_actor_startup_commands_for_table(lua, root);
     let queued = lua
         .remove_app_data::<SongLuaStartupQueues>()
@@ -14589,8 +14639,9 @@ pub fn read_actor_multi_vertex_mesh(
     }
 }
 
-pub fn read_model_path(actor: &Table) -> Result<Option<PathBuf>, String> {
-    for key in ["Meshes", "Materials", "Bones"] {
+pub fn read_model_paths(actor: &Table) -> Result<Option<[PathBuf; 3]>, String> {
+    let mut paths = [None, None, None];
+    for (index, key) in ["Meshes", "Materials", "Bones"].into_iter().enumerate() {
         let Some(raw) = actor
             .get::<Option<String>>(key)
             .map_err(|err| err.to_string())?
@@ -14598,11 +14649,15 @@ pub fn read_model_path(actor: &Table) -> Result<Option<PathBuf>, String> {
         else {
             continue;
         };
-        if let Ok(path) = resolve_actor_asset_path(actor, &raw) {
-            return Ok(Some(path));
-        }
+        paths[index] = Some(resolve_actor_asset_path(actor, &raw).map_err(|err| err.to_string())?);
     }
-    Ok(None)
+    let Some(fallback) = paths.iter().flatten().next().cloned() else {
+        return Ok(None);
+    };
+    // A single-file model contains all sections; explicit pieces keep their own paths.
+    Ok(Some(
+        paths.map(|path| path.unwrap_or_else(|| fallback.clone())),
+    ))
 }
 
 pub fn read_actor_model_layers<Slot, Vertex, ReadSlots, ReadLayer>(
@@ -14611,13 +14666,13 @@ pub fn read_actor_model_layers<Slot, Vertex, ReadSlots, ReadLayer>(
     read_layer: ReadLayer,
 ) -> Result<Option<Arc<[SongLuaOverlayModelLayer<Vertex>]>>, String>
 where
-    ReadSlots: Fn(&Path) -> Result<Arc<[Slot]>, String>,
+    ReadSlots: Fn(&Path, &Path, &Path) -> Result<Arc<[Slot]>, String>,
     ReadLayer: Fn(&Slot) -> Option<SongLuaOverlayModelLayer<Vertex>>,
 {
-    let Some(model_path) = read_model_path(actor)? else {
+    let Some(paths) = read_model_paths(actor)? else {
         return Ok(None);
     };
-    let slots = read_slots(&model_path)?;
+    let slots = read_slots(&paths[0], &paths[1], &paths[2])?;
     Ok(overlay_model_layers_from_slots(slots.as_ref(), read_layer))
 }
 
@@ -14645,7 +14700,7 @@ where
 pub struct SongLuaNoteskinTapActorModel {
     pub skin: String,
     pub element: String,
-    pub model_path: PathBuf,
+    pub model_paths: [PathBuf; 3],
 }
 
 pub fn read_noteskin_tap_actor_model(
@@ -14665,13 +14720,13 @@ pub fn read_noteskin_tap_actor_model(
     else {
         return Ok(None);
     };
-    let Some(model_path) = read_model_path(actor)? else {
+    let Some(model_paths) = read_model_paths(actor)? else {
         return Ok(None);
     };
     Ok(Some(SongLuaNoteskinTapActorModel {
         skin,
         element,
-        model_path,
+        model_paths,
     }))
 }
 
@@ -14680,17 +14735,20 @@ pub fn read_noteskin_tap_actor_slots<Slot, ReadSlots>(
     read_slots: ReadSlots,
 ) -> Result<Option<Arc<[Slot]>>, String>
 where
-    ReadSlots: Fn(&Path) -> Result<Arc<[Slot]>, String>,
+    ReadSlots: Fn(&Path, &Path, &Path) -> Result<Arc<[Slot]>, String>,
 {
     let Some(model) = read_noteskin_tap_actor_model(actor)? else {
         return Ok(None);
     };
-    read_slots(&model.model_path).map(Some).map_err(|err| {
-        format!(
-            "failed to load noteskin actor '{} {}': {err}",
-            model.skin, model.element
-        )
-    })
+    let paths = &model.model_paths;
+    read_slots(&paths[0], &paths[1], &paths[2])
+        .map(Some)
+        .map_err(|err| {
+            format!(
+                "failed to load noteskin actor '{} {}': {err}",
+                model.skin, model.element
+            )
+        })
 }
 
 pub fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Result<(), String> {

@@ -33,7 +33,7 @@ pub use explosion::{
     GlowEffect, itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,
     parse_explosion_animation,
 };
-pub use model::{ItgModelSlotPlan, itg_load_model_slots_from_path};
+pub use model::{ItgModelSlotPlan, itg_load_model_slots};
 pub use parts::{
     ITG_DANCE_COL_SPACING, NOTE_ANIM_PART_COUNT, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType,
     NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate, Quantization, Style,

@@ -153,7 +153,7 @@ pub use lua_util::{
     read_child_index, read_color_args, read_color_call, read_color_value,
     read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
-    read_model_path, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
+    read_model_paths, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
     read_note_column_transform_samples, read_note_column_transform_samples_for_fields,
     read_note_column_zoom_hides, read_note_column_zoom_hides_for_actor,
     read_noteskin_tap_actor_model, read_noteskin_tap_actor_slots,
@@ -5237,7 +5237,7 @@ mod tests {
         )
     }
 
-    fn test_read_model_slots(_: &Path) -> Result<Arc<[()]>, String> {
+    fn test_read_model_slots(_: &Path, _: &Path, _: &Path) -> Result<Arc<[()]>, String> {
         Ok(Arc::from(Vec::<()>::new().into_boxed_slice()))
     }
 
@@ -6498,6 +6498,11 @@ return Def.ActorFrame{
     fn compile_song_lua_supports_model_base_rotation_shape() {
         let song_dir = test_dir("model-base-rotation-shape");
         let entry = song_dir.join("default.lua");
+        fs::write(
+            song_dir.join("ring_model.txt"),
+            "// MilkShape 3D ASCII\nMeshes: 0\nMaterials: 0\nBones: 0\n",
+        )
+        .expect("model file for the shape test's slot reader");
         fs::write(
             &entry,
             r#"
@@ -11416,6 +11421,146 @@ return Def.ActorFrame{}
         assert_eq!(
             compiled.messages[0].message,
             "6:6:0:Difficulty_Hard:10:Difficulty_Edit:true:true:true:true"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_exposes_itgmania_actor_classes() {
+        let song_dir = test_dir("itgmania-actor-classes");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+assert(type(NoteField) == "table")
+assert(type(NoteField.get_column_actors) == "function")
+assert(type(NoteField.GetChildAt) == "function")
+assert(type(Player.SetLife) == "function")
+assert(type(Player.get_oitg_zoom_mode) == "function")
+assert(type(Player.set_oitg_zoom_mode) == "function")
+assert(NoteField.set_skin == nil)
+assert(Player.SetNoteData == nil and Player.SetNoteDataFromLua == nil)
+return Def.ActorFrame {
+    InitCommand = function()
+        local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+        local field = player:GetChild("NoteField")
+        assert(#NoteField.get_column_actors(field) == 4)
+    end,
+}
+"#,
+        )
+        .expect("actor class script");
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "ITGmania Actor Classes"),
+        )
+        .expect("ITGmania class probes and forwarding");
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+    }
+
+    #[test]
+    fn update_capture_preserves_shared_actor_indices() {
+        let lua = Lua::new();
+        let runtime = create_song_runtime_table(&lua, &SongLuaCompileContext::new("", ""))
+            .expect("song runtime");
+        lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+        let shared = lua.create_table().unwrap();
+        let other = lua.create_table().unwrap();
+        crate::lua_util::begin_overlay_update_capture_from_indices(
+            &lua,
+            [
+                (shared.to_pointer() as usize, 0),
+                (other.to_pointer() as usize, 1),
+                (shared.to_pointer() as usize, 2),
+            ],
+        );
+        crate::lua_util::capture_block_set_f32(&lua, &shared, "x", 23.0).unwrap();
+        crate::lua_util::capture_block_set_f32(&lua, &other, "y", 45.0).unwrap();
+        assert_eq!(
+            crate::lua_util::captured_update_target_mask(&lua, &shared),
+            1 << SongLuaOverlayUpdateTarget::X as usize
+        );
+        let mut writes = Vec::new();
+        crate::lua_util::drain_overlay_update_capture(&lua, |index, values, _, _, _| {
+            writes.push((index, values.to_vec()));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            writes,
+            [
+                (
+                    2,
+                    vec![(
+                        SongLuaOverlayUpdateTarget::X,
+                        SongLuaOverlayUpdateValue::F32(23.0)
+                    )]
+                ),
+                (
+                    1,
+                    vec![(
+                        SongLuaOverlayUpdateTarget::Y,
+                        SongLuaOverlayUpdateValue::F32(45.0)
+                    )]
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn message_probe_does_not_start_recurring_commands() {
+        let song_dir = test_dir("message-probe-queues");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame {
+    OnCommand = function(self) self:SetUpdateFunction(function() end) end,
+    Def.Actor {
+        Name = "looper",
+        BeginMessageCommand = function(self)
+            loop_ready = 0
+            self:queuecommand("Loop")
+        end,
+        LoopCommand = function(self)
+            assert(loop_ready ~= nil, "message probe leaked its recurring queue")
+            loop_ready = loop_ready + 1
+            self:sleep(0.1):queuecommand("Loop")
+        end,
+    },
+}
+"#,
+        )
+        .expect("message probe fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Message Probe Queues");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile message probe");
+        assert_eq!(
+            compiled.info.unsupported_perframes, 0,
+            "{:?}", compiled.info.unsupported_perframe_captures
+        );
+    }
+
+    #[test]
+    fn init_queues_wait_for_on() {
+        let song_dir = test_dir("init-queue-order");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!(
+                "../../../../itgmania-harness-rs/tests/fixtures/song-lua-headless/init-queue.lua"
+            ),
+        )
+        .expect("native Init queue fixture");
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Init Queue Order"),
+        )
+        .expect("Init queue must run after the parent's and child's OnCommand");
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .any(|event| event.message == "InitQueueLate" && event.beat > 0.0)
         );
     }
 

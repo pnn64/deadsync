@@ -157,6 +157,7 @@ mod lua_songs {
         mawaru6 => "mawaru6/mawaru6.sm",
         mawaru7 => "mawaru7/mawaru7.sm",
         mawaru8 => "mawaru8/mawaru8.sm",
+        mawaru9 => "mawaru9/mawaru9.sm",
         igaku => "Igaku/Igaku.ssc",
         flowers => "flowers/flowers.ssc",
         do_the_mario => "Do the Mario/DoTheMario.ssc",

@@ -93,7 +93,7 @@ fn test_song_lua_double_context(root: &Path, title: &str) -> SongLuaCompileConte
     context
 }
 
-fn test_read_model_slots(_: &Path) -> Result<Arc<[()]>, String> {
+fn test_read_model_slots(_: &Path, _: &Path, _: &Path) -> Result<Arc<[()]>, String> {
     Ok(Arc::from(Vec::<()>::new().into_boxed_slice()))
 }
 

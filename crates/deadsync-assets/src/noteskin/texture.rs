@@ -959,14 +959,22 @@ fn model_animation_source_data(
     ))
 }
 
-pub fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
-    let model_path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        resolve_asset_path(path)
-    };
-    deadsync_noteskin::itg_load_model_slots_from_path(
-        &model_path,
+pub fn load_itg_model_slots(
+    meshes: &Path,
+    materials: &Path,
+    bones: &Path,
+) -> Result<Arc<[SpriteSlot]>, String> {
+    let paths = [meshes, materials, bones].map(|path| {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            resolve_asset_path(path)
+        }
+    });
+    deadsync_noteskin::itg_load_model_slots(
+        &paths[0],
+        &paths[1],
+        &paths[2],
         itg_model_slot_from_texture_path,
         apply_model_slot_plan,
     )
@@ -1811,7 +1819,7 @@ Materials: 1
 "#,
         )
         .unwrap();
-        let slots = load_itg_model_slots_from_path(&model).unwrap();
+        let slots = load_itg_model_slots(&model, &model, &model).unwrap();
         assert_eq!(slots.len(), 1);
         let slot = slots[0].clone();
         assert!(!slot.sphere_mapped);

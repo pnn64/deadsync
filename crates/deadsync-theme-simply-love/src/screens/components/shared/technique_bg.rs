@@ -293,7 +293,8 @@ fn load_assets() -> Result<TechniqueAssets, String> {
 }
 
 fn load_layers(path: &str) -> Result<Arc<[TechniqueLayer]>, String> {
-    let slots = noteskin::load_itg_model_slots_from_path(std::path::Path::new(path))?;
+    let model_path = std::path::Path::new(path);
+    let slots = noteskin::load_itg_model_slots(model_path, model_path, model_path)?;
     let layers = slots
         .iter()
         .cloned()
