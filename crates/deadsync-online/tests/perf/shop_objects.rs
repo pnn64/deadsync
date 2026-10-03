@@ -9,16 +9,6 @@ mod baseline {
     ));
 }
 
-fn fields(download: &ParsedDownload) -> (&str, &str, &str, &str, bool) {
-    (
-        &download.item_id,
-        &download.name,
-        &download.details,
-        &download.url,
-        download.site_downloaded,
-    )
-}
-
 fn map(value: Value) -> Map<String, Value> {
     value.as_object().unwrap().clone()
 }
@@ -121,13 +111,13 @@ fn borrowed_download_objects_preserve_fields_rejection_and_retained_capacity() {
                     object.insert(name_key.into(), name.into());
                     object.insert(id_key.into(), id.clone());
                     let old = baseline::download_from_object(&object);
-                    let new = download_from_object(&object);
-                    assert_eq!(old.as_ref().map(fields), new.as_ref().map(fields));
+                    let new = purchase_download_from_object(&object);
+                    assert_eq!(
+                        old.as_ref().map(|download| download.name.as_str()),
+                        new.as_ref().map(|download| download.name.as_str())
+                    );
                     if let (Some(old), Some(new)) = (old, new) {
-                        assert!(new.item_id.capacity() <= old.item_id.capacity());
                         assert!(new.name.capacity() <= old.name.capacity());
-                        assert!(new.details.capacity() <= old.details.capacity());
-                        assert!(new.url.capacity() <= old.url.capacity());
                     }
                 }
             }
@@ -150,7 +140,7 @@ fn borrowed_download_objects_remove_copies_before_cleanup_and_rejection() {
                     &object,
                 ))))
             },
-            || drop(black_box(download_from_object(black_box(&object)))),
+            || drop(black_box(purchase_download_from_object(black_box(&object)))),
         );
     }
 }
@@ -161,8 +151,9 @@ fn shop_objects_benchmark() {
     let original = black_box(
         baseline::download_from_object as fn(&Map<String, Value>) -> Option<ParsedDownload>,
     );
-    let current =
-        black_box(download_from_object as fn(&Map<String, Value>) -> Option<ParsedDownload>);
+    let current = black_box(
+        purchase_download_from_object as fn(&Map<String, Value>) -> Option<PurchaseDownload>,
+    );
     for (name, object) in [
         ("missing", map(serde_json::json!({}))),
         ("empty", map(serde_json::json!({"url":""}))),
@@ -208,17 +199,22 @@ fn shop_objects_benchmark() {
             ),
         ),
     ] {
-        let run = |variant, f: fn(&Map<String, Value>) -> Option<ParsedDownload>| {
-            measure_sampled(&format!("shop-objects/{name}/{variant}"), 16384, 1, || {
-                f(black_box(&object))
+        let old = || {
+            measure_sampled(&format!("shop-objects/{name}/original"), 16384, 1, || {
+                original(black_box(&object))
+            });
+        };
+        let new = || {
+            measure_sampled(&format!("shop-objects/{name}/current"), 16384, 1, || {
+                current(black_box(&object))
             });
         };
         if std::env::var_os("DEADSYNC_BENCH_NEW_FIRST").is_some() {
-            run("current", current);
-            run("original", original);
+            new();
+            old();
         } else {
-            run("original", original);
-            run("current", current);
+            old();
+            new();
         }
     }
     for (name, object) in [

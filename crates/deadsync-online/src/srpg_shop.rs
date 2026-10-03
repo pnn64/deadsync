@@ -662,10 +662,7 @@ fn parse_purchase(body: &str) -> Result<PurchaseResult, SrpgShopError> {
     let download = value
         .get("unlocks")
         .and_then(Value::as_object)
-        .and_then(download_from_object)
-        .map(|download| PurchaseDownload {
-            name: download.name,
-        });
+        .and_then(purchase_download_from_object);
     Ok(PurchaseResult { errors, download })
 }
 
@@ -707,9 +704,15 @@ fn parse_downloads(body: &str) -> Result<Vec<ParsedDownload>, SrpgShopError> {
         .into_iter()
         .filter(|row| row.url.contains(".zip"))
         .map(|row| ParsedDownload {
-            item_id: value_text(&row.id),
-            name: clean_cell(&row.song).into_owned(),
-            details: clean_cell(&row.data).into_owned(),
+            item_id: match row.id {
+                Value::String(mut id) => {
+                    id.shrink_to_fit();
+                    id
+                }
+                value => value_text(&value),
+            },
+            name: clean_owned_cell(row.song),
+            details: clean_owned_cell(row.data),
             url: absolutize_url(&row.url),
             site_downloaded: row.dled != 0,
         })
@@ -935,7 +938,7 @@ fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<Srpg
     })
 }
 
-fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDownload> {
+fn purchase_download_from_object(map: &Map<String, Value>) -> Option<PurchaseDownload> {
     let url = value_text_ref(Some(object_text_value(
         map,
         &["url", "href", "download_url"],
@@ -943,16 +946,10 @@ fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDownload> {
     if !url.contains(".zip") {
         return None;
     }
-    Some(ParsedDownload {
-        item_id: object_text_value(map, &["id", "cid", "itemid"])
-            .map(value_text)
-            .unwrap_or_default(),
+    Some(PurchaseDownload {
         name: object_text_value(map, &["song", "title", "name"])
             .map(|name| clean_cell(value_text_ref(Some(name)).as_ref()).into_owned())
             .unwrap_or_else(|| "SRPG10 unlock".to_string()),
-        details: String::new(),
-        url: absolutize_url(&url),
-        site_downloaded: false,
     })
 }
 
@@ -1095,6 +1092,18 @@ fn value_text_ref(value: Option<&Value>) -> Cow<'_, str> {
         Some(Value::Bool(true)) => Cow::Borrowed("true"),
         Some(Value::Bool(false)) => Cow::Borrowed("false"),
         _ => Cow::Borrowed(""),
+    }
+}
+
+fn clean_owned_cell(mut text: String) -> String {
+    match clean_cell(&text) {
+        Cow::Borrowed(clean) => {
+            let len = clean.len();
+            text.truncate(len);
+            text.shrink_to_fit();
+            text
+        }
+        Cow::Owned(clean) => clean,
     }
 }
 
@@ -1520,3 +1529,11 @@ mod shop_effects_perf;
 #[cfg(test)]
 #[path = "../tests/perf/shop_objects.rs"]
 mod shop_objects_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/owned_download_rows.rs"]
+mod owned_download_rows_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/purchase_projection.rs"]
+mod purchase_projection_perf;

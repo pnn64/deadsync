@@ -566,7 +566,8 @@ fn finish_catalog_request(generation: u64, result: Result<Vec<PackInfo>, StepMan
         log::debug!("Discarding stale StepManiaOnline catalog generation {generation}.");
         return;
     }
-    let mut snapshot = (*runtime.snapshot).clone();
+    let snapshot = Arc::make_mut(&mut runtime.snapshot);
+    snapshot.installs.shrink_to_fit();
     match result {
         Ok(packs) => {
             let count = packs.len();
@@ -582,7 +583,6 @@ fn finish_catalog_request(generation: u64, result: Result<Vec<PackInfo>, StepMan
             snapshot.message = Some(error.to_string());
         }
     }
-    runtime.snapshot = Arc::new(snapshot);
 }
 
 fn start_download_worker() -> Result<SyncSender<DownloadJob>, String> {
@@ -1556,3 +1556,7 @@ mod preparation_perf {
 #[cfg(test)]
 #[path = "../tests/perf/install_queue.rs"]
 mod install_queue_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/catalog_completion.rs"]
+mod catalog_completion_perf;
