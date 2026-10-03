@@ -4333,13 +4333,21 @@ pub fn overlay_actor_tree_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
     root_index: usize,
 ) -> bool {
     overlay_actor_has_visual(&overlays[root_index].actor)
-        || overlay_descendants_by_parent(overlays.len(), root_index, |index| {
-            overlays
-                .get(index)
-                .and_then(|overlay| overlay.actor.parent_index)
+        || overlays.iter().any(|overlay| {
+            if !overlay_actor_has_visual(&overlay.actor) {
+                return false;
+            }
+            let mut parent = overlay.actor.parent_index;
+            while let Some(index) = parent {
+                if index == root_index {
+                    return true;
+                }
+                parent = overlays
+                    .get(index)
+                    .and_then(|overlay| overlay.actor.parent_index);
+            }
+            false
         })
-        .into_iter()
-        .any(|index| overlay_actor_has_visual(&overlays[index].actor))
 }
 
 pub fn ensure_overlay_arrow_visual<NoteskinSlot, ModelVertex, TextAttr>(
@@ -23290,3 +23298,7 @@ mod key_dispatch_perf;
 mod method_args;
 
 mod state_text;
+
+#[cfg(test)]
+#[path = "../tests/perf/actor_preparation.rs"]
+mod actor_preparation_perf;

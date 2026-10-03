@@ -311,7 +311,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
                 || !summary.global_timing_segments.warps.is_empty()))
         .then(|| {
             CachedTimingSegments::from_rssp_owned(
-                summary.global_timing_segments.clone(),
+                summary.global_timing_segments,
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -994,3 +994,7 @@ mod tests {
         dir
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/song_timing_ownership.rs"]
+mod song_timing_ownership_perf;

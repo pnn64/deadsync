@@ -5397,10 +5397,10 @@ fn apply_song_lua_overlay_runtime_eases_for(
     overlay_index: usize,
     overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
-    mut current: SongLuaOverlayState,
-) -> SongLuaOverlayState {
+    current: &mut SongLuaOverlayState,
+) {
     let Some(ease_range) = overlay_ease_ranges.get(overlay_index) else {
-        return current;
+        return;
     };
     for ease in &overlay_eases[ease_range.clone()] {
         debug_assert_eq!(ease.overlay_index, overlay_index);
@@ -5414,14 +5414,14 @@ fn apply_song_lua_overlay_runtime_eases_for(
             continue;
         }
         if now >= ease.sustain_end_second {
-            apply_overlay_delta(&mut current, &ease.to.delta);
+            apply_overlay_delta(current, &ease.to.delta);
             if ease.to.delta.sprite_state_index.is_some() {
                 current.sprite_animation_epoch = Some(ease.end_second);
             }
             continue;
         }
         if ease.end_second <= ease.start_second || now >= ease.end_second {
-            apply_overlay_delta(&mut current, &ease.to.delta);
+            apply_overlay_delta(current, &ease.to.delta);
             if ease.to.delta.sprite_state_index.is_some() {
                 current.sprite_animation_epoch = Some(ease.end_second);
             }
@@ -5432,13 +5432,12 @@ fn apply_song_lua_overlay_runtime_eases_for(
             ease.opt1,
             ease.opt2,
         );
-        apply_overlay_delta(&mut current, &ease.from.delta);
-        overlay_state_lerp(&mut current, &ease.to.delta, t);
+        apply_overlay_delta(current, &ease.from.delta);
+        overlay_state_lerp(current, &ease.to.delta, t);
         if ease.from.delta.sprite_state_index.is_some() {
             current.sprite_animation_epoch = Some(ease.start_second);
         }
     }
-    current
 }
 
 fn reapply_active_song_lua_overlay_runtime_eases_for(
@@ -5529,19 +5528,19 @@ fn song_lua_overlay_render_state_dynamic<S: NoteskinSlot + Clone>(
     update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
-    let current = song_lua_message_state_cached(
+    let mut current = song_lua_message_state_cached(
         now,
         overlay.initial_state,
         &overlay.message_commands,
         events,
         message_cache,
     );
-    let mut current = apply_song_lua_overlay_runtime_eases_for(
+    apply_song_lua_overlay_runtime_eases_for(
         now,
         overlay_index,
         overlay_eases,
         overlay_ease_ranges,
-        current,
+        &mut current,
     );
     apply_song_lua_overlay_runtime_updates_for(
         now,
@@ -13072,3 +13071,7 @@ fn player_scratch<T>(active_players: usize, capacity: usize) -> [Vec<T>; MAX_PLA
         }
     })
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/ease_playback.rs"]
+mod ease_playback_perf;
