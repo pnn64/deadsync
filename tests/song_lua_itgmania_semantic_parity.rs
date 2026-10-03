@@ -3508,6 +3508,11 @@ fn affine_skew_matches_native_drawing() {
 }
 
 #[test]
+fn ancestor_scale_matches_native_drawing() {
+    assert_native_actor_drawing("ancestor-scale");
+}
+
+#[test]
 fn parent_rotation_matches_native_drawing() {
     assert_native_actor_drawing("parent-rotation");
 }
@@ -4708,6 +4713,20 @@ fn queued_lua_state_matches_native_dispatch() {
         eprintln!("{}", parity.summary(name));
         parity.assert_complete(name);
     }
+}
+
+#[test]
+#[ignore = "recurring tween phase and GetY still differ from native"]
+fn recurring_road_loop_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/road-loop.json.zst"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/road-loop.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Road loop"));
+    parity.assert_complete("Road loop");
 }
 
 #[test]

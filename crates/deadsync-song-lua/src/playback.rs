@@ -1708,6 +1708,23 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
             std::array::from_fn(|axis| parent_scale[axis] * ancestor[axis]),
             local,
         ])
+    } else if !affine_2d
+        && parent.skew_x.abs() <= f32::EPSILON
+        && parent.skew_y.abs() <= f32::EPSILON
+        && [child.rot_x_deg, child.rot_y_deg, child.rot_z_deg]
+            .iter()
+            .all(|value| value.to_radians().abs() <= f32::EPSILON)
+    {
+        // An unrotated child extends the parent's local scale without moving
+        // an ancestor's nonuniform scale across the parent's rotation.
+        parent.scale_factors.map(|[ancestor, parent_local]| {
+            let [sx, sy] = song_lua_overlay_axis_scale(child);
+            let local = [sx, sy, song_lua_overlay_z_scale(child)];
+            [
+                ancestor,
+                std::array::from_fn(|axis| parent_local[axis] * local[axis]),
+            ]
+        })
     } else {
         None
     };

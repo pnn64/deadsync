@@ -1,0 +1,305 @@
+{
+  "schema_version": 1,
+  "name": "ancestor-scale",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "frame",
+        "name": "RoadAncestor",
+        "state": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "zoom": [
+            1.334375,
+            1,
+            1.334375
+          ],
+          "skew": [
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "frame",
+            "name": "RoadParent",
+            "state": {
+              "position": [
+                240,
+                480,
+                -896
+              ],
+              "rotation": [
+                90,
+                0,
+                0
+              ],
+              "zoom": [
+                3,
+                1,
+                1
+              ],
+              "skew": [
+                0,
+                0
+              ]
+            },
+            "children": [
+              {
+                "kind": "frame",
+                "name": "RoadOffset",
+                "state": {
+                  "position": [
+                    0,
+                    -400,
+                    0
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "zoom": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "skew": [
+                    0,
+                    0
+                  ]
+                },
+                "children": [
+                  {
+                    "kind": "sprite",
+                    "name": "Road",
+                    "size": [
+                      64,
+                      32
+                    ],
+                    "alignment": [
+                      0.5,
+                      0.5
+                    ],
+                    "state": {
+                      "position": [
+                        0,
+                        1024,
+                        0
+                      ],
+                      "rotation": [
+                        0,
+                        0,
+                        0
+                      ],
+                      "zoom": [
+                        1,
+                        1,
+                        1
+                      ],
+                      "skew": [
+                        0,
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "TiltedAncestor",
+        "state": {
+          "position": [
+            -40,
+            15,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "zoom": [
+            0.8,
+            1.5,
+            0.6
+          ],
+          "skew": [
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "frame",
+            "name": "TiltedParent",
+            "state": {
+              "position": [
+                350,
+                180,
+                -20
+              ],
+              "rotation": [
+                12,
+                -18,
+                22
+              ],
+              "zoom": [
+                1.3,
+                0.7,
+                1.2
+              ],
+              "skew": [
+                0,
+                0
+              ]
+            },
+            "children": [
+              {
+                "kind": "sprite",
+                "name": "Tilted",
+                "size": [
+                  64,
+                  32
+                ],
+                "alignment": [
+                  0,
+                  1
+                ],
+                "state": {
+                  "position": [
+                    30,
+                    -20,
+                    50
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "zoom": [
+                    0.8,
+                    1.2,
+                    1
+                  ],
+                  "skew": [
+                    -0.1,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "ReflectedAncestor",
+        "state": {
+          "position": [
+            20,
+            -10,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "zoom": [
+            0.6,
+            -0.8,
+            1.3
+          ],
+          "skew": [
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "frame",
+            "name": "ReflectedParent",
+            "state": {
+              "position": [
+                600,
+                280,
+                40
+              ],
+              "rotation": [
+                -20,
+                35,
+                45
+              ],
+              "zoom": [
+                -1.5,
+                0.7,
+                0.6
+              ],
+              "skew": [
+                0,
+                0
+              ]
+            },
+            "children": [
+              {
+                "kind": "sprite",
+                "name": "Reflected",
+                "size": [
+                  64,
+                  32
+                ],
+                "alignment": [
+                  0.5,
+                  0.5
+                ],
+                "state": {
+                  "position": [
+                    30,
+                    -20,
+                    -50
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "zoom": [
+                    0.8,
+                    1.2,
+                    1
+                  ],
+                  "skew": [
+                    0,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

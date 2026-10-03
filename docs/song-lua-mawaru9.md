@@ -58,6 +58,10 @@ Challenge, description `TaroNuke`.
   retained ancestor/local scale order. Previously only Z rotation affected
   child offsets, so the road's 90-degree X rotation left offsets on Y rather
   than moving them into depth.
+- Unrotated descendants retain an ancestor's nonuniform scale before the
+  parent's rotation. Dropping the scale factors at an intermediate frame
+  moved ancestor Z scale after the road's X rotation, distorting both the
+  sprite and the next child offset.
 
 ## Native reference
 
@@ -119,6 +123,25 @@ Regenerate its native drawing from the workspace root:
 ./itgmania-harness-rs/target/release/itgmania-harness-rs.exe actor-conformance deadsync/tests/fixtures/itgmania-song-lua-micro/parent-rotation.request.json --out deadsync/tests/fixtures/itgmania-song-lua-micro/parent-rotation-native.json
 ```
 
+`ancestor-scale.lua` adds nonuniform ancestor scales before those rotated
+parents, including the road's X/Z scale of 1.334375 and a reflected ancestor.
+Its actual native drawing regression failed before the scale propagation fix:
+the first road corner's Z was -1669.85 instead of -2006.9. All 36 coordinates
+now pass within 0.0001 units. The previous drawing fixtures are unchanged.
+
+The 0.5.1718 scale pass reran all 962 Lua/profile gameplay tests and all 75
+regular semantic tests in both repositories. Its complete Mawaru9 audit took
+721.50 seconds: 480.29 seconds compiling, 201.92 seconds comparing projected
+geometry and 29.96 seconds comparing vibration. It adds 25 passing geometry
+checks with the same reference and denominator. The portable road-loop test
+below is explicitly ignored because it still reproduces a remaining gap.
+
+Regenerate this additional native drawing from the workspace root:
+
+```powershell
+./itgmania-harness-rs/target/release/itgmania-harness-rs.exe actor-conformance deadsync/tests/fixtures/itgmania-song-lua-micro/ancestor-scale.request.json --out deadsync/tests/fixtures/itgmania-song-lua-micro/ancestor-scale-native.json
+```
+
 The 0.5.1715 probe pass reran all 962 Lua/profile gameplay tests and all 71
 regular semantic tests successfully in both repositories. The stateful
 cross-actor regression now checks both direct and indirect commands.
@@ -170,7 +193,7 @@ contain `allowed/` and `lua-songs/`; all 73 current tests pass with the existing
 
 ## Complete song audit
 
-After these fixes: **106,321 / 117,464 checks pass (90.51%)**. The ignored
+After these fixes: **106,346 / 117,464 checks pass (90.53%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -183,7 +206,7 @@ DeadSync comparison.
 | Render persistence | 6,507 / 6,587 |
 | Update values | 23,065 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 53,275 / 64,018 |
+| Projected geometry | 53,300 / 64,018 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 223 / 224 |
 | Message commands | 225 / 227 |
@@ -195,9 +218,10 @@ instance-aware comparison still report the remaining gaps rather than
 changing expected values or omitting checks. The native capture is unchanged.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 11,143, with 1,025 detailed gap reports. The immediately
-preceding audit used the same 117,464 checks and passed 104,988; the affine
-fix adds 1,333 passing geometry checks without changing the reference.
+checks are now 11,118, with 1,025 detailed gap reports. Before the affine
+fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
+geometry checks. The parent-translation pass retained 106,321 passing checks;
+the ancestor-scale pass adds another 25 without changing the reference.
 
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
@@ -206,7 +230,7 @@ gaps include trail opacity/visibility, projected sprite bounds, one player
 range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
 beat 540.076 and stateful `ToshiUp` and `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru-parent-rotation-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-ancestor-scale-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -253,6 +277,32 @@ frames before attributing the remaining road coordinates to the camera or to
 the corrected offset rotation. Adding parent Euler angles still cannot
 represent arbitrary nested 3D rotations; use a native drawing reproduction
 before replacing that composition path.
+
+A temporary bounded 48-second Mawaru9 replay found that `actor_nf` retained
+ancestor scales `[2.0015626, 1, 1.334375]` and local scales `[2, 1, 1]`, but
+`actor_of` and its sprite dropped those factors. The scale propagation fix
+addresses that loss. The same diagnostic reported the loop's local Y as
+-1022.9318 at beat 87.273/second 47.85, so inspect the loop independently too.
+
+The portable `road-loop` fixture isolates the exact looping tween:
+`linear((480/115)/2):y(-1024):sleep(0):y(0):queuecommand("Loop")`.
+It also has a following sibling that reads `road:GetY()`. A native capture
+of 12 four-beat measures through beat/second 47 completes without dropped
+events or runtime errors. The comparison passes 1,164/1,900 and still fails,
+without any 3D transforms. At beat 2.25,
+the road's native Y is -80 while DeadSync's is -73.6; at beat 0.25, the
+native witness X is -122.666664 while DeadSync's is zero. This gives separate
+reproductions for cycle frame advance and current-position getter updates.
+Its source and simfile live in the Lua crate's `tests/fixtures/`; its unchanged
+native capture is retained at
+`tests/fixtures/itgmania-song-lua-micro/road-loop.json.zst`. Compression reduced
+264,161 bytes to 26,743 and was checked with an exact round trip. The decoded
+SHA256 is `308aa5e04ab50c002bbb4fcea9ec753f4752134c10889f44acb8ecf08c5e00ea`.
+The ignored `recurring_road_loop_matches_native` test reports all four gaps:
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity recurring_road_loop_matches_native -- --exact --ignored --nocapture
+```
 
 The native trace runs `WallCommand` on `def-0441` at beat 103.820473 and
 `StopVibCommand` at 104.203804. The child vibration mismatch at 104.012138
