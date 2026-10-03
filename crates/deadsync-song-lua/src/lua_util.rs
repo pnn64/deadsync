@@ -1402,8 +1402,86 @@ fn make_actor_ctor(
         if let Some(text) = input_status_actor_text(actor_type) {
             table.set("Text", text)?;
         }
+        own_actor_children(lua, &table, install_actor_methods)?;
         Ok(table)
     })
+}
+
+fn own_actor_children(
+    lua: &Lua,
+    actor: &Table,
+    install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+) -> mlua::Result<()> {
+    let mut children = smallvec::SmallVec::<[(i64, Table); 16]>::new();
+    actor.for_each::<Value, Value>(|key, value| {
+        if let (Value::Integer(index), Value::Table(child)) = (key, value)
+            && index > 0
+            && child
+                .get::<Option<String>>("__songlua_actor_type")?
+                .is_some()
+        {
+            children.push((index, child));
+        }
+        Ok(())
+    })?;
+    children.sort_unstable_by_key(|(index, _)| *index);
+    for (index, child) in children {
+        // ActorFrame::LoadChildrenFromNode constructs an Actor per occurrence,
+        // even when Lua reuses the same definition table in several slots.
+        let child = if child
+            .get::<Option<bool>>("__songlua_def_owned")?
+            .unwrap_or(false)
+        {
+            clone_actor_def(lua, &child, install_methods)?
+        } else {
+            child
+        };
+        child.set("__songlua_def_owned", true)?;
+        actor.raw_set(index, child)?;
+    }
+    Ok(())
+}
+
+fn clone_actor_def(
+    lua: &Lua,
+    source: &Table,
+    install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+) -> mlua::Result<Table> {
+    let actor = lua.create_table()?;
+    source.for_each::<Value, Value>(|key, value| {
+        let name = if let Value::String(ref key) = key {
+            Some(key.to_str()?)
+        } else {
+            None
+        };
+        if name.as_deref().is_some_and(|name| {
+            matches!(
+                name,
+                "__songlua_def_owned"
+                    | "__songlua_parent"
+                    | "__songlua_init_commands_ran"
+                    | "__songlua_startup_commands_ran"
+                    | "__songlua_startup_command_started"
+            )
+        }) {
+            return Ok(());
+        }
+        let value = if name
+            .as_deref()
+            .is_some_and(|name| name == "Frames" || is_actor_mutable_state_key(name))
+        {
+            clone_lua_value(lua, value)?
+        } else {
+            value
+        };
+        actor.raw_set(key, value)
+    })?;
+    // Installed methods close over their owning table; rebind them to the new
+    // instance while sharing user command functions and their Lua upvalues.
+    install_methods(lua, &actor)?;
+    install_actor_metatable(lua, &actor)?;
+    own_actor_children(lua, &actor, install_methods)?;
+    Ok(actor)
 }
 
 fn install_graph_display_children(

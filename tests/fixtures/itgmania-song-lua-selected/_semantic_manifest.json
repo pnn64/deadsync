@@ -358,7 +358,7 @@
     {
       "simfile": "And Drugs/and drugs.ssc",
       "fixture": "And Drugs/and drugs.ssc.semantic.json",
-      "title": "And Drugs\u2191\u2191",
+      "title": "And Drugs↑↑",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -673,7 +673,7 @@
     {
       "simfile": "Igaku/Igaku.ssc",
       "fixture": "Igaku/Igaku.ssc.semantic.json",
-      "title": "\u00e3\u201a\u00a4\u00e3\u201a\u00ac\u00e3\u201a\u00af",
+      "title": "ã‚¤ã‚¬ã‚¯",
       "lua_entries": 2,
       "status": "ok"
     },
@@ -799,7 +799,7 @@
     {
       "simfile": "Someone Special - hubert/Someone Special.ssc",
       "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json.zst",
-      "title": "\uff33\uff4f\uff4d\uff45\uff4f\uff4e\uff45 \uff33\uff50\uff45\uff43\uff49\uff41\uff4c",
+      "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "lua_entries": 1,
       "status": "ok",
       "reference": {
@@ -1093,7 +1093,7 @@
     {
       "simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
       "fixture": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc.semantic.json",
-      "title": "[FULL SONG] \u82b1\u6708\u30ce\u5922",
+      "title": "[FULL SONG] 花月ノ夢",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -1107,7 +1107,7 @@
     {
       "simfile": "broadcast/broadcast.ssc",
       "fixture": "broadcast/broadcast.ssc.semantic.json",
-      "title": "\u653e\u9001",
+      "title": "放送",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -1121,7 +1121,7 @@
     {
       "simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
       "fixture": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc.semantic.json",
-      "title": "\u200b#feelyourtouch e.d.e.n",
+      "title": "​#feelyourtouch e.d.e.n",
       "lua_entries": 1,
       "status": "ok"
     },
@@ -1226,11 +1226,15 @@
           480
         ],
         "beat_step": 0.25,
-        "max_events": 2000000
+        "max_events": 2000000,
+        "noteskin": "cyber"
       },
       "runtime_errors": 0,
       "dropped_events": 0,
-      "trace_until_beat": 836
+      "trace_until_beat": 836,
+      "runtime_actor_ids": "unique per occurrence",
+      "uncompressed_sha256": "123fdd5c599807f307d133aa66b4b1edfe327495de88e09db636072fb0ee419d",
+      "semantic_host_sha256": "e9cbacb902bd4193771014e1e1c96bdc22137f4513784331d563568778b6ec00"
     }
   ]
 }

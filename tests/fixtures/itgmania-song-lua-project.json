@@ -1,0 +1,512 @@
+{
+  "project": "DeadSync Lua Compatibility",
+  "url": "https://github.com/users/pnn64/projects/1",
+  "captured": "2026-10-03",
+  "meaning": "Historical board values; reported checks are not current verified parity.",
+  "items": [
+    {
+      "title": "[Lua] Spooky [SM7]",
+      "issue": 699,
+      "hash": "d5bd4dd7224f68ff",
+      "pack": "scryptstagram",
+      "reported_checks": "1674/1674",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] media offline [SM10]",
+      "issue": 700,
+      "hash": "c9e45c5e534f058d",
+      "pack": "Snap's Burfus Bonanza 2",
+      "reported_checks": "59334/59334",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Godspeed (Grum Remix) [SX12]",
+      "issue": 702,
+      "hash": "596b42ed8317d9b8",
+      "pack": "Everlasting Memories",
+      "reported_checks": "48650/48650",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] CO5M1C R4ILR0AD [SH11]",
+      "issue": 703,
+      "hash": "3926ec3e5f1aaede",
+      "pack": "scrypts' fruit platter",
+      "reported_checks": "7845/7845",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Gemini in Clockland [SX11]",
+      "issue": 704,
+      "hash": "3a6b2cedcc3fdca3",
+      "pack": "dimocracy 2021: second term",
+      "reported_checks": "7112/7112",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Riddle [DX10]",
+      "issue": 705,
+      "hash": "a147dd828cd08fc7",
+      "pack": "dimocracy 3: raucous caucus",
+      "reported_checks": "8129/8129",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] flip69 [DX10]",
+      "issue": 706,
+      "hash": "0ea0735edbc2405f",
+      "pack": "ITL Online 2026",
+      "reported_checks": "390119/390119",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] KENPO SAITO [DX11]",
+      "issue": 707,
+      "hash": "e443862891fe809a",
+      "pack": "ITL Online 2026",
+      "reported_checks": "180/180",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Botanic Panic [SX10]",
+      "issue": 708,
+      "hash": "30448d01c606fce9",
+      "pack": "UPS 3",
+      "reported_checks": "421458/421458",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] 7th Gear [SX11]",
+      "issue": 709,
+      "hash": "477fed829d289df2",
+      "pack": "dimocracy 2021: second term",
+      "reported_checks": "226475/226475",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Who the Hell Is Edgar? [SX9]",
+      "issue": 710,
+      "hash": "31d58dde5886155f",
+      "pack": "ITL Online 2025",
+      "reported_checks": "535244/535244",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] BroGamer [SX13]",
+      "issue": 711,
+      "hash": "e5b7f2be78829f4e",
+      "pack": " \tGpop's Pack of Original Pad Sims IV",
+      "reported_checks": "26593/26593",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Step Your Game Up (Director's Cut) [SX14]",
+      "issue": 712,
+      "hash": "553effff992457a7",
+      "pack": " Technical Proficiency Exam 3",
+      "reported_checks": "506805/506805",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Slamurai [SX11]",
+      "issue": 713,
+      "hash": "b9ad6d1bcea87aee",
+      "pack": " 9guys1pack",
+      "reported_checks": "40990/40990",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Bank Account [SX1]",
+      "issue": 714,
+      "hash": " 67a852124fd1f0ef",
+      "pack": "Secret Stepfile Santa 2025",
+      "reported_checks": "1153/1153",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Levels (Skrillex Remix) [SX11]",
+      "issue": 715,
+      "hash": " f41a24722a37758f",
+      "pack": "Everlasting Memories 2",
+      "reported_checks": "47464/47464",
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Ultimate taste [SX15]",
+      "issue": 716,
+      "hash": "d7c1e7bb11c85644",
+      "pack": "dimocracy 3",
+      "reported_checks": "321621/321621",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Delightful Day [SX9]",
+      "issue": 717,
+      "hash": "e3365d654c4974a3",
+      "pack": "Animal Crossover",
+      "reported_checks": "207/207",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Episode 01 Save Your Tears (expects 2 players)",
+      "issue": 718,
+      "hash": "657399e28076dbdf",
+      "pack": "Cringle Desolation",
+      "reported_checks": "397/398",
+      "reported_notes": "beat-0 sprite alpha, 1.0 versus 0.2"
+    },
+    {
+      "title": "[Lua] Episode 13 My Ex's Bestfriend",
+      "issue": 719,
+      "hash": "dd8ba83c397442fc",
+      "pack": "Cringle Desolation",
+      "reported_checks": "27/27",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Episode 15 Circles",
+      "issue": 720,
+      "hash": "230926fc7510fa94",
+      "pack": "Cringle Desolation",
+      "reported_checks": "44037/44037",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Episode 17 Pale",
+      "issue": 721,
+      "hash": "ee316a15131eb3b9",
+      "pack": "Cringle Desolation",
+      "reported_checks": "40/40",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Get Into It",
+      "issue": 722,
+      "hash": "9c208360a9b25133",
+      "pack": "Cringle Asylum",
+      "reported_checks": null,
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Jumper",
+      "issue": 723,
+      "hash": "7c085505e95af69a",
+      "pack": "Cringle Odyssey",
+      "reported_checks": null,
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Rhythm Hell",
+      "issue": 724,
+      "hash": "be38aa9e3c88c32b",
+      "pack": "Cringle Hollow",
+      "reported_checks": null,
+      "reported_notes": null
+    },
+    {
+      "title": "[Lua] Let Me Hear That",
+      "issue": 726,
+      "hash": "19f67d67330cae32",
+      "pack": "dimocracy",
+      "reported_checks": "4357/4357",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Waltz Capriccio",
+      "issue": 727,
+      "hash": "0d1c59154eff02b7",
+      "pack": "dimocracy",
+      "reported_checks": "520966/520966",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Warp Zone",
+      "issue": 728,
+      "hash": "9fc2acb0fcec215b",
+      "pack": "dimocracy",
+      "reported_checks": "3909/3926",
+      "reported_notes": "portal sprite bounds wrong (projected geometry 66/82), 1 unsupported function action"
+    },
+    {
+      "title": "[Lua] Apollo",
+      "issue": 730,
+      "hash": "450ff4f0585fdae3",
+      "pack": "dimocracy 2021",
+      "reported_checks": "14037/14037",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Bunny House",
+      "issue": 731,
+      "hash": "13c007f1b2cc142d",
+      "pack": "dimocracy 2021",
+      "reported_checks": "55476/55476",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Panopticon",
+      "issue": 732,
+      "hash": "c2d067a7513bef49",
+      "pack": "dimocracy 2021",
+      "reported_checks": "2024/2024",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Karachi",
+      "issue": 733,
+      "hash": "702b3a5f5aba3b98",
+      "pack": "dimocracy 3",
+      "reported_checks": "26924/27022",
+      "reported_notes": "All 316 Roll writes pass; modifiers are 26718/26718. Actor/render gaps remain."
+    },
+    {
+      "title": "[Lua] LALA",
+      "issue": 734,
+      "hash": "4117628540d4ac3d",
+      "pack": "Egg Carton",
+      "reported_checks": "20368/20368",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] broadcast",
+      "issue": 735,
+      "hash": "81612ed8c89ac4b9",
+      "pack": "Egg Scramble",
+      "reported_checks": "5710/5710",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] feelyourtouch e.d.e.n [SX]",
+      "issue": 736,
+      "hash": "ecc9cbae7195f915",
+      "pack": "Egg Scramble",
+      "reported_checks": "459556/459556",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] feelyourtouch e.d.e.n [DX]",
+      "issue": 737,
+      "hash": "d1ab790f73670414",
+      "pack": "Egg Scramble",
+      "reported_checks": null,
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] 666",
+      "issue": 738,
+      "hash": "bcc24d0383531e4d",
+      "pack": "GPOPS IV",
+      "reported_checks": "274951/274951",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] I",
+      "issue": 739,
+      "hash": "f3905e4e0bb5398f",
+      "pack": "GPOPS IV",
+      "reported_checks": "72507/72530",
+      "reported_notes": "Remaining gaps concern actors, geometry, and final-frame values"
+    },
+    {
+      "title": "[Lua] Oshama Scramble!",
+      "issue": 740,
+      "hash": "b2f5af049eeeb8f9",
+      "pack": "GPOPS IV",
+      "reported_checks": "103085/103397",
+      "reported_notes": "projected geometry 255/445 (sprite centres and visibility), a few modifier values"
+    },
+    {
+      "title": "[Lua] Flying Castle",
+      "issue": 741,
+      "hash": "c9f1235a63d75076",
+      "pack": "ITG Level Asian",
+      "reported_checks": "11958/11958",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] [CRYSTAL_ACCESS]",
+      "issue": 742,
+      "hash": "47017d8cec7dc992",
+      "pack": "ITG Level Asian",
+      "reported_checks": "4284/4284",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Lake of Lost Nostalgia",
+      "issue": 743,
+      "hash": "b3b8ef32884b2d90",
+      "pack": "7gays1pack",
+      "reported_checks": "8842/8842",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Sharkmode",
+      "issue": 744,
+      "hash": "f13226ac1b5eedcc",
+      "pack": "15gays1pack",
+      "reported_checks": "8545/8709",
+      "reported_notes": "Projected bounds/centers remain."
+    },
+    {
+      "title": "[Lua] Someone Special",
+      "issue": 745,
+      "hash": "59bba16f2331d939",
+      "pack": "L.E.F.T.S",
+      "reported_checks": "1,257,106/1,257,106",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] MAWARUCHI SURVIVER (7)",
+      "issue": 746,
+      "hash": "f7fdd8fafaee6188",
+      "pack": "Mawaru Collection",
+      "reported_checks": "16974/26165",
+      "reported_notes": "sprite visibility (249), geometry 7664/16587, vibration 8815/8853, modifiers 30/106, compile info 11/18"
+    },
+    {
+      "title": "[Lua] MAWARU! SETSUGETSUKA! (8)",
+      "issue": 747,
+      "hash": "cadefe09888e9ab8",
+      "pack": "Mawaru Collection",
+      "reported_checks": "12474/15940",
+      "reported_notes": "Timeline improved to 128/131; queued CheckGame5, CheckGame7 and CheckGame9 messages remain missing. Final render 362/447, geometry 8242/11544, modifiers 208/242"
+    },
+    {
+      "title": "[Lua] MAWARU SIMULATOR 2016 (9)",
+      "issue": 748,
+      "hash": "824199e7dfc44ef6",
+      "pack": "Mawaru Collection",
+      "reported_checks": "67428/88316",
+      "reported_notes": "rendering, ordering, and message gaps remain"
+    },
+    {
+      "title": "[Lua] MAWARU RIDES AGAIN (6)",
+      "issue": 749,
+      "hash": "8729524440c7e8d4",
+      "pack": "Mawaru Collection",
+      "reported_checks": "9645/10113",
+      "reported_notes": "message commands 0/270 (Robot, Candy and Static effects missing), geometry 2/175 with no matching DeadSync actor"
+    },
+    {
+      "title": "[Lua] MAWARU FINALE (5)",
+      "issue": 750,
+      "hash": "74765c1936186d20",
+      "pack": "Mawaru Collection",
+      "reported_checks": "1586/2193",
+      "reported_notes": "projected geometry 716/1323, visibility and PicAma/PicTaron bounds"
+    },
+    {
+      "title": "[Lua] Igaku",
+      "issue": 751,
+      "hash": "3e9fa53d70b9aa19",
+      "pack": "Notice Me Benpai 3",
+      "reported_checks": "227201/230318",
+      "reported_notes": "Activation windows remain missing from the full-song compilation."
+    },
+    {
+      "title": "[Lua] Brain Power",
+      "issue": 752,
+      "hash": "a73ec5f2f3015620",
+      "pack": "UPS 4",
+      "reported_checks": "73/120",
+      "reported_notes": "modifiers (drunk, tipsy, reverse, brake stay at 0 in DeadSync), projected geometry 2/13"
+    },
+    {
+      "title": "[Lua] flowers",
+      "issue": 753,
+      "hash": "508d7cc730888b3e",
+      "pack": "R.I.G.H.T.S",
+      "reported_checks": "480/480",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Do the mario",
+      "issue": 754,
+      "hash": "5cc4462209b00369",
+      "pack": "R.I.G.H.T.S",
+      "reported_checks": "65/65",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] Goodbye",
+      "issue": 755,
+      "hash": "b21f3f83be7fbaad",
+      "pack": "R.I.G.H.T.S 3",
+      "reported_checks": "18491/18492",
+      "reported_notes": "Only actor ordering remains"
+    },
+    {
+      "title": "[Lua] Macarena",
+      "issue": 756,
+      "hash": "2c4993120bc7d1b5",
+      "pack": "R.I.G.H.T.S 3",
+      "reported_checks": "24/24",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] And Drugs",
+      "issue": 757,
+      "hash": "d79aed6b06cb7912",
+      "pack": "sorae's stax",
+      "reported_checks": "14839/14867",
+      "reported_notes": "compile info 3/31, unsupported function eases (outCubic, inCirc, outCirc)"
+    },
+    {
+      "title": "[Lua] Bad Apple!!",
+      "issue": 758,
+      "hash": "0a977b622e3d2b0f",
+      "pack": "This is Crazy 5.0",
+      "reported_checks": "94/316",
+      "reported_notes": "compile info 3/81, player ranges 2/18, modifiers (boolean options like Wide false, Twister false are uncovered), final render 0/1"
+    },
+    {
+      "title": "[Lua] MEGALOVANIA",
+      "issue": 759,
+      "hash": "f8c29e15fbbe460e",
+      "pack": "This is Crazy 1.0",
+      "reported_checks": "12531/18249",
+      "reported_notes": "Timeline improved to 15/17. Dark and Bones2Away remain missing near beat 439.8 in the randomized pause section. Modifiers 1138/1140; geometry and final-render gaps remain"
+    },
+    {
+      "title": "[Lua] Rainbow Road",
+      "issue": 760,
+      "hash": "ae23d77e63189e02",
+      "pack": "UPSMH Online",
+      "reported_checks": "117/175",
+      "reported_notes": "projected geometry 54/112, mostly the uncle1 and uncle2 sprite sheets"
+    },
+    {
+      "title": "[Lua] Fof Guys",
+      "issue": 761,
+      "hash": "29216cf8f382a21d",
+      "pack": "UPSMH Online",
+      "reported_checks": "5/8",
+      "reported_notes": "actor tree (ITGmania 6 drawables, DeadSync 5), 1 geometry sample has no DeadSync actor"
+    },
+    {
+      "title": "[Lua] finite [Edit]",
+      "issue": 762,
+      "hash": "c4ba45c6133c8abd",
+      "pack": "UPSMH Online",
+      "reported_checks": "26666/26666",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] [FULL SONG] Kagetsu no Yume",
+      "issue": 763,
+      "hash": "813d600a24bdd875",
+      "pack": "Virtual Youtuber Pad Pack II",
+      "reported_checks": "30830/30830",
+      "reported_notes": "verify and add to allowlist"
+    },
+    {
+      "title": "[Lua] [FULL SONG] ChikuTaku",
+      "issue": 764,
+      "hash": "a1c95e9c47363527",
+      "pack": "Virtual Youtuber Pad Pack II",
+      "reported_checks": "35240/35284",
+      "reported_notes": "modifiers only (stealth, mini, wave, tornado)"
+    }
+  ]
+}

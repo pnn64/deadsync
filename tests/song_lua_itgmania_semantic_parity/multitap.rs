@@ -615,6 +615,7 @@ fn perspective_geometry_survives_noteskin_kind_change() {
         {"id":"deco", "class":"Sprite", "name":"Decoration"}
     ])).expect("native actor tree");
     let track = &mut trace.projected_vertex_tracks[0];
+    track.actor = "deco".into();
     track.definition_id = Some("deco".into());
     track.camera_actor = "camera".into();
     // Use the first visible quad recorded by the native flip69 fixture.

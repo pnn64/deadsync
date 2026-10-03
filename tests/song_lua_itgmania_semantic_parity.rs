@@ -125,6 +125,8 @@ struct NativeActor {
     id: String,
     path: String,
     #[serde(default)]
+    parent_id: Option<String>,
+    #[serde(default)]
     final_render_state: Option<NativeRenderSnapshot>,
     #[serde(default)]
     render_state_samples: Vec<(usize, Option<f32>, bool)>,
@@ -166,6 +168,8 @@ struct NativeProjectedVertexTrack {
 #[derive(Deserialize)]
 struct NativeDrawOrder {
     parent_definition_id: String,
+    #[serde(default)]
+    parent_actor: String,
     instance: usize,
     final_children: Vec<NativeDrawChild>,
 }
@@ -173,6 +177,10 @@ struct NativeDrawOrder {
 #[derive(Deserialize)]
 struct NativeDrawChild {
     definition_id: String,
+    #[serde(default)]
+    actor: Option<String>,
+    #[serde(default)]
+    layer_index: usize,
 }
 
 #[derive(Deserialize)]
@@ -743,40 +751,82 @@ impl Default for NativeFinalRenderState {
     }
 }
 
+#[derive(Clone, Copy)]
+struct NativeInstance<'a> {
+    id: &'a str,
+    class: &'a str,
+    name: Option<&'a str>,
+}
+
 fn collect_native_drawable_definitions<'a>(
     trace: &'a NativeTrace,
     parent: &'a NativeDefinition,
     definitions: &HashMap<&'a str, &'a NativeDefinition>,
-    out: &mut Vec<&'a NativeDefinition>,
+    out: &mut Vec<NativeInstance<'a>>,
 ) {
-    let draw_order = trace
-        .draw_orders
-        .iter()
-        .find(|order| order.parent_definition_id == parent.id && order.instance == 1);
+    let actor = parent
+        .runtime_actors
+        .first()
+        .map_or(parent.id.as_str(), String::as_str);
+    collect_native_instances(trace, parent, actor, definitions, true, out);
+}
+
+fn collect_native_instances<'a>(
+    trace: &'a NativeTrace,
+    parent: &'a NativeDefinition,
+    actor: &'a str,
+    definitions: &HashMap<&'a str, &'a NativeDefinition>,
+    drawables_only: bool,
+    out: &mut Vec<NativeInstance<'a>>,
+) {
+    let draw_order = trace.draw_orders.iter().find(|order| {
+        order.parent_actor == actor
+            || (order.parent_actor.is_empty()
+                && order.parent_definition_id == parent.id
+                && order.instance == 1)
+    });
     let mut source_children = parent.children.iter().collect::<Vec<_>>();
     source_children.sort_by_key(|child| child.layer_index);
     let children = draw_order
         .map(|order| {
-            order
-                .final_children
-                .iter()
-                .map(|child| child.definition_id.as_str())
+            let mut children = order.final_children.iter().collect::<Vec<_>>();
+            if !drawables_only {
+                children.sort_by_key(|child| child.layer_index);
+            }
+            children
+                .into_iter()
+                .map(|child| (child.definition_id.as_str(), child.actor.as_deref()))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_else(|| {
             source_children
                 .iter()
-                .map(|child| child.definition_id.as_str())
+                .map(|child| (child.definition_id.as_str(), None))
                 .collect()
         });
-    for child in children {
+    for (child, actor) in children {
         let Some(definition) = definitions.get(child).copied() else {
             continue;
         };
-        if !matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
-            out.push(definition);
+        let id = actor.unwrap_or_else(|| {
+            definition
+                .runtime_actors
+                .first()
+                .map_or(definition.id.as_str(), String::as_str)
+        });
+        let include = if drawables_only {
+            !matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound")
+        } else {
+            definition.class != "Actor" || !definition.children.is_empty()
+        };
+        if include {
+            out.push(NativeInstance {
+                id,
+                class: &definition.class,
+                name: definition.name.as_deref(),
+            });
         }
-        collect_native_drawable_definitions(trace, definition, definitions, out);
+        collect_native_instances(trace, definition, id, definitions, drawables_only, out);
     }
 }
 
@@ -787,14 +837,7 @@ fn native_color_alpha(args: &[Value]) -> Option<f32> {
         .or_else(|| value_f32(args.get(3)))
 }
 
-fn native_final_render_state(
-    trace: &NativeTrace,
-    definition: &NativeDefinition,
-) -> NativeFinalRenderState {
-    let actor = definition
-        .runtime_actors
-        .first()
-        .map_or(definition.id.as_str(), String::as_str);
+fn native_final_render_state(trace: &NativeTrace, actor: &str) -> NativeFinalRenderState {
     if let Some(snapshot) = trace
         .runtime_actors
         .iter()
@@ -963,7 +1006,7 @@ fn compare_final_render_states(
             .unwrap_or_else(|| song_beat_at_elapsed_seconds(seconds, context));
         let final_states = compiled_local_states_at(compiled, context, beat, seconds);
         for (definition, overlay_index) in native.into_iter().zip(deadsync) {
-            let expected = native_final_render_state(trace, definition);
+            let expected = native_final_render_state(trace, definition.id);
             let actual = if expected.sampled {
                 final_states[overlay_index]
             } else {
@@ -987,6 +1030,19 @@ fn compare_final_render_states(
             }
         }
     }
+}
+
+#[test]
+fn shared_actor_instances_match_native_rendering() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/shared-actor.json"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/shared-actor.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    assert_eq!(parity.checks(), 20);
+    parity.assert_complete(&trace.title);
 }
 
 #[test]
@@ -1372,12 +1428,8 @@ fn compare_player_proxy_sources(
 
 fn native_update_render_writes(
     trace: &NativeTrace,
-    definition: &NativeDefinition,
+    actor: &str,
 ) -> (Vec<(f32, f32)>, Vec<(f32, bool)>) {
-    let actor = definition
-        .runtime_actors
-        .first()
-        .map_or(definition.id.as_str(), String::as_str);
     let mut alpha = Vec::<(u64, f32, f32)>::new();
     let mut visible = Vec::<(u64, f32, bool)>::new();
     for track in trace.tween_tracks.iter().filter(|track| {
@@ -1441,13 +1493,13 @@ fn native_update_render_writes(
 
 fn native_render_probe(
     trace: &NativeTrace,
-    definition: &NativeDefinition,
+    actor: &str,
     beat: f32,
 ) -> Option<(f32, Option<f32>, bool)> {
     let samples = &trace
         .runtime_actors
         .iter()
-        .find(|actor| definition.runtime_actors.iter().any(|id| *id == actor.id))?
+        .find(|runtime| runtime.id == actor)?
         .render_state_samples;
     let frame = trace
         .update_frames
@@ -1505,13 +1557,13 @@ fn compare_update_render_persistence(
             continue;
         }
         for (definition, overlay_index) in native.into_iter().zip(deadsync) {
-            let (alpha_writes, visible_writes) = native_update_render_writes(trace, definition);
+            let (alpha_writes, visible_writes) = native_update_render_writes(trace, definition.id);
             for (beat, expected) in persistence_probes(
                 &alpha_writes,
                 trace.fixture_context.beat_step,
                 trace.trace_until_beat,
             ) {
-                let (beat, expected) = match native_render_probe(trace, definition, beat) {
+                let (beat, expected) = match native_render_probe(trace, definition.id, beat) {
                     Some((beat, Some(alpha), _)) => (beat, alpha),
                     Some((_, None, _)) => continue,
                     None => (beat, expected),
@@ -1538,7 +1590,7 @@ fn compare_update_render_persistence(
                 trace.fixture_context.beat_step,
                 trace.trace_until_beat,
             ) {
-                let (beat, expected) = native_render_probe(trace, definition, beat)
+                let (beat, expected) = native_render_probe(trace, definition.id, beat)
                     .map_or((beat, expected), |(beat, _, visible)| (beat, visible));
                 let Some(SongLuaOverlayUpdateValue::Bool(actual)) = compiled_update_value_at(
                     context,
@@ -1699,14 +1751,7 @@ fn native_render_values(
     }
 }
 
-fn native_update_render_writes_all(
-    trace: &NativeTrace,
-    definition: &NativeDefinition,
-) -> Vec<NativeRenderWrite> {
-    let actor = definition
-        .runtime_actors
-        .first()
-        .map_or(definition.id.as_str(), String::as_str);
+fn native_update_render_writes_all(trace: &NativeTrace, actor: &str) -> Vec<NativeRenderWrite> {
     let mut writes =
         trace
             .tween_tracks
@@ -1895,21 +1940,16 @@ fn render_value_matches(
 }
 
 fn collect_native_overlay_definitions<'a>(
+    trace: &'a NativeTrace,
     parent: &'a NativeDefinition,
     definitions: &HashMap<&'a str, &'a NativeDefinition>,
-    out: &mut Vec<&'a NativeDefinition>,
+    out: &mut Vec<NativeInstance<'a>>,
 ) {
-    let mut children = parent.children.iter().collect::<Vec<_>>();
-    children.sort_by_key(|child| child.layer_index);
-    for child in children {
-        let Some(definition) = definitions.get(child.definition_id.as_str()).copied() else {
-            continue;
-        };
-        if definition.class != "Actor" || !definition.children.is_empty() {
-            out.push(definition);
-        }
-        collect_native_overlay_definitions(definition, definitions, out);
-    }
+    let actor = parent
+        .runtime_actors
+        .first()
+        .map_or(parent.id.as_str(), String::as_str);
+    collect_native_instances(trace, parent, actor, definitions, false, out);
 }
 
 fn compare_update_render_values(
@@ -1929,7 +1969,7 @@ fn compare_update_render_values(
             continue;
         };
         let mut native = Vec::new();
-        collect_native_overlay_definitions(root, &definitions, &mut native);
+        collect_native_overlay_definitions(trace, root, &definitions, &mut native);
         let native_len = native.len();
         let overlay_indices = (0..compiled.overlays.len())
             .filter(|index| Some(*index) != compiled.screen_overlay_index)
@@ -1972,7 +2012,7 @@ fn compare_update_render_values(
             continue;
         }
         for (overlay_index, definition) in pairs {
-            for write in native_update_render_writes_all(trace, definition) {
+            for write in native_update_render_writes_all(trace, definition.id) {
                 let exact_ease_is_authoritative = compiled.overlay_eases.iter().any(|ease| {
                     if ease.overlay_index != overlay_index
                         || ease.unit != SongLuaTimeUnit::Beat
@@ -2055,35 +2095,9 @@ fn collect_native_drawables<'a>(
     definitions: &HashMap<&'a str, &'a NativeDefinition>,
     out: &mut Vec<(&'a str, Option<&'a str>)>,
 ) {
-    let draw_order = trace
-        .draw_orders
-        .iter()
-        .find(|order| order.parent_definition_id == parent.id && order.instance == 1);
-    let mut source_children = parent.children.iter().collect::<Vec<_>>();
-    source_children.sort_by_key(|child| child.layer_index);
-    let children = draw_order
-        .map(|order| {
-            order
-                .final_children
-                .iter()
-                .map(|child| child.definition_id.as_str())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_else(|| {
-            source_children
-                .iter()
-                .map(|child| child.definition_id.as_str())
-                .collect()
-        });
-    for child in children {
-        let Some(definition) = definitions.get(child).copied() else {
-            continue;
-        };
-        if !matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
-            out.push((definition.class.as_str(), definition.name.as_deref()));
-        }
-        collect_native_drawables(trace, definition, definitions, out);
-    }
+    let mut instances = Vec::new();
+    collect_native_drawable_definitions(trace, parent, definitions, &mut instances);
+    out.extend(instances.into_iter().map(|actor| (actor.class, actor.name)));
 }
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
@@ -2252,6 +2266,12 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
                 .iter()
                 .map(move |child| (child.definition_id.as_str(), parent.id.as_str()))
         })
+        .chain(trace.runtime_actors.iter().filter_map(|actor| {
+            actor
+                .parent_id
+                .as_deref()
+                .map(|parent| (actor.id.as_str(), parent))
+        }))
         .collect::<HashMap<_, _>>();
     let root_layers = trace
         .roots
@@ -3084,24 +3104,24 @@ fn projected_drawable_map(
                 native
                     .into_iter()
                     .zip(deadsync)
-                    .map(|(definition, index)| (definition.id.clone(), (layer, index))),
+                    .map(|(definition, index)| (definition.id.to_owned(), (layer, index))),
             );
         } else {
             // A noteskin placeholder can change drawable kinds without changing
             // the authored tree. Keep checking the other actors in that tree.
             let mut actors = Vec::new();
-            collect_native_overlay_definitions(root, &definitions, &mut actors);
+            collect_native_overlay_definitions(trace, root, &definitions, &mut actors);
             if actors.len() == compiled.overlays.len()
                 && actors
                     .iter()
                     .zip(&compiled.overlays)
-                    .all(|(native, actual)| native.name == actual.name)
+                    .all(|(native, actual)| native.name == actual.name.as_deref())
             {
                 drawable_map.extend(
                     actors
                         .into_iter()
                         .enumerate()
-                        .map(|(index, definition)| (definition.id.clone(), (layer, index))),
+                        .map(|(index, definition)| (definition.id.to_owned(), (layer, index))),
                 );
             }
         }
@@ -3671,7 +3691,7 @@ fn additive_update_matches_native() {
         .iter()
         .find(|a| a.name.as_deref() == Some("SetterAdd"))
         .unwrap();
-    let writes = native_update_render_writes_all(&trace, definition);
+    let writes = native_update_render_writes_all(&trace, &definition.id);
     use SongLuaOverlayUpdateTarget as Target;
     for (target, expected) in [
         (Target::X, 105.0),
@@ -3989,7 +4009,7 @@ fn compare_projected_geometry(
         let Some(definition_id) = track.definition_id.as_deref() else {
             continue;
         };
-        let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
+        let Some(&(layer, overlay_index)) = drawable_map.get(&track.actor) else {
             parity.check(false, || {
                 format!(
                     "projected geometry is untested for {definition_id}: no matching DeadSync actor"
@@ -4155,7 +4175,7 @@ fn compare_projected_vibration_coverage(
         let Some(definition_id) = track.definition_id.as_deref() else {
             continue;
         };
-        let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
+        let Some(&(layer, overlay_index)) = drawable_map.get(&track.actor) else {
             continue;
         };
         for sample in &track.samples {
@@ -5101,7 +5121,7 @@ fn assert_step_player_proxy_and_projection(
             .find_map(|(root_id, layer)| {
                 let root = definitions.get(root_id.as_str())?;
                 let mut native = Vec::new();
-                collect_native_overlay_definitions(root, &definitions, &mut native);
+                collect_native_overlay_definitions(&trace, root, &definitions, &mut native);
                 native
                     .iter()
                     .position(|definition| definition.id == *proxy_id)

@@ -11541,14 +11541,26 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn shared_definitions_create_separate_actors() {
+        let song_dir = test_dir("shared-actor-definition");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../tests/fixtures/shared-actor.lua"))
+            .expect("shared actor fixture");
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Shared Actor Definition"),
+        )
+        .expect("shared definitions instantiate separate native actors");
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+    }
+
+    #[test]
     fn init_queues_wait_for_on() {
         let song_dir = test_dir("init-queue-order");
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
-            include_str!(
-                "../../../../itgmania-harness-rs/tests/fixtures/song-lua-headless/init-queue.lua"
-            ),
+            include_str!("../tests/fixtures/init-queue.lua"),
         )
         .expect("native Init queue fixture");
         let compiled = test_compile_song_lua(
