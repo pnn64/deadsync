@@ -1,4 +1,7 @@
-use crate::media::{is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg};
+use crate::media::{
+    is_mac_resource_fork, is_song_art_image, resolve_song_asset_path_like_itg,
+    song_asset_entry_is_file,
+};
 use crate::tags::latest_simfile_tag_values;
 use image::image_dimensions;
 use std::fs;
@@ -125,12 +128,21 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     };
     let mut paths = read_dir
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| !is_mac_resource_fork(path) && is_song_art_image(path) && path.is_file())
+        .filter_map(|entry| {
+            let path = entry.path();
+            (!is_mac_resource_fork(&path)
+                && is_song_art_image(&path)
+                && song_asset_entry_is_file(&entry, &path))
+            .then_some(path)
+        })
         .collect::<Vec<_>>();
     sort_song_art_paths(&mut paths);
     paths
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/entry_types/artwork.rs"]
+mod entry_types_perf;
 
 #[derive(Clone, Copy)]
 struct ArtworkSortKey {

@@ -10,7 +10,7 @@ use crate::cache::{
 use crate::media::{
     foreground_media_ext_rank, is_bgchange_movie_path, is_mac_resource_fork,
     list_song_dir_rel_entries, path_uses_lua_like_itg, resolve_foreground_media_dir,
-    resolve_song_path_like_itg, song_lua_entry_path_like_itg,
+    resolve_song_path_like_itg, song_asset_entry_is_file, song_lua_entry_path_like_itg,
 };
 use crate::tags::named_tag_values;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget};
@@ -520,9 +520,12 @@ fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
     };
     let mut files = read_dir
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| {
-            !is_mac_resource_fork(path) && is_bgchange_movie_path(path) && path.is_file()
+        .filter_map(|entry| {
+            let path = entry.path();
+            (!is_mac_resource_fork(&path)
+                && is_bgchange_movie_path(&path)
+                && song_asset_entry_is_file(&entry, &path))
+            .then_some(path)
         })
         .collect::<Vec<_>>();
     files.sort_by_cached_key(|path| {
@@ -532,6 +535,10 @@ fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
     });
     files
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/entry_types/movies.rs"]
+mod entry_types_perf;
 
 fn upsert_background_change(out: &mut Vec<SongBackgroundChange>, change: SongBackgroundChange) {
     if let Some(slot) = out

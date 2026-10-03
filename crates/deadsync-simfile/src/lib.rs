@@ -26,5 +26,9 @@ pub mod timing;
 mod perf;
 
 #[cfg(test)]
+#[path = "../tests/perf/entry_types/fixtures.rs"]
+mod entry_types_perf_fixtures;
+
+#[cfg(test)]
 #[path = "../tests/perf/processing.rs"]
 mod processing_perf;
