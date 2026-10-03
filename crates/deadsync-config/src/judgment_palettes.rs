@@ -1,4 +1,4 @@
-use crate::ini::SimpleIni;
+use crate::ini::borrowed_ini_sections;
 use crate::runtime::palette_path;
 use deadlib_present::color::Color;
 use deadsync_theme::color::{JudgmentColorRole, JudgmentPalette, JudgmentPalettePreset};
@@ -39,11 +39,10 @@ impl JudgmentPaletteCatalog {
     }
 
     pub fn from_ini(content: &str, built_in: JudgmentPalettePreset) -> Self {
-        let mut ini = SimpleIni::new();
-        ini.load_str(content);
+        let ini = borrowed_ini_sections(content);
 
         let mut custom = Vec::new();
-        for (section, properties) in ini.sections() {
+        for (section, properties) in &ini {
             let Some(id) = section.strip_prefix("Palette ") else {
                 continue;
             };
@@ -53,7 +52,7 @@ impl JudgmentPaletteCatalog {
             }
             let name = properties
                 .get("Name")
-                .map(String::as_str)
+                .copied()
                 .and_then(valid_name)
                 .unwrap_or("Custom Palette")
                 .to_owned();
@@ -93,7 +92,10 @@ impl JudgmentPaletteCatalog {
                 catalog.palettes.push(definition);
             }
         }
-        if let Some(default_id) = ini.get("General", "DefaultPalette")
+        if let Some(default_id) = ini
+            .get("General")
+            .and_then(|properties| properties.get("DefaultPalette"))
+            .copied()
             && catalog.palette(default_id).is_some()
         {
             default_id.clone_into(&mut catalog.default_palette_id);
@@ -311,6 +313,13 @@ pub fn update_runtime_catalog(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod palette_loading_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/palette_loading.rs"
+        ));
+    }
 
     const PRESET: JudgmentPalettePreset = JudgmentPalettePreset {
         id: "test-theme",

@@ -289,11 +289,12 @@ fn song_title_contains(song: &SongData, translit: bool, needle: &str) -> bool {
 }
 
 #[inline]
-fn lowercase_full_title_bytes(song: &SongData) -> impl Iterator<Item = u8> + '_ {
+fn lowercase_full_title_tail(song: &SongData, title_start: usize) -> impl Iterator<Item = u8> + '_ {
     let subtitle = song.display_subtitle(false);
     let has_subtitle = !subtitle.trim().is_empty();
-    song.display_title(false)
-        .bytes()
+    song.display_title(false).as_bytes()[title_start..]
+        .iter()
+        .copied()
         .chain(has_subtitle.then_some(b' '))
         .chain(if has_subtitle { subtitle } else { "" }.bytes())
         .map(|byte| byte.to_ascii_lowercase())
@@ -301,7 +302,18 @@ fn lowercase_full_title_bytes(song: &SongData) -> impl Iterator<Item = u8> + '_ 
 
 #[inline]
 fn display_full_title_cmp(left: &SongData, right: &SongData) -> Ordering {
-    lowercase_full_title_bytes(left).cmp(lowercase_full_title_bytes(right))
+    let left_title = left.display_title(false).as_bytes();
+    let right_title = right.display_title(false).as_bytes();
+    for (&a, &b) in left_title.iter().zip(right_title) {
+        if a != b {
+            let order = a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase());
+            if order != Ordering::Equal {
+                return order;
+            }
+        }
+    }
+    let shared = left_title.len().min(right_title.len());
+    lowercase_full_title_tail(left, shared).cmp(lowercase_full_title_tail(right, shared))
 }
 
 fn sort_song_search_candidates(candidates: &mut [SongSearchCandidate]) {
@@ -408,6 +420,13 @@ mod tests {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/perf/title_search.rs"
+        ));
+    }
+
+    mod search_sort_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/search_sort.rs"
         ));
     }
 

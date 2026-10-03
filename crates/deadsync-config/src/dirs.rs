@@ -311,24 +311,33 @@ impl AppDirs {
 
     /// Locate Workshop content inside the game assets, including portable installs.
     pub fn workshop_dir(&self, cwd: Option<&Path>) -> PathBuf {
-        let roots = cwd
-            .into_iter()
-            .flat_map(|cwd| [cwd.to_path_buf(), cwd.join("deadsync")])
-            .chain(std::iter::once(self.exe_dir.clone()));
-        roots
-            .map(|root| root.join("assets/noteskins"))
+        let mut root = self.workshop_pack_root(cwd);
+        root.reserve_exact(5);
+        root.push("hurg");
+        root
+    }
+
+    fn workshop_pack_root(&self, cwd: Option<&Path>) -> PathBuf {
+        cwd.into_iter()
+            .map(|cwd| cwd.join("assets/noteskins"))
+            .chain(cwd.into_iter().map(|cwd| {
+                let mut nested = cwd.join("deadsync");
+                nested.reserve_exact("assets/noteskins".len() + 1);
+                nested.push("assets/noteskins");
+                nested
+            }))
+            .chain(std::iter::once_with(|| {
+                self.exe_dir.join("assets/noteskins")
+            }))
             .find(|root| root.is_dir())
             .unwrap_or_else(|| self.exe_dir.join("assets/noteskins"))
-            .join("hurg")
     }
 
     /// Prepare the asset subsystem's overlay and cache paths at startup.
     pub fn asset_paths(&self, cwd: Option<&Path>) -> AssetPaths {
         // The install destination wins over older copies (including cargo's
         // copied assets), so a successful download activates that exact pack.
-        let mut pack_root = self.workshop_dir(cwd);
-        pack_root.pop();
-        let mut noteskin_pack_roots = vec![pack_root];
+        let mut noteskin_pack_roots = vec![self.workshop_pack_root(cwd)];
         for root in self.media_roots("assets/noteskins", cwd) {
             if !noteskin_pack_roots.contains(&root) {
                 noteskin_pack_roots.push(root);
@@ -369,6 +378,10 @@ impl AppDirs {
 #[cfg(test)]
 #[path = "../tests/perf/media_roots.rs"]
 mod media_roots_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/workshop_paths.rs"]
+mod workshop_paths_perf;
 
 /// Paths retained by the game asset subsystem, without config/profile/song layout.
 #[derive(Clone, Debug)]
