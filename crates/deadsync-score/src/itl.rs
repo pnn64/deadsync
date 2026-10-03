@@ -843,6 +843,28 @@ pub fn runtime_set_online_srpg_self_score_for_profile_dirs<P>(
     );
 }
 
+// Hashbrown's cache can use the existing bincode map layout directly:
+// a u64 entry count followed by key/value pairs, with no second hash table.
+struct OnlineItlSelfIndexRef<'a>(&'a OnlineItlSelfCacheMap);
+
+#[cfg(test)]
+#[path = "../tests/perf/itl_index_encoding.rs"]
+mod index_encoding_perf;
+
+impl Encode for OnlineItlSelfIndexRef<'_> {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        (self.0.len() as u64).encode(encoder)?;
+        for (key, value) in self.0 {
+            key.encode(encoder)?;
+            value.encode(encoder)?;
+        }
+        Ok(())
+    }
+}
+
 pub fn save_online_itl_self_index_file(
     path: &Path,
     by_key: &OnlineItlSelfCacheMap,
@@ -855,12 +877,10 @@ pub fn save_online_itl_self_index_file(
         error,
     })?;
 
-    let std_by_key: HashMap<_, _> = by_key.iter().collect();
-    let buf = bincode::encode_to_vec(&std_by_key, bincode::config::standard()).map_err(|_| {
-        OnlineItlSelfIndexWriteError::Encode {
+    let buf = bincode::encode_to_vec(OnlineItlSelfIndexRef(by_key), bincode::config::standard())
+        .map_err(|_| OnlineItlSelfIndexWriteError::Encode {
             path: path.to_path_buf(),
-        }
-    })?;
+        })?;
     let tmp_path = path.with_extension("tmp");
     fs::write(&tmp_path, buf).map_err(|error| OnlineItlSelfIndexWriteError::WriteTemp {
         path: tmp_path.clone(),
@@ -3319,9 +3339,15 @@ mod tests {
         );
     }
     mod ranking_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/itl_ranking.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/itl_ranking.rs"
+        ));
     }
     mod online_cache_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/online_itl.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/online_itl.rs"
+        ));
     }
 }

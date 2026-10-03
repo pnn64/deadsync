@@ -4977,10 +4977,7 @@ pub fn decode_local_score_index(bytes: &[u8]) -> Option<LocalScoreIndex> {
 #[must_use]
 pub fn encode_local_score_index(index: &LocalScoreIndex) -> Option<Vec<u8>> {
     bincode::encode_to_vec(
-        LocalScoreIndexFile {
-            version: LOCAL_SCORE_INDEX_VERSION,
-            index: index.clone(),
-        },
+        (LOCAL_SCORE_INDEX_VERSION, index),
         bincode::config::standard(),
     )
     .ok()
@@ -11383,3 +11380,7 @@ mod tests {
 #[path = "../../../tests/support/perf.rs"]
 #[allow(dead_code)]
 mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/index_encoding.rs"]
+mod index_encoding_perf;

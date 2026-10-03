@@ -46,6 +46,15 @@ pub mod update;
 mod profile_ini;
 use profile_ini::ProfileIni;
 
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/stats_encoding.rs"]
+mod stats_encoding_perf;
+
 pub const PLAYER_SLOTS: usize = 2;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
 pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
@@ -6912,14 +6921,15 @@ pub fn decode_profile_stats(bytes: &[u8]) -> Result<ProfileStats, ProfileStatsDe
 
 #[must_use]
 pub fn encode_profile_stats(stats: &ProfileStats) -> Option<Vec<u8>> {
-    let mut known_pack_names: Vec<String> = stats.known_pack_names.iter().cloned().collect();
+    let mut known_pack_names: Vec<&str> =
+        stats.known_pack_names.iter().map(String::as_str).collect();
     known_pack_names.sort_unstable();
     bincode::encode_to_vec(
-        ProfileStatsV1 {
-            version: PROFILE_STATS_VERSION_V1,
-            current_combo: stats.current_combo,
+        (
+            PROFILE_STATS_VERSION_V1,
+            stats.current_combo,
             known_pack_names,
-        },
+        ),
         bincode::config::standard(),
     )
     .ok()
