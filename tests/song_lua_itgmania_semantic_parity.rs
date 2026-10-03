@@ -3504,17 +3504,31 @@ fn runtime_size_zoom_matches_native_drawing() {
 
 #[test]
 fn affine_skew_matches_native_drawing() {
+    assert_native_actor_drawing("affine-skew");
+}
+
+#[test]
+fn parent_rotation_matches_native_drawing() {
+    assert_native_actor_drawing("parent-rotation");
+}
+
+fn assert_native_actor_drawing(fixture: &str) {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let song_dir = root.join("tests/fixtures/song-lua");
-    let mut context = SongLuaCompileContext::new(&song_dir, "Affine skew");
+    let mut context = SongLuaCompileContext::new(&song_dir, fixture);
     context.screen_width = 854.0;
-    let compiled =
-        compile_song_lua_layers(&[song_dir.join("affine-skew.lua").as_path()], 0, &context)
-            .expect("compile nested skew fixture");
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join(format!("{fixture}.lua")).as_path()],
+        0,
+        &context,
+    )
+    .expect("compile native drawing fixture");
     let native: Value = serde_json::from_slice(
-        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/affine-skew-native.json"))
-            .expect("native skew drawing"),
+        &fs::read(root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{fixture}-native.json"
+        )))
+        .expect("native drawing"),
     )
     .expect("native actor fixture");
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");

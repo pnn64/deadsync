@@ -54,6 +54,10 @@ Challenge, description `TaroNuke`.
 - Two-dimensional parent composition applies scale before skew, matching
   native `Actor::BeginDraw`. The affine decomposition derives X shear from
   X scale. The previous ordering widened sprites under nonuniform scale.
+- Child translations follow the parent's X, Y and Z rotation, including
+  retained ancestor/local scale order. Previously only Z rotation affected
+  child offsets, so the road's 90-degree X rotation left offsets on Y rather
+  than moving them into depth.
 
 ## Native reference
 
@@ -85,6 +89,35 @@ cargo test --test song_lua_itgmania_semantic_parity corpora::lua_songs::mawaru9 
 ```
 
 ## Verification
+
+`parent-rotation.lua` reproduces the road's rotated frame and nested offsets,
+plus tilted parents with nonuniform and reflected scales, child skew and
+noncentral alignment. The request and actual native Actor/Sprite draw output
+are retained under `tests/fixtures/itgmania-song-lua-micro/`. The regression
+failed before the fix: the first road corner's Y was 1104 instead of 480.
+All 36 world-coordinate comparisons now pass within 0.0001 units. This fixture
+uses native drawing rather than the semantic host's matrix reconstruction.
+
+The 0.5.1717 translation pass reran all 962 Lua/profile gameplay tests and all
+74 regular semantic tests successfully in both repositories. The real game's
+running executable blocked Cargo from replacing `target/debug/deadsync.exe`.
+Its newly compiled semantic test executable
+`song_lua_itgmania_semantic_parity-bc8cc7dd1e331be6.exe` was run directly with
+the workspace override; all 74 tests passed. Close the running game before
+rebuilding the game executable to try this source change.
+
+The complete 0.5.1717 audit took 706.64 seconds: 469.72 seconds compiling,
+202.70 seconds comparing projected geometry and 25.34 seconds comparing
+vibration. It still passes 106,321/117,464 checks, with the same 1,025 gap
+reports. The nine road sprites' reported coordinates changed, but their
+remaining differences still fail the native comparison at beat 87.273.
+The translation regression is fixed; full road-scene parity is not established.
+
+Regenerate its native drawing from the workspace root:
+
+```powershell
+./itgmania-harness-rs/target/release/itgmania-harness-rs.exe actor-conformance deadsync/tests/fixtures/itgmania-song-lua-micro/parent-rotation.request.json --out deadsync/tests/fixtures/itgmania-song-lua-micro/parent-rotation-native.json
+```
 
 The 0.5.1715 probe pass reran all 962 Lua/profile gameplay tests and all 71
 regular semantic tests successfully in both repositories. The stateful
@@ -173,7 +206,7 @@ gaps include trail opacity/visibility, projected sprite bounds, one player
 range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
 beat 540.076 and stateful `ToshiUp` and `TVGrow` target writes.
 
-Local detailed audit output: `.tmp/mawaru-affine-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-parent-rotation-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -212,6 +245,14 @@ Native expected values and comparator tolerances are unchanged.
 The highest remaining failure count is projected geometry. The two vibration
 mismatches and `ChanceTime` give smaller, frame-specific reproductions to
 investigate alongside the trail fades.
+
+The parent-rotation pass fixes child offsets independently against native
+drawing but does not reduce the complete Mawaru9 failing-check count. Inspect
+the road actors' local animation values and scale order through their nested
+frames before attributing the remaining road coordinates to the camera or to
+the corrected offset rotation. Adding parent Euler angles still cannot
+represent arbitrary nested 3D rotations; use a native drawing reproduction
+before replacing that composition path.
 
 The native trace runs `WallCommand` on `def-0441` at beat 103.820473 and
 `StopVibCommand` at 104.203804. The child vibration mismatch at 104.012138

@@ -1636,6 +1636,7 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
 ) -> SongLuaOverlayState {
     let [parent_scale_x, parent_scale_y] = song_lua_overlay_axis_scale(parent);
+    let local_z = child.z;
     child.z = parent.z + child.z * song_lua_overlay_z_scale(parent);
     let epsilon = 0.01;
     let raw_local_x = if matches!(
@@ -1742,6 +1743,21 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
         child.rot_z_deg += parent.rot_z_deg;
         child.skew_x += parent.skew_x;
         child.skew_y += parent.skew_y;
+    }
+    // Child translations follow the complete parent transform. In particular,
+    // a road frame rotated around X maps its children's Y offsets into Z.
+    if parent.rot_x_deg.to_radians().abs() > f32::EPSILON
+        || parent.rot_y_deg.to_radians().abs() > f32::EPSILON
+    {
+        let matrix = song_lua_overlay_sprite_matrix(
+            parent,
+            [0.0; 2],
+            [parent.x, parent.y, parent.z],
+            [parent.rot_x_deg, parent.rot_y_deg, parent.rot_z_deg],
+            [1.0; 3],
+        );
+        let position = matrix * Vector4::new(raw_local_x, raw_local_y, local_z, 1.0);
+        [child.x, child.y, child.z] = position.truncate().to_array();
     }
     for i in 0..4 {
         child.diffuse[i] *= parent.diffuse[i];
