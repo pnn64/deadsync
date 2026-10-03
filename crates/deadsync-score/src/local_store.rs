@@ -105,49 +105,59 @@ impl ScoreProfilePaths {
     #[inline(always)]
     #[must_use]
     pub fn scores_dir(&self) -> PathBuf {
-        self.profile_dir.join("scores")
+        self.score_path(&["scores"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn gs_dir(&self) -> PathBuf {
-        self.scores_dir().join("gs")
+        self.score_path(&["scores", "gs"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn gs_chart_dir(&self, chart_hash: &str) -> PathBuf {
-        self.gs_dir().join(score_file_shard(chart_hash))
+        self.score_path(&["scores", "gs", score_file_shard(chart_hash)])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn gs_index_path(&self) -> PathBuf {
-        self.gs_dir().join("index.bin")
+        self.score_path(&["scores", "gs", "index.bin"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn ac_dir(&self) -> PathBuf {
-        self.scores_dir().join("ac")
+        self.score_path(&["scores", "ac"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn ac_index_path(&self) -> PathBuf {
-        self.ac_dir().join("index.bin")
+        self.score_path(&["scores", "ac", "index.bin"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn local_dir(&self) -> PathBuf {
-        self.scores_dir().join("local")
+        self.score_path(&["scores", "local"])
     }
 
     #[inline(always)]
     #[must_use]
     pub fn local_index_path(&self) -> PathBuf {
-        self.local_dir().join("index.bin")
+        self.score_path(&["scores", "local", "index.bin"])
+    }
+
+    #[inline]
+    fn score_path(&self, components: &[&str]) -> PathBuf {
+        let mut path = self.profile_dir.clone();
+        path.reserve_exact(components.iter().map(|part| part.len() + 1).sum());
+        for component in components {
+            path.push(component);
+        }
+        path
     }
 }
 
@@ -1900,3 +1910,7 @@ mod score_storage;
 #[cfg(test)]
 #[path = "../tests/cache_preparation/mod.rs"]
 mod cache_preparation;
+
+#[cfg(test)]
+#[path = "../tests/perf/score_paths.rs"]
+mod score_paths_perf;

@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, LazyLock, Mutex};
 
+#[cfg(test)]
+#[path = "../tests/perf/itl_unlocks.rs"]
+mod unlocks_perf;
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ItlFileData {
     #[serde(rename = "pathMap", default)]
@@ -1893,6 +1897,7 @@ pub fn itl_song_folder_unlocked(data: &ItlFileData, song_folder: &str) -> bool {
         .unwrap_or(false)
 }
 
+#[inline]
 pub fn itl_mark_unlock_folders<'a, I>(data: &mut ItlFileData, folders: I) -> bool
 where
     I: IntoIterator<Item = &'a str>,
@@ -1901,7 +1906,13 @@ where
     for folder in folders {
         let folder = folder.trim();
         if !folder.is_empty() {
-            changed |= data.unlock_folders.insert(folder.to_string(), true) != Some(true);
+            changed |= match data.unlock_folders.entry_ref(folder) {
+                hashbrown::hash_map::EntryRef::Occupied(mut entry) => !entry.insert(true),
+                hashbrown::hash_map::EntryRef::Vacant(entry) => {
+                    entry.insert(true);
+                    true
+                }
+            };
         }
     }
     changed

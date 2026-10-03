@@ -509,6 +509,7 @@ fn itl_progress_from_submit(
 fn srpg_progress_from_submit(
     input: &SubmitEventProgressInput,
     leaderboard: Vec<LeaderboardEntry>,
+    skill_improvements: Vec<String>,
 ) -> Option<ItlEventProgress> {
     let srpg = input.srpg.as_ref()?;
     let score_delta = if input.result.eq_ignore_ascii_case("score-added") {
@@ -549,11 +550,7 @@ fn srpg_progress_from_submit(
         clear_type_before: None,
         clear_type_after: None,
         stat_improvements: event_stat_improvements(srpg.progress.as_ref()),
-        skill_improvements: srpg
-            .progress
-            .as_ref()
-            .map(|progress| progress.skill_improvements.clone())
-            .unwrap_or_default(),
+        skill_improvements,
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages =
@@ -574,10 +571,16 @@ pub fn event_progress_from_submit(input: &SubmitEventProgressInput) -> Vec<ItlEv
         .filter(|_| input.itl_score_hundredths.is_some())
         .map(|event| event.leaderboard.clone())
         .unwrap_or_default();
-    event_progress_with_leaderboards(input, srpg, itl)
+    let skills = input
+        .srpg
+        .as_ref()
+        .and_then(|event| event.progress.as_ref())
+        .map(|progress| progress.skill_improvements.clone())
+        .unwrap_or_default();
+    event_progress_with_leaderboards(input, srpg, itl, skills)
 }
 
-/// Consume prepared event data without copying its leaderboard rows again.
+/// Consume prepared event data without copying leaderboard rows or skill text.
 #[must_use]
 pub fn event_progress_from_submit_owned(
     mut input: SubmitEventProgressInput,
@@ -592,18 +595,34 @@ pub fn event_progress_from_submit_owned(
         .as_mut()
         .map(|event| std::mem::take(&mut event.leaderboard))
         .unwrap_or_default();
-    event_progress_with_leaderboards(&input, srpg, itl)
+    let skills = input
+        .srpg
+        .as_mut()
+        .and_then(|event| event.progress.as_mut())
+        .map(|progress| {
+            let skills = &mut progress.skill_improvements;
+            if skills.capacity() == skills.len()
+                && skills.iter().all(|skill| skill.capacity() == skill.len())
+            {
+                std::mem::take(skills)
+            } else {
+                skills.clone()
+            }
+        })
+        .unwrap_or_default();
+    event_progress_with_leaderboards(&input, srpg, itl, skills)
 }
 
 fn event_progress_with_leaderboards(
     input: &SubmitEventProgressInput,
     srpg: Vec<LeaderboardEntry>,
     itl: Vec<LeaderboardEntry>,
+    skills: Vec<String>,
 ) -> Vec<ItlEventProgress> {
     let count = usize::from(input.srpg.is_some())
         + usize::from(input.itl.is_some() && input.itl_score_hundredths.is_some());
     let mut progress = Vec::with_capacity(count);
-    if let Some(srpg) = srpg_progress_from_submit(input, srpg) {
+    if let Some(srpg) = srpg_progress_from_submit(input, srpg, skills) {
         progress.push(srpg);
     }
     if let Some(itl) = itl_progress_from_submit(input, itl) {
@@ -611,3 +630,7 @@ fn event_progress_with_leaderboards(
     }
     progress
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/event_skills.rs"]
+mod skills_perf;
