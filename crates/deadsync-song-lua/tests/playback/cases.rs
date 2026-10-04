@@ -10438,3 +10438,90 @@ fn parent_motion_advances_without_local_writes() {
         }
     }
 }
+
+#[test]
+fn parent_color_advances_without_local_writes() {
+    use deadlib_present::anim::{EffectClock, EffectMode};
+    for mode in [
+        EffectMode::None,
+        EffectMode::DiffuseBlink,
+        EffectMode::DiffuseShift,
+        EffectMode::DiffuseRamp,
+        EffectMode::GlowBlink,
+        EffectMode::GlowShift,
+        EffectMode::GlowRamp,
+    ] {
+        let parent = SongLuaOverlayState {
+            diffuse: [0.2, 0.4, 0.6, 0.8],
+            glow: [0.3, 0.1, 0.2, 0.25],
+            effect_mode: mode,
+            rainbow: mode == EffectMode::None,
+            effect_clock: EffectClock::Beat,
+            effect_period: 2.0,
+            effect_color1: [0.9, 0.2, 0.6, 0.35],
+            effect_color2: [0.1, 0.8, 0.3, 0.9],
+            ..Default::default()
+        };
+        let child = SongLuaOverlayState {
+            diffuse: [0.8, 0.5, 0.3, 0.75],
+            glow: [0.2, 0.1, 0.5, 0.3],
+            ..Default::default()
+        };
+        let overlays: Vec<SongLuaOverlayActor> = [parent, child, SongLuaOverlayState::default()]
+            .into_iter()
+            .enumerate()
+            .map(|(index, initial_state)| SongLuaOverlayActor {
+                kind: if index == 0 {
+                    SongLuaOverlayKind::ActorFrame
+                } else {
+                    SongLuaOverlayKind::Quad
+                },
+                name: None,
+                parent_index: (index == 1).then_some(0),
+                initial_state,
+                message_commands: vec![],
+            })
+            .collect();
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        assert!(order.dynamic_local_indices.is_empty());
+        assert_eq!(order.effect_composed_indices.as_ref(), &[0, 1]);
+        let (mut local, mut composed) =
+            song_lua_overlay_initial_state_sets(&overlays, 854.0, 480.0);
+        let initial = composed[1];
+        let capacity = (local.capacity(), composed.capacity());
+        let mut messages = vec![];
+        for beat in [0.75, 1.25, 1.75, 2.0, 0.75] {
+            song_lua_overlay_state_sets_active_into(
+                10.0,
+                &overlays,
+                &[],
+                &[],
+                &[],
+                854.0,
+                480.0,
+                &mut order,
+                &mut messages,
+                &mut local,
+                &mut composed,
+                [10.0, beat],
+            );
+            let mut expected = Vec::new();
+            song_lua_overlay_states_from_local_all_into(
+                &overlays,
+                &local,
+                854.0,
+                480.0,
+                &mut expected,
+                [10.0, beat],
+            );
+            assert_eq!(composed, expected, "{mode:?} at beat {beat}");
+            if beat == 1.25 {
+                assert_ne!(composed[1], initial, "{mode:?}");
+            }
+            assert_eq!(local[0], parent);
+            assert_eq!(local[1], child);
+            assert_eq!(composed[2], SongLuaOverlayState::default());
+            assert_eq!((local.capacity(), composed.capacity()), capacity);
+        }
+    }
+}

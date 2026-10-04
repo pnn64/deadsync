@@ -6845,3 +6845,81 @@ fn effect_switch_native_draws() {
         (950, 2169, 1448, 1448)
     );
 }
+
+#[test]
+fn color_inheritance_native_draws() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let screen = [854.0, 480.0];
+    let mut context = SongLuaCompileContext::new(&song_dir, "Color inheritance");
+    context.screen_width = screen[0];
+    context.music_length_seconds = 2.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join("color-inheritance.lua").as_path()],
+        0,
+        &context,
+    )
+    .expect("compile color inheritance fixture");
+    let native: Value =
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(root.join(
+                    "tests/fixtures/itgmania-song-lua-micro/color-inheritance-native.json.zst",
+                ))
+                .unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let layer = &compiled[0];
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let (mut colors, mut failures) = (0, Vec::new());
+    for sample in native["samples"].as_array().unwrap() {
+        let seconds = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(layer, &context, seconds, seconds);
+        for actor in sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["kind"] == "sprite")
+        {
+            let name = actor["name"].as_str().unwrap();
+            let index = layer
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == Some(name))
+                .unwrap();
+            let frame =
+                composer.render_overlay(&layer.overlays, &states, index, screen, seconds, seconds);
+            let draws = actor["draws"].as_array().unwrap();
+            assert_eq!(
+                frame.sprite_instances.len(),
+                draws.len(),
+                "{name} at {seconds}"
+            );
+            for (instance, draw) in frame.sprite_instances.iter().zip(draws) {
+                for vertex in draw["vertices"].as_array().unwrap() {
+                    for (channel, actual) in instance.tint.iter().enumerate() {
+                        let expected = vertex["color"][channel].as_u64().unwrap() as f32 / 255.0;
+                        // Native draw colors are bytes; permit one quantization step.
+                        if (actual - expected).abs() > 1.0 / 255.0 + 0.00001 && failures.len() < 12
+                        {
+                            failures.push(format!(
+                                "{name} at {seconds} {} channel {channel}: {expected} vs {actual}",
+                                draw["texture_mode"]
+                            ));
+                        }
+                        colors += 1;
+                    }
+                }
+            }
+        }
+    }
+    eprintln!("color inheritance: {colors} native draw color channels");
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert_eq!(colors, 54656);
+}

@@ -53,7 +53,7 @@ pub fn effect_sample(state: SongLuaOverlayState, time: f32, beat: f32) -> Effect
 /// Read the deterministic draw transform, keeping the base Lua state unchanged.
 #[must_use]
 pub fn transform_state(state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
-    song_lua_pulse_parent(song_lua_motion_state(state, clock), clock)
+    song_lua_pulse_parent(song_lua_pre_draw_state(state, clock), clock)
 }
 
 #[must_use]

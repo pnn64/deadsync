@@ -1038,13 +1038,12 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
     let mut effect_capable = overlays
         .iter()
         .map(|overlay| {
-            song_lua_transform_effect(overlay.initial_state.effect_mode)
+            song_lua_compose_effect(overlay.initial_state.effect_mode)
+                || overlay.initial_state.rainbow
                 || overlay.message_commands.iter().any(|command| {
                     command.blocks.iter().any(|block| {
-                        block
-                            .delta
-                            .effect_mode
-                            .is_some_and(song_lua_transform_effect)
+                        block.delta.effect_mode.is_some_and(song_lua_compose_effect)
+                            || block.delta.rainbow == Some(true)
                     })
                 })
         })
@@ -1074,12 +1073,14 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
                 .from
                 .delta
                 .effect_mode
-                .is_some_and(song_lua_transform_effect)
+                .is_some_and(song_lua_compose_effect)
                 || ease
                     .to
                     .delta
                     .effect_mode
-                    .is_some_and(song_lua_transform_effect);
+                    .is_some_and(song_lua_compose_effect)
+                || ease.from.delta.rainbow == Some(true)
+                || ease.to.delta.rainbow == Some(true);
             if ease.from.delta.draw_order.is_some() || ease.to.delta.draw_order.is_some() {
                 dynamic_actor_draw_order[ease.overlay_index] = true;
             }
@@ -1104,11 +1105,15 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
             continue;
         }
         dynamic_local[track.overlay_index] = true;
-        effect_capable[track.overlay_index] |= track.target
-            == crate::SongLuaOverlayUpdateTarget::EffectMode
-            && track.samples.iter().any(|sample| {
-                matches!(sample.value, crate::SongLuaOverlayUpdateValue::EffectMode(mode) if song_lua_transform_effect(mode))
-            });
+        effect_capable[track.overlay_index] |= match track.target {
+            crate::SongLuaOverlayUpdateTarget::EffectMode => track.samples.iter().any(|sample| {
+                matches!(sample.value, crate::SongLuaOverlayUpdateValue::EffectMode(mode) if song_lua_compose_effect(mode))
+            }),
+            crate::SongLuaOverlayUpdateTarget::Rainbow => track.samples.iter().any(|sample| {
+                matches!(sample.value, crate::SongLuaOverlayUpdateValue::Bool(true))
+            }),
+            _ => false,
+        };
         dynamic_actor_draw_order[track.overlay_index] |=
             track.target == crate::SongLuaOverlayUpdateTarget::DrawOrder;
         has_dynamic_z_order |= matches!(
@@ -1726,8 +1731,8 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
     clock: [f32; 2],
 ) -> SongLuaOverlayState {
-    let parent = song_lua_pulse_parent(song_lua_motion_state(parent, clock), clock);
-    child = song_lua_motion_state(child, clock);
+    let parent = song_lua_pulse_parent(song_lua_pre_draw_state(parent, clock), clock);
+    child = song_lua_pre_draw_state(child, clock);
     let local_rotation = [child.rot_x_deg, child.rot_y_deg, child.rot_z_deg];
     let [parent_scale_x, parent_scale_y] = song_lua_overlay_axis_scale(parent);
     let local_z = child.z;
@@ -1885,6 +1890,10 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
     }
     for i in 0..4 {
         child.diffuse[i] *= parent.diffuse[i];
+        if parent.glow[3] > 0.0 {
+            // Actor::PreDraw combines inherited glow independently of diffuse.
+            child.glow[i] += parent.glow[i] - parent.glow[i] * child.glow[i];
+        }
     }
     child.texcoord_offset = match (parent.texcoord_offset, child.texcoord_offset) {
         (Some(parent), Some(child)) => Some([parent[0] + child[0], parent[1] + child[1]]),
@@ -2061,7 +2070,7 @@ fn song_lua_overlay_states_from_local_all_into<S: NoteskinSlot + Clone>(
                     clock,
                 )
             })
-            .unwrap_or_else(|| song_lua_motion_state(local, clock));
+            .unwrap_or_else(|| song_lua_pre_draw_state(local, clock));
         out.push(composed);
     }
 }
@@ -2108,7 +2117,7 @@ fn song_lua_overlay_states_from_local_into<S: NoteskinSlot + Clone>(
                     clock,
                 )
             })
-            .unwrap_or_else(|| song_lua_motion_state(local, clock));
+            .unwrap_or_else(|| song_lua_pre_draw_state(local, clock));
     }
 }
 
@@ -6289,11 +6298,24 @@ fn song_lua_effect_lerp(a: f32, b: f32, t: f32) -> f32 {
     (b - a) * t + a
 }
 
-const fn song_lua_transform_effect(mode: deadlib_present::anim::EffectMode) -> bool {
+const fn song_lua_compose_effect(mode: deadlib_present::anim::EffectMode) -> bool {
     use deadlib_present::anim::EffectMode;
     matches!(
         mode,
         EffectMode::Pulse | EffectMode::Bob | EffectMode::Bounce | EffectMode::Wag
+    ) || song_lua_color_effect(mode)
+}
+
+const fn song_lua_color_effect(mode: deadlib_present::anim::EffectMode) -> bool {
+    use deadlib_present::anim::EffectMode;
+    matches!(
+        mode,
+        EffectMode::DiffuseBlink
+            | EffectMode::DiffuseShift
+            | EffectMode::DiffuseRamp
+            | EffectMode::GlowBlink
+            | EffectMode::GlowShift
+            | EffectMode::GlowRamp
     )
 }
 
@@ -6364,8 +6386,26 @@ fn song_lua_apply_motion(
     }
 }
 
-fn song_lua_motion_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
+fn song_lua_pre_draw_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
     use deadlib_present::anim::EffectMode;
+    if state.rainbow || song_lua_color_effect(state.effect_mode) {
+        let mut tint = state.diffuse;
+        tint[3] = state.vertex_colors.map_or(tint[3], |colors| colors[0][3]);
+        if song_lua_apply_color_effect(
+            song_lua_overlay_effect_state(state),
+            state.rainbow,
+            clock,
+            &mut tint,
+            &mut state.glow,
+        ) {
+            state.diffuse = tint;
+            state.vertex_colors = None;
+        }
+        // Color effects replace local colors before inherited tint and glow.
+        // Keep the compiled/getter state intact; only the draw state is consumed.
+        state.effect_mode = EffectMode::None;
+        state.rainbow = false;
+    }
     if !matches!(
         state.effect_mode,
         EffectMode::Bob | EffectMode::Bounce | EffectMode::Wag
@@ -6454,6 +6494,67 @@ fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
     state.diffuse[3] > f32::EPSILON || state.glow[3] > f32::EPSILON
 }
 
+// Native color macros replace RGB and retain the original local diffuse alpha.
+// The return value identifies uniform diffuse output, which replaces gradients.
+fn song_lua_apply_color_effect(
+    effect: EffectState,
+    rainbow: bool,
+    clock: [f32; 2],
+    tint: &mut [f32; 4],
+    glow: &mut [f32; 4],
+) -> bool {
+    use deadlib_present::anim::EffectMode;
+    if !rainbow && !song_lua_color_effect(effect.mode) {
+        return false;
+    }
+    let color_effect = EffectState {
+        mode: if rainbow {
+            EffectMode::DiffuseShift
+        } else {
+            effect.mode
+        },
+        ..effect
+    };
+    let Some(percent) = song_lua_effect_percent(color_effect, clock) else {
+        return false;
+    };
+    if rainbow {
+        tint[..3].copy_from_slice(&song_lua_rainbow_color(percent));
+        return true;
+    }
+    let color = match effect.mode {
+        EffectMode::DiffuseBlink | EffectMode::GlowBlink => {
+            if percent > 0.5 {
+                effect.color1
+            } else {
+                effect.color2
+            }
+        }
+        _ => {
+            let mix = if matches!(
+                effect.mode,
+                EffectMode::DiffuseShift | EffectMode::GlowShift
+            ) {
+                deadlib_present::anim::glowshift_mix(percent)
+            } else {
+                percent
+            };
+            std::array::from_fn(|channel| {
+                song_lua_effect_lerp(effect.color2[channel], effect.color1[channel], mix)
+            })
+        }
+    };
+    let diffuse = matches!(
+        effect.mode,
+        EffectMode::DiffuseBlink | EffectMode::DiffuseShift | EffectMode::DiffuseRamp
+    );
+    let alpha = tint[3];
+    let target = if diffuse { tint } else { glow };
+    *target = color;
+    target[3] *= alpha;
+    diffuse
+}
+
 fn song_lua_apply_overlay_effect(
     effect: EffectState,
     rainbow: bool,
@@ -6497,58 +6598,12 @@ fn song_lua_apply_overlay_effect(
     }
     if let Some(percent) = song_lua_effect_percent(effect, [effect_time, effect_beat]) {
         match effect.mode {
-            deadlib_present::anim::EffectMode::DiffuseBlink => {
-                let color = if percent > 0.5 {
-                    effect.color1
-                } else {
-                    effect.color2
-                };
-                let alpha = tint[3];
-                *tint = color;
-                tint[3] *= alpha;
-            }
-            deadlib_present::anim::EffectMode::DiffuseRamp => {
-                for (idx, out) in tint.iter_mut().enumerate() {
-                    let color =
-                        song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], percent)
-                            .clamp(0.0, 1.0);
-                    *out = (*out * color).clamp(0.0, 1.0);
-                }
-            }
-            deadlib_present::anim::EffectMode::DiffuseShift => {
-                let between = deadlib_present::anim::glowshift_mix(percent);
-                for (idx, out) in tint.iter_mut().enumerate() {
-                    let color =
-                        song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
-                            .clamp(0.0, 1.0);
-                    *out = (*out * color).clamp(0.0, 1.0);
-                }
-            }
-            deadlib_present::anim::EffectMode::GlowShift => {
-                let between = deadlib_present::anim::glowshift_mix(percent);
-                for (idx, out) in glow.iter_mut().enumerate() {
-                    *out = song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
-                        .clamp(0.0, 1.0);
-                }
-                glow[3] *= tint[3];
-            }
-            deadlib_present::anim::EffectMode::GlowBlink => {
-                let alpha = tint[3];
-                *glow = if percent > 0.5 {
-                    effect.color1
-                } else {
-                    effect.color2
-                };
-                glow[3] *= alpha;
-            }
-            deadlib_present::anim::EffectMode::GlowRamp => {
-                let alpha = tint[3];
-                for (idx, out) in glow.iter_mut().enumerate() {
-                    *out = song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], percent)
-                        .clamp(0.0, 1.0);
-                }
-                glow[3] *= alpha;
-            }
+            deadlib_present::anim::EffectMode::DiffuseBlink
+            | deadlib_present::anim::EffectMode::DiffuseShift
+            | deadlib_present::anim::EffectMode::DiffuseRamp
+            | deadlib_present::anim::EffectMode::GlowBlink
+            | deadlib_present::anim::EffectMode::GlowShift
+            | deadlib_present::anim::EffectMode::GlowRamp => {}
             deadlib_present::anim::EffectMode::Pulse => {
                 song_lua_pulse_scale(effect, [effect_time, effect_beat], scale);
             }
@@ -6560,16 +6615,7 @@ fn song_lua_apply_overlay_effect(
             deadlib_present::anim::EffectMode::Spin | deadlib_present::anim::EffectMode::None => {}
         }
     }
-    if rainbow {
-        let rainbow_effect = EffectState {
-            mode: deadlib_present::anim::EffectMode::DiffuseShift,
-            ..effect
-        };
-        if let Some(percent) = song_lua_effect_percent(rainbow_effect, [effect_time, effect_beat]) {
-            let color = song_lua_rainbow_color(percent);
-            tint[..3].copy_from_slice(&color);
-        }
-    }
+    song_lua_apply_color_effect(effect, rainbow, [effect_time, effect_beat], tint, glow);
     offset[0] = offset[0].max(-1_000_000.0).min(1_000_000.0);
     offset[1] = offset[1].max(-1_000_000.0).min(1_000_000.0);
     offset[2] = offset[2].max(-1_000_000.0).min(1_000_000.0);
