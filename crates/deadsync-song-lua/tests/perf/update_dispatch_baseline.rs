@@ -115,23 +115,17 @@ pub(super) fn run_recurring_update(
         return Ok(());
     }
 
-    // The headless ITGmania oracle advances its source-derived tween queue with
-    // double-precision frame times. A command behind a sleep only runs when
-    // that frame has positive delta left after completing the sleep; exact
-    // equality leaves the zero-time command queued until the next frame.
+    // Compare dispatch costs with both implementations using native clocks.
     let mut time_left = actor
         .get::<Option<f64>>("__songlua_recurring_update_time_left")?
-        .unwrap_or(interval);
-    let mut delta = delta_seconds.max(0.0);
+        .unwrap_or(interval) as f32;
+    let mut delta = delta_seconds.max(0.0) as f32;
     let mut runs = 0usize;
     while delta > 0.0 && runs < 64 {
         if time_left > 0.0 {
             let elapsed = time_left.min(delta);
             time_left -= elapsed;
             delta -= elapsed;
-            if time_left <= 1.0e-7 {
-                time_left = 0.0;
-            }
             if delta == 0.0 {
                 break;
             }
@@ -147,9 +141,9 @@ pub(super) fn run_recurring_update(
         if interval <= f64::EPSILON {
             break;
         }
-        time_left = interval;
+        time_left = interval as f32;
     }
-    actor.set("__songlua_recurring_update_time_left", time_left)?;
+    actor.set("__songlua_recurring_update_time_left", f64::from(time_left))?;
     Ok(())
 }
 

@@ -9360,7 +9360,7 @@ impl SongLuaCompileFrames {
         if frame == 0 {
             0.0
         } else {
-            self.time(frame) - self.time(frame - 1)
+            f64::from(self.time(frame) as f32 - self.time(frame - 1) as f32)
         }
     }
 }
@@ -9437,23 +9437,25 @@ fn advance_queue_clock(
     clock: &mut SongLuaQueueClock,
     duration: f64,
 ) {
-    let mut left = duration;
+    // Actor::UpdateTweening subtracts native floats on each frame. A double
+    // clock can release a zero-time command early and change later RNG calls.
+    let mut left = duration as f32;
     loop {
         if clock.remaining <= 0.0 {
             clock.frame += 1;
             clock.remaining = frames.delta(clock.frame);
         }
-        let elapsed = left.min(clock.remaining);
+        let elapsed = left.min(clock.remaining as f32);
         left -= elapsed;
-        clock.remaining -= elapsed;
-        if left <= 0.000_000_1 {
+        clock.remaining = f64::from(clock.remaining as f32 - elapsed);
+        if left == 0.0 {
             break;
         }
         if clock.frame >= frames.times.len() {
             let count = (left * 60.0).floor() as usize;
             if count > 1 {
                 clock.frame += count - 1;
-                left -= (count - 1) as f64 / 60.0;
+                left -= (count - 1) as f32 / 60.0;
             }
         }
     }
@@ -10416,23 +10418,19 @@ fn run_recurring_update(
         return Ok(());
     }
 
-    // The headless ITGmania oracle advances its source-derived tween queue with
-    // double-precision frame times. A command behind a sleep only runs when
-    // that frame has positive delta left after completing the sleep; exact
-    // equality leaves the zero-time command queued until the next frame.
+    // Actor::UpdateTweening advances a command behind a sleep only when the
+    // frame retains positive delta. Use native float subtraction; rounding
+    // can defer the zero-time command and change later Lua state or RNG calls.
     let mut time_left = actor
         .get::<Option<f64>>("__songlua_recurring_update_time_left")?
-        .unwrap_or(interval);
-    let mut delta = delta_seconds.max(0.0);
+        .unwrap_or(interval) as f32;
+    let mut delta = delta_seconds.max(0.0) as f32;
     let mut runs = 0usize;
     while delta > 0.0 && runs < 64 {
         if time_left > 0.0 {
             let elapsed = time_left.min(delta);
             time_left -= elapsed;
             delta -= elapsed;
-            if time_left <= 1.0e-7 {
-                time_left = 0.0;
-            }
             if delta == 0.0 {
                 break;
             }
@@ -10452,7 +10450,7 @@ fn run_recurring_update(
         // consume the delta left after finishing the preceding cycle.
         let time = lua
             .app_data_ref::<SongLuaCompileFrames>()
-            .map(|frames| (frames.frame, delta));
+            .map(|frames| (frames.frame, f64::from(delta)));
         let prior_queue = lua.remove_app_data::<SongLuaQueuedCommand>();
         lua.set_app_data(SongLuaQueuedCommand {
             start: 0.0,
@@ -10482,9 +10480,9 @@ fn run_recurring_update(
         if interval <= f64::EPSILON {
             break;
         }
-        time_left = interval;
+        time_left = interval as f32;
     }
-    actor.set("__songlua_recurring_update_time_left", time_left)?;
+    actor.set("__songlua_recurring_update_time_left", f64::from(time_left))?;
     Ok(())
 }
 

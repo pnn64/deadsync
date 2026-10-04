@@ -3142,7 +3142,8 @@ pub fn compile_update_functions<Kind>(
                 .map(|sample| (sample.overlay_index, sample.target, sample.value.clone())),
         );
         crate::lua_util::set_prior_positions(lua, &current_overlays);
-        call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, delta_seconds)?;
+        let actor_delta = f64::from(seconds as f32 - (seconds - delta_seconds) as f32);
+        call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, actor_delta)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, started)?;
@@ -3954,13 +3955,18 @@ mod tests {
         let expected = 85.5555419921875_f32;
         let factor = (101.0_f32 / 60.0) / 3.0;
         let actual = lerp_scheduled_value(&Value::F32(-700.0), &Value::F32(700.0), factor);
-        let Value::F32(actual) = actual else { panic!("scalar tween") };
+        let Value::F32(actual) = actual else {
+            panic!("scalar tween")
+        };
         assert_eq!(actual.to_bits(), expected.to_bits());
         let actual = lerp_scheduled_value(
             &Value::Vec3([516.0, 31.0, -700.0]),
-            &Value::Vec3([516.0, 31.0, 700.0]), factor,
+            &Value::Vec3([516.0, 31.0, 700.0]),
+            factor,
         );
-        let Value::Vec3(actual) = actual else { panic!("vector tween") };
+        let Value::Vec3(actual) = actual else {
+            panic!("vector tween")
+        };
         assert_eq!(actual, [516.0, 31.0, expected]);
     }
 
@@ -3974,9 +3980,10 @@ mod tests {
             (2.0, 1.0, 0.0, false, false),
             (359.75, 359.0, 0.0, true, true),
         ] {
-            assert_eq!(transform_tail_closes(
-                Some(current), Some(prior), Some(baseline), 0.0, cyclic,
-            ), closes);
+            assert_eq!(
+                transform_tail_closes(Some(current), Some(prior), Some(baseline), 0.0, cyclic,),
+                closes
+            );
         }
     }
 

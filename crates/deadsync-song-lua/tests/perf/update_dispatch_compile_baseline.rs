@@ -150,7 +150,8 @@ pub(super) fn compile_update_functions<Kind>(
             &scheduled_overlay_samples,
             seconds,
         )?;
-        call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, delta_seconds)?;
+        let actor_delta = f64::from(seconds as f32 - (seconds - delta_seconds) as f32);
+        call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, actor_delta)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, started)?;

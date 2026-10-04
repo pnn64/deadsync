@@ -4988,7 +4988,7 @@ fn recurring_stop_matches_native() {
     );
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("Recurring stop"));
-    assert_eq!(parity.checks(), 737);
+    assert_eq!(parity.checks(), 696);
     parity.assert_complete("Recurring stop");
 }
 
@@ -5407,7 +5407,7 @@ fn zoom_axis_fit_matches_native() {
 fn nested_global_probes_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for (name, checks) in [("global-probe", 342), ("global-probe-sibling", 343)] {
+    for (name, checks) in [("global-probe", 359), ("global-probe-sibling", 351)] {
         let trace = read_trace_file(&root.join(format!(
             "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
         )));
@@ -5449,7 +5449,7 @@ fn recurring_follow_matches_native() {
         let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
         let parity = compare_semantics(&trace, &compiled, primary, &context);
         eprintln!("{}", parity.summary(name));
-        assert_eq!(parity.checks(), 874);
+        assert_eq!(parity.checks(), 854);
         parity.assert_complete(name);
     }
 }

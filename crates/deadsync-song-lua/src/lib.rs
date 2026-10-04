@@ -19976,7 +19976,7 @@ return Def.ActorFrame{
                 track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Vibrate
             })
             .expect("queued effects are captured at their dispatch frames");
-        for (value, native_beat) in [(true, 1.5166667), (false, 1.8)] {
+        for (value, native_beat) in [(true, 1.5166667), (false, 1.8166667)] {
             let sample = vibration
                 .samples
                 .iter()
