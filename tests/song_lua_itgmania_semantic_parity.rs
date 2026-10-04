@@ -4885,6 +4885,23 @@ fn paused_updates_match_native() {
 }
 
 #[test]
+fn queued_bounce_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/queued-bounce.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/queued-bounce.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Queued bounce"));
+    assert_eq!(parity.checks(), 543);
+    parity.assert_complete("Queued bounce");
+}
+
+#[test]
 fn queued_message_states_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

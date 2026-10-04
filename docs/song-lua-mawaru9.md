@@ -960,6 +960,67 @@ The final full debug audit took 366.88 seconds. The main repository receives
 this pass as 0.5.1727, exactly one patch increment from 0.5.1726. The original
 song, native Mawaru9 reference and harness sources are unchanged in this pass.
 
+## Recurring tween cycles (0.5.1728)
+
+MMM's four ball sprites build a decelerating upward tween followed by an
+accelerating return, then queue `Bounce` again. DeadSync previously counted
+only the first tween: the self-queue branch did not flush the last capture
+block, and exact interval accumulation included sleeps but omitted tweens.
+The next callback consequently restarted the bounce before its return had
+finished. Both players then bounced from Y=240, including P2's first ball
+whose initial return destination is Y=-40.
+
+Queue-step recording now accumulates exact durations for both sleeps and
+tweens. Self-queuing flushes the final tween before selecting its interval.
+The sleep-specific accumulator was removed in favor of the shared path.
+This remains load-time compiler work; gameplay consumes the sampled tracks.
+
+The native `queued-bounce.sm` fixture reproduces the two different first
+bounces and several recurring cycles. Before the fix, the next callback ran
+at beat 4.55 instead of ITGmania's 4.9583333. At beat 4.55, both DeadSync balls
+were at Y=232.90425; native positions were 150.4157 and -128.29106. The full
+micro-fixture improves from **367/543** to **543/543**, resolving all 176
+failed geometry checks without changing comparison tolerances.
+
+The frozen capture has 190 update frames, zero Lua runtime errors and zero
+dropped events. Its 69,914 raw bytes compress to 9,146 bytes with an exact
+round trip. Decoded SHA256:
+`edbd97f0fc19cdbd287f6a5c0c29ef5bd3bdf790ff7030de37d1fd80291a771d`.
+The gameplay regression checks all 106 native ball positions through the
+production compiler, time conversion and cached playback, with offsets of
+zero and 0.25 seconds and a backward seek through the first bounces.
+
+The complete song uses the unchanged frozen native reference, decoded
+SHA256 `d56bc4ea2aef3f9ec87e291466e134e1e6e6925b094a7b5f0443f8dc2bc7b503`:
+
+| Category | Passing checks |
+| --- | --- |
+| Complete result | 118,900/118,933 |
+| Compile info | 12/12 |
+| Layer order | 4/4 |
+| Final render | 3,748/3,748 |
+| Render persistence | 6,639/6,639 |
+| Update values | 23,197/23,197 |
+| Player ranges | 13/14 |
+| Projected geometry | 65,388/65,418 |
+| Projected vibration | 19,398/19,400 |
+| Timeline | 224/224 |
+| Message commands | 231/231 |
+| Runtime modifiers | 46/46 |
+
+All 120 MMM geometry failures are resolved, with unchanged full-song
+coverage. Mawaru9 now has 33 failed checks and 23 distinct reports: 30
+geometry checks, two vibration samples and P2's X range. Its complete test
+remains ignored and failing. The remaining geometry reports concern the
+body projections and stars, Chike game-over banners, Patients' pulsing
+sprites, and the initial pulse actor.
+
+All 964 Lua/profile tests and 87 regular semantic tests pass in both
+repositories. The full debug audit took 446.28 seconds alongside build and
+validation work; this is not a gameplay frametime measurement. Main receives
+exactly one patch increment from 0.5.1727 to 0.5.1728. The original song and
+the harness sources are unchanged.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the

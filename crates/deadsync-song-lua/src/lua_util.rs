@@ -5462,15 +5462,6 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 let cursor = delay.unwrap_or(cursor);
                 actor.set("__songlua_capture_cursor", cursor + duration)?;
                 actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
-                if actor_has_active_command(lua, &actor)? {
-                    let interval = actor
-                        .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
-                        .unwrap_or(0.0);
-                    actor.set(
-                        "__songlua_recurring_update_exact_interval",
-                        interval + exact_duration,
-                    )?;
-                }
                 Ok(actor.clone())
             }
         })?,
@@ -5548,6 +5539,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     .get::<Option<bool>>(command.as_str())?
                     .unwrap_or(false)
                 {
+                    flush_actor_capture(&actor)?;
                     actor.set("__songlua_recurring_update_command", command)?;
                     invalidate_compile_update_plan(lua);
                     let cursor = actor
@@ -9310,6 +9302,19 @@ fn advance_queue_clock(
 fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::Result<Option<f32>> {
     // Queue creation spans startup and replay; retain its clock and dispatch
     // tail together so changing phases cannot advance the same time twice.
+    if let Some(duration) = duration
+        && actor_has_active_command(lua, actor)?
+    {
+        // A self-queued command waits for every tween and sleep in its cycle.
+        // Keep their exact durations instead of the rounded render cursor.
+        let interval = actor
+            .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
+            .unwrap_or(0.0);
+        actor.set(
+            "__songlua_recurring_update_exact_interval",
+            interval + duration,
+        )?;
+    }
     if lua.app_data_ref::<SongLuaCompileFrames>().is_none()
         && let Some(duration) = duration
     {

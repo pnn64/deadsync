@@ -30,6 +30,85 @@ use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 use deadsync_song_lua::{SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget};
 
 #[test]
+fn song_lua_queued_bounce_matches_native_playback() {
+    crate::tests::init_paths();
+    let song_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/song-lua")
+        .canonicalize()
+        .unwrap();
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-actors/queued-bounce.json"
+    )))
+    .unwrap();
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 210.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Queued bounce");
+    context.song_display_bpms = [210.0; 2];
+    context.song_timing = Some(timing.clone());
+    context.music_length_seconds = 22.0 / 7.0;
+    let entry = song_dir.join("queued-bounce.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap();
+    for layer in compiled {
+        for offset in [0.0, 0.25] {
+            let tracks = deadsync_song_lua::gameplay::build_song_lua_overlay_update_tracks(
+                &layer, &timing, offset,
+            );
+            let mut overlays = layer.overlays.clone();
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::UpdateTracks { tracks },
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+            let ranges = vec![0..0; overlays.len()];
+            let events = vec![Vec::new(); overlays.len()];
+            let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+            let (mut caches, mut local, mut composed) = (Vec::new(), Vec::new(), Vec::new());
+            let samples = native["samples"].as_array().unwrap();
+            assert_eq!(samples.len(), 106);
+            // Include a backward seek through the two different first bounces.
+            for sample in samples.iter().chain(samples.iter().take(48)) {
+                let name = sample["name"].as_str().unwrap();
+                let index = overlays
+                    .iter()
+                    .position(|actor| actor.name.as_deref() == Some(name))
+                    .unwrap();
+                let second = sample["second"].as_f64().unwrap() as f32;
+                song_lua_overlay_state_sets_from_into::<SpriteSlot>(
+                    second - offset,
+                    &overlays,
+                    &events,
+                    &[],
+                    &ranges,
+                    854.0,
+                    480.0,
+                    &mut order,
+                    &mut caches,
+                    &mut local,
+                    &mut composed,
+                );
+                for (axis, actual) in [local[index].x, local[index].y].into_iter().enumerate() {
+                    let expected = sample["position"][axis].as_f64().unwrap() as f32;
+                    assert!(
+                        (actual - expected).abs() < 0.002,
+                        "{name} at {second}, offset {offset}: {actual} vs {expected}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_paused_updates_match_native_playback() {
     use deadsync_rules::timing::{DelaySegment, StopSegment, TimingSegments, WarpSegment};
     crate::tests::init_paths();
