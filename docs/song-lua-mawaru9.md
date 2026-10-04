@@ -717,6 +717,109 @@ body-scene projection and tween results; P2 range, two vibration samples and
 the single Aya message report remain independent gaps. These audit timings
 do not measure live gameplay performance.
 
+## Width and height zoom fits
+
+The initial `bg5.png` and `bg8.png` bounds, and the one-pixel Glados Quad,
+were reference errors. The headless host recorded `zoomtowidth` and
+`zoomtoheight` without applying them. These methods now set the destination
+zoom axis, matching `Actor::ZoomToWidth` and `Actor::ZoomToHeight` in
+ITGmania's `Actor.h`. They preserve unzoomed dimensions. Zoomed-size getters
+include destination zoom and base scale.
+
+DeadSync also changed unzoomed dimensions for those methods. Sprites, Quads
+and other geometric actors now write the zoom axes instead. This preserves
+`GetWidth`/`GetHeight`, interpolates pending fits and lets later `zoomx` or
+`zoomy` replace the fit. BitmapText retains its existing deferred font-fit
+bounds representation; this pass does not establish native text sizing.
+
+The portable `zoom-axis-fit` fixture exercises a resized Quad with base zoom,
+a 64x32 Sprite with negative horizontal fit, and an unsized Quad, followed by
+plain zoom resets. ITGmania's compiled actor fixture calls `ZoomToWidth` and
+`ZoomToHeight` directly for both immediate and tweened destinations. The
+corrected headless host matches all 120 independently drawn native corner
+coordinates. DeadSync matches those same 120 coordinates, plus all 267
+semantic comparisons. The previous executable fails 39/267 comparisons,
+including interpolated bounds and zoom resets.
+
+The compressed semantic capture has zero errors or dropped events and an
+exact round trip: 37,222 bytes to 6,851, decoded SHA256
+`17e65c4baf681948e571ba317bd309b2d67b917e2e8b6f26b51e59958dc52d7c`.
+The full Mawaru9 reference was regenerated from the original unmodified song
+with the same Cyber noteskin under `deadsync/assets/noteskins`. Actor
+definitions, loaded files, layer roots, random seed, noteskin context, BPMs,
+end position and all 17,930 update frames match the previous capture. It has
+2,431 unique actor occurrences and zero errors or dropped events. The exact
+compression round trip is 32,633,322 bytes to 1,643,448, decoded SHA256
+`d56bc4ea2aef3f9ec87e291466e134e1e6e6925b094a7b5f0443f8dc2bc7b503`.
+The headless host SHA256 is
+`c8177bd08168affde567445f0dd42f7432bc5c0cf774dfdcc32b05f865d1a047`.
+Its corrected geometry contributes additional comparisons, so differences
+from the old full-song totals are not solely DeadSync improvements.
+
+## Stopped tween positions
+
+A bounded replay of the original body scene found a checkpoint collision
+near beat 97.815. Its cancelled queue ended at Z=350. DeadSync retained that
+destination for `addz(60)`, producing Z=410; native `StopTweening` clears the
+queue and leaves the current position as the new destination. At beat
+98.007, the native rendered depth was approximately 58.216 while DeadSync
+was approximately 425.750.
+
+Cancellation now restores current X/Y/Z destinations, respecting an earlier
+sibling callback's access to a later child's previous-frame position. The
+captured replacement tween starts from that position without inventing Lua
+setter writes. Cancellation also removes active startup/message block replay:
+otherwise, the original movement resumes after the replacement tween ends.
+
+The portable `stop-position` fixture queues three movements, then interrupts
+the target from an earlier sibling. A later witness copies its destination
+getters. The original executable passes only 73/85 comparisons. Restoring
+destination fields alone leaves eight failures; seeding the replacement
+tween still leaves two endpoint failures until startup replay is cancelled.
+The final implementation passes all 85 comparisons and an additional 60
+direct native world-depth coordinates. Those depth assertions matter because
+orthographic screen bounds cannot expose an incorrect Z value.
+
+The native capture has zero errors or dropped events and an exact compression
+round trip: 28,285 bytes to 4,894, decoded SHA256
+`1183fa2f3277138e95f0e17886ec748fa107077ce8551691dadc853189573c9c`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity stopped_position_matches_native -- --exact --nocapture
+```
+
+The full 0.5.1725 audit against the corrected reference passes
+**118,680/118,929**, leaving **249 failures** and 67 detailed gap reports:
+
+| Comparison | Result |
+|---|---:|
+| Compile info | 12/12 |
+| Layer order | 4/4 |
+| Final render | 3,748/3,748 |
+| Render persistence | 6,639/6,639 |
+| Update values | 23,197/23,197 |
+| Player ranges | 13/14 |
+| Projected geometry | 65,173/65,418 |
+| Projected vibration | 19,398/19,400 |
+| Timeline | 224/224 |
+| Message commands | 226/227 |
+| Runtime modifiers | 46/46 |
+
+The checkpoint's bounds and center now match throughout the full sampled
+trace. The fitted backgrounds and Glados Quad match the corrected reference.
+Remaining geometry includes MMM balls, Sans bones, Aya/TV, pulse initialization,
+alpha and perspective precision. P2 X range, two vibration samples and
+`TVGrowMessageCommand` still fail. The complete song test remains ignored and
+failing; tolerances and comparison coverage have not been relaxed.
+
+All 962 Lua/profile tests and 84 regular semantic tests pass in both
+repositories. The 60 depth assertions also pass in both; all 120 harness tests
+pass in rework. The full debug audit took 493.14 seconds, with 372.05 seconds
+in update replay, 57.45 seconds comparing geometry and 22.85 seconds comparing
+vibration. These measurements include concurrent regression/build work and
+do not measure gameplay performance. The main repository receives this pass
+as version 0.5.1725, exactly one patch increment from 0.5.1724.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the

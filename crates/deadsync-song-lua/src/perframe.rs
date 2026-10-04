@@ -1807,6 +1807,7 @@ fn set_overlay_state_update_value(
 struct OverlaySampleScratch {
     completed: Vec<SongLuaScheduledOverlaySample>,
     reset_indices: Vec<usize>,
+    stopped_indices: Vec<usize>,
     captured_tracks: Vec<bool>,
     message_targets: Vec<(
         usize,
@@ -2101,12 +2102,14 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
         );
     }
     scratch.reset_indices.clear();
+    scratch.stopped_indices.clear();
     scratch.captured_tracks.clear();
     scratch.captured_tracks.resize(tracks.len(), false);
     scratch.message_targets.clear();
     scratch.retargeted_states.clear();
     let OverlaySampleScratch {
         reset_indices,
+        stopped_indices,
         captured_tracks,
         message_targets,
         retargeted_states,
@@ -2121,6 +2124,7 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
             if tween_reset {
+                stopped_indices.push(overlay_index);
                 for sample in scheduled_samples
                     .iter()
                     .filter(|sample| sample.overlay_index == overlay_index)
@@ -3034,6 +3038,7 @@ pub fn compile_update_functions<Kind>(
         &mut scheduled_overlay_samples,
         &mut overlay_sample_scratch,
     )?;
+    message_replay.stop(&overlay_sample_scratch.stopped_indices);
 
     let mut beat = start;
     let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
@@ -3102,6 +3107,7 @@ pub fn compile_update_functions<Kind>(
             &mut scheduled_overlay_samples,
             &mut overlay_sample_scratch,
         )?;
+        message_replay.stop(&overlay_sample_scratch.stopped_indices);
         apply_scheduled_overlay_states(
             lua,
             &capture_actors,
@@ -3468,6 +3474,16 @@ struct SongLuaPerframeMessageReplay<'a> {
 }
 
 impl<'a> SongLuaPerframeMessageReplay<'a> {
+    fn stop(&mut self, indices: &[usize]) {
+        // Startup and message blocks share the actor's native tween queue.
+        // A callback cancellation must prevent them from resuming next frame.
+        for &index in indices {
+            if let Some(active) = self.active.get_mut(index) {
+                *active = None;
+            }
+        }
+    }
+
     fn new(messages: &'a [SongLuaMessageEvent], overlay_count: usize) -> Self {
         let mut order = (0..messages.len()).collect::<Vec<_>>();
         order.sort_by(|&a, &b| messages[a].beat.total_cmp(&messages[b].beat));

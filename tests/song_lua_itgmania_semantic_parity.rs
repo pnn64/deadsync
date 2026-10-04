@@ -4799,6 +4799,95 @@ fn simply_love_receptor_metrics_match_native() {
 }
 
 #[test]
+fn stopped_position_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/stop-position.json.zst"),
+    );
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/stop-position.sm"));
+    // Orthographic screen bounds cannot expose an incorrect stopped Z value.
+    // Check native world depth through the same compiled playback path.
+    let drawable_map = projected_drawable_map(&trace, &compiled);
+    let mut depths = 0;
+    for track in &trace.projected_vertex_tracks {
+        let &(layer, index) = drawable_map.get(&track.actor).unwrap();
+        for sample in &track.samples {
+            let beat = value_f32(sample.get(0)).unwrap();
+            let seconds = value_f32(sample.get(1)).unwrap();
+            let states = compiled_overlay_states_at(&compiled[layer], &context, beat, seconds);
+            let actual = compiled_world_vertices(states[index], track.texture_size);
+            for (corner, vertex) in sample[4].as_array().unwrap().iter().enumerate() {
+                let expected = value_f32(vertex.get(2)).unwrap();
+                assert!(
+                    (actual[corner][2] - expected).abs() <= 0.002,
+                    "{} world Z at beat {beat}: {} vs {expected}",
+                    track.actor, actual[corner][2]
+                );
+                depths += 1;
+            }
+        }
+    }
+    assert_eq!(depths, 60);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Stop position"));
+    assert_eq!(parity.checks(), 85);
+    parity.assert_complete("Stop position");
+}
+
+#[test]
+fn zoom_axis_fit_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/zoom-axis-fit.json.zst"),
+    );
+    let simfile = root.join("tests/fixtures/song-lua/zoom-axis-fit.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/zoom-axis-fit-native.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let seconds = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(&compiled[0], &context, seconds * 2.0, seconds);
+        for actor in sample["actors"].as_array().unwrap().iter().skip(1) {
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == actor["name"].as_str())
+                .unwrap();
+            let size = [
+                actor["size"][0].as_f64().unwrap() as f32,
+                actor["size"][1].as_f64().unwrap() as f32,
+            ];
+            let corners = compiled_world_vertices(states[index], size);
+            for corner in 0..4 {
+                let expected = &actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["screen"];
+                for axis in 0..2 {
+                    let expected = expected[axis].as_f64().unwrap() as f32;
+                    assert!(
+                        (expected - corners[corner][axis]).abs() <= 0.002,
+                        "{} at {seconds} corner {corner} axis {axis}: {expected} vs {:?}",
+                        actor["name"],
+                        corners[corner]
+                    );
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 120);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Zoom axis fit"));
+    assert!(parity.checks() > 100);
+    parity.assert_complete("Zoom axis fit");
+}
+
+#[test]
 fn nested_global_probes_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

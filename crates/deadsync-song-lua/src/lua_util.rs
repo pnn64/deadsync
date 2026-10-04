@@ -738,7 +738,7 @@ fn finish_pending_tweens(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
-fn stop_pending_tweens(lua: &Lua, actor: &Table) {
+fn stop_pending_tweens(lua: &Lua, actor: &Table, position: [f32; 3]) {
     let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
         return;
     };
@@ -754,6 +754,18 @@ fn stop_pending_tweens(lua: &Lua, actor: &Table) {
     capture.final_values[index].retain(|(target, _)| targets & (1_u128 << *target as usize) == 0);
     capture.scheduled[index].clear();
     capture.pending_tweens[index].clear();
+    for (target, value) in [
+        SongLuaOverlayUpdateTarget::X,
+        SongLuaOverlayUpdateTarget::Y,
+        SongLuaOverlayUpdateTarget::Z,
+    ]
+    .into_iter()
+    .zip(position)
+    {
+        let value = SongLuaOverlayUpdateValue::F32(value);
+        SongLuaOverlayUpdateCapture::replace_value(&mut capture.values[index], target, value.clone());
+        SongLuaOverlayUpdateCapture::replace_value(&mut capture.final_values[index], target, value);
+    }
 }
 
 pub(crate) fn captured_update_target_mask(lua: &Lua, actor: &Table) -> u128 {
@@ -4679,8 +4691,13 @@ pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Resul
                 let Some(width) = args.get(1).cloned().and_then(read_f32) else {
                     return Ok(actor.clone());
                 };
-                let (_, height) = actor_base_size(&actor)?;
-                capture_block_set_size(lua, &actor, [width, height])?;
+                let (base_width, height) = actor_base_size(&actor)?;
+                if actor_type_is(&actor, "BitmapText")? {
+                    // Text fit bounds resolve against font metrics during playback.
+                    capture_block_set_size(lua, &actor, [width, height])?;
+                } else {
+                    capture_block_set_f32(lua, &actor, "zoom_x", width / base_width)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -4693,8 +4710,12 @@ pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Resul
                 let Some(height) = args.get(1).cloned().and_then(read_f32) else {
                     return Ok(actor.clone());
                 };
-                let (width, _) = actor_base_size(&actor)?;
-                capture_block_set_size(lua, &actor, [width, height])?;
+                let (width, base_height) = actor_base_size(&actor)?;
+                if actor_type_is(&actor, "BitmapText")? {
+                    capture_block_set_size(lua, &actor, [width, height])?;
+                } else {
+                    capture_block_set_f32(lua, &actor, "zoom_y", height / base_height)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -5144,11 +5165,21 @@ pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result
     let actor = actor.clone();
     lua.create_function(move |lua, _args: MultiValue| {
         prepare_capture_scope_actor(lua, &actor)?;
+        let position = [
+            actor_current_position(lua, &actor, 0)?,
+            actor_current_position(lua, &actor, 1)?,
+            actor_current_position(lua, &actor, 2)?,
+        ];
         clear_spin_queue(&actor, false)?;
         flush_actor_capture(&actor)?;
         clear_actor_queue(lua, &actor)?;
-        stop_pending_tweens(lua, &actor);
+        stop_pending_tweens(lua, &actor, position);
         reset_actor_capture(lua, &actor)?;
+        // StopTweening removes the back state; relative setters now start at
+        // the current position, including a later child's pre-update pose.
+        for (key, value) in POSITION_DEST_KEYS.into_iter().zip(position) {
+            actor.set(key, value)?;
+        }
         Ok(actor.clone())
     })
 }

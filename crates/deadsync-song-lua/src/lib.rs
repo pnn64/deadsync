@@ -14949,7 +14949,7 @@ return Def.ActorFrame{
             self:zoomtowidth(30)
             self:zoomtoheight(40)
             mod_actions = {
-                {1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true},
+                {1, string.format("%.0f:%.0f:%.0f:%.0f", self:GetWidth(), self:GetHeight(), self:GetZoomedWidth(), self:GetZoomedHeight()), true},
             }
         end,
     },
@@ -14964,7 +14964,7 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "30:40");
+        assert_eq!(compiled.messages[0].message, "10:20:30:40");
     }
 
     #[test]
