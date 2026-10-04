@@ -205,7 +205,9 @@ impl SongLuaOverlayTopologyIndex {
         let dynamic_camera_scope = overlays.iter().any(|overlay| {
             matches!(
                 overlay.kind,
-                SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+                SongLuaOverlayKind::ActorFrame
+                    | SongLuaOverlayKind::WrapperState
+                    | SongLuaOverlayKind::ActorFrameTexture { .. }
             ) && overlay
                 .message_commands
                 .iter()
@@ -240,7 +242,9 @@ impl SongLuaOverlayTopologyIndex {
                 }
                 if matches!(
                     parent.kind,
-                    SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+                    SongLuaOverlayKind::ActorFrame
+                        | SongLuaOverlayKind::WrapperState
+                        | SongLuaOverlayKind::ActorFrameTexture { .. }
                 ) && parent_state.fov.is_some()
                 {
                     Some(parent_index)
@@ -261,7 +265,9 @@ impl SongLuaOverlayTopologyIndex {
             overlays.get(ease.overlay_index).is_some_and(|overlay| {
                 matches!(
                     overlay.kind,
-                    SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+                    SongLuaOverlayKind::ActorFrame
+                        | SongLuaOverlayKind::WrapperState
+                        | SongLuaOverlayKind::ActorFrameTexture { .. }
                 ) && (ease.from.delta.fov.is_some() || ease.to.delta.fov.is_some())
             })
         });
@@ -932,8 +938,21 @@ fn song_lua_overlay_child_list_index(parent_index: Option<usize>) -> usize {
     parent_index.map_or(0, |idx| idx + 1)
 }
 
+fn song_lua_order_source<S>(overlays: &[SongLuaOverlayActor<S>], mut index: usize) -> usize {
+    // The compiler emits each wrapper immediately before its sole draw child.
+    // Wrappers are states of that child, not siblings with their own draw order.
+    while matches!(overlays[index].kind, SongLuaOverlayKind::WrapperState) {
+        let next = index + 1;
+        if !overlays.get(next).is_some_and(|actor| actor.parent_index == Some(index)) {
+            break;
+        }
+        index = next;
+    }
+    index
+}
+
 fn song_lua_sort_static_children<S>(overlays: &[SongLuaOverlayActor<S>], children: &mut [usize]) {
-    children.sort_by_key(|&idx| (overlays[idx].initial_state.draw_order, idx));
+    children.sort_by_key(|&idx| (overlays[song_lua_order_source(overlays, idx)].initial_state.draw_order, idx));
 }
 
 fn song_lua_push_static_order(
@@ -1102,7 +1121,7 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
         .map(|children| {
             children
                 .iter()
-                .any(|&idx| dynamic_actor_draw_order.get(idx).copied().unwrap_or(false))
+                .any(|&idx| dynamic_actor_draw_order.get(song_lua_order_source(overlays, idx)).copied().unwrap_or(false))
         })
         .collect::<Vec<_>>();
     let static_root_order =
@@ -1577,6 +1596,7 @@ fn song_lua_overlay_parent_uses_center_origin<S: NoteskinSlot + Clone>(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::WrapperState
             | SongLuaOverlayKind::ActorFrameTexture { .. }
     ) && 0.5f32.mul_add(-overlay_space_axis, parent_axis).abs() <= 0.01
 }
@@ -1651,6 +1671,7 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::WrapperState
             | SongLuaOverlayKind::ActorFrameTexture { .. }
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
@@ -1666,6 +1687,7 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
         parent_kind,
         SongLuaOverlayKind::Actor
             | SongLuaOverlayKind::ActorFrame
+            | SongLuaOverlayKind::WrapperState
             | SongLuaOverlayKind::ActorFrameTexture { .. }
     ) && song_lua_overlay_parent_uses_center_origin(
         parent_kind,
@@ -2277,7 +2299,9 @@ fn song_lua_overlay_camera_ancestor<S: NoteskinSlot + Clone>(
         }
         if matches!(
             overlay.kind,
-            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+            SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::WrapperState
+                | SongLuaOverlayKind::ActorFrameTexture { .. }
         ) {
             return Some(current);
         }
@@ -2918,6 +2942,7 @@ fn song_lua_aft_actor_capacity<S: NoteskinSlot + Clone>(kind: &SongLuaOverlayKin
     match kind {
         SongLuaOverlayKind::Actor
         | SongLuaOverlayKind::ActorFrame
+        | SongLuaOverlayKind::WrapperState
         | SongLuaOverlayKind::ActorFrameTexture { .. }
         | SongLuaOverlayKind::Sound { .. } => 0,
         SongLuaOverlayKind::AftSprite { .. } => 2,
@@ -4587,9 +4612,10 @@ fn song_lua_push_order<S: NoteskinSlot + Clone>(
     {
         let mut changed = order_cache.sort_modes[list_idx] != SONG_LUA_CHILD_ORDER_DRAW;
         for &idx in &order_cache.child_lists[list_idx] {
+            let source = song_lua_order_source(overlays, idx);
             let draw_order = overlay_states
-                .get(idx)
-                .map_or(overlays[idx].initial_state.draw_order, |state| {
+                .get(source)
+                .map_or(overlays[source].initial_state.draw_order, |state| {
                     state.draw_order
                 });
             if order_cache.last_draw_orders[idx] != draw_order {
@@ -4757,7 +4783,9 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
         return;
     };
     match overlay.kind {
-        SongLuaOverlayKind::Actor | SongLuaOverlayKind::ActorFrame => {
+        SongLuaOverlayKind::Actor
+        | SongLuaOverlayKind::ActorFrame
+        | SongLuaOverlayKind::WrapperState => {
             let list_idx = song_lua_overlay_child_list_index(Some(index));
             let Some(children) = order_cache.child_lists.get(list_idx) else {
                 return;
@@ -4861,6 +4889,20 @@ fn song_lua_build_local_proxy_actor<S: NoteskinSlot + Clone>(
     // ITG ActorProxy::DrawPrimitives temporarily unhides its target for the
     // proxied draw, then restores the target's hidden state.
     target_state.visible = true;
+    if matches!(overlays[target_index].kind, SongLuaOverlayKind::WrapperState) {
+        // A native wrapper ActorFrame has no draw children of its own.
+        return None;
+    }
+    let mut parent = overlays[target_index].parent_index;
+    while let Some(index) = parent {
+        let wrapper = &overlays[index];
+        if !matches!(wrapper.kind, SongLuaOverlayKind::WrapperState) { break; }
+        target_state = song_lua_overlay_compose_state(
+            &wrapper.kind, local_overlay_states[index], target_state,
+            overlay_space_width, overlay_space_height,
+        );
+        parent = wrapper.parent_index;
+    }
     let source = if let Some(slot) = proxy_actor_scratch
         .as_deref_mut()
         .and_then(SongLuaProxyActorScratch::next_screen)
@@ -4980,6 +5022,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
             overlay.kind,
             SongLuaOverlayKind::Actor
                 | SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::WrapperState
                 | SongLuaOverlayKind::ActorFrameTexture { .. }
         ) {
             continue;
@@ -6496,7 +6539,9 @@ fn song_lua_overlay_camera_state<S: NoteskinSlot + Clone>(
         let state = overlay_states.get(current).copied()?;
         if matches!(
             overlay.kind,
-            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+            SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::WrapperState
+                | SongLuaOverlayKind::ActorFrameTexture { .. }
         ) && state.fov.is_some()
         {
             return Some(state);
@@ -8497,7 +8542,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     };
     match &overlay.kind {
         SongLuaOverlayKind::Actor => None,
-        SongLuaOverlayKind::ActorFrame => None,
+        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::WrapperState => None,
         SongLuaOverlayKind::UpdateTracks { .. } => None,
         SongLuaOverlayKind::ActorFrameTexture { .. } => None,
         SongLuaOverlayKind::ActorProxy { .. } => None,
@@ -10980,6 +11025,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
             overlay.kind,
             SongLuaOverlayKind::Actor
                 | SongLuaOverlayKind::ActorFrame
+                | SongLuaOverlayKind::WrapperState
                 | SongLuaOverlayKind::UpdateTracks { .. }
                 | SongLuaOverlayKind::Sound { .. }
         ) {

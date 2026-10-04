@@ -1660,6 +1660,77 @@ fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
 }
 
 #[test]
+fn song_lua_wrappers_preserve_owner_draw_order() {
+    let actor = |kind, parent, draw_order| SongLuaOverlayActor {
+        kind, name: None, parent_index: parent,
+        initial_state: SongLuaOverlayState { draw_order, ..Default::default() },
+        message_commands: Vec::new(),
+    };
+    let mut overlays = vec![
+        actor(SongLuaOverlayKind::WrapperState, None, 100),
+        actor(SongLuaOverlayKind::WrapperState, Some(0), -100),
+        actor(SongLuaOverlayKind::Quad, Some(1), -1),
+        actor(SongLuaOverlayKind::Quad, None, 0),
+    ];
+    overlays[2].message_commands.push(deadsync_song_lua::SongLuaOverlayMessageCommand {
+        frame_advance: 0.0, message: "Reorder".into(), aux: None,
+        blocks: vec![deadsync_song_lua::SongLuaOverlayCommandBlock {
+            queued: false, start: 0.0, duration: 0.0, easing: None,
+            opt1: None, opt2: None,
+            delta: SongLuaOverlayStateDelta { draw_order: Some(2), ..Default::default() },
+        }],
+    });
+    let mut cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+    assert_eq!(cache.child_lists[0], [0,3]);
+    assert!(cache.dynamic_draw_order[0]);
+    let mut states = overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>();
+    states[2].draw_order = 2;
+    song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut Vec::new());
+    assert_eq!(cache.child_lists[0], [3,0]);
+    states[2].draw_order = -1;
+    song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut Vec::new());
+    assert_eq!(cache.child_lists[0], [0,3]);
+}
+
+#[test]
+fn song_lua_proxy_preserves_target_wrappers() {
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(640.0,480.0));
+    let actor = |kind, parent, state| SongLuaOverlayActor {
+        kind, name: None, parent_index: parent, initial_state: state,
+        message_commands: Vec::new(),
+    };
+    let overlays = vec![
+        actor(SongLuaOverlayKind::WrapperState, None, SongLuaOverlayState {
+            x: 66.0, y: 220.0, zoom: 0.5, ..Default::default()
+        }),
+        actor(SongLuaOverlayKind::Quad, Some(0), SongLuaOverlayState {
+            x: 8.0, y: 10.0, zoom: 2.0, visible: false,
+            size: Some([64.0,32.0]), ..Default::default()
+        }),
+    ];
+    let local = overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>();
+    let composed = song_lua_overlay_states_from_local(&overlays, &local, 640.0,480.0);
+    let order = song_lua_overlay_order_cache_from(&overlays, &[]);
+    let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+    let assets = AssetManager::new();
+    let mut scratch = song_lua_projected_mesh_scratch_for(&overlays);
+    let mut build = |target, local: &[SongLuaOverlayState]| song_lua_build_local_proxy_actor(
+        &overlays, &composed, local, &order, &topology, &assets, target,
+        SongLuaOverlayState::default(), 0, 640.0,480.0,640.0,480.0,
+        0.0,0.0,0.0, &mut scratch, None,
+    );
+    let proxy = build(1, &local).expect("wrapped hidden target is unhidden for the proxy");
+    let Actor::SharedFrame { children, .. } = proxy else { panic!("expected proxy frame") };
+    let [Actor::Sprite { offset, scale, .. }] = children.as_ref() else { panic!("expected wrapped quad") };
+    assert_eq!(*offset, [70.0,225.0]);
+    assert_eq!(*scale, [64.0,32.0]);
+    assert!(build(0, &local).is_none(), "a wrapper frame itself has no draw children");
+    let mut hidden = local;
+    hidden[0].visible = false;
+    assert!(build(1, &hidden).is_none(), "proxy unhides the owner but preserves wrapper visibility");
+}
+
+#[test]
 fn song_lua_dynamic_order_cache_tracks_draw_and_z_key_changes() {
     let mut overlays = (0..8)
         .map(|index| SongLuaOverlayActor {

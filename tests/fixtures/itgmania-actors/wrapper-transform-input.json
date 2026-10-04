@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "name": "wrapper-transform",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0,
+    0.25,
+    0.5,
+    1,
+    2,
+    4
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "camera": {
+      "fov": 60,
+      "vanish": [
+        427,
+        240
+      ]
+    },
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "Mixed",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "rotation": [
+            -10,
+            -40,
+            -30
+          ],
+          "skew": [
+            -0.4,
+            -0.03
+          ]
+        },
+        "wrappers": [
+          {
+            "name": "MixedWrapper",
+            "state": {
+              "position": [
+                66,
+                220,
+                0
+              ],
+              "zoom": [
+                0.5,
+                0.5,
+                1.334375
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Layered",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            10,
+            -8,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            40
+          ],
+          "skew": [
+            0,
+            0.07
+          ]
+        },
+        "wrappers": [
+          {
+            "name": "LayeredInner",
+            "state": {
+              "position": [
+                32,
+                -10,
+                0
+              ],
+              "zoom": [
+                0.8,
+                0.7,
+                1
+              ],
+              "rotation": [
+                0,
+                0,
+                20
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 1,
+                "easing": "linear",
+                "state": {
+                  "rotation": [
+                    0,
+                    0,
+                    -35
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "LayeredOuter",
+            "state": {
+              "position": [
+                300,
+                230,
+                0
+              ],
+              "zoom": [
+                -0.6,
+                1.1,
+                1
+              ],
+              "rotation": [
+                0,
+                0,
+                -15
+              ],
+              "skew": [
+                0.15,
+                0
+              ],
+              "diffuse": [
+                1,
+                1,
+                1,
+                0.6
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Callback",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "rotation": [
+            0,
+            0,
+            -20
+          ],
+          "skew": [
+            0.12,
+            0
+          ]
+        },
+        "wrappers": [
+          {
+            "name": "CallbackWrapper",
+            "state": {
+              "position": [
+                620,
+                240,
+                0
+              ],
+              "zoom": [
+                0.5,
+                0.5,
+                0.5
+              ],
+              "rotation": [
+                0,
+                0,
+                30
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 4,
+                "easing": "linear",
+                "state": {
+                  "position": [
+                    660,
+                    240,
+                    0
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    70
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

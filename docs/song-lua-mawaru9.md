@@ -1083,6 +1083,86 @@ this is not a gameplay frametime measurement. Main receives exactly one
 patch increment from 0.5.1728 to 0.5.1729. The original song, full native
 reference, and harness sources are unchanged.
 
+## Animated wrapper states (0.5.1730)
+
+Mawaru9's initial pulse creates a wrapper for its placement and nonuniform
+scale, then rotates and skews the sprite itself. DeadSync created that Lua
+state but omitted it from the compiled overlay tree. Wrapper states now
+enter the tree as distinct, independently animated parents. Highest-index
+wrappers are outermost, matching ITGmania's draw order. Startup tweens and
+wrapper-owned update callbacks are captured and replayed, including after
+a backward seek. The wrapped actor retains its sibling draw order. Actor
+proxies carry the target's wrapper states while a wrapper targeted directly
+has no draw children; hiding a wrapper still hides the proxied owner.
+
+The reference harness had a separate bug: `AddWrapperState()` returned the
+owner rather than the new wrapper, and projected geometry did not visit
+wrappers. That incorrect reference placed wrapper writes on the sprite
+itself. The harness now returns the new state, composes wrappers in native
+order, and inherits their visibility and alpha. The previous pulse reference
+is replaced. Authored actors remain the audit's operation targets; synthetic
+wrapper parents are checked through the final projected geometry.
+
+`wrapper-transform.lua` covers the pulse's mixed actor/wrapper transform,
+two stacked wrappers, a one-second wrapper tween, a wrapper-owned update
+function, one-based queries, and inherited alpha. It improves from
+**81/127** on the 0.5.1729 binary to **127/127**, with 241 update frames, no
+Lua errors and no dropped events. The 44,300-byte capture compresses to
+7,960 bytes with an exact round trip. Decoded SHA256:
+`55360987ebb4c6bc0dd39e494a9242acc2c3cafbe1d7b66de90a4431f69539c0`.
+
+The independent C++ fixture calls ITGmania's actual `Actor::AddWrapperState`
+and `GetWrapperState`, then `Actor::Update` and `Actor::Draw`. Its input is
+retained in `tests/fixtures/itgmania-actors/wrapper-transform-input.json`.
+All 216 world coordinates agree with the harness within 0.002. DeadSync
+checks 324 coordinates through the same production transform functions,
+including a backward seek, and reuses the warmed textured-sprite builder
+to verify drawing and inherited alpha. Native color comparisons allow one
+byte of quantization. The native C++ output repeats byte-for-byte; SHA256:
+`c09bd6cf1c5a22132f20582a711b2afba54ffb6e58affd70f26d6642ca678d78`.
+
+The refreshed full-song reference uses the same chart, three layers, 50
+loaded Lua files, asset/noteskin hashes, random seed, 17,930 update frames,
+2,431 unique actor instances and complete beat-836 endpoint. There are no
+runtime errors or dropped events. Only operation, tween and projected
+vertex tracks change. The 32,633,951-byte capture compresses to 1,644,450
+bytes. Decoded SHA256:
+`422da087837313cd4dd9fd5986eb81676f153f19ca9ed8b7a01092fbf9c6c508`.
+The corrected semantic host SHA256 is
+`961051344cc6b9fd28987025a99fa21568265444e7c38e8e367dfa38cb7a7c3e`.
+The final corrected harness reproduces the full capture byte-for-byte.
+The complete final audit takes 416.85 seconds; this is a debug verification
+time, not a gameplay frametime measurement.
+
+| Category | Passing checks |
+| --- | --- |
+| Complete result | 118,914/118,933 |
+| Compile info | 12/12 |
+| Layer order | 4/4 |
+| Final render | 3,748/3,748 |
+| Render persistence | 6,639/6,639 |
+| Update values | 23,197/23,197 |
+| Player ranges | 13/14 |
+| Projected geometry | 65,402/65,418 |
+| Projected vibration | 19,398/19,400 |
+| Timeline | 224/224 |
+| Message commands | 231/231 |
+| Runtime modifiers | 46/46 |
+
+Both initial pulse geometry failures are resolved. The total denominator,
+geometry coverage and comparison tolerances are unchanged. Mawaru9 still
+has 19 failed checks and 17 distinct reports: 16 near-camera-plane geometry
+checks for the body projections and stars, two vibration samples and P2's
+X range. Its complete test remains ignored and failing.
+
+All 966 Lua/profile tests and 91 regular semantic tests pass in both
+repositories. The corrected harness passes 90 unit tests, with one ignored.
+The new production order-cache and proxy tests cover static/runtime sibling
+order, owner visibility, wrapper visibility and an empty wrapper target.
+No gameplay-time Lua execution or growing cache is added. Main receives
+exactly one patch increment from 0.5.1729 to 0.5.1730. Rework stays
+uncommitted, and the original song and ITGmania sources remain unchanged.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the

@@ -685,7 +685,7 @@ fn compile_trace_song_at(
 fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
     match kind {
         SongLuaOverlayKind::Actor => "Actor",
-        SongLuaOverlayKind::ActorFrame => "ActorFrame",
+        SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::WrapperState => "ActorFrame",
         SongLuaOverlayKind::UpdateTracks { .. } => "UpdateTracks",
         SongLuaOverlayKind::ActorFrameTexture { .. } => "ActorFrameTexture",
         SongLuaOverlayKind::ActorProxy { .. } => "ActorProxy",
@@ -2049,7 +2049,13 @@ fn compare_update_render_values(
         collect_native_overlay_definitions(trace, root, &definitions, &mut native);
         let native_len = native.len();
         let overlay_indices = (0..compiled.overlays.len())
-            .filter(|index| Some(*index) != compiled.screen_overlay_index)
+            .filter(|index| {
+                Some(*index) != compiled.screen_overlay_index
+                    && !matches!(
+                        compiled.overlays[*index].kind,
+                        SongLuaOverlayKind::WrapperState
+                    )
+            })
             .collect::<Vec<_>>();
         let pairs = if native_len == overlay_indices.len() {
             native
@@ -4907,6 +4913,108 @@ fn queued_bounce_matches_native() {
 }
 
 #[test]
+fn wrapper_transform_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/wrapper-transform.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/wrapper-transform.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Wrapper transform"));
+    assert_eq!(parity.checks(), 127);
+    parity.assert_complete(&trace.title);
+    assert_eq!(
+        compiled[0]
+            .overlays
+            .iter()
+            .filter(|actor| matches!(actor.kind, SongLuaOverlayKind::WrapperState))
+            .count(),
+        4
+    );
+}
+
+#[test]
+fn wrapper_transform_matches_native_drawing() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/wrapper-transform.json.zst"),
+    );
+    let (compiled, _, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/wrapper-transform.sm"),
+    );
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            root.join("tests/fixtures/itgmania-song-lua-micro/wrapper-transform-native.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let mut composer = WholeSongComposer::new(&compiled[0].overlays);
+    let screen = [context.screen_width, context.screen_height];
+    let samples = native["samples"].as_array().unwrap();
+    let mut checks = 0;
+    // Reuse the warmed builder and include a backward seek through the tween.
+    for sample in samples.iter().chain(samples.iter().take(3)) {
+        let second = sample["time"].as_f64().unwrap() as f32;
+        let states = compiled_overlay_states_at(&compiled[0], &context, second, second);
+        for actor in sample["actors"].as_array().unwrap().iter().skip(1) {
+            let name = actor["name"].as_str().unwrap();
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == Some(name))
+                .unwrap();
+            let actual = compiled_world_vertices(states[index], [64.0, 32.0]);
+            for corner in 0..4 {
+                for axis in 0..3 {
+                    let expected = actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["world"]
+                        [axis]
+                        .as_f64()
+                        .unwrap() as f32;
+                    assert!(
+                        (actual[corner][axis] - expected).abs() <= 0.002,
+                        "{name} at {second}, corner {corner}/{axis}: {} vs {expected}",
+                        actual[corner][axis]
+                    );
+                    checks += 1;
+                }
+            }
+            let frame = composer.render_overlay(
+                &compiled[0].overlays,
+                &states,
+                index,
+                screen,
+                second,
+                second,
+            );
+            assert!(
+                !frame.tmesh_instances.is_empty(),
+                "{name} at {second} must render"
+            );
+            let expected_alpha = actor["draws"][0]["vertices"][0]["color"][3]
+                .as_f64()
+                .unwrap() as f32
+                / 255.0;
+            assert!(
+                frame
+                    .tmesh_instances
+                    .iter()
+                    .all(|instance| (instance.tint[3] - expected_alpha).abs() <= 1.0 / 255.0)
+            );
+        }
+    }
+    assert_eq!(checks, 324);
+}
+
+#[test]
 fn collapsed_transform_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -4968,7 +5076,8 @@ fn stopped_position_matches_native() {
                 assert!(
                     (actual[corner][2] - expected).abs() <= 0.002,
                     "{} world Z at beat {beat}: {} vs {expected}",
-                    track.actor, actual[corner][2]
+                    track.actor,
+                    actual[corner][2]
                 );
                 depths += 1;
             }

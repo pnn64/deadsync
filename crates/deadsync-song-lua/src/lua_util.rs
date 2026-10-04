@@ -8657,6 +8657,7 @@ pub fn install_actor_runtime_child_methods(
                 let wrappers = actor_wrappers(lua, &actor)?;
                 let next_index = wrappers.raw_len() + 1;
                 wrappers.raw_set(next_index, wrapper.clone())?;
+                invalidate_compile_update_plan(lua);
                 Ok(wrapper)
             }
         })?,
@@ -9525,6 +9526,11 @@ fn collect_startup_states(
         actor.set("__songlua_capture_blocks", lua.create_table()?)?;
         actor.set("__songlua_capture_immediate_block", Value::Nil)?;
     }
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        for wrapper in wrappers.sequence_values::<Table>() {
+            collect_startup_states(lua, &wrapper?, states)?;
+        }
+    }
     for child in actor.sequence_values::<Value>() {
         if let Value::Table(child) = child? {
             collect_startup_states(lua, &child, states)?;
@@ -9533,10 +9539,31 @@ fn collect_startup_states(
     Ok(())
 }
 
+fn collect_wrapper_initials(
+    actor: &Table,
+    states: &mut HashMap<usize, (Table, SongLuaOverlayState)>,
+) -> mlua::Result<()> {
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        for wrapper in wrappers.sequence_values::<Table>() {
+            let wrapper = wrapper?;
+            states
+                .entry(wrapper.to_pointer() as usize)
+                .or_insert_with(|| (wrapper.clone(), SongLuaOverlayState::default()));
+            collect_wrapper_initials(&wrapper, states)?;
+        }
+    }
+    for child in actor.sequence_values::<Value>() {
+        if let Value::Table(child) = child? {
+            collect_wrapper_initials(&child, states)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn run_actor_startup_commands(
     lua: &Lua,
     root: &Value,
-    initial_states: HashMap<usize, (Table, SongLuaOverlayState)>,
+    mut initial_states: HashMap<usize, (Table, SongLuaOverlayState)>,
 ) -> mlua::Result<(SongLuaStartupStates, SongLuaStartupStates)> {
     let Value::Table(root) = root else {
         return Ok((HashMap::new(), HashMap::new()));
@@ -9549,6 +9576,8 @@ pub fn run_actor_startup_commands(
         .remove_app_data::<SongLuaStartupQueues>()
         .expect("startup queue scope was installed above");
     result?;
+    // Wrappers created by Init/On begin at the default ActorFrame state.
+    collect_wrapper_initials(root, &mut initial_states)?;
     // Keep Init/On tweens before queued-command capture resets the song tree.
     let startup_tweens = capture_startup_states(initial_states).map_err(mlua::Error::external)?;
     let mut states = HashMap::new();
@@ -9625,6 +9654,13 @@ fn collect_compile_update_jobs(
     jobs: &mut Vec<SongLuaCompileUpdateJob>,
     order: &mut usize,
 ) -> mlua::Result<()> {
+    // Actor::Update advances wrappers before the wrapped actor. A wrapper
+    // receives its owner's delta, before ActorFrame's child update rate.
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        for wrapper in wrappers.sequence_values::<Table>() {
+            collect_compile_update_jobs(lua, &wrapper?, parent_rate, jobs, order)?;
+        }
+    }
     *order += 1;
     if lua.app_data_ref::<SongLuaCompileUpdateOrders>().is_none() {
         lua.set_app_data(SongLuaCompileUpdateOrders(FxHashMap::default()));
@@ -10243,6 +10279,16 @@ fn run_actor_update_functions_for_table_inner(
     parent_delta_seconds: f64,
     run_recurring_commands: bool,
 ) -> mlua::Result<()> {
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        for wrapper in wrappers.sequence_values::<Table>() {
+            run_actor_update_functions_for_table_inner(
+                lua,
+                &wrapper?,
+                parent_delta_seconds,
+                run_recurring_commands,
+            )?;
+        }
+    }
     let delta_seconds = parent_delta_seconds * actor_update_rate(actor)?;
     // ITGmania runs Actor::UpdateInternal (including queued UpdateCommands),
     // then child updates, then the ActorFrame update function.
@@ -10322,6 +10368,13 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
             .is_some()
     {
         return Ok(true);
+    }
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        for wrapper in wrappers.sequence_values::<Table>() {
+            if actor_table_has_update_functions(lua, &wrapper?)? {
+                return Ok(true);
+            }
+        }
     }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child? else {
@@ -15430,6 +15483,31 @@ where
     ReadNoteskin: Fn(&Table, &SongLuaCompileContext) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
     OnSkipped: FnMut(String),
 {
+    // Highest-index wrappers are outermost, exactly as Actor::Draw.
+    let mut parent_index = parent_index;
+    if let Some(wrappers) = actor
+        .get::<Option<Table>>("__songlua_wrappers")
+        .map_err(|err| err.to_string())?
+    {
+        for index in (1..=wrappers.raw_len()).rev() {
+            let wrapper = wrappers
+                .raw_get::<Table>(index)
+                .map_err(|err| err.to_string())?;
+            read_overlay_compile_actors_from_table(
+                lua,
+                &wrapper,
+                parent_index,
+                aft_capture_names,
+                referenced_actors,
+                out,
+                context,
+                read_model_layers,
+                read_noteskin_tap_actor_slots,
+                on_skipped_message_capture,
+            )?;
+            parent_index = Some(out.len() - 1);
+        }
+    }
     let next_parent_index = if let Some(overlay) = read_overlay_compile_actor(
         lua,
         actor,
@@ -15447,6 +15525,11 @@ where
     } else {
         parent_index
     };
+    // Actor::Draw only calls BeginDraw/EndDraw on wrapper ActorFrames; their
+    // own ActorFrame children are not drawn.
+    if actor_type_is(actor, "WrapperState").map_err(|err| err.to_string())? {
+        return Ok(());
+    }
     for child in actor.sequence_values::<Value>() {
         let Value::Table(child) = child.map_err(|err| err.to_string())? else {
             continue;
@@ -15516,6 +15599,8 @@ where
             return Ok(None);
         }
         SongLuaOverlayKind::Actor
+    } else if actor_type.eq_ignore_ascii_case("WrapperState") {
+        SongLuaOverlayKind::WrapperState
     } else if actor_type.eq_ignore_ascii_case("ActorFrame") {
         let has_draw_function = actor
             .get::<Option<Function>>("__songlua_draw_function")

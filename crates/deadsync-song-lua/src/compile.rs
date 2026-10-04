@@ -1034,6 +1034,11 @@ fn mark_actor_layer(actor: &Value, index: usize) -> mlua::Result<()> {
         return Ok(());
     };
     actor.set(COMPILE_LAYER_KEY, index)?;
+    if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
+        for wrapper in wrappers.sequence_values::<Value>() {
+            mark_actor_layer(&wrapper?, index)?;
+        }
+    }
     for child in actor.sequence_values::<Value>() {
         mark_actor_layer(&child?, index)?;
     }

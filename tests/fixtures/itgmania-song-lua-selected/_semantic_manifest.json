@@ -1233,8 +1233,8 @@
       "dropped_events": 0,
       "trace_until_beat": 836,
       "runtime_actor_ids": "unique per occurrence",
-      "uncompressed_sha256": "d56bc4ea2aef3f9ec87e291466e134e1e6e6925b094a7b5f0443f8dc2bc7b503",
-      "semantic_host_sha256": "c8177bd08168affde567445f0dd42f7432bc5c0cf774dfdcc32b05f865d1a047",
+      "uncompressed_sha256": "422da087837313cd4dd9fd5986eb81676f153f19ca9ed8b7a01092fbf9c6c508",
+      "semantic_host_sha256": "961051344cc6b9fd28987025a99fa21568265444e7c38e8e367dfa38cb7a7c3e",
       "reference_theme": {
         "name": "Simply Love",
         "metrics_source": "Simply-Love-SM5-8ms-iamchris4life/metrics.ini",
@@ -1245,7 +1245,8 @@
         },
         "correction": "Replace the semantic host's missing-metric zero fallback."
       },
-      "geometry_fit_correction": "Apply zoomtowidth/zoomtoheight to destination zoom axes; retain unzoomed dimensions."
+      "geometry_fit_correction": "Apply zoomtowidth/zoomtoheight to destination zoom axes; retain unzoomed dimensions.",
+      "wrapper_correction": "Return the created AddWrapperState actor; compose highest-index wrappers first and inherit wrapper visibility/alpha."
     }
   ]
 }

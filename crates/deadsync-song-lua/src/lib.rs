@@ -1903,6 +1903,8 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
 pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     Actor,
     ActorFrame,
+    /// Independently animated outer state added by Actor:AddWrapperState.
+    WrapperState,
     UpdateTracks {
         tracks: Vec<SongLuaOverlayRuntimeUpdateTrack>,
     },
