@@ -1,0 +1,9 @@
+#TITLE:Late pulse;
+#BPMS:0=120;
+#FGCHANGES:0=late-pulse.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+;

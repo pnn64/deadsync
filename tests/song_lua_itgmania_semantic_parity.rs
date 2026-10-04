@@ -6490,6 +6490,9 @@ fn motion_native_draws() {
 fn native_effect_draws(stem: &str) -> (usize, usize) {
     use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
     crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
     let trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
         "tests/fixtures/itgmania-song-lua-micro/{stem}.json.zst"
@@ -6582,6 +6585,43 @@ fn rendered_quad_corners(
 ) -> Vec<[f32; 2]> {
     let mut actual = Vec::new();
     for op in &frame.ops {
+        if let deadlib_present::render::DrawOp::Sprite(run) = op {
+            let camera = deadsync_song_lua::playback::actor_conformance::matrix_rows(
+                frame.cameras[usize::from(run.camera)],
+            );
+            for instance in &frame.sprite_instances[run.instance_start as usize..]
+                [..run.instance_count as usize]
+            {
+                let [s, c] = instance.rot_sin_cos;
+                let [os, oc] = instance.local_offset_rot_sin_cos;
+                let [ox, oy] = instance.local_offset;
+                // Read the instanced quad using the sprite vertex shader's pose.
+                for [x, y] in [
+                    [-0.5, -0.5],
+                    [0.5, -0.5],
+                    [0.5, 0.5],
+                    [-0.5, -0.5],
+                    [0.5, 0.5],
+                    [-0.5, 0.5],
+                ] {
+                    let [x, y] = [x * instance.size[0], y * instance.size[1]];
+                    let clip = deadsync_song_lua::playback::actor_conformance::project_world(
+                        camera,
+                        [
+                            instance.center[0] + (c * x - s * y) + (oc * ox - os * oy),
+                            instance.center[1] + (s * x + c * y) + (os * ox + oc * oy),
+                            instance.center[2],
+                            1.0,
+                        ],
+                    );
+                    actual.push([
+                        (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+                        (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+                    ]);
+                }
+            }
+            continue;
+        }
         let deadlib_present::render::DrawOp::TexturedMesh(run) = op else {
             panic!("unexpected draw")
         };
@@ -6680,4 +6720,11 @@ fn pulse_driver_native_draws() {
     }
     eprintln!("pulse driver rendered {checked} native corners");
     assert_eq!(checked, 360);
+}
+
+#[test]
+fn late_pulse_native_draws() {
+    let (checks, corners) = native_effect_draws("late-pulse");
+    eprintln!("late pulse: {checks} semantic checks, {corners} rendered native corners");
+    assert_eq!((checks, corners), (2210, 3368));
 }

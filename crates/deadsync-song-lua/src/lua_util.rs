@@ -4328,12 +4328,13 @@ pub fn set_actor_effect_defaults(
         && (mode == "bounce"
             || previous.as_deref() != Some(mode)
             || (mode == "bob" && period.is_some_and(|value| value != previous_period)));
-    if motion {
+    if motion || mode == "pulse" {
         let clock =
             if let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? {
                 clock
             } else {
                 let clock = lua.create_table()?;
+                clock.set("units", 0.0_f32)?;
                 actor.raw_set("__songlua_state_motion_clock", clock.clone())?;
                 clock
             };
@@ -9963,9 +9964,16 @@ fn clear_spin_queue(actor: &Table, finish: bool) -> mlua::Result<()> {
 }
 
 fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
-    let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
-        return Ok(());
-    };
+    // Native Actor advances its timer before any effect has been selected.
+    // Retain that history so a later pulse keeps the actor's existing phase.
+    let clock =
+        if let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? {
+            clock
+        } else {
+            let clock = lua.create_table()?;
+            actor.raw_set("__songlua_state_motion_clock", clock.clone())?;
+            clock
+        };
     let previous = clock.get::<Option<f32>>("units")?.unwrap_or(0.0);
     let timer = actor
         .raw_get::<Option<bool>>("__songlua_state_effect_timer")?
@@ -10003,6 +10011,14 @@ pub(crate) fn motion_render_phase(
     actor: &Table,
     frame_clock: [f32; 2],
 ) -> mlua::Result<Option<f32>> {
+    if !matches!(
+        actor
+            .raw_get::<Option<String>>("__songlua_state_effect_mode")?
+            .as_deref(),
+        Some("bob" | "bounce" | "wag" | "pulse")
+    ) {
+        return Ok(None);
+    }
     let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
         return Ok(None);
     };

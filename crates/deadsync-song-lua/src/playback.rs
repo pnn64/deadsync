@@ -945,7 +945,10 @@ fn song_lua_order_source<S>(overlays: &[SongLuaOverlayActor<S>], mut index: usiz
     // Wrappers are states of that child, not siblings with their own draw order.
     while matches!(overlays[index].kind, SongLuaOverlayKind::WrapperState) {
         let next = index + 1;
-        if !overlays.get(next).is_some_and(|actor| actor.parent_index == Some(index)) {
+        if !overlays
+            .get(next)
+            .is_some_and(|actor| actor.parent_index == Some(index))
+        {
             break;
         }
         index = next;
@@ -5027,14 +5030,19 @@ fn song_lua_build_local_proxy_actor<S: NoteskinSlot + Clone>(
     // ITG ActorProxy::DrawPrimitives temporarily unhides its target for the
     // proxied draw, then restores the target's hidden state.
     target_state.visible = true;
-    if matches!(overlays[target_index].kind, SongLuaOverlayKind::WrapperState) {
+    if matches!(
+        overlays[target_index].kind,
+        SongLuaOverlayKind::WrapperState
+    ) {
         // A native wrapper ActorFrame has no draw children of its own.
         return None;
     }
     let mut parent = overlays[target_index].parent_index;
     while let Some(index) = parent {
         let wrapper = &overlays[index];
-        if !matches!(wrapper.kind, SongLuaOverlayKind::WrapperState) { break; }
+        if !matches!(wrapper.kind, SongLuaOverlayKind::WrapperState) {
+            break;
+        }
         target_state = song_lua_overlay_compose_state(
             &wrapper.kind,
             local_overlay_states[index],
@@ -6262,7 +6270,12 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
         color1: state.effect_color1,
         color2: state.effect_color2,
         period,
-        offset: state.effect_offset,
+        offset: state.effect_offset
+            - if state.effect_mode == deadlib_present::anim::EffectMode::Pulse {
+                state.effect_phase
+            } else {
+                0.0
+            },
         timing: state
             .effect_timing
             .unwrap_or([period * 0.5, 0.0, period * 0.5, 0.0, 0.0]),
