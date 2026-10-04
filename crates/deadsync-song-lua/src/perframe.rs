@@ -1833,6 +1833,7 @@ fn set_overlay_state_update_value(
 #[derive(Default)]
 struct OverlaySampleScratch {
     completed: Vec<SongLuaScheduledOverlaySample>,
+    blocked_actors: Vec<bool>,
     reset_indices: Vec<usize>,
     stopped_indices: Vec<usize>,
     captured_tracks: Vec<bool>,
@@ -1859,7 +1860,7 @@ fn retarget_actor_tween(
         return None;
     }
     let pending = scheduled.iter().rposition(|sample| {
-        sample.overlay_index == overlay_index && sample.end_seconds > seconds + 0.000_000_1
+        sample.overlay_index == overlay_index && sample.end_seconds > seconds
     })?;
     let (start, end) = (
         scheduled[pending].start_seconds,
@@ -1875,7 +1876,7 @@ fn retarget_actor_tween(
                     .dispatch_seconds
                     .is_none_or(|dispatch| dispatch <= seconds + 1.0e-7)
                 && sample.start_seconds <= seconds + f64::from(sample.frame_advance)
-                && sample.end_seconds > seconds + 0.000_000_1
+                && sample.end_seconds > seconds
         })
         .map_or_else(
             || overlay_state_update_value(current, target),
@@ -2083,13 +2084,22 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
         .is_some()
     {
         scratch.completed.clear();
+        scratch.blocked_actors.resize(overlays.len(), false);
+        scratch.blocked_actors.fill(false);
         scratch
             .completed
             .extend(scheduled_samples.extract_if(.., |sample| {
-                sample
+                // A later zero-time state cannot pass its pending actor tween
+                // when cursor rounding puts that state's endpoint first.
+                if scratch.blocked_actors[sample.overlay_index] {
+                    return false;
+                }
+                let complete = sample
                     .dispatch_seconds
                     .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
-                    && sample.end_seconds <= next_seconds + f64::from(sample.frame_advance) + 1.0e-7
+                    && sample.end_seconds <= next_seconds + f64::from(sample.frame_advance);
+                scratch.blocked_actors[sample.overlay_index] = !complete;
+                complete
             }));
         // Actor queues are captured in enqueue order. Rounded cursor times
         // can put a trailing zero-time state just before its preceding tween;
@@ -2553,7 +2563,7 @@ fn merge_completed_scheduled_overlay_samples_into(
     // The common case where none have completed does not allocate or move them.
     // Beats do not advance during a pause. Actor delays and tweens still do.
     completed.extend(scheduled.extract_if(.., |sample| {
-        sample.end_seconds <= seconds + 0.000_000_1
+        sample.end_seconds <= seconds
             && sample
                 .dispatch_seconds
                 .is_none_or(|dispatch| dispatch <= seconds + 1.0e-7)

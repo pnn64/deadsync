@@ -6728,3 +6728,120 @@ fn late_pulse_native_draws() {
     eprintln!("late pulse: {checks} semantic checks, {corners} rendered native corners");
     assert_eq!((checks, corners), (2210, 3368));
 }
+
+#[test]
+fn effect_switch_native_draws() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let screen = [854.0, 480.0];
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        screen[0], screen[1],
+    ));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/effect-switch.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/effect-switch.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("effect switch"));
+    parity.assert_complete("effect switch");
+    let native: Value = serde_json::from_reader(
+        zstd::stream::read::Decoder::new(
+            fs::File::open(
+                root.join("tests/fixtures/itgmania-song-lua-micro/effect-switch-native.json.zst"),
+            )
+            .unwrap(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let layer = &compiled[primary];
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let (mut selectors, mut corners, mut colors) = (0, 0, 0);
+    for sample in native["samples"].as_array().unwrap() {
+        let seconds = sample["time"].as_f64().unwrap() as f32;
+        let beat = seconds * 2.0;
+        let states = compiled_overlay_states_at(layer, &context, beat, seconds);
+        for actor in sample["actors"].as_array().unwrap() {
+            let Some(index) = layer
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == actor["name"].as_str())
+            else {
+                continue;
+            };
+            let mut local = compiled_command_state_at(&context, layer, index, beat, seconds);
+            apply_runtime_updates(&context, layer, index, beat, seconds, &mut local);
+            let mode = actor["effect"]["type"].as_str().unwrap();
+            assert_eq!(
+                local.vibrate,
+                mode == "vibrate",
+                "{} at {seconds}",
+                actor["name"]
+            );
+            assert_eq!(
+                local.rainbow,
+                mode == "rainbow",
+                "{} at {seconds}",
+                actor["name"]
+            );
+            assert_eq!(
+                local.effect_mode,
+                deadsync_song_lua::parse_overlay_effect_mode(mode).unwrap_or(EffectMode::None),
+                "{} at {seconds}",
+                actor["name"]
+            );
+            selectors += 3;
+            if actor["draws"].as_array().unwrap().is_empty()
+                || states[index].vibrate
+                || states[index]
+                    .inherited_vibrate
+                    .iter()
+                    .any(|value| *value != 0.0)
+            {
+                continue;
+            }
+            let frame =
+                composer.render_overlay(&layer.overlays, &states, index, screen, seconds, beat);
+            let actual = rendered_quad_corners(&frame, screen);
+            let vertices = actor["draws"][0]["vertices"].as_array().unwrap();
+            assert_eq!(actual.len(), 6);
+            for vertex in vertices {
+                let expected = [
+                    value_f32(vertex["screen"].get(0)).unwrap(),
+                    value_f32(vertex["screen"].get(1)).unwrap(),
+                ];
+                assert!(
+                    actual.iter().any(|v| (v[0] - expected[0]).abs() <= 0.75
+                        && (v[1] - expected[1]).abs() <= 0.75),
+                    "{} at {seconds}: {expected:?} vs {actual:?}",
+                    actor["name"]
+                );
+                corners += 1;
+            }
+            for instance in &frame.sprite_instances {
+                for (channel, actual) in instance.tint.iter().enumerate() {
+                    let expected = vertices[0]["color"][channel].as_u64().unwrap() as f32 / 255.0;
+                    // Native draw colors are stored as bytes; allow one quantization step.
+                    assert!(
+                        (actual - expected).abs() <= 1.0 / 255.0 + 0.00001,
+                        "{} at {seconds} channel {channel}: {expected} vs {actual}",
+                        actor["name"]
+                    );
+                    colors += 1;
+                }
+            }
+        }
+    }
+    eprintln!(
+        "effect switch: {} semantic, {selectors} selectors, {corners} corners, {colors} draw colors",
+        parity.checks()
+    );
+    assert_eq!(
+        (parity.checks(), selectors, corners, colors),
+        (950, 2169, 1448, 1448)
+    );
+}

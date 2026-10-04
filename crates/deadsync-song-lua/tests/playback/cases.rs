@@ -1702,10 +1702,13 @@ fn delayed_foreground_hide_skips_layer_and_survives_seek() {
         assert_eq!(!actors.is_empty(), visible, "time={now}");
         assert!(targets.is_empty());
         if visible {
-            assert!(actors.iter().any(|actor| matches!(actor,
-                Actor::Sprite { offset, tint, .. }
-                    if *offset == [262.0, 242.0] && (tint[3] - 0.6).abs() < 0.0001
-            )), "foreground transform and tint at time={now}");
+            assert!(
+                actors.iter().any(|actor| matches!(actor,
+                    Actor::Sprite { offset, tint, .. }
+                        if *offset == [262.0, 242.0] && (tint[3] - 0.6).abs() < 0.0001
+                )),
+                "foreground transform and tint at time={now}"
+            );
         }
         if !visible {
             assert!(order.is_empty());
@@ -1758,8 +1761,13 @@ fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
 #[test]
 fn song_lua_wrappers_preserve_owner_draw_order() {
     let actor = |kind, parent, draw_order| SongLuaOverlayActor {
-        kind, name: None, parent_index: parent,
-        initial_state: SongLuaOverlayState { draw_order, ..Default::default() },
+        kind,
+        name: None,
+        parent_index: parent,
+        initial_state: SongLuaOverlayState {
+            draw_order,
+            ..Default::default()
+        },
         message_commands: Vec::new(),
     };
     let mut overlays = vec![
@@ -1768,24 +1776,35 @@ fn song_lua_wrappers_preserve_owner_draw_order() {
         actor(SongLuaOverlayKind::Quad, Some(1), -1),
         actor(SongLuaOverlayKind::Quad, None, 0),
     ];
-    overlays[2].message_commands.push(deadsync_song_lua::SongLuaOverlayMessageCommand {
-        frame_advance: 0.0, message: "Reorder".into(), aux: None,
-        blocks: vec![deadsync_song_lua::SongLuaOverlayCommandBlock {
-            queued: false, start: 0.0, duration: 0.0, easing: None,
-            opt1: None, opt2: None,
-            delta: SongLuaOverlayStateDelta { draw_order: Some(2), ..Default::default() },
-        }],
-    });
+    overlays[2]
+        .message_commands
+        .push(deadsync_song_lua::SongLuaOverlayMessageCommand {
+            frame_advance: 0.0,
+            message: "Reorder".into(),
+            aux: None,
+            blocks: vec![deadsync_song_lua::SongLuaOverlayCommandBlock {
+                queued: false,
+                start: 0.0,
+                duration: 0.0,
+                easing: None,
+                opt1: None,
+                opt2: None,
+                delta: SongLuaOverlayStateDelta {
+                    draw_order: Some(2),
+                    ..Default::default()
+                },
+            }],
+        });
     let mut cache = song_lua_overlay_order_cache_from(&overlays, &[]);
-    assert_eq!(cache.child_lists[0], [0,3]);
+    assert_eq!(cache.child_lists[0], [0, 3]);
     assert!(cache.dynamic_draw_order[0]);
     let mut states = overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>();
     states[2].draw_order = 2;
     song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut Vec::new());
-    assert_eq!(cache.child_lists[0], [3,0]);
+    assert_eq!(cache.child_lists[0], [3, 0]);
     states[2].draw_order = -1;
     song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut Vec::new());
-    assert_eq!(cache.child_lists[0], [0,3]);
+    assert_eq!(cache.child_lists[0], [0, 3]);
 }
 
 #[test]
@@ -1794,7 +1813,10 @@ fn song_lua_proxy_preserves_target_wrappers() {
         640.0, 480.0,
     ));
     let actor = |kind, parent, state| SongLuaOverlayActor {
-        kind, name: None, parent_index: parent, initial_state: state,
+        kind,
+        name: None,
+        parent_index: parent,
+        initial_state: state,
         message_commands: Vec::new(),
     };
     let overlays = vec![
@@ -1822,7 +1844,7 @@ fn song_lua_proxy_preserves_target_wrappers() {
         ),
     ];
     let local = overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>();
-    let composed = song_lua_overlay_states_from_local(&overlays, &local, 640.0,480.0);
+    let composed = song_lua_overlay_states_from_local(&overlays, &local, 640.0, 480.0);
     let order = song_lua_overlay_order_cache_from(&overlays, &[]);
     let topology = SongLuaOverlayTopologyIndex::new(&overlays);
     let assets = AssetManager::new();
@@ -1864,7 +1886,10 @@ fn song_lua_proxy_preserves_target_wrappers() {
     );
     let mut hidden = local;
     hidden[0].visible = false;
-    assert!(build(1, &hidden).is_none(), "proxy unhides the owner but preserves wrapper visibility");
+    assert!(
+        build(1, &hidden).is_none(),
+        "proxy unhides the owner but preserves wrapper visibility"
+    );
 }
 
 #[test]
@@ -7393,7 +7418,9 @@ fn song_lua_quad_applies_rainbow_tint_at_runtime() {
     match actor {
         Actor::Sprite { tint, z, .. } => {
             assert_eq!(z, 779);
-            assert_eq!(tint, [0.0, 1.0, 1.0, 1.0]);
+            for (actual, native) in tint.into_iter().zip([1.0, 0.25, 0.25, 1.0]) {
+                assert!((actual - native).abs() < 0.000_001);
+            }
         }
         other => panic!("expected rainbow sprite-backed quad, got {other:?}"),
     }

@@ -6271,7 +6271,7 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
         color2: state.effect_color2,
         period,
         offset: state.effect_offset
-            - if state.effect_mode == deadlib_present::anim::EffectMode::Pulse {
+            - if state.effect_mode == deadlib_present::anim::EffectMode::Pulse || state.rainbow {
                 state.effect_phase
             } else {
                 0.0
@@ -6561,10 +6561,14 @@ fn song_lua_apply_overlay_effect(
         }
     }
     if rainbow {
-        let color = song_lua_rainbow_color(effect_time, effect.period, effect.offset);
-        tint[0] *= color[0];
-        tint[1] *= color[1];
-        tint[2] *= color[2];
+        let rainbow_effect = EffectState {
+            mode: deadlib_present::anim::EffectMode::DiffuseShift,
+            ..effect
+        };
+        if let Some(percent) = song_lua_effect_percent(rainbow_effect, [effect_time, effect_beat]) {
+            let color = song_lua_rainbow_color(percent);
+            tint[..3].copy_from_slice(&color);
+        }
     }
     offset[0] = offset[0].max(-1_000_000.0).min(1_000_000.0);
     offset[1] = offset[1].max(-1_000_000.0).min(1_000_000.0);
@@ -6600,23 +6604,14 @@ fn song_lua_overlay_vibrate_magnitude(state: SongLuaOverlayState) -> [f32; 3] {
     ]
 }
 
-fn song_lua_rainbow_color(time: f32, period: f32, offset: f32) -> [f32; 3] {
-    let hue = ((time + offset) / period.max(f32::EPSILON)).rem_euclid(1.0);
-    let h = hue * 6.0;
-    let x = 1.0 - (h.rem_euclid(2.0) - 1.0).abs();
-    if h < 1.0 {
-        [1.0, x, 0.0]
-    } else if h < 2.0 {
-        [x, 1.0, 0.0]
-    } else if h < 3.0 {
-        [0.0, 1.0, x]
-    } else if h < 4.0 {
-        [0.0, x, 1.0]
-    } else if h < 5.0 {
-        [x, 0.0, 1.0]
-    } else {
-        [1.0, 0.0, x]
-    }
+fn song_lua_rainbow_color(percent: f32) -> [f32; 3] {
+    let between = ((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() / 2.0 + 0.5;
+    std::array::from_fn(|axis| {
+        (between * 2.0 * std::f32::consts::PI + std::f32::consts::PI * (axis * 2) as f32 / 3.0)
+            .cos()
+            * 0.5
+            + 0.5
+    })
 }
 
 const SONG_LUA_TEXT_RAINBOW_COLORS: [[f32; 4]; 7] = [

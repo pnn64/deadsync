@@ -4290,7 +4290,19 @@ pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlu
 }
 
 pub fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Result<()> {
-    capture_immediate_string(lua, actor, "effect_mode", mode)
+    // Actor owns one effect selector; the separate render flags are aliases.
+    capture_immediate_bool(lua, actor, "vibrate", mode == "vibrate")?;
+    capture_immediate_bool(lua, actor, "rainbow", mode == "rainbow")?;
+    capture_immediate_string(
+        lua,
+        actor,
+        "effect_mode",
+        if matches!(mode, "vibrate" | "rainbow") {
+            "none"
+        } else {
+            mode
+        },
+    )
 }
 
 fn capture_effect_period(lua: &Lua, actor: &Table, period: f32) -> mlua::Result<()> {
@@ -4324,11 +4336,15 @@ pub fn set_actor_effect_defaults(
         .raw_get::<Option<f32>>("__songlua_state_effect_period")?
         .unwrap_or(1.0);
     let motion = matches!(mode, "bob" | "bounce" | "wag");
-    let reset = motion
+    let reset = (motion
         && (mode == "bounce"
             || previous.as_deref() != Some(mode)
-            || (mode == "bob" && period.is_some_and(|value| value != previous_period)));
-    if motion || mode == "pulse" {
+            || (mode == "bob" && period.is_some_and(|value| value != previous_period))))
+        || (mode == "rainbow"
+            && !actor
+                .raw_get::<Option<bool>>("__songlua_state_rainbow")?
+                .unwrap_or(false));
+    if motion || matches!(mode, "pulse" | "rainbow") {
         let clock =
             if let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? {
                 clock
@@ -7999,7 +8015,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         lua.create_function({
             let actor = actor.clone();
             move |lua, _self: Option<Value>| {
-                capture_immediate_bool(lua, &actor, "vibrate", true)?;
+                set_actor_effect_mode(lua, &actor, "vibrate")?;
                 capture_immediate_vec3(lua, &actor, "effect_magnitude", [10.0, 10.0, 10.0])?;
                 Ok(actor.clone())
             }
@@ -8010,8 +8026,6 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                capture_immediate_bool(lua, &actor, "vibrate", false)?;
-                capture_immediate_bool(lua, &actor, "rainbow", false)?;
                 set_actor_effect_mode(lua, &actor, "none")?;
                 Ok(actor.clone())
             }
@@ -8148,12 +8162,8 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "rainbow",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let enabled = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_boolish)
-                    .unwrap_or(true);
-                capture_block_set_bool(lua, &actor, "rainbow", enabled)?;
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(lua, &actor, "rainbow", Some(2.0), None, None, None)?;
                 Ok(actor.clone())
             }
         })?,
@@ -10011,12 +10021,16 @@ pub(crate) fn motion_render_phase(
     actor: &Table,
     frame_clock: [f32; 2],
 ) -> mlua::Result<Option<f32>> {
-    if !matches!(
-        actor
-            .raw_get::<Option<String>>("__songlua_state_effect_mode")?
-            .as_deref(),
-        Some("bob" | "bounce" | "wag" | "pulse")
-    ) {
+    if !actor
+        .raw_get::<Option<bool>>("__songlua_state_rainbow")?
+        .unwrap_or(false)
+        && !matches!(
+            actor
+                .raw_get::<Option<String>>("__songlua_state_effect_mode")?
+                .as_deref(),
+            Some("bob" | "bounce" | "wag" | "pulse")
+        )
+    {
         return Ok(None);
     }
     let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
