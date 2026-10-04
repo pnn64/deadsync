@@ -5175,6 +5175,7 @@ fn clear_actor_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     }
     actor.set("__songlua_recurring_update_command", Value::Nil)?;
     actor.set("__songlua_recurring_update_time_left", Value::Nil)?;
+    actor.set("__songlua_startup_queue_seconds", Value::Nil)?;
     invalidate_compile_update_plan(lua);
     Ok(())
 }
@@ -5271,7 +5272,7 @@ pub fn make_actor_tween_method(
             .unwrap_or(0.0)
             .max(0.0);
         queue_spin_tween(lua, &actor, exact_duration, easing)?;
-        if let Some(delay) = record_queue_step(lua, &actor, Some(exact_duration)) {
+        if let Some(delay) = record_queue_step(lua, &actor, Some(exact_duration))? {
             cursor = delay;
             actor.set("__songlua_capture_cursor", cursor)?;
         }
@@ -5419,10 +5420,10 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     .and_then(read_f64)
                     .unwrap_or(0.0)
                     .max(0.0);
-                let delay = record_queue_step(lua, &actor, Some(exact_duration));
+                let delay = record_queue_step(lua, &actor, Some(exact_duration))?;
                 queue_spin_tween(lua, &actor, exact_duration, Some("linear"))?;
                 queue_spin_tween(lua, &actor, 0.0, Some("linear"))?;
-                record_queue_step(lua, &actor, Some(0.0));
+                record_queue_step(lua, &actor, Some(0.0))?;
                 let duration = duration.and_then(read_f32).unwrap_or(0.0).max(0.0);
                 let cursor = actor
                     .get::<Option<f32>>("__songlua_capture_cursor")?
@@ -5530,12 +5531,27 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                         .unwrap_or_else(|| f64::from((cursor - start).max(0.0)));
                     if interval > f64::EPSILON {
                         actor.set("__songlua_recurring_update_interval", interval)?;
+                        if lua.app_data_ref::<SongLuaCompileFrames>().is_none()
+                            && actor
+                                .get::<Option<f64>>("__songlua_recurring_update_time_left")?
+                                .is_none()
+                        {
+                            // Startup capture has already run the first queued
+                            // callback. Its next deadline includes the delay
+                            // before that callback, not just the new interval.
+                            actor.set(
+                                "__songlua_recurring_update_time_left",
+                                actor
+                                    .get::<Option<f64>>("__songlua_startup_queue_seconds")?
+                                    .unwrap_or_else(|| f64::from(start.max(0.0)) + interval),
+                            )?;
+                        }
                     }
                     return Ok(actor.clone());
                 }
                 // QueueCommand appends a zero-duration state after the active tween.
                 flush_actor_capture(&actor)?;
-                record_queue_step(lua, &actor, None);
+                record_queue_step(lua, &actor, None)?;
                 let queue = actor_command_queue(lua, &actor)?;
                 let index = queue.raw_len() + 1;
                 {
@@ -9260,12 +9276,24 @@ fn advance_queue_clock(
     }
 }
 
-fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> Option<f32> {
+fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::Result<Option<f32>> {
+    // Queue creation spans startup and replay; retain its clock and dispatch
+    // tail together so changing phases cannot advance the same time twice.
+    if lua.app_data_ref::<SongLuaCompileFrames>().is_none()
+        && let Some(duration) = duration
+    {
+        // Keep startup queue time at the same precision as replay clocks.
+        // Summing the render cursor's f32 values can move a frame boundary.
+        let seconds = actor
+            .get::<Option<f64>>("__songlua_startup_queue_seconds")?
+            .unwrap_or(0.0);
+        actor.set("__songlua_startup_queue_seconds", seconds + duration)?;
+    }
     if !lua
         .app_data_ref::<SongLuaCompileUpdatePhase>()
         .is_some_and(|phase| phase.active)
     {
-        return None;
+        return Ok(None);
     }
     let actor = actor.to_pointer() as usize;
     let scope = lua
@@ -9277,7 +9305,9 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> Option<
     let later = queue_actor_order(lua, actor) > phase.order;
     let owner_later = scope
         .is_some_and(|scope| queue_actor_order(lua, actor) > queue_actor_order(lua, scope.actor));
-    let mut frames = lua.app_data_mut::<SongLuaCompileFrames>()?;
+    let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() else {
+        return Ok(None);
+    };
     let (frame, remaining) = scope
         .and_then(|scope| {
             scope.time.map(|(frame, remaining)| {
@@ -9327,7 +9357,7 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> Option<
     });
     clock.steps.push_back(duration);
     frames.clocks.insert(actor, clock);
-    delay
+    Ok(delay)
 }
 
 fn drain_queue_clock(lua: &Lua, actor: &Table) -> Option<(usize, f64)> {
@@ -13752,6 +13782,7 @@ pub fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
 
 pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set("__songlua_capture_cursor", 0.0_f32)?;
+    actor.set("__songlua_startup_queue_seconds", Value::Nil)?;
     actor.set("__songlua_capture_duration", 0.0_f32)?;
     actor.set("__songlua_capture_tween_time_left", 0.0_f32)?;
     actor.set("__songlua_capture_easing", Value::Nil)?;
@@ -13807,6 +13838,9 @@ pub fn hurry_actor_tweening(actor: &Table, factor: f32) -> mlua::Result<()> {
     }
     flush_actor_capture(actor)?;
     let scale = factor.recip();
+    if let Some(seconds) = actor.get::<Option<f64>>("__songlua_startup_queue_seconds")? {
+        actor.set("__songlua_startup_queue_seconds", seconds * f64::from(scale))?;
+    }
     if let Some(blocks) = actor.get::<Option<Table>>("__songlua_capture_blocks")? {
         for block in blocks.sequence_values::<Table>() {
             let block = block?;

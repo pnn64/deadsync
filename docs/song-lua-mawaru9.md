@@ -66,6 +66,9 @@ Challenge, description `TaroNuke`.
   that finishes without self-queuing stops; its finite tween tail still runs.
 - Pre-queue snapshots retain untouched siblings until the initial getter
   callback runs, preventing copied queued state from appearing at beat zero.
+- A recurring command's first replay deadline includes its initial queued
+  delay. Startup queue time retains 64-bit precision, and cancellation clears
+  that time before another loop starts.
 
 ## Native reference
 
@@ -198,7 +201,7 @@ contain `allowed/` and `lua-songs/`; use the workspace override for those tests.
 
 ## Complete song audit
 
-With the corrected theme reference: **114,093 / 117,302 checks pass (97.26%)**. The ignored
+After retaining the initial recurring-command delay: **116,578 / 118,890 checks pass (98.06%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -208,12 +211,12 @@ DeadSync comparison.
 | Compile info | 12 / 12 |
 | Layer order | 4 / 4 |
 | Final render | 3,748 / 3,748 |
-| Render persistence | 6,571 / 6,581 |
-| Update values | 23,052 / 23,197 |
+| Render persistence | 6,639 / 6,639 |
+| Update values | 23,159 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 60,813 / 63,862 |
+| Projected geometry | 63,122 / 65,392 |
 | Projected vibration | 19,385 / 19,387 |
-| Timeline | 223 / 224 |
+| Timeline | 224 / 224 |
 | Message commands | 226 / 227 |
 | Runtime modifiers | 46 / 46 |
 
@@ -224,7 +227,7 @@ changing comparator tolerances or omitting checks. The native capture was
 regenerated for the receptor metric correction documented below.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 3,209, with 393 detailed gap reports. Before the affine
+checks are now 2,312, with 160 detailed gap reports. Before the affine
 fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
 geometry checks. The parent-translation pass retained 106,321 passing checks;
 the ancestor-scale pass added another 25 without changing the reference.
@@ -247,11 +250,12 @@ pooled arrows. Investigate their lifecycle and dispatch timing independently.
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
 trigger beat near 87.050. Its state changes are now deferred as well. Remaining
-gaps include Reisen pool writes and visibility, projected sprite bounds, one player
-range, two vibration mismatches near beat 104.012, the `ChanceTime` broadcast near
-beat 540.076 and stateful `TVGrow` target writes.
+gaps include 38 raw writes to stair-scene sprites near beats 274-277, projected sprite
+bounds, one player range, two vibration mismatches near beat 104.012 and
+stateful `TVGrow` target writes. Render persistence and the complete timeline,
+including `ChanceTime`, now pass.
 
-Local detailed audit output: `.tmp/mawaru-receptor-metrics-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-recurring-delay-final-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -564,6 +568,84 @@ seconds**: 248.56 seconds compiling, 49.50 seconds comparing geometry and
 20.58 seconds comparing vibration. All 80 regular semantic tests pass in both
 repositories, including the new 20-check fixture. Fresh selected-corpus
 coverage checks pass in both copies after the reference replacement.
+
+## Initial recurring-command deadline
+
+The main body's `PulseCommand` shares Lua's random generator with Reisen's
+pooled arrows. Its first queue sleeps `30/115` seconds, and subsequent queues
+sleep `60/115`. Startup capture already runs the first queued callback, but
+the recurring runner previously initialized its next deadline with only the
+repeat interval. It now includes the initial delay before that callback.
+This preserves the phase of the shared random sequence without changing
+the random generator or the song.
+
+Queue durations retain 64-bit precision through startup, as they already do
+in frame replay. The first implementation used the render cursor's 32-bit
+sum and regressed 88 getter checks in `recurring-follow`. Preserving the
+exact queue time restores all 874 checks in both follow fixtures. Stop and
+finish discard the accumulated startup time, and hurry scales it with the
+captured queue.
+
+Two portable fixtures reproduce those exact fractional delays at 90 BPM,
+with and without a parent update callback. They record each pulse's count
+and beat, then record random choices after beat one, including repeated
+draws that reject the previous choice. Their On commands first cancel a
+two-second sleep with stop and finish respectively, verifying that a
+discarded queue does not delay the new loop. The native captures fail
+**89/105** checks each before the fix and pass **105/105** after it. Both
+captures have zero errors or dropped events, 281 frames through beat seven,
+and verified exact compression round trips:
+
+- `recurring-delay`: 85,701 bytes to 11,516, decoded SHA256
+  `5e68268434d690f26bf3910c318a41e641f0a988c1d2e61e21cb4e4711685d0d`.
+- `recurring-delay-callback`: 86,455 bytes to 11,590, decoded SHA256
+  `0227ecd1813377b2ba35fe45c1b265da3236f41f688dc623169fb9b8cfbb2cf9`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity recurring_initial_delay_matches_native -- --exact --nocapture
+```
+
+A temporary copy of the original song also records random-call counts and
+results through beat 162.976. An intermediate replay matches all 192 positive
+native frames, including Reisen's arrow selection. The first random-driven
+pulse now runs at beat 1.175, matching native, instead of beat 1.575.
+The startup pulse itself still lacks a replay sample at native beat 0.4 in
+this diagnostic; the later 159 pulse samples match. This was a bounded
+diagnostic replay, not a substitute for the full parity comparison. Its
+temporary test instrumentation was removed from the source.
+
+The 0.5.1723 full audit uses the same native reference as 0.5.1722 and passes
+**116,578/118,890**. The failing-check count decreases by 897, from 3,209 to
+2,312; detailed gap reports decrease from 393 to 160. All persistence checks
+and the `ChanceTime` timeline check now pass. Raw update failures decrease
+from 145 to 38. Geometry has 2,270 failures, down from 3,049.
+
+The denominator increases by 1,588: 58 persistence checks and 1,530 geometry
+checks. Those comparators depend on active update tracks and visibility in
+both engines. Correcting the random sequence changes those states, so the
+897 fewer failures are not 897 identical comparisons newly passing. The
+native capture and all comparison tolerances remain unchanged.
+
+The final debug audit took **418.56 seconds**, including 334.16 seconds
+compiling, 53.34 seconds comparing geometry and 22.32 seconds comparing
+vibration. These are audit timings, not gameplay performance measurements.
+The intermediate 355.31-second audit had identical comparator tallies;
+the final audit reruns the precision and cancellation corrections too.
+
+All 962 Lua/profile tests and all 81 regular semantic tests pass in both
+repositories. The new regular regression retains 210 independent native
+comparisons, including stop/finish cancellation; both existing follow
+fixtures still pass their 1,748 comparisons. Before resetting the exact
+startup clock on finish, the cancellation fixture failed 73/105 checks.
+
+The next raw-write reproduction is the stair scene's `UpdateCommand` in
+`lua/sbahj/default.lua`, line 72. The first mismatch moves both brother
+sprites to Y=167.8 instead of native Y=193 at beat 274.289. Later random
+rotation and base-zoom writes diverge near beat 275.753. Check the first
+collision's getter state and branch before diagnosing those later random
+values. The separate player-range failure is P2 X: native [503.059, 773.938]
+versus DeadSync [0.000, 745.438]. The remaining message report is Aya's
+`TVGrowMessageCommand` in `lua/default.lua`, lines 2356-2357.
 
 ## Project scope
 

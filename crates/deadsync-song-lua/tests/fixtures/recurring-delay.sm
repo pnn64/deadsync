@@ -1,0 +1,14 @@
+#TITLE:recurring-delay;
+#BPMS:0=90;
+#BGCHANGES:0=recurring-delay.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+;
