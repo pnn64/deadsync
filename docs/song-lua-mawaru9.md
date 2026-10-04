@@ -1284,10 +1284,118 @@ geometry needs a dedicated production-renderer comparison and reference
 correction. Passing the present comparators will therefore not close the
 63-chart goal by itself. The full project remains active.
 
+## Pulse transforms and native clocks (0.5.1733)
+
+The previous passing reference recorded Pulse descriptors while leaving
+Pulse transforms out of the projected vertices. Native Actor::PreDraw
+scales each axis by the pulse zoom and its RGB color control. The harness
+now uses that native function, with float inputs, instead of keeping the
+base zoom for effect geometry. Scalar and table effect-color arguments
+are both decoded with native color conversion. EffectTiming also retains
+the native Lua argument order: hold-at-zero fourth, optional hold-at-full
+fifth; hold-at-full updates preserve the other intervals.
+
+The first complete regenerated capture exposed a separate harness clock
+error. It treated effectclock("bgm") as seconds. Native Actor.cpp maps bgm
+to CLOCK_BGM_BEAT, while music selects CLOCK_BGM_TIME. DeadSync already
+used the correct beat clock. The wrong clock produced 93 projected gap
+reports in the temporary reference. The final capture uses the native
+alias, so the fix does not retime DeadSync to match that incorrect data.
+
+Production rendering had two transform gaps: a parent or wrapper Pulse
+was omitted from a descendant's transform, and negative pulse scales were
+clamped to zero. Parent composition now applies the parent's own effect
+before positioning/scaling children; the child retains its own effect for
+its normal renderer. The same clocked path is used for AFT children and
+local proxy/wrapper composition. The replaced clamped pulse path is
+removed, and pulse phase/control arithmetic follows native float order.
+Local Lua states retain their base values.
+
+The song-lifetime order plan marks descendants of actors that can pulse
+through initial state, commands, eases or update tracks. Those descendants
+recompose even when no local value changes. The frame update reuses the
+existing preallocated state buffers; it does not rebuild the tree or grow
+the plan. A production frame-state regression exercises forward updates,
+cycle wrap and backward seeks without Lua writes, with unchanged buffer
+capacity and unchanged local actor states.
+
+The portable fixture uses 120 BPM, deliberately separating beat and
+second clocks. It includes a leaf Pulse, a parent Pulse, simultaneous
+parent/child Pulse, a wrapper, RGB axis controls, signed scales and custom
+hold timing. The harness compares 800 native world/screen coordinates.
+DeadSync passes 2,766/2,766 semantic checks and compares 160 native corners
+against the final RenderFrame vertex buffers. It verifies both triangles
+and every native corner, so a missing or collapsed quad cannot pass.
+The test composer warms the white texture used by projected quads, just
+as gameplay does. The previous 0.5.1732 executable fails this fixture.
+The 0.75-pixel drawing tolerance is unchanged.
+
+The decoded pulse-body trace has SHA-256
+`05fa723705814b78763ed733a87529fe3718e27ffeb611e4f5cc11e90c00aa8c`.
+The native Actor drawing fixture has SHA-256
+`ef9bdfb47083b2def3dc747d0345e7524f50b23098db449b782b28c9d6f1acd9`.
+Independent native recaptures reproduce both files byte for byte.
+
+The corrected full capture then exposed a separate production gap: the
+compiler discarded unnamed, default-state plain Actors even when Lua
+held a global reference to them. Mawaru's colorant Actor starts this way
+and later tweens X from zero to 0.05. Dropping it kept GetX() at zero,
+leaving the hospital frame's two pulse colors white. Referenced plain
+Actors now retain their chronological tween capture, just like referenced
+ActorFrames. This closes the final 41 hospital geometry mismatches.
+
+The portable pulse-driver fixture reproduces that runtime tween and its
+per-frame scalar RGB writes. It passes 458/458 semantic comparisons and
+compares all 360 native corners against the actual RenderFrame triangles.
+The executable before the helper-actor fix fails 135 geometry comparisons.
+The fixture's decoded SHA-256 is
+`9712c251e5492cff1bad0fb251cc58bef10c1c64d8a3c401fe5ed6229dcf5b9c`;
+a separate native capture reproduces it byte for byte.
+
+The fresh complete Mawaru capture spans all 836 beats, 17,930 update
+frames, 2,431 runtime actors and 50 loaded Lua files, with zero runtime
+errors and zero dropped events. The frozen semantic host has SHA-256
+`0966ed2e29bc3263dc80ca6cd77e09a8e74180606e73cc55d80e33a50354a148`.
+The decoded full trace has SHA-256
+`993568fcf9e48a7106479596b9a332161a4fdb6fadd1e1adba3e2247812f81d0`.
+Only projected-vertex tracks changed from the 0.5.1732 native snapshot;
+all previous projected sample times remain, with 22,450 new sample times.
+
+The complete audit passes 231,275/231,275 in 469.80 seconds:
+
+| Section | Passed / total |
+| --- | ---: |
+| Compile info | 12 / 12 |
+| Layer order | 4 / 4 |
+| Final render | 3,748 / 3,748 |
+| Render persistence | 6,639 / 6,639 |
+| Update values | 23,197 / 23,197 |
+| Player ranges | 14 / 14 |
+| Projected geometry | 155,216 / 155,216 |
+| Projected vibration | 41,944 / 41,944 |
+| Timeline | 224 / 224 |
+| Message commands | 231 / 231 |
+| Runtime modifiers | 46 / 46 |
+
+The actual song sources remain unchanged. The selected manifest updates
+only Mawaru's entry with the corrected native trace and host hashes.
+
+Both repositories pass 969 Lua/profile checks and all 96 regular semantic
+tests; 71 explicit corpus/native audits remain ignored by that regular
+command. The final harness passes 93 unit and 31 integration tests, with
+one local-corpus startup test ignored. Main receives only the changed
+DeadSync files and exactly one version increment, 0.5.1732 to 0.5.1733,
+including Cargo.toml and Cargo.lock. Rework remains uncommitted.
+
+The all-63-chart goal remains active. Pulse coverage is now grounded in
+native drawing; other deterministic effects and the fresh complete
+project audit still need review.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the
 public project page, captured on 2026-10-03, including chart hashes and pack
 names. Board check counts are historical worklist values, not current proof
-of passing parity. Mawaru9 passes the current semantic comparators; native
-deterministic effect geometry and the overall 63-chart audit remain active.
+of passing parity. Mawaru9 passes the current full semantic and native Pulse
+drawing audit. Other deterministic effects and the overall fresh 63-chart
+audit remain active.

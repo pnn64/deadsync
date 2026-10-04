@@ -95,6 +95,7 @@ fn song_lua_queued_bounce_matches_native_playback() {
                     &mut caches,
                     &mut local,
                     &mut composed,
+                    [0.0; 2],
                 );
                 for (axis, actual) in [local[index].x, local[index].y].into_iter().enumerate() {
                     let expected = sample["position"][axis].as_f64().unwrap() as f32;
@@ -214,6 +215,7 @@ fn song_lua_paused_updates_match_native_playback() {
                     &mut caches,
                     &mut local,
                     &mut composed,
+                    [0.0; 2],
                 );
                 for (axis, actual) in [local[index].x, local[index].y].into_iter().enumerate() {
                     let expected = sample["position"][axis].as_f64().unwrap() as f32;
@@ -354,6 +356,7 @@ fn song_lua_background_fit_and_smooth_match_native_actors() {
             &mut caches,
             &mut local,
             &mut composed,
+            [0.0; 2],
         );
         let expected = native["samples"][sample]["actors"][3]["current"]["diffuse"][0][3]
             .as_f64()
@@ -494,6 +497,7 @@ fn song_lua_deferred_messages_render_each_broadcast_value() {
             &mut caches,
             &mut local,
             &mut composed,
+            [0.0; 2],
         );
         assert!(
             (local[receiver].diffuse[3] - alpha).abs() < 1e-6,
@@ -557,6 +561,7 @@ fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
             &mut local,
             &mut composed,
             [854.0, 480.0],
+            [0.0; 2],
         );
         let effect = song_lua_proxy_effect(composed[0], music, 0.0, 0);
         assert!(
@@ -628,6 +633,7 @@ fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
             &mut local,
             &mut composed,
             [854.0, 480.0],
+            [0.0; 2],
         );
         assert_eq!(local[0].diffuse[3], alpha);
         assert_eq!(composed[0].diffuse[3], alpha);
@@ -745,6 +751,7 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
             &mut caches,
             &mut local,
             &mut composed,
+            [0.0; 2],
         );
     }
 
@@ -1525,6 +1532,7 @@ fn song_lua_empty_overlay_state_clears_reused_outputs() {
         &mut message_caches,
         &mut local_states,
         &mut states,
+        [0.0; 2],
     );
 
     assert!(message_caches.is_empty());
@@ -3354,6 +3362,7 @@ fn song_lua_overlay_center_coords_stay_centered_under_actorframe() {
         child,
         854.0,
         480.0,
+        [0.0; 2],
     );
     assert_eq!(composed.x, 427.0);
     assert_eq!(composed.y, 240.0);
@@ -3373,6 +3382,7 @@ fn song_lua_overlay_root_actorframe_keeps_absolute_center_child() {
         child,
         854.0,
         480.0,
+        [0.0; 2],
     );
     assert_eq!(composed.x, 427.0);
     assert_eq!(composed.y, 240.0);
@@ -3396,6 +3406,7 @@ fn song_lua_overlay_local_offsets_still_compose_from_centered_actorframe() {
         child,
         854.0,
         480.0,
+        [0.0; 2],
     );
     assert_eq!(composed.x, 247.0);
     assert_eq!(composed.y, 240.0);
@@ -3420,6 +3431,7 @@ fn song_lua_overlay_inherits_actorframe_vibration() {
         child,
         854.0,
         480.0,
+        [0.0; 2],
     );
 
     assert_eq!(composed.inherited_vibrate, [23.0, 14.0, 5.0]);
@@ -3441,14 +3453,21 @@ fn song_lua_overlay_nested_center_survives_parent_zoom_and_rotation() {
         rot_z_deg: 67.0,
         ..SongLuaOverlayState::default()
     };
-    let inner =
-        song_lua_overlay_compose_state(&SongLuaOverlayKind::ActorFrame, outer, inner, 854.0, 480.0);
+    let inner = song_lua_overlay_compose_state(
+        &SongLuaOverlayKind::ActorFrame,
+        outer,
+        inner,
+        854.0,
+        480.0,
+        [0.0; 2],
+    );
     let circle = song_lua_overlay_compose_state(
         &SongLuaOverlayKind::ActorFrame,
         inner,
         SongLuaOverlayState::default(),
         854.0,
         480.0,
+        [0.0; 2],
     );
 
     assert!((circle.x - 427.0).abs() <= 0.000_1);
@@ -3736,14 +3755,21 @@ fn song_lua_overlay_nested_rotated_skew_keeps_affine_transform() {
         expected_inner_pos + expected_inner_linear * Vector2::new(sprite.x, sprite.y);
     let expected_linear = expected_inner_linear * song_lua_overlay_linear_2d(sprite);
 
-    let inner =
-        song_lua_overlay_compose_state(&SongLuaOverlayKind::ActorFrame, outer, inner, 854.0, 480.0);
+    let inner = song_lua_overlay_compose_state(
+        &SongLuaOverlayKind::ActorFrame,
+        outer,
+        inner,
+        854.0,
+        480.0,
+        [0.0; 2],
+    );
     let sprite = song_lua_overlay_compose_state(
         &SongLuaOverlayKind::ActorFrame,
         inner,
         sprite,
         854.0,
         480.0,
+        [0.0; 2],
     );
 
     for (actual, expected) in song_lua_overlay_linear_2d(sprite)
@@ -3773,6 +3799,7 @@ fn song_lua_overlay_texture_translate_stacks_from_parent() {
         child,
         854.0,
         480.0,
+        [0.0; 2],
     );
     assert_eq!(composed.texcoord_offset, Some([0.375, 0.25]));
 }
@@ -4617,7 +4644,14 @@ fn song_lua_preloaded_aft_chain_preserves_pixels() {
     deadlib_present::space::set_current_window_px(1600, 900);
     let local: Vec<_> = overlays.iter().map(|a| a.initial_state).collect();
     let mut states = Vec::new();
-    song_lua_overlay_states_from_local_all_into(&overlays, &local, 854.0, 480.0, &mut states);
+    song_lua_overlay_states_from_local_all_into(
+        &overlays,
+        &local,
+        854.0,
+        480.0,
+        &mut states,
+        [0.0; 2],
+    );
     let topology = SongLuaOverlayTopologyIndex::new(&overlays);
     let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
     let mut captures = SongLuaAftCaptureScratch::new(&overlays, &topology);
@@ -6419,6 +6453,7 @@ fn song_lua_multitap_model_preserves_vertical_squash_in_all_lanes() {
                 },
                 854.0,
                 480.0,
+                [0.0; 2],
             );
             let actors = song_lua_noteskin_actor(
                 &slots,
@@ -10073,4 +10108,70 @@ fn prepare_fixture(
         compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
     )
+}
+
+#[test]
+fn parent_pulse_advances_without_local_writes() {
+    let parent = SongLuaOverlayState {
+        x: 100.0,
+        zoom: 2.0,
+        effect_mode: deadlib_present::anim::EffectMode::Pulse,
+        effect_clock: deadlib_present::anim::EffectClock::Beat,
+        effect_period: 2.0,
+        effect_magnitude: [0.5, 1.0, 10.0],
+        ..Default::default()
+    };
+    let child = SongLuaOverlayState {
+        x: 20.0,
+        z: 10.0,
+        zoom: 0.8,
+        ..Default::default()
+    };
+    let overlays: Vec<SongLuaOverlayActor> = vec![
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrame,
+            name: None,
+            parent_index: None,
+            initial_state: parent,
+            message_commands: vec![],
+        },
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: Some(0),
+            initial_state: child,
+            message_commands: vec![],
+        },
+    ];
+    let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+    assert!(order.dynamic_local_indices.is_empty());
+    assert_eq!(order.pulse_descendants.as_ref(), &[1]);
+    let (mut local, mut composed) = song_lua_overlay_initial_state_sets(&overlays, 854.0, 480.0);
+    let mut messages = vec![];
+    let capacity = (local.capacity(), composed.capacity());
+    for (seconds, beat, x, z) in [
+        (10.0, 0.0, 120.0, 10.0),
+        (10.0, 1.0, 140.0, 20.0),
+        (10.0, 2.0, 120.0, 10.0),
+        (3.0, 1.0, 140.0, 20.0),
+    ] {
+        song_lua_overlay_state_sets_active_into(
+            seconds,
+            &overlays,
+            &[],
+            &[],
+            &[],
+            854.0,
+            480.0,
+            &mut order,
+            &mut messages,
+            &mut local,
+            &mut composed,
+            [seconds, beat],
+        );
+        assert_eq!(local, vec![parent, child]);
+        assert_eq!(composed[0], parent);
+        assert_eq!([composed[1].x, composed[1].z], [x, z]);
+        assert_eq!((local.capacity(), composed.capacity()), capacity);
+    }
 }

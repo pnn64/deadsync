@@ -223,11 +223,13 @@ fn check_edgar_model_squash(compiled: &CompiledSongLua, context: &SongLuaCompile
             assert!(local[arrow].rot_x_deg.abs() > f32::EPSILON);
             let squash = local[frame].zoom_y;
             assert!((squash - 1.0).abs() > 0.001);
-            let states = compose_overlay_states(&compiled.overlays, &local, screen);
+            let states =
+                compose_overlay_states(&compiled.overlays, &local, screen, [seconds, beat]);
             let actual =
                 composer.render_overlay(&compiled.overlays, &states, arrow, screen, seconds, beat);
             local[frame].zoom_y = 1.0;
-            let states = compose_overlay_states(&compiled.overlays, &local, screen);
+            let states =
+                compose_overlay_states(&compiled.overlays, &local, screen, [seconds, beat]);
             let baseline =
                 composer.render_overlay(&compiled.overlays, &states, arrow, screen, seconds, beat);
             assert!(
@@ -308,7 +310,7 @@ fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileCon
                     }
                 }
             }
-            let states = compose_overlay_states(&compiled.overlays, &local, screen);
+            let states = compose_overlay_states(&compiled.overlays, &local, screen, [time, beat]);
             let mut passes = Vec::new();
             for index in leaves {
                 let frame =
@@ -385,7 +387,12 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
         !local[count].visible,
         "exercise the last, unnumbered multitap phase"
     );
-    let states = compose_overlay_states(&compiled.overlays, &local, screen);
+    let states = compose_overlay_states(
+        &compiled.overlays,
+        &local,
+        screen,
+        [song_elapsed_seconds_at(beat, context), beat],
+    );
     let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[arrow].kind else {
         panic!("compiled multitap must retain its actual noteskin model");
     };
@@ -974,7 +981,12 @@ return Def.ActorFrame{
                 song_elapsed_seconds_at(beat, &context),
             );
             assert_eq!(local[frame].visible, visible, "beat {beat}");
-            let composed = compose_overlay_states(&compiled.overlays, &local, [854.0, 480.0]);
+            let composed = compose_overlay_states(
+                &compiled.overlays,
+                &local,
+                [854.0, 480.0],
+                [song_elapsed_seconds_at(beat, &context), beat],
+            );
             for &index in &explosion_sprites {
                 if !composed[index].visible {
                     continue;

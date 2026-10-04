@@ -87,6 +87,8 @@ struct SongLuaOverlayOrderCache {
     // and only these composed states depend on changing local/ancestor state.
     dynamic_local_indices: Box<[usize]>,
     dynamic_composed_indices: Box<[usize]>,
+    // Pulsing parent effects require a bounded descendant recomposition each frame.
+    pulse_descendants: Box<[usize]>,
     // Most Song Lua trees never mutate ordering fields. Flatten those trees at
     // screen entry so the frame loop can copy one contiguous index slice.
     static_root_order: Option<Box<[usize]>>,
@@ -1023,6 +1025,17 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
     }
     let mut dynamic_actor_draw_order = vec![false; overlays.len()];
     let mut dynamic_local = vec![false; overlays.len()];
+    let mut pulse_capable = overlays
+        .iter()
+        .map(|overlay| {
+            overlay.initial_state.effect_mode == deadlib_present::anim::EffectMode::Pulse
+                || overlay.message_commands.iter().any(|command| {
+                    command.blocks.iter().any(|block| {
+                        block.delta.effect_mode == Some(deadlib_present::anim::EffectMode::Pulse)
+                    })
+                })
+        })
+        .collect::<Vec<_>>();
     let mut has_dynamic_z_order = overlays
         .iter()
         .any(|overlay| overlay.initial_state.draw_by_z_position);
@@ -1044,6 +1057,9 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
     for ease in overlay_eases {
         if ease.overlay_index < dynamic_actor_draw_order.len() {
             dynamic_local[ease.overlay_index] = true;
+            pulse_capable[ease.overlay_index] |= ease.from.delta.effect_mode
+                == Some(deadlib_present::anim::EffectMode::Pulse)
+                || ease.to.delta.effect_mode == Some(deadlib_present::anim::EffectMode::Pulse);
             if ease.from.delta.draw_order.is_some() || ease.to.delta.draw_order.is_some() {
                 dynamic_actor_draw_order[ease.overlay_index] = true;
             }
@@ -1068,6 +1084,14 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
             continue;
         }
         dynamic_local[track.overlay_index] = true;
+        pulse_capable[track.overlay_index] |= track.target
+            == crate::SongLuaOverlayUpdateTarget::EffectMode
+            && track.samples.iter().any(|sample| {
+                sample.value
+                    == crate::SongLuaOverlayUpdateValue::EffectMode(
+                        deadlib_present::anim::EffectMode::Pulse,
+                    )
+            });
         dynamic_actor_draw_order[track.overlay_index] |=
             track.target == crate::SongLuaOverlayUpdateTarget::DrawOrder;
         has_dynamic_z_order |= matches!(
@@ -1103,8 +1127,18 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
         .collect::<Box<[_]>>();
     let mut dynamic_composed = Vec::with_capacity(overlays.len());
     let mut dynamic_composed_indices = Vec::new();
+    let mut pulse_ancestors = vec![false; overlays.len()];
+    let mut pulse_descendants = Vec::new();
     for (index, overlay) in overlays.iter().enumerate() {
-        let dynamic = dynamic_local[index]
+        let inherited_pulse = overlay
+            .parent_index
+            .is_some_and(|parent| pulse_ancestors[parent] || pulse_capable[parent]);
+        pulse_ancestors[index] = inherited_pulse;
+        if inherited_pulse {
+            pulse_descendants.push(index);
+        }
+        let dynamic = inherited_pulse
+            || dynamic_local[index]
             || overlay
                 .parent_index
                 .and_then(|parent| dynamic_composed.get(parent))
@@ -1139,6 +1173,7 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
         tap_commands,
         dynamic_local_indices,
         dynamic_composed_indices: dynamic_composed_indices.into_boxed_slice(),
+        pulse_descendants: pulse_descendants.into_boxed_slice(),
         static_root_order,
         update_actor_index,
         update_ranges: update_ranges.into_boxed_slice(),
@@ -1662,7 +1697,9 @@ fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
     mut child: SongLuaOverlayState,
     overlay_space_width: f32,
     overlay_space_height: f32,
+    clock: [f32; 2],
 ) -> SongLuaOverlayState {
+    let parent = song_lua_pulse_parent(parent, clock);
     let [parent_scale_x, parent_scale_y] = song_lua_overlay_axis_scale(parent);
     let local_z = child.z;
     child.z = parent.z + child.z * song_lua_overlay_z_scale(parent);
@@ -1918,6 +1955,7 @@ fn song_lua_overlay_states_from_local<S: NoteskinSlot + Clone>(
         screen_width,
         screen_height,
         &mut out,
+        [0.0; 2],
     );
     out
 }
@@ -1928,6 +1966,7 @@ fn song_lua_overlay_states_from_local_all_into<S: NoteskinSlot + Clone>(
     screen_width: f32,
     screen_height: f32,
     out: &mut Vec<SongLuaOverlayState>,
+    clock: [f32; 2],
 ) {
     out.clear();
     out.reserve(overlays.len());
@@ -1947,6 +1986,7 @@ fn song_lua_overlay_states_from_local_all_into<S: NoteskinSlot + Clone>(
                     local,
                     screen_width,
                     screen_height,
+                    clock,
                 )
             })
             .unwrap_or(local);
@@ -1961,6 +2001,7 @@ fn song_lua_overlay_states_from_local_into<S: NoteskinSlot + Clone>(
     screen_width: f32,
     screen_height: f32,
     out: &mut Vec<SongLuaOverlayState>,
+    clock: [f32; 2],
 ) {
     if out.len() != overlays.len() {
         song_lua_overlay_states_from_local_all_into(
@@ -1969,6 +2010,7 @@ fn song_lua_overlay_states_from_local_into<S: NoteskinSlot + Clone>(
             screen_width,
             screen_height,
             out,
+            clock,
         );
         return;
     }
@@ -1991,6 +2033,7 @@ fn song_lua_overlay_states_from_local_into<S: NoteskinSlot + Clone>(
                     local,
                     screen_width,
                     screen_height,
+                    clock,
                 )
             })
             .unwrap_or(local);
@@ -2013,6 +2056,7 @@ fn song_lua_overlay_initial_state_sets<S: NoteskinSlot + Clone>(
         screen_width,
         screen_height,
         &mut composed,
+        [0.0; 2],
     );
     (local, composed)
 }
@@ -2029,6 +2073,7 @@ fn song_lua_overlay_state_sets_from_into<S: NoteskinSlot + Clone>(
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
+    clock: [f32; 2],
 ) {
     if overlays.is_empty() {
         message_caches.clear();
@@ -2048,6 +2093,7 @@ fn song_lua_overlay_state_sets_from_into<S: NoteskinSlot + Clone>(
         message_caches,
         local_out,
         overlay_out,
+        clock,
     );
 }
 
@@ -2063,10 +2109,12 @@ fn song_lua_overlay_state_sets_active_into<S: NoteskinSlot + Clone>(
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
+    clock: [f32; 2],
 ) {
     let SongLuaOverlayOrderCache {
         dynamic_local_indices,
         dynamic_composed_indices,
+        pulse_descendants,
         update_actor_index,
         update_ranges,
         visible_update_indices,
@@ -2095,6 +2143,17 @@ fn song_lua_overlay_state_sets_active_into<S: NoteskinSlot + Clone>(
             screen_width,
             screen_height,
             overlay_out,
+            clock,
+        );
+    } else if !pulse_descendants.is_empty() {
+        song_lua_overlay_states_from_local_into(
+            overlays,
+            local_out,
+            pulse_descendants,
+            screen_width,
+            screen_height,
+            overlay_out,
+            clock,
         );
     }
 }
@@ -2108,6 +2167,7 @@ fn apply_song_lua_taps<S: NoteskinSlot + Clone>(
     local: &mut [SongLuaOverlayState],
     composed: &mut Vec<SongLuaOverlayState>,
     screen: [f32; 2],
+    clock: [f32; 2],
 ) {
     let mut changed = false;
     for tap in &mut order.tap_commands {
@@ -2150,6 +2210,7 @@ fn apply_song_lua_taps<S: NoteskinSlot + Clone>(
             screen[0],
             screen[1],
             composed,
+            clock,
         );
     }
 }
@@ -4677,6 +4738,7 @@ fn song_lua_capture_overlay_states_into_scratch<S: NoteskinSlot + Clone>(
     overlay_space_width: f32,
     overlay_space_height: f32,
     out: &mut Vec<SongLuaOverlayState>,
+    clock: [f32; 2],
 ) {
     if out.len() != overlays.len() {
         out.resize(overlays.len(), SongLuaOverlayState::default());
@@ -4690,6 +4752,7 @@ fn song_lua_capture_overlay_states_into_scratch<S: NoteskinSlot + Clone>(
         overlay_space_width,
         overlay_space_height,
         out,
+        clock,
     );
 }
 
@@ -4702,6 +4765,7 @@ fn song_lua_fill_capture_overlay_states<S: NoteskinSlot + Clone>(
     overlay_space_width: f32,
     overlay_space_height: f32,
     out: &mut [SongLuaOverlayState],
+    clock: [f32; 2],
 ) {
     let Some(capture_state) = overlay_states.get(capture_index).copied() else {
         return;
@@ -4717,6 +4781,7 @@ fn song_lua_fill_capture_overlay_states<S: NoteskinSlot + Clone>(
         overlay_space_width,
         overlay_space_height,
         out,
+        clock,
     );
 }
 
@@ -4728,6 +4793,7 @@ fn song_lua_capture_overlay_child_states<S: NoteskinSlot + Clone>(
     overlay_space_width: f32,
     overlay_space_height: f32,
     out: &mut [SongLuaOverlayState],
+    clock: [f32; 2],
 ) {
     let list_idx = song_lua_overlay_child_list_index(Some(parent_index));
     let Some(children) = order_cache.child_lists.get(list_idx) else {
@@ -4746,6 +4812,7 @@ fn song_lua_capture_overlay_child_states<S: NoteskinSlot + Clone>(
             local,
             overlay_space_width,
             overlay_space_height,
+            clock,
         );
         if !matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
             song_lua_capture_overlay_child_states(
@@ -4756,6 +4823,7 @@ fn song_lua_capture_overlay_child_states<S: NoteskinSlot + Clone>(
                 overlay_space_width,
                 overlay_space_height,
                 out,
+                clock,
             );
         }
     }
@@ -4804,6 +4872,7 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
                     local,
                     overlay_space_width,
                     overlay_space_height,
+                    [effect_time, effect_beat],
                 );
                 song_lua_append_local_proxy_target(
                     out,
@@ -4898,8 +4967,12 @@ fn song_lua_build_local_proxy_actor<S: NoteskinSlot + Clone>(
         let wrapper = &overlays[index];
         if !matches!(wrapper.kind, SongLuaOverlayKind::WrapperState) { break; }
         target_state = song_lua_overlay_compose_state(
-            &wrapper.kind, local_overlay_states[index], target_state,
-            overlay_space_width, overlay_space_height,
+            &wrapper.kind,
+            local_overlay_states[index],
+            target_state,
+            overlay_space_width,
+            overlay_space_height,
+            [effect_time, effect_beat],
         );
         parent = wrapper.parent_index;
     }
@@ -4996,6 +5069,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
         overlay_space_width,
         overlay_space_height,
         capture_states,
+        [effect_time, effect_beat],
     );
     song_lua_overlay_order_into(
         overlays,
@@ -6122,7 +6196,61 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
 
 #[inline(always)]
 fn song_lua_effect_lerp(a: f32, b: f32, t: f32) -> f32 {
-    (b - a).mul_add(t, a)
+    (b - a) * t + a
+}
+
+fn song_lua_pulse_scale(effect: EffectState, clock: [f32; 2], scale: &mut [f32; 3]) {
+    let t = effect.timing;
+    let total = t[0] + t[1] + t[2] + t[3] + t[4];
+    if !total.is_finite() || total <= 0.0 {
+        return;
+    }
+    let units =
+        deadlib_present::anim::effect_clock_units(effect, clock[0], clock[1]) + effect.offset;
+    let x = (units % total + total) % total;
+    let half = t[0] + t[1];
+    let full = half + t[2];
+    let percent = if x < t[0] {
+        x * 0.5 / t[0]
+    } else if x < half {
+        0.5
+    } else if x < full {
+        (x - half) * 0.5 / (full - half) + 0.5
+    } else if x < full + t[3] {
+        1.0
+    } else {
+        0.0
+    };
+    let pulse = (percent * std::f32::consts::PI).sin();
+    let zoom = song_lua_effect_lerp(effect.magnitude[0], effect.magnitude[1], pulse);
+    for (axis, value) in scale.iter_mut().enumerate() {
+        *value *= zoom;
+        *value *= song_lua_effect_lerp(effect.color1[axis], effect.color2[axis], pulse);
+    }
+}
+
+fn song_lua_pulse_parent(mut parent: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
+    if parent.effect_mode != deadlib_present::anim::EffectMode::Pulse {
+        return parent;
+    }
+    let effect = song_lua_overlay_effect_state(parent);
+    // Common zoom and axis zoom are aliases, rather than independent factors.
+    let current = SongLuaOverlayState {
+        basezoom: 1.0,
+        basezoom_x: 1.0,
+        basezoom_y: 1.0,
+        basezoom_z: 1.0,
+        ..parent
+    };
+    let [x, y] = song_lua_overlay_axis_scale(current);
+    let mut zoom = [x, y, song_lua_overlay_z_scale(current)];
+    song_lua_pulse_scale(effect, clock, &mut zoom);
+    parent.zoom = 1.0;
+    [parent.zoom_x, parent.zoom_y, parent.zoom_z] = zoom;
+    if let Some([_, local]) = parent.scale_factors.as_mut() {
+        song_lua_pulse_scale(effect, clock, local);
+    }
+    parent
 }
 
 fn song_lua_proxy_effect(
@@ -6260,12 +6388,7 @@ fn song_lua_apply_overlay_effect(
                 glow[3] *= alpha;
             }
             deadlib_present::anim::EffectMode::Pulse => {
-                let pulse = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
-                let zoom =
-                    song_lua_effect_lerp(effect.magnitude[0], effect.magnitude[1], pulse).max(0.0);
-                scale[0] *= zoom * song_lua_effect_lerp(effect.color1[0], effect.color2[0], pulse);
-                scale[1] *= zoom * song_lua_effect_lerp(effect.color1[1], effect.color2[1], pulse);
-                scale[2] *= zoom * song_lua_effect_lerp(effect.color1[2], effect.color2[2], pulse);
+                song_lua_pulse_scale(effect, [effect_time, effect_beat], scale);
             }
             deadlib_present::anim::EffectMode::Bob => {
                 let bob = (percent * 2.0 * std::f32::consts::PI).sin();
@@ -6305,9 +6428,6 @@ fn song_lua_apply_overlay_effect(
     glow[1] = glow[1].clamp(0.0, 1.0);
     glow[2] = glow[2].clamp(0.0, 1.0);
     glow[3] = glow[3].clamp(0.0, 1.0);
-    scale[0] = scale[0].max(0.0);
-    scale[1] = scale[1].max(0.0);
-    scale[2] = scale[2].max(0.0);
 }
 
 #[inline(always)]
@@ -11860,6 +11980,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         song_lua_message_state_cache,
         song_lua_local_state_scratch,
         song_lua_overlay_state_scratch,
+        [song_lua_now, state.current_beat()],
     );
     apply_song_lua_taps(
         &state.display.visual_feedback,
@@ -11874,6 +11995,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_visuals.screen_width,
             song_lua_visuals.screen_height,
         ],
+        [song_lua_now, state.current_beat()],
     );
     let song_lua_background_active_layers: &[usize] = if show_song_visuals {
         song_lua_background_layer_activity.sync(song_lua_now)
@@ -11902,6 +12024,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             message_caches,
             local_states,
             layer_states,
+            [song_lua_now, state.current_beat()],
         );
         apply_song_lua_taps(
             &state.display.visual_feedback,
@@ -11913,6 +12036,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             local_states,
             layer_states,
             [layer.screen_width, layer.screen_height],
+            [song_lua_now, state.current_beat()],
         );
     }
     for &layer_idx in song_lua_foreground_active_layers {
@@ -11932,6 +12056,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             message_caches,
             local_states,
             layer_states,
+            [song_lua_now, state.current_beat()],
         );
         apply_song_lua_taps(
             &state.display.visual_feedback,
@@ -11943,6 +12068,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             local_states,
             layer_states,
             [layer.screen_width, layer.screen_height],
+            [song_lua_now, state.current_beat()],
         );
     }
     let mut proxy_analysis = if show_song_visuals {

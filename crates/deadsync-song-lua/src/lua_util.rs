@@ -15590,11 +15590,13 @@ where
         .map_err(|err| err.to_string())?;
 
     let kind = if actor_type.eq_ignore_ascii_case("Actor") {
+        // A referenced plain Actor can drive other actors through tween getters.
         if name.is_none()
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
             && message_sounds.is_empty()
             && !has_deferred_message(lua, actor, None)
+            && !referenced_actors.contains(&(actor.to_pointer() as usize))
         {
             return Ok(None);
         }

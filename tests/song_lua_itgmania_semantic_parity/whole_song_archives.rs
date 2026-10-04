@@ -290,6 +290,7 @@ fn compose_entire_song(
                 &compiled.overlays,
                 &local,
                 [compiled.screen_width, compiled.screen_height],
+                [seconds, beat],
             );
             assert_eq!(composed.len(), compiled.overlays.len());
             actor_samples += composer.actor_count(

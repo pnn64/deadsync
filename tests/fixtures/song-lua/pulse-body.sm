@@ -1,0 +1,9 @@
+#TITLE:Pulse body;
+#BPMS:0=120;
+#BGCHANGES:0=pulse-body.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+;

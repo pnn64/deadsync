@@ -50,6 +50,12 @@ pub fn effect_sample(state: SongLuaOverlayState, time: f32, beat: f32) -> Effect
     sample
 }
 
+/// Read the actual Pulse draw transform, keeping the base Lua state unchanged.
+#[must_use]
+pub fn pulse_state(state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
+    song_lua_pulse_parent(state, clock)
+}
+
 #[must_use]
 pub fn vibration_magnitude(state: SongLuaOverlayState) -> [f32; 3] {
     song_lua_overlay_vibrate_magnitude(state)
@@ -227,6 +233,7 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
     overlays: &[SongLuaOverlayActor<S>],
     local_states: &[SongLuaOverlayState],
     screen: [f32; 2],
+    clock: [f32; 2],
 ) -> Vec<SongLuaOverlayState> {
     let mut out = Vec::with_capacity(overlays.len());
     song_lua_overlay_states_from_local_all_into(
@@ -235,6 +242,7 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
         screen[0],
         screen[1],
         &mut out,
+        clock,
     );
     // Audit the same texture-space states used by the capture renderer.
     // Global composition alone includes placement that BeginRenderingTo resets.
@@ -259,6 +267,7 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
                 screen[0],
                 screen[1],
                 &mut capture,
+                clock,
             );
             for (child, ancestor) in topology.aft_ancestors.iter().enumerate() {
                 if ancestor.get() == Some(index) {
@@ -285,6 +294,7 @@ impl WholeSongComposer {
         let mut assets = AssetManager::new();
         for overlay in overlays {
             match &overlay.kind {
+                SongLuaOverlayKind::Quad => queue_texture(&mut assets, &white_texture_key()),
                 SongLuaOverlayKind::Sprite { texture_key, .. } => {
                     queue_texture(&mut assets, texture_key);
                 }

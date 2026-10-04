@@ -3280,6 +3280,7 @@ fn compiled_overlay_states_at(
         &compiled.overlays,
         &local,
         [compiled.screen_width, compiled.screen_height],
+        [seconds, beat],
     )
 }
 
@@ -4408,6 +4409,12 @@ fn compare_projected_geometry(
                     state, seconds, beat,
                 );
                 [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
+            }
+            if state.effect_mode == EffectMode::Pulse {
+                state = deadsync_song_lua::playback::actor_conformance::pulse_state(
+                    state,
+                    [seconds, beat],
+                );
             }
             let actual_visible =
                 state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
@@ -6311,4 +6318,200 @@ fn queued_visibility_matches_native_actor_updates() {
         }
     }
     assert_eq!(checked, 35);
+}
+
+#[test]
+fn pulse_native_draws() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/pulse-body.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &dir.join("pulse-body.sm"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("pulse body"));
+    assert_eq!(parity.checks(), 2766);
+    parity.assert_complete("pulse body");
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/itgmania-song-lua-micro/pulse-body-native.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let _ = deadsync_song_lua::playback::actor_conformance::view_projection(
+        [854, 480],
+        80.0,
+        [427.0, 240.0],
+    );
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut checked = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let second = sample["time"].as_f64().unwrap() as f32;
+        let beat = second * 2.0;
+        let states = compiled_overlay_states_at(&compiled[primary], &context, beat, second);
+        for actor in sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| a["draws"].as_array().is_some_and(|v| !v.is_empty()))
+        {
+            let index = compiled[primary]
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == actor["name"].as_str())
+                .unwrap();
+            let frame = composer.render_overlay(
+                &compiled[primary].overlays,
+                &states,
+                index,
+                [854.0, 480.0],
+                second,
+                beat,
+            );
+            let expected = actor["draws"][0]["vertices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| {
+                    [
+                        v["screen"][0].as_f64().unwrap() as f32,
+                        v["screen"][1].as_f64().unwrap() as f32,
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let actual = rendered_quad_corners(&frame, [854.0, 480.0]);
+            assert_eq!(actual.len(), 6, "quad must emit both triangles");
+            for vertex in &expected {
+                assert!(
+                    actual.iter().any(|got| (got[0] - vertex[0]).abs() <= 0.75
+                        && (got[1] - vertex[1]).abs() <= 0.75),
+                    "{} at {second}: missing native corner {vertex:?}, rendered {actual:?}",
+                    actor["name"]
+                );
+                checked += 1;
+            }
+            for vertex in &actual {
+                assert!(
+                    expected
+                        .iter()
+                        .any(|e| (e[0] - vertex[0]).abs() <= 0.75
+                            && (e[1] - vertex[1]).abs() <= 0.75),
+                    "{} at {second}: {expected:?} vs {actual:?}",
+                    actor["name"]
+                );
+            }
+        }
+    }
+    assert_eq!(checked, 160);
+}
+
+fn rendered_quad_corners(
+    frame: &deadlib_present::render::RenderFrame,
+    screen: [f32; 2],
+) -> Vec<[f32; 2]> {
+    let mut actual = Vec::new();
+    for op in &frame.ops {
+        let deadlib_present::render::DrawOp::TexturedMesh(run) = op else {
+            panic!("unexpected draw")
+        };
+        let camera = frame.cameras[usize::from(run.camera)];
+        for instance in
+            &frame.tmesh_instances[run.instance_start as usize..][..run.instance_count as usize]
+        {
+            for vertex in frame.tmesh_geometries[run.geometry as usize]
+                .vertices
+                .iter()
+            {
+                let clip = deadsync_song_lua::playback::actor_conformance::project_world(
+                    deadsync_song_lua::playback::actor_conformance::matrix_rows(
+                        camera * instance.transform(),
+                    ),
+                    [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0],
+                );
+                actual.push([
+                    (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+                    (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+                ]);
+            }
+        }
+    }
+    actual
+}
+
+#[test]
+fn pulse_driver_native_draws() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/pulse-driver.json.zst"));
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/pulse-driver.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("pulse driver"));
+    assert_eq!(parity.checks(), 458);
+    parity.assert_complete("pulse driver");
+    let layer = &compiled[primary];
+    assert!(
+        layer
+            .overlays
+            .iter()
+            .any(|actor| actor.name.is_none() && matches!(actor.kind, SongLuaOverlayKind::Actor))
+    );
+    let body = layer
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Body"))
+        .unwrap();
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut checked = 0;
+    for sample in &trace.projected_vertex_tracks[0].samples {
+        let beat = value_f32(sample.get(0)).unwrap();
+        let seconds = value_f32(sample.get(1)).unwrap();
+        let states = compiled_overlay_states_at(layer, &context, beat, seconds);
+        let frame = composer.render_overlay(
+            &layer.overlays,
+            &states,
+            body,
+            [854.0, 480.0],
+            seconds,
+            beat,
+        );
+        let actual = rendered_quad_corners(&frame, [854.0, 480.0]);
+        assert_eq!(actual.len(), 6, "quad must emit both triangles");
+        let expected = sample[6]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| [value_f32(v.get(0)).unwrap(), value_f32(v.get(1)).unwrap()])
+            .collect::<Vec<_>>();
+        for vertex in &expected {
+            assert!(
+                actual
+                    .iter()
+                    .any(|got| (got[0] - vertex[0]).abs() <= 0.75
+                        && (got[1] - vertex[1]).abs() <= 0.75),
+                "at {seconds}: missing native corner {vertex:?}, rendered {actual:?}"
+            );
+            checked += 1;
+        }
+        for vertex in &actual {
+            assert!(
+                expected
+                    .iter()
+                    .any(|got| (got[0] - vertex[0]).abs() <= 0.75
+                        && (got[1] - vertex[1]).abs() <= 0.75),
+                "at {seconds}: unexpected rendered vertex {vertex:?}"
+            );
+        }
+    }
+    eprintln!("pulse driver rendered {checked} native corners");
+    assert_eq!(checked, 360);
 }

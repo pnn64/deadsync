@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "name": "pulse-body",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0,
+    0.1,
+    0.4,
+    0.6,
+    1,
+    1.4,
+    1.6833333333333333,
+    2
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Camera",
+    "camera": {
+      "fov": 80,
+      "vanish": [
+        427,
+        240
+      ]
+    },
+    "state": {
+      "zoom": [
+        1.334375,
+        1,
+        1.334375
+      ]
+    },
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "Leaf",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            200,
+            80,
+            40
+          ],
+          "zoom": [
+            1.0666666666666667,
+            1.0666666666666667,
+            1.0666666666666667
+          ]
+        },
+        "effect": {
+          "type": "pulse",
+          "period": 2,
+          "zoom": [
+            1.0666666666666667,
+            1.7066666666666668
+          ],
+          "clock": "bgm_beat",
+          "offset": 0
+        }
+      },
+      {
+        "kind": "frame",
+        "name": "Parent",
+        "state": {
+          "position": [
+            350,
+            200,
+            20
+          ],
+          "zoom": [
+            1.2,
+            1.2,
+            1.2
+          ]
+        },
+        "effect": {
+          "type": "pulse",
+          "period": 2,
+          "zoom": [
+            0.5,
+            1
+          ],
+          "clock": "bgm_beat",
+          "offset": 0
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Nested",
+            "size": [
+              64,
+              64
+            ],
+            "state": {
+              "position": [
+                35,
+                -10,
+                50
+              ],
+              "zoom": [
+                0.8,
+                0.8,
+                0.8
+              ]
+            }
+          },
+          {
+            "kind": "sprite",
+            "name": "Double",
+            "size": [
+              64,
+              64
+            ],
+            "state": {
+              "position": [
+                0,
+                50,
+                40
+              ],
+              "zoom": [
+                0.7,
+                0.7,
+                0.7
+              ]
+            },
+            "effect": {
+              "type": "pulse",
+              "period": 2,
+              "zoom": [
+                0.8,
+                1.2
+              ],
+              "clock": "bgm_beat",
+              "offset": 0.4,
+              "color1": [
+                0.8,
+                1.4,
+                1,
+                1
+              ],
+              "color2": [
+                1.2,
+                0.6,
+                1,
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Wrapped",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            600,
+            160,
+            60
+          ],
+          "zoom": [
+            0.9,
+            0.9,
+            0.9
+          ]
+        },
+        "wrappers": [
+          {
+            "kind": "frame",
+            "name": "Wrapper",
+            "state": {
+              "position": [
+                -10,
+                15,
+                10
+              ]
+            },
+            "effect": {
+              "type": "pulse",
+              "period": 2,
+              "zoom": [
+                0.5,
+                1
+              ],
+              "clock": "bgm_beat",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Signed",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            150,
+            350,
+            -80
+          ],
+          "zoom": [
+            0.8,
+            0.8,
+            0.8
+          ]
+        },
+        "effect": {
+          "type": "pulse",
+          "period": 2,
+          "zoom": [
+            -0.5,
+            -1
+          ],
+          "clock": "bgm_beat",
+          "timing": [
+            0.2,
+            0.1,
+            0.4,
+            0.3,
+            0.2
+          ]
+        }
+      }
+    ]
+  },
+  "bpm": 120
+}
