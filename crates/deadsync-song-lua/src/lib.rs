@@ -20094,6 +20094,16 @@ return Def.ActorFrame{
         fs::write(&entry, r#"
 local p = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
 local function uses(text, player) return GAMESTATE:PlayerIsUsingModifier(player or PLAYER_1, text) end
+assert(uses('1x', 0) and uses('1x', 1))
+assert(not uses('0x') and not uses('2x'))
+assert(p:XMod() == 1 and p:CMod() == nil and p:MMod() == nil)
+local detected = 2.5
+for i=0,10,0.01 do
+    local rounded = math.floor(i * 100 + 0.5) / 100
+    if uses(rounded .. 'x', 0) then detected = i; break end
+end
+assert(math.abs(detected - 1) < 0.000001)
+assert(not string.find(GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptionsString('ModsLevel_Song'), '1x', 1, true))
 assert(uses('no reverse'))
 assert(not uses('reverse'))
 assert(p:Reverse() == 0)
@@ -20115,6 +20125,8 @@ assert(p:Reverse() == 0.5 and p:XMod() == 2)
 return Def.ActorFrame{}
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&song_dir, "Modifier queries");
+        context.players[0].speedmod = SongLuaSpeedMod::X(1.0);
+        context.players[1].speedmod = SongLuaSpeedMod::X(1.0);
         context.players[1].enabled = true;
         test_compile_song_lua(&entry, &context).unwrap();
     }

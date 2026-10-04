@@ -330,13 +330,13 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     // Native GetMods includes the initial profile speed. Default 1x is
     // omitted until explicitly set; later string round-trips must keep C/M/X.
     match player.speedmod {
-        SongLuaSpeedMod::X(value) if value != 1.0 => {
-            set_player_speedmod(&table, "xmod", Some(value))?
+        SongLuaSpeedMod::X(value) => {
+            set_player_speedmod(&table, "xmod", Some(value))?;
+            table.raw_set("__songlua_speedmod_explicit", value != 1.0)?;
         }
         SongLuaSpeedMod::C(value) => set_player_speedmod(&table, "cmod", Some(value))?,
         SongLuaSpeedMod::M(value) => set_player_speedmod(&table, "mmod", Some(value))?,
         SongLuaSpeedMod::A(value) => set_player_speedmod(&table, "amod", Some(value))?,
-        _ => {}
     }
     table.set(
         "FromString",
