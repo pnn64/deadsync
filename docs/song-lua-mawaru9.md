@@ -201,7 +201,7 @@ contain `allowed/` and `lua-songs/`; use the workspace override for those tests.
 
 ## Complete song audit
 
-After retaining the initial recurring-command delay: **116,578 / 118,890 checks pass (98.06%)**. The ignored
+After restoring nested global probe state: **118,632 / 118,890 checks pass (99.78%)**. The ignored
 full-song test still fails, correctly identifying the remaining gaps.
 Fixture status `ok` describes the complete native capture, not a passing
 DeadSync comparison.
@@ -212,9 +212,9 @@ DeadSync comparison.
 | Layer order | 4 / 4 |
 | Final render | 3,748 / 3,748 |
 | Render persistence | 6,639 / 6,639 |
-| Update values | 23,159 / 23,197 |
+| Update values | 23,197 / 23,197 |
 | Player ranges | 13 / 14 |
-| Projected geometry | 63,122 / 65,392 |
+| Projected geometry | 65,138 / 65,392 |
 | Projected vibration | 19,385 / 19,387 |
 | Timeline | 224 / 224 |
 | Message commands | 226 / 227 |
@@ -227,7 +227,7 @@ changing comparator tolerances or omitting checks. The native capture was
 regenerated for the receptor metric correction documented below.
 The previous result was 67,430/88,316; more visible state and runtime message
 effects now enter the comparison, so the totals differ. Remaining failing
-checks are now 2,312, with 160 detailed gap reports. Before the affine
+checks are now 258, with 72 detailed gap reports. Before the affine
 fix, the same 117,464 checks passed 104,988; the affine fix added 1,333 passing
 geometry checks. The parent-translation pass retained 106,321 passing checks;
 the ancestor-scale pass added another 25 without changing the reference.
@@ -250,12 +250,12 @@ pooled arrows. Investigate their lifecycle and dispatch timing independently.
 The queued `Start -> SpawnPlayers -> SetControlling` sequence now records
 `BodyRotateBuildings` at its dispatch beat near 89.701, rather than the
 trigger beat near 87.050. Its state changes are now deferred as well. Remaining
-gaps include 38 raw writes to stair-scene sprites near beats 274-277, projected sprite
-bounds, one player range, two vibration mismatches near beat 104.012 and
-stateful `TVGrow` target writes. Render persistence and the complete timeline,
-including `ChanceTime`, now pass.
+gaps include 254 projected geometry checks, one player range, two vibration
+mismatches near beat 104.012 and stateful `TVGrow` target writes. All raw
+updates, render persistence and the complete timeline, including `ChanceTime`,
+now pass.
 
-Local detailed audit output: `.tmp/mawaru-recurring-delay-final-full.log` at the workspace
+Local detailed audit output: `.tmp/mawaru-global-probes-final-full.log` at the workspace
 root. Rerun the per-song command above to reproduce every comparison. No
 reference song files or ITGmania source files were modified.
 
@@ -638,7 +638,7 @@ comparisons, including stop/finish cancellation; both existing follow
 fixtures still pass their 1,748 comparisons. Before resetting the exact
 startup clock on finish, the cancellation fixture failed 73/105 checks.
 
-The next raw-write reproduction is the stair scene's `UpdateCommand` in
+The raw-write reproduction at 0.5.1723 was the stair scene's `UpdateCommand` in
 `lua/sbahj/default.lua`, line 72. The first mismatch moves both brother
 sprites to Y=167.8 instead of native Y=193 at beat 274.289. Later random
 rotation and base-zoom writes diverge near beat 275.753. Check the first
@@ -646,6 +646,76 @@ collision's getter state and branch before diagnosing those later random
 values. The separate player-range failure is P2 X: native [503.059, 773.938]
 versus DeadSync [0.000, 745.438]. The remaining message report is Aya's
 `TVGrowMessageCommand` in `lua/default.lua`, lines 2356-2357.
+
+## Nested global probe state
+
+An isolated copy of the original stair scene passes all 729 native checks
+when started directly. Using its original `ShowGame7` message instead
+reproduces the full-song movement and random-choice differences. The parent
+callback case fails 436/730 checks before restoring nested global state;
+an earlier sibling callback fails 426/686. Both pass all their checks after
+the correction, against the unchanged native captures.
+
+The command probes preserved global bindings shallowly and restored local
+upvalue tables, but mutations inside global tables survived. The stair
+scene stores gravity, floors, bounce counts and timers in those tables.
+Speculative message execution therefore advanced its physics before the
+real message. That early movement later changed collision branches and
+the shared random-call sequence.
+
+Probe snapshots now follow referenced global tables and Lua helper functions,
+as well as local cells. They include the function's own environment when it
+differs from the globals. The existing graph traversal preserves identities,
+cycles and aliases; actor state remains owned by the action-capture scope,
+and C closures retain their host state handling. A referenced name is selected
+conservatively from the function's bytecode, so the snapshot need not walk
+the entire host environment.
+
+The portable `global-probe` fixtures start a falling actor by message from
+parent and earlier-sibling callbacks. They exercise nested global tables,
+a shared alias, a self-cycle, random choices and a global helper with a
+private local counter. The original executable fails **197/342** and
+**197/343** comparisons. Restoring tables alone still fails 19 and 18 checks
+of the helper's private counter, establishing why helper traversal is needed.
+Both now pass **342/342** and **343/343**, totaling 685 native comparisons.
+Both native captures have zero errors or dropped events and verified exact
+compression round trips:
+
+- `global-probe`: 104,869 bytes to 12,708, decoded SHA256
+  `b0975e22b1a316f7aed169c7399aa7a7178f91c952243c36afa1eb7cccba76ce`.
+- `global-probe-sibling`: 105,765 bytes to 12,663, decoded SHA256
+  `409d891ab774d802ebe42baf07f8b9d49c55b44f22fc5cd12c913da18fee2d66`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity nested_global_probes_match_native -- --exact --nocapture
+```
+
+The cross-actor message-discovery test now gives its synthetic target a
+`Quad` actor type, matching production actor metadata. Its original
+one-command and stable-effect assertions remain unchanged. Without that
+type, the untagged target was traversed as ordinary song data, including
+its capture bookkeeping.
+
+The intermediate table-only full audit passes **118,632/118,890**, leaving
+258 failing checks and 72 gap reports. It adds 2,054 passing checks over
+0.5.1723 with the same native reference, denominator and tolerances: all 38
+raw-write failures now pass, alongside 2,016 additional geometry checks.
+This intermediate audit took 423.82 seconds, including 63.62 seconds in
+geometry and 22.19 seconds in vibration. The final audit also verifies
+helper-local and environment preservation. The final 0.5.1724 audit has
+identical tallies: **118,632/118,890** passing, with **258 failures** and
+72 detailed gap reports. Every raw update now matches, including both stair
+sprites' physics and random choices. The full native reference and comparator
+tolerances remain unchanged.
+
+The final debug audit took **433.52 seconds**: 348.77 seconds compiling,
+54.46 seconds comparing geometry and 22.05 seconds comparing vibration.
+All 962 Lua/profile tests and all 82 regular semantic tests pass in both
+repositories. The complete song test remains correctly ignored and failing.
+The outstanding 254 geometry checks include initial background fitting,
+body-scene projection and tween results; P2 range, two vibration samples and
+the single Aya message report remain independent gaps. These audit timings
+do not measure live gameplay performance.
 
 ## Project scope
 

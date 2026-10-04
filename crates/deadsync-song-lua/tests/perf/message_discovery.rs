@@ -151,6 +151,7 @@ fn lua_state_message_cross_actor_capture_preserves_stable_effects() {
             .unwrap();
         let source = fixture(&lua, 64, 0, "mixed");
         let target = lua.create_table().unwrap();
+        target.raw_set("__songlua_actor_type", "Quad").unwrap();
         install_actor_transform_methods(&lua, &target).unwrap();
         lua.globals().raw_set("target", &target).unwrap();
         source

@@ -12918,8 +12918,8 @@ fn snapshot_function_locals(
     // belongs to the existing action capture scope; C closures own host data.
     let mut cells = Vec::new();
     let mut seen = HashSet::new();
-    // Globals are restored by the outer probe. Following _G from a nested
-    // local would traverse host APIs and actor command tables unnecessarily.
+    // Global bindings are shallow snapshots. Preserve referenced table contents
+    // alongside locals without following the entire host environment through _G.
     seen.insert(lua.globals().to_pointer() as usize);
     for snapshot in &snapshots {
         seen.insert(snapshot.table.to_pointer() as usize);
@@ -12930,6 +12930,32 @@ fn snapshot_function_locals(
             Value::Function(function)
                 if function.info().what != "C" && seen.insert(function.to_pointer() as usize) =>
             {
+                let chunk = function.dump(true);
+                let globals = lua.globals();
+                let environment = function
+                    .environment()
+                    .map(|environment| {
+                        Ok::<_, mlua::Error>(environment
+                            .raw_get::<Option<Table>>("__songlua_env_target")?
+                            .unwrap_or(environment))
+                    })
+                    .transpose()?
+                    .filter(|environment| environment.to_pointer() != globals.to_pointer());
+                for namespace in [Some(globals), environment].into_iter().flatten() {
+                    namespace.for_each::<Value, Value>(|key, value| {
+                        if let Value::String(name) = key
+                            && matches!(value, Value::Table(_) | Value::Function(_))
+                        {
+                            let name = name.as_bytes();
+                            if !name.is_empty()
+                                && chunk.windows(name.len()).any(|bytes| bytes == name.as_ref())
+                            {
+                                pending.push(value);
+                            }
+                        }
+                        Ok(())
+                    })?;
+                }
                 for index in 1..=function.info().num_upvalues {
                     let (name, value) = read_function_upvalue(lua, function.clone(), index.into())?;
                     if matches!(&name, Value::String(name) if name.to_str()?.as_ref() == "_ENV") {

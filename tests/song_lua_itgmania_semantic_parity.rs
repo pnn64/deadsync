@@ -4799,6 +4799,23 @@ fn simply_love_receptor_metrics_match_native() {
 }
 
 #[test]
+fn nested_global_probes_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (name, checks) in [("global-probe", 342), ("global-probe-sibling", 343)] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+        )));
+        let simfile = root.join(format!("crates/deadsync-song-lua/tests/fixtures/{name}.sm"));
+        let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        assert_eq!(parity.checks(), checks);
+        parity.assert_complete(name);
+    }
+}
+
+#[test]
 fn recurring_initial_delay_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
