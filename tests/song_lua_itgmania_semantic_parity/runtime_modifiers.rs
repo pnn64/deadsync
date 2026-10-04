@@ -1,10 +1,13 @@
 //! Compare recorded modifier writes with the production gameplay evaluator.
 //! The headless oracle records Song-level targets, not native Current-level
-//! approach state. Each probe settles approach in the production evaluator at
-//! the recorded timestamp, leaving authored ease time and clamping intact.
+//! approach state. Each probe evaluates the requested targets through the
+//! production ease evaluator, leaving authored time and clamping intact.
 
 use super::*;
-use deadsync_gameplay::{AttackBaseEffects, GameplayAttackRuntimeState, SongLuaPlayerTransform};
+use deadsync_gameplay::{
+    ActiveAttackMaskValues, AttackBaseEffects, GameplayAttackRuntimeState, SongLuaPlayerTransform,
+    SongLuaPlayerTransformValues,
+};
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
@@ -427,6 +430,41 @@ fn modifier_runtime(
         GameplayAttackRuntimeState::new(constants, eases),
         unsupported_eases.get(),
     )
+}
+
+#[test]
+fn zero_approach_keeps_current_and_audits_song_target() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/zero-approach.json"));
+    let simfile = root.join("tests/fixtures/song-lua/zero-approach.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("zero approach");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for second in [0.5, 1.5, 2.5] {
+        runtime.refresh_player(
+            0,
+            second,
+            1.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime_mod_value(&runtime, 0, "drunk"), Some(1.0));
+    }
+    let mut missing = compiled.clone();
+    for layer in &mut missing {
+        layer
+            .eases
+            .retain(|window| window.approach_speed != Some(0.0));
+    }
+    let mut missing_parity = Parity::default();
+    compare_runtime_modifiers(&trace, &missing, &context, &mut missing_parity);
+    assert_eq!(missing_parity.checks() - missing_parity.passed(), 2);
 }
 
 #[test]
@@ -2207,9 +2245,10 @@ pub(super) fn compare_runtime_modifiers(
             last_writes.insert((write.player, write.key.as_str()), write);
             cursor += 1;
         }
-        // The oracle records requested targets. Settle approach rather than
-        // treating a correct gradual approach as a target mismatch. This does
-        // not advance ease time and does not measure native approach parity.
+        // The oracle records Song targets. Current cannot settle to a target
+        // with zero approach speed, even with an arbitrarily large delta.
+        // Evaluate the authored targets directly through the production API;
+        // actual Current progression is checked separately with real deltas.
         for (player, transform) in transforms.iter_mut().enumerate() {
             if let Some(next) = runtime.refresh_player(
                 player,
@@ -2221,6 +2260,33 @@ pub(super) fn compare_runtime_modifiers(
             ) {
                 *transform = next;
             }
+            let mut targets = ActiveAttackMaskValues {
+                accel: runtime.accel[player],
+                visual: runtime.visual[player],
+                visibility: runtime.visibility[player],
+                scroll: runtime.scroll[player],
+                perspective: runtime.perspective[player],
+                scroll_speed: runtime.scroll_speed[player],
+                mini_percent: runtime.mini_percent[player],
+                ..ActiveAttackMaskValues::new(runtime.appearance[player])
+            };
+            let mut player_targets = SongLuaPlayerTransformValues::default();
+            deadsync_gameplay::apply_song_lua_attack_eases(
+                &mut targets,
+                &mut runtime.appearance[player],
+                &mut player_targets,
+                &runtime.song_lua_ease_windows[player],
+                second,
+                0.0,
+            );
+            *transform = player_targets.resolve();
+            runtime.accel[player] = targets.accel;
+            runtime.visual[player] = targets.visual;
+            runtime.visibility[player] = targets.visibility;
+            runtime.scroll[player] = targets.scroll;
+            runtime.perspective[player] = targets.perspective;
+            runtime.scroll_speed[player] = targets.scroll_speed;
+            runtime.mini_percent[player] = targets.mini_percent;
         }
         for (key, write) in last_writes {
             // Native XMod/CMod/MMod setters select one shared speed mode.
