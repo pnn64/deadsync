@@ -3,12 +3,12 @@ use mlua::{Lua, Table, Value};
 use std::sync::Arc;
 
 use crate::{
-    LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_NOTE_COLUMNS, SongLuaCompileContext,
-    SongLuaNoteskinResolver, SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayKind,
+    LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SongLuaCompileContext, SongLuaNoteskinResolver,
+    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayKind,
     SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode,
     SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     named_overlay_indices_by_name, overlay_delta_intersection, overlay_descendants_by_parent,
-    read_f32, song_lua_style_column_x,
+    read_f32, song_lua_style_column_x, song_lua_style_info,
 };
 
 pub const MULTITAP_PREVISIBLE_BEATS: f32 = 8.0;
@@ -50,10 +50,20 @@ pub fn read_multitap_descs(
         .difficulty
         .sm_name()
         .trim_start_matches("Difficulty_");
+    let is_double = song_lua_style_info(&context.style_name).name == "double";
+    let key = if is_double {
+        format!("Double_{difficulty}")
+    } else {
+        difficulty.to_owned()
+    };
     let table = multitaps
-        .get::<Option<Table>>(difficulty)
+        .get::<Option<Table>>(key)
         .map_err(|err| err.to_string())?
-        .or_else(|| multitaps.get::<Option<Table>>("Challenge").ok().flatten());
+        .or_else(|| {
+            (!is_double)
+                .then(|| multitaps.get::<Option<Table>>("Challenge").ok().flatten())
+                .flatten()
+        });
     let Some(table) = table else {
         return Ok(None);
     };
@@ -413,7 +423,9 @@ where
 {
     // An omitted root frame can own additional callbacks. Check the complete
     // update plan before replacing the factory's sampled replay.
-    if !crate::lua_util::actor_tree_update_only(lua, root, "Update").map_err(|err| err.to_string())? {
+    if !crate::lua_util::actor_tree_update_only(lua, root, "Update")
+        .map_err(|err| err.to_string())?
+    {
         return Ok(None);
     }
     let Some(multitaps) = read_multitap_descs(lua, context)? else {
@@ -523,7 +535,7 @@ where
                 numbered,
             );
         }
-        for lane in 1..=SONG_LUA_NOTE_COLUMNS {
+        for lane in 1..=song_lua_style_info(&context.style_name).columns {
             let Some(&explosion_index) =
                 overlay_indices.get(format!("MultitapExplosionP{pn}_{lane}").as_str())
             else {

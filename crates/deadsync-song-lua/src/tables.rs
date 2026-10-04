@@ -14,9 +14,9 @@ use crate::version::version_parts;
 use crate::{
     GRAPH_DISPLAY_VALUE_RESOLUTION, LUA_PLAYERS, SONG_LUA_INITIAL_LIFE, SONG_LUA_THEME_NAME,
     SONG_LUA_THEME_PATH_PREFIX, SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext,
-    song_lua_arch_name, song_lua_human_player_count, theme_has_string, theme_metric_bool,
-    theme_metric_names, theme_metric_number_for_screen, theme_metric_value_for_human_players,
-    theme_string, theme_string_names,
+    song_lua_arch_name, song_lua_human_player_count, song_lua_style_info, theme_has_string,
+    theme_metric_bool, theme_metric_names, theme_metric_number_for_screen,
+    theme_metric_value_for_human_players, theme_string, theme_string_names,
 };
 
 pub fn lua_table_to_string(args: &MultiValue) -> String {
@@ -1169,12 +1169,14 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
             "Player",
             context.players[0].clone(),
             context.song_dir.as_path(),
+            song_lua_style_info(&context.style_name).steps_type,
         )?,
         create_player_stage_stats_table(
             lua,
             "Player",
             context.players[1].clone(),
             context.song_dir.as_path(),
+            song_lua_style_info(&context.style_name).steps_type,
         )?,
     ];
     let multi_player_stats = create_player_stage_stats_table(
@@ -1182,6 +1184,7 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
         "MultiPlayer",
         context.players[0].clone(),
         context.song_dir.as_path(),
+        song_lua_style_info(&context.style_name).steps_type,
     )?;
     let song = create_song_table(lua, context)?;
     stage_stats.set(
@@ -1268,6 +1271,7 @@ fn create_player_stage_stats_table(
     high_score_name: &str,
     player: SongLuaPlayerContext,
     song_dir: &Path,
+    steps_type: &str,
 ) -> mlua::Result<Table> {
     let stats = lua.create_table()?;
     stats.set("__songlua_failed", false)?;
@@ -1278,7 +1282,13 @@ fn create_player_stage_stats_table(
     let high_score = create_high_score_table(lua, high_score_name)?;
     let played_steps = lua.create_table()?;
     let possible_steps = lua.create_table()?;
-    let steps = create_steps_table(lua, player.difficulty, player.display_bpms, song_dir)?;
+    let steps = create_steps_table(
+        lua,
+        player.difficulty,
+        player.display_bpms,
+        song_dir,
+        steps_type,
+    )?;
     played_steps.raw_set(1, steps.clone())?;
     possible_steps.raw_set(1, steps)?;
     stats.set(

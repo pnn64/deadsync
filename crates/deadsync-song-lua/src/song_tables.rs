@@ -50,12 +50,14 @@ pub fn create_player_tables(
             context.players[0].difficulty,
             context.players[0].display_bpms,
             context.song_dir.as_path(),
+            song_lua_style_info(&context.style_name).steps_type,
         )?,
         create_steps_table(
             lua,
             context.players[1].difficulty,
             context.players[1].display_bpms,
             context.song_dir.as_path(),
+            song_lua_style_info(&context.style_name).steps_type,
         )?,
     ];
     Ok(PlayerLuaTables {
@@ -260,10 +262,11 @@ pub fn create_steps_table(
     difficulty: SongLuaDifficulty,
     display_bpms: [f32; 2],
     song_dir: &Path,
+    steps_type: &str,
 ) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetDifficulty", difficulty.sm_name())?;
-    set_string_method(lua, &table, "GetStepsType", "StepsType_Dance_Single")?;
+    set_string_method(lua, &table, "GetStepsType", steps_type)?;
     set_string_method(lua, &table, "GetDescription", "")?;
     set_string_method(lua, &table, "GetChartName", "")?;
     set_string_method(lua, &table, "GetAuthorCredit", "")?;
@@ -1311,6 +1314,9 @@ pub fn create_trail_table(
 ) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.raw_set("__songlua_steps", steps.clone())?;
+    let steps_type = steps
+        .get::<Function>("GetStepsType")?
+        .call::<String>(steps.clone())?;
     let entry = create_trail_entry_table(lua, song, steps)?;
     let entries = create_single_value_array(lua, entry.clone())?;
     table.set(
@@ -1333,7 +1339,7 @@ pub fn create_trail_table(
                 .unwrap_or_else(|| entry.clone()))
         })?,
     )?;
-    set_string_method(lua, &table, "GetStepsType", "StepsType_Dance_Single")?;
+    set_string_method(lua, &table, "GetStepsType", &steps_type)?;
     set_string_method(lua, &table, "GetDifficulty", "Difficulty_Medium")?;
     table.set(
         "GetMeter",
@@ -1756,7 +1762,13 @@ fn create_steps_by_steps_type_table(
     {
         table.raw_set(
             idx + 1,
-            create_steps_table(lua, difficulty, display_bpms, song_dir)?,
+            create_steps_table(
+                lua,
+                difficulty,
+                display_bpms,
+                song_dir,
+                "StepsType_Dance_Single",
+            )?,
         )?;
     }
     Ok(table)

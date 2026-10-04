@@ -7705,7 +7705,10 @@ return Def.ActorFrame{
         context.song_display_bpms = [60.0; 2];
         context.music_length_seconds = 4.0;
         let compiled = test_compile_song_lua(&entry, &context).expect("compile queued broadcast");
-        let event = compiled.messages.iter().find(|event| event.message == "BodyRotateBuildings")
+        let event = compiled
+            .messages
+            .iter()
+            .find(|event| event.message == "BodyRotateBuildings")
             .expect("queued broadcast");
         assert!((event.beat - 1.7666667).abs() < 0.0001);
     }
@@ -8974,15 +8977,33 @@ return Def.ActorFrame{
         context.song_display_bpms = [60.0; 2];
         context.song_timing_bpms = vec![(0.0, 60.0)];
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        assert!(!compiled.eases.iter().any(|ease| ease.target == SongLuaEaseTarget::Mod("reverse".into())));
+        assert!(
+            !compiled
+                .eases
+                .iter()
+                .any(|ease| ease.target == SongLuaEaseTarget::Mod("reverse".into()))
+        );
         assert_eq!(compiled.column_splines.len(), 4);
         let track = &compiled.column_splines[0];
         let active = track.at_second(1.5).expect("active Position frame");
-        assert_eq!(active.position.as_ref().expect("position").view().receptor(1.5)[1], 100.0);
+        assert_eq!(
+            active
+                .position
+                .as_ref()
+                .expect("position")
+                .view()
+                .receptor(1.5)[1],
+            100.0
+        );
         assert!(active.zoom.as_ref().expect("zoom").view().receptor(1.5)[0] < 0.99);
         assert!(track.at_second(0.5).expect("baseline").position.is_none());
-        assert!(compiled.column_offsets.iter().filter(|window| window.target == SongLuaColumnTransformTarget::OffsetX)
-            .all(|window| window.from_y == 0.0 && window.to_y == 0.0));
+        assert!(
+            compiled
+                .column_offsets
+                .iter()
+                .filter(|window| window.target == SongLuaColumnTransformTarget::OffsetX)
+                .all(|window| window.from_y == 0.0 && window.to_y == 0.0)
+        );
     }
 
     #[test]
@@ -11629,7 +11650,8 @@ return Def.ActorFrame {
         let compiled = test_compile_song_lua(&entry, &context).expect("compile message probe");
         assert_eq!(
             compiled.info.unsupported_perframes, 0,
-            "{:?}", compiled.info.unsupported_perframe_captures
+            "{:?}",
+            compiled.info.unsupported_perframe_captures
         );
     }
 
@@ -16545,6 +16567,11 @@ return Def.ActorFrame{
     InitCommand=function(self)
         self:SetUpdateFunction(function(actor)
             local style = GAMESTATE:GetCurrentStyle()
+            assert(GAMESTATE:GetCurrentSteps(PLAYER_1):GetStepsType() == style:GetStepsType())
+            assert(GAMESTATE:GetCurrentSteps(PLAYER_2):GetStepsType() == style:GetStepsType())
+            assert(GAMESTATE:GetCurrentTrail(PLAYER_1):GetStepsType() == style:GetStepsType())
+            local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+            assert(stats:GetPlayedSteps()[1]:GetStepsType() == style:GetStepsType())
             local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
             local cols = nf:GetColumnActors()
             local col8 = style:GetColumnInfo(PLAYER_1, 8)

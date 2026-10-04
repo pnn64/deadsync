@@ -548,7 +548,7 @@
       "status": "ok",
       "reference": {
         "itgmania": {
-          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
           "git_dirty": "false",
           "execution": "embedded_bundled_lua",
           "launches_executable": false
@@ -578,8 +578,8 @@
           "seconds": 135.87825149525844
         },
         "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "0bd7bf6a820fc1056545629ae39cce8e86bfd56012e98f54ad4237f10c6d39cb",
-          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade"
+          "itgmania-harness-rs/semantic_host.lua": "a93cc6d58aa7b88bdb1a88178dc3755fd8ec50dd6925df97207ab00026b470e0",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "ede41c27560de2a36b4645018e09f5d36102ba7f5978d38b25136b9d49e22ee8"
         },
         "source_files_sha256": {
           "Cuphead [TaroNuke]/botanic.sm": "6d4f35389c80992011e7b143c5959d32fb5887dfc189975153fbab4885aacd96",
@@ -588,11 +588,11 @@
           "Cuphead [TaroNuke]/lua/modhelpers.lua": "86e7105441fff23c0e75c8c948c14739b350df4f76349a02be28c54b6e2eff14",
           "Cuphead [TaroNuke]/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
         },
-        "raw_capture_sha256": "568ce1ac7c217c3519b8670d59d19a730861b51bf6e34630d4f436044c8591fa",
-        "sha256": "69a83be6f337cfc6842b45533173d443d5393cf400ee129250413b77a6e7110f",
-        "uncompressed_sha256": "568ce1ac7c217c3519b8670d59d19a730861b51bf6e34630d4f436044c8591fa",
-        "compressed_bytes": 2733715,
-        "uncompressed_bytes": 45214673
+        "raw_capture_sha256": "8e73a17f3169924fe004ca6e93018c25a1df7af3f6c5a8db0125fdc8c26885a3",
+        "sha256": "e20fe58933e9451c707e1c7347a6885095fe25a09daabba6a3ad54202257c2c3",
+        "uncompressed_sha256": "8e73a17f3169924fe004ca6e93018c25a1df7af3f6c5a8db0125fdc8c26885a3",
+        "compressed_bytes": 2476851,
+        "uncompressed_bytes": 46987229
       },
       "runtime_errors": 0,
       "dropped_events": 0

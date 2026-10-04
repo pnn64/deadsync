@@ -76,6 +76,29 @@ mod lua_songs {
     use super::*;
 
     #[test]
+    #[ignore = "compiles feelyourtouch's double chart and reports every semantic check"]
+    fn feelyourtouch_double() {
+        crate::paths::init();
+        let simfile = "feelyourtouch e.d.e.n/feelyourtouch eden.ssc";
+        let trace = read_trace_file(
+            &fixture_root(&CORPUS)
+                .join("feelyourtouch e.d.e.n/feelyourtouch eden.ssc.double.semantic.json.zst"),
+        );
+        assert_eq!(trace.steps_type, "dance-double");
+        assert_eq!(trace.difficulty, "Difficulty_Challenge");
+        let song = parse_song(&corpus_root(&CORPUS).join(simfile));
+        assert!(
+            song.charts.iter().any(|chart| {
+                chart.chart_type == trace.steps_type
+                    && chart.difficulty == "Challenge"
+                    && chart.short_hash == "d1ab790f73670414"
+            }),
+            "missing frozen project double chart"
+        );
+        assert_trace_parity(&CORPUS, simfile, &trace);
+    }
+
+    #[test]
     #[ignore = "compiles every other 666 difficulty and reports all semantic checks"]
     fn song_666_other_difficulties() {
         for difficulty in ["Hard", "Medium", "Easy", "Beginner"] {
