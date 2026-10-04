@@ -1163,6 +1163,53 @@ No gameplay-time Lua execution or growing cache is added. Main receives
 exactly one patch increment from 0.5.1729 to 0.5.1730. Rework stays
 uncommitted, and the original song and ITGmania sources remain unchanged.
 
+## Player position retention and vibration restarts (0.5.1731)
+
+The remaining P2 range failure was a compiler reset error. The song moves
+P2 from X=503.059375 to X=640.5, crossing the Simply Love baseline X=612.
+The tail cleanup interpreted the smaller distance as an unfinished return
+and replaced the explicit destination with 612. At beat 467.7, addx(133.4375)
+therefore reached 745.4375 instead of native 773.9375. Linear transform
+tails now retain destinations that cross the baseline. The existing
+ordinary and cyclic return rules remain covered by the boundary test.
+The native player-tail micro-fixture improves from 6/7 to 7/7 with the same
+checks; it also asserts the exact resulting P2 maximum.
+
+The two vibration failures were reference errors. Native Actor.cpp resets
+the magnitude to (10,10,10) on every SetEffectVibrate call, while StopEffect
+only clears the active effect. The semantic host incorrectly retained the
+zero magnitude introduced by its StopEffect handling. The host now follows
+both native rules. Actual native Actor commands validate custom strength,
+stopping, restarting and subsequent overrides at five sample times. Their
+capture repeats byte-for-byte. The vibration micro-fixture passes 38/38
+full checks, plus 20 explicit native effect-state comparisons in DeadSync.
+
+The refreshed full trace retains 17,930 update frames, 2,431 runtime actor
+occurrences, 50 loaded Lua files, zero runtime errors and zero dropped
+events. Its only data changes are two effect-chain magnitudes from zero
+to (10,10,10); geometry, commands, tweens, timing and all sample counts are
+unchanged. Its decoded SHA-256 is
+`d0847e980a77118eeef360d4e200f2216a4c14595070b6d90b18f8fdddefe3be`.
+The semantic host SHA-256 is
+`3764b719dc1c23a517a503446ea5c47e9a954abc7137caed6dd3d9dfd93c03fa`.
+
+The final complete Mawaru9 audit took 447.27 seconds and improves from
+118,914/118,933 to **118,917/118,933**. Player ranges pass 14/14 and projected
+vibration passes 19,400/19,400. Compile info, layer order, final render,
+render persistence, update values, timeline, message commands and runtime
+modifiers remain fully passing. Projected geometry remains 65,402/65,418:
+16 failed checks with 14 distinct reports, all involving the previously
+identified body/star projections close to the perspective plane.
+
+Both repositories pass 967 Lua/profile checks and all 93 regular semantic
+tests; 71 corpus/native audit tests remain ignored by the regular command.
+The harness passes 91 tests with its local-corpus startup test ignored.
+No comparison tolerance is widened and no check is removed. Only changed
+DeadSync source, tests, fixtures and this document are copied to main.
+Main receives exactly one patch increment, 0.5.1730 to 0.5.1731, including
+Cargo.toml and Cargo.lock. Rework remains uncommitted. Mawaru9 and the
+complete 63-chart goal remain unfinished.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the

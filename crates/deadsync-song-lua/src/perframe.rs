@@ -632,6 +632,13 @@ fn transform_tail_closes(
     let current = current.unwrap_or(default);
     let prior = prior.unwrap_or(default);
     let baseline = baseline.unwrap_or(default);
+    // Crossing the baseline can be an explicit new destination. Preserve it
+    // rather than treating the smaller distance as an unfinished return tween.
+    if !cyclic
+        && ((current < baseline && prior > baseline) || (current > baseline && prior < baseline))
+    {
+        return false;
+    }
     let remaining = transform_distance(current, baseline, cyclic);
     let prior_remaining = transform_distance(prior, baseline, cyclic);
     let last_step = transform_distance(current, prior, cyclic);
@@ -3829,6 +3836,22 @@ mod sampling_perf;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tail_keeps_crossing_pos() {
+        for (current, prior, baseline, cyclic, closes) in [
+            (640.5, 503.059375, 612.0, false, false),
+            (503.059375, 640.5, 612.0, false, false),
+            (0.25, 1.0, 0.0, false, true),
+            (0.0, 1.0, 0.0, false, true),
+            (2.0, 1.0, 0.0, false, false),
+            (359.75, 359.0, 0.0, true, true),
+        ] {
+            assert_eq!(transform_tail_closes(
+                Some(current), Some(prior), Some(baseline), 0.0, cyclic,
+            ), closes);
+        }
+    }
 
     #[test]
     fn completed_update_tweens_persist_into_following_state() {

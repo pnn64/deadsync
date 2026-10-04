@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "name": "vibration-restart",
+  "screen": {"width": 854, "height": 480},
+  "samples": [0, 0.75, 1.25, 1.75, 2.25],
+  "root": {
+    "kind": "frame",
+    "name": "Vibration",
+    "effect": {"type": "vibrate", "magnitude": [20, 12, 4]},
+    "commands": {
+      "Stop": {"effect": {"type": "none"}},
+      "Restart": {"effect": {"type": "vibrate"}},
+      "Override": {"effect": {"type": "vibrate"}},
+      "Custom": {"effect": {"type": "vibrate", "magnitude": [7, 8, 9]}}
+    },
+    "tweens": [
+      {"curve": "sleep", "duration": 0.5}, {"queuecommand": "Stop"},
+      {"curve": "sleep", "duration": 0.5}, {"queuecommand": "Restart"},
+      {"curve": "sleep", "duration": 0.5}, {"queuecommand": "Override"},
+      {"curve": "sleep", "duration": 0.5}, {"queuecommand": "Custom"}
+    ],
+    "children": [{"kind": "sprite", "name": "Witness", "size": [64, 32]}]
+  }
+}

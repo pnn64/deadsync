@@ -4913,6 +4913,71 @@ fn queued_bounce_matches_native() {
 }
 
 #[test]
+fn player_tail_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/player-tail.json.zst"));
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/player-tail.sm"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    assert_eq!(parity.checks(), 7);
+    parity.assert_complete("player position crossing baseline");
+    let range = compiled_player_range(&compiled, 2, &SongLuaEaseTarget::PlayerX, 0.0);
+    assert_eq!(range.1, 773.9375);
+}
+
+#[test]
+fn vibrate_restart_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/vibration-restart.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/vibration-restart.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("vibration restart"));
+    assert_eq!(parity.checks(), 38);
+    parity.assert_complete("vibration restart");
+    let native: Value = serde_json::from_slice(
+        &fs::read(
+            root.join("tests/fixtures/itgmania-song-lua-micro/vibration-restart-native.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let index = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Vibration"))
+        .unwrap();
+    for sample in native["samples"].as_array().unwrap() {
+        let seconds = sample["time"].as_f64().unwrap() as f32;
+        let mut state =
+            compiled_command_state_at(&context, &compiled[primary], index, seconds, seconds);
+        apply_runtime_updates(
+            &context,
+            &compiled[primary],
+            index,
+            seconds,
+            seconds,
+            &mut state,
+        );
+        let effect = &sample["actors"][0]["effect"];
+        assert_eq!(state.vibrate, effect["type"] == "vibrate");
+        for axis in 0..3 {
+            assert_eq!(
+                state.effect_magnitude[axis],
+                effect["magnitude"][axis].as_f64().unwrap() as f32
+            );
+        }
+    }
+}
+
+#[test]
 fn wrapper_transform_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
