@@ -2587,7 +2587,9 @@ pub fn broadcast_song_lua_message(
                 && let Some(mut deferred) = lua.app_data_mut::<SongLuaDeferredMessages>()
             {
                 for entry in &mut deferred.0 {
-                    if entry.actor.to_pointer() == actor.to_pointer() && entry.command == command.as_str() {
+                    if entry.actor.to_pointer() == actor.to_pointer()
+                        && entry.command == command.as_str()
+                    {
                         entry.observed = true;
                     }
                 }
@@ -3102,6 +3104,19 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             // Keep both the Lua command and its clock until Actor::UpdateInternal
             // reaches this frame. Capturing setters early must not run Lua state
             // changes, broadcasts or child commands before their actual dispatch.
+            return Ok(());
+        }
+        if time.is_some()
+            && lua
+                .app_data_ref::<SongLuaCompileUpdatePhase>()
+                .is_some_and(|phase| {
+                    phase.active
+                        && queue_actor_order(lua, actor.to_pointer() as usize) > phase.order
+                })
+        {
+            // A broadcast can queue a command on a later sibling. Run it
+            // when that actor advances, after the broadcasting body finishes
+            // updating Lua state, rather than draining it inside the message.
             return Ok(());
         }
         if time.is_some() {
@@ -12263,7 +12278,9 @@ fn note_column_handler_uniform_component(
         };
         if let Some(prior) = uniform {
             if (value - prior).abs() > EPS {
-                spline.set(witness_key, index).map_err(|err| err.to_string())?;
+                spline
+                    .set(witness_key, index)
+                    .map_err(|err| err.to_string())?;
                 return Ok(None);
             }
         } else {
@@ -13270,7 +13287,9 @@ fn snapshot_function_locals(
                         {
                             let name = name.as_bytes();
                             if !name.is_empty()
-                                && chunk.windows(name.len()).any(|bytes| bytes == name.as_ref())
+                                && chunk
+                                    .windows(name.len())
+                                    .any(|bytes| bytes == name.as_ref())
                             {
                                 pending.push(value);
                             }

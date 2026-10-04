@@ -6338,6 +6338,36 @@ fn assert_step_player_proxy_and_projection(
 }
 
 #[test]
+fn delayed_actor_pool_is_ready_for_queued_updates() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/delayed-pool.json"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/delayed-pool/pool.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    assert_eq!(parity.checks(), 63);
+    parity.assert_complete("delayed actor pool");
+    for (second, visible) in [(0.0, false), (1.1, true), (1.5, false)] {
+        let states = compiled_local_states_at(&compiled[primary], &context, second, second);
+        for name in ["First", "Second"] {
+            let index = compiled[primary]
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some(name))
+                .expect("pooled actor");
+            assert_eq!(states[index].visible, visible, "{name} at {second}");
+            if second == 1.1 {
+                assert!(states[index].diffuse[3] > 0.0);
+            }
+            if second == 1.5 {
+                assert_eq!(states[index].diffuse[3], 0.0);
+            }
+        }
+    }
+}
+
+#[test]
 fn queued_startup_preserves_initial_overlay_state() {
     crate::paths::init();
     let temp = tempfile::tempdir().expect("create song directory");
