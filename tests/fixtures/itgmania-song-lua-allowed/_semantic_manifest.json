@@ -40,7 +40,7 @@
       "dropped_events": 0,
       "reference": {
         "itgmania": {
-          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
           "git_dirty": "false",
           "execution": "embedded_bundled_lua",
           "launches_executable": false
@@ -56,21 +56,26 @@
             854,
             480
           ],
-          "beat_step": 0.25,
-          "max_events": 500000
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
         },
         "random_seed": 1,
         "update_frames": 7082,
         "lua_song_beat_precision": "native_float",
         "arrow_timing": "native",
         "noteskin": "cel",
+        "description": "[FX] XO-",
         "end_position": {
           "beat": 275.3541564941406,
           "seconds": 118.00892421177456
         },
+        "project_chart_hash": "d5bd4dd7224f68ff",
+        "harness_host_sha256": "5bba522be095f4ef40272a92dbab07ebfa3e8361fa08a5a3d18565f901a9bbac",
         "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "0bd7bf6a820fc1056545629ae39cce8e86bfd56012e98f54ad4237f10c6d39cb",
-          "itgmania-harness-rs/native/actor_oracle.cpp": "c00ad4b18122a8e6796ec694b8a526c988d5182581a5d18c4c4202ddd7a3bade"
+          "itgmania-harness-rs/semantic_host.lua": "9c6791a539865d234af68d77fb4e08911de524662dda5e9001ebf7963762a606",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "ede41c27560de2a36b4645018e09f5d36102ba7f5978d38b25136b9d49e22ee8",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f"
         },
         "source_files_sha256": {
           "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc": "0855d937dccea4c96aeb0744cc24f496eee8875c6290d73646914a21a2b84f4c",
@@ -79,8 +84,8 @@
           "[07] Spooky (SM) [Scrypts]/lua/modhelpers.lua": "50503adf228f5b3a200be92674e36a87e3494a5ba0d681b123a4c989f6c5fa45",
           "[07] Spooky (SM) [Scrypts]/lua/mods.lua": "cddc8734f41e533cd05152a26dce036dfe62edde4babdd57672adc9ba7f8ddb5"
         },
-        "sha256": "2785c5d29b91cc078445f04d7a032279557cd671192b82d1562a33a639ef695a",
-        "uncompressed_bytes": 495516
+        "sha256": "fa1813f13f70d668dfbc32efcff31f47bbff9fea221870bf0c6a5a9ee46a8220",
+        "uncompressed_bytes": 624371
       }
     },
     {

@@ -245,13 +245,20 @@ fn assert_song_parity(corpus: &Corpus, simfile: &str) {
 
 fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
-    if simfile == "Jumper/Jumper.ssc" {
-        assert_eq!(trace.random_seed, Some(2));
+    let project_chart = match simfile {
+        "Jumper/Jumper.ssc" => Some(("7c085505e95af69a", 2)),
+        "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc" => Some(("d5bd4dd7224f68ff", 1)),
+        _ => None,
+    };
+    if let Some((hash, seed)) = project_chart {
+        assert_eq!(trace.random_seed, Some(seed));
+        assert_eq!(trace.steps_type, "dance-single");
+        assert_eq!(trace.difficulty, "Difficulty_Challenge");
         let song = parse_song(&corpus_root(corpus).join(simfile));
         assert!(song.charts.iter().any(|chart| {
             chart.chart_type == "dance-single" && chart.difficulty == "Challenge"
-                && chart.short_hash == "7c085505e95af69a"
-        }), "missing frozen project Jumper chart");
+                && chart.short_hash == hash && chart.description == trace.description
+        }), "missing frozen project chart {hash}: {simfile}");
     }
     let (compiled, primary_index, context) =
         compile_trace_song_at(trace, &corpus_root(corpus).join(simfile));
