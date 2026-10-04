@@ -158,7 +158,23 @@ fn startup_command(
     }
     // Native zero-time queues consume the first positive frame's delta.
     for block in &mut blocks {
-        block.start -= 1.0 / SONG_LUA_UPDATE_REFERENCE_FPS;
+        if block.queued
+            && block.delta.effect_mode.is_some_and(|mode| {
+                matches!(
+                    mode,
+                    deadlib_present::anim::EffectMode::Bob
+                        | deadlib_present::anim::EffectMode::Bounce
+                        | deadlib_present::anim::EffectMode::Wag
+                )
+            })
+        {
+            // Immediate motion macros run after the timer advance on their
+            // first positive dispatch frame, including an exact sleep boundary.
+            block.start = (block.start * SONG_LUA_UPDATE_REFERENCE_FPS + 0.000_01).floor()
+                / SONG_LUA_UPDATE_REFERENCE_FPS;
+        } else {
+            block.start -= 1.0 / SONG_LUA_UPDATE_REFERENCE_FPS;
+        }
     }
     Some(crate::SongLuaOverlayMessageCommand {
         frame_advance: 0.0,
@@ -1639,11 +1655,13 @@ fn overlay_state_update_value(
         Target::Vibrate => value!(Bool, vibrate),
         Target::EffectMagnitude => value!(Vec3, effect_magnitude),
         Target::EffectClock => value!(EffectClock, effect_clock),
+        Target::EffectTimer => value!(Bool, effect_timer),
         Target::EffectMode => value!(EffectMode, effect_mode),
         Target::EffectColor1 => value!(Vec4, effect_color1),
         Target::EffectColor2 => value!(Vec4, effect_color2),
         Target::EffectPeriod => value!(F32, effect_period),
         Target::EffectOffset => value!(F32, effect_offset),
+        Target::EffectPhase => value!(F32, effect_phase),
         Target::EffectTiming => option!(Vec5, effect_timing),
         Target::Rainbow => value!(Bool, rainbow),
         Target::RainbowScroll => value!(Bool, rainbow_scroll),
@@ -1774,11 +1792,13 @@ fn set_overlay_state_update_value(
     set_value!(Vibrate, Bool, vibrate);
     set_value!(EffectMagnitude, Vec3, effect_magnitude);
     set_value!(EffectClock, EffectClock, effect_clock);
+    set_value!(EffectTimer, Bool, effect_timer);
     set_value!(EffectMode, EffectMode, effect_mode);
     set_value!(EffectColor1, Vec4, effect_color1);
     set_value!(EffectColor2, Vec4, effect_color2);
     set_value!(EffectPeriod, F32, effect_period);
     set_value!(EffectOffset, F32, effect_offset);
+    set_value!(EffectPhase, F32, effect_phase);
     set_option!(EffectTiming, Vec5, effect_timing);
     set_value!(Rainbow, Bool, rainbow);
     set_value!(RainbowScroll, Bool, rainbow_scroll);
@@ -2965,6 +2985,18 @@ pub fn compile_update_functions<Kind>(
     let option_tables = update_player_option_tables(lua)?;
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
+    for overlay in overlays.iter() {
+        if overlay
+            .table
+            .raw_get::<Option<Table>>("__songlua_state_motion_clock")
+            .map_err(|err| err.to_string())?
+            .is_some()
+        {
+            // Probing queued bodies leaves their future effect state in Lua.
+            // Chronological replay begins with the state after Init/On.
+            set_actor_overlay_getter_state(lua, &overlay.table, overlay.actor.initial_state)?;
+        }
+    }
     let overlay_count = overlays.len();
     // Player transforms use the same chronological tween capture as song
     // actors. Their temporary indices never become drawable overlay tracks.
@@ -3192,6 +3224,24 @@ pub fn compile_update_functions<Kind>(
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         for (index, actor) in capture_actors.iter().enumerate() {
+            if let Some(phase) =
+                crate::lua_util::motion_render_phase(actor, [seconds as f32, next_beat])
+                    .map_err(|err| err.to_string())?
+            {
+                let target = SongLuaOverlayUpdateTarget::EffectPhase;
+                let value = SongLuaOverlayUpdateValue::F32(phase);
+                set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
+                push_captured_overlay_value(
+                    &mut overlay_tracks,
+                    &mut overlay_track_indices,
+                    index,
+                    target,
+                    prior_time,
+                    &current_overlays[index],
+                    next_time,
+                    &value,
+                );
+            }
             if let Some(rotation) =
                 crate::lua_util::spin_render_pose(actor).map_err(|err| err.to_string())?
             {
@@ -3636,6 +3686,19 @@ fn apply_perframe_active_message<Kind>(
     };
     let state =
         overlay_state_after_blocks(message.base, command.blocks.iter().filter(keep), elapsed);
+    if let Some(epoch) = crate::motion_restart_epoch(
+        message.base,
+        &command.blocks,
+        elapsed,
+        song_elapsed_seconds_at(message.start_beat, context),
+    ) {
+        crate::lua_util::sync_motion_restart(
+            &overlay.table,
+            epoch,
+            song_elapsed_seconds_at(beat, context),
+        )
+        .map_err(|err| err.to_string())?;
+    }
     set_actor_overlay_getter_state(lua, &overlay.table, state)?;
     let duration = command
         .blocks

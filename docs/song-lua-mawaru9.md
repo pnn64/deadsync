@@ -1391,11 +1391,130 @@ The all-63-chart goal remains active. Pulse coverage is now grounded in
 native drawing; other deterministic effects and the fresh complete
 project audit still need review.
 
+## Native motion and parent composition (0.5.1734)
+
+The previous reference recorded Bob, Bounce and Wag descriptors but
+projected their actors at stationary positions and rotations. The
+harness now samples each local pose through native Actor::PreDraw before
+multiplying parent and wrapper matrices. Macro defaults match native
+Actor.cpp: a two-second period, Y magnitude 20 for Bob/Bounce and Z
+magnitude 20 degrees for Wag.
+
+DeadSync now applies local motion before parent composition, including
+ancestor effects, AFT children and local proxies. Raw Lua state keeps
+its authored base values; composed draw state clears a consumed motion
+mode to prevent a second application. Shared native float phase and
+motion math replace the duplicate leaf branches and fused arithmetic.
+
+Nested XYZ rotations multiply native rotation matrices and recover an
+equivalent Euler pose, including the gimbal pose. Nonuniform ancestor
+scale stays before the combined rotations when the parent-local scale
+is uniform. An anchored spotlight keeps this prefix scale before its
+local rotation and alignment. Model and noteskin-model drawing use the
+same scale order, preserving the existing four-lane vertical-squash
+regression.
+
+Motion timers advance with native float additions and one period
+subtraction per update. Bob restarts when changing mode or replacing a
+nondefault period; Wag restarts on a mode change; Bounce always restarts. Repeating
+Bob at its unchanged default period and repeating Wag preserve phase.
+Timer and music clocks are distinguished internally. Queued and live
+message macros reset after the appropriate actor update, and phase
+tracks use step sampling across wraps and resets. Chronological capture
+starts from Init/On state rather than future queued-probe state, and
+advances these clocks even without a Lua update callback.
+
+A repeated finite queued command was previously suppressed while the
+first invocation drained its siblings. Queue dispatch now permits an
+entry already accepted at enqueue while restoring the enclosing guard.
+Immediate recursion and cyclic command chains keep their existing
+recurring-command detection. The repeated Bob/Bounce fixture and the
+existing vibration cycle both verify these paths.
+
+The full audit then isolated 5,316 geometry differences in Darren and
+Laer. Their repeated Pulse macro reset the default timing, but the
+following effectperiod() call retained those old timing intervals. Native
+SetEffectPeriod resets both ramps and clears all hold intervals. The
+macro and explicit setter now share that reset. The expanded native
+fixture detects the bug: the executable immediately before this fix
+fails 18 geometry checks on the repeated Pulse actor.
+
+The song-lifetime plan includes transform-effect actors and descendants,
+using initial state, commands, eases and update tracks. Clock-only frames
+recompose that bounded set in existing preallocated buffers. The new
+regression covers all three modes, cycle wrap and backward seeks, with
+unchanged raw states and buffer capacities and a static sibling excluded.
+
+The portable fixture covers 13 drawable actors at 121 successive frame
+times: leaves, nested 3D frames, a wrapper, three stacked X/Y/Z Bob frames
+like Glados, signed magnitudes, offsets, anchored geometry, custom hold
+timing, distinct beat/second clocks at 120 BPM, delayed/repeated resets
+and phase-preserving setters. It also repeats an anchored Pulse macro
+with a custom period and full-hold interval, as Darren and Laer do. It
+passes 7,202/7,202 semantic checks and compares all 6,292 native corners against actual RenderFrame triangle
+buffers. Every native corner and both emitted triangles are checked at
+the unchanged 0.75-pixel tolerance. The harness separately compares
+31,460 native world/screen coordinates at its existing tolerances. The
+frozen 0.5.1733 executable fails 2,531 geometry checks on this same fixture.
+
+Independent recaptures reproduce both fixtures byte for byte. Their
+compressed files round-trip exactly. The decoded semantic SHA-256 is
+`6d44a24e61cf72812d6a381928e757576b172cbec72a8fd6cbf8d0b3abe046c6`;
+the decoded native drawing SHA-256 is
+`0e8e994c2ee656cc2e4e1093a8c86f68c5b17b4f330260c68ddfda8cda792839`.
+
+The complete fresh Mawaru capture includes all 836 beats, 17,930 update
+frames, 2,431 runtime actor occurrences and 50 Lua files, with zero runtime
+errors and dropped events. Only projected-vertex tracks differ from the
+0.5.1733 reference; every previous sample time remains, with 24,270 more
+samples. The cyber noteskin, actor definitions, tween records, operations
+and timeline are unchanged. The decoded trace SHA-256 is
+`f8138aacd102bb6d9a63444c5453b4f7cdef471f553ab3dec33ed43aec463c37`;
+the frozen host SHA-256 is
+`a93cc6d58aa7b88bdb1a88178dc3755fd8ec50dd6925df97207ab00026b470e0`.
+
+The fresh complete audit passes **352,625/352,625**, with zero failed
+checks, in 565.70 seconds. Its sections are:
+
+| Section | Passed / total |
+| --- | ---: |
+| Compile info | 12 / 12 |
+| Layer order | 4 / 4 |
+| Final render | 3,748 / 3,748 |
+| Render persistence | 6,639 / 6,639 |
+| Update values | 23,197 / 23,197 |
+| Player ranges | 14 / 14 |
+| Projected geometry | 252,296 / 252,296 |
+| Projected vibration | 66,214 / 66,214 |
+| Timeline | 224 / 224 |
+| Message commands | 231 / 231 |
+| Runtime modifiers | 46 / 46 |
+
+Both repositories pass 970 Lua/profile/playback tests, all 97 regular
+semantic tests and 31 actor-conformance tests. The 71 explicit corpus
+audits remain ignored by the regular semantic command. The harness passes
+94 unit and 31 integration tests, with one local-corpus test ignored.
+
+Regular root tests run with `--test-threads=1` and
+`RUST_MIN_STACK=16777216`. Main uses
+`ITGMANIA_SONG_LUA_WORKSPACE=C:\GitHub\rework` to locate the external
+song corpus and local ITGmania reference trees.
+
+Actual song sources remain unchanged. Only Mawaru's selected manifest
+entry changes. Main receives the changed DeadSync files and exactly one
+patch increment, 0.5.1733 to 0.5.1734, including Cargo.toml and Cargo.lock.
+Rework remains uncommitted.
+
+The all-63-chart goal remains active. Additional Actor timer modes and
+arbitrary nested 3D nonuniform-scale/skew combinations need native drawing
+coverage. The fresh complete project audit still needs review.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the
 public project page, captured on 2026-10-03, including chart hashes and pack
 names. Board check counts are historical worklist values, not current proof
-of passing parity. Mawaru9 passes the current full semantic and native Pulse
-drawing audit. Other deterministic effects and the overall fresh 63-chart
-audit remain active.
+of passing parity. Mawaru9 passes the current full semantic audit and
+native Pulse, Bob, Bounce and Wag drawing regressions. Other native
+transform/clock cases
+and the overall fresh 63-chart audit remain active.

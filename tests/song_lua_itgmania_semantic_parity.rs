@@ -1887,6 +1887,7 @@ fn compiled_update_value_at(
     sample_update_track(
         context,
         compiled.overlay_update_unit,
+        target,
         samples,
         beat,
         seconds,
@@ -1896,6 +1897,7 @@ fn compiled_update_value_at(
 fn sample_update_track(
     context: &SongLuaCompileContext,
     unit: SongLuaTimeUnit,
+    target: SongLuaOverlayUpdateTarget,
     samples: &[deadsync_song_lua::SongLuaOverlayUpdateSample],
     beat: f32,
     seconds: f32,
@@ -1904,6 +1906,9 @@ fn sample_update_track(
     let next_index = samples.partition_point(|sample| sample.time <= time);
     if next_index == 0 {
         return None;
+    }
+    if target == SongLuaOverlayUpdateTarget::EffectPhase {
+        return Some(samples[next_index - 1].value.clone());
     }
     let current = &samples[next_index - 1];
     let Some(next) = samples.get(next_index) else {
@@ -1992,6 +1997,7 @@ fn overlay_state_render_value(
         Target::EffectMode => UpdateValue::EffectMode(state.effect_mode),
         Target::EffectPeriod => UpdateValue::F32(state.effect_period),
         Target::EffectOffset => UpdateValue::F32(state.effect_offset),
+        Target::EffectPhase => UpdateValue::F32(state.effect_phase),
         Target::Size => state.size.map_or(UpdateValue::None, UpdateValue::Vec2),
         _ => return None,
     })
@@ -3252,6 +3258,7 @@ fn compiled_local_states_at(
                     sample_update_track(
                         context,
                         compiled.overlay_update_unit,
+                        track.target,
                         &track.samples,
                         beat,
                         seconds,
@@ -4410,12 +4417,10 @@ fn compare_projected_geometry(
                 );
                 [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
             }
-            if state.effect_mode == EffectMode::Pulse {
-                state = deadsync_song_lua::playback::actor_conformance::pulse_state(
-                    state,
-                    [seconds, beat],
-                );
-            }
+            state = deadsync_song_lua::playback::actor_conformance::transform_state(
+                state,
+                [seconds, beat],
+            );
             let actual_visible =
                 state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
             let visibility_matches = native_visible == actual_visible || {
@@ -6322,31 +6327,40 @@ fn queued_visibility_matches_native_actor_updates() {
 
 #[test]
 fn pulse_native_draws() {
+    assert_eq!(native_effect_draws("pulse-body"), (2766, 160));
+}
+
+#[test]
+fn motion_native_draws() {
+    assert_eq!(native_effect_draws("motion-body"), (7202, 6292));
+}
+
+fn native_effect_draws(stem: &str) -> (usize, usize) {
     use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
     crate::paths::init();
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
-    let trace = read_trace_file(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/itgmania-song-lua-micro/pulse-body.json.zst"),
-    );
-    let (compiled, primary, context) = compile_trace_song_at(&trace, &dir.join("pulse-body.sm"));
+    let trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "tests/fixtures/itgmania-song-lua-micro/{stem}.json.zst"
+    )));
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &dir.join(format!("{stem}.sm")));
     let parity = compare_semantics(&trace, &compiled, primary, &context);
-    eprintln!("{}", parity.summary("pulse body"));
-    assert_eq!(parity.checks(), 2766);
-    parity.assert_complete("pulse body");
-    let native: Value = serde_json::from_slice(
-        &fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/itgmania-song-lua-micro/pulse-body-native.json"),
+    eprintln!("{}", parity.summary(stem));
+    parity.assert_complete(stem);
+    let native_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "tests/fixtures/itgmania-song-lua-micro/{stem}-native.json"
+    ));
+    let native: Value = if native_path.exists() {
+        serde_json::from_reader(fs::File::open(native_path).unwrap()).unwrap()
+    } else {
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(native_path.with_extension("json.zst")).unwrap(),
+            )
+            .unwrap(),
         )
-        .unwrap(),
-    )
-    .unwrap();
-    let _ = deadsync_song_lua::playback::actor_conformance::view_projection(
-        [854, 480],
-        80.0,
-        [427.0, 240.0],
-    );
+        .unwrap()
+    };
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
     let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
     let mut checked = 0;
@@ -6407,7 +6421,7 @@ fn pulse_native_draws() {
             }
         }
     }
-    assert_eq!(checked, 160);
+    (parity.checks(), checked)
 }
 
 fn rendered_quad_corners(

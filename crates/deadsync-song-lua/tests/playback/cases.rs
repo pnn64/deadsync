@@ -1702,19 +1702,36 @@ fn song_lua_wrappers_preserve_owner_draw_order() {
 
 #[test]
 fn song_lua_proxy_preserves_target_wrappers() {
-    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(640.0,480.0));
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        640.0, 480.0,
+    ));
     let actor = |kind, parent, state| SongLuaOverlayActor {
         kind, name: None, parent_index: parent, initial_state: state,
         message_commands: Vec::new(),
     };
     let overlays = vec![
-        actor(SongLuaOverlayKind::WrapperState, None, SongLuaOverlayState {
-            x: 66.0, y: 220.0, zoom: 0.5, ..Default::default()
-        }),
-        actor(SongLuaOverlayKind::Quad, Some(0), SongLuaOverlayState {
-            x: 8.0, y: 10.0, zoom: 2.0, visible: false,
-            size: Some([64.0,32.0]), ..Default::default()
-        }),
+        actor(
+            SongLuaOverlayKind::WrapperState,
+            None,
+            SongLuaOverlayState {
+                x: 66.0,
+                y: 220.0,
+                zoom: 0.5,
+                ..Default::default()
+            },
+        ),
+        actor(
+            SongLuaOverlayKind::Quad,
+            Some(0),
+            SongLuaOverlayState {
+                x: 8.0,
+                y: 10.0,
+                zoom: 2.0,
+                visible: false,
+                size: Some([64.0, 32.0]),
+                ..Default::default()
+            },
+        ),
     ];
     let local = overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>();
     let composed = song_lua_overlay_states_from_local(&overlays, &local, 640.0,480.0);
@@ -1722,17 +1739,41 @@ fn song_lua_proxy_preserves_target_wrappers() {
     let topology = SongLuaOverlayTopologyIndex::new(&overlays);
     let assets = AssetManager::new();
     let mut scratch = song_lua_projected_mesh_scratch_for(&overlays);
-    let mut build = |target, local: &[SongLuaOverlayState]| song_lua_build_local_proxy_actor(
-        &overlays, &composed, local, &order, &topology, &assets, target,
-        SongLuaOverlayState::default(), 0, 640.0,480.0,640.0,480.0,
-        0.0,0.0,0.0, &mut scratch, None,
-    );
+    let mut build = |target, local: &[SongLuaOverlayState]| {
+        song_lua_build_local_proxy_actor(
+            &overlays,
+            &composed,
+            local,
+            &order,
+            &topology,
+            &assets,
+            target,
+            SongLuaOverlayState::default(),
+            0,
+            640.0,
+            480.0,
+            640.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+            &mut scratch,
+            None,
+        )
+    };
     let proxy = build(1, &local).expect("wrapped hidden target is unhidden for the proxy");
-    let Actor::SharedFrame { children, .. } = proxy else { panic!("expected proxy frame") };
-    let [Actor::Sprite { offset, scale, .. }] = children.as_ref() else { panic!("expected wrapped quad") };
-    assert_eq!(*offset, [70.0,225.0]);
-    assert_eq!(*scale, [64.0,32.0]);
-    assert!(build(0, &local).is_none(), "a wrapper frame itself has no draw children");
+    let Actor::SharedFrame { children, .. } = proxy else {
+        panic!("expected proxy frame")
+    };
+    let [Actor::Sprite { offset, scale, .. }] = children.as_ref() else {
+        panic!("expected wrapped quad")
+    };
+    assert_eq!(*offset, [70.0, 225.0]);
+    assert_eq!(*scale, [64.0, 32.0]);
+    assert!(
+        build(0, &local).is_none(),
+        "a wrapper frame itself has no draw children"
+    );
     let mut hidden = local;
     hidden[0].visible = false;
     assert!(build(1, &hidden).is_none(), "proxy unhides the owner but preserves wrapper visibility");
@@ -10145,7 +10186,7 @@ fn parent_pulse_advances_without_local_writes() {
     ];
     let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
     assert!(order.dynamic_local_indices.is_empty());
-    assert_eq!(order.pulse_descendants.as_ref(), &[1]);
+    assert_eq!(order.effect_composed_indices.as_ref(), &[0, 1]);
     let (mut local, mut composed) = song_lua_overlay_initial_state_sets(&overlays, 854.0, 480.0);
     let mut messages = vec![];
     let capacity = (local.capacity(), composed.capacity());
@@ -10173,5 +10214,112 @@ fn parent_pulse_advances_without_local_writes() {
         assert_eq!(composed[0], parent);
         assert_eq!([composed[1].x, composed[1].z], [x, z]);
         assert_eq!((local.capacity(), composed.capacity()), capacity);
+    }
+}
+
+#[test]
+fn parent_motion_advances_without_local_writes() {
+    use deadlib_present::anim::{EffectClock, EffectMode};
+    // Known quarter-cycle poses exercise clock-only recomposition and seeks.
+    for (mode, rotation, magnitude, poses) in [
+        (
+            EffectMode::Bob,
+            90.0,
+            [10.0, 0.0, 0.0],
+            [[110.0, 98.0], [100.0, 90.0], [90.0, 82.0], [100.0, 90.0]],
+        ),
+        (
+            EffectMode::Bounce,
+            90.0,
+            [10.0, 0.0, 0.0],
+            [
+                [107.07107, 98.0],
+                [110.0, 90.0],
+                [107.07107, 82.0],
+                [100.0, 90.0],
+            ],
+        ),
+        (
+            EffectMode::Wag,
+            0.0,
+            [0.0, 0.0, 90.0],
+            [[100.0, 98.0], [140.0, 50.0], [100.0, 18.0], [140.0, 50.0]],
+        ),
+    ] {
+        let parent = SongLuaOverlayState {
+            x: 100.0,
+            y: 50.0,
+            zoom: 2.0,
+            rot_z_deg: rotation,
+            effect_mode: mode,
+            effect_clock: EffectClock::Time,
+            effect_period: 2.0,
+            effect_magnitude: magnitude,
+            ..Default::default()
+        };
+        let child = SongLuaOverlayState {
+            x: 20.0,
+            effect_mode: EffectMode::Bob,
+            effect_clock: EffectClock::Time,
+            effect_period: 2.0,
+            effect_magnitude: [4.0, 0.0, 0.0],
+            ..Default::default()
+        };
+        let static_state = SongLuaOverlayState {
+            x: 400.0,
+            ..Default::default()
+        };
+        let overlays: Vec<SongLuaOverlayActor> = [parent, child, static_state]
+            .into_iter()
+            .enumerate()
+            .map(|(index, initial_state)| SongLuaOverlayActor {
+                kind: if index == 0 {
+                    SongLuaOverlayKind::ActorFrame
+                } else {
+                    SongLuaOverlayKind::Quad
+                },
+                name: None,
+                parent_index: (index == 1).then_some(0),
+                initial_state,
+                message_commands: vec![],
+            })
+            .collect();
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        assert!(order.dynamic_local_indices.is_empty());
+        assert_eq!(order.effect_composed_indices.as_ref(), &[0, 1]);
+        let (mut local, mut composed) =
+            song_lua_overlay_initial_state_sets(&overlays, 854.0, 480.0);
+        let mut messages = vec![];
+        let capacity = (local.capacity(), composed.capacity());
+        for (seconds, expected) in [0.5, 1.0, 1.5, 2.0, 0.5]
+            .into_iter()
+            .zip(poses.into_iter().chain([poses[0]]))
+        {
+            song_lua_overlay_state_sets_active_into(
+                seconds,
+                &overlays,
+                &[],
+                &[],
+                &[],
+                854.0,
+                480.0,
+                &mut order,
+                &mut messages,
+                &mut local,
+                &mut composed,
+                [seconds, 123.0],
+            );
+            assert_eq!(local, [parent, child, static_state]);
+            for (actual, expected) in [composed[1].x, composed[1].y].into_iter().zip(expected) {
+                assert!(
+                    (actual - expected).abs() < 0.0001,
+                    "{mode:?} at {seconds}: {actual} != {expected}"
+                );
+            }
+            assert_eq!(composed[0].effect_mode, EffectMode::None);
+            assert_eq!(composed[1].effect_mode, EffectMode::None);
+            assert_eq!(composed[2], static_state);
+            assert_eq!((local.capacity(), composed.capacity()), capacity);
+        }
     }
 }

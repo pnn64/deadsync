@@ -1,0 +1,972 @@
+{
+  "schema_version": 1,
+  "name": "motion-body",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "bpm": 120,
+  "samples": [
+    0.0,
+    0.016666666666666666,
+    0.03333333333333333,
+    0.05,
+    0.06666666666666667,
+    0.08333333333333333,
+    0.1,
+    0.11666666666666667,
+    0.13333333333333333,
+    0.15,
+    0.16666666666666666,
+    0.18333333333333332,
+    0.2,
+    0.21666666666666667,
+    0.23333333333333334,
+    0.25,
+    0.26666666666666666,
+    0.2833333333333333,
+    0.3,
+    0.31666666666666665,
+    0.3333333333333333,
+    0.35,
+    0.36666666666666664,
+    0.38333333333333336,
+    0.4,
+    0.4166666666666667,
+    0.43333333333333335,
+    0.45,
+    0.4666666666666667,
+    0.48333333333333334,
+    0.5,
+    0.5166666666666667,
+    0.5333333333333333,
+    0.55,
+    0.5666666666666667,
+    0.5833333333333334,
+    0.6,
+    0.6166666666666667,
+    0.6333333333333333,
+    0.65,
+    0.6666666666666666,
+    0.6833333333333333,
+    0.7,
+    0.7166666666666667,
+    0.7333333333333333,
+    0.75,
+    0.7666666666666667,
+    0.7833333333333333,
+    0.8,
+    0.8166666666666667,
+    0.8333333333333334,
+    0.85,
+    0.8666666666666667,
+    0.8833333333333333,
+    0.9,
+    0.9166666666666666,
+    0.9333333333333333,
+    0.95,
+    0.9666666666666667,
+    0.9833333333333333,
+    1.0,
+    1.0166666666666666,
+    1.0333333333333334,
+    1.05,
+    1.0666666666666667,
+    1.0833333333333333,
+    1.1,
+    1.1166666666666667,
+    1.1333333333333333,
+    1.15,
+    1.1666666666666667,
+    1.1833333333333333,
+    1.2,
+    1.2166666666666666,
+    1.2333333333333334,
+    1.25,
+    1.2666666666666666,
+    1.2833333333333334,
+    1.3,
+    1.3166666666666667,
+    1.3333333333333333,
+    1.35,
+    1.3666666666666667,
+    1.3833333333333333,
+    1.4,
+    1.4166666666666667,
+    1.4333333333333333,
+    1.45,
+    1.4666666666666666,
+    1.4833333333333334,
+    1.5,
+    1.5166666666666666,
+    1.5333333333333334,
+    1.55,
+    1.5666666666666667,
+    1.5833333333333333,
+    1.6,
+    1.6166666666666667,
+    1.6333333333333333,
+    1.65,
+    1.6666666666666667,
+    1.6833333333333333,
+    1.7,
+    1.7166666666666666,
+    1.7333333333333334,
+    1.75,
+    1.7666666666666666,
+    1.7833333333333334,
+    1.8,
+    1.8166666666666667,
+    1.8333333333333333,
+    1.85,
+    1.8666666666666667,
+    1.8833333333333333,
+    1.9,
+    1.9166666666666667,
+    1.9333333333333333,
+    1.95,
+    1.9666666666666666,
+    1.9833333333333334,
+    2.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Camera",
+    "state": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "zoom": [
+        1.334375,
+        1,
+        1.334375
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "LeafBob",
+        "state": {
+          "position": [
+            180,
+            80,
+            40
+          ],
+          "zoom": [
+            1.2,
+            1.2,
+            1.2
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "size": [
+          64,
+          64
+        ],
+        "effect": {
+          "type": "bob",
+          "magnitude": [
+            8,
+            12,
+            5
+          ],
+          "period": 2,
+          "clock": "timer",
+          "offset": 0
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "LeafBounce",
+        "state": {
+          "position": [
+            380,
+            80,
+            -40
+          ],
+          "zoom": [
+            1,
+            1,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "size": [
+          64,
+          64
+        ],
+        "effect": {
+          "type": "bounce",
+          "magnitude": [
+            -7,
+            20,
+            12
+          ],
+          "period": 1,
+          "clock": "bgm_beat",
+          "offset": 0.05
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "LeafWag",
+        "state": {
+          "position": [
+            580,
+            80,
+            70
+          ],
+          "zoom": [
+            1,
+            1,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "size": [
+          64,
+          64
+        ],
+        "effect": {
+          "type": "wag",
+          "magnitude": [
+            13,
+            23,
+            37
+          ],
+          "period": 1,
+          "clock": "bgm_beat",
+          "offset": 0.13
+        }
+      },
+      {
+        "kind": "frame",
+        "name": "BobParent",
+        "state": {
+          "position": [
+            180,
+            240,
+            -10
+          ],
+          "zoom": [
+            1.2,
+            1.2,
+            1.2
+          ],
+          "rotation": [
+            0,
+            0,
+            12
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "NestedBob",
+            "state": {
+              "position": [
+                25,
+                -15,
+                30
+              ],
+              "zoom": [
+                0.8,
+                0.8,
+                0.8
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "size": [
+              64,
+              64
+            ],
+            "effect": {
+              "type": "bob",
+              "magnitude": [
+                11,
+                -5,
+                4
+              ],
+              "period": 2,
+              "clock": "bgm_beat",
+              "offset": 0
+            },
+            "alignment": [
+              0.5,
+              0
+            ]
+          }
+        ],
+        "effect": {
+          "type": "bob",
+          "magnitude": [
+            8,
+            12,
+            5
+          ],
+          "period": 2,
+          "clock": "timer",
+          "offset": 0
+        }
+      },
+      {
+        "kind": "frame",
+        "name": "BounceParent",
+        "state": {
+          "position": [
+            400,
+            240,
+            20
+          ],
+          "zoom": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "rotation": [
+            0,
+            0,
+            -7
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "NestedBounce",
+            "state": {
+              "position": [
+                20,
+                -10,
+                40
+              ],
+              "zoom": [
+                0.8,
+                0.8,
+                0.8
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "size": [
+              64,
+              64
+            ]
+          }
+        ],
+        "effect": {
+          "type": "bounce",
+          "magnitude": [
+            0,
+            15,
+            0
+          ],
+          "period": 1,
+          "clock": "bgm_beat",
+          "offset": 0
+        }
+      },
+      {
+        "kind": "frame",
+        "name": "WagParent",
+        "state": {
+          "position": [
+            630,
+            240,
+            -20
+          ],
+          "zoom": [
+            0.8,
+            0.8,
+            0.8
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "NestedWag",
+            "state": {
+              "position": [
+                22,
+                -15,
+                30
+              ],
+              "zoom": [
+                0.9,
+                0.9,
+                0.9
+              ],
+              "rotation": [
+                0,
+                30,
+                0
+              ]
+            },
+            "size": [
+              64,
+              64
+            ],
+            "effect": {
+              "type": "bob",
+              "magnitude": [
+                3,
+                7,
+                4
+              ],
+              "period": 2,
+              "clock": "bgm_beat",
+              "offset": 0
+            }
+          }
+        ],
+        "effect": {
+          "type": "wag",
+          "magnitude": [
+            12,
+            20,
+            30
+          ],
+          "period": 1,
+          "clock": "bgm_beat",
+          "offset": 0
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Wrapped",
+        "state": {
+          "position": [
+            250,
+            390,
+            30
+          ],
+          "zoom": [
+            0.9,
+            0.9,
+            0.9
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "size": [
+          64,
+          64
+        ],
+        "effect": {
+          "type": "bounce",
+          "magnitude": [
+            0,
+            20,
+            0
+          ],
+          "period": 2,
+          "clock": "timer",
+          "offset": 0
+        },
+        "wrappers": [
+          {
+            "name": "Wrapper",
+            "state": {
+              "position": [
+                -15,
+                10,
+                12
+              ]
+            },
+            "effect": {
+              "type": "wag",
+              "magnitude": [
+                10,
+                0,
+                18
+              ],
+              "period": 1,
+              "clock": "bgm_beat",
+              "offset": 0
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "TripleY",
+        "state": {
+          "position": [
+            480,
+            380,
+            -30
+          ],
+          "zoom": [
+            1.1,
+            1.1,
+            1.1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "frame",
+            "name": "TripleX",
+            "state": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "zoom": [
+                1,
+                1,
+                1
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ]
+            },
+            "children": [
+              {
+                "kind": "frame",
+                "name": "TripleZ",
+                "state": {
+                  "position": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "zoom": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "children": [
+                  {
+                    "kind": "sprite",
+                    "name": "Triple",
+                    "state": {
+                      "position": [
+                        15,
+                        30,
+                        20
+                      ],
+                      "zoom": [
+                        1,
+                        1,
+                        1
+                      ],
+                      "rotation": [
+                        0,
+                        40,
+                        0
+                      ]
+                    },
+                    "size": [
+                      64,
+                      64
+                    ]
+                  }
+                ],
+                "effect": {
+                  "type": "bob",
+                  "magnitude": [
+                    0,
+                    0,
+                    20
+                  ],
+                  "period": 6,
+                  "clock": "timer",
+                  "offset": 0
+                }
+              }
+            ],
+            "effect": {
+              "type": "bob",
+              "magnitude": [
+                20,
+                0,
+                0
+              ],
+              "period": 9,
+              "clock": "timer",
+              "offset": 0
+            }
+          }
+        ],
+        "effect": {
+          "type": "bob",
+          "magnitude": [
+            0,
+            20,
+            0
+          ],
+          "period": 7,
+          "clock": "timer",
+          "offset": 0
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "TimedBob",
+        "state": {
+          "position": [
+            60,
+            380,
+            0
+          ],
+          "zoom": [
+            1,
+            1,
+            1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "size": [
+          64,
+          64
+        ],
+        "effect": {
+          "type": "bob",
+          "magnitude": [
+            -8,
+            6,
+            3
+          ],
+          "period": 1.2,
+          "clock": "bgm_beat",
+          "offset": 0,
+          "timing": [
+            0.2,
+            0.1,
+            0.4,
+            0.3,
+            0.2
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "DelayedBob",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            60,
+            160,
+            0
+          ]
+        },
+        "commands": {
+          "Enable": {
+            "effect": {
+              "type": "bob",
+              "period": 2,
+              "magnitude": [
+                16,
+                0,
+                0
+              ],
+              "clock": "timer",
+              "offset": 0,
+              "timing": [
+                0.6,
+                0,
+                0.6,
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "tweens": [
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Enable"
+          },
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Enable"
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "HeldBob",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            60,
+            240,
+            0
+          ]
+        },
+        "effect": {
+          "type": "bob",
+          "period": 2,
+          "magnitude": [
+            16,
+            0,
+            0
+          ],
+          "clock": "timer",
+          "offset": 0
+        },
+        "commands": {
+          "Again": {
+            "effect": {
+              "type": "bob",
+              "period": 2,
+              "magnitude": [
+                16,
+                0,
+                0
+              ],
+              "clock": "timer",
+              "offset": 0
+            }
+          }
+        },
+        "tweens": [
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Again"
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "WagBounce",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            60,
+            320,
+            0
+          ]
+        },
+        "effect": {
+          "type": "wag",
+          "period": 2,
+          "magnitude": [
+            0,
+            0,
+            25
+          ],
+          "clock": "timer",
+          "offset": 0
+        },
+        "commands": {
+          "Again": {
+            "effect": {
+              "type": "wag",
+              "period": 2,
+              "magnitude": [
+                0,
+                0,
+                25
+              ],
+              "clock": "timer",
+              "offset": 0
+            }
+          },
+          "Bounce": {
+            "effect": {
+              "type": "bounce",
+              "period": 2,
+              "magnitude": [
+                16,
+                0,
+                0
+              ],
+              "clock": "timer",
+              "offset": 0
+            }
+          }
+        },
+        "tweens": [
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Again"
+          },
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Bounce"
+          },
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Bounce"
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "ResetPulse",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            170,
+            440,
+            0
+          ]
+        },
+        "effect": {
+          "type": "pulse",
+          "period": 1,
+          "zoom": [
+            1,
+            1
+          ],
+          "color1": [
+            0.99,
+            1.01,
+            1,
+            1
+          ],
+          "color2": [
+            1.01,
+            0.99,
+            1,
+            1
+          ],
+          "clock": "bgm_beat",
+          "offset": 0.3,
+          "timing": [
+            0.3,
+            0,
+            0.3,
+            0.4,
+            0
+          ]
+        },
+        "commands": {
+          "Reset": {
+            "effect": {
+              "type": "pulse",
+              "period": 1,
+              "zoom": [
+                1,
+                1
+              ],
+              "color1": [
+                0.99,
+                1.01,
+                1,
+                1
+              ],
+              "color2": [
+                1.01,
+                0.99,
+                1,
+                1
+              ],
+              "clock": "bgm_beat",
+              "offset": 0.3,
+              "timing": [
+                0.3,
+                0,
+                0.3,
+                0.4,
+                0
+              ]
+            }
+          }
+        },
+        "tweens": [
+          {
+            "curve": "sleep",
+            "duration": 0.5
+          },
+          {
+            "queuecommand": "Reset"
+          }
+        ],
+        "alignment": [
+          0.5,
+          1
+        ]
+      }
+    ],
+    "camera": {
+      "fov": 80,
+      "vanish": [
+        427,
+        240
+      ]
+    }
+  }
+}

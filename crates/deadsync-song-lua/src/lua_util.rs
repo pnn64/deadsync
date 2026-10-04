@@ -763,7 +763,11 @@ fn stop_pending_tweens(lua: &Lua, actor: &Table, position: [f32; 3]) {
     .zip(position)
     {
         let value = SongLuaOverlayUpdateValue::F32(value);
-        SongLuaOverlayUpdateCapture::replace_value(&mut capture.values[index], target, value.clone());
+        SongLuaOverlayUpdateCapture::replace_value(
+            &mut capture.values[index],
+            target,
+            value.clone(),
+        );
         SongLuaOverlayUpdateCapture::replace_value(&mut capture.final_values[index], target, value);
     }
 }
@@ -879,6 +883,7 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "vibrate" => Target::Vibrate,
         "effect_magnitude" => Target::EffectMagnitude,
         "effect_clock" => Target::EffectClock,
+        "effect_timer" => Target::EffectTimer,
         "effect_mode" => Target::EffectMode,
         "effect_color1" => Target::EffectColor1,
         "effect_color2" => Target::EffectColor2,
@@ -2973,20 +2978,19 @@ fn run_guarded_actor_command(
         actor.set(&recurring_exact_key, 0.0_f64)?;
         (previous_cursor, previous_exact)
     };
-    let result = call_actor_function(lua, actor, command, params)
-        .map_err(|err| {
-            mlua::Error::external(format!(
-                "{} failed for {}: {err}",
-                name,
-                actor_debug_label(actor)
-            ))
-        })
-        .and_then(|()| {
-            if drain_queue {
-                drain_actor_command_queue(lua, actor)?;
-            }
-            Ok(())
-        });
+    let result = call_actor_function(lua, actor, command, params).map_err(|err| {
+        mlua::Error::external(format!(
+            "{} failed for {}: {err}",
+            name,
+            actor_debug_label(actor)
+        ))
+    });
+    let result = result.and_then(|()| {
+        if drain_queue {
+            drain_actor_command_queue(lua, actor)?;
+        }
+        Ok(())
+    });
     actor.set(recurring_cursor_key, previous_recurring_state.0)?;
     actor.set(&recurring_exact_key, previous_recurring_state.1)?;
     active.set(name, Value::Nil)?;
@@ -3119,12 +3123,20 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
             capture.queued_depth += 1;
         }
+        // This entry passed the recursion check when it was enqueued. An
+        // earlier dispatch with the same name may still be draining siblings;
+        // allow this body while preserving ancestor guards for cyclic queues.
+        let active = actor_active_commands(lua, actor)?;
+        let command = ActorCommandName::new(&name, "Command");
+        let previous_active = active.get::<Value>(command.as_str())?;
+        active.set(command.as_str(), Value::Nil)?;
         let result = run_actor_message_with_params(
             lua,
             actor,
-            &ActorCommandName::new(&name, "Command"),
+            &command,
             None,
         );
+        active.set(command.as_str(), previous_active)?;
         if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
             capture.queued_depth -= 1;
         }
@@ -3849,6 +3861,7 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "decode_movie" => "__songlua_state_decode_movie",
         "diffuse" => "__songlua_state_diffuse",
         "effect_clock" => "__songlua_state_effect_clock",
+        "effect_timer" => "__songlua_state_effect_timer",
         "effect_color1" => "__songlua_state_effect_color1",
         "effect_color2" => "__songlua_state_effect_color2",
         "effect_magnitude" => "__songlua_state_effect_magnitude",
@@ -4228,6 +4241,22 @@ pub fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Resu
     capture_immediate_string(lua, actor, "effect_mode", mode)
 }
 
+fn capture_effect_period(lua: &Lua, actor: &Table, period: f32) -> mlua::Result<()> {
+    capture_immediate_f32(lua, actor, "effect_period", period)?;
+    if actor
+        .raw_get::<Option<Table>>("__songlua_state_effect_timing")?
+        .is_some()
+    {
+        capture_immediate_vec5(
+            lua,
+            actor,
+            "effect_timing",
+            [period / 2.0, 0.0, period / 2.0, 0.0, 0.0],
+        )?;
+    }
+    Ok(())
+}
+
 pub fn set_actor_effect_defaults(
     lua: &Lua,
     actor: &Table,
@@ -4237,6 +4266,29 @@ pub fn set_actor_effect_defaults(
     color1: Option<[f32; 4]>,
     color2: Option<[f32; 4]>,
 ) -> mlua::Result<()> {
+    prepare_capture_scope_actor(lua, actor)?;
+    let previous = actor.raw_get::<Option<String>>("__songlua_state_effect_mode")?;
+    let previous_period = actor
+        .raw_get::<Option<f32>>("__songlua_state_effect_period")?
+        .unwrap_or(1.0);
+    let motion = matches!(mode, "bob" | "bounce" | "wag");
+    let reset = motion
+        && (mode == "bounce"
+            || previous.as_deref() != Some(mode)
+            || (mode == "bob" && period.is_some_and(|value| value != previous_period)));
+    if motion {
+        let clock =
+            if let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? {
+                clock
+            } else {
+                let clock = lua.create_table()?;
+                actor.raw_set("__songlua_state_motion_clock", clock.clone())?;
+                clock
+            };
+        if reset {
+            clock.set("units", 0.0_f32)?;
+        }
+    }
     set_actor_effect_mode(lua, actor, mode)?;
     if mode == "spin"
         && actor
@@ -4259,8 +4311,8 @@ pub fn set_actor_effect_defaults(
         pose.set("tail", 0usize)?;
         actor.raw_set("__songlua_state_spin", pose)?;
     }
-    if let Some(value) = period {
-        capture_immediate_f32(lua, actor, "effect_period", value)?;
+    if let Some(value) = period.filter(|_| mode != "bob" || reset) {
+        capture_effect_period(lua, actor, value)?;
     }
     if let Some(value) = magnitude {
         capture_immediate_vec3(lua, actor, "effect_magnitude", value)?;
@@ -7793,7 +7845,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 if let Some(value) = value.and_then(read_f32) {
-                    capture_immediate_f32(lua, &actor, "effect_period", value)?;
+                    capture_effect_period(lua, &actor, value)?;
                 }
                 Ok(actor.clone())
             }
@@ -7878,6 +7930,12 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                     return Ok(actor.clone());
                 };
                 capture_immediate_string(lua, &actor, "effect_clock", effect_clock_label(clock))?;
+                capture_immediate_bool(
+                    lua,
+                    &actor,
+                    "effect_timer",
+                    raw.eq_ignore_ascii_case("timer"),
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -9037,6 +9095,11 @@ pub fn install_actor_effect_time_getter_methods(lua: &Lua, actor: &Table) -> mlu
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
+                if let Some(clock) =
+                    actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")?
+                {
+                    return clock.get::<f32>("units");
+                }
                 let (beat, seconds) = compile_song_runtime_values(lua)?;
                 let clock = actor
                     .get::<Option<String>>("__songlua_state_effect_clock")?
@@ -9055,6 +9118,11 @@ pub fn install_actor_effect_time_getter_methods(lua: &Lua, actor: &Table) -> mlu
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
+                if let Some(clock) =
+                    actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")?
+                {
+                    return Ok(clock.get::<Option<f32>>("delta")?.unwrap_or(0.0));
+                }
                 let (delta_beat, delta_seconds) = compile_song_runtime_delta_values(lua)?;
                 let clock = actor
                     .get::<Option<String>>("__songlua_state_effect_clock")?
@@ -9792,6 +9860,76 @@ fn clear_spin_queue(actor: &Table, finish: bool) -> mlua::Result<()> {
     pose.set("tail", 0usize)
 }
 
+fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
+    let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
+        return Ok(());
+    };
+    let previous = clock.get::<Option<f32>>("units")?.unwrap_or(0.0);
+    let timer = actor
+        .raw_get::<Option<bool>>("__songlua_state_effect_timer")?
+        .unwrap_or(true);
+    let (units, delta) = if timer {
+        let delta = delta_seconds as f32;
+        let period = actor
+            .raw_get::<Option<f32>>("__songlua_state_effect_period")?
+            .unwrap_or(1.0);
+        let mut units = previous + delta;
+        if units > period {
+            units -= period;
+        }
+        (units, delta)
+    } else {
+        let (beat, seconds) = compile_song_runtime_values(lua)?;
+        let units = if actor
+            .raw_get::<Option<String>>("__songlua_state_effect_clock")?
+            .as_deref()
+            == Some("beat")
+        {
+            beat
+        } else {
+            seconds
+        };
+        (units, units - previous)
+    };
+    let units = clock.get::<Option<f32>>("pending_units")?.unwrap_or(units);
+    clock.set("pending_units", Value::Nil)?;
+    clock.set("units", units)?;
+    clock.set("delta", delta)
+}
+
+pub(crate) fn motion_render_phase(
+    actor: &Table,
+    frame_clock: [f32; 2],
+) -> mlua::Result<Option<f32>> {
+    let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
+        return Ok(None);
+    };
+    let units = if actor
+        .raw_get::<Option<String>>("__songlua_state_effect_clock")?
+        .as_deref()
+        == Some("beat")
+    {
+        frame_clock[1]
+    } else {
+        frame_clock[0]
+    };
+    Ok(Some(
+        units - clock.get::<Option<f32>>("units")?.unwrap_or(0.0),
+    ))
+}
+
+pub(crate) fn sync_motion_restart(actor: &Table, epoch: f32, seconds: f32) -> mlua::Result<()> {
+    let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
+        return Ok(());
+    };
+    if clock.get::<Option<f32>>("replay_epoch")? != Some(epoch) {
+        clock.set("replay_epoch", epoch)?;
+        // Queued commands run after Actor::UpdateInternal has advanced time.
+        clock.set("pending_units", (seconds - epoch).max(0.0))?;
+    }
+    Ok(())
+}
+
 // Mirrors Actor::UpdateInternal: advance spin first, then interpolate the
 // complete tween rotation even if the authored tween only changes alpha.
 fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Result<()> {
@@ -9992,6 +10130,7 @@ pub fn run_actor_compile_update_functions_with_delta(
             }
             match job {
                 SongLuaCompileUpdateJob::Advance { actor, rate, .. } => {
+                    advance_motion_clock(lua, actor, delta_seconds * rate)?;
                     advance_spin_pose(lua, actor, delta_seconds * rate)?;
                     advance_capture_position(lua, actor)?;
                     let ready = lua
@@ -10360,11 +10499,15 @@ pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Res
 }
 
 pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
+    // Motion clocks need chronological advancement even without a Lua callback.
     if actor
         .get::<Option<Function>>("__songlua_update_function")?
         .is_some()
         || actor
             .get::<Option<String>>("__songlua_recurring_update_command")?
+            .is_some()
+        || actor
+            .raw_get::<Option<Table>>("__songlua_state_motion_clock")?
             .is_some()
     {
         return Ok(true);
@@ -13024,9 +13167,11 @@ fn snapshot_function_locals(
                 let environment = function
                     .environment()
                     .map(|environment| {
-                        Ok::<_, mlua::Error>(environment
-                            .raw_get::<Option<Table>>("__songlua_env_target")?
-                            .unwrap_or(environment))
+                        Ok::<_, mlua::Error>(
+                            environment
+                                .raw_get::<Option<Table>>("__songlua_env_target")?
+                                .unwrap_or(environment),
+                        )
                     })
                     .transpose()?
                     .filter(|environment| environment.to_pointer() != globals.to_pointer());
@@ -13954,7 +14099,10 @@ pub fn hurry_actor_tweening(actor: &Table, factor: f32) -> mlua::Result<()> {
     flush_actor_capture(actor)?;
     let scale = factor.recip();
     if let Some(seconds) = actor.get::<Option<f64>>("__songlua_startup_queue_seconds")? {
-        actor.set("__songlua_startup_queue_seconds", seconds * f64::from(scale))?;
+        actor.set(
+            "__songlua_startup_queue_seconds",
+            seconds * f64::from(scale),
+        )?;
     }
     if let Some(blocks) = actor.get::<Option<Table>>("__songlua_capture_blocks")? {
         for block in blocks.sequence_values::<Table>() {
@@ -14219,6 +14367,9 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                     .map_err(|err| err.to_string())?
                     .as_deref()
                     .and_then(parse_overlay_effect_clock),
+                effect_timer: block
+                    .get::<Option<bool>>("effect_timer")
+                    .map_err(|err| err.to_string())?,
                 effect_mode: block
                     .get::<Option<String>>("effect_mode")
                     .map_err(|err| err.to_string())?
@@ -14640,6 +14791,10 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
     {
         state.effect_clock = value;
     }
+    state.effect_timer = actor
+        .raw_get::<Option<bool>>("__songlua_state_effect_timer")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(true);
     if let Some(value) = actor
         .get::<Option<Table>>("__songlua_state_effect_color1")
         .map_err(|err| err.to_string())?
@@ -14889,6 +15044,16 @@ pub fn set_actor_overlay_getter_state(
     set!("__songlua_state_rot_z_deg", state.rot_z_deg);
     set!("__songlua_state_halign", state.halign);
     set!("__songlua_state_valign", state.valign);
+    set!(
+        "__songlua_state_effect_mode",
+        crate::effect_mode_label(state.effect_mode)
+    );
+    set!(
+        "__songlua_state_effect_clock",
+        effect_clock_label(state.effect_clock)
+    );
+    set!("__songlua_state_effect_timer", state.effect_timer);
+    set!("__songlua_state_effect_period", state.effect_period);
     set!(
         "__songlua_state_diffuse",
         make_color_table(lua, state.diffuse).map_err(|err| err.to_string())?

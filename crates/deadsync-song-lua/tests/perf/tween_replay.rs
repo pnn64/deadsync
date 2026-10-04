@@ -6,7 +6,7 @@ use std::hint::black_box;
 mod baseline;
 
 // Insert the complete enum order from the existing behavior fixture below.
-const TARGETS: [SongLuaOverlayUpdateTarget; 78] = [
+const TARGETS: [SongLuaOverlayUpdateTarget; 80] = [
     SongLuaOverlayUpdateTarget::X,
     SongLuaOverlayUpdateTarget::Y,
     SongLuaOverlayUpdateTarget::Z,
@@ -53,11 +53,13 @@ const TARGETS: [SongLuaOverlayUpdateTarget; 78] = [
     SongLuaOverlayUpdateTarget::Vibrate,
     SongLuaOverlayUpdateTarget::EffectMagnitude,
     SongLuaOverlayUpdateTarget::EffectClock,
+    SongLuaOverlayUpdateTarget::EffectTimer,
     SongLuaOverlayUpdateTarget::EffectMode,
     SongLuaOverlayUpdateTarget::EffectColor1,
     SongLuaOverlayUpdateTarget::EffectColor2,
     SongLuaOverlayUpdateTarget::EffectPeriod,
     SongLuaOverlayUpdateTarget::EffectOffset,
+    SongLuaOverlayUpdateTarget::EffectPhase,
     SongLuaOverlayUpdateTarget::EffectTiming,
     SongLuaOverlayUpdateTarget::Rainbow,
     SongLuaOverlayUpdateTarget::RainbowScroll,

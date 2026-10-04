@@ -1233,8 +1233,8 @@
       "dropped_events": 0,
       "trace_until_beat": 836,
       "runtime_actor_ids": "unique per occurrence",
-      "uncompressed_sha256": "993568fcf9e48a7106479596b9a332161a4fdb6fadd1e1adba3e2247812f81d0",
-      "semantic_host_sha256": "0966ed2e29bc3263dc80ca6cd77e09a8e74180606e73cc55d80e33a50354a148",
+      "uncompressed_sha256": "f8138aacd102bb6d9a63444c5453b4f7cdef471f553ab3dec33ed43aec463c37",
+      "semantic_host_sha256": "a93cc6d58aa7b88bdb1a88178dc3755fd8ec50dd6925df97207ab00026b470e0",
       "reference_theme": {
         "name": "Simply Love",
         "metrics_source": "Simply-Love-SM5-8ms-iamchris4life/metrics.ini",
@@ -1250,7 +1250,8 @@
       "vibration_correction": "Reset magnitude to (10,10,10) on every vibrate call; stopeffect preserves the stored magnitude, as native Actor does.",
       "tween_interpolation_correction": "Use native RageUtil::lerp for float actor fields, rounding the product before the sum. The semantic update clock and tween queue timing remain unchanged.",
       "pulse_geometry_correction": "Apply native Actor::PreDraw pulse zoom and RGB axis scaling to projected vertices, including parent frames and wrappers; normalize both scalar and table effect colors.",
-      "pulse_clock_correction": "Native bgm is a beat clock; music is the seconds clock."
+      "pulse_clock_correction": "Native bgm is a beat clock; music is the seconds clock.",
+      "motion_geometry_correction": "Apply native Actor::PreDraw Bob, Bounce and Wag poses before composing parent and wrapper matrices; use native macro timer resets and float timer advancement."
     }
   ]
 }

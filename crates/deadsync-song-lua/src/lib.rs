@@ -2120,6 +2120,23 @@ pub const fn effect_clock_label(clock: EffectClock) -> &'static str {
     }
 }
 
+pub(crate) const fn effect_mode_label(mode: EffectMode) -> &'static str {
+    match mode {
+        EffectMode::None => "none",
+        EffectMode::DiffuseBlink => "diffuseblink",
+        EffectMode::DiffuseRamp => "diffuseramp",
+        EffectMode::DiffuseShift => "diffuseshift",
+        EffectMode::GlowBlink => "glowblink",
+        EffectMode::GlowRamp => "glowramp",
+        EffectMode::GlowShift => "glowshift",
+        EffectMode::Pulse => "pulse",
+        EffectMode::Bob => "bob",
+        EffectMode::Bounce => "bounce",
+        EffectMode::Wag => "wag",
+        EffectMode::Spin => "spin",
+    }
+}
+
 #[inline(always)]
 #[must_use]
 pub const fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
@@ -2547,11 +2564,14 @@ pub struct SongLuaOverlayState {
     /// Vibration contributed by composed ancestor ActorFrames.
     pub inherited_vibrate: [f32; 3],
     pub effect_clock: EffectClock,
+    pub effect_timer: bool,
     pub effect_mode: EffectMode,
     pub effect_color1: [f32; 4],
     pub effect_color2: [f32; 4],
     pub effect_period: f32,
     pub effect_offset: f32,
+    /// Native per-actor clock correction, sampled during chronological compilation.
+    pub effect_phase: f32,
     pub effect_timing: Option<[f32; 5]>,
     pub rainbow: bool,
     pub rainbow_scroll: bool,
@@ -2637,11 +2657,13 @@ impl Default for SongLuaOverlayState {
             effect_magnitude: [0.0, 0.0, 0.0],
             inherited_vibrate: [0.0, 0.0, 0.0],
             effect_clock: EffectClock::Time,
+            effect_timer: true,
             effect_mode: EffectMode::None,
             effect_color1: [1.0, 1.0, 1.0, 1.0],
             effect_color2: [1.0, 1.0, 1.0, 1.0],
             effect_period: 1.0,
             effect_offset: 0.0,
+            effect_phase: 0.0,
             effect_timing: None,
             rainbow: false,
             rainbow_scroll: false,
@@ -2781,6 +2803,7 @@ pub struct SongLuaOverlayStateDelta {
     pub vibrate: Option<bool>,
     pub effect_magnitude: Option<[f32; 3]>,
     pub effect_clock: Option<EffectClock>,
+    pub effect_timer: Option<bool>,
     pub effect_mode: Option<EffectMode>,
     pub effect_color1: Option<[f32; 4]>,
     pub effect_color2: Option<[f32; 4]>,
@@ -2867,11 +2890,13 @@ impl SongLuaOverlayStateDelta {
             Target::Vibrate => self.vibrate.is_some(),
             Target::EffectMagnitude => self.effect_magnitude.is_some(),
             Target::EffectClock => self.effect_clock.is_some(),
+            Target::EffectTimer => self.effect_timer.is_some(),
             Target::EffectMode => self.effect_mode.is_some(),
             Target::EffectColor1 => self.effect_color1.is_some(),
             Target::EffectColor2 => self.effect_color2.is_some(),
             Target::EffectPeriod => self.effect_period.is_some(),
             Target::EffectOffset => self.effect_offset.is_some(),
+            Target::EffectPhase => false,
             Target::EffectTiming => self.effect_timing.is_some(),
             Target::Rainbow => self.rainbow.is_some(),
             Target::RainbowScroll => self.rainbow_scroll.is_some(),
@@ -2930,6 +2955,37 @@ pub struct SongLuaOverlayCommandBlock {
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
     pub delta: SongLuaOverlayStateDelta,
+}
+
+/// Resolve native motion macro resets against the actor's state at dispatch.
+pub fn motion_restart_epoch(
+    mut state: SongLuaOverlayState,
+    blocks: &[SongLuaOverlayCommandBlock],
+    elapsed: f32,
+    origin: f32,
+) -> Option<f32> {
+    let mut epoch = None;
+    for block in blocks {
+        if elapsed + f32::EPSILON < block.start {
+            break;
+        }
+        if let Some(mode) = block.delta.effect_mode {
+            let reset = match mode {
+                EffectMode::Bob => state.effect_mode != mode || state.effect_period != 2.0,
+                EffectMode::Wag => state.effect_mode != mode,
+                EffectMode::Bounce => true,
+                _ => false,
+            };
+            if reset {
+                epoch = Some(origin + block.start);
+            }
+        }
+        apply_overlay_delta(&mut state, &block.delta);
+        if elapsed < block.start + block.duration.max(0.0) {
+            break;
+        }
+    }
+    epoch
 }
 
 fn overlay_command_out_bounce(t: f32) -> f32 {
@@ -3208,6 +3264,9 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.effect_clock {
         state.effect_clock = value;
+    }
+    if let Some(value) = delta.effect_timer {
+        state.effect_timer = value;
     }
     if let Some(value) = delta.effect_mode {
         state.effect_mode = value;
@@ -3605,6 +3664,11 @@ pub fn overlay_state_lerp(
     {
         from.effect_clock = to;
     }
+    if let Some(to) = delta.effect_timer
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.effect_timer = to;
+    }
     if let Some(to) = delta.effect_mode
         && t >= 1.0 - f32::EPSILON
     {
@@ -3717,6 +3781,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.vibrate.is_none()
         && delta.effect_magnitude.is_none()
         && delta.effect_clock.is_none()
+        && delta.effect_timer.is_none()
         && delta.effect_mode.is_none()
         && delta.effect_color1.is_none()
         && delta.effect_color2.is_none()
@@ -3909,6 +3974,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     if from.effect_clock.is_some() {
         into.effect_clock = from.effect_clock;
     }
+    if from.effect_timer.is_some() {
+        into.effect_timer = from.effect_timer;
+    }
     if from.effect_mode.is_some() {
         into.effect_mode = from.effect_mode;
     }
@@ -4082,6 +4150,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(vibrate);
     copy_pair!(effect_magnitude);
     copy_pair!(effect_clock);
+    copy_pair!(effect_timer);
     copy_pair!(effect_mode);
     copy_pair!(effect_color1);
     copy_pair!(effect_color2);
@@ -4465,11 +4534,13 @@ pub enum SongLuaOverlayUpdateTarget {
     Vibrate,
     EffectMagnitude,
     EffectClock,
+    EffectTimer,
     EffectMode,
     EffectColor1,
     EffectColor2,
     EffectPeriod,
     EffectOffset,
+    EffectPhase,
     EffectTiming,
     Rainbow,
     RainbowScroll,
