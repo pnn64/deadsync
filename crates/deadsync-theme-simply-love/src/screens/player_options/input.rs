@@ -173,7 +173,8 @@ pub fn update(
             first_y_bits: first_row_center_y.to_bits(),
             row_step_bits: row_step.to_bits(),
         };
-        if state.pane().row_tweens.len() != total_rows {
+        let tweens_reset = state.pane().row_tweens.len() != total_rows;
+        if tweens_reset {
             state.pane_mut().row_tweens = init_row_tweens(
                 &state.pane().row_map,
                 state.pane().selected_row,
@@ -194,6 +195,7 @@ pub fn update(
             );
             pane.layout_key = Some(layout_key);
         }
+        retarget_inline_scroll(state, active, tweens_reset);
         for tween in &mut state.pane_mut().row_tweens {
             if tween.t < 1.0 {
                 if ROW_TWEEN_SECONDS > 0.0 {
