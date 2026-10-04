@@ -386,10 +386,10 @@ impl SongLuaOverlayUpdateCapture {
         if self.active_broadcast.is_none() && self.queued_depth == 0 {
             let samples = self.writes.entry((index, target)).or_default();
             let sample = crate::SongLuaOverlayUpdateSample {
-                beat,
+                time: beat,
                 value: value.clone(),
             };
-            if samples.last().is_some_and(|last| last.beat == beat) {
+            if samples.last().is_some_and(|last| last.time == beat) {
                 if !scheduled {
                     *samples.last_mut().expect("sample exists") = sample;
                 }

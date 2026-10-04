@@ -25,7 +25,7 @@ fn sampled_states_preserve_static_actors_tween_endpoints_and_stopped_updates() {
             .find(|track| track.overlay_index == index && track.target == target).unwrap();
         let last = track.samples.last().unwrap();
         assert_eq!(last.value, SongLuaOverlayUpdateValue::F32(expected));
-        assert!((last.beat - end).abs() < 0.02, "{name}: {}", last.beat);
+        assert!((last.time - end).abs() < 0.02, "{name}: {}", last.time);
     }
     assert!(compiled.messages.iter().any(|event| event.message == "Pulse" && event.beat == 0.75));
     assert!(compiled.messages.iter().any(|event| event.message == "Pulse" && event.beat == 1.25));

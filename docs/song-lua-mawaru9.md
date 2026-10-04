@@ -82,7 +82,7 @@ limit. Its per-entry provenance is recorded in the selected manifest;
 older entries keep their original provenance.
 
 Decompressed SHA256:
-`e16dbaf5b1e109b51de64e60e2506a8ee07c7c602f7e22be99871a1253472f92`.
+`d56bc4ea2aef3f9ec87e291466e134e1e6e6925b094a7b5f0443f8dc2bc7b503`.
 Compression was checked with an exact byte-for-byte round trip.
 
 Regenerate from the workspace root after a relevant oracle or song change:
@@ -892,6 +892,73 @@ seconds comparing geometry and 22.57 seconds comparing vibration. These
 load-time audit measurements include concurrent validation work and do not
 measure gameplay performance. The main repository receives this pass as
 0.5.1726, exactly one patch increment from 0.5.1725.
+
+## Rendered updates during timing stops (0.5.1727)
+
+At beat 651.5, Sans has three distinct update frames at the same song beat:
+247.4666667, 247.4833333 and 247.5 seconds. Its recurring 20 ms command keeps
+moving the bones during that stop. Beat-keyed render tracks collapsed those
+frames, so the first native pause sample received the later position: a
+seven-unit local displacement, or 9.340625 logical screen pixels.
+
+Captured render updates now retain absolute song seconds when song timing
+is available. Their shared time unit survives splitting into background and
+foreground layers, queued startup uses the same clock, and gameplay converts
+the samples with the calibration offset. The sample coordinate is named
+`time` rather than `beat`; raw setter audit tracks still use beats. Sampled
+player transforms and column transform windows also retain seconds instead
+of dropping frames with identical start/end beats. The original beat-only
+capture path remains for compile contexts that have no song timing.
+
+`paused-updates.ssc` contains a 0.4-second stop, a 0.3-second delay and a
+one-beat warp. A recurring command moves one Quad; a SetUpdateFunction clock
+moves another. Native ITGmania applies all three timing segments. The earlier
+staging `.sm` ignored its warp tag, so it was replaced before freezing the
+fixture. The final capture contains 644 update frames, zero Lua runtime
+errors and zero dropped events. Its raw 78,769 bytes compress to 10,417 bytes
+with an exact round trip. Decoded SHA256:
+`6e08ed8864f866970142fc8766a63b9197654df61b3c69d44616d160edb51f61`.
+
+The regular semantic regression compares the complete native fixture:
+362/370 before the change and 370/370 after it. Before the change, the walker
+was 40 units too far along and the frame clock actor was eight units too far
+along at the first stopped frame. The gameplay regression additionally
+checks 72 native actor positions through
+the production compiler, runtime conversion and cached playback, with two
+Lua layers, offsets of zero and 0.25 seconds, and a cursor rewind. A separate
+fixture checks sampled player X and the rendered column spline during the
+stop at music rates 0.5, 1.0 and 1.5. The checker selects render samples with
+native seconds; seconds-frame rounding uses the existing gameplay precision
+of 0.0001 seconds, while the previous beat tolerance stays unchanged.
+
+The final full-song audit uses the same frozen Mawaru9 native reference:
+
+| Category | Passing checks |
+| --- | --- |
+| Complete result | 118,780/118,933 |
+| Compile info | 12/12 |
+| Layer order | 4/4 |
+| Final render | 3,748/3,748 |
+| Render persistence | 6,639/6,639 |
+| Update values | 23,197/23,197 |
+| Player ranges | 13/14 |
+| Projected geometry | 65,268/65,418 |
+| Projected vibration | 19,398/19,400 |
+| Timeline | 224/224 |
+| Message commands | 231/231 |
+| Runtime modifiers | 46/46 |
+
+This resolves all 28 Sans bone geometry failures and the alpha mismatch for
+def-2254 at the beat-120 stop. Coverage is unchanged. Mawaru9 still fails
+150 geometry checks, two vibration samples and P2's X range, for 153 failed
+checks and 31 distinct reports. Its complete test remains ignored and
+failing; passing micro-fixtures do not establish full-song parity.
+
+All 963 Lua/profile tests and 86 regular semantic tests pass in both
+repositories.
+The final full debug audit took 366.88 seconds. The main repository receives
+this pass as 0.5.1727, exactly one patch increment from 0.5.1726. The original
+song, native Mawaru9 reference and harness sources are unchanged in this pass.
 
 ## Project scope
 

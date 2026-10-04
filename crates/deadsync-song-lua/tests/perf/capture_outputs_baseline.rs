@@ -28,7 +28,7 @@ pub(super) fn push_update_overlay_value(
                 // Do not invent a ramp from the actor default before that first
                 // write; the runtime applies the first sampled value as a step.
                 samples: vec![SongLuaOverlayUpdateSample {
-                    beat: next_beat,
+                    time: next_beat,
                     value: next,
                 }],
             });
@@ -42,15 +42,15 @@ pub(super) fn push_update_overlay_value(
     if track
         .samples
         .last()
-        .is_some_and(|sample| sample.beat < beat - f32::EPSILON)
+        .is_some_and(|sample| sample.time < beat - f32::EPSILON)
     {
         track.samples.push(SongLuaOverlayUpdateSample {
-            beat,
+            time: beat,
             value: current,
         });
     }
     track.samples.push(SongLuaOverlayUpdateSample {
-        beat: next_beat,
+        time: next_beat,
         value: next,
     });
     track_index

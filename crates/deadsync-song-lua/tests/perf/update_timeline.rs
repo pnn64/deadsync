@@ -444,7 +444,7 @@ fn assert_tracks(actual: &[SongLuaOverlayUpdateTrack], expected: &[SongLuaOverla
             (b.overlay_index, b.target, b.samples.len())
         );
         for (a, b) in a.samples.iter().zip(&b.samples) {
-            assert_eq!(a.beat.to_bits(), b.beat.to_bits());
+            assert_eq!(a.time.to_bits(), b.time.to_bits());
             assert_eq!(a.value, b.value);
         }
     }
@@ -523,7 +523,7 @@ fn ordered_appends_keep_last_timestamp_value_and_arc_ownership() {
     assert!(old_weak.upgrade().is_none());
     assert_eq!(tracks[0].samples.len(), 1);
     assert_eq!(
-        tracks[0].samples[0].beat.to_bits(),
+        tracks[0].samples[0].time.to_bits(),
         (2.0 * f32::EPSILON).to_bits()
     );
     assert_eq!(
@@ -544,7 +544,7 @@ fn scheduled_merges_preserve_prefilled_unsorted_and_empty_tracks() {
                 .into_iter()
                 .enumerate()
                 .map(|(i, beat)| SongLuaOverlayUpdateSample {
-                    beat,
+                    time: beat,
                     value: SongLuaOverlayUpdateValue::F32(i as f32 + 100.0),
                 })
                 .collect(),

@@ -185,7 +185,7 @@ impl Fixture {
                 overlay_index: i,
                 target,
                 samples: vec![SongLuaOverlayUpdateSample {
-                    beat: 0.0,
+                    time: 0.0,
                     value: overlay_state_update_value(state, target),
                 }],
             });

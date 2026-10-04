@@ -1681,6 +1681,8 @@ pub struct CompiledSongLua<OverlayActor> {
     /// Captured ScreenGameplay translation and vibration shared by all screen draws.
     pub screen_overlay_index: Option<usize>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
+    /// Clock shared by rendered update samples; pauses need distinct song seconds.
+    pub overlay_update_unit: SongLuaTimeUnit,
     pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
     /// Setter arguments retained only for reference audits; rendered tracks may tween them.
     #[cfg(feature = "test-support")]
@@ -1713,6 +1715,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             overlays: Vec::new(),
             screen_overlay_index: None,
             overlay_eases: Vec::new(),
+            overlay_update_unit: SongLuaTimeUnit::Beat,
             overlay_updates: Vec::new(),
             #[cfg(feature = "test-support")]
             overlay_writes: Vec::new(),
@@ -4551,7 +4554,8 @@ impl SongLuaOverlayUpdateValue {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayUpdateSample {
-    pub beat: f32,
+    /// Render tracks use `overlay_update_unit`; raw audit writes use beats.
+    pub time: f32,
     pub value: SongLuaOverlayUpdateValue,
 }
 
@@ -7598,10 +7602,10 @@ return Def.ActorFrame{
             .find(|track| track.target == SongLuaOverlayUpdateTarget::Visible)
             .expect("the flash should have a sampled visibility track");
         assert!(visible.samples.iter().any(|sample| {
-            sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
+            sample.time >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
         }));
         assert!(visible.samples.iter().any(|sample| {
-            (sample.beat - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
+            (sample.time - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Bool(false)
         }));
         let diffuse = compiled
@@ -7610,11 +7614,11 @@ return Def.ActorFrame{
             .find(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse)
             .expect("the flash should have a sampled diffuse track");
         assert!(diffuse.samples.iter().any(|sample| {
-            (sample.beat - 1.25).abs() <= 1.0e-4
+            (sample.time - 1.25).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 1.0])
         }));
         assert!(diffuse.samples.iter().any(|sample| {
-            (sample.beat - 1.5).abs() <= 1.0e-4
+            (sample.time - 1.5).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.0])
         }));
     }
@@ -8103,7 +8107,7 @@ return Def.ActorFrame{
             let sample = alpha
                 .samples
                 .iter()
-                .find(|sample| (sample.beat - beat).abs() < 0.00001)
+                .find(|sample| (sample.time - beat).abs() < 0.00001)
                 .unwrap();
             let SongLuaOverlayUpdateValue::Vec4(value) = sample.value else {
                 panic!("alpha value");
@@ -8116,7 +8120,7 @@ return Def.ActorFrame{
                 .samples
                 .iter()
                 .rev()
-                .find(|sample| sample.beat <= beat + 0.00001)
+                .find(|sample| sample.time <= beat + 0.00001)
                 .unwrap();
             assert_eq!(
                 sample.value,
@@ -8185,9 +8189,9 @@ return Def.ActorFrame{
         let midpoint = x
             .samples
             .iter()
-            .min_by(|left, right| (left.beat - 1.5).abs().total_cmp(&(right.beat - 1.5).abs()))
+            .min_by(|left, right| (left.time - 1.5).abs().total_cmp(&(right.time - 1.5).abs()))
             .unwrap();
-        assert!((midpoint.beat - 1.5).abs() <= 0.051);
+        assert!((midpoint.time - 1.5).abs() <= 0.051);
         assert!(
             matches!(midpoint.value, SongLuaOverlayUpdateValue::F32(value) if (value - 50.0).abs() <= 5.1),
             "unexpected midpoint sample: {midpoint:?}"
@@ -8454,7 +8458,7 @@ return Def.ActorFrame{
             })
             .unwrap();
         assert!(x.samples.first().is_some_and(|sample| {
-            sample.beat >= 0.2 && sample.value == SongLuaOverlayUpdateValue::F32(100.0)
+            sample.time >= 0.2 && sample.value == SongLuaOverlayUpdateValue::F32(100.0)
         }));
         assert!(
             x.samples
@@ -8522,7 +8526,7 @@ return Def.ActorFrame{
                 track.overlay_index == target_index && track.target == SongLuaOverlayUpdateTarget::X
             })
             .unwrap();
-        let next = track.samples.partition_point(|sample| sample.beat <= 4.0);
+        let next = track.samples.partition_point(|sample| sample.time <= 4.0);
         assert_eq!(
             track.samples[next - 1].value,
             SongLuaOverlayUpdateValue::F32(100.0)
@@ -8587,7 +8591,7 @@ return Def.ActorFrame{
             })
             .expect("proxy visibility update track should be captured");
         let at = |beat| {
-            let next = track.samples.partition_point(|sample| sample.beat <= beat);
+            let next = track.samples.partition_point(|sample| sample.time <= beat);
             &track.samples[next.saturating_sub(1)].value
         };
         assert_eq!(at(1.0), &SongLuaOverlayUpdateValue::Bool(false));
@@ -8679,7 +8683,7 @@ return Def.ActorFrame{
             .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
             .unwrap();
         assert!(x.samples.iter().any(|sample| {
-            (sample.beat - 0.5).abs() <= f32::EPSILON
+            (sample.time - 0.5).abs() <= f32::EPSILON
                 && sample.value == SongLuaOverlayUpdateValue::F32(0.0)
         }));
         assert_eq!(
@@ -8749,7 +8753,7 @@ return Def.ActorFrame{
             Some(&SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.0]))
         );
         assert!(alpha.samples.iter().all(|sample| {
-            sample.beat <= 0.5
+            sample.time <= 0.5
                 || sample.value != SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 1.0])
         }));
     }
@@ -8798,7 +8802,7 @@ return Def.ActorFrame{
                 .iter()
                 .find(|track| track.target == target)
                 .unwrap();
-            assert!(track.samples.iter().all(|sample| sample.beat <= 0.5));
+            assert!(track.samples.iter().all(|sample| sample.time <= 0.5));
             assert!(matches!(
                 track.samples.last().map(|sample| &sample.value),
                 Some(SongLuaOverlayUpdateValue::F32(value)) if *value > 0.0
@@ -8845,7 +8849,7 @@ return Def.ActorFrame{
             .iter()
             .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
             .unwrap();
-        assert!(track.samples.iter().all(|sample| sample.beat <= 0.5));
+        assert!(track.samples.iter().all(|sample| sample.time <= 0.5));
         assert_eq!(
             track.samples.last().map(|sample| &sample.value),
             Some(&SongLuaOverlayUpdateValue::F32(80.0))
@@ -9435,7 +9439,7 @@ return Def.ActorFrame{
                     .samples
                     .iter()
                     .rev()
-                    .find(|sample| sample.beat <= 0.100_01)
+                    .find(|sample| sample.time <= 0.100_01)
             })
             .and_then(|sample| match sample.value {
                 SongLuaOverlayUpdateValue::F32(value) => Some(value),
@@ -9864,7 +9868,7 @@ return Def.ActorFrame{
         let before = &track.samples[first_changed - 1];
         let first = &track.samples[first_changed];
         assert!(
-            before.value == SongLuaOverlayUpdateValue::F32(0.0) && first.beat > 1.0,
+            before.value == SongLuaOverlayUpdateValue::F32(0.0) && first.time > 1.0,
             "the runtime tween must start from the untouched initial state: {before:?}, {first:?}"
         );
     }
@@ -11575,11 +11579,8 @@ return Def.ActorFrame {
     fn init_queues_wait_for_on() {
         let song_dir = test_dir("init-queue-order");
         let entry = song_dir.join("default.lua");
-        fs::write(
-            &entry,
-            include_str!("../tests/fixtures/init-queue.lua"),
-        )
-        .expect("native Init queue fixture");
+        fs::write(&entry, include_str!("../tests/fixtures/init-queue.lua"))
+            .expect("native Init queue fixture");
         let compiled = test_compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Init Queue Order"),
@@ -19256,7 +19257,7 @@ return Def.ActorFrame{
             track.overlay_index == stone_index
                 && track.target == SongLuaOverlayUpdateTarget::Visible
                 && track.samples.iter().any(|sample| {
-                    sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
+                    sample.time >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
                 })
         }));
     }
@@ -19313,11 +19314,11 @@ return Def.ActorFrame{
         assert!(
             x.samples
                 .iter()
-                .filter(|sample| sample.beat <= 2.0)
+                .filter(|sample| sample.time <= 2.0)
                 .all(|sample| sample.value == SongLuaOverlayUpdateValue::F32(0.0))
         );
         assert!(x.samples.iter().any(|sample| {
-            sample.beat > 2.0
+            sample.time > 2.0
                 && matches!(sample.value, SongLuaOverlayUpdateValue::F32(value) if value > 0.0)
         }));
     }
@@ -19768,8 +19769,11 @@ return Def.ActorFrame{
     fn compile_song_lua_captures_queued_parent_vibration() {
         let song_dir = test_dir("queued-parent-vibration");
         let entry = song_dir.join("default.lua");
-        fs::write(&entry, include_str!("../tests/fixtures/queue-vibration.lua"))
-            .expect("native queued vibration fixture");
+        fs::write(
+            &entry,
+            include_str!("../tests/fixtures/queue-vibration.lua"),
+        )
+        .expect("native queued vibration fixture");
 
         let mut context = SongLuaCompileContext::new(&song_dir, "Queued Parent Vibration");
         context.music_length_seconds = 3.0;
@@ -19804,7 +19808,7 @@ return Def.ActorFrame{
                 .iter()
                 .find(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(value))
                 .expect("native vibration transition");
-            assert!((sample.beat - native_beat).abs() < 0.0001, "{sample:?}");
+            assert!((sample.time - native_beat).abs() < 0.0001, "{sample:?}");
         }
         let magnitude = compiled
             .overlay_updates

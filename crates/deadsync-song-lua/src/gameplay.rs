@@ -802,15 +802,18 @@ pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
             .samples
             .iter()
             .filter_map(|sample| {
-                deadsync_gameplay::song_lua_message_second(
-                    sample.beat,
+                let second = deadsync_gameplay::song_lua_time_to_second(
+                    song_lua_runtime_time_unit(compiled.overlay_update_unit),
+                    sample.time,
                     timing_player,
                     global_offset_seconds,
-                )
-                .map(|second| crate::SongLuaOverlayRuntimeUpdateSample {
-                    second,
-                    value: sample.value.clone(),
-                })
+                );
+                second
+                    .is_finite()
+                    .then(|| crate::SongLuaOverlayRuntimeUpdateSample {
+                        second,
+                        value: sample.value.clone(),
+                    })
             })
             .collect::<Vec<_>>();
         if samples.is_empty() {

@@ -1601,6 +1601,7 @@ fn compare_update_render_persistence(
                     overlay_index,
                     SongLuaOverlayUpdateTarget::Diffuse,
                     beat,
+                    song_elapsed_seconds_at(beat, context),
                 ) else {
                     continue;
                 };
@@ -1625,6 +1626,7 @@ fn compare_update_render_persistence(
                     overlay_index,
                     SongLuaOverlayUpdateTarget::Visible,
                     beat,
+                    song_elapsed_seconds_at(beat, context),
                 ) else {
                     continue;
                 };
@@ -1841,13 +1843,34 @@ fn native_update_render_writes_all(trace: &NativeTrace, actor: &str) -> Vec<Nati
     merged
 }
 
+fn overlay_update_time(
+    context: &SongLuaCompileContext,
+    unit: SongLuaTimeUnit,
+    beat: f32,
+    seconds: f32,
+) -> f32 {
+    match unit {
+        SongLuaTimeUnit::Beat => beat,
+        SongLuaTimeUnit::Second => {
+            seconds * deadsync_song_lua::song_music_rate(context)
+                + context
+                    .song_timing
+                    .as_ref()
+                    .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0))
+        }
+        SongLuaTimeUnit::BeatClock => seconds * deadsync_song_lua::song_music_rate(context),
+    }
+}
+
 fn compiled_update_value_at(
     context: &SongLuaCompileContext,
     compiled: &CompiledSongLua,
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
     beat: f32,
+    seconds: f32,
 ) -> Option<SongLuaOverlayUpdateValue> {
+    let time = overlay_update_time(context, compiled.overlay_update_unit, beat, seconds);
     let samples = &compiled
         .overlay_updates
         .iter()
@@ -1858,18 +1881,27 @@ fn compiled_update_value_at(
                 && track
                     .samples
                     .first()
-                    .is_some_and(|sample| sample.beat <= beat)
+                    .is_some_and(|sample| sample.time <= time)
         })?
         .samples;
-    sample_update_track(context, samples, beat)
+    sample_update_track(
+        context,
+        compiled.overlay_update_unit,
+        samples,
+        beat,
+        seconds,
+    )
 }
 
 fn sample_update_track(
     context: &SongLuaCompileContext,
+    unit: SongLuaTimeUnit,
     samples: &[deadsync_song_lua::SongLuaOverlayUpdateSample],
     beat: f32,
+    seconds: f32,
 ) -> Option<SongLuaOverlayUpdateValue> {
-    let next_index = samples.partition_point(|sample| sample.beat <= beat);
+    let time = overlay_update_time(context, unit, beat, seconds);
+    let next_index = samples.partition_point(|sample| sample.time <= time);
     if next_index == 0 {
         return None;
     }
@@ -1877,18 +1909,22 @@ fn sample_update_track(
     let Some(next) = samples.get(next_index) else {
         return Some(current.value.clone());
     };
-    let span = next.beat - current.beat;
+    let span = next.time - current.time;
     // The native oracle serializes its 60 Hz clock as f64 while runtime tracks
-    // store beat positions as f32.  Compare the same frame directly when the
+    // store coordinates as f32. Compare the same frame directly when the
     // two representations straddle it. Dense tracks contain one sample per
     // update frame; sparse tween tracks must retain interpolation semantics.
     let nearest = [current, next].into_iter().min_by(|left, right| {
-        (left.beat - beat)
+        (left.time - time)
             .abs()
-            .total_cmp(&(right.beat - beat).abs())
+            .total_cmp(&(right.time - time).abs())
     })?;
-    let frame_epsilon = EPSILON;
-    if (nearest.beat - beat).abs() <= frame_epsilon {
+    let frame_epsilon = if unit == SongLuaTimeUnit::Beat {
+        EPSILON
+    } else {
+        0.000_1
+    };
+    if (nearest.time - time).abs() <= frame_epsilon {
         return Some(nearest.value.clone());
     }
     if span <= f32::EPSILON {
@@ -1896,9 +1932,15 @@ fn sample_update_track(
     }
     // Gameplay converts captured beat positions to seconds before sampling.
     // Beat interpolation changes a seconds-based fade across a BPM boundary.
-    let start = song_elapsed_seconds_at(current.beat, context);
-    let end = song_elapsed_seconds_at(next.beat, context);
-    let now = song_elapsed_seconds_at(beat, context);
+    let (start, end, now) = if unit == SongLuaTimeUnit::Beat {
+        (
+            song_elapsed_seconds_at(current.time, context),
+            song_elapsed_seconds_at(next.time, context),
+            seconds,
+        )
+    } else {
+        (current.time, next.time, time)
+    };
     let t = if end <= start + f32::EPSILON {
         1.0
     } else {
@@ -2076,7 +2118,7 @@ fn compare_update_render_values(
                         track
                             .samples
                             .iter()
-                            .find(|sample| (sample.beat - write.beat).abs() <= EPSILON)
+                            .find(|sample| (sample.time - write.beat).abs() <= EPSILON)
                     })
                     .map(|sample| sample.value.clone())
                     .or_else(|| {
@@ -2086,6 +2128,7 @@ fn compare_update_render_values(
                             overlay_index,
                             write.target,
                             write.beat,
+                            song_elapsed_seconds_at(write.beat, context),
                         )
                     })
                     .or_else(|| {
@@ -3092,6 +3135,7 @@ fn apply_runtime_updates(
     compiled: &CompiledSongLua,
     overlay_index: usize,
     beat: f32,
+    seconds: f32,
     state: &mut SongLuaOverlayState,
 ) {
     for track in compiled
@@ -3099,9 +3143,14 @@ fn apply_runtime_updates(
         .iter()
         .filter(|track| track.overlay_index == overlay_index)
     {
-        if let Some(value) =
-            compiled_update_value_at(context, compiled, overlay_index, track.target, beat)
-        {
+        if let Some(value) = compiled_update_value_at(
+            context,
+            compiled,
+            overlay_index,
+            track.target,
+            beat,
+            seconds,
+        ) {
             deadsync_song_lua::playback::apply_overlay_update(state, track.target, &value);
         }
     }
@@ -3183,16 +3232,25 @@ fn compiled_local_states_at(
     // Resolve the last active track per actor/property once. Applying the
     // original track order retains interactions such as size versus stretch,
     // including repeated targets and tracks that have not started yet.
+    let time = overlay_update_time(context, compiled.overlay_update_unit, beat, seconds);
     let mut updates = HashMap::with_capacity(compiled.overlay_updates.len());
     for track in compiled.overlay_updates.iter().rev() {
         if track
             .samples
             .first()
-            .is_some_and(|sample| sample.beat <= beat)
+            .is_some_and(|sample| sample.time <= time)
         {
             updates
                 .entry((track.overlay_index, track.target))
-                .or_insert_with(|| sample_update_track(context, &track.samples, beat));
+                .or_insert_with(|| {
+                    sample_update_track(
+                        context,
+                        compiled.overlay_update_unit,
+                        &track.samples,
+                        beat,
+                        seconds,
+                    )
+                });
         }
     }
     for track in &compiled.overlay_updates {
@@ -3232,7 +3290,7 @@ fn frame_updates_keep_track_precedence() {
         samples: values
             .iter()
             .map(|(beat, value)| SongLuaOverlayUpdateSample {
-                beat: *beat,
+                time: *beat,
                 value: value.clone(),
             })
             .collect(),
@@ -3293,7 +3351,14 @@ fn frame_updates_keep_track_precedence() {
             .map(|actor| actor.initial_state)
             .collect::<Vec<_>>();
         for (index, state) in expected.iter_mut().enumerate() {
-            apply_runtime_updates(&context, &compiled, index, beat, state);
+            apply_runtime_updates(
+                &context,
+                &compiled,
+                index,
+                beat,
+                song_elapsed_seconds_at(beat, &context),
+                state,
+            );
         }
         let actual = compiled_local_states_at(
             &compiled,
@@ -3344,7 +3409,7 @@ fn frame_track_sampling_benchmark() {
                     target,
                     samples: [0.0, 2.0]
                         .map(|beat| SongLuaOverlayUpdateSample {
-                            beat,
+                            time: beat,
                             value: SongLuaOverlayUpdateValue::F32(beat + overlay_index as f32),
                         })
                         .into(),
@@ -3362,7 +3427,7 @@ fn frame_track_sampling_benchmark() {
         .collect::<Vec<_>>();
     let start = std::time::Instant::now();
     for (index, state) in expected.iter_mut().enumerate() {
-        apply_runtime_updates(&context, &compiled, index, 1.0, state);
+        apply_runtime_updates(&context, &compiled, index, 1.0, 1.0, state);
     }
     let per_actor = start.elapsed();
     let start = std::time::Instant::now();
@@ -4489,6 +4554,7 @@ fn compare_projected_vibration_coverage(
                     index,
                     SongLuaOverlayUpdateTarget::Vibrate,
                     beat,
+                    seconds,
                 )
                 .and_then(|value| match value {
                     SongLuaOverlayUpdateValue::Bool(value) => Some(value),
@@ -4502,6 +4568,7 @@ fn compare_projected_vibration_coverage(
                         index,
                         SongLuaOverlayUpdateTarget::EffectMagnitude,
                         beat,
+                        seconds,
                     )
                     .and_then(|value| match value {
                         SongLuaOverlayUpdateValue::Vec3(value) => Some(value),
@@ -4518,7 +4585,7 @@ fn compare_projected_vibration_coverage(
                 if let Some(index) = screen_layer.screen_overlay_index {
                     let mut screen =
                         compiled_command_state_at(context, screen_layer, index, beat, seconds);
-                    apply_runtime_updates(context, screen_layer, index, beat, &mut screen);
+                    apply_runtime_updates(context, screen_layer, index, beat, seconds, &mut screen);
                     if screen.vibrate {
                         for axis in 0..3 {
                             actual[axis] += screen.effect_magnitude[axis];
@@ -4796,6 +4863,28 @@ fn simply_love_receptor_metrics_match_native() {
 }
 
 #[test]
+fn paused_updates_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/paused-updates.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/paused-updates.ssc"),
+    );
+    assert!(
+        compiled
+            .iter()
+            .all(|layer| layer.overlay_update_unit == SongLuaTimeUnit::Second)
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Paused updates"));
+    assert!(parity.checks() > 200);
+    parity.assert_complete("Paused updates");
+}
+
+#[test]
 fn queued_message_states_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -4821,8 +4910,10 @@ fn stopped_position_matches_native() {
     let trace = read_trace_file(
         &root.join("tests/fixtures/itgmania-song-lua-micro/stop-position.json.zst"),
     );
-    let (compiled, primary, context) =
-        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/stop-position.sm"));
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/stop-position.sm"),
+    );
     // Orthographic screen bounds cannot expose an incorrect stopped Z value.
     // Check native world depth through the same compiled playback path.
     let drawable_map = projected_drawable_map(&trace, &compiled);
@@ -4991,7 +5082,13 @@ fn finite_queue_controls_match_native() {
                     .iter()
                     .find(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(enabled))
                     .expect("compiled effect transition")
-                    .beat;
+                    .time;
+                let native = overlay_update_time(
+                    &context,
+                    compiled[primary].overlay_update_unit,
+                    native,
+                    song_elapsed_seconds_at(native, &context),
+                );
                 assert!(
                     (native - actual).abs() < 0.0001,
                     "{command}: {native} vs {actual}"
@@ -5071,8 +5168,8 @@ fn cuphead_stateful_fire_message_matches_itgmania() {
         .and_then(|track| {
             track.samples.iter().find_map(|sample| {
                 (matches!(&sample.value, SongLuaOverlayUpdateValue::Bool(true))
-                    && (299.0..=301.0).contains(&sample.beat))
-                .then_some(sample.beat)
+                    && (299.0..=301.0).contains(&sample.time))
+                .then_some(sample.time)
             })
         })
         .expect("DeadSync never makes the Cuphead flower actor visible");
@@ -5768,6 +5865,7 @@ fn assert_step_player_proxy_and_projection(
                 overlay_index,
                 SongLuaOverlayUpdateTarget::Visible,
                 hidden.0 as f32,
+                song_elapsed_seconds_at(hidden.0 as f32, context),
             ),
             Some(SongLuaOverlayUpdateValue::Bool(false))
         );
@@ -5778,6 +5876,7 @@ fn assert_step_player_proxy_and_projection(
                 overlay_index,
                 SongLuaOverlayUpdateTarget::Visible,
                 restored.0 as f32,
+                song_elapsed_seconds_at(restored.0 as f32, context),
             ),
             Some(SongLuaOverlayUpdateValue::Bool(true))
         );

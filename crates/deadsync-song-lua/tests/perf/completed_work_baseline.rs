@@ -51,7 +51,7 @@ pub(super) fn merge_scheduled_overlay_samples(
                     overlay_index: sample.overlay_index,
                     target: sample.target,
                     samples: vec![SongLuaOverlayUpdateSample {
-                        beat: 0.0,
+                        time: 0.0,
                         value: overlay_state_update_value(
                             &baseline[sample.overlay_index],
                             sample.target,
@@ -65,7 +65,7 @@ pub(super) fn merge_scheduled_overlay_samples(
             .samples
             .iter()
             .rev()
-            .find(|current| current.beat <= sample.start_beat + f32::EPSILON)
+            .find(|current| current.time <= sample.start_beat + f32::EPSILON)
             .map(|current| current.value.clone())
             .unwrap_or_else(|| {
                 overlay_state_update_value(&baseline[sample.overlay_index], sample.target)
@@ -79,7 +79,7 @@ pub(super) fn merge_scheduled_overlay_samples(
         let ordered = track
             .samples
             .last()
-            .is_none_or(|last| last.beat.total_cmp(&first_beat).is_le());
+            .is_none_or(|last| last.time.total_cmp(&first_beat).is_le());
         if ordered {
             // The existing prefix is sorted and compacted. An ordered append
             // can only merge with its last sample, preserving last-write wins.
@@ -87,7 +87,7 @@ pub(super) fn merge_scheduled_overlay_samples(
                 append_ordered_overlay_sample(
                     &mut track.samples,
                     SongLuaOverlayUpdateSample {
-                        beat: sample.start_beat,
+                        time: sample.start_beat,
                         value: current,
                     },
                 );
@@ -95,7 +95,7 @@ pub(super) fn merge_scheduled_overlay_samples(
             append_ordered_overlay_sample(
                 &mut track.samples,
                 SongLuaOverlayUpdateSample {
-                    beat: sample.end_beat,
+                    time: sample.end_beat,
                     value: sample.value,
                 },
             );
@@ -103,12 +103,12 @@ pub(super) fn merge_scheduled_overlay_samples(
         }
         if has_start {
             track.samples.push(SongLuaOverlayUpdateSample {
-                beat: sample.start_beat,
+                time: sample.start_beat,
                 value: current,
             });
         }
         track.samples.push(SongLuaOverlayUpdateSample {
-            beat: sample.end_beat,
+            time: sample.end_beat,
             value: sample.value,
         });
         sort_overlay_update_samples(&mut track.samples);

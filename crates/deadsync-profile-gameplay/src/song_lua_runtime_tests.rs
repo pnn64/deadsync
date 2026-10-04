@@ -338,12 +338,12 @@ fn column_offset_bridge_filters_by_player() {
 #[test]
 fn song_lua_overlay_updates_keep_absolute_song_time() {
     let timing = test_timing(8 * 48);
-    let compiled = TestCompiledSongLua {
+    let mut compiled = TestCompiledSongLua {
         overlay_updates: vec![SongLuaOverlayUpdateTrack {
             overlay_index: 0,
             target: SongLuaOverlayUpdateTarget::Y,
             samples: vec![SongLuaOverlayUpdateSample {
-                beat: 4.0,
+                time: 4.0,
                 value: SongLuaOverlayUpdateValue::F32(120.0),
             }],
         }],
@@ -360,6 +360,14 @@ fn song_lua_overlay_updates_keep_absolute_song_time() {
     let expected =
         deadsync_gameplay::song_lua_message_second(4.0, &timing, global_offset_seconds).unwrap();
     assert_eq!(tracks[0].samples[0].second, expected);
+
+    compiled.overlay_update_unit = SongLuaTimeUnit::Second;
+    let tracks = deadsync_song_lua::gameplay::build_song_lua_overlay_update_tracks(
+        &compiled,
+        &timing,
+        global_offset_seconds,
+    );
+    assert_eq!(tracks[0].samples[0].second, 4.0 - global_offset_seconds);
 }
 
 #[test]

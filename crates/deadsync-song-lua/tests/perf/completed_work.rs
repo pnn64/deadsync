@@ -127,7 +127,7 @@ fn assert_same(a: &Fixture, b: &Fixture) {
             (b.overlay_index, b.target, b.samples.len())
         );
         for (a, b) in a.samples.iter().zip(&b.samples) {
-            assert_eq!(a.beat.to_bits(), b.beat.to_bits());
+            assert_eq!(a.time.to_bits(), b.time.to_bits());
             assert_eq!(a.value, b.value);
         }
     }
@@ -168,11 +168,11 @@ fn lua_work_completed_tweens_match_parent_for_ties_rewinds_and_nonfinite_times()
             target: SongLuaOverlayUpdateTarget::Z,
             samples: vec![
                 SongLuaOverlayUpdateSample {
-                    beat: 3.0,
+                    time: 3.0,
                     value: SongLuaOverlayUpdateValue::F32(7.0),
                 },
                 SongLuaOverlayUpdateSample {
-                    beat: -0.0,
+                    time: -0.0,
                     value: SongLuaOverlayUpdateValue::F32(2.0),
                 },
             ],

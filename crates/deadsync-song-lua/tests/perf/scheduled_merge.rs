@@ -27,7 +27,7 @@ fn assert_tracks(actual: &[SongLuaOverlayUpdateTrack], expected: &[SongLuaOverla
         assert_eq!((a.overlay_index, a.target), (b.overlay_index, b.target));
         assert_eq!(a.samples.len(), b.samples.len());
         for (a, b) in a.samples.iter().zip(&b.samples) {
-            assert_eq!(a.beat.to_bits(), b.beat.to_bits());
+            assert_eq!(a.time.to_bits(), b.time.to_bits());
             assert_eq!(value_bits(&a.value), value_bits(&b.value));
         }
     }
@@ -38,7 +38,7 @@ fn samples(beats: impl IntoIterator<Item = f32>) -> Vec<SongLuaOverlayUpdateSamp
         .into_iter()
         .enumerate()
         .map(|(i, beat)| SongLuaOverlayUpdateSample {
-            beat,
+            time: beat,
             value: SongLuaOverlayUpdateValue::F32(i as f32),
         })
         .collect()
@@ -80,16 +80,16 @@ fn next(rng: &mut u64) -> u32 {
 fn scheduled_merge_lookup_preserves_signed_zero_nan_prefixes_payloads_and_infinities() {
     for len in [0, 1, 2, 16, 31, 32, 33, 128, 1024] {
         let mut values = samples(EDGES.into_iter().cycle().take(len));
-        values.sort_by(|a, b| a.beat.total_cmp(&b.beat));
+        values.sort_by(|a, b| a.time.total_cmp(&b.time));
         for beat in EDGES {
             assert_lookup(&values, beat);
             assert_lookup(&values, beat + f32::EPSILON);
         }
     }
     let mut zeros = samples([-0.0, 0.0]);
-    zeros.sort_by(|a, b| a.beat.total_cmp(&b.beat));
+    zeros.sort_by(|a, b| a.time.total_cmp(&b.time));
     let found = overlay_sample_at_or_before(&zeros, -0.0).unwrap();
-    assert_eq!(found.beat.to_bits(), 0.0_f32.to_bits());
+    assert_eq!(found.time.to_bits(), 0.0_f32.to_bits());
     assert_eq!(found.value, SongLuaOverlayUpdateValue::F32(1.0));
 }
 
@@ -98,7 +98,7 @@ fn scheduled_merge_lookup_matches_parent_for_large_sorted_histories_and_random_f
     for seed in 1..=12 {
         let mut rng = seed;
         let mut values = samples((0..4096).map(|_| f32::from_bits(next(&mut rng))));
-        values.sort_by(|a, b| a.beat.total_cmp(&b.beat));
+        values.sort_by(|a, b| a.time.total_cmp(&b.time));
         for _ in 0..256 {
             assert_lookup(&values, f32::from_bits(next(&mut rng)));
         }
@@ -161,7 +161,7 @@ impl Fixture {
                 let value = overlay_state_update_value(state, target);
                 let mut values = Vec::with_capacity(history + 4);
                 values.extend((0..history).map(|i| SongLuaOverlayUpdateSample {
-                    beat: i as f32,
+                    time: i as f32,
                     value: value.clone(),
                 }));
                 indices.insert((actor, target), tracks.len());
@@ -314,7 +314,7 @@ fn scheduled_merge_canonicalizes_untouched_tracks_with_no_pending_work() {
         assert!(
             track
                 .samples
-                .is_sorted_by(|a, b| a.beat.total_cmp(&b.beat).is_le())
+                .is_sorted_by(|a, b| a.time.total_cmp(&b.time).is_le())
         );
     }
 }
@@ -348,7 +348,7 @@ fn scheduled_merge_retains_color_owners_for_required_anchors_and_end_values() {
         Fixture::new(1, 1, true, "step_before"),
     );
     assert_eq!(step.tracks[0].samples.len(), 2);
-    assert_eq!(step.tracks[0].samples[0].beat, -2.0);
+    assert_eq!(step.tracks[0].samples[0].time, -2.0);
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn scheduled_merge_ordered_appends_preserve_last_write_and_epsilon_connected_run
     }
     let new = compare(old, new);
     assert_eq!(new.tracks[0].samples.len(), 2);
-    assert_eq!(new.tracks[0].samples[1].beat, 4.0 * f32::EPSILON);
+    assert_eq!(new.tracks[0].samples[1].time, 4.0 * f32::EPSILON);
     assert_eq!(
         new.tracks[0].samples[1].value,
         SongLuaOverlayUpdateValue::F32(41.0)

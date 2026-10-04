@@ -111,7 +111,7 @@ fn assert_tracks(a: &[SongLuaOverlayUpdateTrack], b: &[SongLuaOverlayUpdateTrack
             (b.overlay_index, b.target, b.samples.len())
         );
         for (a, b) in a.samples.iter().zip(&b.samples) {
-            assert_eq!(a.beat.to_bits(), b.beat.to_bits());
+            assert_eq!(a.time.to_bits(), b.time.to_bits());
             assert_eq!(value_bits(&a.value), value_bits(&b.value));
         }
     }
@@ -227,7 +227,7 @@ fn capture_sampling_lazy_values_preserve_steps_gaps_equal_writes_nan_and_value_i
         &next,
     );
     assert_eq!(tracks[0].samples.len(), 1);
-    assert_eq!(tracks[0].samples[0].beat, 10.0);
+    assert_eq!(tracks[0].samples[0].time, 10.0);
     let SongLuaOverlayUpdateValue::VertexColors(retained) = &tracks[0].samples[0].value else {
         panic!("missing colors")
     };
@@ -274,7 +274,7 @@ impl Values {
             indices.insert((i, target), i);
             let mut samples = Vec::with_capacity(40);
             samples.push(SongLuaOverlayUpdateSample {
-                beat: 0.0,
+                time: 0.0,
                 value: values[0].clone(),
             });
             tracks.push(SongLuaOverlayUpdateTrack {

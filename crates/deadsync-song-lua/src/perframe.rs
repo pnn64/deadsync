@@ -1461,9 +1461,9 @@ fn push_update_overlay_value(
     >,
     overlay_index: usize,
     target: crate::SongLuaOverlayUpdateTarget,
-    beat: f32,
+    time: f32,
     current: crate::SongLuaOverlayUpdateValue,
-    next_beat: f32,
+    next_time: f32,
     next: crate::SongLuaOverlayUpdateValue,
 ) -> usize {
     let key = (overlay_index, target);
@@ -1479,7 +1479,7 @@ fn push_update_overlay_value(
                 // Do not invent a ramp from the actor default before that first
                 // write; the runtime applies the first sampled value as a step.
                 samples: vec![SongLuaOverlayUpdateSample {
-                    beat: next_beat,
+                    time: next_time,
                     value: next,
                 }],
             });
@@ -1493,15 +1493,15 @@ fn push_update_overlay_value(
     if track
         .samples
         .last()
-        .is_some_and(|sample| sample.beat < beat - f32::EPSILON)
+        .is_some_and(|sample| sample.time < time - f32::EPSILON)
     {
         track.samples.push(SongLuaOverlayUpdateSample {
-            beat,
+            time: time,
             value: current,
         });
     }
     track.samples.push(SongLuaOverlayUpdateSample {
-        beat: next_beat,
+        time: next_time,
         value: next,
     });
     track_index
@@ -1517,9 +1517,9 @@ fn push_captured_overlay_value(
     >,
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
-    beat: f32,
+    time: f32,
     current: &SongLuaOverlayState,
-    next_beat: f32,
+    next_time: f32,
     next: &SongLuaOverlayUpdateValue,
 ) -> usize {
     let key = (overlay_index, target);
@@ -1534,7 +1534,7 @@ fn push_captured_overlay_value(
                 overlay_index,
                 target,
                 samples: vec![SongLuaOverlayUpdateSample {
-                    beat: next_beat,
+                    time: next_time,
                     value: next.clone(),
                 }],
             });
@@ -1553,15 +1553,15 @@ fn push_captured_overlay_value(
     if track
         .samples
         .last()
-        .is_some_and(|sample| sample.beat < beat - f32::EPSILON)
+        .is_some_and(|sample| sample.time < time - f32::EPSILON)
     {
         track.samples.push(SongLuaOverlayUpdateSample {
-            beat,
+            time: time,
             value: overlay_state_update_value(current, target),
         });
     }
     track.samples.push(SongLuaOverlayUpdateSample {
-        beat: next_beat,
+        time: next_time,
         value: next.clone(),
     });
     track_index
@@ -2045,8 +2045,8 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
         usize,
         impl std::hash::BuildHasher,
     >,
-    beat: f32,
-    next_beat: f32,
+    time: f32,
+    next_time: f32,
     next_seconds: f64,
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
     scratch: &mut OverlaySampleScratch,
@@ -2083,9 +2083,9 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                 track_indices,
                 sample.overlay_index,
                 sample.target,
-                beat,
+                time,
                 &from_states[sample.overlay_index],
-                next_beat,
+                next_time,
                 &sample.value,
             );
         }
@@ -2158,9 +2158,9 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                         track_indices,
                         overlay_index,
                         sample.target,
-                        beat,
+                        time,
                         &from_states[overlay_index],
-                        next_beat,
+                        next_time,
                         &current,
                     );
                 }
@@ -2224,9 +2224,9 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                     track_indices,
                     overlay_index,
                     *target,
-                    beat,
+                    time,
                     current,
-                    next_beat,
+                    next_time,
                     next,
                 );
                 // Tracks only append. Mark unchanged writes too: they still
@@ -2279,9 +2279,9 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
             track_indices,
             overlay_index,
             target,
-            beat,
+            time,
             current,
-            next_beat,
+            next_time,
             message,
         );
     }
@@ -2548,11 +2548,11 @@ fn merge_completed_scheduled_overlay_samples_into(
 fn sort_overlay_update_samples(samples: &mut Vec<SongLuaOverlayUpdateSample>) {
     // Sample tracks are normally already ordered. Avoid the stable sort's
     // temporary allocation in that case; preserve stable ties when sorting.
-    if !samples.is_sorted_by(|left, right| left.beat.total_cmp(&right.beat).is_le()) {
-        samples.sort_by(|left, right| left.beat.total_cmp(&right.beat));
+    if !samples.is_sorted_by(|left, right| left.time.total_cmp(&right.time).is_le()) {
+        samples.sort_by(|left, right| left.time.total_cmp(&right.time));
     }
     samples.dedup_by(|next, previous| {
-        if (previous.beat - next.beat).abs() <= f32::EPSILON {
+        if (previous.time - next.time).abs() <= f32::EPSILON {
             // Keep the last value AND timestamp so epsilon-connected runs
             // collapse exactly as they do when replacing the last output item.
             std::mem::swap(previous, next);
@@ -2568,7 +2568,7 @@ fn append_ordered_overlay_sample(
     sample: SongLuaOverlayUpdateSample,
 ) {
     if let Some(last) = samples.last_mut()
-        && (last.beat - sample.beat).abs() <= f32::EPSILON
+        && (last.time - sample.time).abs() <= f32::EPSILON
     {
         *last = sample;
     } else {
@@ -2595,24 +2595,24 @@ fn merge_scheduled_overlay_samples(
 // Numeric comparison includes both signs of zero, matching the reverse scan.
 fn overlay_sample_at_or_before(
     samples: &[SongLuaOverlayUpdateSample],
-    beat: f32,
+    time: f32,
 ) -> Option<&SongLuaOverlayUpdateSample> {
     let last = samples.last()?;
-    if last.beat <= beat {
+    if last.time <= time {
         return Some(last);
     }
     let earlier = &samples[..samples.len() - 1];
-    // Short reverse scans beat the binary-search setup. The last sample was
+    // Short reverse scans time the binary-search setup. The last sample was
     // already rejected, so neither path needs to compare it again.
     if earlier.len() < 32 {
-        return earlier.iter().rev().find(|sample| sample.beat <= beat);
+        return earlier.iter().rev().find(|sample| sample.time <= time);
     }
     let end = earlier.partition_point(|sample| {
-        sample.beat <= beat || (sample.beat.is_nan() && sample.beat.is_sign_negative())
+        sample.time <= time || (sample.time.is_nan() && sample.time.is_sign_negative())
     });
     end.checked_sub(1)
         .and_then(|index| earlier.get(index))
-        .filter(|sample| sample.beat <= beat)
+        .filter(|sample| sample.time <= time)
 }
 
 fn merge_scheduled_overlay_samples_from_buffer(
@@ -2638,7 +2638,7 @@ fn merge_scheduled_overlay_samples_from_buffer(
                     overlay_index: sample.overlay_index,
                     target: sample.target,
                     samples: vec![SongLuaOverlayUpdateSample {
-                        beat: 0.0,
+                        time: 0.0,
                         value: overlay_state_update_value(
                             &baseline[sample.overlay_index],
                             sample.target,
@@ -2666,7 +2666,7 @@ fn merge_scheduled_overlay_samples_from_buffer(
         let ordered = track
             .samples
             .last()
-            .is_none_or(|last| last.beat.total_cmp(&first_beat).is_le());
+            .is_none_or(|last| last.time.total_cmp(&first_beat).is_le());
         if ordered {
             // The existing prefix is sorted and compacted. An ordered append
             // can only merge with its last sample, preserving last-write wins.
@@ -2674,7 +2674,7 @@ fn merge_scheduled_overlay_samples_from_buffer(
                 append_ordered_overlay_sample(
                     &mut track.samples,
                     SongLuaOverlayUpdateSample {
-                        beat: sample.start_beat,
+                        time: sample.start_beat,
                         value: current,
                     },
                 );
@@ -2682,7 +2682,7 @@ fn merge_scheduled_overlay_samples_from_buffer(
             append_ordered_overlay_sample(
                 &mut track.samples,
                 SongLuaOverlayUpdateSample {
-                    beat: sample.end_beat,
+                    time: sample.end_beat,
                     value: sample.value,
                 },
             );
@@ -2690,12 +2690,12 @@ fn merge_scheduled_overlay_samples_from_buffer(
         }
         if let Some(current) = current {
             track.samples.push(SongLuaOverlayUpdateSample {
-                beat: sample.start_beat,
+                time: sample.start_beat,
                 value: current,
             });
         }
         track.samples.push(SongLuaOverlayUpdateSample {
-            beat: sample.end_beat,
+            time: sample.end_beat,
             value: sample.value,
         });
         sort_overlay_update_samples(&mut track.samples);
@@ -2991,6 +2991,12 @@ pub fn compile_update_functions<Kind>(
     let sample_count = replay.len();
     let mut sample_beats = frame_buffer(start, sample_count);
     let rate = f64::from(song_music_rate(context));
+    let origin = context
+        .song_timing
+        .as_ref()
+        .map(|timing| timing.get_time_for_beat_exact(0.0));
+    let frame_time =
+        |beat, seconds: f64| origin.map_or(beat, |origin| (seconds * rate) as f32 + origin);
     let mut sample_seconds = frame_buffer(
         (f64::from(song_elapsed_seconds_at(start, context)) * rate) as f32,
         sample_count,
@@ -3032,8 +3038,8 @@ pub fn compile_update_functions<Kind>(
         started,
         &mut overlay_tracks,
         &mut overlay_track_indices,
-        start,
-        start,
+        frame_time(start, f64::from(song_elapsed_seconds_at(start, context))),
+        frame_time(start, f64::from(song_elapsed_seconds_at(start, context))),
         f64::from(song_elapsed_seconds_at(start, context)),
         &mut scheduled_overlay_samples,
         &mut overlay_sample_scratch,
@@ -3052,7 +3058,9 @@ pub fn compile_update_functions<Kind>(
         frame_count += 1;
         crate::lua_util::set_compile_frame(lua, frame_count);
         let delta_beats = next_beat - beat;
+        let prior_time = frame_time(beat, seconds);
         seconds += delta_seconds;
+        let next_time = frame_time(next_beat, seconds);
         let stage = profile.then(Instant::now);
         reset_tracked_capture_tables(lua, tracked_actors)?;
         reset_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
@@ -3101,8 +3109,8 @@ pub fn compile_update_functions<Kind>(
             started,
             &mut overlay_tracks,
             &mut overlay_track_indices,
-            beat,
-            next_beat,
+            prior_time,
+            next_time,
             seconds,
             &mut scheduled_overlay_samples,
             &mut overlay_sample_scratch,
@@ -3122,9 +3130,9 @@ pub fn compile_update_functions<Kind>(
                 &mut overlay_track_indices,
                 index,
                 target,
-                beat,
+                prior_time,
                 &current_overlays[index],
-                next_beat,
+                next_time,
                 &value,
             );
         }
@@ -3143,9 +3151,9 @@ pub fn compile_update_functions<Kind>(
                 &mut overlay_track_indices,
                 sample.overlay_index,
                 sample.target,
-                beat,
+                prior_time,
                 &current_overlays[sample.overlay_index],
-                next_beat,
+                next_time,
                 &value,
             );
         }
@@ -3168,9 +3176,9 @@ pub fn compile_update_functions<Kind>(
                 &mut overlay_track_indices,
                 actor_index,
                 target,
-                beat,
+                prior_time,
                 &current_overlays[actor_index],
-                next_beat,
+                next_time,
                 &value,
             );
         }
@@ -3202,9 +3210,9 @@ pub fn compile_update_functions<Kind>(
                             &mut overlay_track_indices,
                             index,
                             target,
-                            beat,
+                            prior_time,
                             &current_overlays[index],
-                            next_beat,
+                            next_time,
                             &value,
                         );
                     }
@@ -3359,7 +3367,12 @@ pub fn compile_update_functions<Kind>(
             // can move a step target past its own frame's timestamp.
             mod_unit,
         );
-        if seg_end <= seg_start {
+        let (frame_start, frame_end, frame_unit) = if origin.is_some() {
+            (mod_start, mod_end, SongLuaTimeUnit::Second)
+        } else {
+            (seg_start, seg_end, SongLuaTimeUnit::Beat)
+        };
+        if frame_end <= frame_start {
             continue;
         }
         let from_players = player_samples[index];
@@ -3367,14 +3380,18 @@ pub fn compile_update_functions<Kind>(
             .get(index + 1)
             .copied()
             .unwrap_or(from_players);
+        let first_player_window = eases.len();
         push_perframe_player_targets(
             &mut eases,
-            seg_start,
-            seg_end,
+            frame_start,
+            frame_end,
             &from_players,
             &to_players,
             &baseline_players,
         );
+        for window in &mut eases[first_player_window..] {
+            window.unit = frame_unit;
+        }
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);
         append_column_transform_windows_from_samples(
@@ -3382,9 +3399,9 @@ pub fn compile_update_functions<Kind>(
             from_columns,
             to_columns,
             SongLuaColumnOffsetBuildParams {
-                unit: SongLuaTimeUnit::Beat,
-                start: seg_start,
-                limit: seg_end - seg_start,
+                unit: frame_unit,
+                start: frame_start,
+                limit: frame_end - frame_start,
                 span_mode: SongLuaSpanMode::Len,
                 easing: None,
                 sustain: None,
@@ -3849,7 +3866,7 @@ mod tests {
         assert_eq!(update_states[0].x, 427.0);
         assert_eq!(next_states[0].x, 427.0);
         assert!(tracks[0].samples.last().is_some_and(|sample| {
-            sample.beat == 2.0 && sample.value == SongLuaOverlayUpdateValue::F32(427.0)
+            sample.time == 2.0 && sample.value == SongLuaOverlayUpdateValue::F32(427.0)
         }));
     }
 }

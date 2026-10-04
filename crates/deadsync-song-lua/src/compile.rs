@@ -641,6 +641,11 @@ where
     };
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
+    out.overlay_update_unit = if context.song_timing.is_some() {
+        crate::SongLuaTimeUnit::Second
+    } else {
+        crate::SongLuaTimeUnit::Beat
+    };
     out.overlay_updates.extend(update_overlay_tracks);
     #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::lua_util::SongLuaOverlayWrites>() {
@@ -698,9 +703,12 @@ where
         }
     }
     resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
-    let startup_beat = crate::song_beat_at_elapsed_seconds(
-        1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS,
-        context,
+    let startup_seconds = 1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS;
+    let startup_time = context.song_timing.as_ref().map_or_else(
+        || crate::song_beat_at_elapsed_seconds(startup_seconds, context),
+        |timing| {
+            timing.get_time_for_beat_exact(0.0) + startup_seconds * crate::song_music_rate(context)
+        },
     );
     for track in &mut out.overlay_updates {
         if startup_states.contains_key(&(overlays[track.overlay_index].table.to_pointer() as usize))
@@ -710,9 +718,9 @@ where
             for sample in track
                 .samples
                 .iter_mut()
-                .take_while(|sample| sample.beat < startup_beat)
+                .take_while(|sample| sample.time < startup_time)
             {
-                sample.beat = startup_beat;
+                sample.time = startup_time;
             }
         }
     }
@@ -1059,6 +1067,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
             entry_path: entry_path.clone(),
             screen_width: compiled.screen_width,
             screen_height: compiled.screen_height,
+            overlay_update_unit: compiled.overlay_update_unit,
             messages: compiled.messages.clone(),
             sound_paths: compiled.sound_paths.clone(),
             ..DefaultCompiledSongLua::default()

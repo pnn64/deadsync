@@ -27,7 +27,163 @@ use deadlib_present::dsl::TextBuilder;
 
 use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 
-use deadsync_song_lua::SongLuaOverlayStateDelta;
+use deadsync_song_lua::{SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget};
+
+#[test]
+fn song_lua_paused_updates_match_native_playback() {
+    use deadsync_rules::timing::{DelaySegment, StopSegment, TimingSegments, WarpSegment};
+    crate::tests::init_paths();
+    let song_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/song-lua")
+        .canonicalize()
+        .unwrap();
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-actors/paused-updates.json"
+    )))
+    .unwrap();
+    let timing = TimingData::from_segments(
+        -0.125,
+        0.0,
+        &TimingSegments {
+            bpms: vec![(0.0, 60.0)],
+            stops: vec![StopSegment {
+                beat: 2.0,
+                duration: 0.4,
+            }],
+            delays: vec![DelaySegment {
+                beat: 4.0,
+                duration: 0.3,
+            }],
+            warps: vec![WarpSegment {
+                beat: 6.0,
+                length: 1.0,
+            }],
+            ..Default::default()
+        },
+        &[],
+    );
+    let origin = timing.get_time_for_beat_exact(0.0);
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Paused updates");
+    context.screen_width = 854.0;
+    context.song_display_bpms = [60.0, 60.0];
+    context.song_timing = Some(timing.clone());
+    context.music_length_seconds = 12.0;
+    let entry = song_dir.join("paused-updates.lua");
+    // Two layers must retain the sampled clock when global actor indices split.
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path(), entry.as_path()], 1, &context).unwrap();
+    for layer in compiled {
+        assert_eq!(
+            layer.overlay_update_unit,
+            deadsync_song_lua::SongLuaTimeUnit::Second
+        );
+        for offset in [0.0, 0.25] {
+            let tracks = deadsync_song_lua::gameplay::build_song_lua_overlay_update_tracks(
+                &layer, &timing, offset,
+            );
+            let walker = layer
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some("Walker"))
+                .unwrap();
+            let pause = tracks
+                .iter()
+                .find(|track| {
+                    track.overlay_index == walker && track.target == SongLuaOverlayUpdateTarget::X
+                })
+                .unwrap();
+            assert!(
+                pause
+                    .samples
+                    .iter()
+                    .filter(|sample| (2.0 + origin - offset..2.4 + origin - offset)
+                        .contains(&sample.second))
+                    .count()
+                    > 10
+            );
+            let mut overlays = layer.overlays.clone();
+            overlays.push(SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::UpdateTracks { tracks },
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: Vec::new(),
+            });
+            let ranges = vec![0..0; overlays.len()];
+            let events = vec![Vec::new(); overlays.len()];
+            let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+            let (mut caches, mut local, mut composed) = (Vec::new(), Vec::new(), Vec::new());
+            // Rewind after the last sample to exercise cached cursor recovery.
+            let samples = native["samples"].as_array().unwrap();
+            for sample in samples.iter().chain(samples.iter().take(12)) {
+                let name = sample["name"].as_str().unwrap();
+                let index = overlays
+                    .iter()
+                    .position(|actor| actor.name.as_deref() == Some(name))
+                    .unwrap();
+                let second = sample["second"].as_f64().unwrap() as f32;
+                song_lua_overlay_state_sets_from_into::<SpriteSlot>(
+                    second + origin - offset,
+                    &overlays,
+                    &events,
+                    &[],
+                    &ranges,
+                    854.0,
+                    480.0,
+                    &mut order,
+                    &mut caches,
+                    &mut local,
+                    &mut composed,
+                );
+                for (axis, actual) in [local[index].x, local[index].y].into_iter().enumerate() {
+                    let expected = sample["position"][axis].as_f64().unwrap() as f32;
+                    assert!(
+                        (actual - expected).abs() < 0.001,
+                        "{name} at {second}, offset {offset}: {actual} vs {expected}"
+                    );
+                }
+            }
+        }
+    }
+    for rate in [1.0, 0.5, 1.5] {
+        context.song_music_rate = rate;
+        let compiled = compile_song_lua(&song_dir.join("paused-transforms.lua"), &context).unwrap();
+        let offset = 0.25;
+        let (players, unsupported) =
+            deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                offset,
+                &[],
+            );
+        assert_eq!(unsupported, 0);
+        let columns = deadsync_song_lua::gameplay::build_song_lua_column_offset_windows_for_player(
+            &compiled, &timing, 0, offset,
+        );
+        for second in [2.0, 2.05, 2.2, 2.35] {
+            let now = second + origin - offset;
+            let player = players
+                .iter()
+                .filter(|window| window.target == deadsync_gameplay::SongLuaEaseMaskTarget::PlayerX)
+                .filter_map(|window| deadsync_gameplay::song_lua_ease_window_value(window, now))
+                .next_back()
+                .unwrap();
+            let (column, splines) = deadsync_gameplay::song_lua_column_transforms(&columns, 4, now);
+            let column_y = column[1][0] + splines[0].receptor(2.0)[1];
+            assert!(
+                (player - (200.0 + second / rate * 10.0)).abs() < 0.001,
+                "player at {second}, rate {rate}: {player}"
+            );
+            assert!(
+                (column_y - second / rate * 3.0).abs() < 0.001,
+                "column at {second}, rate {rate}: {}",
+                column_y
+            );
+        }
+    }
+}
 
 #[test]
 #[cfg(feature = "test-support")]
@@ -222,7 +378,7 @@ fn song_lua_deferred_messages_render_each_broadcast_value() {
                     .iter()
                     .map(
                         |sample| deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
-                            second: sample.beat,
+                            second: sample.time,
                             value: sample.value.clone(),
                         },
                     )
@@ -475,7 +631,7 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
                     .iter()
                     .map(
                         |sample| deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
-                            second: sample.beat,
+                            second: sample.time,
                             value: sample.value.clone(),
                         },
                     )
@@ -859,7 +1015,7 @@ fn song_lua_tween_playback_matches_native() {
                         .samples
                         .iter()
                         .map(|s| deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
-                            second: deadsync_song_lua::song_elapsed_seconds_at(s.beat, &context),
+                            second: deadsync_song_lua::song_elapsed_seconds_at(s.time, &context),
                             value: s.value.clone(),
                         })
                         .collect(),

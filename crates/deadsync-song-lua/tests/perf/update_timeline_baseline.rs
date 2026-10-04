@@ -100,11 +100,11 @@ pub(super) fn push_update_mod_targets(
 pub(super) fn sort_overlay_update_samples(samples: &mut Vec<SongLuaOverlayUpdateSample>) {
     // Sample tracks are normally already ordered. Avoid the stable sort's
     // temporary allocation in that case; preserve stable ties when sorting.
-    if !samples.is_sorted_by(|left, right| left.beat.total_cmp(&right.beat).is_le()) {
-        samples.sort_by(|left, right| left.beat.total_cmp(&right.beat));
+    if !samples.is_sorted_by(|left, right| left.time.total_cmp(&right.time).is_le()) {
+        samples.sort_by(|left, right| left.time.total_cmp(&right.time));
     }
     samples.dedup_by(|next, previous| {
-        if (previous.beat - next.beat).abs() <= f32::EPSILON {
+        if (previous.time - next.time).abs() <= f32::EPSILON {
             // Keep the last value AND timestamp so epsilon-connected runs
             // collapse exactly as they do when replacing the last output item.
             std::mem::swap(previous, next);
@@ -134,7 +134,7 @@ pub(super) fn merge_scheduled_overlay_samples(
                     overlay_index: sample.overlay_index,
                     target: sample.target,
                     samples: vec![SongLuaOverlayUpdateSample {
-                        beat: 0.0,
+                        time: 0.0,
                         value: overlay_state_update_value(
                             &baseline[sample.overlay_index],
                             sample.target,
@@ -148,19 +148,19 @@ pub(super) fn merge_scheduled_overlay_samples(
             .samples
             .iter()
             .rev()
-            .find(|current| current.beat <= sample.start_beat + f32::EPSILON)
+            .find(|current| current.time <= sample.start_beat + f32::EPSILON)
             .map(|current| current.value.clone())
             .unwrap_or_else(|| {
                 overlay_state_update_value(&baseline[sample.overlay_index], sample.target)
             });
         if sample.end_beat > sample.start_beat + f32::EPSILON {
             track.samples.push(SongLuaOverlayUpdateSample {
-                beat: sample.start_beat,
+                time: sample.start_beat,
                 value: current,
             });
         }
         track.samples.push(SongLuaOverlayUpdateSample {
-            beat: sample.end_beat,
+            time: sample.end_beat,
             value: sample.value,
         });
         sort_overlay_update_samples(&mut track.samples);

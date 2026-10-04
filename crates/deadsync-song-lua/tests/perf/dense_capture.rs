@@ -108,7 +108,7 @@ impl CaptureFixture {
         self.tracks[self.indices[&(actor, target)]]
             .samples
             .iter()
-            .map(|sample| (sample.beat, sample.value.clone()))
+            .map(|sample| (sample.time, sample.value.clone()))
             .collect()
     }
 }

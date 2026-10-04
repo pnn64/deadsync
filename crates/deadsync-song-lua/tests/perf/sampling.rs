@@ -4,11 +4,11 @@ use std::hint::black_box;
 // Frozen pre-optimization algorithm: sorting is stable and the LAST sample in
 // each epsilon-connected run wins, including its timestamp.
 fn legacy_sort(samples: &mut Vec<SongLuaOverlayUpdateSample>) {
-    samples.sort_by(|left, right| left.beat.total_cmp(&right.beat));
+    samples.sort_by(|left, right| left.time.total_cmp(&right.time));
     let mut merged: Vec<SongLuaOverlayUpdateSample> = Vec::with_capacity(samples.len());
     for sample in samples.drain(..) {
         if let Some(last) = merged.last_mut()
-            && (last.beat - sample.beat).abs() <= f32::EPSILON
+            && (last.time - sample.time).abs() <= f32::EPSILON
         {
             *last = sample;
         } else {
@@ -23,7 +23,7 @@ fn samples(beats: impl IntoIterator<Item = f32>) -> Vec<SongLuaOverlayUpdateSamp
         .into_iter()
         .enumerate()
         .map(|(index, beat)| SongLuaOverlayUpdateSample {
-            beat,
+            time: beat,
             value: SongLuaOverlayUpdateValue::F32(index as f32),
         })
         .collect()
@@ -35,7 +35,7 @@ fn assert_samples_eq(
 ) {
     assert_eq!(actual.len(), expected.len());
     for (actual, expected) in actual.iter().zip(expected) {
-        assert_eq!(actual.beat.to_bits(), expected.beat.to_bits());
+        assert_eq!(actual.time.to_bits(), expected.time.to_bits());
         assert_eq!(actual.value, expected.value);
     }
 }
@@ -74,7 +74,7 @@ fn sample_compaction_matches_legacy_order_and_last_write() {
     assert_eq!(
         chain,
         vec![SongLuaOverlayUpdateSample {
-            beat: 2.0 * f32::EPSILON,
+            time: 2.0 * f32::EPSILON,
             value: SongLuaOverlayUpdateValue::F32(2.0),
         }]
     );
@@ -288,11 +288,11 @@ fn compaction_drops_superseded_owned_values_and_keeps_the_last_owner() {
     let kept = std::sync::Arc::new([[1.0; 4]; 4]);
     let mut values = vec![
         SongLuaOverlayUpdateSample {
-            beat: 1.0,
+            time: 1.0,
             value: SongLuaOverlayUpdateValue::VertexColors(removed),
         },
         SongLuaOverlayUpdateSample {
-            beat: 1.0,
+            time: 1.0,
             value: SongLuaOverlayUpdateValue::VertexColors(kept.clone()),
         },
     ];
