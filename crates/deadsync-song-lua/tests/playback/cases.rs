@@ -1626,6 +1626,94 @@ fn empty_song_lua_layer_skips_preparation_without_changing_output() {
 }
 
 #[test]
+fn delayed_foreground_hide_skips_layer_and_survives_seek() {
+    crate::tests::init_paths();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let mut context = crate::SongLuaCompileContext::new(&dir, "Foreground Delay");
+    context.song_display_bpms = [60.0; 2];
+    context.music_length_seconds = 4.0;
+    let compiled = compile_song_lua(&dir.join("foreground-delay.lua"), &context).unwrap();
+    let seconds = compiled
+        .messages
+        .iter()
+        .map(|message| Some(message.beat))
+        .collect::<Vec<_>>();
+    let events = crate::gameplay::build_song_lua_actor_message_events_for_commands(
+        &compiled.messages,
+        &seconds,
+        &compiled.song_foreground.message_commands,
+    );
+    let mut cache = SongLuaMessageStateCache::default();
+    let states = compiled
+        .overlays
+        .iter()
+        .map(|actor| actor.initial_state)
+        .collect::<Vec<_>>();
+    let mut order_cache = song_lua_overlay_order_cache_from(&compiled.overlays, &[]);
+    let topology = SongLuaOverlayTopologyIndex::new(&compiled.overlays);
+    let mut order = Vec::new();
+    let mut aft = SongLuaAftCaptureScratch::new(&compiled.overlays, &topology);
+    let mut projected = song_lua_projected_mesh_scratch_for(&compiled.overlays);
+    let assets = AssetManager::new();
+    for (now, visible) in [
+        (0.0, true),
+        (2.9, true),
+        (3.1, false),
+        (4.0, false),
+        (0.0, true),
+    ] {
+        let layer = song_lua_song_foreground_state_from(
+            now,
+            &compiled.song_foreground,
+            &events,
+            &mut cache,
+        );
+        assert_eq!(layer.visible, visible, "time={now}");
+        let mut actors = Vec::new();
+        let mut targets = Vec::new();
+        push_song_lua_layer_actors(
+            &mut actors,
+            &mut targets,
+            &compiled.overlays,
+            &mut order_cache,
+            &topology,
+            &states,
+            &states,
+            layer,
+            &SongLuaScreenProxySources::default(),
+            None,
+            None,
+            &assets,
+            854.0,
+            480.0,
+            now,
+            now,
+            now,
+            &mut order,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut aft,
+            &mut projected,
+            SONG_LUA_FOREGROUND_DEPTH,
+        );
+        assert_eq!(!actors.is_empty(), visible, "time={now}");
+        assert!(targets.is_empty());
+        if visible {
+            assert!(actors.iter().any(|actor| matches!(actor,
+                Actor::Sprite { offset, tint, .. }
+                    if *offset == [262.0, 242.0] && (tint[3] - 0.6).abs() < 0.0001
+            )), "foreground transform and tint at time={now}");
+        }
+        if !visible {
+            assert!(order.is_empty());
+        }
+    }
+}
+
+#[test]
 fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
     let command = SongLuaOverlayMessageCommand {
         frame_advance: 0.0,

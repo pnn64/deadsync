@@ -142,11 +142,12 @@ pub(crate) fn prepare_song_lua(
     session: &deadsync_gameplay::GameplaySession,
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: deadlib_render_core::BackendType,
+    random_seed: u32,
 ) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
-    let context = deadsync_profile_gameplay::song_lua_play_context(
+    let mut context = deadsync_profile_gameplay::song_lua_play_context(
         song,
         charts,
         timing,
@@ -159,6 +160,7 @@ pub(crate) fn prepare_song_lua(
         config,
         &video_renderer.to_string(),
     );
+    context.random_seed = random_seed;
     deadsync_song_lua::playback::prepare_song_lua(
         song,
         &context,

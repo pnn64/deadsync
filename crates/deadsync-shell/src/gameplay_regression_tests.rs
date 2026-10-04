@@ -710,6 +710,7 @@ mod tests {
             &session,
             &GameplayConfig::default(),
             deadlib_render_core::BackendType::Software,
+            1,
         );
         screen_gameplay::init(
             song,
@@ -3901,7 +3902,8 @@ return Def.ActorFrame{
         player:visible(false)
         SCREENMAN:GetTopScreen():GetChild("Underlay"):visible(false)
         for name, layer in pairs(SCREENMAN:GetTopScreen():GetChildren()) do
-            if name ~= "PlayerP1" and name ~= "PlayerP2" and name ~= "Underlay" then
+            if name ~= "PlayerP1" and name ~= "PlayerP2" and name ~= "Underlay"
+                and name ~= "SongBackground" and name ~= "SongForeground" then
                 layer:smooth(1.5):diffusealpha(0)
             end
         end

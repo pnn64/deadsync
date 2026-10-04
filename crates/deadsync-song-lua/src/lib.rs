@@ -7696,6 +7696,81 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn startup_sleep_delays_broadcast() {
+        let song_dir = test_dir("startup-delay");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../tests/fixtures/startup-delay.lua"))
+            .expect("write startup delay fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Startup Delay");
+        context.song_display_bpms = [60.0; 2];
+        context.music_length_seconds = 4.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile startup delay");
+        let messages = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message == "ShowAnswer")
+            .collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1);
+        assert!((messages[0].beat - 2.0).abs() < 0.02, "{:?}", messages[0]);
+        let panel = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Panel"))
+            .expect("panel");
+        assert!(compiled.overlays[panel].initial_state.visible);
+        let visibility = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == panel && track.target == SongLuaOverlayUpdateTarget::Visible
+            })
+            .expect("timed panel visibility");
+        assert!(
+            visibility.samples.iter().any(|sample| sample.time >= 2.0
+                && sample.value == SongLuaOverlayUpdateValue::Bool(false))
+        );
+        assert!(
+            visibility.samples.iter().all(|sample| sample.time >= 1.99
+                || sample.value == SongLuaOverlayUpdateValue::Bool(true))
+        );
+    }
+
+    #[test]
+    fn consuming_cross_message_uses_runtime_capture() {
+        let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Consumed Message");
+        context.song_display_bpms = [60.0; 2];
+        context.music_length_seconds = 4.0;
+        let compiled =
+            test_compile_song_lua(&song_dir.join("consumed-message.lua"), &context).unwrap();
+        assert!(
+            compiled.info.skipped_message_command_captures.is_empty(),
+            "{:?}",
+            compiled.info.skipped_message_command_captures
+        );
+        assert_eq!(
+            compiled
+                .messages
+                .iter()
+                .filter(|event| event.message == "Consume")
+                .count(),
+            1
+        );
+        let target = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Target"))
+            .unwrap();
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == target
+                && track.target == SongLuaOverlayUpdateTarget::X
+                && track.samples.iter().any(|sample| {
+                    sample.time >= 2.0 && sample.value == SongLuaOverlayUpdateValue::F32(150.0)
+                })
+        }));
+    }
+
+    #[test]
     fn queued_broadcasts_keep_the_dispatch_beat() {
         let song_dir = test_dir("queued-broadcast-beat");
         let entry = song_dir.join("default.lua");

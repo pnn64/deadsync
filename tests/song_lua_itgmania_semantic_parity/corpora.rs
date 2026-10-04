@@ -155,6 +155,7 @@ mod lua_songs {
         lala => "[TPE2] LALA/lala.ssc",
         broadcast => "broadcast/broadcast.ssc",
         feelyourtouch => "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+        jumper => "Jumper/Jumper.ssc",
         lake_of_lost_nostalgia => "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
         crystal_access => "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
         sharkmode => "Sharkmode [Ky_Dash]/Sharkmode.ssc",
@@ -244,6 +245,14 @@ fn assert_song_parity(corpus: &Corpus, simfile: &str) {
 
 fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
+    if simfile == "Jumper/Jumper.ssc" {
+        assert_eq!(trace.random_seed, Some(2));
+        let song = parse_song(&corpus_root(corpus).join(simfile));
+        assert!(song.charts.iter().any(|chart| {
+            chart.chart_type == "dance-single" && chart.difficulty == "Challenge"
+                && chart.short_hash == "7c085505e95af69a"
+        }), "missing frozen project Jumper chart");
+    }
     let (compiled, primary_index, context) =
         compile_trace_song_at(trace, &corpus_root(corpus).join(simfile));
     let mut parity = compare_semantics(trace, &compiled, primary_index, &context);

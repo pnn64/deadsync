@@ -519,6 +519,15 @@ fn retain_lobby_effects(effects: &mut Vec<ThemeEffect>) {
     debug_assert!(effects.len() <= MAX_TRANSITION_LOBBY_EFFECTS);
 }
 
+fn song_lua_seed() -> u32 {
+    // Match native ITGmania's wall-time seed, resolved once per load so all
+    // compilation probes and retries use the same random stream.
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as u32
+}
+
 fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
     GameplayViewport::new(metrics.right - metrics.left, metrics.top - metrics.bottom)
 }
@@ -2163,6 +2172,7 @@ impl App {
                         &gameplay_session,
                         &gameplay_config,
                         video_renderer,
+                        song_lua_seed(),
                     );
                     GameplayPreload {
                         song_path,
@@ -8745,6 +8755,7 @@ impl App {
                     &gameplay_session,
                     &gameplay_config_from_config(&cfg),
                     cfg.video_renderer,
+                    song_lua_seed(),
                 );
                 let mut gs = gameplay::init(
                     song_arc,
@@ -9251,6 +9262,7 @@ impl App {
                             &gameplay_session,
                             &gameplay_config,
                             video_renderer,
+                            song_lua_seed(),
                         )
                     });
                     gameplay::init(

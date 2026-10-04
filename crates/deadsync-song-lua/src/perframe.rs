@@ -2931,7 +2931,7 @@ pub fn compile_update_functions<Kind>(
     root: &Value,
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
-    tracked_actors: &[SongLuaTrackedActor],
+    tracked_actors: &mut [SongLuaTrackedActor],
     messages: &[SongLuaMessageEvent],
     sound_events: &mut Vec<crate::SongLuaSoundEvent>,
     column_splines: &mut Vec<deadsync_gameplay::SongLuaColumnSplineTrack>,
@@ -3010,6 +3010,21 @@ pub fn compile_update_functions<Kind>(
             baseline_overlays.push(actor_overlay_initial_state(actor)?);
         }
     }
+    // Screen layers sit outside the returned song tree but queued callbacks
+    // can still write them. Capture those writes on the same chronological
+    // clock, retaining them as timed commands on the existing captured actor.
+    let mut layer_capture_indices = Vec::new();
+    for (tracked_index, tracked) in tracked_actors.iter().enumerate() {
+        if matches!(
+            tracked.target,
+            SongLuaTrackedActorTarget::SongForeground | SongLuaTrackedActorTarget::ScreenLayer(_)
+        ) {
+            layer_capture_indices.push((tracked_index, capture_actors.len()));
+            capture_actors.push(tracked.table.clone());
+            baseline_overlays.push(actor_overlay_initial_state(&tracked.table)?);
+        }
+    }
+    let mut layer_broadcasts = Vec::new();
     crate::lua_util::begin_overlay_update_capture_from_indices(
         lua,
         capture_actors
@@ -3091,7 +3106,8 @@ pub fn compile_update_functions<Kind>(
     let mut transform_masks = player_transform_masks(lua, &player_tables)?;
     let mut player_capture_masks = transform_masks;
     let mut frame_count = 0;
-    crate::lua_util::set_compile_frames(lua, replay.iter().copied());
+    crate::lua_util::set_compile_frames(lua, replay.iter().copied())
+        .map_err(|err| err.to_string())?;
     for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
         let next_beat = exact_beat as f32;
         frame_count += 1;
@@ -3351,6 +3367,36 @@ pub fn compile_update_functions<Kind>(
         column_samples.push(read_note_column_transform_samples(lua)?);
         spline_capture.capture(lua, (seconds * rate) as f32)?;
         column_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let mut layer_message = None;
+        for &(tracked_index, index) in &layer_capture_indices {
+            let prior = current_overlays[index];
+            let Some((_, delta)) =
+                overlay_delta_pair_from_states(prior, prior, replay_overlays[index])
+            else {
+                continue;
+            };
+            let message =
+                layer_message.get_or_insert_with(|| format!("__songlua_layer_frame_{frame_count}"));
+            tracked_actors[tracked_index].actor.message_commands.push(
+                crate::SongLuaOverlayMessageCommand {
+                    frame_advance: 0.0,
+                    message: message.clone(),
+                    aux: None,
+                    blocks: vec![crate::SongLuaOverlayCommandBlock {
+                        queued: false,
+                        start: 0.0,
+                        duration: 0.0,
+                        easing: None,
+                        opt1: None,
+                        opt2: None,
+                        delta,
+                    }],
+                },
+            );
+        }
+        if let Some(message) = layer_message {
+            layer_broadcasts.push((next_beat, message, true));
+        }
         std::mem::swap(&mut current_overlays, &mut replay_overlays);
         beat = next_beat;
     }
@@ -3485,7 +3531,8 @@ pub fn compile_update_functions<Kind>(
     }
     stateful_messages
         .retain(|capture| !capture.overlay_targets.is_empty() || !capture.writes.is_empty());
-    let runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
+    let mut runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
+    runtime_broadcasts.extend(layer_broadcasts);
     spline_capture.finish(column_splines);
     sound_events.extend(crate::lua_util::take_runtime_sounds(lua));
     crate::lua_util::apply_message_advances(lua, overlays);

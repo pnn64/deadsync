@@ -121,7 +121,7 @@ impl Fixture {
                 &self.root,
                 &self.context,
                 &mut self.overlays,
-                &[],
+                &mut [],
                 &[],
                 &mut Vec::new(),
                 &mut Vec::new(),

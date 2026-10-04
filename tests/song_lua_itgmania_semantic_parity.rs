@@ -2201,17 +2201,31 @@ fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mu
                     continue;
                 };
                 let has_listener = compiled
-                    .overlays
+                    .messages
                     .iter()
-                    .flat_map(|actor| &actor.message_commands)
-                    .chain(
-                        compiled
-                            .player_actors
-                            .iter()
-                            .flat_map(|actor| &actor.message_commands),
-                    )
-                    .chain(&compiled.song_foreground.message_commands)
-                    .any(|command| command.message == message);
+                    .any(|event| event.message == message)
+                    || compiled
+                        .stateful_message_captures
+                        .iter()
+                        .any(|capture| capture.message == message)
+                    || compiled
+                        .overlays
+                        .iter()
+                        .flat_map(|actor| &actor.message_commands)
+                        .chain(
+                            compiled
+                                .player_actors
+                                .iter()
+                                .flat_map(|actor| &actor.message_commands),
+                        )
+                        .chain(&compiled.song_foreground.message_commands)
+                        .chain(
+                            compiled
+                                .screen_layers
+                                .iter()
+                                .flat_map(|actor| &actor.message_commands),
+                        )
+                        .any(|command| command.message == message);
                 if !has_listener {
                     continue;
                 }
@@ -3283,12 +3297,44 @@ fn compiled_overlay_states_at(
     seconds: f32,
 ) -> Vec<SongLuaOverlayState> {
     let local = compiled_local_states_at(compiled, context, beat, seconds);
-    compose_overlay_states(
+    let mut states = compose_overlay_states(
         &compiled.overlays,
         &local,
         [compiled.screen_width, compiled.screen_height],
         [seconds, beat],
-    )
+    );
+    let foreground = &compiled.song_foreground;
+    let message_seconds = compiled
+        .messages
+        .iter()
+        .map(|event| Some(song_elapsed_seconds_at(event.beat, context)))
+        .collect::<Vec<_>>();
+    let events = deadsync_song_lua::gameplay::build_song_lua_actor_message_events_for_commands(
+        &compiled.messages,
+        &message_seconds,
+        &foreground.message_commands,
+    );
+    let layer = deadsync_song_lua::playback::replay_song_lua_message_state(
+        seconds,
+        foreground.initial_state,
+        &foreground.message_commands,
+        Some(&events),
+    );
+    if layer != SongLuaOverlayState::default() {
+        for state in &mut states {
+            *state = deadsync_song_lua::playback::song_lua_overlay_compose_state::<
+                deadsync_assets::noteskin::SpriteSlot,
+            >(
+                &SongLuaOverlayKind::ActorFrame,
+                layer,
+                *state,
+                compiled.screen_width,
+                compiled.screen_height,
+                [seconds, beat],
+            );
+        }
+    }
+    states
 }
 
 #[test]
@@ -4748,6 +4794,82 @@ fn native_song_lua_semantics_match_deadsync() {
 }
 
 #[test]
+fn startup_delay_matches_native_dispatch() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/startup-delay.json"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/startup-delay.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    let expected = trace
+        .timeline_tracks
+        .iter()
+        .flat_map(|track| &track.samples)
+        .find(|sample| sample.3.first().is_some_and(|name| name == "ShowAnswer"))
+        .expect("native timeout")
+        .1
+        .expect("native timeout beat");
+    let actual = compiled[primary]
+        .messages
+        .iter()
+        .find(|message| message.message == "ShowAnswer")
+        .expect("compiled timeout")
+        .beat;
+    assert!(
+        (expected - actual).abs() <= 0.0001,
+        "{expected} vs {actual}"
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    parity.assert_complete("startup delay");
+}
+
+#[test]
+fn foreground_delay_matches_native_visibility() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/foreground-delay.json"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/foreground-delay.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    assert!(compiled[primary].song_foreground.initial_state.visible);
+    assert!(
+        !compiled[primary]
+            .song_foreground
+            .message_commands
+            .is_empty()
+    );
+    compare_semantics(&trace, &compiled, primary, &context).assert_complete("foreground delay");
+}
+
+#[test]
+fn consumed_message_checks_runtime_timeline() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/consumed-message.json"));
+    let simfile = root.join("crates/deadsync-song-lua/tests/fixtures/consumed-message.sm");
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+    assert!(
+        compiled[primary]
+            .overlays
+            .iter()
+            .flat_map(|actor| &actor.message_commands)
+            .all(|command| command.message != "Consume")
+    );
+    compare_semantics(&trace, &compiled, primary, &context).assert_complete("consumed message");
+    let mut missing = compiled[primary].clone();
+    missing.messages.retain(|event| event.message != "Consume");
+    let mut parity = Parity::default();
+    compare_timeline(&trace, &missing, &mut parity);
+    assert_eq!(
+        parity.gaps.len(),
+        1,
+        "lost runtime-only broadcasts must fail: {}",
+        parity.summary("consumed message")
+    );
+}
+
+#[test]
 fn queued_broadcasts_match_native_frames() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -5957,8 +6079,8 @@ fn bank_account_complete_semantics_match_itgmania() {
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     assert_eq!(
         parity.checks(),
-        1153,
-        "proxy and modifier coverage must remain complete"
+        1160,
+        "proxy, modifier and runtime timeline coverage must remain complete"
     );
     parity.assert_complete("Bank Account complete semantics");
 }
@@ -5974,8 +6096,8 @@ fn delightful_day_movie_and_hidden_layers_match_itgmania() {
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut complete);
     assert_eq!(
         complete.checks(),
-        1351,
-        "movie geometry must remain covered"
+        1355,
+        "movie geometry and runtime timeline must remain covered"
     );
     complete.assert_complete("Delightful Day complete rendering semantics");
     let layer = &compiled[primary];

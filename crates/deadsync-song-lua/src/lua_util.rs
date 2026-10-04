@@ -239,6 +239,7 @@ struct SongLuaDeferredMessage {
     actor: Table,
     command: String,
     detail: String,
+    observed: bool,
 }
 
 // Owned by one load-time Lua session. Retry once after chronological replay;
@@ -253,6 +254,29 @@ fn has_deferred_message(lua: &Lua, actor: &Table, command: Option<&str>) -> bool
                     && command.is_none_or(|command| message.command == command)
             })
         })
+}
+
+fn defer_actor_message(lua: &Lua, actor: &Table, command: &str, detail: String) -> String {
+    if lua.app_data_ref::<SongLuaDeferredMessages>().is_none() {
+        lua.set_app_data(SongLuaDeferredMessages(Vec::new()));
+    }
+    let mut deferred = lua
+        .app_data_mut::<SongLuaDeferredMessages>()
+        .expect("deferred message list was initialized");
+    if let Some(existing) = deferred
+        .0
+        .iter()
+        .find(|entry| entry.actor.to_pointer() == actor.to_pointer() && entry.command == command)
+    {
+        return existing.detail.clone();
+    }
+    deferred.0.push(SongLuaDeferredMessage {
+        actor: actor.clone(),
+        command: command.to_owned(),
+        detail: detail.clone(),
+        observed: false,
+    });
+    detail
 }
 
 #[derive(Clone)]
@@ -2558,7 +2582,17 @@ pub fn broadcast_song_lua_message(
                 &command,
                 true,
                 params.clone(),
-            )
+            )?;
+            if lua.app_data_ref::<SongLuaCompileFrames>().is_some()
+                && let Some(mut deferred) = lua.app_data_mut::<SongLuaDeferredMessages>()
+            {
+                for entry in &mut deferred.0 {
+                    if entry.actor.to_pointer() == actor.to_pointer() && entry.command == command.as_str() {
+                        entry.observed = true;
+                    }
+                }
+            }
+            Ok(())
         })
     };
     let result = result();
@@ -3044,6 +3078,22 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         let Some(name) = queue.raw_get::<Option<String>>(1)? else {
             break;
         };
+        if lua.app_data_ref::<SongLuaCompileFrames>().is_none()
+            && (lua.app_data_ref::<SongLuaQueuedStartup>().is_some()
+                || actor
+                    .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
+                    .unwrap_or(false))
+            && let Some(starts) = actor.get::<Option<Table>>("__songlua_command_queue_starts")?
+            && starts
+                .raw_get::<Option<f32>>(1)?
+                .is_some_and(|start| start > 0.0)
+        {
+            // A startup sleep delays Lua state changes and broadcasts too.
+            // Leave the command queued until chronological replay reaches it.
+            actor.set("__songlua_command_queue_deferred", true)?;
+            invalidate_compile_update_plan(lua);
+            return Ok(());
+        }
         let time = drain_queue_clock(lua, actor);
         if time.is_some_and(|(frame, _)| {
             lua.app_data_ref::<SongLuaCompileFrames>()
@@ -3130,12 +3180,7 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         let command = ActorCommandName::new(&name, "Command");
         let previous_active = active.get::<Value>(command.as_str())?;
         active.set(command.as_str(), Value::Nil)?;
-        let result = run_actor_message_with_params(
-            lua,
-            actor,
-            &command,
-            None,
-        );
+        let result = run_actor_message_with_params(lua, actor, &command, None);
         active.set(command.as_str(), previous_active)?;
         if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
             capture.queued_depth -= 1;
@@ -3459,20 +3504,12 @@ pub fn capture_actor_message_commands(
         let blocks = match blocks {
             Ok(blocks) => blocks,
             Err(err) => {
-                let detail = format!("{}.{}: {err}", actor_debug_label(actor), name);
-                if lua.app_data_ref::<SongLuaDeferredMessages>().is_none() {
-                    lua.set_app_data(SongLuaDeferredMessages(Vec::new()));
-                }
-                if !has_deferred_message(lua, actor, Some(&name)) {
-                    lua.app_data_mut::<SongLuaDeferredMessages>()
-                        .expect("deferred message list was initialized")
-                        .0
-                        .push(SongLuaDeferredMessage {
-                            actor: actor.clone(),
-                            command: name,
-                            detail: detail.clone(),
-                        });
-                }
+                let detail = defer_actor_message(
+                    lua,
+                    actor,
+                    &name,
+                    format!("{}.{}: {err}", actor_debug_label(actor), name),
+                );
                 push_unique_compile_detail(&mut out.skipped, detail);
                 continue;
             }
@@ -5256,6 +5293,7 @@ fn clear_actor_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             queue.clear()?;
         }
     }
+    actor.set("__songlua_command_queue_deferred", Value::Nil)?;
     actor.set("__songlua_recurring_update_command", Value::Nil)?;
     actor.set("__songlua_recurring_update_time_left", Value::Nil)?;
     actor.set("__songlua_startup_queue_seconds", Value::Nil)?;
@@ -9312,7 +9350,10 @@ impl SongLuaCompileFrames {
     }
 }
 
-pub(crate) fn set_compile_frames(lua: &Lua, frames: impl Iterator<Item = (f64, f64)>) {
+pub(crate) fn set_compile_frames(
+    lua: &Lua,
+    frames: impl Iterator<Item = (f64, f64)>,
+) -> mlua::Result<()> {
     let mut seconds = 0.0;
     let (beats, times) = frames
         .map(|(beat, delta)| {
@@ -9327,6 +9368,41 @@ pub(crate) fn set_compile_frames(lua: &Lua, frames: impl Iterator<Item = (f64, f
         epoch: 0,
         clocks: FxHashMap::default(),
     });
+    for actor in song_lua_actor_registry(lua)?.sequence_values::<Table>() {
+        let actor = actor?;
+        if !actor
+            .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let starts: Table = actor.get("__songlua_command_queue_starts")?;
+        let mut steps = std::collections::VecDeque::new();
+        let mut previous = 0.0;
+        for start in starts.sequence_values::<f32>() {
+            let start = f64::from(start?);
+            steps.push_back(Some((start - previous).max(0.0)));
+            steps.push_back(None);
+            previous = start;
+        }
+        lua.app_data_mut::<SongLuaCompileFrames>()
+            .expect("frames installed")
+            .clocks
+            .insert(
+                actor.to_pointer() as usize,
+                SongLuaQueueClock {
+                    epoch: 0,
+                    frame: 0,
+                    remaining: 0.0,
+                    steps,
+                    dispatch: None,
+                    recurring_frame: None,
+                },
+            );
+        drain_queue_clock(lua, &actor);
+        actor.set("__songlua_command_queue_deferred", Value::Nil)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn set_compile_frame(lua: &Lua, frame: usize) {
@@ -9793,6 +9869,15 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
         return Ok(false);
     };
     let jobs = compile_update_jobs(lua, root)?;
+    for job in jobs.iter() {
+        if let SongLuaCompileUpdateJob::Advance { actor, .. } = job
+            && actor
+                .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
+                .unwrap_or(false)
+        {
+            return Ok(false);
+        }
+    }
     let mut jobs = jobs
         .iter()
         .filter(|job| !matches!(job, SongLuaCompileUpdateJob::Advance { .. }));
@@ -10509,6 +10594,9 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
         || actor
             .raw_get::<Option<Table>>("__songlua_state_motion_clock")?
             .is_some()
+        || actor
+            .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
+            .unwrap_or(false)
     {
         return Ok(true);
     }
@@ -13554,13 +13642,15 @@ pub(crate) fn capture_deferred_messages<Kind>(
             .command
             .strip_suffix("MessageCommand")
             .expect("message suffix");
-        if runtime_captures.iter().any(|capture| {
-            capture.message == message
-                && capture
-                    .overlay_targets
-                    .iter()
-                    .any(|(index, _)| *index == source_index)
-        }) {
+        if deferred.observed
+            || runtime_captures.iter().any(|capture| {
+                capture.message == message
+                    && capture
+                        .overlay_targets
+                        .iter()
+                        .any(|(index, _)| *index == source_index)
+            })
+        {
             // The actual broadcast has already captured this receiver. Retrying
             // at song end would freeze callback upvalues at the wrong beat.
             skipped.retain(|detail| detail != &deferred.detail);
@@ -13703,11 +13793,17 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
         let second = match second.expect("second capture exists after a successful first capture") {
             Ok(second) => second,
             Err(err) => {
-                on_dynamic(format!(
-                    "{}.{} cannot be replayed for stable cross-actor capture: {err}",
-                    actor_debug_label(&source),
-                    command_name
-                ));
+                let detail = defer_actor_message(
+                    lua,
+                    &source,
+                    &command_name,
+                    format!(
+                        "{}.{} cannot be replayed for stable cross-actor capture: {err}",
+                        actor_debug_label(&source),
+                        command_name
+                    ),
+                );
+                on_dynamic(detail);
                 continue;
             }
         };
@@ -13718,11 +13814,17 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
             continue;
         }
         if first != second {
-            on_dynamic(format!(
-                "{}.{} changes cross-actor targets or effects between runs",
-                actor_debug_label(&source),
-                command_name
-            ));
+            let detail = defer_actor_message(
+                lua,
+                &source,
+                &command_name,
+                format!(
+                    "{}.{} changes cross-actor targets or effects between runs",
+                    actor_debug_label(&source),
+                    command_name
+                ),
+            );
+            on_dynamic(detail);
             continue;
         }
         additions.extend(first.into_iter().map(|(target, blocks, aux)| {

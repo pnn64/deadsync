@@ -1714,7 +1714,8 @@ fn song_lua_overlay_set_linear_2d(
     true
 }
 
-fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
+/// Compose a child's draw state with its parent, including screen layers.
+pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
     parent_kind: &SongLuaOverlayKind<S>,
     parent: SongLuaOverlayState,
     mut child: SongLuaOverlayState,
@@ -5799,7 +5800,8 @@ fn song_lua_overlay_render_state_dynamic<S: NoteskinSlot + Clone>(
     current
 }
 
-fn replay_song_lua_message_state(
+/// Sample immutable message commands, including when seeking a song timeline.
+pub fn replay_song_lua_message_state(
     now: f32,
     initial_state: SongLuaOverlayState,
     message_commands: &[SongLuaOverlayMessageCommand],
@@ -11219,7 +11221,7 @@ fn prepare_song_lua_layer<S: NoteskinSlot + Clone>(
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
     depth: SongLuaLayerDepth,
 ) -> Option<SongLuaLayerDepth> {
-    if overlays.is_empty() {
+    if overlays.is_empty() || !song_foreground_state.visible {
         order_scratch.clear();
         return None;
     }
@@ -11324,6 +11326,18 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
             .get(idx)
             .copied()
             .unwrap_or_else(SongLuaOverlayState::default);
+        let overlay_state = if song_foreground_state == SongLuaOverlayState::default() {
+            overlay_state
+        } else {
+            song_lua_overlay_compose_state(
+                &SongLuaOverlayKind::<S>::ActorFrame,
+                song_foreground_state,
+                overlay_state,
+                space_width,
+                space_height,
+                [effect_time, effect_beat],
+            )
+        };
         let z = song_lua_depth.draw_z(draw_idx);
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {

@@ -632,7 +632,7 @@ where
                 &root,
                 context,
                 &mut overlays,
-                &tracked_actors,
+                &mut tracked_actors,
                 &out.messages,
                 &mut sound_events,
                 &mut out.column_splines,
