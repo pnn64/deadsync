@@ -3252,7 +3252,7 @@ pub fn compile_update_functions<Kind>(
         let stage = profile.then(Instant::now);
         for (index, actor) in capture_actors.iter().enumerate() {
             if let Some(phase) =
-                crate::lua_util::motion_render_phase(actor, [seconds as f32, next_beat])
+                crate::lua_util::effect_render_phase(actor, [seconds as f32, next_beat])
                     .map_err(|err| err.to_string())?
             {
                 let target = SongLuaOverlayUpdateTarget::EffectPhase;

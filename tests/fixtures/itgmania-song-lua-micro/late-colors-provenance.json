@@ -1,0 +1,35 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "screen": [
+    854,
+    480
+  ],
+  "seed": 1,
+  "samples": 241,
+  "frame_rate": 60,
+  "semantic_beat_step": 0.125,
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "6ae884323c1da179afd41b481d93aa9f66825079b634b33acb65d2d84a3fbeaf",
+    "itgmania-harness-rs/semantic_host.lua": "d5549f12d6700e45d4f5b458024fd77bc244d1a8d295b611d6d7dd99216f0c52",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "28f36503e251fb5d4c284e439841698655ce3099a11ae74858c424eb58d551b8",
+    "itgmania-harness-rs/src/song_lua_semantics.rs": "5a425f10b208eed482d20131ab84d95d5ea8c533db405189e4059709e53574c8",
+    "deadsync/tests/fixtures/song-lua/late-colors.lua": "56179f673f6b53422a671e0891aef1131d22e0c47ad2ccd9a6d9605815458bd1",
+    "deadsync/tests/fixtures/song-lua/late-colors.sm": "5c92f71e28dc757b8a8f86efe430e119e83ff1fd9ecb8905db9d203e975b2544",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/late-colors-input.json": "5042fb730dea9770abd3360bbd8155d4bb77d6746324b6c529bc22dd301af7e9"
+  },
+  "captures": {
+    "late-colors.json.zst": {
+      "raw_sha256": "fb2d870ff0f37166dbbaf2b9058877dba91a3856c8c7b533799848222cd337c4",
+      "raw_bytes": 96258,
+      "compressed_sha256": "eb7ad192d72850a6a1f7ba53c9ab812f8df015124d1e67e76c08aea055eb3759",
+      "compressed_bytes": 7424
+    },
+    "late-colors-native.json.zst": {
+      "raw_sha256": "467a955aaa510bd9078aa05c546e4bef01382e3182174b518db27584588b70a8",
+      "raw_bytes": 60382013,
+      "compressed_sha256": "c645dee748cbe65ee19d0ac55ef622d79d8b0856a24d347c53a3c20b1792d368",
+      "compressed_bytes": 85868
+    }
+  }
+}

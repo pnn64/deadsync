@@ -6280,7 +6280,10 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
         color2: state.effect_color2,
         period,
         offset: state.effect_offset
-            - if state.effect_mode == deadlib_present::anim::EffectMode::Pulse || state.rainbow {
+            - if state.effect_mode == deadlib_present::anim::EffectMode::Pulse
+                || state.rainbow
+                || song_lua_color_effect(state.effect_mode)
+            {
                 state.effect_phase
             } else {
                 0.0

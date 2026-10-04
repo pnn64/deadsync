@@ -2621,7 +2621,7 @@ impl Default for SongLuaOverlayState {
             uppercase: false,
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0, 0.0, 0.0, 0.5],
-            glow: [0.0, 0.0, 0.0, 0.0],
+            glow: [1.0, 1.0, 1.0, 0.0],
             fov: None,
             vanishpoint: None,
             diffuse: [1.0, 1.0, 1.0, 1.0],

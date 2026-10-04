@@ -4410,6 +4410,8 @@ fn compare_projected_geometry(
 ) {
     parity.section("projected geometry");
     let drawable_map = projected_drawable_map(trace, compiled);
+    let mut colors = Parity::default();
+    colors.section("draw colors");
     let mut state_cache = HashMap::<(usize, u32, u32), Vec<SongLuaOverlayState>>::new();
     for track in &trace.projected_vertex_tracks {
         let Some(definition_id) = track.definition_id.as_deref() else {
@@ -4423,6 +4425,7 @@ fn compare_projected_geometry(
             });
             continue;
         };
+        let mut reported_colors = [false; 8];
         let mut reported_visibility = false;
         let mut reported_alpha = false;
         let mut reported_nonfinite = false;
@@ -4467,8 +4470,27 @@ fn compare_projected_geometry(
                 state,
                 [seconds, beat],
             );
-            let actual_visible =
-                state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
+            let actual_diffuse = state.vertex_colors.map_or(state.diffuse, |corners| {
+                std::array::from_fn(|channel| state.diffuse[channel] * corners[0][channel])
+            });
+            let has_colors = sample.get(9).is_some_and(Value::is_array)
+                && sample.get(10).is_some_and(Value::is_array);
+            let actual_visible = state.sprite_texture
+                && state.visible
+                && (actual_diffuse[3] > 0.000_001 || (has_colors && state.glow[3] > 0.000_001));
+            if native_visible && has_colors {
+                for (field, actual) in [(9, actual_diffuse), (10, state.glow)] {
+                    let native = sample[field].as_array().expect("native RGBA array");
+                    for channel in 0..4 {
+                        let expected = value_f32(native.get(channel));
+                        colors.check_once(
+                            expected.is_some_and(|expected| (expected - actual[channel]).abs() <= 0.000_1),
+                            &mut reported_colors[(field - 9) * 4 + channel],
+                            || format!("draw color differs for {} ({definition_id}) at beat {beat:.3}, field {field} channel {channel}: ITGmania {expected:?}, DeadSync {}", track.actor, actual[channel]),
+                        );
+                    }
+                }
+            }
             let visibility_matches = native_visible == actual_visible || {
                 let probe_beat = (beat
                     + if native_visible {
@@ -4490,7 +4512,10 @@ fn compare_projected_geometry(
                     })
                     .get(overlay_index)
                     .is_some_and(|state| {
-                        native_visible == (state.visible && state.diffuse[3] > 0.000_001)
+                        native_visible
+                            == (state.visible
+                                && (state.diffuse[3] > 0.000_001
+                                    || (has_colors && state.glow[3] > 0.000_001)))
                     })
             };
             parity.check_once(visibility_matches, &mut reported_visibility, || {
@@ -4501,8 +4526,8 @@ fn compare_projected_geometry(
             });
             if native_visible && actual_visible {
                 parity.check_once(
-                    native_alpha == state.diffuse[3]
-                        || (native_alpha - state.diffuse[3]).abs() <= 0.03,
+                    native_alpha == actual_diffuse[3]
+                        || (native_alpha - actual_diffuse[3]).abs() <= 0.03,
                     &mut reported_alpha,
                     || {
                         format!(
@@ -4571,6 +4596,8 @@ fn compare_projected_geometry(
             );
         }
     }
+    parity.sections.extend(colors.sections);
+    parity.gaps.extend(colors.gaps);
 }
 
 fn compare_projected_vibration_coverage(
@@ -6846,8 +6873,7 @@ fn effect_switch_native_draws() {
     );
 }
 
-#[test]
-fn color_inheritance_native_draws() {
+fn native_color_draws(fixture: &str, end_seconds: f32) -> usize {
     use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -6855,25 +6881,24 @@ fn color_inheritance_native_draws() {
     let screen = [854.0, 480.0];
     let mut context = SongLuaCompileContext::new(&song_dir, "Color inheritance");
     context.screen_width = screen[0];
-    context.music_length_seconds = 2.0;
+    context.music_length_seconds = end_seconds;
     context.song_timing_bpms = vec![(0.0, 60.0)];
     let compiled = compile_song_lua_layers(
-        &[song_dir.join("color-inheritance.lua").as_path()],
+        &[song_dir.join(format!("{fixture}.lua")).as_path()],
         0,
         &context,
     )
     .expect("compile color inheritance fixture");
-    let native: Value =
-        serde_json::from_reader(
-            zstd::stream::read::Decoder::new(
-                fs::File::open(root.join(
-                    "tests/fixtures/itgmania-song-lua-micro/color-inheritance-native.json.zst",
-                ))
-                .unwrap(),
-            )
+    let native: Value = serde_json::from_reader(
+        zstd::stream::read::Decoder::new(
+            fs::File::open(root.join(format!(
+                "tests/fixtures/itgmania-song-lua-micro/{fixture}-native.json.zst"
+            )))
             .unwrap(),
         )
-        .unwrap();
+        .unwrap(),
+    )
+    .unwrap();
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
     let layer = &compiled[0];
     let mut composer = WholeSongComposer::new(&layer.overlays);
@@ -6919,7 +6944,25 @@ fn color_inheritance_native_draws() {
             }
         }
     }
-    eprintln!("color inheritance: {colors} native draw color channels");
+    eprintln!("{fixture}: {colors} native draw color channels");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!(colors, 54656);
+    colors
+}
+
+#[test]
+fn color_inheritance_native_draws() {
+    assert_eq!(native_color_draws("color-inheritance", 2.0), 54656);
+}
+
+#[test]
+fn late_colors_native_draws() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/late-colors.json.zst"));
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/late-colors.sm"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("late colors"));
+    parity.assert_complete("late colors");
+    assert_eq!(native_color_draws("late-colors", 4.0), 57840);
 }
