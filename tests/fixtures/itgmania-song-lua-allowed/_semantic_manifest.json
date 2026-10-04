@@ -93,7 +93,58 @@
       "fixture": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc.semantic.json",
       "title": "[4914] [10] Riddle",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-double",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "random_seed": 1,
+        "update_frames": 8453,
+        "lua_song_beat_precision": "native_float",
+        "arrow_timing": "native",
+        "noteskin": "cel",
+        "description": "DS+ BR ST- MODS",
+        "end_position": {
+          "beat": 300.5,
+          "seconds": 140.859375
+        },
+        "project_chart_hash": "a147dd828cd08fc7",
+        "harness_host_sha256": "5bba522be095f4ef40272a92dbab07ebfa3e8361fa08a5a3d18565f901a9bbac",
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9c6791a539865d234af68d77fb4e08911de524662dda5e9001ebf7963762a606",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "ede41c27560de2a36b4645018e09f5d36102ba7f5978d38b25136b9d49e22ee8",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f"
+        },
+        "source_files_sha256": {
+          "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc": "f64b12b08603c2193ae2943bf1611ceccf349f35c04973296ee4b9712c2327c2",
+          "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/default.lua": "b46efc54c91080640db483376c77bca84cb319bf1f8a1f6c1c9a3c245bc2f3db",
+          "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+          "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+        },
+        "sha256": "d90cdeab860c9abb4485e9bc0e4ddb58f64306293251fcc06191b3e91e6065cf",
+        "uncompressed_bytes": 2297968
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",

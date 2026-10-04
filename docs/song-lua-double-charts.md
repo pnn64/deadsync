@@ -103,8 +103,31 @@ against the existing reference, rather than a fresh native recapture.
 
 ## Remaining project scope
 
-These results cover two exact charts. They do not establish fresh parity
-for all 63 frozen project entries. Jumper's fresh native capture currently
-reports an initialization error in its Wordle save-data path. Get Into It
-and Rhythm Hell still need their source charts located and audited. The
-other entries also require the ongoing fresh audit.
+The fresh audit of all 63 frozen project entries is ongoing. Jumper now
+passes its valid seed-2 branch; its original seed-1 dictionary-index error
+is documented in `song-lua-jumper.md`. Spooky's fresh audit is documented
+in `song-lua-spooky.md`. Get Into It and Rhythm Hell are not present under
+those names in the local song corpus. Only local resources are used;
+chart-hash mismatches are reported for the user to update later.
+
+## Riddle double-chart audit (0.5.1738)
+
+The frozen project's issue 705 is dance-double Challenge, hash
+`a147dd828cd08fc7`, description `DS+ BR ST- MODS`, meter 10. A complete
+fresh native capture passes **16,075 / 16,075** checks: 4 compile checks,
+2 layer-order checks, 303 column-spline checks and 15,766 runtime-modifier
+checks. The chart's Lua modifies player and column state; it does not
+create drawable overlays requiring projected-geometry comparisons.
+
+The explicit native selection is `--steps-type dance-double --difficulty
+Challenge --random-seed 1 --beat-step 0.125 --max-events 2000000`. Context:
+cel, both players, 854 by 480, 60 Hz, native arrow timing. ITGmania revision
+is `5b205125ad53b9867bb4a494ff858f8d38ad4406`, clean. It reaches beat
+300.5 and 140.859375 seconds over 8,453 frames, with no errors or dropped
+events. The allowed-corpus manifest records exact song, loaded Lua, host,
+harness and capture hashes. The reference retains its native data.
+
+The corpus guard pins Riddle's hash, description, double style, difficulty
+and seed. No additional production fix or tolerance change is needed.
+Main validation covers the complete named Riddle audit, all regular
+semantic tests, and the Jumper and Spooky regressions sharing that guard.
