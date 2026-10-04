@@ -1597,25 +1597,33 @@ fn song_lua_overlay_set_linear_2d(
     linear: Matrix2,
     z_scale: f32,
 ) -> bool {
-    const EPS: f32 = 1.0e-6;
     if !linear.is_finite() || !z_scale.is_finite() {
         return false;
     }
     let scale_x = linear.x_axis.length();
-    if scale_x <= EPS {
-        return false;
-    }
-    let rotation = linear.x_axis.y.atan2(linear.x_axis.x);
-    let local = Matrix2::from_angle(-rotation) * linear;
-    let scale_y = local.y_axis.y;
-    if scale_y.abs() <= EPS || local.x_axis.y.abs() > 0.001 {
-        return false;
-    }
+    let (rotation, scale_y, skew_x) = if scale_x > 0.0 {
+        let rotation = linear.x_axis.y.atan2(linear.x_axis.x);
+        let local = Matrix2::from_angle(-rotation) * linear;
+        if local.x_axis.y.abs() > 0.001 {
+            return false;
+        }
+        (rotation, local.y_axis.y, local.y_axis.x / scale_x)
+    } else {
+        // A collapsed X axis still has a transformed Y column. Align that
+        // column with local Y instead of falling back to reordered scales.
+        let scale_y = linear.y_axis.length();
+        let rotation = if scale_y > 0.0 {
+            (-linear.y_axis.x).atan2(linear.y_axis.y)
+        } else {
+            0.0
+        };
+        (rotation, scale_y, 0.0)
+    };
 
     state.rot_z_deg = rotation.to_degrees();
     // Actor::BeginDraw applies scale before skew. The X shear coefficient
     // therefore divides the off-diagonal entry by X scale, not Y scale.
-    state.skew_x = local.y_axis.x / scale_x;
+    state.skew_x = skew_x;
     state.skew_y = 0.0;
     state.basezoom = 1.0;
     state.zoom = 1.0;

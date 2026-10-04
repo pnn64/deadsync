@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "name": "collapsed-transform",
+  "screen": { "width": 854, "height": 480 },
+  "samples": [0],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "frame", "name": "FlatYParent",
+        "base": { "zoom": [0.8,0.8,1] },
+        "state": { "position": [170,39,0], "zoom": [1,0,1] },
+        "children": [{ "kind": "sprite", "name": "FlatY", "size": [64,32], "state": { "rotation": [0,0,-6] } }]
+      },
+      {
+        "kind": "frame", "name": "FlatXParent",
+        "state": { "position": [300,240,0], "zoom": [1.334375,1,1] },
+        "children": [{ "kind": "sprite", "name": "FlatX", "size": [64,32], "base": { "zoom": [0,0.8,1] }, "state": { "position": [45,-43,0], "rotation": [0,0,85] } }]
+      },
+      {
+        "kind": "frame", "name": "ReflectedParent",
+        "state": { "position": [600,280,0], "zoom": [0,-0.7,1], "rotation": [0,0,45], "skew": [0.15,0] },
+        "children": [{ "kind": "sprite", "name": "Reflected", "size": [64,32], "state": { "position": [30,-20,0], "zoom": [0.8,1.2,1], "rotation": [0,0,-20], "skew": [0,0.03] } }]
+      }
+    ]
+  }
+}

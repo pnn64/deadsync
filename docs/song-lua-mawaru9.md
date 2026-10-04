@@ -1021,6 +1021,68 @@ validation work; this is not a gameplay frametime measurement. Main receives
 exactly one patch increment from 0.5.1727 to 0.5.1728. The original song and
 the harness sources are unchanged.
 
+## Collapsed affine transforms (0.5.1729)
+
+Chike's game-over banners start inside a parent with zero Y zoom and have a
+rotated child sprite. Patients' rotated sprites later set base X zoom to
+zero. Both produce rank-deficient affine matrices. The decomposition helper
+rejected zero X or Y scale and used the fallback that multiplies scalar
+zooms before the child's rotation. This reversed the authored transform
+order: Chike's horizontal line gained height, and Patients' collapsed
+sprites had the wrong width.
+
+The decomposition now preserves zero Y scale and its X shear. When the X
+column is zero, it aligns the transformed Y column with local Y; a matrix
+with both columns zero remains collapsed. The former zero-axis rejection
+and its small-scale threshold were removed. This uses the existing composed
+state and rendering path, without adding another transform representation.
+
+`collapsed-transform.lua` covers a zero-Y parent, a zero-X child beneath a
+nonuniform parent, and a reflected zero-X parent with rotation and skew.
+The frozen song-Lua fixture improves from **24/27** to **27/27**. Its 241
+update frames complete without Lua runtime errors or dropped events. The
+22,665-byte capture compresses to 3,963 bytes with an exact round trip.
+Decoded SHA256:
+`d3ecef96621823436ef85bd5f78a4ce7ed653a7230eb35ae0c33df4256d3e21f`.
+
+An independent native C++ actor-conformance fixture describes the same
+three transforms. All 36 world vertex coordinates agree within the existing
+0.0001 tolerance. The original input is retained alongside the native
+output, whose 82,572 bytes have SHA256
+`e1f5585de39c8fd5626ee2a667634f4458d1f0a46109a0f42cc7456ca9b6f6ec`.
+Both native captures use the unchanged ITGmania reference sources.
+
+The complete song uses the same frozen native Mawaru9 reference, decoded
+SHA256 `d56bc4ea2aef3f9ec87e291466e134e1e6e6925b094a7b5f0443f8dc2bc7b503`:
+
+| Category | Passing checks |
+| --- | --- |
+| Complete result | 118,912/118,933 |
+| Compile info | 12/12 |
+| Layer order | 4/4 |
+| Final render | 3,748/3,748 |
+| Render persistence | 6,639/6,639 |
+| Update values | 23,197/23,197 |
+| Player ranges | 13/14 |
+| Projected geometry | 65,400/65,418 |
+| Projected vibration | 19,398/19,400 |
+| Timeline | 224/224 |
+| Message commands | 231/231 |
+| Runtime modifiers | 46/46 |
+
+All 12 Chike and Patients geometry failures are resolved. Coverage and
+comparison tolerances are unchanged. Mawaru9 has 21 failed checks and 19
+distinct reports: 18 geometry checks, two vibration samples and P2's X
+range. Its complete test remains ignored and failing. A separate staging
+reproduction confirms that `AddWrapperState()` placement is lost, matching
+the remaining initial pulse actor error; that gap is not fixed in this pass.
+
+All 964 Lua/profile tests and 89 regular semantic tests pass in both
+repositories. The full debug audit took 406.99 seconds alongside validation;
+this is not a gameplay frametime measurement. Main receives exactly one
+patch increment from 0.5.1728 to 0.5.1729. The original song, full native
+reference, and harness sources are unchanged.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the

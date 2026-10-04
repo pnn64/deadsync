@@ -3570,6 +3570,11 @@ fn affine_skew_matches_native_drawing() {
 }
 
 #[test]
+fn collapsed_transform_matches_native_drawing() {
+    assert_native_actor_drawing("collapsed-transform");
+}
+
+#[test]
 fn ancestor_scale_matches_native_drawing() {
     assert_native_actor_drawing("ancestor-scale");
 }
@@ -4899,6 +4904,22 @@ fn queued_bounce_matches_native() {
     eprintln!("{}", parity.summary("Queued bounce"));
     assert_eq!(parity.checks(), 543);
     parity.assert_complete("Queued bounce");
+}
+
+#[test]
+fn collapsed_transform_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/collapsed-transform.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/collapsed-transform.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    assert_eq!(parity.checks(), 27);
+    parity.assert_complete("Collapsed transform");
 }
 
 #[test]
