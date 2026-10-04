@@ -5353,19 +5353,14 @@ fn song_lua_overlay_apply_blocks(
     }
     let mut current = state;
     for block in blocks {
-        if elapsed < block.start {
+        let Some(factor) = crate::overlay_block_factor(block, elapsed) else {
             break;
-        }
-        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
+        };
+        if factor >= 1.0 {
             apply_overlay_delta(&mut current, &block.delta);
             continue;
         }
-        let t = song_lua_ease_factor(
-            block.easing.as_deref(),
-            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
-            block.opt1,
-            block.opt2,
-        );
+        let t = song_lua_ease_factor(block.easing.as_deref(), factor, block.opt1, block.opt2);
         overlay_state_lerp(&mut current, &block.delta, t);
         return current;
     }
@@ -5392,10 +5387,10 @@ fn song_lua_overlay_apply_blocks_cached(
     *last_elapsed = elapsed;
 
     while let Some(block) = blocks.get(*next_block) {
-        if elapsed < block.start {
+        let Some(factor) = crate::overlay_block_factor(block, elapsed) else {
             break;
-        }
-        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
+        };
+        if factor >= 1.0 {
             apply_overlay_delta(block_state, &block.delta);
             *next_block += 1;
             continue;
@@ -5408,11 +5403,7 @@ fn song_lua_overlay_apply_blocks_cached(
                 easing
             }
         };
-        let t = easing.factor(
-            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
-            block.opt1,
-            block.opt2,
-        );
+        let t = easing.factor(factor, block.opt1, block.opt2);
         let mut current = *block_state;
         overlay_state_lerp(&mut current, &block.delta, t);
         return current;
@@ -5872,7 +5863,7 @@ fn song_lua_sprite_animation_epoch(
     command_start_second: f32,
 ) -> Option<f32> {
     blocks.iter().rev().find_map(|block| {
-        let activation = block.start + block.duration.max(0.0);
+        let activation = crate::overlay_block_end(block);
         (block.delta.sprite_state_index.is_some() && elapsed >= activation)
             .then_some(command_start_second + activation)
     })

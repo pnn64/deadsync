@@ -2947,6 +2947,10 @@ pub fn overlay_delta_uses_nearest_sampler(delta: &SongLuaOverlayStateDelta) -> b
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayCommandBlock {
+    /// Immutable song-load samples [seconds, native time left]. Shared with
+    /// cloned commands for the song lifetime; lookup is bounded by the song's
+    /// 60 Hz frame count, allocates nothing, and never grows during gameplay.
+    pub progress: Option<std::sync::Arc<[[f32; 2]]>>,
     /// Writes from queued commands are replayed at their actual dispatch frames.
     pub queued: bool,
     pub start: f32,
@@ -2955,6 +2959,43 @@ pub struct SongLuaOverlayCommandBlock {
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
     pub delta: SongLuaOverlayStateDelta,
+}
+
+#[must_use]
+pub fn overlay_block_factor(block: &SongLuaOverlayCommandBlock, elapsed: f32) -> Option<f32> {
+    if let Some(samples) = &block.progress {
+        let right = samples.partition_point(|sample| sample[0] <= elapsed);
+        let [time, left] = *samples.get(right.checked_sub(1)?)?;
+        if block.duration == 0.0 {
+            return Some(1.0);
+        }
+        let left = if let Some(next) = samples.get(right) {
+            actor_lerp(left, next[1], (elapsed - time) / (next[0] - time))
+        } else {
+            // The sampled horizon is the song end. Preserve a partial tween
+            // beyond that horizon without freezing its remaining countdown.
+            (left - (elapsed - time)).max(0.0)
+        };
+        return Some((1.0 - left / block.duration).clamp(0.0, 1.0));
+    }
+    (elapsed >= block.start).then(|| {
+        if block.duration <= f32::EPSILON {
+            1.0
+        } else {
+            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0)
+        }
+    })
+}
+
+#[must_use]
+pub fn overlay_block_end(block: &SongLuaOverlayCommandBlock) -> f32 {
+    block
+        .progress
+        .as_ref()
+        .and_then(|samples| samples.last())
+        .map_or(block.start + block.duration.max(0.0), |sample| {
+            sample[0] + sample[1]
+        })
 }
 
 /// Resolve native motion macro resets against the actor's state at dispatch.
@@ -3083,18 +3124,14 @@ pub fn overlay_state_after_blocks<'a>(
         return state;
     }
     for block in blocks {
-        if elapsed < block.start {
+        let Some(factor) = overlay_block_factor(block, elapsed) else {
             break;
-        }
-        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
+        };
+        if factor >= 1.0 {
             apply_overlay_delta(&mut state, &block.delta);
             continue;
         }
-        let t = overlay_command_ease_factor(
-            block.easing.as_deref(),
-            (elapsed - block.start) / block.duration,
-            block.opt1,
-        );
+        let t = overlay_command_ease_factor(block.easing.as_deref(), factor, block.opt1);
         overlay_state_lerp(&mut state, &block.delta, t);
         return state;
     }
@@ -23383,6 +23420,7 @@ end
             opt2: Some(2.0),
         };
         let block = |delta: SongLuaOverlayStateDelta| SongLuaOverlayCommandBlock {
+            progress: None,
             queued: false,
             start: 0.0,
             duration: 0.0,

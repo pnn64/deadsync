@@ -272,7 +272,7 @@ where
     // Startup queues and the initial update can consume one-shot broadcasts
     // before the sampled replay starts. Retain their events as well.
     crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
-    let (startup_states, startup_tweens) =
+    let (startup_states, mut startup_tweens) =
         run_actor_startup_commands(&lua, &root, initial_actor_states).map_err(|err| {
             format!(
                 "failed to run actor startup commands for song lua session '{}': {err}",
@@ -280,7 +280,18 @@ where
             )
         })?;
     compile_timer.push_stage("startup_commands");
-    let screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
+    let mut screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
+    crate::lua_util::bake_startup_tweens(
+        startup_tweens
+            .values_mut()
+            .chain(screen_layer_startup.values_mut()),
+        crate::perframe::update_function_replay_beats(
+            context,
+            0.0,
+            crate::perframe::update_function_end_beat(context),
+        )
+        .into_iter(),
+    );
     // Later sampled callbacks must not retroactively change the skin/lead-in
     // selected for the transition into gameplay.
     let startup = read_startup(&lua, context).map_err(|err| err.to_string())?;
@@ -824,6 +835,7 @@ where
                 message,
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    progress: None,
                     queued: false,
                     start: 0.0,
                     duration: 0.0,
@@ -858,6 +870,7 @@ where
                 message,
                 aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
+                    progress: None,
                     queued: false,
                     start: 0.0,
                     duration: 0.0,

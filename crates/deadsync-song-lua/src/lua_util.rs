@@ -3582,6 +3582,9 @@ pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Tab
         .max(0.0);
     block.set("start", start)?;
     block.set("duration", duration)?;
+    if let Some(steps) = actor.get::<Option<Table>>("__songlua_command_queue_steps")? {
+        block.set("__songlua_tween_step", steps.raw_len())?;
+    }
     block.set(
         "__songlua_queued_block",
         lua.app_data_ref::<SongLuaQueuedCommand>().is_some(),
@@ -9463,6 +9466,7 @@ fn advance_queue_clock(
     frames: &SongLuaCompileFrames,
     clock: &mut SongLuaQueueClock,
     duration: f64,
+    mut samples: Option<&mut Vec<[f32; 2]>>,
 ) {
     // Actor::UpdateTweening subtracts native floats on each frame. A double
     // clock can release a zero-time command early and change later RNG calls.
@@ -9472,9 +9476,22 @@ fn advance_queue_clock(
             clock.frame += 1;
             clock.remaining = frames.delta(clock.frame);
         }
+        if let Some(samples) = &mut samples
+            && clock.frame < frames.times.len()
+            && samples.is_empty()
+        {
+            let start = frames.time(clock.frame) - if left == 0.0 { 0.0 } else { clock.remaining };
+            samples.push([start as f32, left]);
+        }
         let elapsed = left.min(clock.remaining as f32);
         left -= elapsed;
         clock.remaining = f64::from(clock.remaining as f32 - elapsed);
+        if let Some(samples) = &mut samples
+            && clock.frame < frames.times.len()
+            && left != duration as f32
+        {
+            samples.push([frames.time(clock.frame) as f32, left]);
+        }
         if left == 0.0 {
             break;
         }
@@ -9582,7 +9599,7 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::R
     let changed = clock.epoch != epoch;
     if changed && clock.dispatch.is_none() {
         while let Some(step) = clock.steps.pop_front() {
-            advance_queue_clock(&frames, &mut clock, step.unwrap_or(0.0));
+            advance_queue_clock(&frames, &mut clock, step.unwrap_or(0.0), None);
         }
         clock.epoch = epoch;
     }
@@ -9612,7 +9629,7 @@ fn drain_queue_clock(lua: &Lua, actor: &Table) -> Option<(usize, f64)> {
         return Some(time);
     }
     while let Some(step) = clock.steps.pop_front() {
-        advance_queue_clock(&frames, &mut clock, step.unwrap_or(0.0));
+        advance_queue_clock(&frames, &mut clock, step.unwrap_or(0.0), None);
         if step.is_none() {
             let time = (clock.frame, clock.remaining);
             clock.dispatch = Some(time);
@@ -9659,6 +9676,63 @@ fn queued_render_advance(
 pub struct SongLuaStartupState {
     pub initial: SongLuaOverlayState,
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
+    steps: Vec<f32>,
+    block_steps: Vec<Option<usize>>,
+}
+
+pub(crate) fn bake_startup_tweens<'a>(
+    states: impl Iterator<Item = &'a mut SongLuaStartupState>,
+    replay: impl Iterator<Item = (f64, f64)>,
+) {
+    let mut seconds = 0.0;
+    let times = replay
+        .map(|(_, delta)| {
+            seconds += delta;
+            seconds
+        })
+        .collect::<Vec<_>>();
+    if times.len() < 2 {
+        return;
+    }
+    let frames = SongLuaCompileFrames {
+        times,
+        beats: Vec::new(),
+        frame: 0,
+        epoch: 0,
+        clocks: FxHashMap::default(),
+    };
+    for state in states {
+        let mut clock = SongLuaQueueClock {
+            epoch: 0,
+            frame: 0,
+            remaining: 0.0,
+            steps: std::collections::VecDeque::new(),
+            dispatch: None,
+            recurring_frame: None,
+        };
+        for (index, duration) in state.steps.iter().enumerate() {
+            let capture = state
+                .block_steps
+                .iter()
+                .any(|step| *step == Some(index + 1));
+            let mut samples = Vec::new();
+            advance_queue_clock(
+                &frames,
+                &mut clock,
+                f64::from(*duration),
+                capture.then_some(&mut samples),
+            );
+            if samples.is_empty() {
+                continue;
+            }
+            let samples: std::sync::Arc<[[f32; 2]]> = samples.into();
+            for (block, step) in state.blocks.iter_mut().zip(&state.block_steps) {
+                if *step == Some(index + 1) {
+                    block.progress = Some(samples.clone());
+                }
+            }
+        }
+    }
 }
 pub(crate) type SongLuaStartupStates = HashMap<usize, SongLuaStartupState>;
 
@@ -9705,7 +9779,35 @@ pub(crate) fn capture_startup_states(
         .map(|(pointer, (actor, initial))| {
             flush_actor_capture(&actor).map_err(|err| err.to_string())?;
             let blocks = read_actor_capture_blocks(&actor)?;
-            Ok((pointer, SongLuaStartupState { initial, blocks }))
+            let steps = actor
+                .get::<Option<Table>>("__songlua_command_queue_steps")
+                .map_err(|err| err.to_string())?
+                .map(|steps| {
+                    steps
+                        .sequence_values::<Value>()
+                        .map(|step| step.map(|step| read_f32(step).unwrap_or(0.0)))
+                        .collect::<mlua::Result<Vec<_>>>()
+                })
+                .transpose()
+                .map_err(|err| err.to_string())?
+                .unwrap_or_default();
+            let captured: Table = actor
+                .get("__songlua_capture_blocks")
+                .map_err(|err| err.to_string())?;
+            let block_steps = captured
+                .sequence_values::<Table>()
+                .map(|block| block?.get::<Option<usize>>("__songlua_tween_step"))
+                .collect::<mlua::Result<Vec<_>>>()
+                .map_err(|err| err.to_string())?;
+            Ok((
+                pointer,
+                SongLuaStartupState {
+                    initial,
+                    blocks,
+                    steps,
+                    block_steps,
+                },
+            ))
         })
         .collect()
 }
@@ -9805,7 +9907,15 @@ pub fn run_actor_startup_commands(
             // The initial zero-delta callback can copy a queued actor's state
             // into an otherwise untouched sibling. Keep its pre-queue state
             // too; startup_command filters unchanged actors after that callback.
-            states.insert(pointer, SongLuaStartupState { initial, blocks });
+            states.insert(
+                pointer,
+                SongLuaStartupState {
+                    initial,
+                    blocks,
+                    steps: Vec::new(),
+                    block_steps: Vec::new(),
+                },
+            );
         }
     }
     Ok((states, startup_tweens))
@@ -14403,6 +14513,7 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
             .get::<Option<String>>("easing")
             .map_err(|err| err.to_string())?;
         out.push(SongLuaOverlayCommandBlock {
+            progress: None,
             queued: block
                 .get::<Option<bool>>("__songlua_queued_block")
                 .map_err(|err| err.to_string())?

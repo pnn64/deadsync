@@ -30,6 +30,56 @@ use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 use deadsync_song_lua::{SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget};
 
 #[test]
+fn startup_clock_keeps_native_residual_on_seek() {
+    crate::tests::init_paths();
+    let song_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Fade clock");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("fade-clock.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap();
+    let flash = compiled[0]
+        .overlays
+        .iter()
+        .find(|actor| actor.name.as_deref() == Some("Flash"))
+        .expect("native flash actor");
+    let command_index = flash
+        .message_commands
+        .iter()
+        .position(|command| command.message == "__songlua_actor_startup")
+        .expect("startup tween command");
+    let blocks = &flash.message_commands[command_index].blocks;
+    assert!(blocks.iter().any(|block| block.progress.is_some()));
+    let events = [SongLuaOverlayMessageRuntime {
+        event_second: 0.0,
+        command_index,
+    }];
+    let mut cache = SongLuaMessageStateCache::default();
+    for seconds in (0..=240)
+        .map(|frame| frame as f32 / 60.0)
+        .chain([1.6, 1.3, 0.0, 1.6, 4.0])
+    {
+        let current = song_lua_message_state_cached(
+            seconds,
+            flash.initial_state,
+            &flash.message_commands,
+            Some(&events),
+            &mut cache,
+        );
+        let uncached =
+            deadsync_song_lua::overlay_state_after_blocks(flash.initial_state, blocks, seconds);
+        assert_eq!(current, uncached, "cached startup at {seconds}");
+        if seconds == 1.6 {
+            // Actual Actor::UpdateTweening retains this positive alpha on the
+            // last fade frame; the native fixture records one Sprite draw.
+            assert_eq!(current.diffuse[3], 5.1259995e-6);
+        }
+    }
+}
+
+#[test]
 fn song_lua_queued_bounce_matches_native_playback() {
     crate::tests::init_paths();
     let song_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -525,6 +575,7 @@ fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
             message: "__songlua_tap_1_3_W1".into(),
             aux: None,
             blocks: vec![SongLuaOverlayCommandBlock {
+                progress: None,
                 queued: false,
                 start: 0.0,
                 duration: 0.0,
@@ -590,6 +641,7 @@ fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
             blocks: [(0.0, 1.0), (0.5, 0.0)]
                 .into_iter()
                 .map(|(duration, alpha)| SongLuaOverlayCommandBlock {
+                    progress: None,
                     queued: false,
                     start: 0.0,
                     duration,
@@ -939,6 +991,7 @@ fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessag
         message: String::new(),
         aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
+            progress: None,
             queued: false,
             start: 0.0,
             duration: 0.75,
@@ -1269,6 +1322,7 @@ fn song_lua_cached_tween_applies_terminal_flags_and_rewinds() {
         message: "show".to_owned(),
         aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
+            progress: None,
             queued: false,
             start: 0.0,
             duration: 1.0,
@@ -1724,6 +1778,7 @@ fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
         aux: None,
         blocks: (0..128)
             .map(|index| SongLuaOverlayCommandBlock {
+                progress: None,
                 queued: false,
                 start: index as f32 * 0.25,
                 duration: 0.2,
@@ -1783,6 +1838,7 @@ fn song_lua_wrappers_preserve_owner_draw_order() {
             message: "Reorder".into(),
             aux: None,
             blocks: vec![deadsync_song_lua::SongLuaOverlayCommandBlock {
+                progress: None,
                 queued: false,
                 start: 0.0,
                 duration: 0.0,

@@ -147,6 +147,7 @@ fn startup_command(
     if blocks.is_empty() {
         let (_, delta) = overlay_delta_pair_from_states(startup.initial, ready, ready)?;
         blocks.push(crate::SongLuaOverlayCommandBlock {
+            progress: None,
             queued: false,
             start: 0.0,
             duration: 0.0,
@@ -3394,6 +3395,7 @@ pub fn compile_update_functions<Kind>(
                     message: message.clone(),
                     aux: None,
                     blocks: vec![crate::SongLuaOverlayCommandBlock {
+                        progress: None,
                         queued: false,
                         start: 0.0,
                         duration: 0.0,
@@ -3762,7 +3764,7 @@ fn apply_perframe_active_message<Kind>(
         .blocks
         .iter()
         .filter(keep)
-        .map(|block| block.start + block.duration.max(0.0))
+        .map(crate::overlay_block_end)
         .fold(0.0_f32, f32::max);
     if elapsed >= duration {
         *active = None;

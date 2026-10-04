@@ -164,9 +164,7 @@ fn compact_snapshots_preserve_conversion_errors_and_raw_access() {
         .raw_set("__songlua_speedmod_cmod", Value::Nil)
         .unwrap();
     let old = player_option_sample(&owners[0]).unwrap();
-    let new = ModSnapshotScratch::default()
-        .sample(&owners[0])
-        .unwrap();
+    let new = ModSnapshotScratch::default().sample(&owners[0]).unwrap();
     assert_eq!(bits(&old), bits(&new));
     assert_eq!(new.get("cmod"), Some(&450.0));
 }
@@ -369,6 +367,7 @@ impl CompileFixture {
                             message: "Pulse".into(),
                             aux: None,
                             blocks: vec![crate::SongLuaOverlayCommandBlock {
+                                progress: None,
                                 queued: false,
                                 start: 0.0,
                                 duration: 0.1,

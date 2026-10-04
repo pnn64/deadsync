@@ -938,6 +938,7 @@ fn apply_compiled_delta(
     overlay_state_after_blocks(
         state,
         &[SongLuaOverlayCommandBlock {
+            progress: None,
             queued: false,
             start: 0.0,
             duration: 0.0,
@@ -5092,19 +5093,26 @@ fn player_tail_native() {
 fn near_camera_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let trace =
-        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/near-camera.json.zst"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/near-camera-clock.json.zst"),
+    );
     let (compiled, primary, context) =
         compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/near-camera.sm"));
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("near camera"));
-    assert_eq!(parity.checks(), 913);
+    assert_eq!(parity.checks(), 2374);
     parity.assert_complete("near camera");
-    let native: Value = serde_json::from_slice(
-        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/near-camera-native.json"))
+    let native: Value =
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(root.join(
+                    "tests/fixtures/itgmania-song-lua-micro/near-camera-clock-native.json.zst",
+                ))
+                .unwrap(),
+            )
             .unwrap(),
-    )
-    .unwrap();
+        )
+        .unwrap();
     assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
     let index = compiled[primary]
         .overlays
@@ -5148,7 +5156,7 @@ fn near_camera_native() {
             }
         }
     }
-    assert_eq!(checks, 16);
+    assert_eq!(checks, 816);
 }
 
 #[test]
@@ -6965,4 +6973,105 @@ fn late_colors_native_draws() {
     eprintln!("{}", parity.summary("late colors"));
     parity.assert_complete("late colors");
     assert_eq!(native_color_draws("late-colors", 4.0), 57840);
+}
+
+#[test]
+fn fade_clock_matches_native() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Fade clock");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[song_dir.join("fade-clock.lua").as_path()], 0, &context)
+            .expect("compile native fade fixture");
+    let native: Value = serde_json::from_reader(
+        zstd::stream::read::Decoder::new(
+            fs::File::open(
+                root.join("tests/fixtures/itgmania-song-lua-micro/fade-clock-native.json.zst"),
+            )
+            .expect("native fade capture"),
+        )
+        .expect("compressed native capture"),
+    )
+    .expect("native actor JSON");
+    let layer = &compiled[0];
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let (mut channels, mut draws, mut failures) = (0, 0, Vec::new());
+    for sample in native["samples"].as_array().expect("native samples") {
+        let seconds = sample["time"].as_f64().expect("sample time") as f32;
+        let states = compiled_overlay_states_at(layer, &context, seconds, seconds);
+        for actor in sample["actors"]
+            .as_array()
+            .expect("native actors")
+            .iter()
+            .filter(|actor| actor["kind"] == "sprite")
+        {
+            let name = actor["name"].as_str().expect("actor name");
+            let index = layer
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == Some(name))
+                .expect("compiled native actor");
+            for (field, actual) in [
+                ("diffuse", states[index].diffuse),
+                ("glow", states[index].glow),
+            ] {
+                let expected = if field == "diffuse" {
+                    &actor["current"][field][0]
+                } else {
+                    &actor["current"][field]
+                };
+                for (channel, actual) in actual.iter().enumerate() {
+                    let expected = expected[channel].as_f64().expect("native color") as f32;
+                    if (actual - expected).abs() > f32::EPSILON && failures.len() < 16 {
+                        failures.push(format!(
+                            "{name} at {seconds} {field}[{channel}]: {expected} vs {actual}"
+                        ));
+                    }
+                    channels += 1;
+                }
+            }
+            let frame = composer.render_overlay(
+                &layer.overlays,
+                &states,
+                index,
+                [854.0, 480.0],
+                seconds,
+                seconds,
+            );
+            let expected = actor["draws"].as_array().expect("native draws").len();
+            if frame.sprite_instances.len() != expected && failures.len() < 16 {
+                failures.push(format!(
+                    "{name} at {seconds}: native {expected} draws, DeadSync {}",
+                    frame.sprite_instances.len()
+                ));
+            }
+            draws += 1;
+        }
+    }
+    eprintln!("fade clock: {channels} native RGBA channels, {draws} draw-count checks");
+    assert_eq!((channels, draws), (5784, 723));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn mawaru5_local_draw_colors_match_native() {
+    crate::paths::init();
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/mawaru5-draw-colors.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Mawaru5 local draw colors"));
+    assert_eq!(
+        parity.checks(),
+        77718,
+        "retain complete local chart coverage"
+    );
+    parity.assert_complete("Mawaru5 local draw colors");
 }

@@ -1,0 +1,542 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "screen": [
+    854,
+    480
+  ],
+  "seed": 1,
+  "reference_frame_rate": 60,
+  "captures": {
+    "fade-clock-native.json.zst": {
+      "raw_sha256": "2c83e2ba2b42a138fcd1ebf8ade031487bdfd6b1659903a87a2c13c1cfa6fa1b",
+      "raw_bytes": 11398080,
+      "compressed_sha256": "6adb005b0e433f1dacedac5caf9ee8e49132ccd9ae94d667de69b8b718da40e5",
+      "compressed_bytes": 39340
+    },
+    "mawaru5-draw-colors.json.zst": {
+      "raw_sha256": "af5e08235816f679575164b1ccc5e564c7d2c1370998e7bbb15abd7eec131ebd",
+      "raw_bytes": 3263184,
+      "compressed_sha256": "176236b6fc53578af0dcd9c6c912552678334ee5b02cb5da7a18a25be4577cbc",
+      "compressed_bytes": 205607
+    }
+  },
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "6ae884323c1da179afd41b481d93aa9f66825079b634b33acb65d2d84a3fbeaf",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "28f36503e251fb5d4c284e439841698655ce3099a11ae74858c424eb58d551b8",
+    "itgmania-harness-rs/semantic_host.lua": "d5549f12d6700e45d4f5b458024fd77bc244d1a8d295b611d6d7dd99216f0c52",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/fade-clock-input.json": "79fc7e841dad54784e0759030252dd07cdf8754c7d639514fba16810f22f1dbb",
+    "deadsync/tests/fixtures/song-lua/fade-clock.lua": "5623a4d633804f57c42f74b27fdf7aac55468ece5367cd84fc13418a993b21ef",
+    "deadsync/tests/fixtures/song-lua/fade-clock.sm": "e0452ff072d7efa3153bc92abdb877e85a5162207857a7befaf3f2d8f7e6780e",
+    "lua-songs/mawaru5/mawaru5.sm": "6feab5a3a888443ae3e50802a230a7ddf6de95ba1e14b8805880795ef14e56b2",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/near-camera-clock-input.json": "3adfa0fc777225b5b465c552c716dbc0610259ef39dccf0733e6ba8a4691db84",
+    "deadsync/tests/fixtures/song-lua/near-camera.lua": "cce9fa1d2ceca435b271f4a7971445622ae0665817690a6c736effe1a6468ff0",
+    "deadsync/tests/fixtures/song-lua/near-camera.sm": "c74508fd2e7883e0329e836b20164e8466b868466b66a8579c53bb681ef53e6a"
+  },
+  "mawaru5_context": {
+    "beat_step": 0.125,
+    "bpm": 10000.0,
+    "bpm_segments": [
+      [
+        0.0,
+        90.0
+      ],
+      [
+        12.5,
+        100.0
+      ],
+      [
+        16.0,
+        115.0
+      ],
+      [
+        19.0,
+        130.0
+      ],
+      [
+        23.5,
+        155.0
+      ],
+      [
+        30.0,
+        175.0
+      ],
+      [
+        32.0,
+        190.0
+      ],
+      [
+        36.0,
+        200.0
+      ],
+      [
+        39.0,
+        220.0
+      ],
+      [
+        43.0,
+        230.0
+      ],
+      [
+        47.0,
+        240.0
+      ],
+      [
+        47.97916793823242,
+        480.0
+      ],
+      [
+        80.02083587646484,
+        140.0
+      ],
+      [
+        181.0,
+        141.0
+      ],
+      [
+        182.0,
+        142.0
+      ],
+      [
+        183.0,
+        143.0
+      ],
+      [
+        184.0,
+        144.0
+      ],
+      [
+        185.0,
+        145.0
+      ],
+      [
+        186.0,
+        146.0
+      ],
+      [
+        187.0,
+        147.0
+      ],
+      [
+        188.0,
+        148.0
+      ],
+      [
+        189.0,
+        149.0
+      ],
+      [
+        190.0,
+        150.0
+      ],
+      [
+        191.0,
+        152.1999969482422
+      ],
+      [
+        192.0,
+        153.3000030517578
+      ],
+      [
+        193.0,
+        154.39999389648438
+      ],
+      [
+        194.0,
+        155.4600067138672
+      ],
+      [
+        195.0,
+        155.0
+      ],
+      [
+        213.0,
+        160.0
+      ],
+      [
+        215.0,
+        155.0
+      ],
+      [
+        253.0,
+        156.00100708007812
+      ],
+      [
+        254.0,
+        157.00100708007812
+      ],
+      [
+        255.0,
+        158.00100708007812
+      ],
+      [
+        256.0,
+        159.00100708007812
+      ],
+      [
+        257.0,
+        160.00100708007812
+      ],
+      [
+        258.0,
+        161.00100708007812
+      ],
+      [
+        259.0,
+        162.00100708007812
+      ],
+      [
+        260.0,
+        163.00100708007812
+      ],
+      [
+        261.0,
+        164.00100708007812
+      ],
+      [
+        262.0,
+        165.00100708007812
+      ],
+      [
+        263.0,
+        166.00100708007812
+      ],
+      [
+        264.0,
+        167.0019989013672
+      ],
+      [
+        265.0,
+        168.0019989013672
+      ],
+      [
+        266.0,
+        169.0019989013672
+      ],
+      [
+        267.0,
+        175.0
+      ],
+      [
+        270.0,
+        170.0
+      ],
+      [
+        332.0,
+        85.0
+      ],
+      [
+        333.0,
+        170.1999969482422
+      ],
+      [
+        341.0,
+        171.0
+      ],
+      [
+        342.0,
+        172.0
+      ],
+      [
+        343.0,
+        173.00100708007812
+      ],
+      [
+        344.0,
+        174.00100708007812
+      ],
+      [
+        345.0,
+        175.00100708007812
+      ],
+      [
+        346.0,
+        176.00100708007812
+      ],
+      [
+        347.0,
+        177.00100708007812
+      ],
+      [
+        348.0,
+        178.00100708007812
+      ],
+      [
+        349.0,
+        179.00100708007812
+      ],
+      [
+        350.0,
+        180.00100708007812
+      ],
+      [
+        351.0,
+        181.0019989013672
+      ],
+      [
+        352.0,
+        182.0019989013672
+      ],
+      [
+        353.0,
+        183.0019989013672
+      ],
+      [
+        354.0,
+        184.0019989013672
+      ],
+      [
+        355.0,
+        185.0019989013672
+      ],
+      [
+        356.0,
+        185.0
+      ],
+      [
+        376.0,
+        188.0
+      ],
+      [
+        379.0,
+        185.0
+      ],
+      [
+        417.0,
+        186.0019989013672
+      ],
+      [
+        418.0,
+        187.0019989013672
+      ],
+      [
+        419.0,
+        188.0019989013672
+      ],
+      [
+        420.0,
+        189.0019989013672
+      ],
+      [
+        421.0,
+        190.0019989013672
+      ],
+      [
+        422.0,
+        191.0019989013672
+      ],
+      [
+        423.0,
+        192.0030059814453
+      ],
+      [
+        424.0,
+        193.0030059814453
+      ],
+      [
+        425.0,
+        194.0030059814453
+      ],
+      [
+        426.0,
+        195.0030059814453
+      ],
+      [
+        427.0,
+        196.0030059814453
+      ],
+      [
+        428.0,
+        197.0030059814453
+      ],
+      [
+        429.0,
+        198.0030059814453
+      ],
+      [
+        430.0,
+        199.0030059814453
+      ],
+      [
+        431.0,
+        200.0030059814453
+      ],
+      [
+        432.0,
+        206.0
+      ],
+      [
+        435.0,
+        200.0
+      ],
+      [
+        501.0,
+        201.0030059814453
+      ],
+      [
+        502.0,
+        202.00399780273438
+      ],
+      [
+        503.0,
+        203.00399780273438
+      ],
+      [
+        504.0,
+        204.00399780273438
+      ],
+      [
+        505.0,
+        205.00399780273438
+      ],
+      [
+        506.0,
+        206.00399780273438
+      ],
+      [
+        507.0,
+        207.0240020751953
+      ],
+      [
+        508.0,
+        208.00399780273438
+      ],
+      [
+        509.0,
+        209.00399780273438
+      ],
+      [
+        510.0,
+        210.00399780273438
+      ],
+      [
+        511.0,
+        211.00399780273438
+      ],
+      [
+        512.0,
+        212.0050048828125
+      ],
+      [
+        513.0,
+        213.0050048828125
+      ],
+      [
+        514.0,
+        214.0050048828125
+      ],
+      [
+        515.0,
+        215.0050048828125
+      ],
+      [
+        516.0,
+        215.0
+      ],
+      [
+        565.0,
+        142.0
+      ],
+      [
+        597.0,
+        190.0
+      ],
+      [
+        642.5,
+        200.0
+      ],
+      [
+        677.0,
+        50.599998474121094
+      ],
+      [
+        679.0,
+        163.10000610351562
+      ],
+      [
+        689.0,
+        10000.0
+      ],
+      [
+        693.0208129882812,
+        0.10000000149011612
+      ]
+    ],
+    "chart_description": "TaroNuke (converted by MrThatKid4)",
+    "difficulty_code": 4,
+    "max_beat": 693.8333129882812,
+    "steps_type_code": 0,
+    "update_fps": 60
+  },
+  "mawaru5_tracks": 81,
+  "mawaru5_sample_rows": 6046,
+  "near_camera": {
+    "input_sha256": "3adfa0fc777225b5b465c552c716dbc0610259ef39dccf0733e6ba8a4691db84",
+    "samples": 102,
+    "frame_rate": 60,
+    "captures": {
+      "near-camera-clock.json.zst": {
+        "raw_sha256": "d9923731f50847b387972c4e2f40dda74a225c9439ff3b9e5c1b07abd43daa90",
+        "compressed_sha256": "f91577608a33acc25d698e05241acbf0d3e83a203c6e4f8c8089bc95b7d158fd",
+        "raw_bytes": 155151,
+        "compressed_bytes": 19172
+      },
+      "near-camera-clock-native.json.zst": {
+        "raw_sha256": "3882e352ce3aa20e63d0aaa1e81fec78f337091f70868003c4bc6574f0b335a3",
+        "compressed_sha256": "0691c773d7dab7266fb0eeea88d77583fac3be687ff605d55d0798a74b9cfbe5",
+        "raw_bytes": 2753445,
+        "compressed_bytes": 28638
+      }
+    },
+    "semantic_frame_rate": 60,
+    "old_native_sample_times": [
+      0.0,
+      1.6833332777023315
+    ]
+  },
+  "mawaru5_end_position": {
+    "beat": 981.0208129882812,
+    "seconds": 244.0354766845703
+  },
+  "mawaru5_update_frames": 14644,
+  "mawaru5_lua_sha256": {
+    "lua-songs/mawaru5/Thanks/default.lua": "a05cd8cb767a745f6d6ca0f5a41275ef922ffd2d7254ea60087dfda265e31022",
+    "lua-songs/mawaru5/speedups/200to215/default.lua": "c75f556b4c8b387b05fe421e6c7b4bad34cbe134fc02f8886fff7e3130510459",
+    "lua-songs/mawaru5/speedups/185to200/default.lua": "154b46f58137050d915c042c4a3f70e45fafc7f16497116a996e4c02e04b4040",
+    "lua-songs/mawaru5/Backgrounds/warning/default.lua": "75cb4d65e821301d9d69e7557083e9db41c2591b3030fa03871f76b226e282e6",
+    "lua-songs/mawaru5/people/PicUFO/default.lua": "44ee578129d45bbc614b7fd26fa2a9cb3cb1b3f744dd8a11da6300e42e43ea14",
+    "lua-songs/mawaru5/speedups/170to185/default.lua": "101feb0ae09bbd986ee07b602a1ee9c67100e1053967734f11b299091d25d734",
+    "lua-songs/mawaru5/foregrounds/technika/default.lua": "d27f3c0ebfb6b9f8d5d47adeb386ce4c7cd452c2e807940723d5d5734441d7d1",
+    "lua-songs/mawaru5/Backgrounds/Intro/default.lua": "59e675921bed2f5e9f9325de0ba09817e0ade92ed996acaef0ea19762a720314",
+    "lua-songs/mawaru5/people/PicTaronInterrupted/default.lua": "deb144e09117c3f7e1ed0d2190fff5055190b19606fe066e0b13fb4febc980f0",
+    "lua-songs/mawaru5/speedups/140to155/default.lua": "64ebf54b18e2da0fadc4e485b13eaa19b4fb8c745f67e0be6b750c2c8e4dff6b",
+    "lua-songs/mawaru5/foregrounds/fgi/default.lua": "b2fb0be00f8b1391f3b74344dc7648bb252e79498b887acc1e059e11f547bbad",
+    "lua-songs/mawaru5/foregrounds/taiko/default.lua": "549ed337e8576aa2af13204dab66d2708a3dcb74835f18ad155829d9772f3b56",
+    "lua-songs/mawaru5/Backgrounds/Boss/default.lua": "e54da1c930519a9ad5ef6dc48be94f12cc727422f94ffb653b48080e4c9d48e0",
+    "lua-songs/mawaru5/people/PicTaron/default.lua": "d98482f7725b1002b486961788b0833b8ab82d0ecc015d4546464abfa8d90142",
+    "lua-songs/mawaru5/people/PicSplitAmaAyaze/default.lua": "adcaea69f707b33f0723b214430cfbc860ee93648cc354d88b2c2516a197d9ae",
+    "lua-songs/mawaru5/Backgrounds/Boss2/default.lua": "8be5129905b17ed430d55c823e4d53b90a58f437ddbe66c1b5ba20a5669598d4",
+    "lua-songs/mawaru5/speedups/155to170/default.lua": "27126b6a18d9f4e55db3c9064b76fdce141a3f4d987bbfb849a7f3230e5fbd72",
+    "lua-songs/mawaru5/foregrounds/fgd/default.lua": "221b15a13df2c7336538c738e8237933526aa1f39d08fd9f2534986c29657937",
+    "lua-songs/mawaru5/foregrounds/qb-fg/Default.lua": "09848944439027bbb97970fe2f67a9bde428e490dc45730babc924ab11db051e",
+    "lua-songs/mawaru5/foregrounds/fgh/default.lua": "e0b729306cb01838696640b0aaa355a5d4155c5313259366e4f38624d39f9ced",
+    "lua-songs/mawaru5/people/PicTaka/default.lua": "add990e1abf1f52dfcd4b8fee1981cf11f4b4325739aebfd95764f8007049e91",
+    "lua-songs/mawaru5/people/PicAyaze/default.lua": "6952baae7774d9d583caa0b7ab517a45892cec8bff6b71d37e66735ae3cd0fa7",
+    "lua-songs/mawaru5/people/PicKoizu/default.lua": "1b2c1b2778d048dd8eb65842ca943552714b0e391fc36a8b8bbbc4b2d4d3338a",
+    "lua-songs/mawaru5/foregrounds/fgc/default.lua": "2d875608e5132b1c591db3b2d68787244b4a791baab530a9cbc3966b3661cec8",
+    "lua-songs/mawaru5/foregrounds/fgf/default.lua": "48c7a5763e9474e54ffd5555b94a20a896fc78310aed01b9eec7916c728b093c",
+    "lua-songs/mawaru5/foregrounds/ok/default.lua": "b427f4a9b1408e61b187b812860b9f6569e6c2a882edb55441e447e6631ae722",
+    "lua-songs/mawaru5/foregrounds/fgg/default.lua": "97f27c537ef70b21d105ad5ef16e36348f5bd8d7f7b6023f855cd7c1d62d9037",
+    "lua-songs/mawaru5/people/PicSplitKoizuAyaze/default.lua": "55dedb3524f5a2b573f6b848df2a13d40d5838a51c9450941ed8f49b7f96c182",
+    "lua-songs/mawaru5/people/PicAma/default.lua": "c2164165af30a1f813e54141e9a399949921de84bc8bccd561cbc57e2afd821a",
+    "lua-songs/mawaru5/foregrounds/fgb/default.lua": "e17e643f283a12c253c78eaf0209cec7149a38618450e7b2c74193959c27f629",
+    "lua-songs/mawaru5/foregrounds/fge/default.lua": "d5108ea4ffd61590fe0cf9d6c1308ad68c8842a5a387b9a8c97bc31e070d1d7d",
+    "lua-songs/mawaru5/foregrounds/letsbegin/default.lua": "f0ccf182684bff6b4751af9cc0f89489de00e85e69717b87455974a3f453f013",
+    "lua-songs/mawaru5/people/PicSplitAyazeTaron/default.lua": "cbdd9d7595483a7eaa98eb181a93ee3685fce3ba38c7accca63efe83e9ca317b",
+    "lua-songs/mawaru5/foregrounds/fgk/default.lua": "966066dfbed5d8a92f2d052cc7902f451f82bb7d578da7c2cf4b60b11429862e",
+    "lua-songs/mawaru5/foregrounds/fga/default.lua": "f3a74887bb535cbd9697c2892780ebafc5a450f6585f6d02f089b5a29d40eb13",
+    "lua-songs/mawaru5/foregrounds/fgj/default.lua": "89ba25d2d7b97e7e006226c469b6394eb70a15bef818d9960792982044bf762c",
+    "lua-songs/mawaru5/foregrounds/iidx/default.lua": "a8f5bf3557d7e3af3f5fc7f74f8a305eae57a43772ebc4ec5bbcd43c9aebac16",
+    "lua-songs/mawaru5/foregrounds/IntroFG/default.lua": "6f7c4733b9f387f7096f2355a626c165cb53e1ac2076069fd289dea4e63bc190"
+  }
+}

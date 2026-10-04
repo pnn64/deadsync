@@ -6,6 +6,7 @@ mod baseline;
 
 fn block(index: usize) -> SongLuaOverlayCommandBlock {
     SongLuaOverlayCommandBlock {
+        progress: None,
         queued: false,
         start: index as f32,
         duration: 0.5,
