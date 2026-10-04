@@ -1210,10 +1210,84 @@ Main receives exactly one patch increment, 0.5.1730 to 0.5.1731, including
 Cargo.toml and Cargo.lock. Rework remains uncommitted. Mawaru9 and the
 complete 63-chart goal remain unfinished.
 
+## Native float tween interpolation (0.5.1732)
+
+The near-camera failure has a native arithmetic component. Actor.cpp's
+TweenState::MakeWeightedAverage uses RageUtil::lerp: a float subtraction,
+multiply and addition, with rounding between operations. DeadSync instead
+used explicit fused multiply-add for command properties and scheduled
+scalar/vector tween values. That produces Z=85.55552673339844 at 101/60
+seconds of the star's -700 to +700, three-second tween. Native Actor
+produces Z=85.5555419921875. Under the 1.334375 parent depth scale and
+FOV=150 camera, this one-ULP local-depth difference becomes a roughly
+10-pixel projection difference near W=0.
+
+Both production interpolation paths now use the native float operation
+order. The replaced fused property/vector paths are removed. The semantic
+host had its own independent error: Lua double interpolation. It now
+calls native RageUtil::lerp through the harness's actor-math binding.
+Tween queue scheduling and the semantic replay clock remain unchanged.
+This does not claim to emulate accumulated native float delta-time drift
+across arbitrary frame sequences.
+
+A portable near-camera fixture contains one quad and one camera. Its
+actual native C++ Actor capture has two samples and repeats byte-for-byte.
+Against the corrected reference, the previous DeadSync executable fails
+911/913 full checks; current DeadSync passes 913/913. The regression also
+compares exact native depth bits at both samples and 16 projected corner
+coordinates using the existing 0.75-pixel native drawing tolerance.
+The scheduled scalar/vector path has an exact native-depth regression.
+The harness independently checks native world depth and projected
+coordinates as exact float bits, accounting only for JSON decimal
+serialization. No comparison tolerance is widened or check removed.
+
+The full reference retains 17,930 update frames, 2,431 runtime actor
+occurrences, 50 loaded Lua files, zero runtime errors and zero dropped
+events. Only projected vertices, runtime render-state samples and tween
+state snapshots change: native float rounding affects 436 projection
+tracks, 444 runtime actor records and 44 tween records. Projection
+deduplication now retains 19,494 samples instead of 19,400; actor render
+state has 18,530 samples instead of 18,531. Operation tracks, player
+render tracks, actor definitions and the replay timeline remain unchanged.
+Its decoded SHA-256 is
+`5760ee840c82e154517f68e47e3d03ffff3c84db1592df1d13eee557b8d6ae82`.
+The semantic host SHA-256 is
+`b775fd560bc9bfe882647bfd3b2dc60b79dbffbbcac7ec1b1f9b021834613b8c`.
+The near-camera semantic fixture's decoded SHA-256 is
+`077594ae12b66ba3277cc044bd34bc460e7405a7ae6435f58dd8dbdf12e7b26a`.
+The native Actor fixture SHA-256 is
+`ab4d1c14c063542f819a58bde30e4eff723638cef7caf4088740aca9197d60a3`.
+
+The complete Mawaru9 audit took 359.92 seconds and reports
+**119,025/119,025**, with 0 failed checks. Projected geometry is
+65,416/65,416. The previous total was 118,917/118,933. Float rounding
+collapses 35 visible projection samples and adds 129 samples, including
+three visible samples. This yields 94 more vibration checks and two fewer
+geometry checks under the existing visibility/alpha/bounds comparisons.
+All previously failing body/star sample times remain in the new trace.
+The comparator code and tolerances are unchanged.
+
+Both repositories pass 968 Lua/profile checks and all 94 regular semantic
+tests, with 71 explicit corpus/native audits ignored by the regular
+command. Both refreshed fixture manifest checks pass. The harness passes
+92 unit tests and 31 integration tests, with one local-corpus startup test
+ignored. Only changed DeadSync files are copied to main, which receives
+exactly one patch increment, 0.5.1731 to 0.5.1732, including Cargo.toml
+and Cargo.lock. Rework remains uncommitted.
+
+A separate native drawing probe also exposes a reference coverage gap:
+the semantic projection model records pulse effect descriptors but does
+not apply pulse scaling to vertices. The actual native star's pulse
+changes its world corners from [642.9908447, -3.1333351, Z] to
+[610.8045654, -27.2542267, Z] at the same sample. That deterministic effect
+geometry needs a dedicated production-renderer comparison and reference
+correction. Passing the present comparators will therefore not close the
+63-chart goal by itself. The full project remains active.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the
 public project page, captured on 2026-10-03, including chart hashes and pack
 names. Board check counts are historical worklist values, not current proof
-of passing parity. Mawaru9 remains failing; the overall 63-chart goal is
-still active.
+of passing parity. Mawaru9 passes the current semantic comparators; native
+deterministic effect geometry and the overall 63-chart audit remain active.

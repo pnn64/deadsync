@@ -2321,7 +2321,7 @@ fn lerp_scheduled_value(
     factor: f32,
 ) -> SongLuaOverlayUpdateValue {
     use SongLuaOverlayUpdateValue as Value;
-    let lerp = |from: f32, to: f32| (to - from).mul_add(factor, from);
+    let lerp = |from: f32, to: f32| crate::actor_lerp(from, to, factor);
     match (from, to) {
         (Value::F32(from), Value::F32(to)) => Value::F32(lerp(*from, *to)),
         (Value::Vec2(from), Value::Vec2(to)) => {
@@ -3836,6 +3836,23 @@ mod sampling_perf;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scheduled_native_lerp() {
+        use SongLuaOverlayUpdateValue as Value;
+        // Native near-camera Actor capture at 101/60 seconds of a 3s tween.
+        let expected = 85.5555419921875_f32;
+        let factor = (101.0_f32 / 60.0) / 3.0;
+        let actual = lerp_scheduled_value(&Value::F32(-700.0), &Value::F32(700.0), factor);
+        let Value::F32(actual) = actual else { panic!("scalar tween") };
+        assert_eq!(actual.to_bits(), expected.to_bits());
+        let actual = lerp_scheduled_value(
+            &Value::Vec3([516.0, 31.0, -700.0]),
+            &Value::Vec3([516.0, 31.0, 700.0]), factor,
+        );
+        let Value::Vec3(actual) = actual else { panic!("vector tween") };
+        assert_eq!(actual, [516.0, 31.0, expected]);
+    }
 
     #[test]
     fn tail_keeps_crossing_pos() {

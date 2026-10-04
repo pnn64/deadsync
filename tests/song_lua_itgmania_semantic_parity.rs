@@ -4928,6 +4928,69 @@ fn player_tail_native() {
 }
 
 #[test]
+fn near_camera_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/near-camera.json.zst"));
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/near-camera.sm"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("near camera"));
+    assert_eq!(parity.checks(), 913);
+    parity.assert_complete("near camera");
+    let native: Value = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/near-camera-native.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let index = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Tween"))
+        .unwrap();
+    let mut checks = 0;
+    for sample in native["samples"].as_array().unwrap() {
+        let second = sample["time"].as_f64().unwrap() as f32;
+        let local = compiled_local_states_at(&compiled[primary], &context, second, second);
+        let actor = sample["actors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|actor| actor["name"] == "Tween")
+            .unwrap();
+        // Exact depth catches fused arithmetic that ordinary screen bounds miss.
+        assert_eq!(
+            local[index].z.to_bits(),
+            (actor["current"]["position"][2].as_f64().unwrap() as f32).to_bits()
+        );
+        let states = compiled_overlay_states_at(&compiled[primary], &context, second, second);
+        let vertices = compiled_perspective_vertices(
+            &compiled[primary],
+            &states,
+            index,
+            states[index],
+            [64.0, 64.0],
+        )
+        .expect("finite perspective vertices");
+        for (corner, actual) in vertices.iter().enumerate() {
+            let expected = &actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]]["screen"];
+            for axis in 0..2 {
+                let expected = expected[axis].as_f64().unwrap() as f32;
+                assert!(
+                    (actual[axis] - expected).abs() <= 0.75,
+                    "at {second}, corner {corner}/{axis}: {} vs {expected}",
+                    actual[axis]
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert_eq!(checks, 16);
+}
+
+#[test]
 fn vibrate_restart_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

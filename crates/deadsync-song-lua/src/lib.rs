@@ -3307,6 +3307,12 @@ pub const fn apply_overlay_delta(
     }
 }
 
+// Actor::TweenState uses RageUtil::lerp, rounding the product before the sum.
+// Fusing these operations changes depth enough to distort perspective near W=0.
+fn actor_lerp(from: f32, to: f32, factor: f32) -> f32 {
+    (to - from) * factor + from
+}
+
 /// Interpolates written properties in place, retaining implicit baselines and unwritten state.
 ///
 /// The factor is not clamped, allowing easing curves to overshoot. Discrete
@@ -3319,12 +3325,8 @@ pub fn overlay_state_lerp(
     delta: &SongLuaOverlayStateDelta,
     t: f32,
 ) {
-    let x = delta
-        .x
-        .map_or(from.x, |to| (to - from.x).mul_add(t, from.x));
-    let y = delta
-        .y
-        .map_or(from.y, |to| (to - from.y).mul_add(t, from.y));
+    let x = delta.x.map_or(from.x, |to| actor_lerp(from.x, to, t));
+    let y = delta.y.map_or(from.y, |to| actor_lerp(from.y, to, t));
     if delta.stretch_rect.is_some() {
         from.x = x;
         from.y = y;
@@ -3332,10 +3334,10 @@ pub fn overlay_state_lerp(
         move_overlay(from, x, y);
     }
     if let Some(to) = delta.z {
-        from.z = (to - from.z).mul_add(t, from.z);
+        from.z = actor_lerp(from.z, to, t);
     }
     if let Some(to) = delta.z_bias {
-        from.z_bias = (to - from.z_bias).mul_add(t, from.z_bias);
+        from.z_bias = actor_lerp(from.z_bias, to, t);
     }
     if let Some(to) = delta.draw_order
         && t >= 1.0 - f32::EPSILON
@@ -3348,10 +3350,10 @@ pub fn overlay_state_lerp(
         from.draw_by_z_position = to;
     }
     if let Some(to) = delta.halign {
-        from.halign = (to - from.halign).mul_add(t, from.halign);
+        from.halign = actor_lerp(from.halign, to, t);
     }
     if let Some(to) = delta.valign {
-        from.valign = (to - from.valign).mul_add(t, from.valign);
+        from.valign = actor_lerp(from.valign, to, t);
     }
     if let Some(to) = delta.text_align
         && t >= 1.0 - f32::EPSILON
@@ -3365,68 +3367,67 @@ pub fn overlay_state_lerp(
     }
     if let Some(to) = delta.shadow_len {
         from.shadow_len = [
-            (to[0] - from.shadow_len[0]).mul_add(t, from.shadow_len[0]),
-            (to[1] - from.shadow_len[1]).mul_add(t, from.shadow_len[1]),
+            actor_lerp(from.shadow_len[0], to[0], t),
+            actor_lerp(from.shadow_len[1], to[1], t),
         ];
     }
     if let Some(to) = delta.shadow_color {
         for (value, to) in from.shadow_color.iter_mut().zip(to) {
-            *value = (to - *value).mul_add(t, *value);
+            *value = actor_lerp(*value, to, t);
         }
     }
     if let Some(to) = delta.glow {
         for (value, to) in from.glow.iter_mut().zip(to) {
-            *value = (to - *value).mul_add(t, *value);
+            *value = actor_lerp(*value, to, t);
         }
     }
     if let (Some(from_fov), Some(to_fov)) = (from.fov, delta.fov) {
-        from.fov = Some((to_fov - from_fov).mul_add(t, from_fov));
+        from.fov = Some(actor_lerp(from_fov, to_fov, t));
     }
     if let (Some(from_vanish), Some(to_vanish)) = (from.vanishpoint, delta.vanishpoint) {
         from.vanishpoint = Some([
-            (to_vanish[0] - from_vanish[0]).mul_add(t, from_vanish[0]),
-            (to_vanish[1] - from_vanish[1]).mul_add(t, from_vanish[1]),
+            actor_lerp(from_vanish[0], to_vanish[0], t),
+            actor_lerp(from_vanish[1], to_vanish[1], t),
         ]);
     }
     if let Some(to) = delta.diffuse {
         for (value, to) in from.diffuse.iter_mut().zip(to) {
-            *value = (to - *value).mul_add(t, *value);
+            *value = actor_lerp(*value, to, t);
         }
     }
     if let Some(to_colors) = delta.vertex_colors {
         let mut from_colors = from.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
         for corner in 0..4 {
             for channel in 0..4 {
-                from_colors[corner][channel] = (to_colors[corner][channel]
-                    - from_colors[corner][channel])
-                    .mul_add(t, from_colors[corner][channel]);
+                from_colors[corner][channel] =
+                    actor_lerp(from_colors[corner][channel], to_colors[corner][channel], t);
             }
         }
         from.vertex_colors = Some(from_colors);
     }
     if let Some(to) = delta.cropleft {
-        from.cropleft = (to - from.cropleft).mul_add(t, from.cropleft);
+        from.cropleft = actor_lerp(from.cropleft, to, t);
     }
     if let Some(to) = delta.cropright {
-        from.cropright = (to - from.cropright).mul_add(t, from.cropright);
+        from.cropright = actor_lerp(from.cropright, to, t);
     }
     if let Some(to) = delta.croptop {
-        from.croptop = (to - from.croptop).mul_add(t, from.croptop);
+        from.croptop = actor_lerp(from.croptop, to, t);
     }
     if let Some(to) = delta.cropbottom {
-        from.cropbottom = (to - from.cropbottom).mul_add(t, from.cropbottom);
+        from.cropbottom = actor_lerp(from.cropbottom, to, t);
     }
     if let Some(to) = delta.fadeleft {
-        from.fadeleft = (to - from.fadeleft).mul_add(t, from.fadeleft);
+        from.fadeleft = actor_lerp(from.fadeleft, to, t);
     }
     if let Some(to) = delta.faderight {
-        from.faderight = (to - from.faderight).mul_add(t, from.faderight);
+        from.faderight = actor_lerp(from.faderight, to, t);
     }
     if let Some(to) = delta.fadetop {
-        from.fadetop = (to - from.fadetop).mul_add(t, from.fadetop);
+        from.fadetop = actor_lerp(from.fadetop, to, t);
     }
     if let Some(to) = delta.fadebottom {
-        from.fadebottom = (to - from.fadebottom).mul_add(t, from.fadebottom);
+        from.fadebottom = actor_lerp(from.fadebottom, to, t);
     }
     if let Some(to) = delta.mask_source
         && t >= 1.0 - f32::EPSILON
@@ -3439,81 +3440,79 @@ pub fn overlay_state_lerp(
         from.mask_dest = to;
     }
     if let Some(to) = delta.zoom {
-        from.zoom = (to - from.zoom).mul_add(t, from.zoom);
+        from.zoom = actor_lerp(from.zoom, to, t);
     }
     if let Some(to) = delta.zoom_x {
-        from.zoom_x = (to - from.zoom_x).mul_add(t, from.zoom_x);
+        from.zoom_x = actor_lerp(from.zoom_x, to, t);
     }
     if let Some(to) = delta.zoom_y {
-        from.zoom_y = (to - from.zoom_y).mul_add(t, from.zoom_y);
+        from.zoom_y = actor_lerp(from.zoom_y, to, t);
     }
     if let Some(to) = delta.zoom_z {
-        from.zoom_z = (to - from.zoom_z).mul_add(t, from.zoom_z);
+        from.zoom_z = actor_lerp(from.zoom_z, to, t);
     }
     if let Some(to) = delta.basezoom {
-        from.basezoom = (to - from.basezoom).mul_add(t, from.basezoom);
+        from.basezoom = actor_lerp(from.basezoom, to, t);
     }
     if let Some(to) = delta.basezoom_x {
-        from.basezoom_x = (to - from.basezoom_x).mul_add(t, from.basezoom_x);
+        from.basezoom_x = actor_lerp(from.basezoom_x, to, t);
     }
     if let Some(to) = delta.basezoom_y {
-        from.basezoom_y = (to - from.basezoom_y).mul_add(t, from.basezoom_y);
+        from.basezoom_y = actor_lerp(from.basezoom_y, to, t);
     }
     if let Some(to) = delta.basezoom_z {
-        from.basezoom_z = (to - from.basezoom_z).mul_add(t, from.basezoom_z);
+        from.basezoom_z = actor_lerp(from.basezoom_z, to, t);
     }
     if let Some(to) = delta.rot_x_deg {
-        from.rot_x_deg = (to - from.rot_x_deg).mul_add(t, from.rot_x_deg);
+        from.rot_x_deg = actor_lerp(from.rot_x_deg, to, t);
     }
     if let Some(to) = delta.rot_y_deg {
-        from.rot_y_deg = (to - from.rot_y_deg).mul_add(t, from.rot_y_deg);
+        from.rot_y_deg = actor_lerp(from.rot_y_deg, to, t);
     }
     if let Some(to) = delta.rot_z_deg {
-        from.rot_z_deg = (to - from.rot_z_deg).mul_add(t, from.rot_z_deg);
+        from.rot_z_deg = actor_lerp(from.rot_z_deg, to, t);
     }
     if let Some(to) = delta.skew_x {
-        from.skew_x = (to - from.skew_x).mul_add(t, from.skew_x);
+        from.skew_x = actor_lerp(from.skew_x, to, t);
     }
     if let Some(to) = delta.skew_y {
-        from.skew_y = (to - from.skew_y).mul_add(t, from.skew_y);
+        from.skew_y = actor_lerp(from.skew_y, to, t);
     }
     if let Some(to) = delta.effect_magnitude {
         for (value, to) in from.effect_magnitude.iter_mut().zip(to) {
-            *value = (to - *value).mul_add(t, *value);
+            *value = actor_lerp(*value, to, t);
         }
     }
     if let Some(to) = delta.effect_color1 {
         for (value, to) in from.effect_color1.iter_mut().zip(to) {
-            *value = (to - *value).mul_add(t, *value);
+            *value = actor_lerp(*value, to, t);
         }
     }
     if let Some(to) = delta.effect_color2 {
         for (value, to) in from.effect_color2.iter_mut().zip(to) {
-            *value = (to - *value).mul_add(t, *value);
+            *value = actor_lerp(*value, to, t);
         }
     }
     if let Some(to) = delta.effect_period {
-        from.effect_period = (to - from.effect_period).mul_add(t, from.effect_period);
+        from.effect_period = actor_lerp(from.effect_period, to, t);
     }
     if let Some(to) = delta.effect_offset {
-        from.effect_offset = (to - from.effect_offset).mul_add(t, from.effect_offset);
+        from.effect_offset = actor_lerp(from.effect_offset, to, t);
     }
     if let (Some(from_timing), Some(to_timing)) = (from.effect_timing, delta.effect_timing) {
         from.effect_timing = Some([
-            (to_timing[0] - from_timing[0]).mul_add(t, from_timing[0]),
-            (to_timing[1] - from_timing[1]).mul_add(t, from_timing[1]),
-            (to_timing[2] - from_timing[2]).mul_add(t, from_timing[2]),
-            (to_timing[3] - from_timing[3]).mul_add(t, from_timing[3]),
-            (to_timing[4] - from_timing[4]).mul_add(t, from_timing[4]),
+            actor_lerp(from_timing[0], to_timing[0], t),
+            actor_lerp(from_timing[1], to_timing[1], t),
+            actor_lerp(from_timing[2], to_timing[2], t),
+            actor_lerp(from_timing[3], to_timing[3], t),
+            actor_lerp(from_timing[4], to_timing[4], t),
         ]);
     }
     if let Some(to) = delta.sprite_playback_rate {
-        from.sprite_playback_rate =
-            (to - from.sprite_playback_rate).mul_add(t, from.sprite_playback_rate);
+        from.sprite_playback_rate = actor_lerp(from.sprite_playback_rate, to, t);
     }
     if let Some(to) = delta.sprite_state_delay {
-        from.sprite_state_delay =
-            (to - from.sprite_state_delay).mul_add(t, from.sprite_state_delay);
+        from.sprite_state_delay = actor_lerp(from.sprite_state_delay, to, t);
     }
     if let Some(to) = delta.sprite_state_index
         && t >= 1.0 - f32::EPSILON
@@ -3531,10 +3530,10 @@ pub fn overlay_state_lerp(
         from.wrap_width_pixels = Some(to);
     }
     if let (Some(from_width), Some(to_width)) = (from.max_width, delta.max_width) {
-        from.max_width = Some((to_width - from_width).mul_add(t, from_width));
+        from.max_width = Some(actor_lerp(from_width, to_width, t));
     }
     if let (Some(from_height), Some(to_height)) = (from.max_height, delta.max_height) {
-        from.max_height = Some((to_height - from_height).mul_add(t, from_height));
+        from.max_height = Some(actor_lerp(from_height, to_height, t));
     }
     if let Some(to) = delta.max_w_pre_zoom
         && t >= 1.0 - f32::EPSILON
@@ -3553,37 +3552,37 @@ pub fn overlay_state_lerp(
     }
     if let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, delta.texcoord_offset) {
         from.texcoord_offset = Some([
-            (to_offset[0] - from_offset[0]).mul_add(t, from_offset[0]),
-            (to_offset[1] - from_offset[1]).mul_add(t, from_offset[1]),
+            actor_lerp(from_offset[0], to_offset[0], t),
+            actor_lerp(from_offset[1], to_offset[1], t),
         ]);
     }
     if let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, delta.custom_texture_rect)
     {
         from.custom_texture_rect = Some([
-            (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
-            (to_rect[1] - from_rect[1]).mul_add(t, from_rect[1]),
-            (to_rect[2] - from_rect[2]).mul_add(t, from_rect[2]),
-            (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
+            actor_lerp(from_rect[0], to_rect[0], t),
+            actor_lerp(from_rect[1], to_rect[1], t),
+            actor_lerp(from_rect[2], to_rect[2], t),
+            actor_lerp(from_rect[3], to_rect[3], t),
         ]);
     }
     if let (Some(from_vel), Some(to_vel)) = (from.texcoord_velocity, delta.texcoord_velocity) {
         from.texcoord_velocity = Some([
-            (to_vel[0] - from_vel[0]).mul_add(t, from_vel[0]),
-            (to_vel[1] - from_vel[1]).mul_add(t, from_vel[1]),
+            actor_lerp(from_vel[0], to_vel[0], t),
+            actor_lerp(from_vel[1], to_vel[1], t),
         ]);
     }
     if let (Some(from_size), Some(to_size)) = (from.size, delta.size) {
         from.size = Some([
-            (to_size[0] - from_size[0]).mul_add(t, from_size[0]),
-            (to_size[1] - from_size[1]).mul_add(t, from_size[1]),
+            actor_lerp(from_size[0], to_size[0], t),
+            actor_lerp(from_size[1], to_size[1], t),
         ]);
     }
     if let (Some(from_rect), Some(to_rect)) = (from.stretch_rect, delta.stretch_rect) {
         from.stretch_rect = Some([
-            (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
-            (to_rect[1] - from_rect[1]).mul_add(t, from_rect[1]),
-            (to_rect[2] - from_rect[2]).mul_add(t, from_rect[2]),
-            (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
+            actor_lerp(from_rect[0], to_rect[0], t),
+            actor_lerp(from_rect[1], to_rect[1], t),
+            actor_lerp(from_rect[2], to_rect[2], t),
+            actor_lerp(from_rect[3], to_rect[3], t),
         ]);
     }
     if let Some(to) = delta.visible
@@ -3627,7 +3626,7 @@ pub fn overlay_state_lerp(
         from.text_jitter = to;
     }
     if let Some(to) = delta.text_distortion {
-        from.text_distortion = (to - from.text_distortion).mul_add(t, from.text_distortion);
+        from.text_distortion = actor_lerp(from.text_distortion, to, t);
     }
     if let Some(to) = delta.text_glow_mode
         && t >= 1.0 - f32::EPSILON

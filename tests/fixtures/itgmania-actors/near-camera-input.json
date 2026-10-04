@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "name": "near-camera",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0,
+    1.6833333333333333
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Camera",
+    "camera": {
+      "fov": 150,
+      "vanish": [
+        427,
+        240
+      ]
+    },
+    "state": {
+      "zoom": [
+        1.334375,
+        1,
+        1.334375
+      ]
+    },
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "Tween",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            516,
+            31,
+            -700
+          ],
+          "zoom": [
+            1.0666666666666667,
+            1.0666666666666667,
+            1.0666666666666667
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 3,
+            "curve": "linear",
+            "state": {
+              "position": [
+                516,
+                31,
+                700
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

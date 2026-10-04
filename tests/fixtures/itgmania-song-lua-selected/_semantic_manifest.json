@@ -1233,8 +1233,8 @@
       "dropped_events": 0,
       "trace_until_beat": 836,
       "runtime_actor_ids": "unique per occurrence",
-      "uncompressed_sha256": "d0847e980a77118eeef360d4e200f2216a4c14595070b6d90b18f8fdddefe3be",
-      "semantic_host_sha256": "3764b719dc1c23a517a503446ea5c47e9a954abc7137caed6dd3d9dfd93c03fa",
+      "uncompressed_sha256": "5760ee840c82e154517f68e47e3d03ffff3c84db1592df1d13eee557b8d6ae82",
+      "semantic_host_sha256": "b775fd560bc9bfe882647bfd3b2dc60b79dbffbbcac7ec1b1f9b021834613b8c",
       "reference_theme": {
         "name": "Simply Love",
         "metrics_source": "Simply-Love-SM5-8ms-iamchris4life/metrics.ini",
@@ -1247,7 +1247,8 @@
       },
       "geometry_fit_correction": "Apply zoomtowidth/zoomtoheight to destination zoom axes; retain unzoomed dimensions.",
       "wrapper_correction": "Return the created AddWrapperState actor; compose highest-index wrappers first and inherit wrapper visibility/alpha.",
-      "vibration_correction": "Reset magnitude to (10,10,10) on every vibrate call; stopeffect preserves the stored magnitude, as native Actor does."
+      "vibration_correction": "Reset magnitude to (10,10,10) on every vibrate call; stopeffect preserves the stored magnitude, as native Actor does.",
+      "tween_interpolation_correction": "Use native RageUtil::lerp for float actor fields, rounding the product before the sum. The semantic update clock and tween queue timing remain unchanged."
     }
   ]
 }
