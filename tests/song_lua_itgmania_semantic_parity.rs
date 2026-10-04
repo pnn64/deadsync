@@ -283,7 +283,6 @@ struct ExpectedBlock {
     crop_bottom: Option<f32>,
     sprite_state: Option<u32>,
     sleep: bool,
-    queued_command: bool,
 }
 
 struct ExpectedCommand {
@@ -2224,21 +2223,23 @@ fn native_player_option_value_at(
 }
 
 fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> ExpectedBlock {
-    let easing = match track.easing.as_deref() {
-        Some("linear") => Some("linear"),
-        Some("accelerate") => Some("inQuad"),
-        Some("decelerate") => Some("outQuad"),
-        Some("smooth") => Some("smooth"),
-        Some("spring") => Some("spring"),
-        Some("bouncebegin") => Some("bouncebegin"),
-        Some("bounceend") => Some("bounceend"),
+    // QueueCommand/QueueMessage and Sleep's implicit tail are instantaneous
+    // states. Their native linear object performs no interpolation.
+    let easing = match (track.kind.as_str(), track.easing.as_deref()) {
+        ("command" | "message", _) => None,
+        (_, Some("linear")) => Some("linear"),
+        (_, Some("accelerate")) => Some("inQuad"),
+        (_, Some("decelerate")) => Some("outQuad"),
+        (_, Some("smooth")) => Some("smooth"),
+        (_, Some("spring")) => Some("spring"),
+        (_, Some("bouncebegin")) => Some("bouncebegin"),
+        (_, Some("bounceend")) => Some("bounceend"),
         _ => None,
     };
     let mut block = ExpectedBlock {
         duration: segment.duration,
-        easing,
+        easing: if segment.implicit { None } else { easing },
         sleep: track.kind == "sleep",
-        queued_command: track.kind == "command",
         ..ExpectedBlock::default()
     };
     for operation in &segment.operations {
@@ -2372,7 +2373,6 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
                     .segments
                     .iter()
                     .take_while(|segment| (segment.beat - first_beat).abs() <= EPSILON)
-                    .filter(|segment| !segment.implicit)
                     .map(|segment| (segment.enqueue_seq, expected_block(track, segment))),
             );
         }
@@ -2400,9 +2400,6 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
         command.blocks.retain_mut(|(_, block)| {
             if block.sleep {
                 start += block.duration;
-                return false;
-            }
-            if block.queued_command {
                 return false;
             }
             block.start = start;
@@ -4796,6 +4793,25 @@ fn simply_love_receptor_metrics_match_native() {
     eprintln!("{}", parity.summary("Receptor metrics"));
     assert_eq!(parity.checks(), 20);
     parity.assert_complete("Receptor metrics");
+}
+
+#[test]
+fn queued_message_states_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (name, checks) in [("message-queue-reset", 363), ("queued-command-state", 33)] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+        )));
+        let (compiled, primary, context) = compile_trace_song_at(
+            &trace,
+            &root.join(format!("tests/fixtures/song-lua/{name}.sm")),
+        );
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        assert_eq!(parity.checks(), checks);
+        parity.assert_complete(name);
+    }
 }
 
 #[test]

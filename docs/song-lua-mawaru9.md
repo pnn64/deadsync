@@ -820,6 +820,79 @@ vibration. These measurements include concurrent regression/build work and
 do not measure gameplay performance. The main repository receives this pass
 as version 0.5.1725, exactly one patch increment from 0.5.1724.
 
+## Queued state order
+
+The original Aya/TV sequence reproduced the same off-screen reset failure
+in a portable fixture. After shrinking, Aya should return to X=1120 and the
+TV frame to X=832. DeadSync held Aya at X=-392 and the frame at X=-680.
+Both commands end their accelerated movement with `sleep(0)` and an
+absolute position reset.
+
+Captured cursors use f32 values. Promoting a tween's start and duration to
+f64 can place its calculated endpoint slightly after the next captured
+zero-time cursor. Sorting completed samples by those endpoints reversed
+their native queue order, applying the reset before the off-screen movement.
+Frame replay now retains capture order when draining completed actor states.
+The chronological merge used outside frame replay retains its existing path.
+
+The small Aya/TV fixture originally passed 356/363 checks, with six geometry
+failures and one message report. Preserving queue order fixes all six
+geometry failures, reaching 362/363. The remaining message report was a
+checker error: `Actor::QueueCommand`, `QueueMessage` and Sleep's implicit
+tail use zero-duration native linear objects. They apply instantaneous
+states, represented without interpolation by DeadSync.
+
+The command checker now treats those states as instantaneous, retains setter
+writes in queued command states and includes writes in Sleep's implicit
+tail. The replaced skip flag and filters were deleted. Explicit tween
+curves, durations and property comparisons remain strict; no numeric
+tolerance was changed. The Aya/TV fixture now passes all 363 checks.
+A second fixture writes position and alpha after both `queuecommand` and
+`queuemessage`, proving both native states are compared; it passes 33/33,
+including two message-command checks. Both captures have zero errors or
+dropped events and verified exact compression round trips:
+
+- `message-queue-reset`: 63,587 bytes to 8,457, decoded SHA256
+  `1969ed32d970883f46f9d470d4387c6f51b26cb5e82a6b37cac81c1d402ec49a`.
+- `queued-command-state`: 16,881 bytes to 3,324, decoded SHA256
+  `0ac14f4534047e2092f1016f78727102fc741f35b30e6c1cdbf2d1413d4d7d91`.
+
+```powershell
+cargo test --test song_lua_itgmania_semantic_parity queued_message_states_match_native -- --exact --nocapture
+```
+
+The final 0.5.1726 full audit uses the unchanged native reference with decoded
+SHA256 `d56bc4ea2aef3f9ec87e291466e134e1e6e6925b094a7b5f0443f8dc2bc7b503`.
+It passes **118,751/118,933**, leaving **182 failures** and 60 gap reports:
+
+| Comparison | Result |
+|---|---:|
+| Compile info | 12/12 |
+| Layer order | 4/4 |
+| Final render | 3,748/3,748 |
+| Render persistence | 6,639/6,639 |
+| Update values | 23,197/23,197 |
+| Player ranges | 13/14 |
+| Projected geometry | 65,239/65,418 |
+| Projected vibration | 19,398/19,400 |
+| Timeline | 224/224 |
+| Message commands | 231/231 |
+| Runtime modifiers | 46/46 |
+
+This fixes 66 geometry checks with unchanged geometry coverage and resolves
+the message checker report. The additional four message-command checks
+explain the changed total denominator. Aya, TV static and TV frame now match
+throughout the sampled trace; every message-command comparison passes.
+The remaining failures are 179 geometry checks, two vibration samples and
+P2's X range. Mawaru9's complete test remains ignored and failing.
+
+All 962 Lua/profile tests and 85 regular semantic tests pass in both
+repositories. The full debug audit took 424.16 seconds, including 61.57
+seconds comparing geometry and 22.57 seconds comparing vibration. These
+load-time audit measurements include concurrent validation work and do not
+measure gameplay performance. The main repository receives this pass as
+0.5.1726, exactly one patch increment from 0.5.1725.
+
 ## Project scope
 
 `tests/fixtures/itgmania-song-lua-project.json` preserves all 63 items from the

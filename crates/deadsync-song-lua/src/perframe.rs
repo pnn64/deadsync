@@ -2064,9 +2064,9 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                     .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
                     && sample.end_seconds <= next_seconds + f64::from(sample.frame_advance) + 1.0e-7
             }));
-        scratch
-            .completed
-            .sort_by(|a, b| a.end_seconds.total_cmp(&b.end_seconds));
+        // Actor queues are captured in enqueue order. Rounded cursor times
+        // can put a trailing zero-time state just before its preceding tween;
+        // sorting completed endpoints would then restore the wrong state.
         for sample in &scratch.completed {
             set_overlay_state_update_value(
                 &mut update_states[sample.overlay_index],

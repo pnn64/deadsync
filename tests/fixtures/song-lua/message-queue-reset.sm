@@ -1,0 +1,19 @@
+#TITLE:Message queue reset;
+#BPMS:0=120;
+#BGCHANGES:0=message-queue-reset.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+,
+1000
+0100
+0010
+0001
+;
