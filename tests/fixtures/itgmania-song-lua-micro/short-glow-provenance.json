@@ -1,0 +1,47 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "screen": [
+    854,
+    480
+  ],
+  "seed": 1,
+  "frame_rate": 60,
+  "direct_samples": 481,
+  "native_color_channels": 3848,
+  "native_draw_count_checks": 481,
+  "semantic_checks": 8601,
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "3a5224f8c27340ad938fdf22cf9e6899ee9453a26d4013ef0595c07f56f11faa",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "424b6a846a70201a642852598ef4616027c30b0274eccbd902a58e1c1fbf3c27",
+    "itgmania-harness-rs/semantic_host.lua": "d5549f12d6700e45d4f5b458024fd77bc244d1a8d295b611d6d7dd99216f0c52",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/short-glow-input.json": "7fc7684b5d31d8aac3a1897bc86ac269f55ae4383b9d241ea96c1ec3ad9dfcc9",
+    "deadsync/tests/fixtures/song-lua/short-glow.lua": "ae20b431e6c1dce3548711622815f87961ca2e207164355eb68c95f8f5da4d2c",
+    "deadsync/tests/fixtures/song-lua/short-glow.sm": "8975170d57864077fefa018e11091d472f4f023ae3a74ffa83a8aaac94278313"
+  },
+  "captures": {
+    "short-glow-native.json.zst": {
+      "raw_sha256": "740af210f824c97edb27f48bbcdac724a2046512f708b93d37c17703cff692b8",
+      "compressed_sha256": "2d09fab3ad33cabff369dbd0c0b764fe0b0e4bb80d4af36781938283a9f295af",
+      "raw_bytes": 18342696,
+      "compressed_bytes": 21365
+    },
+    "short-glow.json.zst": {
+      "raw_sha256": "c038e21c49376dbc62012e37802cabe07f97503c78de07366e706e23862c3f41",
+      "compressed_sha256": "de4f988674ca9bc8bea6b7da50d0ed6ba5ffbd152d384f8b2a3499e6f61a9ffe",
+      "raw_bytes": 317410,
+      "compressed_bytes": 11769
+    }
+  },
+  "comparison": {
+    "raw_color_tolerance": "f32::EPSILON",
+    "native_lua_cpp_agreement_channels": 3848
+  },
+  "before_fix": {
+    "test_exit": 101,
+    "first_mismatch_seconds": 0.016666668,
+    "channel": "glow[0]",
+    "native": 10.330127,
+    "deadsync": 10.330128
+  }
+}

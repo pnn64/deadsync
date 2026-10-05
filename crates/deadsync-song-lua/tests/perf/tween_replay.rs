@@ -59,7 +59,7 @@ const TARGETS: [SongLuaOverlayUpdateTarget; 80] = [
     SongLuaOverlayUpdateTarget::EffectColor2,
     SongLuaOverlayUpdateTarget::EffectPeriod,
     SongLuaOverlayUpdateTarget::EffectOffset,
-    SongLuaOverlayUpdateTarget::EffectPhase,
+    SongLuaOverlayUpdateTarget::EffectTime,
     SongLuaOverlayUpdateTarget::EffectTiming,
     SongLuaOverlayUpdateTarget::Rainbow,
     SongLuaOverlayUpdateTarget::RainbowScroll,

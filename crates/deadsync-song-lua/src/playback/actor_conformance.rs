@@ -35,9 +35,7 @@ pub fn effect_sample(state: SongLuaOverlayState, time: f32, beat: f32) -> Effect
         rotation: [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
     };
     song_lua_apply_overlay_effect(
-        song_lua_overlay_effect_state(state),
-        state.rainbow,
-        song_lua_overlay_vibrate_magnitude(state),
+        state,
         time,
         beat,
         0,

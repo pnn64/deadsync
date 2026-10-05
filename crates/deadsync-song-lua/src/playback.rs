@@ -5553,7 +5553,7 @@ pub fn apply_overlay_update(
     set_value!(EffectColor2, Vec4, effect_color2);
     set_value!(EffectPeriod, F32, effect_period);
     set_value!(EffectOffset, F32, effect_offset);
-    set_value!(EffectPhase, F32, effect_phase);
+    set_option!(EffectTime, Vec2, effect_time);
     set_option!(EffectTiming, Vec5, effect_timing);
     set_value!(Rainbow, Bool, rainbow);
     set_value!(RainbowScroll, Bool, rainbow_scroll);
@@ -5620,7 +5620,7 @@ fn apply_song_lua_overlay_runtime_updates_for(
             t = snap.t;
         }
         // A native timer wrap or restart is an instantaneous phase change.
-        let value = if track.target == crate::SongLuaOverlayUpdateTarget::EffectPhase {
+        let value = if track.target == crate::SongLuaOverlayUpdateTarget::EffectTime {
             from.value.clone()
         } else {
             from.value.lerp(&to.value, t)
@@ -6257,6 +6257,16 @@ const fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
     }
 }
 
+fn song_lua_effect_clock(state: SongLuaOverlayState, mut clock: [f32; 2]) -> [f32; 2] {
+    if (state.rainbow || song_lua_compose_effect(state.effect_mode))
+        && let Some([at, units]) = state.effect_time
+    {
+        let axis = matches!(state.effect_clock, deadlib_present::anim::EffectClock::Beat) as usize;
+        clock[axis] = units + (clock[axis] - at);
+    }
+    clock
+}
+
 #[inline(always)]
 fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
     let period = state.effect_period.max(f32::EPSILON);
@@ -6270,15 +6280,7 @@ fn song_lua_overlay_effect_state(state: SongLuaOverlayState) -> EffectState {
         color1: state.effect_color1,
         color2: state.effect_color2,
         period,
-        offset: state.effect_offset
-            - if state.effect_mode == deadlib_present::anim::EffectMode::Pulse
-                || state.rainbow
-                || song_lua_color_effect(state.effect_mode)
-            {
-                state.effect_phase
-            } else {
-                0.0
-            },
+        offset: state.effect_offset,
         timing: state
             .effect_timing
             .unwrap_or([period * 0.5, 0.0, period * 0.5, 0.0, 0.0]),
@@ -6382,6 +6384,7 @@ fn song_lua_apply_motion(
 
 fn song_lua_pre_draw_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
     use deadlib_present::anim::EffectMode;
+    let clock = song_lua_effect_clock(state, clock);
     if state.rainbow || song_lua_color_effect(state.effect_mode) {
         let mut tint = state.diffuse;
         tint[3] = state.vertex_colors.map_or(tint[3], |colors| colors[0][3]);
@@ -6407,11 +6410,6 @@ fn song_lua_pre_draw_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> S
         return state;
     }
     let effect = song_lua_overlay_effect_state(state);
-    let mut clock = clock;
-    match state.effect_clock {
-        deadlib_present::anim::EffectClock::Time => clock[0] -= state.effect_phase,
-        deadlib_present::anim::EffectClock::Beat => clock[1] -= state.effect_phase,
-    }
     if let Some(percent) = song_lua_effect_percent(effect, clock) {
         let mut position = [state.x, state.y, state.z];
         let mut rotation = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
@@ -6430,6 +6428,7 @@ fn song_lua_pulse_parent(mut parent: SongLuaOverlayState, clock: [f32; 2]) -> So
         return parent;
     }
     let effect = song_lua_overlay_effect_state(parent);
+    let clock = song_lua_effect_clock(parent, clock);
     // Common zoom and axis zoom are aliases, rather than independent factors.
     let current = SongLuaOverlayState {
         basezoom: 1.0,
@@ -6459,9 +6458,7 @@ fn song_lua_proxy_effect(
     let mut scale = [1.0; 3];
     let mut rotation = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
     song_lua_apply_overlay_effect(
-        song_lua_overlay_effect_state(state),
-        state.rainbow,
-        song_lua_overlay_vibrate_magnitude(state),
+        state,
         effect_time,
         effect_beat,
         actor_seed,
@@ -6529,12 +6526,12 @@ fn song_lua_apply_color_effect(
                 effect.mode,
                 EffectMode::DiffuseShift | EffectMode::GlowShift
             ) {
-                deadlib_present::anim::glowshift_mix(percent)
+                song_lua_color_mix(percent)
             } else {
                 percent
             };
             std::array::from_fn(|channel| {
-                song_lua_effect_lerp(effect.color2[channel], effect.color1[channel], mix)
+                effect.color1[channel] * mix + effect.color2[channel] * (1.0 - mix)
             })
         }
     };
@@ -6550,9 +6547,7 @@ fn song_lua_apply_color_effect(
 }
 
 fn song_lua_apply_overlay_effect(
-    effect: EffectState,
-    rainbow: bool,
-    vibrate_magnitude: [f32; 3],
+    state: SongLuaOverlayState,
     effect_time: f32,
     effect_beat: f32,
     actor_seed: u32,
@@ -6562,6 +6557,10 @@ fn song_lua_apply_overlay_effect(
     scale: &mut [f32; 3],
     rot_deg: &mut [f32; 3],
 ) {
+    let effect = song_lua_overlay_effect_state(state);
+    let [effect_time, effect_beat] = song_lua_effect_clock(state, [effect_time, effect_beat]);
+    let rainbow = state.rainbow;
+    let vibrate_magnitude = song_lua_overlay_vibrate_magnitude(state);
     if vibrate_magnitude
         .iter()
         .any(|value| value.abs() > f32::EPSILON)
@@ -6644,8 +6643,12 @@ fn song_lua_overlay_vibrate_magnitude(state: SongLuaOverlayState) -> [f32; 3] {
     ]
 }
 
+fn song_lua_color_mix(percent: f32) -> f32 {
+    ((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() / 2.0 + 0.5
+}
+
 fn song_lua_rainbow_color(percent: f32) -> [f32; 3] {
-    let between = ((percent + 0.25) * 2.0 * std::f32::consts::PI).sin() / 2.0 + 0.5;
+    let between = song_lua_color_mix(percent);
     std::array::from_fn(|axis| {
         (between * 2.0 * std::f32::consts::PI + std::f32::consts::PI * (axis * 2) as f32 / 3.0)
             .cos()
@@ -8647,9 +8650,7 @@ fn build_song_lua_aft_sprite_actor(
     let mut effect_scale = [1.0, 1.0, 1.0];
     let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
     song_lua_apply_overlay_effect(
-        song_lua_overlay_effect_state(state),
-        state.rainbow,
-        song_lua_overlay_vibrate_magnitude(state),
+        state,
         effect_time,
         effect_beat,
         z as u32,
@@ -8757,16 +8758,13 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
         return Some(false);
     }
     let actor_scale = [overlay_scale[0].abs(), overlay_scale[1].abs()];
-    let effect = song_lua_overlay_effect_state(state);
     let mut tint = state.diffuse;
     let mut glow = state.glow;
     let mut effect_offset = [0.0, 0.0, 0.0];
     let mut effect_scale = [1.0, 1.0, 1.0];
     let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
     song_lua_apply_overlay_effect(
-        effect,
-        state.rainbow,
-        song_lua_overlay_vibrate_magnitude(state),
+        state,
         effect_time,
         effect_beat,
         z as u32,
@@ -8868,7 +8866,6 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     } else {
         (overlay_scale[1], false)
     };
-    let effect = song_lua_overlay_effect_state(state);
     let overlay_blend = song_lua_overlay_blend(state.blend);
     // Only sprites and quads that reach geometry use the camera projection.
     let perspective_view_proj = || {
@@ -8926,9 +8923,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
-                    effect,
-                    state.rainbow,
-                    song_lua_overlay_vibrate_magnitude(state),
+                    state,
                     effect_time,
                     effect_beat,
                     z as u32,
@@ -8994,9 +8989,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
-                    effect,
-                    state.rainbow,
-                    song_lua_overlay_vibrate_magnitude(state),
+                    state,
                     effect_time,
                     effect_beat,
                     z as u32,
@@ -9099,9 +9092,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
-                    effect,
-                    state.rainbow,
-                    song_lua_overlay_vibrate_magnitude(state),
+                    state,
                     effect_time,
                     effect_beat,
                     z as u32,
@@ -9190,9 +9181,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let mut effect_scale = [1.0, 1.0, 1.0];
             let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
             song_lua_apply_overlay_effect(
-                effect,
-                state.rainbow,
-                song_lua_overlay_vibrate_magnitude(state),
+                state,
                 effect_time,
                 effect_beat,
                 z as u32,
@@ -9278,9 +9267,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let mut effect_scale = [1.0, 1.0, 1.0];
             let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
             song_lua_apply_overlay_effect(
-                effect,
-                state.rainbow,
-                song_lua_overlay_vibrate_magnitude(state),
+                state,
                 effect_time,
                 effect_beat,
                 z as u32,
@@ -9442,9 +9429,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let mut effect_scale = [1.0, 1.0, 1.0];
             let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
             song_lua_apply_overlay_effect(
-                effect,
-                state.rainbow,
-                song_lua_overlay_vibrate_magnitude(state),
+                state,
                 effect_time,
                 effect_beat,
                 z as u32,
@@ -9492,9 +9477,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let mut effect_scale = [1.0, 1.0, 1.0];
             let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
             song_lua_apply_overlay_effect(
-                effect,
-                state.rainbow,
-                song_lua_overlay_vibrate_magnitude(state),
+                state,
                 effect_time,
                 effect_beat,
                 z as u32,
@@ -9595,9 +9578,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
-                    effect,
-                    state.rainbow,
-                    song_lua_overlay_vibrate_magnitude(state),
+                    state,
                     effect_time,
                     effect_beat,
                     z as u32,
@@ -9663,9 +9644,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut rot_deg = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
-                    effect,
-                    state.rainbow,
-                    song_lua_overlay_vibrate_magnitude(state),
+                    state,
                     effect_time,
                     effect_beat,
                     z as u32,
@@ -9764,9 +9743,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let mut effect_scale = [1.0, 1.0, 1.0];
                 let mut effect_rot = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
                 song_lua_apply_overlay_effect(
-                    effect,
-                    state.rainbow,
-                    song_lua_overlay_vibrate_magnitude(state),
+                    state,
                     effect_time,
                     effect_beat,
                     z as u32,

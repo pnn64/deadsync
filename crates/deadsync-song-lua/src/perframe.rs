@@ -1662,7 +1662,7 @@ fn overlay_state_update_value(
         Target::EffectColor2 => value!(Vec4, effect_color2),
         Target::EffectPeriod => value!(F32, effect_period),
         Target::EffectOffset => value!(F32, effect_offset),
-        Target::EffectPhase => value!(F32, effect_phase),
+        Target::EffectTime => option!(Vec2, effect_time),
         Target::EffectTiming => option!(Vec5, effect_timing),
         Target::Rainbow => value!(Bool, rainbow),
         Target::RainbowScroll => value!(Bool, rainbow_scroll),
@@ -1799,7 +1799,7 @@ fn set_overlay_state_update_value(
     set_value!(EffectColor2, Vec4, effect_color2);
     set_value!(EffectPeriod, F32, effect_period);
     set_value!(EffectOffset, F32, effect_offset);
-    set_value!(EffectPhase, F32, effect_phase);
+    set_option!(EffectTime, Vec2, effect_time);
     set_option!(EffectTiming, Vec5, effect_timing);
     set_value!(Rainbow, Bool, rainbow);
     set_value!(RainbowScroll, Bool, rainbow_scroll);
@@ -3278,12 +3278,18 @@ pub fn compile_update_functions<Kind>(
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         for (index, actor) in capture_actors.iter().enumerate() {
-            if let Some(phase) =
-                crate::lua_util::effect_render_phase(actor, [seconds as f32, next_beat])
+            if let Some(clock) =
+                crate::lua_util::effect_render_time(actor, [seconds as f32, next_beat])
                     .map_err(|err| err.to_string())?
             {
-                let target = SongLuaOverlayUpdateTarget::EffectPhase;
-                let value = SongLuaOverlayUpdateValue::F32(phase);
+                // Keep a reference while it predicts the exact native float.
+                // Wraps, restarts, or changed rounding publish a new sample.
+                let clock = current_overlays[index]
+                    .effect_time
+                    .filter(|[at, units]| (units + (clock[0] - at)).to_bits() == clock[1].to_bits())
+                    .unwrap_or(clock);
+                let target = SongLuaOverlayUpdateTarget::EffectTime;
+                let value = SongLuaOverlayUpdateValue::Vec2(clock);
                 set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
                 push_captured_overlay_value(
                     &mut overlay_tracks,

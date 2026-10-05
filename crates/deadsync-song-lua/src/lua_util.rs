@@ -10209,10 +10209,10 @@ fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::R
     clock.set("delta", delta)
 }
 
-pub(crate) fn effect_render_phase(
+pub(crate) fn effect_render_time(
     actor: &Table,
     frame_clock: [f32; 2],
-) -> mlua::Result<Option<f32>> {
+) -> mlua::Result<Option<[f32; 2]>> {
     if !actor
         .raw_get::<Option<bool>>("__songlua_state_rainbow")?
         .unwrap_or(false)
@@ -10248,9 +10248,10 @@ pub(crate) fn effect_render_phase(
     } else {
         frame_clock[0]
     };
-    Ok(Some(
-        units - clock.get::<Option<f32>>("units")?.unwrap_or(0.0),
-    ))
+    Ok(Some([
+        units,
+        clock.get::<Option<f32>>("units")?.unwrap_or(0.0),
+    ]))
 }
 
 pub(crate) fn sync_motion_restart(actor: &Table, epoch: f32, seconds: f32) -> mlua::Result<()> {

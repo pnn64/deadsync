@@ -1908,7 +1908,7 @@ fn sample_update_track(
     if next_index == 0 {
         return None;
     }
-    if target == SongLuaOverlayUpdateTarget::EffectPhase {
+    if target == SongLuaOverlayUpdateTarget::EffectTime {
         return Some(samples[next_index - 1].value.clone());
     }
     let current = &samples[next_index - 1];
@@ -1998,7 +1998,9 @@ fn overlay_state_render_value(
         Target::EffectMode => UpdateValue::EffectMode(state.effect_mode),
         Target::EffectPeriod => UpdateValue::F32(state.effect_period),
         Target::EffectOffset => UpdateValue::F32(state.effect_offset),
-        Target::EffectPhase => UpdateValue::F32(state.effect_phase),
+        Target::EffectTime => state
+            .effect_time
+            .map_or(UpdateValue::None, UpdateValue::Vec2),
         Target::Size => state.size.map_or(UpdateValue::None, UpdateValue::Vec2),
         _ => return None,
     })
@@ -7046,7 +7048,7 @@ fn late_colors_native_draws() {
     assert_eq!(native_color_draws("late-colors", 4.0), 57840);
 }
 
-fn native_fade_draws(name: &str, duration: f32) -> (usize, usize) {
+fn native_actor_draws(name: &str, duration: f32) -> (usize, usize) {
     use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -7077,6 +7079,12 @@ fn native_fade_draws(name: &str, duration: f32) -> (usize, usize) {
     for sample in native["samples"].as_array().expect("native samples") {
         let seconds = sample["time"].as_f64().expect("sample time") as f32;
         let states = compiled_overlay_states_at(layer, &context, seconds, seconds);
+        let composed = deadsync_song_lua::playback::actor_conformance::compose_overlay_states(
+            &layer.overlays,
+            &states,
+            [854.0, 480.0],
+            [seconds, seconds],
+        );
         for actor in sample["actors"]
             .as_array()
             .expect("native actors")
@@ -7090,13 +7098,14 @@ fn native_fade_draws(name: &str, duration: f32) -> (usize, usize) {
                 .position(|overlay| overlay.name.as_deref() == Some(name))
                 .expect("compiled native actor");
             for (field, actual) in [
-                ("diffuse", states[index].diffuse),
-                ("glow", states[index].glow),
+                ("diffuse", composed[index].diffuse),
+                ("glow", composed[index].glow),
             ] {
+                let native_state = actor.get("effected").unwrap_or(&actor["current"]);
                 let expected = if field == "diffuse" {
-                    &actor["current"][field][0]
+                    &native_state[field][0]
                 } else {
-                    &actor["current"][field]
+                    &native_state[field]
                 };
                 for (channel, actual) in actual.iter().enumerate() {
                     let expected = expected[channel].as_f64().expect("native color") as f32;
@@ -7133,12 +7142,12 @@ fn native_fade_draws(name: &str, duration: f32) -> (usize, usize) {
 
 #[test]
 fn fade_clock_matches_native() {
-    assert_eq!(native_fade_draws("fade-clock", 4.0), (5784, 723));
+    assert_eq!(native_actor_draws("fade-clock", 4.0), (5784, 723));
 }
 
 #[test]
 fn scheduled_fade_matches_native() {
-    assert_eq!(native_fade_draws("scheduled-fade", 5.0), (9632, 1204));
+    assert_eq!(native_actor_draws("scheduled-fade", 5.0), (9632, 1204));
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let trace = read_trace_file(
         &root.join("tests/fixtures/itgmania-song-lua-micro/scheduled-fade.json.zst"),
@@ -7155,6 +7164,24 @@ fn scheduled_fade_matches_native() {
         "retain full scheduled-tween coverage"
     );
     parity.assert_complete("scheduled fade");
+}
+
+#[test]
+fn short_glow_matches_native() {
+    assert_eq!(native_actor_draws("short-glow", 8.0), (3848, 481));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/short-glow.json.zst"));
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/short-glow.sm"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("short glow"));
+    assert_eq!(
+        parity.checks(),
+        8601,
+        "retain full short-period effect coverage"
+    );
+    parity.assert_complete("short glow");
 }
 
 #[test]

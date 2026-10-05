@@ -7317,10 +7317,71 @@ fn song_lua_quad_applies_bounce_effect_offset_at_runtime() {
 }
 
 #[test]
+fn song_lua_effect_clock_advances_and_seeks_across_wraps() {
+    use deadlib_present::anim::{EffectClock, EffectMode};
+    use deadsync_song_lua::{
+        SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
+        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
+    };
+    let tracks = [Track {
+        overlay_index: 0,
+        target: Target::EffectTime,
+        samples: vec![
+            Sample {
+                second: 1000.0,
+                value: Value::Vec2([1000.0, 0.234375]),
+            },
+            Sample {
+                second: 1000.03125,
+                value: Value::Vec2([1000.03125, 0.015625]),
+            },
+        ],
+    }];
+    for effect_clock in [EffectClock::Time, EffectClock::Beat] {
+        let mut cursors = [0];
+        let mut state = SongLuaOverlayState {
+            effect_mode: EffectMode::GlowShift,
+            effect_clock,
+            effect_period: 0.25,
+            ..SongLuaOverlayState::default()
+        };
+        for (now, expected) in [
+            (1000.0078125, 0.2421875),
+            (1000.03125, 0.015625),
+            (1000.0390625, 0.0234375),
+            (1000.0078125, 0.2421875),
+        ] {
+            apply_song_lua_overlay_runtime_updates_for(
+                now,
+                &tracks,
+                0..1,
+                &mut cursors,
+                None,
+                &mut state,
+            );
+            let clock = match effect_clock {
+                EffectClock::Time => [now, 7.0],
+                EffectClock::Beat => [7.0, now],
+            };
+            let expected = match effect_clock {
+                EffectClock::Time => [expected, 7.0],
+                EffectClock::Beat => [7.0, expected],
+            };
+            assert_eq!(song_lua_effect_clock(state, clock), expected);
+            let stopped = SongLuaOverlayState {
+                effect_mode: EffectMode::None,
+                ..state
+            };
+            assert_eq!(song_lua_effect_clock(stopped, clock), clock);
+        }
+    }
+}
+
+#[test]
 fn song_lua_vibrate_applies_effect_magnitude_at_runtime() {
-    let effect = EffectState {
-        magnitude: [20.0, 10.0, 5.0],
-        ..EffectState::default()
+    let state = SongLuaOverlayState {
+        effect_magnitude: [20.0, 10.0, 5.0],
+        ..SongLuaOverlayState::default()
     };
     let mut tint = [1.0; 4];
     let mut glow = [0.0; 4];
@@ -7328,9 +7389,7 @@ fn song_lua_vibrate_applies_effect_magnitude_at_runtime() {
     let mut scale = [1.0; 3];
     let mut rotation = [0.0; 3];
     song_lua_apply_overlay_effect(
-        effect,
-        false,
-        [0.0; 3],
+        state,
         0.5,
         0.0,
         0,
@@ -7342,11 +7401,13 @@ fn song_lua_vibrate_applies_effect_magnitude_at_runtime() {
     );
     assert_eq!(still, [0.0; 3]);
 
+    let state = SongLuaOverlayState {
+        vibrate: true,
+        ..state
+    };
     let mut shaken = [0.0; 3];
     song_lua_apply_overlay_effect(
-        effect,
-        false,
-        effect.magnitude,
+        state,
         0.5,
         0.0,
         0,
@@ -7357,15 +7418,13 @@ fn song_lua_vibrate_applies_effect_magnitude_at_runtime() {
         &mut rotation,
     );
     assert!(shaken.iter().any(|value| value.abs() > 0.001));
-    assert!(shaken[0].abs() <= effect.magnitude[0]);
-    assert!(shaken[1].abs() <= effect.magnitude[1]);
-    assert!(shaken[2].abs() <= effect.magnitude[2]);
+    assert!(shaken[0].abs() <= state.effect_magnitude[0]);
+    assert!(shaken[1].abs() <= state.effect_magnitude[1]);
+    assert!(shaken[2].abs() <= state.effect_magnitude[2]);
 
     let mut same_frame = [0.0; 3];
     song_lua_apply_overlay_effect(
-        effect,
-        false,
-        effect.magnitude,
+        state,
         0.51,
         0.0,
         0,
@@ -7379,9 +7438,7 @@ fn song_lua_vibrate_applies_effect_magnitude_at_runtime() {
 
     let mut next_frame = [0.0; 3];
     song_lua_apply_overlay_effect(
-        effect,
-        false,
-        effect.magnitude,
+        state,
         0.52,
         0.0,
         0,
