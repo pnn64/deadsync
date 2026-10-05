@@ -5331,9 +5331,12 @@ fn collapsed_transform_matches_native() {
 fn queued_message_states_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for (name, checks) in [("message-queue-reset", 363), ("queued-command-state", 33)] {
+    for (name, capture, checks) in [
+        ("message-queue-reset", "message-queue-reset-clock", 951),
+        ("queued-command-state", "queued-command-state", 33),
+    ] {
         let trace = read_trace_file(&root.join(format!(
-            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+            "tests/fixtures/itgmania-song-lua-micro/{capture}.json.zst"
         )));
         let (compiled, primary, context) = compile_trace_song_at(
             &trace,
@@ -5344,6 +5347,74 @@ fn queued_message_states_match_native() {
         assert_eq!(parity.checks(), checks);
         parity.assert_complete(name);
     }
+}
+
+#[test]
+fn queued_reset_matches_native_clock() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/message-queue-reset-clock.json.zst"),
+    );
+    let (compiled, _, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/message-queue-reset.sm"),
+    );
+    let native: serde_json::Value =
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(root.join(
+                    "tests/fixtures/itgmania-song-lua-micro/queued-reset-clock-native.json.zst",
+                ))
+                .expect("native queued reset capture"),
+            )
+            .expect("compressed native reset capture"),
+        )
+        .expect("native queued reset capture");
+    let mut checks = 0;
+    for sample in native["samples"].as_array().expect("native samples") {
+        let seconds = value_f32(sample.get("time")).expect("native time");
+        if seconds < 3.0 {
+            continue;
+        }
+        let states = compiled_overlay_states_at(&compiled[0], &context, seconds * 2.0, seconds);
+        for actor in sample["actors"].as_array().expect("native actors") {
+            let name = actor["name"].as_str().expect("native name");
+            if !matches!(name, "Runner" | "TV") {
+                continue;
+            }
+            let index = compiled[0]
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == Some(name))
+                .expect("queued reset actor");
+            for (axis, actual) in [states[index].x, states[index].y].into_iter().enumerate() {
+                let expected =
+                    value_f32(actor["current"]["position"].get(axis)).expect("native position");
+                assert!(
+                    (actual - expected).abs() <= 0.75,
+                    "{name} at {seconds}, axis {axis}: {actual} vs native {expected}"
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert_eq!(checks, 484, "retain every native reset frame and axis");
+    assert!(
+        native["samples"][263]["actors"][1]["current"]["position"][0]
+            .as_f64()
+            .expect("position before reset")
+            < 0.0
+    );
+    assert_eq!(
+        native["samples"][264]["actors"][1]["current"]["position"][0],
+        1120.0
+    );
+    assert_eq!(
+        native["samples"][264]["actors"][2]["current"]["position"][0],
+        832.0
+    );
+    eprintln!("queued reset: {checks} native position checks");
 }
 
 #[test]
@@ -6975,24 +7046,26 @@ fn late_colors_native_draws() {
     assert_eq!(native_color_draws("late-colors", 4.0), 57840);
 }
 
-#[test]
-fn fade_clock_matches_native() {
+fn native_fade_draws(name: &str, duration: f32) -> (usize, usize) {
     use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let song_dir = root.join("tests/fixtures/song-lua");
     let mut context = SongLuaCompileContext::new(&song_dir, "Fade clock");
     context.screen_width = 854.0;
-    context.music_length_seconds = 4.0;
+    context.music_length_seconds = duration;
     context.song_timing_bpms = vec![(0.0, 60.0)];
-    let compiled =
-        compile_song_lua_layers(&[song_dir.join("fade-clock.lua").as_path()], 0, &context)
-            .expect("compile native fade fixture");
+    let compiled = compile_song_lua_layers(
+        &[song_dir.join(format!("{name}.lua")).as_path()],
+        0,
+        &context,
+    )
+    .expect("compile native fade fixture");
     let native: Value = serde_json::from_reader(
         zstd::stream::read::Decoder::new(
-            fs::File::open(
-                root.join("tests/fixtures/itgmania-song-lua-micro/fade-clock-native.json.zst"),
-            )
+            fs::File::open(root.join(format!(
+                "tests/fixtures/itgmania-song-lua-micro/{name}-native.json.zst"
+            )))
             .expect("native fade capture"),
         )
         .expect("compressed native capture"),
@@ -7053,9 +7126,35 @@ fn fade_clock_matches_native() {
             draws += 1;
         }
     }
-    eprintln!("fade clock: {channels} native RGBA channels, {draws} draw-count checks");
-    assert_eq!((channels, draws), (5784, 723));
+    eprintln!("{name}: {channels} native RGBA channels, {draws} draw-count checks");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+    (channels, draws)
+}
+
+#[test]
+fn fade_clock_matches_native() {
+    assert_eq!(native_fade_draws("fade-clock", 4.0), (5784, 723));
+}
+
+#[test]
+fn scheduled_fade_matches_native() {
+    assert_eq!(native_fade_draws("scheduled-fade", 5.0), (9632, 1204));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/scheduled-fade.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/scheduled-fade.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("scheduled fade"));
+    assert_eq!(
+        parity.checks(),
+        4706,
+        "retain full scheduled-tween coverage"
+    );
+    parity.assert_complete("scheduled fade");
 }
 
 #[test]

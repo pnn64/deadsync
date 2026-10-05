@@ -151,6 +151,7 @@ impl SongLuaOverlayUpdateCapture {
         };
         Self::replace_value(&mut self.final_values[index], target, value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
+            progress: None,
             dispatch_seconds: None,
             frame_advance: 0.0,
             initial_value: self.values[index]

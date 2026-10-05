@@ -82,6 +82,8 @@ fn sample_compaction_matches_legacy_order_and_last_write() {
 
 fn scheduled_sample(index: usize, end: f32) -> SongLuaScheduledOverlaySample {
     SongLuaScheduledOverlaySample {
+        progress: None,
+        duration: 0.5,
         dispatch_seconds: None,
         frame_advance: 0.0,
         overlay_index: index % 2,

@@ -52,6 +52,7 @@ pub(super) fn record_scheduled(
         value.clone(),
     );
     capture.scheduled[index].push(SongLuaScheduledOverlayUpdate {
+        progress: None,
         dispatch_seconds: None,
         frame_advance: 0.0,
         initial_value: capture.values[index]

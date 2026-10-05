@@ -221,6 +221,8 @@ pub(super) fn append_scheduled_overlay_updates(
             })
             .unwrap_or(SongLuaOverlayUpdateValue::None);
         scheduled_samples.push(SongLuaScheduledOverlaySample {
+            progress: None,
+            duration: update.duration_seconds,
             dispatch_seconds: None,
             frame_advance: 0.0,
             overlay_index,

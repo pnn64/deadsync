@@ -1861,7 +1861,8 @@ fn retarget_actor_tween(
         return None;
     }
     let pending = scheduled.iter().rposition(|sample| {
-        sample.overlay_index == overlay_index && sample.end_seconds > seconds
+        sample.overlay_index == overlay_index
+            && sample.end_seconds > scheduled_overlay_clock(sample, seconds)
     })?;
     let (start, end) = (
         scheduled[pending].start_seconds,
@@ -1876,8 +1877,8 @@ fn retarget_actor_tween(
                 && sample
                     .dispatch_seconds
                     .is_none_or(|dispatch| dispatch <= seconds + 1.0e-7)
-                && sample.start_seconds <= seconds + f64::from(sample.frame_advance)
-                && sample.end_seconds > seconds
+                && sample.start_seconds <= scheduled_overlay_clock(sample, seconds)
+                && sample.end_seconds > scheduled_overlay_clock(sample, seconds)
         })
         .map_or_else(
             || overlay_state_update_value(current, target),
@@ -1889,7 +1890,7 @@ fn retarget_actor_tween(
                     } else {
                         &sample.value
                     },
-                    scheduled_overlay_factor(sample, seconds + f64::from(sample.frame_advance)),
+                    scheduled_overlay_factor(sample, scheduled_overlay_clock(sample, seconds)),
                 )
             },
         );
@@ -1916,6 +1917,8 @@ fn retarget_actor_tween(
             |sample| sample.value.clone(),
         );
     let replacement = SongLuaScheduledOverlaySample {
+        progress: pending.progress.clone(),
+        duration: pending.duration,
         dispatch_seconds: pending.dispatch_seconds,
         frame_advance: pending.frame_advance,
         overlay_index,
@@ -1938,7 +1941,7 @@ fn retarget_actor_tween(
         return Some(lerp_scheduled_value(
             &sample.from,
             &sample.value,
-            scheduled_overlay_factor(sample, seconds + f64::from(sample.frame_advance)),
+            scheduled_overlay_factor(sample, scheduled_overlay_clock(sample, seconds)),
         ));
     }
     Some(rendered)
@@ -1963,10 +1966,21 @@ fn append_scheduled_overlay_updates(
     let mut previous_times: Option<((u32, u32), (f32, f32))> = None;
     let reuse_times = scheduled.len() > 1;
     for update in scheduled {
-        let start_seconds = message_seconds + f64::from(update.delay_seconds);
-        let end_seconds = start_seconds + f64::from(update.duration_seconds);
-        let start = (start_seconds - f64::from(update.frame_advance)) as f32;
-        let end = (end_seconds - f64::from(update.frame_advance)) as f32;
+        let (start_seconds, end_seconds) = if let Some(samples) = &update.progress {
+            let start = samples.first().expect("baked tween has frames")[0];
+            let end = samples.last().expect("baked tween has frames");
+            (f64::from(start), f64::from(end[0] + end[1]))
+        } else {
+            let start = message_seconds + f64::from(update.delay_seconds);
+            (start, start + f64::from(update.duration_seconds))
+        };
+        let advance = if update.progress.is_some() {
+            0.0
+        } else {
+            update.frame_advance
+        };
+        let start = (start_seconds - f64::from(advance)) as f32;
+        let end = (end_seconds - f64::from(advance)) as f32;
         let time_bits = (start.to_bits(), end.to_bits());
         // Adjacent properties in one tween share their time bounds. Keep only
         // the preceding pair, keyed by bits to retain signed zero and NaNs.
@@ -1998,6 +2012,8 @@ fn append_scheduled_overlay_updates(
             })
             .unwrap_or(SongLuaOverlayUpdateValue::None);
         scheduled_samples.push(SongLuaScheduledOverlaySample {
+            progress: update.progress.clone(),
+            duration: update.duration_seconds,
             dispatch_seconds: update.dispatch_seconds,
             frame_advance: update.frame_advance,
             overlay_index,
@@ -2098,7 +2114,7 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                 let complete = sample
                     .dispatch_seconds
                     .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
-                    && sample.end_seconds <= next_seconds + f64::from(sample.frame_advance);
+                    && sample.end_seconds <= scheduled_overlay_clock(sample, next_seconds);
                 scratch.blocked_actors[sample.overlay_index] = !complete;
                 complete
             }));
@@ -2167,7 +2183,7 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
                     .iter()
                     .filter(|sample| sample.overlay_index == overlay_index)
                 {
-                    let clock = next_seconds + f64::from(sample.frame_advance);
+                    let clock = scheduled_overlay_clock(sample, next_seconds);
                     let current = if clock >= sample.start_seconds
                         && sample
                             .dispatch_seconds
@@ -2332,6 +2348,8 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
 
 #[cfg_attr(test, derive(Clone))]
 struct SongLuaScheduledOverlaySample {
+    progress: Option<std::sync::Arc<[[f32; 2]]>>,
+    duration: f32,
     dispatch_seconds: Option<f64>,
     frame_advance: f32,
     overlay_index: usize,
@@ -2381,13 +2399,42 @@ fn lerp_scheduled_value(
 
 #[inline(always)]
 fn scheduled_overlay_factor(sample: &SongLuaScheduledOverlaySample, seconds: f64) -> f32 {
-    let linear_factor = if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
+    let linear_factor = if let Some(frames) = &sample.progress {
+        crate::tween_frame_factor(frames, sample.duration, seconds as f32).unwrap_or(0.0)
+    } else if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
         1.0
     } else {
         ((seconds - sample.start_seconds) / (sample.end_seconds - sample.start_seconds))
             .clamp(0.0, 1.0) as f32
     };
     crate::overlay_command_ease_factor(sample.easing.as_deref(), linear_factor, sample.opt1)
+}
+
+fn scheduled_overlay_clock(sample: &SongLuaScheduledOverlaySample, seconds: f64) -> f64 {
+    if sample.progress.is_some() {
+        // Native frame samples and Actor::Update use float timestamps. Compare
+        // on that clock too, so a rounded-up zero-time state is not deferred.
+        f64::from(seconds as f32)
+    } else if sample.frame_advance == 0.0 {
+        seconds
+    } else {
+        seconds + f64::from(sample.frame_advance)
+    }
+}
+
+fn scheduled_clocks_match(
+    left: &SongLuaScheduledOverlaySample,
+    right: &SongLuaScheduledOverlaySample,
+) -> bool {
+    left.start_seconds.to_bits() == right.start_seconds.to_bits()
+        && left.end_seconds.to_bits() == right.end_seconds.to_bits()
+        && left.duration.to_bits() == right.duration.to_bits()
+        && left.frame_advance == right.frame_advance
+        && match (&left.progress, &right.progress) {
+            (Some(left), Some(right)) => std::sync::Arc::ptr_eq(left, right),
+            (None, None) => true,
+            _ => false,
+        }
 }
 
 fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
@@ -2398,11 +2445,7 @@ fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
     seconds: f64,
 ) -> Result<(), String> {
     for sample in scheduled {
-        let clock = if sample.frame_advance == 0.0 {
-            seconds
-        } else {
-            seconds + f64::from(sample.frame_advance)
-        };
+        let clock = scheduled_overlay_clock(sample, seconds);
         if sample
             .dispatch_seconds
             .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
@@ -2410,17 +2453,7 @@ fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
         {
             continue;
         }
-        let linear_factor = if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
-            1.0
-        } else {
-            ((clock - sample.start_seconds) / (sample.end_seconds - sample.start_seconds))
-                .clamp(0.0, 1.0) as f32
-        };
-        let factor = crate::overlay_command_ease_factor(
-            sample.easing.as_deref(),
-            linear_factor,
-            sample.opt1,
-        );
+        let factor = scheduled_overlay_factor(sample, clock);
         let Some(state) = states.get_mut(sample.overlay_index) else {
             continue;
         };
@@ -2449,8 +2482,7 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
     // keep the original loop; grouped expensive tweens amortize the cache.
     let reuse_factors = if let [first, second, ..] = scheduled {
         matches!(first.easing.as_deref(), Some("spring" | "outElastic"))
-            && first.start_seconds.to_bits() == second.start_seconds.to_bits()
-            && first.end_seconds.to_bits() == second.end_seconds.to_bits()
+            && scheduled_clocks_match(first, second)
             && first.easing == second.easing
             && (first.easing.as_deref() == Some("spring")
                 || first.opt1.map(f32::to_bits) == second.opt1.map(f32::to_bits))
@@ -2462,11 +2494,7 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
     }
     let mut last_factor: Option<(&SongLuaScheduledOverlaySample, u8, f32)> = None;
     for sample in scheduled {
-        let clock = if sample.frame_advance == 0.0 {
-            seconds
-        } else {
-            seconds + f64::from(sample.frame_advance)
-        };
+        let clock = scheduled_overlay_clock(sample, seconds);
         if sample
             .dispatch_seconds
             .is_some_and(|dispatch| seconds + 1.0e-7 < dispatch)
@@ -2483,9 +2511,7 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
         };
         let factor = if curve != 0 {
             if let Some((previous, previous_curve, factor)) = last_factor
-                && previous.start_seconds.to_bits() == sample.start_seconds.to_bits()
-                && previous.end_seconds.to_bits() == sample.end_seconds.to_bits()
-                && previous.frame_advance == sample.frame_advance
+                && scheduled_clocks_match(previous, sample)
                 && previous_curve == curve
                 && (curve == 1 || previous.opt1.map(f32::to_bits) == sample.opt1.map(f32::to_bits))
             {
@@ -3149,7 +3175,7 @@ pub fn compile_update_functions<Kind>(
             lua,
             scheduled_overlay_samples
                 .iter()
-                .filter(|sample| sample.end_seconds > seconds)
+                .filter(|sample| sample.end_seconds > scheduled_overlay_clock(sample, seconds))
                 .map(|sample| (sample.overlay_index, sample.target, sample.value.clone())),
         );
         crate::lua_util::set_prior_positions(lua, &current_overlays);
@@ -3207,7 +3233,7 @@ pub fn compile_update_functions<Kind>(
         // can be edited by subsequent callbacks. Endpoint merges retain them.
         for sample in &scheduled_overlay_samples {
             if sample.overlay_index >= overlay_count
-                || seconds + f64::from(sample.frame_advance) > sample.end_seconds
+                || scheduled_overlay_clock(sample, seconds) > sample.end_seconds
             {
                 continue;
             }
@@ -4007,6 +4033,8 @@ mod tests {
         let mut tracks = Vec::new();
         let mut track_indices = std::collections::HashMap::new();
         let mut scheduled = vec![SongLuaScheduledOverlaySample {
+            progress: None,
+            duration: 1.0,
             dispatch_seconds: None,
             frame_advance: 0.0,
             overlay_index: 0,

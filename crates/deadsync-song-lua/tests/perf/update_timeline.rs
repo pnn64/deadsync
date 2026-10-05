@@ -419,6 +419,8 @@ fn unchanged_mod_windows_extend_without_heap_churn_after_warmup() {
 
 fn scheduled(index: usize, overlay: usize, start: f32, end: f32) -> SongLuaScheduledOverlaySample {
     SongLuaScheduledOverlaySample {
+        progress: None,
+        duration: end - start,
         dispatch_seconds: None,
         frame_advance: 0.0,
         overlay_index: overlay,

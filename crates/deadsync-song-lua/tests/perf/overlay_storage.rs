@@ -151,6 +151,7 @@ fn assert_scheduled(
 fn updates(count: usize, distinct: usize, colors: bool) -> Vec<SongLuaScheduledOverlayUpdate> {
     (0..count)
         .map(|index| SongLuaScheduledOverlayUpdate {
+            progress: None,
             dispatch_seconds: None,
             frame_advance: 0.0,
             initial_value: None,

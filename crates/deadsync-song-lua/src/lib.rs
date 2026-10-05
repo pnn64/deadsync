@@ -2964,19 +2964,7 @@ pub struct SongLuaOverlayCommandBlock {
 #[must_use]
 pub fn overlay_block_factor(block: &SongLuaOverlayCommandBlock, elapsed: f32) -> Option<f32> {
     if let Some(samples) = &block.progress {
-        let right = samples.partition_point(|sample| sample[0] <= elapsed);
-        let [time, left] = *samples.get(right.checked_sub(1)?)?;
-        if block.duration == 0.0 {
-            return Some(1.0);
-        }
-        let left = if let Some(next) = samples.get(right) {
-            actor_lerp(left, next[1], (elapsed - time) / (next[0] - time))
-        } else {
-            // The sampled horizon is the song end. Preserve a partial tween
-            // beyond that horizon without freezing its remaining countdown.
-            (left - (elapsed - time)).max(0.0)
-        };
-        return Some((1.0 - left / block.duration).clamp(0.0, 1.0));
+        return tween_frame_factor(samples, block.duration, elapsed);
     }
     (elapsed >= block.start).then(|| {
         if block.duration <= f32::EPSILON {
@@ -2985,6 +2973,21 @@ pub fn overlay_block_factor(block: &SongLuaOverlayCommandBlock, elapsed: f32) ->
             ((elapsed - block.start) / block.duration).clamp(0.0, 1.0)
         }
     })
+}
+
+pub(crate) fn tween_frame_factor(samples: &[[f32; 2]], duration: f32, elapsed: f32) -> Option<f32> {
+    let right = samples.partition_point(|sample| sample[0] <= elapsed);
+    let [time, left] = *samples.get(right.checked_sub(1)?)?;
+    if duration == 0.0 {
+        return Some(1.0);
+    }
+    let left = if let Some(next) = samples.get(right) {
+        actor_lerp(left, next[1], (elapsed - time) / (next[0] - time))
+    } else {
+        // Preserve a partial tween beyond the sampled song horizon.
+        (left - (elapsed - time)).max(0.0)
+    };
+    Some((1.0 - left / duration).clamp(0.0, 1.0))
 }
 
 #[must_use]

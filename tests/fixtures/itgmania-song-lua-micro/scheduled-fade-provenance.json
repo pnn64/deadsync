@@ -1,0 +1,65 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "screen": [
+    854,
+    480
+  ],
+  "seed": 1,
+  "frame_rate": 60,
+  "direct_samples": 301,
+  "native_color_channels": 9632,
+  "native_draw_count_checks": 1204,
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "3a5224f8c27340ad938fdf22cf9e6899ee9453a26d4013ef0595c07f56f11faa",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "424b6a846a70201a642852598ef4616027c30b0274eccbd902a58e1c1fbf3c27",
+    "itgmania-harness-rs/semantic_host.lua": "d5549f12d6700e45d4f5b458024fd77bc244d1a8d295b611d6d7dd99216f0c52",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/scheduled-fade-input.json": "f2ef0c8faca3bb7675d31be6a962c7432499cd2906e42521403e2a94e2617d91",
+    "deadsync/tests/fixtures/song-lua/scheduled-fade.lua": "17b9ade6c15614f87819cc1d68863fb539af8faa22b283f5eb4cc9bad37c22dd",
+    "deadsync/tests/fixtures/song-lua/scheduled-fade.sm": "64476d45dedb360982c7148bcb4aea31833873c24f992f2071105c021c9f68ee"
+  },
+  "captures": {
+    "scheduled-fade-native.json.zst": {
+      "raw_sha256": "d758e865d2e04b44904ec1085f5f93c706aefc726db07e6bbc01544e75a80912",
+      "compressed_sha256": "acaba376e772c5c2d31e05eaf0600e5997d61b1db4ce7502e357ea4ba25809bd",
+      "raw_bytes": 20395642,
+      "compressed_bytes": 50245
+    },
+    "scheduled-fade.json.zst": {
+      "raw_sha256": "1b9c41f73b716a80b790e52f3846cb84e7841ce62a0654f06e03bc42e4cb9528",
+      "compressed_sha256": "8bbc0979e992a8119c372db3632dfe9e7fa0ce86c7c733fc8206c06e9bd45c36",
+      "raw_bytes": 182217,
+      "compressed_bytes": 15224
+    }
+  },
+  "queued_reset": {
+    "direct_samples": 301,
+    "compared_samples": 121,
+    "native_position_checks": 484,
+    "semantic_checks": 951,
+    "sources_sha256": {
+      "deadsync/tests/fixtures/song-lua/message-queue-reset.lua": "4f7de5d659e4eee1a63246469354d964daabe90691a926e5e5bc92169bc3443f",
+      "deadsync/tests/fixtures/song-lua/message-queue-reset.sm": "5095ebb4e0150d28dcdf2bf43b8e8cd01397f5d3749036bdfddce7a6ae944c64",
+      "deadsync/tests/fixtures/itgmania-song-lua-micro/queued-reset-clock-input.json": "3ea4bec2a9aa8e5f1379c100f6df80073ba97edbbc32849365f6969bb55a1769"
+    },
+    "captures": {
+      "queued-reset-clock-native.json.zst": {
+        "raw_sha256": "60fbec1dc0438146f156e00cd6c8ccd4384cc1f77f7abf4f87bf9d4c236685fc",
+        "compressed_sha256": "d34731a76d84ca0159aaf11834d05e814cb57e9a8c509881a55dcc5363262b20",
+        "raw_bytes": 11409482,
+        "compressed_bytes": 33811
+      },
+      "message-queue-reset-clock.json.zst": {
+        "raw_sha256": "95950dd7d94b9b392d4939d291dcec22e38c28d714c1f0e3e0a8898b6cae2ff4",
+        "compressed_sha256": "2c084f4707af25ea01eceb10b2d6fcd7343ac2b033433a46487f05e5df822fa1",
+        "raw_bytes": 67939,
+        "compressed_bytes": 8741
+      }
+    },
+    "retained_capture": {
+      "file": "message-queue-reset.json.zst",
+      "compressed_sha256": "7bfe0b288646f7224b2cb83f589738227fb4e32ec1f2ccee0347bb6453547523",
+      "raw_sha256": "1969ed32d970883f46f9d470d4387c6f51b26cb5e82a6b37cac81c1d402ec49a"
+    }
+  }
+}

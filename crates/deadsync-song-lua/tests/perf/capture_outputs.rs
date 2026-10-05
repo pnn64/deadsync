@@ -516,6 +516,7 @@ fn context(segments: usize) -> SongLuaCompileContext {
 fn updates(count: usize, shared: bool) -> Vec<SongLuaScheduledOverlayUpdate> {
     (0..count)
         .map(|i| SongLuaScheduledOverlayUpdate {
+            progress: None,
             dispatch_seconds: None,
             frame_advance: 0.0,
             initial_value: None,

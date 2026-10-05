@@ -281,6 +281,9 @@ fn defer_actor_message(lua: &Lua, actor: &Table, command: &str, detail: String) 
 
 #[derive(Clone)]
 pub struct SongLuaScheduledOverlayUpdate {
+    /// Immutable native time-left samples baked at load, shared by all writes
+    /// to the queue's back tween. No sampling work or allocation during play.
+    pub progress: Option<std::sync::Arc<[[f32; 2]]>>,
     /// Queued commands cannot render before their actual replay frame.
     pub dispatch_seconds: Option<f64>,
     pub frame_advance: f32,
@@ -478,6 +481,7 @@ impl SongLuaOverlayUpdateCapture {
             })
             .map(|(_, value)| value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
+            progress: None,
             dispatch_seconds: None,
             frame_advance: 0.0,
             initial_value,
@@ -496,6 +500,7 @@ impl SongLuaOverlayUpdateCapture {
         index: usize,
         dispatch_seconds: Option<f64>,
         frame_advance: f32,
+        progress: Option<std::sync::Arc<[[f32; 2]]>>,
     ) {
         let updates = &mut self.scheduled[index];
         let Some((last, prior)) = updates.split_last_mut() else {
@@ -503,6 +508,7 @@ impl SongLuaOverlayUpdateCapture {
         };
         last.dispatch_seconds = dispatch_seconds;
         last.frame_advance = frame_advance;
+        last.progress = progress;
         // Setters mutate one back tween state. Repeated property writes in
         // that state replace its destination while retaining its starting pose.
         let duplicate = prior.iter().rposition(|update| {
@@ -1030,6 +1036,9 @@ fn record_overlay_update_capture(
         .app_data_ref::<SongLuaQueuedCommand>()
         .map(|scope| queued_render_advance(lua, *scope, actor, false))
         .unwrap_or_else(|| actor_frame_advance(lua, actor));
+    let progress = (cursor > f32::EPSILON || duration > f32::EPSILON)
+        .then(|| actor_tween_progress(lua, actor))
+        .flatten();
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|mut capture| {
@@ -1038,7 +1047,7 @@ fn record_overlay_update_capture(
                     .record_scheduled(actor, beat, cursor, duration, easing, opt1, target, value);
                 if recorded {
                     let index = capture.actor_indices[&(actor.to_pointer() as usize)];
-                    capture.set_scheduled_time(index, dispatch_seconds, frame_advance);
+                    capture.set_scheduled_time(index, dispatch_seconds, frame_advance, progress);
                 }
                 recorded
             } else {
@@ -1131,7 +1140,7 @@ fn record_overlay_update_capture_immediate(
                 );
                 if recorded {
                     let index = capture.actor_indices[&(actor.to_pointer() as usize)];
-                    capture.set_scheduled_time(index, dispatch_seconds, advance);
+                    capture.set_scheduled_time(index, dispatch_seconds, advance, None);
                 }
                 recorded
             } else {
@@ -9367,6 +9376,9 @@ struct SongLuaQueuedCommand {
 // Load-time queue clocks use the same replay frames as callbacks. Storage lives
 // for one compilation; it never exists on a gameplay frame.
 struct SongLuaQueueClock {
+    // One shared back-tween sample array per actor. Appending a queue step
+    // invalidates it; sampling is bounded by the song's canonical frame count.
+    progress: Option<std::sync::Arc<[[f32; 2]]>>,
     epoch: usize,
     frame: usize,
     remaining: f64,
@@ -9436,6 +9448,7 @@ pub(crate) fn set_compile_frames(
             .insert(
                 actor.to_pointer() as usize,
                 SongLuaQueueClock {
+                    progress: None,
                     epoch: 0,
                     frame: 0,
                     remaining: 0.0,
@@ -9589,6 +9602,7 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::R
         .clocks
         .remove(&actor)
         .unwrap_or_else(|| SongLuaQueueClock {
+            progress: None,
             epoch,
             frame,
             remaining,
@@ -9616,8 +9630,41 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::R
             as f32
     });
     clock.steps.push_back(duration);
+    clock.progress = None;
     frames.clocks.insert(actor, clock);
     Ok(delay)
+}
+
+fn actor_tween_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32; 2]]>> {
+    let actor = actor.to_pointer() as usize;
+    let mut frames = lua.app_data_mut::<SongLuaCompileFrames>()?;
+    let mut clock = frames.clocks.remove(&actor)?;
+    if clock.progress.is_none() && !clock.steps.is_empty() {
+        let mut sample_clock = SongLuaQueueClock {
+            progress: None,
+            epoch: clock.epoch,
+            frame: clock.frame,
+            remaining: clock.remaining,
+            steps: std::collections::VecDeque::new(),
+            dispatch: None,
+            recurring_frame: None,
+        };
+        let mut samples = Vec::new();
+        for (index, step) in clock.steps.iter().enumerate() {
+            advance_queue_clock(
+                &frames,
+                &mut sample_clock,
+                step.unwrap_or(0.0),
+                (index + 1 == clock.steps.len()).then_some(&mut samples),
+            );
+        }
+        if !samples.is_empty() {
+            clock.progress = Some(samples.into());
+        }
+    }
+    let progress = clock.progress.clone();
+    frames.clocks.insert(actor, clock);
+    progress
 }
 
 fn drain_queue_clock(lua: &Lua, actor: &Table) -> Option<(usize, f64)> {
@@ -9703,6 +9750,7 @@ pub(crate) fn bake_startup_tweens<'a>(
     };
     for state in states {
         let mut clock = SongLuaQueueClock {
+            progress: None,
             epoch: 0,
             frame: 0,
             remaining: 0.0,
