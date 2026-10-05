@@ -1,0 +1,18 @@
+{
+  "oracle": "itgmania_song_lua_headless_semantic_trace",
+  "local_only": true,
+  "raw_sha256": "2eb205f42dfdba91e833f37f76ad83d9e2f76a3a10b192677f1078a39e05d0a9",
+  "raw_event_count": 26,
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "ff8f912b0f3d04a47f20818d5ebd4097d6d8b88d5534ee0a30e2c743750875ff",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f",
+    "deadsync/tests/fixtures/song-lua/screen-translation-bg.lua": "ec2c4e6f83a65fd78d3ff74bb10a1f9f2db31599ae62c4292889773cd9c0fe9d",
+    "deadsync/tests/fixtures/song-lua/screen-translation-fg.lua": "08f53032499bbf2742f4242b29f9f3912603e26f1a2c6c2335840752865dd071",
+    "deadsync/tests/fixtures/song-lua/screen-translation.sm": "89e8e1656625db9f4ddd4b6648b91bbd4f397b8b206d1e6d1f5c89afe13fb1b7"
+  },
+  "itgmania_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "coverage": "shared top-screen translation across background and foreground roots, two independent FOV cameras, flat geometry, chronological screen tween",
+  "recapture_reason": "Actor::ZoomTo writes zoom axes relative to intrinsic dimensions; fixed-size C++ actor cases use setsize explicitly"
+}

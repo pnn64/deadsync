@@ -1077,22 +1077,41 @@ pub(crate) fn compose_frame(
             },
         );
 
+    let judgment_sprite = show_song_visuals
+        .then(|| {
+            deadsync_song_lua::judgment_texture_at(
+                &state.song_lua_visuals().player_actors[player_idx].judgment,
+                state.current_music_time_display(),
+            )
+        })
+        .flatten()
+        .map(|texture| TapJudgmentSprite {
+            source: SpriteSource::TextureHandle {
+                key: texture.key.clone(),
+                handle: textures.texture_handle(&texture.key),
+                generation: textures.texture_registry_generation(),
+            },
+            frame_size: texture.frame_size,
+            frame_cols: texture.frame_cols,
+            frame_rows: texture.frame_rows,
+        })
+        .or_else(|| {
+            judgment_texture
+                .zip(judgment_assets.judgment_sprite_metadata())
+                .map(|(texture, sprite)| TapJudgmentSprite {
+                    source: texture.actor_texture_source(actor_resources, textures),
+                    frame_size: sprite.frame_size,
+                    frame_cols: sprite.frame_cols,
+                    frame_rows: sprite.frame_rows,
+                })
+        });
     let tap = if song_lua_judgment_visible
         && !blind_active
         && let Some(render) = p.last_judgment.as_ref()
         && TapJudgmentHudFrame::render_active(render, elapsed_screen)
-        && let Some(texture) = judgment_texture
-        && let Some(sprite) = judgment_assets.judgment_sprite_metadata()
+        && let Some(sprite) = judgment_sprite
     {
-        Some(TapJudgmentHudFrame {
-            render,
-            sprite: TapJudgmentSprite {
-                source: texture.actor_texture_source(actor_resources, textures),
-                frame_size: sprite.frame_size,
-                frame_cols: sprite.frame_cols,
-                frame_rows: sprite.frame_rows,
-            },
-        })
+        Some(TapJudgmentHudFrame { render, sprite })
     } else {
         None
     };

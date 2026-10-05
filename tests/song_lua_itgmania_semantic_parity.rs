@@ -212,6 +212,8 @@ struct NativeCommandTrack {
 struct NativeTweenSegment {
     enqueue_seq: u64,
     beat: f32,
+    #[serde(default)]
+    seconds: Option<f32>,
     duration: f32,
     #[serde(default)]
     implicit: bool,
@@ -1094,7 +1096,7 @@ fn recurring_ease_tables_match_native_shared_state() {
     )
     .expect("compile recurring ease tables");
     let mut parity = compare_semantics(&trace, &compiled, 0, &context);
-    assert_eq!(parity.checks(), 110);
+    assert_eq!(parity.checks(), 270);
     parity.section("shared ease state");
     for track in &trace.operation_tracks {
         let target = match track.operation.as_str() {
@@ -1119,7 +1121,7 @@ fn recurring_ease_tables_match_native_shared_state() {
             });
         }
     }
-    assert_eq!(parity.checks(), 182);
+    assert_eq!(parity.checks(), 342);
     parity.assert_complete("recurring ease table shared state");
 }
 
@@ -2137,6 +2139,41 @@ fn compare_update_render_values(
                     })
                     .map(|sample| sample.value.clone())
                     .or_else(|| {
+                        // A queued startup setter precedes the first tween advance.
+                        // Compare its captured argument, rather than the draw state
+                        // after that same frame has already consumed its delta.
+                        compiled
+                            .messages
+                            .iter()
+                            .filter(|event| {
+                                event.message == "__songlua_queued_startup"
+                                    && (event.beat - write.beat).abs() <= EPSILON
+                            })
+                            .find_map(|event| {
+                                compiled.overlays[overlay_index]
+                                    .message_commands
+                                    .iter()
+                                    .find(|command| command.message == event.message)?
+                                    .blocks
+                                    .iter()
+                                    .rev()
+                                    .find_map(|block| {
+                                        (block.duration == 0.0
+                                            && block.start <= 0.0
+                                            && block.delta.has_update_target(write.target))
+                                        .then(|| {
+                                            let state = overlay_state_after_blocks(
+                                                SongLuaOverlayState::default(),
+                                                [block],
+                                                0.0,
+                                            );
+                                            overlay_state_render_value(&state, write.target)
+                                        })
+                                        .flatten()
+                                    })
+                            })
+                    })
+                    .or_else(|| {
                         compiled_update_value_at(
                             context,
                             compiled,
@@ -2513,10 +2550,14 @@ fn option_f32_matches(expected: Option<f32>, actual: Option<f32>) -> bool {
         .is_none_or(|expected| actual.is_some_and(|actual| (actual - expected).abs() <= EPSILON))
 }
 
+fn block_easing_matches(block: &ExpectedBlock, duration: f32, easing: Option<&str>) -> bool {
+    (block.duration == 0.0 && duration == 0.0) || block.easing == easing
+}
+
 fn block_matches(expected: &ExpectedBlock, actual: &SongLuaOverlayCommandBlock) -> bool {
     (expected.start - actual.start).abs() <= EPSILON
         && (expected.duration - actual.duration).abs() <= EPSILON
-        && expected.easing == actual.easing.as_deref()
+        && block_easing_matches(expected, actual.duration, actual.easing.as_deref())
         && option_f32_matches(
             expected.alpha,
             actual.delta.diffuse.map(|diffuse| diffuse[3]),
@@ -2573,7 +2614,7 @@ fn stateful_write_has_value(
             && write.target == target
             && (write.delay_seconds - block.start).abs() <= EPSILON
             && (write.duration_seconds - block.duration).abs() <= EPSILON
-            && write.easing.as_deref() == block.easing
+            && block_easing_matches(block, write.duration_seconds, write.easing.as_deref())
             && render_value_matches(expected, &write.value)
     })
 }
@@ -2600,7 +2641,7 @@ fn stateful_block_matches(
                     && write.target == Target::Diffuse
                     && (write.delay_seconds - block.start).abs() <= EPSILON
                     && (write.duration_seconds - block.duration).abs() <= EPSILON
-                    && write.easing.as_deref() == block.easing
+                    && block_easing_matches(block, write.duration_seconds, write.easing.as_deref())
                     && matches!(&write.value, UpdateValue::Vec4(color) if (color[3] - alpha).abs() <= 0.03)
             })
     }) && block
@@ -4411,6 +4452,10 @@ fn compare_projected_geometry(
     context: &SongLuaCompileContext,
     parity: &mut Parity,
 ) {
+    let screen_layer = compiled
+        .iter()
+        .find_map(|layer| layer.screen_overlay_index.map(|index| (layer, index)));
+    let mut screen_offsets = HashMap::new();
     parity.section("projected geometry");
     let drawable_map = projected_drawable_map(trace, compiled);
     let mut colors = Parity::default();
@@ -4456,7 +4501,42 @@ fn compare_projected_geometry(
             let states = state_cache
                 .entry((layer, beat.to_bits(), seconds.to_bits()))
                 .or_insert_with(|| {
-                    compiled_overlay_states_at(&compiled[layer], context, beat, seconds)
+                    let mut states =
+                        compiled_overlay_states_at(&compiled[layer], context, beat, seconds);
+                    if let Some((screen_layer, index)) = screen_layer {
+                        let offset = screen_offsets
+                            .entry((beat.to_bits(), seconds.to_bits()))
+                            .or_insert_with(|| {
+                                let mut screen = compiled_command_state_at(
+                                    context,
+                                    screen_layer,
+                                    index,
+                                    beat,
+                                    seconds,
+                                );
+                                apply_runtime_updates(
+                                    context,
+                                    screen_layer,
+                                    index,
+                                    beat,
+                                    seconds,
+                                    &mut screen,
+                                );
+                                let screen =
+                                    deadsync_song_lua::playback::actor_conformance::transform_state(
+                                        screen,
+                                        [seconds, beat],
+                                    );
+                                [screen.x, screen.y]
+                            });
+                        // GameplayActorSegments::segments places every screen
+                        // fragment at this shared offset before its camera.
+                        for state in &mut states {
+                            state.x += offset[0];
+                            state.y += offset[1];
+                        }
+                    }
+                    states
                 });
             let Some(mut state) = states.get(overlay_index).copied() else {
                 continue;
@@ -4750,6 +4830,8 @@ fn compare_semantics(
     compare_layers(trace, compiled, &mut parity);
     compare_final_render_states(trace, compiled, context, &mut parity);
     compare_player_proxy_sources(trace, compiled, &mut parity);
+    compare_judgment_textures(trace, &compiled[primary_index], context, &mut parity);
+    compare_sprite_textures(trace, compiled, context, &mut parity);
     compare_update_render_persistence(context, trace, compiled, &mut parity);
     compare_update_render_values(trace, compiled, context, &mut parity);
     compare_player_operation_ranges(trace, compiled, &mut parity);
@@ -4760,6 +4842,147 @@ fn compare_semantics(
     compare_timeline(trace, &compiled[primary_index], &mut parity);
     compare_commands(trace, compiled, primary_index, &mut parity);
     parity
+}
+
+fn compare_sprite_textures(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
+    let actors = projected_drawable_map(trace, compiled);
+    let mut loads = HashMap::<&str, Vec<(u64, f32, &str)>>::new();
+    for track in &trace.tween_tracks {
+        for segment in &track.segments {
+            for operation in &segment.operations {
+                if operation.operation == "Sprite.Load"
+                    && let Some(path) = operation.args.first().and_then(Value::as_str)
+                {
+                    let second = segment
+                        .seconds
+                        .unwrap_or_else(|| song_elapsed_seconds_at(segment.beat, context));
+                    loads
+                        .entry(&track.actor)
+                        .or_default()
+                        .push((operation.seq, second, path));
+                }
+            }
+        }
+    }
+    for track in &trace.operation_tracks {
+        if track.operation == "Sprite.Load" && track.actor.starts_with("def-") {
+            for (seq, _, second, args) in &track.samples {
+                if let Some(path) = args.first().and_then(Value::as_str) {
+                    loads
+                        .entry(&track.actor)
+                        .or_default()
+                        .push((*seq, *second, path));
+                }
+            }
+        }
+    }
+    if loads.is_empty() {
+        return;
+    }
+    parity.section("sprite textures");
+    for (actor, mut expected) in loads {
+        expected.sort_by_key(|sample| sample.0);
+        let Some(&(layer, index)) = actors.get(actor) else {
+            parity.check(false, || {
+                format!("Sprite.Load has no matching DeadSync actor: {actor}")
+            });
+            continue;
+        };
+        let SongLuaOverlayKind::Sprite {
+            texture_path,
+            textures,
+            ..
+        } = &compiled[layer].overlays[index].kind
+        else {
+            parity.check(false, || {
+                format!("Sprite.Load actor {actor} does not render a sprite")
+            });
+            continue;
+        };
+        for (_, second, raw) in expected {
+            let path = raw.strip_prefix("song:/").map_or_else(
+                || {
+                    if Path::new(raw).is_absolute() {
+                        PathBuf::from(raw)
+                    } else {
+                        context.song_dir.join(raw)
+                    }
+                },
+                |relative| context.song_dir.join(relative),
+            );
+            let expected_path = fs::canonicalize(&path);
+            let active = deadsync_song_lua::sprite_texture_at(textures, second + 1e-5);
+            let actual = active.map_or(texture_path, |texture| &texture.path);
+            parity.check(expected_path.as_ref().is_ok_and(|path| fs::canonicalize(actual).is_ok_and(|actual| actual == *path)),
+                || format!("Sprite.Load binding differs for {actor} at {second:.6}s: ITGmania {path:?}, DeadSync {actual:?}"));
+        }
+    }
+}
+
+fn compare_judgment_textures(
+    trace: &NativeTrace,
+    compiled: &CompiledSongLua,
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
+    parity.section("judgment textures");
+    for player in 0..2 {
+        let path = format!(
+            "ScreenGameplay/PlayerP{}/Judgment/JudgmentWithOffsets",
+            player + 1
+        );
+        let Some(actor) = trace
+            .external_actors
+            .iter()
+            .find(|actor| actor.path == path)
+        else {
+            continue;
+        };
+        let child = &compiled.player_actors[player].judgment;
+        let mut expected = trace
+            .operation_tracks
+            .iter()
+            .filter(|track| track.actor == actor.id && track.operation == "Sprite.Load")
+            .flat_map(|track| &track.samples)
+            .collect::<Vec<_>>();
+        expected.sort_by_key(|sample| sample.0);
+        if expected.is_empty() && child.textures.is_empty() {
+            continue;
+        }
+        parity.check(child.textures.len() == expected.len(), || {
+            format!(
+                "PlayerP{} judgment sheet count: ITGmania {}, DeadSync {}",
+                player + 1,
+                expected.len(),
+                child.textures.len()
+            )
+        });
+        for (_, _, second, args) in expected {
+            let raw = args
+                .first()
+                .and_then(Value::as_str)
+                .expect("Sprite.Load path");
+            let expected_path = if let Some(relative) = raw.strip_prefix("song:/") {
+                context.song_dir.join(relative)
+            } else if Path::new(raw).is_absolute() {
+                PathBuf::from(raw)
+            } else {
+                context.song_dir.join(raw)
+            };
+            let expected_path = fs::canonicalize(&expected_path)
+                .expect("native judgment sheet exists in the local fixture");
+            let actual = deadsync_song_lua::judgment_texture_at(child, second + 1e-5);
+            parity.check(actual.is_some_and(|texture| {
+                fs::canonicalize(&texture.path).is_ok_and(|path| path == expected_path)
+                    && (texture.second - second).abs() < 1e-4
+            }), || format!("PlayerP{} judgment sheet at {second:.6}s: ITGmania {expected_path:?}, DeadSync {actual:?}", player + 1));
+        }
+    }
 }
 
 #[test]
@@ -5018,7 +5241,7 @@ fn recurring_stop_matches_native() {
     );
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("Recurring stop"));
-    assert_eq!(parity.checks(), 696);
+    assert_eq!(parity.checks(), 1632);
     parity.assert_complete("Recurring stop");
 }
 
@@ -5033,7 +5256,7 @@ fn simply_love_receptor_metrics_match_native() {
     let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("Receptor metrics"));
-    assert_eq!(parity.checks(), 20);
+    assert_eq!(parity.checks(), 36);
     parity.assert_complete("Receptor metrics");
 }
 
@@ -5174,7 +5397,7 @@ fn vibrate_restart_native() {
     );
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("vibration restart"));
-    assert_eq!(parity.checks(), 38);
+    assert_eq!(parity.checks(), 86);
     parity.assert_complete("vibration restart");
     let native: Value = serde_json::from_slice(
         &fs::read(
@@ -5515,7 +5738,7 @@ fn zoom_axis_fit_matches_native() {
 fn nested_global_probes_match_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for (name, checks) in [("global-probe", 359), ("global-probe-sibling", 351)] {
+    for (name, checks) in [("global-probe", 767), ("global-probe-sibling", 759)] {
         let trace = read_trace_file(&root.join(format!(
             "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
         )));
@@ -5540,7 +5763,7 @@ fn recurring_initial_delay_matches_native() {
         let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
         let parity = compare_semantics(&trace, &compiled, primary, &context);
         eprintln!("{}", parity.summary(name));
-        assert_eq!(parity.checks(), 105);
+        assert_eq!(parity.checks(), 257);
         parity.assert_complete(name);
     }
 }
@@ -5557,7 +5780,7 @@ fn recurring_follow_matches_native() {
         let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
         let parity = compare_semantics(&trace, &compiled, primary, &context);
         eprintln!("{}", parity.summary(name));
-        assert_eq!(parity.checks(), 854);
+        assert_eq!(parity.checks(), 2070);
         parity.assert_complete(name);
     }
 }
@@ -6532,11 +6755,76 @@ return Def.ActorFrame{
         if name == "BG" {
             assert_eq!(actor.initial_state.x, 7.0);
             assert_eq!([ready.x, ready.y], [450.0, 240.0]);
-            assert_eq!(ready.size, Some([2562.0, 1440.0]));
+            assert_eq!([ready.zoom_x, ready.zoom_y], [2562.0, 1440.0]);
         } else {
             assert_eq!(ready.diffuse[3], 0.0);
         }
     }
+}
+
+#[test]
+fn queued_tail_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (name, checks) in [("parent-rotation-cycle", 543), ("zero-message-size", 498)] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+        )));
+        let simfile = root.join(format!("tests/fixtures/song-lua/{name}.sm"));
+        let (compiled, primary, context) = compile_trace_song_at(&trace, &simfile);
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        assert_eq!(parity.checks(), checks);
+        parity.assert_complete(name);
+    }
+}
+
+#[test]
+fn sprite_load_cycle_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/sprite-load-cycle.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/sprite-load-cycle.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Sprite Load Cycle"));
+    assert_eq!(parity.checks(), 23);
+    parity.assert_complete("Sprite Load Cycle");
+}
+
+#[test]
+fn recurring_tail_keeps_boundary_frame() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/repeat-boundary.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/repeat-boundary.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Repeat Boundary"));
+    if !parity.gaps.is_empty() {
+        for track in &compiled[primary].overlay_updates {
+            if track.target == SongLuaOverlayUpdateTarget::RotationZ {
+                eprintln!(
+                    "boundary rotation samples: {:?}",
+                    track
+                        .samples
+                        .iter()
+                        .filter(|sample| (77.9..78.2).contains(&sample.time))
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+    assert_eq!(parity.checks(), 4915);
+    parity.assert_complete("Repeat Boundary");
 }
 
 #[test]
@@ -6587,12 +6875,12 @@ fn queued_visibility_matches_native_actor_updates() {
 
 #[test]
 fn pulse_native_draws() {
-    assert_eq!(native_effect_draws("pulse-body"), (2766, 160));
+    assert_eq!(native_effect_draws("pulse-body"), (7166, 160));
 }
 
 #[test]
 fn motion_native_draws() {
-    assert_eq!(native_effect_draws("motion-body"), (7202, 6292));
+    assert_eq!(native_effect_draws("motion-body"), (18674, 6292));
 }
 
 fn native_effect_draws(stem: &str) -> (usize, usize) {
@@ -6770,7 +7058,7 @@ fn pulse_driver_native_draws() {
     );
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("pulse driver"));
-    assert_eq!(parity.checks(), 458);
+    assert_eq!(parity.checks(), 1178);
     parity.assert_complete("pulse driver");
     let layer = &compiled[primary];
     assert!(
@@ -7411,6 +7699,77 @@ fn unnamed_message_child_matches_native() {
 }
 
 #[test]
+fn shared_screen_translation_matches_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/screen-translation.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/screen-translation.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("shared screen translation"));
+    assert_eq!(
+        parity.checks(),
+        212,
+        "retain both cameras and the flat actor"
+    );
+    parity.assert_complete("shared screen translation");
+}
+
+#[test]
+fn queued_child_cycles_match_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (name, checks) in [("queued-child-cycle", 686), ("queued-child-tween", 334)] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+        )));
+        let (compiled, primary, context) = compile_trace_song_at(
+            &trace,
+            &root.join(format!("tests/fixtures/song-lua/{name}.sm")),
+        );
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        assert_eq!(parity.checks(), checks, "retain every native child frame");
+        parity.assert_complete(name);
+    }
+}
+
+#[test]
+fn judgment_sheet_changes_match_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/judgment-sheet-changes.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/judgment-sheet-changes.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("judgment sheet changes"));
+    assert_eq!(
+        parity.checks(),
+        14,
+        "retain both players and unsampled loads"
+    );
+    parity.assert_complete("judgment sheet changes");
+    for player in &compiled[primary].player_actors {
+        for (second, expected) in [
+            (0.0, "Normal 2x6.png"),
+            (0.075, "Fake 2x6.png"),
+            (0.11, "Normal 2x6.png"),
+        ] {
+            let texture = deadsync_song_lua::judgment_texture_at(&player.judgment, second)
+                .expect("baked resource selection for gameplay rendering");
+            assert_eq!(texture.path.file_name().unwrap(), expected);
+            assert_eq!(texture.frame_size, [64.0, 64.0]);
+            assert_eq!((texture.frame_cols, texture.frame_rows), (2, 6));
+        }
+    }
+}
+
+#[test]
 fn mawaru8_local_messages_match_native() {
     crate::paths::init();
     let trace = read_trace_file(
@@ -7423,8 +7782,23 @@ fn mawaru8_local_messages_match_native() {
     eprintln!("{}", parity.summary("Mawaru8 local queued messages"));
     assert_eq!(
         parity.checks(),
-        332029,
+        331138,
         "retain the complete corrected local trace"
     );
     parity.assert_complete("Mawaru8 local queued messages");
+}
+
+#[test]
+fn mawaru7_whole_song_matches_native() {
+    crate::paths::init();
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/mawaru7-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Mawaru7 whole song"));
+    assert_eq!(parity.checks(), 874665, "retain every native observation");
+    parity.assert_complete("Mawaru7 whole song");
 }

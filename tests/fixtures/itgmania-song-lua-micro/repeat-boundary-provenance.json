@@ -1,0 +1,14 @@
+{
+  "local_only": true,
+  "raw_sha256": "7592da9692098a31c4feb03dd965e65ae3abddb66a59a23206d22cab17734105",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "itgmania_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "4bea5eae17d80608bf3d3408c8c1373da72e4bf2b405ad9a2cefee13b5fa514f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "4041d331fcb3632852384566707b254cf59b19fbc906360d89f683e41062d724",
+    "deadsync/tests/fixtures/song-lua/repeat-boundary.lua": "a86bdf51253019268f10029061f4c6b44add049cb0c78928fd3c0640e8ed7b2c",
+    "deadsync/tests/fixtures/song-lua/repeat-boundary.sm": "166183682fc2f70f669e23e7f945e996f79e15bc232d73c71441fb1ca0dbbc4f"
+  },
+  "coverage": "long-running child tween cycle with reentrant parent command preserves the first frame after its empty tail"
+}

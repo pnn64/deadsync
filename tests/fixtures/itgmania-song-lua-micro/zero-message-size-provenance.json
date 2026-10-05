@@ -1,0 +1,17 @@
+{
+  "oracle": "itgmania_song_lua_headless_semantic_trace",
+  "local_only": true,
+  "raw_sha256": "dbd9b98e054f1c487e969bc363dec87ec7caaddb7f422ac444f9dab01e6c8d5b",
+  "raw_event_count": 28,
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "itgmania_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "ff8f912b0f3d04a47f20818d5ebd4097d6d8b88d5534ee0a30e2c743750875ff",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f",
+    "deadsync/tests/fixtures/song-lua/zero-message-size.lua": "43a15d0938515066402e678f7939cc9aa95dbe5a3dee66f33afc85a667657104",
+    "deadsync/tests/fixtures/song-lua/zero-message-size.sm": "7a74f172e3a59502bf78d31ffe2a92aa828d4323ffa6f51c7e239a5878e77063",
+    "deadsync/tests/fixtures/song-lua/Normal 2x6.png": "51be0a4ed68b24462daaf307b5538a037c31ac54d74ad0aae461ece9a2bc44e0"
+  },
+  "coverage": "zero-duration and delayed Sprite ZoomTo message tweens preserve intrinsic sheet dimensions"
+}

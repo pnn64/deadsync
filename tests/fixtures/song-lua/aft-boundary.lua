@@ -1,7 +1,7 @@
 local function quad(name, x, y, w, h)
     return Def.Quad{
         Name = name,
-        InitCommand = function(self) self:xy(x, y):zoomto(w, h) end,
+        InitCommand = function(self) self:xy(x, y):setsize(w, h) end,
     }
 end
 return Def.ActorFrame{

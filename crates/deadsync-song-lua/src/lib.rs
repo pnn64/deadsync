@@ -1924,6 +1924,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         texture_path: PathBuf,
         texture_key: Arc<str>,
         states: Arc<[SongLuaSpriteState]>,
+        textures: Arc<[SongLuaSpriteTexture]>,
     },
     Sound {
         sound_path: PathBuf,
@@ -1966,6 +1967,29 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
 pub struct SongLuaSpriteState {
     pub frame: u32,
     pub delay: f32,
+}
+
+/// Immutable, song-owned bindings recorded during load-time Lua replay. The
+/// recorded event count bounds storage; playback selects in O(log n) without
+/// I/O, allocation, growth or eviction. All images are prewarmed at the gameplay
+/// transition. Bindings are shared read-only and freed with the song at the
+/// next transition; the semantic audit checks recorded loads against native Lua.
+#[derive(Debug, Clone)]
+pub struct SongLuaSpriteTexture {
+    pub second: f32,
+    pub path: PathBuf,
+    pub key: Arc<str>,
+    pub states: Arc<[SongLuaSpriteState]>,
+    pub animation_epoch: Option<f32>,
+    pub frame_sheet: Option<(u32, u32)>,
+}
+
+pub fn sprite_texture_at(
+    textures: &[SongLuaSpriteTexture],
+    second: f32,
+) -> Option<&SongLuaSpriteTexture> {
+    let end = textures.partition_point(|texture| texture.second <= second);
+    end.checked_sub(1).map(|index| &textures[index])
 }
 
 /// Select precompiled text without formatting or allocating on a song frame.
@@ -4340,19 +4364,21 @@ pub fn push_song_lua_video_paths<'a, NoteskinSlot, ModelVertex, TextAttribute>(
         let SongLuaOverlayKind::Sprite {
             texture_path,
             texture_key,
+            textures,
             ..
         } = &overlay.kind
         else {
             continue;
         };
-        if !is_song_lua_video_path(texture_path) {
-            continue;
-        }
         if !overlay.initial_state.decode_movie {
             continue;
         }
-        if seen.insert(texture_key.as_ref()) {
-            paths.push(texture_path.clone());
+        for (texture_path, texture_key) in std::iter::once((texture_path, texture_key))
+            .chain(textures.iter().map(|texture| (&texture.path, &texture.key)))
+        {
+            if is_song_lua_video_path(texture_path) && seen.insert(texture_key.as_ref()) {
+                paths.push(texture_path.clone());
+            }
         }
     }
 }
@@ -4714,6 +4740,28 @@ pub struct SongLuaOverlayRuntimeUpdateTrack {
 pub struct SongLuaCapturedChildActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+    /// Immutable sheet changes baked on the worker; all sheets are prewarmed.
+    pub textures: Vec<SongLuaJudgmentTexture>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaJudgmentTexture {
+    pub second: f32,
+    pub path: PathBuf,
+    pub key: Arc<str>,
+    pub frame_size: [f32; 2],
+    pub frame_cols: usize,
+    pub frame_rows: usize,
+}
+
+pub fn judgment_texture_at(
+    actor: &SongLuaCapturedChildActor,
+    second: f32,
+) -> Option<&SongLuaJudgmentTexture> {
+    let end = actor
+        .textures
+        .partition_point(|texture| texture.second <= second);
+    end.checked_sub(1).map(|index| &actor.textures[index])
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -5201,6 +5249,7 @@ mod tests {
                 texture_key: Arc::from(path.to_string_lossy().into_owned()),
                 texture_path: path,
                 states: Arc::from([]),
+                textures: Arc::from([]),
             },
             name: None,
             parent_index: None,
@@ -9496,6 +9545,103 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn player_judgment_has_replaceable_sprite_child() {
+        let lua = Lua::new();
+        let song_dir = test_dir("judgment-sprite-child");
+        let texture = song_dir.join("Judgment label 2x6.png");
+        image::RgbaImage::new(128, 384).save(&texture).unwrap();
+        for player_index in 0..2 {
+            let player = crate::lua_util::create_top_screen_player_actor(
+                &lua,
+                SongLuaPlayerContext::default(),
+                player_index,
+                "dance-single",
+                test_create_dummy_actor,
+            )
+            .unwrap();
+            player.set("__songlua_song_dir", song_dir.to_str()).unwrap();
+            lua.globals().set("player", player).unwrap();
+            lua.globals().set("texture", texture.to_str()).unwrap();
+            lua.load(
+                r#"
+local judgment = player:GetChild("Judgment")
+assert(judgment:GetChild("Judgment") == nil)
+assert(judgment:GetChild("") == nil)
+local sprite = judgment:GetChild("JudgmentWithOffsets")
+assert(sprite == judgment:GetChildren().JudgmentWithOffsets)
+assert(sprite:GetParent() == judgment)
+assert(sprite:GetName() == "JudgmentWithOffsets")
+assert(sprite.__songlua_actor_type == "Sprite")
+sprite:Load(texture)
+assert(sprite:GetWidth() == 64 and sprite:GetHeight() == 64)
+assert(sprite:GetNumStates() == 12)
+assert(sprite.Texture == texture)
+assert(judgment.Texture == nil)
+"#,
+            )
+            .exec()
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn compile_judgment_sheet_changes_reach_playback() {
+        let song_dir = test_dir("judgment-sheet-changes");
+        for name in ["Normal", "Fake"] {
+            image::RgbaImage::new(128, 384)
+                .save(song_dir.join(format!("{name} 2x6.png")))
+                .unwrap();
+        }
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local sprites = {}
+return Def.ActorFrame{
+    OnCommand=function(self)
+        for i, name in ipairs({"PlayerP1", "PlayerP2"}) do
+            local judgment = SCREENMAN:GetTopScreen():GetChild(name):GetChild("Judgment")
+            rec_print_children(judgment)
+            sprites[i] = judgment:GetChild("JudgmentWithOffsets")
+            sprites[i]:Load("Normal 2x6.png")
+        end
+        local phase = 0
+        self:SetUpdateFunction(function()
+            local seconds = GAMESTATE:GetCurMusicSeconds()
+            if phase == 0 and seconds >= 1 then
+                phase = 1
+                for _, sprite in ipairs(sprites) do sprite:Load("Fake 2x6.png") end
+            elseif phase == 1 and seconds >= 2 then
+                phase = 2
+                for _, sprite in ipairs(sprites) do sprite:Load("Normal 2x6.png") end
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Judgment Sheets");
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+        for player in &compiled.player_actors {
+            let child = &player.judgment;
+            assert_eq!(child.textures.len(), 3, "{:?}", child.textures);
+            for (index, texture) in child.textures.iter().enumerate() {
+                assert!((texture.second - index as f32).abs() < 1.0 / 59.0);
+                assert_eq!(texture.frame_size, [64.0, 64.0]);
+                assert_eq!((texture.frame_cols, texture.frame_rows), (2, 6));
+            }
+            for (second, expected) in [(0.0, "Normal"), (1.1, "Fake"), (2.1, "Normal")] {
+                let texture = crate::judgment_texture_at(child, second).unwrap();
+                assert_eq!(texture.path, song_dir.join(format!("{expected} 2x6.png")));
+            }
+            assert!(crate::judgment_texture_at(child, -0.01).is_none());
+        }
+    }
+
+    #[test]
     fn compile_song_lua_captures_player_hud_child_actions() {
         let song_dir = test_dir("player-hud-child-actions");
         let entry = song_dir.join("default.lua");
@@ -11260,7 +11406,9 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         assert_eq!(compiled.overlays[0].initial_state.x, 42.0);
         assert!(compiled.overlays[0].initial_state.visible);
-        assert_eq!(compiled.overlays[0].initial_state.size, Some([12.0, 18.0]));
+        assert_eq!(compiled.overlays[0].initial_state.size, None);
+        assert_eq!(compiled.overlays[0].initial_state.zoom_x, 12.0);
+        assert_eq!(compiled.overlays[0].initial_state.zoom_y, 18.0);
     }
 
     #[test]
@@ -12347,6 +12495,134 @@ return Def.ActorFrame{
         assert_eq!(block.start, 0.5);
         assert_eq!(block.duration, 0.1);
         assert_eq!(block.delta.zoom, Some(1.2));
+    }
+
+    #[test]
+    fn queued_message_probes_restore_commands() {
+        let song_dir = test_dir("queued-message-probe-state");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrame{
+        Name="Body",
+        OnCommand=function(self) self:bob():effectmagnitude(0,-10,0) end,
+        FallMessageCommand=function(self)
+            self:queuecommand("StopLayer"):stopeffect():accelerate(5):rotationz(80)
+        end,
+        Def.ActorFrame{
+            Name="Limb",
+            OnCommand=function(self) self:wag():effectmagnitude(0,0,-20) end,
+            StopLayerCommand=function(self)
+                self:queuecommand("StopArm"):stopeffect():rotationz(20):linear(3):rotationz(50)
+            end,
+            Def.Quad{StopArmCommand=function(self) self:stopeffect() end},
+        },
+        Def.Quad{
+            Name="Flash",
+            OnCommand=function(self) self:diffusealpha(0) end,
+            StopLayerCommand=function(self) self:queuecommand("Blink") end,
+            BlinkCommand=function(self) self:diffusealpha(1):sleep(0.3):diffusealpha(0) end,
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Queued Probe State"),
+        )
+        .unwrap();
+        assert!(
+            compiled.info.skipped_message_command_captures.is_empty(),
+            "{:?}",
+            compiled.info.skipped_message_command_captures
+        );
+        let limb = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Limb"))
+            .expect("limb");
+        let fall = limb
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Fall")
+            .expect("cross-actor fall command");
+        assert_eq!(
+            fall.blocks
+                .iter()
+                .filter(|block| block.delta.rot_z_deg == Some(50.0))
+                .count(),
+            1
+        );
+        let flash = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Flash"))
+            .expect("flash");
+        let fall = flash
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Fall")
+            .expect("cross-actor flash command");
+        assert_eq!(
+            fall.blocks
+                .iter()
+                .filter(|block| block.delta.diffuse.is_some())
+                .count(),
+            2
+        );
+        assert_eq!(fall.blocks.last().expect("flash tail").start, 0.3);
+    }
+
+    #[test]
+    fn zoomto_preserves_intrinsic_size() {
+        let song_dir = test_dir("zoomto-intrinsic-size");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.ActorFrame{
+        Name="Frame",
+        InitCommand=function(self) self:zoomto(1.25,0.75) end,
+        Def.Quad{
+            Name="Shape",
+            OnCommand=function(self)
+                self:setsize(20,10):zoomto(60,40):zoomx(6)
+                assert(self:GetWidth()==20 and self:GetHeight()==10)
+                assert(self:GetZoomedWidth()==120 and self:GetZoomedHeight()==40)
+                self:zoom(2)
+            end,
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "ZoomTo Intrinsic Size"),
+        )
+        .unwrap();
+        let frame = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Frame"))
+            .expect("frame");
+        assert_eq!(frame.initial_state.zoom_x, 1.25);
+        assert_eq!(frame.initial_state.zoom_y, 0.75);
+        let shape = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Shape"))
+            .expect("shape");
+        assert_eq!(shape.initial_state.size, Some([20.0, 10.0]));
+        assert_eq!(shape.initial_state.zoom, 2.0);
+        assert_eq!(shape.initial_state.zoom_x, 2.0);
+        assert_eq!(shape.initial_state.zoom_y, 2.0);
     }
 
     #[test]
@@ -16521,7 +16797,9 @@ return Def.ActorFrame{
 
         assert_eq!(overlay.initial_state.x, 123.0);
         assert_eq!(overlay.initial_state.y, 234.0);
-        assert_eq!(overlay.initial_state.size, Some([48.0, 64.0]));
+        assert_eq!(overlay.initial_state.size, None);
+        assert_eq!(overlay.initial_state.zoom_x, 48.0);
+        assert_eq!(overlay.initial_state.zoom_y, 64.0);
     }
 
     #[test]
@@ -22964,6 +23242,7 @@ end
                     texture_path: PathBuf::from("arrow.png"),
                     texture_key: Arc::from("arrow.png"),
                     states: Arc::from([]),
+                    textures: Arc::from([]),
                 },
                 SongLuaOverlayState::default(),
             ))

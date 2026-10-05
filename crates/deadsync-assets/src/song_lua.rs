@@ -176,6 +176,7 @@ fn multitap_arrow_visual_spec(
             texture_path: PathBuf::from(texture_key.as_ref()),
             texture_key,
             states: [].into(),
+            textures: [].into(),
         },
         state,
     ))

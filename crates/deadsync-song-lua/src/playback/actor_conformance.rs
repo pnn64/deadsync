@@ -293,8 +293,15 @@ impl WholeSongComposer {
         for overlay in overlays {
             match &overlay.kind {
                 SongLuaOverlayKind::Quad => queue_texture(&mut assets, &white_texture_key()),
-                SongLuaOverlayKind::Sprite { texture_key, .. } => {
+                SongLuaOverlayKind::Sprite {
+                    texture_key,
+                    textures,
+                    ..
+                } => {
                     queue_texture(&mut assets, texture_key);
+                    for texture in textures.iter() {
+                        queue_texture(&mut assets, &texture.key);
+                    }
                 }
                 SongLuaOverlayKind::ActorMultiVertex {
                     texture_key: Some(texture_key),

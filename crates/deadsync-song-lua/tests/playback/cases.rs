@@ -973,6 +973,7 @@ fn test_sprite_kind(key: &str) -> SongLuaOverlayKind {
         texture_path: std::path::PathBuf::from(key),
         texture_key: Arc::from(key),
         states: Arc::from([]),
+        textures: Arc::from([]),
     }
 }
 
@@ -982,6 +983,7 @@ fn test_sprite_path_kind(path: std::path::PathBuf) -> SongLuaOverlayKind {
         texture_path: path,
         texture_key,
         states: Arc::from([]),
+        textures: Arc::from([]),
     }
 }
 
@@ -1192,7 +1194,8 @@ fn song_lua_tween_playback_matches_native() {
                 }
                 if name == "spin-update" {
                     let rendered = song_lua_proxy_effect(state, time, time, 0);
-                    let size = rendered.size.expect("quad size");
+                    // Quad begins at 1x1; ZoomTo changes its zoom axes.
+                    let size = rendered.size.unwrap_or([1.0; 2]);
                     let matrix =
                         Matrix4::from_translation(Vector3::new(rendered.x, rendered.y, rendered.z))
                             * song_lua_overlay_local_transform(
@@ -1215,7 +1218,10 @@ fn song_lua_tween_playback_matches_native() {
                             let expected = sample[6][corner][axis].as_f64().unwrap() as f32;
                             assert!(
                                 (actual - expected).abs() < 0.002,
-                                "{actor_name} at {time}: {actual} vs {expected}"
+                                "{actor_name} at {time}: {actual} vs {expected}, rotation {} (rendered {}), baked {}",
+                                state.rot_z_deg,
+                                rendered.rot_z_deg,
+                                state.spin_baked,
                             );
                             checks += 1;
                         }
@@ -8282,6 +8288,7 @@ fn song_lua_sprite_setstate_restarts_custom_animation() {
                     delay: 9_999.0,
                 },
             ]),
+            textures: Arc::from([]),
         },
         name: None,
         parent_index: None,
@@ -8480,6 +8487,74 @@ fn song_lua_target_sheet_uses_filename_grid_for_physical_size() {
 }
 
 #[test]
+fn queued_sprite_load_changes_rendered_binding() {
+    crate::tests::init_paths();
+    let song_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Sprite Load Cycle");
+    context.music_length_seconds = 1.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua(&song_dir.join("sprite-load-cycle.lua"), &context)
+        .expect("local sprite load fixture compiles");
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Face"))
+        .expect("face actor");
+    let face = &compiled.overlays[index];
+    let mut assets = AssetManager::new();
+    for file in ["Normal 2x6.png", "Fake 2x6.png"] {
+        let path = song_dir.join(file);
+        assets.queue_texture_upload(
+            path.to_string_lossy().into_owned(),
+            image::open(path).expect("local sheet").into_rgba8(),
+        );
+    }
+    // Includes a backward seek: resource selection must depend on song time,
+    // without retaining the last rendered binding.
+    for (second, file, frame) in [
+        (0.0, "Normal 2x6.png", 5),
+        (0.3, "Fake 2x6.png", 1),
+        (0.7, "Normal 2x6.png", 2),
+        (0.3, "Fake 2x6.png", 1),
+    ] {
+        let mut state = face.initial_state;
+        for track in &compiled.overlay_updates {
+            if track.overlay_index == index
+                && let Some(sample) = track
+                    .samples
+                    .iter()
+                    .rev()
+                    .find(|sample| sample.time <= second)
+            {
+                apply_overlay_update(&mut state, track.target, &sample.value);
+            }
+        }
+        let actor = build_song_lua_overlay_actor(
+            face, state, None, &assets, 0, 640.0, 480.0, second, second, 0.0,
+        )
+        .expect_actor("face renders");
+        let Actor::Sprite {
+            source, uv_rect, ..
+        } = actor
+        else {
+            panic!("face sprite");
+        };
+        assert_eq!(
+            source.texture_key(),
+            Some(song_dir.join(file).to_string_lossy().as_ref())
+        );
+        let col = (frame % 2) as f32 / 2.0;
+        let row = (frame / 2) as f32 / 6.0;
+        assert_eq!(
+            uv_rect,
+            Some([col, row, col + 0.5, row + 1.0 / 6.0]),
+            "{file} at {second}s, state {state:?}"
+        );
+    }
+}
+
+#[test]
 fn song_lua_zero_zoom_sheet_does_not_fall_back_to_native_size() {
     let key = r"C:\songs\Botanic Panic\lua\ayaze\target 4x2.png".to_string();
     let mut asset_manager = AssetManager::new();
@@ -8575,6 +8650,7 @@ fn song_lua_custom_sprite_state_maps_to_declared_frame_at_runtime() {
                     delay: 0.1,
                 },
             ]),
+            textures: Arc::from([]),
         },
         name: None,
         parent_index: None,

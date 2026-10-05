@@ -1,0 +1,16 @@
+{
+  "oracle": "itgmania_song_lua_headless_semantic_trace",
+  "local_only": true,
+  "raw_sha256": "10dfced817f9559504ea82c234f1242d315477beca4fda98b27872639d0171b1",
+  "raw_event_count": 83,
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "itgmania_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "ff8f912b0f3d04a47f20818d5ebd4097d6d8b88d5534ee0a30e2c743750875ff",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f",
+    "deadsync/crates/deadsync-song-lua/tests/fixtures/recurring-delay.lua": "9dcc9a73950681e4fc170f1d515388e54bc0f9b5eb13de3d38ed772a3dafd218",
+    "deadsync/crates/deadsync-song-lua/tests/fixtures/recurring-delay.sm": "10589c74c538b752af38f70c4c568944801779cf10ff84d9588bba42c28a7dad"
+  },
+  "recapture_reason": "Actor::ZoomTo writes zoom axes relative to intrinsic dimensions; fixed-size C++ actor cases use setsize explicitly"
+}

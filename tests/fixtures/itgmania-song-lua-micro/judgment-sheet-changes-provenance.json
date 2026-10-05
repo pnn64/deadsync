@@ -1,0 +1,20 @@
+{
+  "oracle": "itgmania_song_lua_headless_semantic_trace",
+  "local_only": true,
+  "raw_sha256": "22fc518ece50f6666cc3d64d9673db7b6df49f33be236e7a36f081e93e29aac0",
+  "raw_bytes": 13727,
+  "raw_event_count": 9,
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "bde9e2926c70850788185a1f55caa27a978ec4f1e8e1d2c1a7ea121659b5502a",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f",
+    "itgmania-harness-rs/src/song_lua_headless.rs": "d812faeee5ec73dbcbbd9c89d482acf7940518b08fc7e59d1c97fda2f73462a4",
+    "deadsync/tests/fixtures/song-lua/judgment-sheet-changes.lua": "eb7156f81b3a65ab5b4004c5b131d3811abbf49ef07f895652f553f564522f2b",
+    "deadsync/tests/fixtures/song-lua/judgment-sheet-changes.sm": "89a12c471f9daabde03f59f1b294d99f6b4e1c6014ac25e0d11ddf796de0e833",
+    "deadsync/tests/fixtures/song-lua/Normal 2x6.png": "51be0a4ed68b24462daaf307b5538a037c31ac54d74ad0aae461ece9a2bc44e0",
+    "deadsync/tests/fixtures/song-lua/Fake 2x6.png": "b72f465876962d2b5af7a84f7d6f206f3752e31177145efc5123d7590a4dda78"
+  },
+  "itgm_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "coverage": "two theme judgment sprites, six Sprite.Load calls including four between sampled frames, 2x6 frame dimensions, music-time sheet selection"
+}

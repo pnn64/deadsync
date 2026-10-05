@@ -209,8 +209,12 @@ struct SongLuaOverlayUpdateCapture {
     active_broadcast_command: Option<mlua::LuaString>,
     active_broadcast_params: bool,
     queued_depth: usize,
+    #[cfg(feature = "test-support")]
+    update_command: bool,
     runtime_broadcasts: Vec<(f32, String, bool)>,
     runtime_sounds: Vec<SongLuaSoundEvent>,
+    judgment_textures: Vec<(usize, crate::SongLuaJudgmentTexture)>,
+    sprite_textures: Vec<(usize, crate::SongLuaSpriteTexture)>,
     message_advances: BTreeMap<(usize, String), f32>,
     #[cfg(feature = "test-support")]
     writes: BTreeMap<(usize, SongLuaOverlayUpdateTarget), Vec<crate::SongLuaOverlayUpdateSample>>,
@@ -307,8 +311,12 @@ impl SongLuaOverlayUpdateCapture {
             active_broadcast_command: None,
             active_broadcast_params: false,
             queued_depth: 0,
+            #[cfg(feature = "test-support")]
+            update_command: false,
             runtime_broadcasts: Vec::new(),
             runtime_sounds: Vec::new(),
+            judgment_textures: Vec::new(),
+            sprite_textures: Vec::new(),
             message_advances: BTreeMap::new(),
             #[cfg(feature = "test-support")]
             writes: BTreeMap::new(),
@@ -410,7 +418,7 @@ impl SongLuaOverlayUpdateCapture {
         value: &SongLuaOverlayUpdateValue,
         scheduled: bool,
     ) {
-        if self.active_broadcast.is_none() && self.queued_depth == 0 {
+        if self.active_broadcast.is_none() && (self.queued_depth == 0 || self.update_command) {
             let samples = self.writes.entry((index, target)).or_default();
             let sample = crate::SongLuaOverlayUpdateSample {
                 time: beat,
@@ -864,6 +872,95 @@ pub(crate) fn take_runtime_sounds(lua: &Lua) -> Vec<SongLuaSoundEvent> {
         .unwrap_or_default()
 }
 
+pub(crate) fn take_judgment_textures(lua: &Lua) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
+    lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .map(|mut capture| std::mem::take(&mut capture.judgment_textures))
+        .unwrap_or_default()
+}
+
+pub(crate) fn take_sprite_textures(lua: &Lua) -> Vec<(usize, crate::SongLuaSpriteTexture)> {
+    lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .map(|mut capture| std::mem::take(&mut capture.sprite_textures))
+        .unwrap_or_default()
+}
+
+fn capture_sprite_texture(lua: &Lua, actor: &Table, previous: Option<PathBuf>) -> mlua::Result<()> {
+    if !actor_type_is(actor, "Sprite")? {
+        return Ok(());
+    }
+    note_song_lua_side_effect(lua)?;
+    let Some(path) = actor_texture_path(actor)? else {
+        return Ok(());
+    };
+    if previous.as_ref() != Some(&path) {
+        // Sprite::SetTexture unloads a different texture, which resets its
+        // current state and seconds into that state before loading new frames.
+        capture_immediate_u32(lua, actor, "sprite_state_index", 0)?;
+        let seconds = lua
+            .globals()
+            .raw_get::<Option<Table>>(crate::SONG_LUA_RUNTIME_KEY)?
+            .map(|runtime| runtime.get::<f32>(crate::SONG_LUA_RUNTIME_SECONDS_KEY))
+            .transpose()?;
+        actor.set("__songlua_state_sprite_texture_epoch", seconds)?;
+    }
+    if lua.app_data_ref::<SongLuaOverlayUpdateCapture>().is_none() {
+        return Ok(());
+    }
+    if lua.app_data_ref::<SongLuaQueuedStartup>().is_some() {
+        // Startup discovery visits future queued bodies. Their actual loads
+        // are recorded by chronological replay, on the dispatching frame.
+        return capture_judgment_texture(lua, actor);
+    }
+    let texture = crate::SongLuaSpriteTexture {
+        second: compile_song_runtime_values(lua)?.1,
+        key: Arc::from(path.to_string_lossy().as_ref()),
+        path,
+        states: read_sprite_states(actor)
+            .map_err(mlua::Error::runtime)?
+            .into(),
+        animation_epoch: actor.get::<Option<f32>>("__songlua_state_sprite_texture_epoch")?,
+        frame_sheet: actor
+            .raw_get::<Option<Table>>("__songlua_state_sprite_frame_sheet")?
+            .map(|sheet| Ok::<_, mlua::Error>((sheet.raw_get(1)?, sheet.raw_get(2)?)))
+            .transpose()?,
+    };
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        capture
+            .sprite_textures
+            .push((actor.to_pointer() as usize, texture));
+    }
+    capture_judgment_texture(lua, actor)
+}
+
+fn capture_judgment_texture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(player) = actor.get::<Option<usize>>("__songlua_judgment_sprite_player")? else {
+        return Ok(());
+    };
+    if lua.app_data_ref::<SongLuaOverlayUpdateCapture>().is_none() {
+        return Ok(());
+    }
+    let Some(path) = actor_texture_path(actor)? else {
+        return Ok(());
+    };
+    let Some((width, height)) = actor_image_frame_size(actor)? else {
+        return Ok(());
+    };
+    let (cols, rows) = actor_sprite_sheet_dims(actor)?.unwrap_or((1, 1));
+    let second = compile_song_runtime_values(lua)?.1;
+    let texture = crate::SongLuaJudgmentTexture {
+        second,
+        key: Arc::from(path.to_string_lossy().as_ref()),
+        path,
+        frame_size: [width, height],
+        frame_cols: cols as usize,
+        frame_rows: rows as usize,
+    };
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        capture.judgment_textures.push((player, texture));
+    }
+    Ok(())
+}
+
 fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
     use SongLuaOverlayUpdateTarget as Target;
     Some(match key {
@@ -1036,13 +1133,38 @@ fn record_overlay_update_capture(
         .app_data_ref::<SongLuaQueuedCommand>()
         .map(|scope| queued_render_advance(lua, *scope, actor, false))
         .unwrap_or_else(|| actor_frame_advance(lua, actor));
-    let progress = (cursor > f32::EPSILON || duration > f32::EPSILON)
+    // Sleep appends an empty zero-time tail. A setter reached through a
+    // parent's command changes that tail, not the last earlier tween that
+    // happened to write this property.
+    let empty_tail = cursor <= f32::EPSILON
+        && duration <= f32::EPSILON
+        && lua
+            .app_data_ref::<SongLuaCompileFrames>()
+            .is_some_and(|frames| {
+                frames
+                    .clocks
+                    .get(&(actor.to_pointer() as usize))
+                    .is_some_and(|clock| clock.steps.back() == Some(&Some(0.0)))
+            });
+    let progress = (cursor > f32::EPSILON || duration > f32::EPSILON || empty_tail)
         .then(|| actor_tween_progress(lua, actor))
         .flatten();
+    let empty_tail = empty_tail
+        && progress.as_ref().is_some_and(|samples| {
+            lua.app_data_ref::<SongLuaCompileFrames>()
+                .is_some_and(|frames| {
+                    samples.first().is_some_and(|sample| {
+                        // The baked clock uses float timestamps. Comparing
+                        // it with an unrounded double marks this frame's
+                        // zero-time tail as future after the song gets long.
+                        sample[0] > frames.time(frames.frame) as f32
+                    })
+                })
+        });
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|mut capture| {
-            if cursor > f32::EPSILON || duration > f32::EPSILON {
+            if cursor > f32::EPSILON || duration > f32::EPSILON || empty_tail {
                 let recorded = capture
                     .record_scheduled(actor, beat, cursor, duration, easing, opt1, target, value);
                 if recorded {
@@ -3023,6 +3145,10 @@ fn run_guarded_actor_command(
         actor.set(&recurring_exact_key, 0.0_f64)?;
         (previous_cursor, previous_exact)
     };
+    #[cfg(feature = "test-support")]
+    let prior_update = lua
+        .app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .map(|mut capture| std::mem::replace(&mut capture.update_command, name == "UpdateCommand"));
     let result = call_actor_function(lua, actor, command, params).map_err(|err| {
         mlua::Error::external(format!(
             "{} failed for {}: {err}",
@@ -3030,6 +3156,12 @@ fn run_guarded_actor_command(
             actor_debug_label(actor)
         ))
     });
+    #[cfg(feature = "test-support")]
+    if let Some(prior) = prior_update {
+        lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+            .expect("command capture remains active during dispatch")
+            .update_command = prior;
+    }
     let result = result.and_then(|()| {
         if drain_queue {
             drain_actor_command_queue(lua, actor)?;
@@ -3071,6 +3203,7 @@ pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 }
 
 fn enqueue_actor_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
+    prepare_capture_scope_actor(lua, actor)?;
     // Commands and messages append a zero-duration state after the active tween.
     flush_actor_capture(actor)?;
     record_queue_step(lua, actor, None)?;
@@ -3676,6 +3809,9 @@ fn actor_immediate_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table
             .get::<Option<f32>>("__songlua_capture_duration")?
             .unwrap_or(0.0)
             == 0.0
+        && actor
+            .get::<Option<Table>>("__songlua_command_queue_steps")?
+            .is_none_or(|steps| steps.raw_len() == 0)
     {
         return actor_current_capture_block(lua, actor);
     }
@@ -3741,6 +3877,39 @@ fn capture_immediate_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlu
         block.set("__songlua_has_changes", true)?;
     }
     set_actor_capture_state(actor, key, value)
+}
+
+fn capture_immediate_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlua::Result<()> {
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        key,
+        SongLuaOverlayUpdateValue::U32(value),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    set_actor_capture_state(actor, key, value)
+}
+
+fn capture_immediate_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
+    let table = lua.create_table_from(
+        size.into_iter()
+            .enumerate()
+            .map(|(i, value)| (i + 1, value)),
+    )?;
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        "size",
+        SongLuaOverlayUpdateValue::Vec2(size),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set("size", table.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    set_actor_capture_state(actor, "size", table)
 }
 
 fn capture_immediate_vec3(
@@ -3906,7 +4075,8 @@ pub fn capture_block_set_bool(
     value: bool,
 ) -> mlua::Result<()> {
     if key == "visible"
-        && (lua.app_data_ref::<SongLuaQueuedStartup>().is_some()
+        && (lua.app_data_ref::<SongLuaStartupQueues>().is_some()
+            || lua.app_data_ref::<SongLuaQueuedStartup>().is_some()
             || lua.app_data_ref::<SongLuaQueuedCommand>().is_some()
             || lua.app_data_ref::<SongLuaCompileFrames>().is_some())
     {
@@ -4350,7 +4520,9 @@ pub fn actor_valign(actor: &Table) -> mlua::Result<f32> {
 }
 
 pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
-    capture_block_set_u32(lua, actor, "sprite_state_index", state_index)?;
+    // Sprite::SetState changes animation state immediately, outside Actor's
+    // tween queue. A same-command state selection must follow Load's reset.
+    capture_immediate_u32(lua, actor, "sprite_state_index", state_index)?;
     let block = actor_current_capture_block(lua, actor)?;
     block.set("custom_texture_rect", Value::Nil)?;
     block.set("__songlua_has_changes", true)?;
@@ -5733,6 +5905,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 let Some(name) = name.and_then(read_string) else {
                     return Ok(actor.clone());
                 };
+                prepare_capture_scope_actor(lua, &actor)?;
                 let active = actor_active_commands(lua, &actor)?;
                 let command = ActorCommandName::new(&name, "Command");
                 if active
@@ -5913,6 +6086,30 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
     Ok(())
 }
 
+fn load_actor_texture(
+    lua: &Lua,
+    actor: &Table,
+    value: Option<&Value>,
+    clear_on_nil: bool,
+) -> mlua::Result<()> {
+    prepare_capture_scope_actor(lua, actor)?;
+    let previous = actor_texture_path(actor)?;
+    set_actor_texture_from_value(actor, value, clear_on_nil)?;
+    // Sprite::Load replaces custom states; SetTexture preserves them.
+    actor.raw_set("__songlua_state_sprite_default_states", true)?;
+    if let Some((cols, rows)) = actor_sprite_sheet_dims(actor)? {
+        actor.raw_set(
+            "__songlua_state_sprite_frame_sheet",
+            lua.create_sequence_from([cols, rows])?,
+        )?;
+    }
+    if let Some((width, height)) = actor_image_frame_size(actor)? {
+        capture_immediate_size(lua, actor, [width, height])?;
+        capture_immediate_bool(lua, actor, "sprite_texture", true)?;
+    }
+    capture_sprite_texture(lua, actor, previous)
+}
+
 pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "SetTexture",
@@ -5920,6 +6117,18 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 prepare_capture_scope_actor(lua, &actor)?;
+                let previous = actor_texture_path(&actor)?;
+                if actor
+                    .raw_get::<Option<Table>>("__songlua_state_sprite_frame_sheet")?
+                    .is_none()
+                    && let Some((cols, rows)) = actor_sprite_sheet_dims(&actor)?
+                {
+                    // SetTexture preserves existing state's UV rectangles.
+                    actor.raw_set(
+                        "__songlua_state_sprite_frame_sheet",
+                        lua.create_sequence_from([cols, rows])?,
+                    )?;
+                }
                 set_actor_texture_from_value(&actor, method_arg(&args, 0), false)?;
                 let size = match method_arg(&args, 0) {
                     Some(Value::Table(texture)) => {
@@ -5942,13 +6151,14 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                     _ => actor_image_frame_size(&actor)?,
                 };
                 if let Some((width, height)) = size {
-                    capture_block_set_size(lua, &actor, [width, height])?;
+                    capture_immediate_size(lua, &actor, [width, height])?;
                 }
                 if actor_aft_capture_name(&actor)?.is_some()
                     || actor_texture_path(&actor)?.is_some()
                 {
                     capture_block_set_bool(lua, &actor, "sprite_texture", true)?;
                 }
+                capture_sprite_texture(lua, &actor, previous)?;
                 Ok(actor.clone())
             }
         })?,
@@ -5959,7 +6169,7 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
             lua.create_function({
                 let actor = actor.clone();
                 let method_name = name;
-                move |_, args: MultiValue| {
+                move |lua, args: MultiValue| {
                     if method_name == "Load" && actor_type_is(&actor, "RollingNumbers")? {
                         if let Some(metric) = method_arg(&args, 0).cloned().and_then(read_string) {
                             set_rolling_numbers_metric(&actor, &metric)?;
@@ -5976,7 +6186,7 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                         set_actor_sound_file_from_value(&actor, method_arg(&args, 0), true)?;
                         return Ok(actor.clone());
                     }
-                    set_actor_texture_from_value(&actor, method_arg(&args, 0), true)?;
+                    load_actor_texture(lua, &actor, method_arg(&args, 0), false)?;
                     Ok(actor.clone())
                 }
             })?,
@@ -5986,11 +6196,11 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "LoadFromCached",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 let path = method_arg(&args, 1)
                     .or_else(|| method_arg(&args, 0))
                     .filter(|value| !matches!(value, Value::Nil));
-                set_actor_texture_from_value(&actor, path, true)?;
+                load_actor_texture(lua, &actor, path, true)?;
                 Ok(actor.clone())
             }
         })?,
@@ -7270,7 +7480,13 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                 let Some(height) = args.get(2).cloned().and_then(read_f32) else {
                     return Ok(actor.clone());
                 };
-                capture_block_set_size(lua, &actor, [width, height])?;
+                if actor_type_is(&actor, "BitmapText")? {
+                    capture_block_set_size(lua, &actor, [width, height])?;
+                } else {
+                    let (base_width, base_height) = actor_base_size(&actor)?;
+                    capture_block_set_f32(lua, &actor, "zoom_x", width / base_width)?;
+                    capture_block_set_f32(lua, &actor, "zoom_y", height / base_height)?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -9449,10 +9665,13 @@ pub(crate) fn set_compile_frames(
     });
     for actor in song_lua_actor_registry(lua)?.sequence_values::<Table>() {
         let actor = actor?;
-        if !actor
+        let deferred = actor
             .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
-            .unwrap_or(false)
-        {
+            .unwrap_or(false);
+        let recurring = actor
+            .raw_get::<Option<String>>("__songlua_recurring_update_command")?
+            .is_some();
+        if !deferred && !recurring {
             continue;
         }
         let captured: Table = actor.get("__songlua_command_queue_steps")?;
@@ -9476,7 +9695,9 @@ pub(crate) fn set_compile_frames(
                     recurring_frame: None,
                 },
             );
-        drain_queue_clock(lua, &actor);
+        if deferred {
+            drain_queue_clock(lua, &actor);
+        }
         actor.set("__songlua_command_queue_deferred", Value::Nil)?;
     }
     Ok(())
@@ -9900,6 +10121,28 @@ fn collect_startup_states(
         flush_actor_capture(actor)?;
         actor.set("__songlua_capture_blocks", lua.create_table()?)?;
         actor.set("__songlua_capture_immediate_block", Value::Nil)?;
+        if actor_type_is(actor, "Sprite")? {
+            let binding = lua.create_table()?;
+            actor.for_each::<Value, Value>(|key, value| {
+                if let Value::String(name) = &key {
+                    let name = name.to_str()?;
+                    if matches!(
+                        name.as_ref(),
+                        "Texture"
+                            | "Frames"
+                            | "__songlua_state_sprite_default_states"
+                            | "__songlua_state_sprite_texture_epoch"
+                            | "__songlua_state_sprite_frame_sheet"
+                    ) || name.starts_with("Frame")
+                        || name.starts_with("Delay")
+                    {
+                        binding.raw_set(key, clone_lua_value(lua, value)?)?;
+                    }
+                }
+                Ok(())
+            })?;
+            actor.raw_set("__songlua_startup_sprite", binding)?;
+        }
     }
     if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
         for wrapper in wrappers.sequence_values::<Table>() {
@@ -10009,6 +10252,7 @@ enum SongLuaCompileUpdateJob {
         actor: Table,
         rate: f64,
         order: usize,
+        recurring: bool,
     },
     Recurring {
         actor: Table,
@@ -10053,15 +10297,16 @@ fn collect_compile_update_jobs(
         .0
         .insert(actor.to_pointer() as usize, *order);
     let rate = parent_rate * actor_update_rate(actor)?;
+    let recurring = actor
+        .get::<Option<String>>("__songlua_recurring_update_command")?
+        .is_some();
     jobs.push(SongLuaCompileUpdateJob::Advance {
         actor: actor.clone(),
         rate,
         order: *order,
+        recurring,
     });
-    if actor
-        .get::<Option<String>>("__songlua_recurring_update_command")?
-        .is_some()
-    {
+    if recurring {
         jobs.push(SongLuaCompileUpdateJob::Recurring {
             actor: actor.clone(),
             rate,
@@ -10153,6 +10398,7 @@ fn queue_spin_tween(
     };
     let tween = lua.create_table()?;
     tween.set("to", clone_lua_value(lua, Value::Table(source))?)?;
+    let duration = (duration as f32).max(0.0);
     tween.set("duration", duration)?;
     tween.set("left", duration)?;
     tween.set("easing", easing)?;
@@ -10327,7 +10573,7 @@ fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Resu
     let queue: Table = pose.get("queue")?;
     let tail: usize = pose.get("tail")?;
     let mut head: usize = pose.get("head")?;
-    let mut remaining = delta_seconds.max(0.0);
+    let mut remaining = (delta_seconds as f32).max(0.0);
     while head <= tail && remaining > 0.0 {
         let tween: Table = queue.raw_get(head)?;
         let source = if let Some(source) = tween.get::<Option<Table>>("from")? {
@@ -10340,21 +10586,21 @@ fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Resu
             };
             source
         };
-        let left: f64 = tween.get("left")?;
+        let left: f32 = tween.get("left")?;
         let consumed = left.min(remaining);
         let left = left - consumed;
         remaining -= consumed;
         tween.set("left", left)?;
         let dest: Table = tween.get("to")?;
-        if left <= 1.0e-7 {
+        if left == 0.0 {
             for index in 1..=3 {
                 rotation.raw_set(index, dest.raw_get::<f32>(index)?)?;
             }
             queue.raw_set(head, Value::Nil)?;
             head += 1;
         } else {
-            let duration: f64 = tween.get("duration")?;
-            let percent = (1.0 - left / duration) as f32;
+            let duration: f32 = tween.get("duration")?;
+            let percent = 1.0 - left / duration;
             let easing = tween.get::<Option<String>>("easing")?;
             let percent =
                 deadsync_gameplay::song_lua_ease_factor(easing.as_deref(), percent, None, None);
@@ -10484,7 +10730,12 @@ pub fn run_actor_compile_update_functions_with_delta(
                 frames.epoch += 1;
             }
             match job {
-                SongLuaCompileUpdateJob::Advance { actor, rate, .. } => {
+                SongLuaCompileUpdateJob::Advance {
+                    actor,
+                    rate,
+                    recurring,
+                    ..
+                } => {
                     advance_motion_clock(lua, actor, delta_seconds * rate)?;
                     advance_spin_pose(lua, actor, delta_seconds * rate)?;
                     advance_capture_position(lua, actor)?;
@@ -10506,6 +10757,24 @@ pub fn run_actor_compile_update_functions_with_delta(
                                 "update queue",
                                 &err,
                             )?;
+                        }
+                    }
+                    if !recurring {
+                        // A parent's queued command can start a child's cycle
+                        // after this frame's plan was built. The child still
+                        // consumes its delta when native ActorFrame reaches it.
+                        let started =
+                            lua.app_data_ref::<SongLuaCompileFrames>()
+                                .is_some_and(|frames| {
+                                    frames
+                                        .clocks
+                                        .get(&(actor.to_pointer() as usize))
+                                        .is_some_and(|clock| {
+                                            clock.recurring_frame == Some(frames.frame)
+                                        })
+                                });
+                        if !started {
+                            run_recurring_update(lua, actor, delta_seconds * rate, true)?;
                         }
                     }
                 }
@@ -10944,6 +11213,18 @@ pub fn create_named_child_actor(
                 .get::<Option<String>>("__songlua_style_name")?
                 .unwrap_or_else(|| current_song_lua_style_name(lua));
             create_note_field_actor(lua, player_index as usize, &style_name, create_dummy_actor)?
+        } else if name.eq_ignore_ascii_case("Judgment") {
+            // Player::Init names the theme's frame Judgment. Simply Love's
+            // replaceable texture belongs to its JudgmentWithOffsets Sprite.
+            let frame = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+            let sprite =
+                create_named_actor(lua, "Sprite", "JudgmentWithOffsets", create_dummy_actor)?;
+            sprite.set("__songlua_parent", frame.clone())?;
+            sprite.set("__songlua_sprite_animate", false)?;
+            sprite.set("__songlua_visible", false)?;
+            sprite.set("__songlua_judgment_sprite_player", player_index)?;
+            actor_children(lua, &frame)?.set("JudgmentWithOffsets", sprite)?;
+            frame
         } else if player_child_proxy_name(name).is_some() {
             create_named_actor(lua, "Actor", name, create_dummy_actor)?
         } else {
@@ -16188,7 +16469,11 @@ where
         {
             SongLuaOverlayKind::AftSprite { capture_name }
         } else {
-            let texture = actor
+            let binding = actor
+                .raw_get::<Option<Table>>("__songlua_startup_sprite")
+                .map_err(|err| err.to_string())?
+                .unwrap_or_else(|| actor.clone());
+            let texture = binding
                 .get::<Option<String>>("Texture")
                 .map_err(|err| err.to_string())?;
             if let Some(texture) = texture {
@@ -16204,7 +16489,8 @@ where
                     SongLuaOverlayKind::Sprite {
                         texture_path,
                         texture_key,
-                        states: read_sprite_states(actor)?.into(),
+                        states: read_sprite_states(&binding)?.into(),
+                        textures: [].into(),
                     }
                 }
             } else {
@@ -16318,6 +16604,32 @@ where
 
 pub(crate) fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
     let mut states = Vec::new();
+    if actor
+        .raw_get::<Option<bool>>("__songlua_state_sprite_default_states")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(false)
+    {
+        return Ok(states);
+    }
+    if let Some(frames) = actor
+        .raw_get::<Option<Table>>("Frames")
+        .map_err(|err| err.to_string())?
+    {
+        let mut frame = 0;
+        for entry in frames.sequence_values::<Table>() {
+            let entry = entry.map_err(|err| err.to_string())?;
+            frame = entry
+                .get::<Option<u32>>("Frame")
+                .map_err(|err| err.to_string())?
+                .unwrap_or(frame);
+            let delay = entry
+                .get::<Option<f32>>("Delay")
+                .map_err(|err| err.to_string())?
+                .unwrap_or(0.1);
+            states.push(crate::SongLuaSpriteState { frame, delay });
+        }
+        return Ok(states);
+    }
     let mut key = [0u8; 16];
     for index in 0i32.. {
         let len = write_sprite_frame_key(index, &mut key);

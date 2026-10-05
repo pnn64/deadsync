@@ -15,7 +15,7 @@ return Def.ActorFrame{
     Def.Quad{
         Name = "Circle",
         InitCommand = function(self)
-            self:zoomto(2646, 2595):xy(427, 240)
+            self:setsize(2646, 2595):xy(427, 240)
             self:rotationx(48.8098327414963):rotationy(30.03682014861311):rotationz(83.7)
             self:zoom(0.4377301259288319)
         end,
@@ -26,7 +26,7 @@ return Def.ActorFrame{
         Def.Quad{
             Name = "InheritedCircle",
             InitCommand = function(self)
-                self:zoomto(2646, 2595)
+                self:setsize(2646, 2595)
                 self:rotationx(48.8098327414963):rotationy(30.03682014861311):rotationz(83.7)
                 self:zoom(0.4377301259288319)
             end,
@@ -35,7 +35,7 @@ return Def.ActorFrame{
     Def.Quad{
         Name = "Spun",
         InitCommand = function(self)
-            self:zoomto(64, 32):xy(427, 240):z(224.245)
+            self:setsize(64, 32):xy(427, 240):z(224.245)
             self:rotationx(55):rotationy(30):rotationz(1.234567)
             self:spin():effectmagnitude(0, 0, 5.1)
         end,

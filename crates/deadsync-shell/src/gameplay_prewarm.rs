@@ -64,13 +64,17 @@ fn prewarm_noteskin_textures(
     });
 }
 
-pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
+pub fn prewarm_gameplay_assets<StateDelta>(
     assets: &mut AssetManager,
     backend: &mut Backend,
     noteskin_sets: [&[Option<Arc<Noteskin>>; MAX_PLAYERS]; 4],
     song: &SongData,
     background_changes: &[SongBackgroundChange],
-    song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
+    song_lua_visuals: &SongLuaRuntimeVisuals<
+        SongLuaOverlayActor,
+        deadsync_song_lua::SongLuaCapturedActor,
+        StateDelta,
+    >,
 ) {
     let mut seen = FastHashSet::<String>::with_capacity(256);
     let mut seen_model_textures = FastHashSet::<String>::with_capacity(64);
@@ -126,28 +130,36 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                     texture_key: Some(texture_key),
                     ..
                 } => {
-                    let key = texture_key.as_ref();
-                    let first_seen = insert_texture_key(&mut seen, key);
-                    let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
-                    if sampler != SamplerDesc::default() {
-                        match media_cache::load_banner_source_rgba(texture_path) {
-                            Ok(rgba) => {
-                                if let Err(error) = assets.update_texture_for_key_with_sampler(
-                                    backend, key, &rgba, sampler,
-                                ) {
+                    let changes = match &overlay.kind {
+                        SongLuaOverlayKind::Sprite { textures, .. } => textures.as_ref(),
+                        _ => &[],
+                    };
+                    for (texture_path, texture_key) in std::iter::once((texture_path, texture_key))
+                        .chain(changes.iter().map(|texture| (&texture.path, &texture.key)))
+                    {
+                        let key = texture_key.as_ref();
+                        let first_seen = insert_texture_key(&mut seen, key);
+                        let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
+                        if sampler != SamplerDesc::default() {
+                            match media_cache::load_banner_source_rgba(texture_path) {
+                                Ok(rgba) => {
+                                    if let Err(error) = assets.update_texture_for_key_with_sampler(
+                                        backend, key, &rgba, sampler,
+                                    ) {
+                                        warn!(
+                                            "Failed to create custom-sampled GPU texture for image {texture_path:?}: {error}. Skipping."
+                                        );
+                                    }
+                                }
+                                Err(error) => {
                                     warn!(
-                                        "Failed to create custom-sampled GPU texture for image {texture_path:?}: {error}. Skipping."
+                                        "Failed to load song lua texture source {texture_path:?}: {error}. Skipping."
                                     );
                                 }
                             }
-                            Err(error) => {
-                                warn!(
-                                    "Failed to load song lua texture source {texture_path:?}: {error}. Skipping."
-                                );
-                            }
+                        } else if first_seen {
+                            media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
-                    } else if first_seen {
-                        media_cache::ensure_banner_texture(assets, backend, texture_path);
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
@@ -200,6 +212,13 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
     }
     for layer in &song_lua_visuals.foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
+    }
+    for player in &song_lua_visuals.player_actors {
+        for texture in &player.judgment.textures {
+            if insert_texture_key(&mut seen, &texture.key) {
+                media_cache::ensure_banner_texture(assets, backend, &texture.path);
+            }
+        }
     }
 }
 

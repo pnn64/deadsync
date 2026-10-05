@@ -1,0 +1,16 @@
+{
+  "local_only": true,
+  "raw_sha256": "ba452357eff1299c805cdf2f8635e2322efc76b0c23828527aee2b7723701b6c",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "itgmania_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "4bea5eae17d80608bf3d3408c8c1373da72e4bf2b405ad9a2cefee13b5fa514f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "4041d331fcb3632852384566707b254cf59b19fbc906360d89f683e41062d724",
+    "deadsync/tests/fixtures/song-lua/sprite-load-cycle.lua": "91549cabeab0196c72dbc1e920c32bac44006adcb3e947f1d95d6099c0e1ed59",
+    "deadsync/tests/fixtures/song-lua/sprite-load-cycle.sm": "af232bf5ce2e3ad8ba8dccddedfd7de9aabfb2f3a61cc357eed8e8ee89e3b8e2",
+    "deadsync/tests/fixtures/song-lua/Normal 2x6.png": "51be0a4ed68b24462daaf307b5538a037c31ac54d74ad0aae461ece9a2bc44e0",
+    "deadsync/tests/fixtures/song-lua/Fake 2x6.png": "b72f465876962d2b5af7a84f7d6f206f3752e31177145efc5123d7590a4dda78"
+  },
+  "coverage": "queued cross-actor Sprite.Load swaps resource bindings and resets custom frame mapping"
+}

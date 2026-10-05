@@ -8887,16 +8887,29 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
         SongLuaOverlayKind::Sprite {
             texture_key,
             states,
+            textures: bindings,
             ..
         } => {
+            let active = crate::sprite_texture_at(bindings, effect_time);
+            let texture_key = active.map_or(texture_key, |texture| &texture.key);
+            let states = active.map_or(states.as_ref(), |texture| texture.states.as_ref());
             let textures = asset_manager.texture_context();
             let binding = match projected_mesh_scratch.as_deref_mut() {
                 Some(scratch) => scratch.bind_sprite(texture_key, textures),
                 None => textures.bind_texture(texture_key),
             }?;
-            let animation_elapsed = state
-                .sprite_animation_epoch
-                .map_or(total_elapsed, |epoch| (effect_time - epoch).max(0.0));
+            let frame_sheet = active
+                .and_then(|texture| texture.frame_sheet)
+                .unwrap_or(binding.sheet);
+            let epoch = match (
+                state.sprite_animation_epoch,
+                active.and_then(|texture| texture.animation_epoch),
+            ) {
+                (Some(state), Some(texture)) => Some(state.max(texture)),
+                (state, texture) => state.or(texture),
+            };
+            let animation_elapsed =
+                epoch.map_or(total_elapsed, |epoch| (effect_time - epoch).max(0.0));
             let source_size = song_lua_overlay_sprite_size(state, binding)?;
             if camera_state.is_none()
                 && state.stretch_rect.is_none()
@@ -8950,7 +8963,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     size,
                     song_lua_overlay_uvs(
                         state,
-                        Some(binding.sheet),
+                        Some(frame_sheet),
                         states,
                         flip_x,
                         flip_y,
@@ -9012,7 +9025,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     rot_deg,
                     song_lua_overlay_uvs(
                         state,
-                        Some(binding.sheet),
+                        Some(frame_sheet),
                         states,
                         flip_x,
                         flip_y,
@@ -9124,7 +9137,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
                 *uv_rect =
-                    song_lua_overlay_uv_rect(state, Some(binding.sheet), states, animation_elapsed);
+                    song_lua_overlay_uv_rect(state, Some(frame_sheet), states, animation_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;

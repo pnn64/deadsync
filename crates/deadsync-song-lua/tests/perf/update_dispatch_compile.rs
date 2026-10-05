@@ -125,6 +125,8 @@ impl Fixture {
                 &[],
                 &mut Vec::new(),
                 &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
             )
         }
         .unwrap()

@@ -1,0 +1,17 @@
+{
+  "oracle": "itgmania_song_lua_headless_semantic_trace",
+  "local_only": true,
+  "raw_sha256": "740a36a765ae8e361b568a1f27f51d766bda98c3a029840312cb2cb96491f060",
+  "raw_event_count": 259,
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources": {
+    "itgmania-harness-rs/semantic_host.lua": "ff8f912b0f3d04a47f20818d5ebd4097d6d8b88d5534ee0a30e2c743750875ff",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f",
+    "deadsync/tests/fixtures/song-lua/queued-child-cycle.lua": "61890a33530d88624dfe9eff29a8bfd458ed64a2e68451f6b817148e445d5399",
+    "deadsync/tests/fixtures/song-lua/queued-child-cycle.sm": "b2083fd703d4cfdc873ad9d4aef34dccb78d23af44fe8e07e689ef29adf9798c"
+  },
+  "itgmania_tree_head": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "coverage": "parent queued Update starts child repeating command after the frame plan was built; current position copies and repeated tween reset consume the child frame delta",
+  "recapture_reason": "Actor::ZoomTo writes zoom axes relative to intrinsic dimensions; fixed-size C++ actor cases use setsize explicitly"
+}

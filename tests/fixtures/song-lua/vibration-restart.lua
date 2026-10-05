@@ -17,6 +17,6 @@ return Def.ActorFrame {
     end,
     Def.Quad {
         Name = "Witness",
-        OnCommand = function(self) self:xy(320, 240):zoomto(64, 32) end,
+        OnCommand = function(self) self:xy(320, 240):setsize(64, 32) end,
     },
 }

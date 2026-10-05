@@ -448,6 +448,8 @@ impl CompileFixture {
                 &self.messages,
                 &mut Vec::new(),
                 &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
             )
         }
         .unwrap();
@@ -479,6 +481,8 @@ impl CompileFixture {
                     &mut self.overlays,
                     &mut [],
                     &self.messages,
+                    &mut Vec::new(),
+                    &mut Vec::new(),
                     &mut Vec::new(),
                     &mut Vec::new(),
                 )

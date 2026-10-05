@@ -413,6 +413,32 @@ pub fn install_stdlib_compat(
         })?,
     )?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
+    // _fallback/Scripts/02 Utilities.lua: preserve actor and shared-name walks.
+    lua.load(
+        r#"
+function rec_print_children(parent, indent)
+    indent = indent or ""
+    if #parent > 0 and type(parent) == "table" then
+        for i, child in ipairs(parent) do rec_print_children(child, indent .. i .. "->") end
+    elseif parent.GetChildren then
+        local name = (parent.GetName and parent:GetName()) or ""
+        Trace(indent .. name .. " children:")
+        for key, child in pairs(parent:GetChildren()) do
+            if #child > 0 then
+                Trace(indent .. name .. "->" .. key .. " shared name:")
+                rec_print_children(child, indent .. name .. "->")
+                Trace(indent .. name .. "->" .. key .. " shared name over.")
+            else rec_print_children(child, indent .. name .. "->") end
+        end
+        Trace(indent .. name .. " children over.")
+    else
+        local name = (parent.GetName and parent:GetName()) or ""
+        Trace(indent .. name .. "(" .. tostring(parent) .. ")")
+    end
+end
+"#,
+    )
+    .exec()?;
     globals.set("debug", create_debug_table(lua)?)?;
     globals.set("lua", create_lua_compat_table(lua, song_dir)?)?;
     globals.set(

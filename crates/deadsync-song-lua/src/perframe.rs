@@ -113,7 +113,12 @@ pub(crate) fn apply_startup_tweens<Kind>(
             continue;
         };
         if !startup.blocks.iter().any(|block| {
-            block.duration > 0.0 && block.delta != crate::SongLuaOverlayStateDelta::default()
+            (block.duration > 0.0
+                || block
+                    .progress
+                    .as_ref()
+                    .is_some_and(|samples| samples.first().is_some_and(|sample| sample[0] > 0.0)))
+                && block.delta != crate::SongLuaOverlayStateDelta::default()
         }) {
             continue;
         }
@@ -1885,7 +1890,12 @@ fn retarget_actor_tween(
             |sample| {
                 lerp_scheduled_value(
                     &sample.from,
-                    if sample.frame_advance > 0.0 {
+                    // A setter changes the back tween. Earlier active tweens
+                    // retain their own destinations on this frame.
+                    if sample.frame_advance > 0.0
+                        && sample.start_seconds == start
+                        && sample.end_seconds == end
+                    {
                         value
                     } else {
                         &sample.value
@@ -1933,10 +1943,10 @@ fn retarget_actor_tween(
         value: value.clone(),
     };
     scheduled.push(replacement);
-    if scheduled
-        .last()
-        .is_some_and(|sample| sample.frame_advance > 0.0)
-    {
+    if scheduled.last().is_some_and(|sample| {
+        sample.frame_advance > 0.0
+            && sample.start_seconds <= scheduled_overlay_clock(sample, seconds)
+    }) {
         let sample = scheduled.last().expect("replacement appended");
         return Some(lerp_scheduled_value(
             &sample.from,
@@ -2590,7 +2600,10 @@ fn merge_completed_scheduled_overlay_samples_into(
     // The common case where none have completed does not allocate or move them.
     // Beats do not advance during a pause. Actor delays and tweens still do.
     completed.extend(scheduled.extract_if(.., |sample| {
-        sample.end_seconds <= seconds
+        // Progress samples use a float song clock. Complete on that same
+        // clock; a double comparison can leave a rounded-up empty tail alive
+        // for one more frame and overwrite the next recurring tween.
+        sample.end_seconds <= scheduled_overlay_clock(sample, seconds)
             && sample
                 .dispatch_seconds
                 .is_none_or(|dispatch| dispatch <= seconds + 1.0e-7)
@@ -2971,6 +2984,8 @@ pub fn compile_update_functions<Kind>(
     tracked_actors: &mut [SongLuaTrackedActor],
     messages: &[SongLuaMessageEvent],
     sound_events: &mut Vec<crate::SongLuaSoundEvent>,
+    judgment_textures: &mut Vec<(usize, crate::SongLuaJudgmentTexture)>,
+    sprite_textures: &mut Vec<(usize, crate::SongLuaSpriteTexture)>,
     column_splines: &mut Vec<deadsync_gameplay::SongLuaColumnSplineTrack>,
 ) -> Result<
     (
@@ -3023,6 +3038,30 @@ pub fn compile_update_functions<Kind>(
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
     reset_tracked_capture_tables(lua, tracked_actors)?;
     for overlay in overlays.iter() {
+        if let Some(binding) = overlay
+            .table
+            .raw_get::<Option<Table>>("__songlua_startup_sprite")
+            .map_err(|err| err.to_string())?
+        {
+            for key in [
+                "Texture",
+                "Frames",
+                "__songlua_state_sprite_default_states",
+                "__songlua_state_sprite_texture_epoch",
+                "__songlua_state_sprite_frame_sheet",
+            ] {
+                overlay
+                    .table
+                    .raw_set(
+                        key,
+                        binding
+                            .raw_get::<Value>(key)
+                            .map_err(|err| err.to_string())?,
+                    )
+                    .map_err(|err| err.to_string())?;
+            }
+            set_actor_overlay_getter_state(lua, &overlay.table, overlay.actor.initial_state)?;
+        }
         if overlay
             .table
             .raw_get::<Option<Table>>("__songlua_state_motion_clock")
@@ -3580,6 +3619,8 @@ pub fn compile_update_functions<Kind>(
     runtime_broadcasts.extend(layer_broadcasts);
     spline_capture.finish(column_splines);
     sound_events.extend(crate::lua_util::take_runtime_sounds(lua));
+    judgment_textures.extend(crate::lua_util::take_judgment_textures(lua));
+    sprite_textures.extend(crate::lua_util::take_sprite_textures(lua));
     crate::lua_util::apply_message_advances(lua, overlays);
     lua.remove_app_data::<crate::lua_util::SongLuaCompileFrames>();
     crate::lua_util::end_overlay_update_capture(lua);

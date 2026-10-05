@@ -306,6 +306,8 @@ where
     compile_timer.push_stage("draw_functions");
     let mut startup_broadcasts = crate::lua_util::runtime_broadcast_captures(&lua);
     let mut startup_sounds = crate::lua_util::take_runtime_sounds(&lua);
+    let mut judgment_textures = crate::lua_util::take_judgment_textures(&lua);
+    let mut sprite_textures = crate::lua_util::take_sprite_textures(&lua);
     crate::lua_util::end_overlay_update_capture(&lua);
     // Actor::UpdateTweening needs positive delta. Match the first-frame clock
     // used when restoring the state before queued startup commands.
@@ -646,6 +648,8 @@ where
                 &mut tracked_actors,
                 &out.messages,
                 &mut sound_events,
+                &mut judgment_textures,
+                &mut sprite_textures,
                 &mut out.column_splines,
             )?
         }
@@ -714,6 +718,18 @@ where
         }
     }
     resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
+    for overlay in &mut overlays {
+        if let SongLuaOverlayKind::Sprite { textures, .. } = &mut overlay.actor.kind {
+            let pointer = overlay.table.to_pointer() as usize;
+            let mut bindings = sprite_textures
+                .iter()
+                .filter(|(actor, _)| *actor == pointer)
+                .map(|(_, texture)| texture.clone())
+                .collect::<Vec<_>>();
+            bindings.sort_by(|a, b| a.second.total_cmp(&b.second));
+            *textures = bindings.into();
+        }
+    }
     let startup_seconds = 1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS;
     let startup_time = context.song_timing.as_ref().map_or_else(
         || crate::song_beat_at_elapsed_seconds(startup_seconds, context),
@@ -893,12 +909,23 @@ where
                 out.player_actors[player].judgment = SongLuaCapturedChildActor {
                     initial_state: tracked.actor.initial_state,
                     message_commands: tracked.actor.message_commands,
+                    textures: {
+                        let mut textures = judgment_textures
+                            .iter()
+                            .filter(|(index, _)| *index == player)
+                            .map(|(_, texture)| texture.clone())
+                            .collect::<Vec<_>>();
+                        textures.sort_by(|a, b| a.second.total_cmp(&b.second));
+                        textures.dedup_by(|a, b| a.path == b.path);
+                        textures
+                    },
                 };
             }
             TrackedCompileActorTarget::PlayerCombo(player) => {
                 out.player_actors[player].combo = SongLuaCapturedChildActor {
                     initial_state: tracked.actor.initial_state,
                     message_commands: tracked.actor.message_commands,
+                    ..SongLuaCapturedChildActor::default()
                 };
             }
             TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
@@ -993,6 +1020,7 @@ fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
                     texture_key: std::sync::Arc::from(texture_path.to_string_lossy().into_owned()),
                     texture_path,
                     states: crate::lua_util::read_sprite_states(&overlay.table)?.into(),
+                    textures: [].into(),
                 };
             }
         }

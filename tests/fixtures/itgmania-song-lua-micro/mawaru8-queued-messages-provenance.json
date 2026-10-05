@@ -20,10 +20,10 @@
   "sources_sha256": {
     "itgmania-harness-rs/build.rs": "ef9723fe365af9cef3e7504a112ef560dbfd6ba965cc65307d39b9e5473afa02",
     "itgmania-harness-rs/native/actor_oracle.cpp": "94b31d42b5efa7e5f8148a5816ce3a5e3e48cc6b6d7f586bdc50aa19cddf7cc1",
-    "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "4041d331fcb3632852384566707b254cf59b19fbc906360d89f683e41062d724",
     "itgmania-harness-rs/native/runtime_stubs.cpp": "fbda8e8d4dd63bc454dea5b948d9b509ff4e4d085104f931e77b925258a63cb5",
-    "itgmania-harness-rs/semantic_host.lua": "85b230866efaab17440cd536277d332902b54e1e70388331fd939a90ad68ec7b",
-    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "dcd0709370e6efd1afa2f0441a11aa7447dac1ec13cf2c72a3ce4f3ddf06522f",
+    "itgmania-harness-rs/semantic_host.lua": "4bea5eae17d80608bf3d3408c8c1373da72e4bf2b405ad9a2cefee13b5fa514f",
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "60261df74f5840c44bd74ffad5aad200d3f7f218abab9e83ba8edd7d9a8276a8",
     "lua-songs/mawaru8/bgp/default.lua": "53ab3e15245416ceeb3c485d1180da67c2aa36fcdd31da31fc682f17f64b6591",
     "lua-songs/mawaru8/lua/breath/default.lua": "765f340f71c467b28efa33ebcbddda1fe35ccb0a5b4d5ba81987c1792e6abbce",
     "lua-songs/mawaru8/lua/coop/default.lua": "24662315b0c76919c743111f62c081544a17c08a1857c43cf2483ba5476fa334",
@@ -47,30 +47,38 @@
   },
   "capture": {
     "file": "mawaru8-queued-messages.json.zst",
-    "raw_sha256": "62e40e62b1040bf85c409bbf1a787c491f97477bff298b825b4cbc0af93e79df",
-    "compressed_sha256": "98c2042e91ae9db7510cf4d8158af516b1173513fcd75cad2df2001b48bb30ec",
-    "raw_bytes": 35856538,
-    "compressed_bytes": 2156320
+    "raw_sha256": "13a4ce57cfe1b7af40d343baecb939e8aa3f38dceff97f9dcddfc339afff5198",
+    "compressed_sha256": "9a24b3eadcade8c777d817d43425436ab8b024b94ab69a020874e726ce9884d2",
+    "raw_bytes": 35835309,
+    "compressed_bytes": 2159420
   },
-  "update_rule": "New local full-song capture after independently verifying queued broadcasts against linked Actor.cpp and MessageManager.cpp, and unnamed lookup against linked ActorFrame::GetChild. Correct the Lua reference host queue dispatch and empty-name index. Preserve earlier captures and frozen chart hashes.",
+  "update_rule": "Local full-song recapture after independently verifying Actor::ZoomTo against linked C++ actors. Streaming serialization preserves all observations. The previous queue-fix result is retained as history; frozen chart hashes are unchanged.",
   "limits": "Full no-input headless song trace, not interactive input or audible sound validation. Direct C++ micro-fixtures independently verify the changed message and lookup behavior.",
-  "semantic_checks": 332029,
-  "before_fix": {
-    "main_version": "0.5.1750",
-    "passed": 328358,
-    "checks": 332010,
-    "failed": 3652,
-    "detailed_gaps": 376
+  "semantic_checks": 331138,
+  "previous_queue_fix": {
+    "before_fix": {
+      "main_version": "0.5.1750",
+      "passed": 328358,
+      "checks": 332010,
+      "failed": 3652,
+      "detailed_gaps": 376
+    },
+    "after_fix": {
+      "passed": 332029,
+      "checks": 332029,
+      "failed": 0,
+      "skipped_message_commands": 0
+    },
+    "publication": {
+      "main_version": "0.5.1751",
+      "regression_tests_per_repository": 1091,
+      "harness_tests": 139
+    }
   },
   "after_fix": {
-    "passed": 332029,
-    "checks": 332029,
+    "passed": 331138,
+    "checks": 331138,
     "failed": 0,
     "skipped_message_commands": 0
-  },
-  "publication": {
-    "main_version": "0.5.1751",
-    "regression_tests_per_repository": 1091,
-    "harness_tests": 139
   }
 }

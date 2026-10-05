@@ -1,0 +1,10 @@
+#TITLE:Shared Screen Translation;
+#BPMS:0=60;
+#BGCHANGES:0=screen-translation-bg.lua=1=0=0=0;
+#FGCHANGES:0=screen-translation-fg.lua=1=0=0=0;
+#NOTES:dance-single::Challenge:1:0,0,0,0,0:
+1000
+0000
+0000
+0000
+;
