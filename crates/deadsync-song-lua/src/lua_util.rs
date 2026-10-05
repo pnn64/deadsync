@@ -3417,12 +3417,15 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 .is_some()
             && let Some((frame, remaining)) = time
         {
+            run_recurring_update(lua, actor, remaining, true)?;
+            // A recurring callback replaces its queue clock. Mark that new
+            // clock after dispatch so this actor cannot consume the frame's
+            // delta again when its next update job is reached.
             if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
                 if let Some(clock) = frames.clocks.get_mut(&(actor.to_pointer() as usize)) {
                     clock.recurring_frame = Some(frame);
                 }
             }
-            run_recurring_update(lua, actor, remaining, true)?;
         }
     }
     Ok(())
@@ -16987,16 +16990,27 @@ pub fn actor_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
     if raw.is_absolute() && raw.exists() {
         return Ok(Some(raw.to_path_buf()));
     }
+    if raw.is_absolute()
+        && let Some(path) = resolve_actor_asset_prefix(Path::new(""), raw)
+    {
+        return Ok(Some(path));
+    }
     if let Some(script_dir) = actor.get::<Option<String>>("__songlua_script_dir")? {
         let candidate = Path::new(&script_dir).join(texture);
         if candidate.exists() {
             return Ok(Some(candidate));
+        }
+        if let Some(path) = resolve_actor_asset_prefix(Path::new(&script_dir), raw) {
+            return Ok(Some(path));
         }
     }
     if let Some(song_dir) = actor.get::<Option<String>>("__songlua_song_dir")? {
         let candidate = Path::new(&song_dir).join(texture);
         if candidate.exists() {
             return Ok(Some(candidate));
+        }
+        if let Some(path) = resolve_actor_asset_prefix(Path::new(&song_dir), raw) {
+            return Ok(Some(path));
         }
     }
     Ok(None)

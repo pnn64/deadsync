@@ -11308,6 +11308,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
+    screen_camera: Option<SongLuaOverlayState>,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     mut direct_proxies: Option<&mut SongLuaDirectProxies>,
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
@@ -11554,7 +11555,9 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                     && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
                         overlay,
                         overlay_state,
-                        topology_index.camera_state(overlay_states, idx),
+                        topology_index
+                            .camera_state(overlay_states, idx)
+                            .or(screen_camera),
                         asset_manager,
                         z,
                         space_width,
@@ -12387,6 +12390,14 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         .overlay
         .then_some(SongLuaActorSegments::new());
     // --- Background and Filter ---
+    // ScreenGameplay is outside the independent song layer trees. Its camera
+    // supplies their default projection; an authored inner camera still wins
+    // and AFT captures keep their separate orthographic viewport.
+    let screen_camera = song_lua_visuals
+        .screen_overlay_index
+        .and_then(|index| song_lua_overlay_state_scratch.get(index))
+        .copied()
+        .filter(|screen| show_song_visuals && screen.fov.is_some());
     let underlay_start = actors.len();
     if show_song_visuals && screen_layers[2].visible && screen_layers[2].diffuse[3] > f32::EPSILON {
         draw_layer(ScreenLayer::Background, actors, FieldLayout::default());
@@ -12429,6 +12440,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             local_states,
             layer_states,
             song_foreground_state,
+            screen_camera,
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -13234,6 +13246,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_local_state_scratch,
             song_lua_overlay_state_scratch,
             song_foreground_state,
+            screen_camera,
             &proxy_sources,
             Some(&mut *song_lua_direct_proxies),
             song_lua_proxy_actor_scratch.as_mut(),
@@ -13299,6 +13312,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             local_states,
             layer_states,
             song_foreground_state,
+            screen_camera,
             &proxy_sources,
             Some(&mut *song_lua_direct_proxies),
             song_lua_proxy_actor_scratch.as_mut(),

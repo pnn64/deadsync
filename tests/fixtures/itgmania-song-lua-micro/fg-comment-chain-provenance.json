@@ -1,0 +1,16 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "raw_sha256": "56bb5fce637834afdac094bc9a7bdfabe493c6a4592c006346a1224ce79e8bb2",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "4bea5eae17d80608bf3d3408c8c1373da72e4bf2b405ad9a2cefee13b5fa514f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "4041d331fcb3632852384566707b254cf59b19fbc906360d89f683e41062d724",
+    "itgmania/src/MsdFile.cpp": "1f7b3bb19da4be9884c47b7aed2a1f62cc1a78277c8c6efd01cdd9e0d2b3ecd4",
+    "deadsync/tests/fixtures/song-lua/fg-comment-chain.sm": "1add041a29aa99f1f798702a3220ba7a95614b52b82d6354caec9b6b2bf9c94a",
+    "deadsync/tests/fixtures/song-lua/fg-comment-first.lua": "274608cbee5dbfa93b85d9c97896bc71fc6c7658c5ba13f0569824841e1de2dc",
+    "deadsync/tests/fixtures/song-lua/fg-comment-second.lua": "62130f64157a8ec36f7dec362423672b3e52f79cea154ec66f3e358339e61bb5"
+  },
+  "coverage": "two native foreground Lua layers survive a commented change with commas, semicolons and a tag marker before the second layer"
+}

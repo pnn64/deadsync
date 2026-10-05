@@ -1302,6 +1302,7 @@ fn aft_boundaries_match_native_geometry_and_visibility() {
                     index,
                     state,
                     track.texture_size,
+                    None,
                 )
                 .unwrap()
             };
@@ -4209,9 +4210,15 @@ fn compare_lua_perspective(entry: &str) {
                 state, second, second,
             );
             [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
-            let vertices =
-                compiled_perspective_vertices(&compiled[0], &states, index, state, [64.0, 32.0])
-                    .expect("finite perspective vertices");
+            let vertices = compiled_perspective_vertices(
+                &compiled[0],
+                &states,
+                index,
+                state,
+                [64.0, 32.0],
+                None,
+            )
+            .expect("finite perspective vertices");
             for (corner, actual) in vertices.iter().enumerate() {
                 let vertex = &actor["draws"][0]["vertices"][[0, 3, 2, 1][corner]];
                 for axis in 0..2 {
@@ -4235,11 +4242,14 @@ fn compiled_perspective_vertices(
     index: usize,
     state: SongLuaOverlayState,
     texture_size: [f32; 2],
+    screen_camera: Option<SongLuaOverlayState>,
 ) -> Option<[[f32; 2]; 4]> {
     use deadsync_song_lua::playback::actor_conformance as actor;
     let mut parent = compiled.overlays[index].parent_index;
     let camera = loop {
-        let index = parent?;
+        let Some(index) = parent else {
+            break screen_camera?;
+        };
         let overlay = &compiled.overlays[index];
         if matches!(overlay.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
             return None;
@@ -4430,7 +4440,7 @@ fn projected_corners_keep_negative_w() {
         ..CompiledSongLua::default()
     };
     let vertices =
-        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2])
+        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2], None)
             .expect("negative W is a defined perspective divide");
     assert!(vertices.iter().flatten().all(|axis| axis.is_finite()));
     assert!(
@@ -4441,7 +4451,7 @@ fn projected_corners_keep_negative_w() {
     );
     let singular = SongLuaOverlayState { z: 320.0, ..sprite };
     assert!(
-        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2])
+        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2], None)
             .is_none()
     );
 }
@@ -4455,7 +4465,7 @@ fn compare_projected_geometry(
     let screen_layer = compiled
         .iter()
         .find_map(|layer| layer.screen_overlay_index.map(|index| (layer, index)));
-    let mut screen_offsets = HashMap::new();
+    let mut screen_states = HashMap::new();
     parity.section("projected geometry");
     let drawable_map = projected_drawable_map(trace, compiled);
     let mut colors = Parity::default();
@@ -4504,7 +4514,7 @@ fn compare_projected_geometry(
                     let mut states =
                         compiled_overlay_states_at(&compiled[layer], context, beat, seconds);
                     if let Some((screen_layer, index)) = screen_layer {
-                        let offset = screen_offsets
+                        let screen = screen_states
                             .entry((beat.to_bits(), seconds.to_bits()))
                             .or_insert_with(|| {
                                 let mut screen = compiled_command_state_at(
@@ -4527,13 +4537,13 @@ fn compare_projected_geometry(
                                         screen,
                                         [seconds, beat],
                                     );
-                                [screen.x, screen.y]
+                                screen
                             });
                         // GameplayActorSegments::segments places every screen
                         // fragment at this shared offset before its camera.
                         for state in &mut states {
-                            state.x += offset[0];
-                            state.y += offset[1];
+                            state.x += screen.x;
+                            state.y += screen.y;
                         }
                     }
                     states
@@ -4629,7 +4639,15 @@ fn compare_projected_geometry(
             if native_vertices.len() != 4 {
                 continue;
             }
-            let actual_vertices = if track.camera_actor == "orthographic-screen" {
+            // The screen can acquire FOV after this track's first invisible
+            // sample. Its camera label is fixed, while the sampled camera
+            // and the compiled ScreenGameplay parent change over the song.
+            let perspective = sample
+                .get(7)
+                .and_then(Value::as_array)
+                .and_then(|camera| value_f32(camera.first()))
+                .is_some_and(|fov| fov != 0.0);
+            let actual_vertices = if track.camera_actor == "orthographic-screen" && !perspective {
                 compiled_world_vertices(state, track.texture_size).map(|[x, y, _, _]| [x, y])
             } else {
                 let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
@@ -4639,6 +4657,9 @@ fn compare_projected_geometry(
                     overlay_index,
                     state,
                     track.texture_size,
+                    screen_states
+                        .get(&(beat.to_bits(), seconds.to_bits()))
+                        .copied(),
                 ) else {
                     parity.check_once(false, &mut reported_bounds, || {
                         format!("projected perspective geometry is untested for {definition_id}: missing camera or undefined perspective divide at beat {beat:.3}")
@@ -5366,6 +5387,7 @@ fn near_camera_native() {
             index,
             states[index],
             [64.0, 64.0],
+            None,
         )
         .expect("finite perspective vertices");
         for (corner, actual) in vertices.iter().enumerate() {
@@ -6828,6 +6850,24 @@ fn recurring_tail_keeps_boundary_frame() {
 }
 
 #[test]
+fn foreground_comments_keep_native_layers() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/fg-comment-chain.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/fg-comment-chain.sm"),
+    );
+    assert_eq!(compiled.len(), 2);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Foreground Comment Chain"));
+    assert_eq!(parity.checks(), 41);
+    parity.assert_complete("Foreground Comment Chain");
+}
+
+#[test]
 fn queued_visibility_matches_native_actor_updates() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -7737,6 +7777,24 @@ fn queued_child_cycles_match_native() {
 }
 
 #[test]
+fn runtime_cycle_start_and_screen_camera_match_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (name, checks) in [("queued-cycle-start", 622), ("screen-camera-change", 40)] {
+        let trace = read_trace_file(&root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}.json.zst"
+        )));
+        let (compiled, primary, context) = compile_trace_song_at(
+            &trace,
+            &root.join(format!("tests/fixtures/song-lua/{name}.sm")),
+        );
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(name));
+        assert_eq!(parity.checks(), checks, "retain every native runtime frame");
+        parity.assert_complete(name);
+    }
+}
+
+#[test]
 fn judgment_sheet_changes_match_native() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let trace = read_trace_file(
@@ -7786,6 +7844,21 @@ fn mawaru8_local_messages_match_native() {
         "retain the complete corrected local trace"
     );
     parity.assert_complete("Mawaru8 local queued messages");
+}
+
+#[test]
+fn mawaru6_whole_song_matches_native() {
+    crate::paths::init();
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/mawaru6-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Mawaru6 whole song"));
+    assert_eq!(parity.checks(), 686877, "retain every native observation");
+    parity.assert_complete("Mawaru6 whole song");
 }
 
 #[test]

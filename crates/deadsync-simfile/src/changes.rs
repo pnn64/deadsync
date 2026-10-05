@@ -18,6 +18,37 @@ use rssp::parse::{bgchanges_values, decode_bytes, unescape_tag};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
+fn strip_msd_comments(data: &[u8]) -> Cow<'_, [u8]> {
+    // MsdFile::ReadBuf removes comments before parsing tag delimiters and
+    // unescaping. An escaped slash is data, and the ending newline is retained.
+    // Ordinary tags keep borrowing their input; only actual comments allocate.
+    let mut clean: Option<Vec<u8>> = None;
+    let mut start = 0;
+    let mut index = 0;
+    while let Some(offset) = memchr::memchr2(b'/', b'\\', &data[index..]) {
+        index += offset;
+        if data[index] == b'\\' {
+            index = (index + 2).min(data.len());
+        } else if data.get(index + 1) == Some(&b'/') {
+            clean
+                .get_or_insert_with(|| Vec::with_capacity(data.len()))
+                .extend_from_slice(&data[start..index]);
+            index =
+                memchr::memchr(b'\n', &data[index..]).map_or(data.len(), |offset| index + offset);
+            start = index;
+        } else {
+            index += 1;
+        }
+    }
+    match clean {
+        Some(mut clean) => {
+            clean.extend_from_slice(&data[start..]);
+            Cow::Owned(clean)
+        }
+        None => Cow::Borrowed(data),
+    }
+}
+
 #[must_use]
 pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &str) -> bool {
     if resolve_song_path_like_itg(song_dir, background_tag)
@@ -25,6 +56,8 @@ pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &s
     {
         return true;
     }
+    let clean = strip_msd_comments(simfile_data);
+    let simfile_data = clean.as_ref();
     let entries = list_song_dir_rel_entries(song_dir);
     bgchange_values_use_lua(song_dir, bgchanges_values(simfile_data), &entries)
         || bgchange_values_use_lua(
@@ -68,6 +101,8 @@ fn extract_foreground_change_sets_with(
     include_media: bool,
     include_lua: bool,
 ) -> ForegroundChangeSets {
+    let clean = strip_msd_comments(simfile_data);
+    let simfile_data = clean.as_ref();
     let entries = list_song_dir_rel_entries(song_dir);
     let mut media = Vec::new();
     let mut lua = Vec::new();
@@ -150,6 +185,8 @@ pub fn extract_background_lua_change_set(
     simfile_data: &[u8],
     background_tag: &str,
 ) -> BackgroundLuaChangeSet {
+    let clean = strip_msd_comments(simfile_data);
+    let simfile_data = clean.as_ref();
     let entries = list_song_dir_rel_entries(song_dir);
     let mut layer_1 = Vec::new();
     let mut uses_lua = false;
@@ -239,9 +276,10 @@ pub fn resolve_background_changes_from_roots(
     song_movie_roots: &[PathBuf],
     random_movie_roots: &[PathBuf],
 ) -> Vec<SongBackgroundChange> {
+    let clean = strip_msd_comments(simfile_data);
     resolve_background_changes_from_values(
         song_dir,
-        bgchanges_values(simfile_data),
+        bgchanges_values(clean.as_ref()),
         song_movie_roots,
         random_movie_roots,
         &[],
@@ -258,9 +296,10 @@ pub fn resolve_background_layer2_changes_from_roots(
     random_movie_roots: &[PathBuf],
     bg_animation_roots: &[PathBuf],
 ) -> Vec<SongBackgroundChange> {
+    let clean = strip_msd_comments(simfile_data);
     resolve_background_changes_from_values(
         song_dir,
-        named_tag_values(simfile_data, &[b"#BGCHANGES2:"]),
+        named_tag_values(clean.as_ref(), &[b"#BGCHANGES2:"]),
         song_movie_roots,
         random_movie_roots,
         bg_animation_roots,
@@ -606,6 +645,47 @@ mod tests {
     use deadsync_chart::SongBackgroundChangeTarget;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn msd_comments_keep_escapes_and_newlines() {
+        for data in [b"plain".as_slice(), br"x\//y", br"\#FGCHANGES:0=lua;"] {
+            assert!(matches!(strip_msd_comments(data), Cow::Borrowed(_)));
+        }
+        assert_eq!(
+            strip_msd_comments(b"a// comment;=,\r\nb// last"),
+            b"a\nb".as_slice()
+        );
+        assert_eq!(strip_msd_comments(br"x\//y// omit"), br"x\//y".as_slice());
+        assert_eq!(strip_msd_comments(br"x\\// omit"), br"x\\".as_slice());
+    }
+
+    #[test]
+    fn foreground_layers_survive_commented_changes() {
+        let root = test_dir("fg-comment-layers");
+        for name in ["input", "trivia", "lua"] {
+            let path = root.join(name);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(path.join("default.lua"), b"return Def.ActorFrame{}").unwrap();
+        }
+        let source = b"#FGCHANGES:0=input=1=0=0=1=====,\n\
+            //0=trivia=1=0=0=1=====,// moved to Lua; #FGCHANGES:0=trivia;\n\
+            0.010=lua=1=0=0=1=====,\n;";
+        let sets = extract_foreground_change_sets(&root, source);
+        assert!(sets.uses_lua);
+        assert!(sets.media.is_empty());
+        assert_eq!(sets.lua.len(), 2);
+        assert_eq!(sets.lua[0].start_beat, 0.0);
+        assert_eq!(sets.lua[1].start_beat, 0.01);
+        for (change, name) in sets.lua.iter().zip(["input", "lua"]) {
+            assert_eq!(
+                PathBuf::from(&change.path),
+                root.join(name).join("default.lua")
+            );
+        }
+        let commented = b"// #FGCHANGES:0=lua=1=0=0=1;\n#TITLE:No Lua;";
+        assert!(!simfile_uses_lua(&root, commented, ""));
+        assert!(extract_foreground_lua_changes(&root, commented).is_empty());
+    }
 
     #[test]
     fn bgchange_fallback_summary_preserves_last_still_and_flags() {

@@ -1,0 +1,16 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "raw_sha256": "aefa98e27f85297f6f5e013d31d19699d1f6e8bd61ea806165e86910a9018f94",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "4bea5eae17d80608bf3d3408c8c1373da72e4bf2b405ad9a2cefee13b5fa514f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "4041d331fcb3632852384566707b254cf59b19fbc906360d89f683e41062d724",
+    "itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania/src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "deadsync/tests/fixtures/song-lua/queued-cycle-start.sm": "b9c4bbeb37a4b9c6b5c2a5cb6032ed595fe5bd8dc1dcf8e3cef252c163b8cd6d",
+    "deadsync/tests/fixtures/song-lua/queued-cycle-start.lua": "eea1899ac4a3bf3adb36c9d21e8f5c23533ca7f95b62e8d89faceff5b391e1ee"
+  },
+  "coverage": "queued-cycle-start"
+}

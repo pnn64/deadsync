@@ -1,0 +1,12 @@
+#TITLE:Foreground Comment Chain;
+#BPMS:0=60;
+#FGCHANGES:0=fg-comment-first.lua=1=0=0=1=====,
+//0=unused.lua=1=0=0=1=====,// moved to Lua; #FGCHANGES:0=unused.lua;
+0.010=fg-comment-second.lua=1=0=0=1=====,
+;
+#NOTES:dance-single::Challenge:1:0,0,0,0,0:
+1000
+0100
+0000
+0000
+;

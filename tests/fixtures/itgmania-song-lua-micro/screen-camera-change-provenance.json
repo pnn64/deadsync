@@ -1,0 +1,17 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "raw_sha256": "d345ce1ff074141ae12ec91444a464e4f92afaf5eb70daae1cdb30341c9c25a8",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "4bea5eae17d80608bf3d3408c8c1373da72e4bf2b405ad9a2cefee13b5fa514f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "4041d331fcb3632852384566707b254cf59b19fbc906360d89f683e41062d724",
+    "itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania/src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "deadsync/tests/fixtures/song-lua/screen-camera-change.sm": "dde33e04f850ae67ca8d74056bb23873c2da96bf18e68b22818400cd01336abe",
+    "deadsync/tests/fixtures/song-lua/screen-camera-change.lua": "bc00e38eb4d8ccbf4611d3a6d27f2e7afc2121fe201c9b0adbc3d7f577777176",
+    "deadsync/tests/fixtures/song-lua/Normal 2x6.png": "51be0a4ed68b24462daaf307b5538a037c31ac54d74ad0aae461ece9a2bc44e0"
+  },
+  "coverage": "screen-camera-change"
+}

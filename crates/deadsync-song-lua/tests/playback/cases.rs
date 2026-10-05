@@ -1743,6 +1743,7 @@ fn delayed_foreground_hide_skips_layer_and_survives_seek() {
             &states,
             &states,
             layer,
+            None,
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -3296,6 +3297,7 @@ fn song_lua_direct_proxies_record_exact_overlay_insertions() {
         &overlay_states,
         &overlay_states,
         SongLuaOverlayState::default(),
+        None,
         &proxy_sources,
         Some(&mut direct),
         None,
@@ -4883,6 +4885,7 @@ fn song_lua_preloaded_aft_chain_preserves_pixels() {
         &local,
         &states,
         SongLuaOverlayState::default(),
+        None,
         &SongLuaScreenProxySources::default(),
         None,
         None,
@@ -4979,6 +4982,7 @@ fn song_lua_aft_passes_keep_capture_dependencies_ordered() {
         &states,
         &states,
         SongLuaOverlayState::default(),
+        None,
         &SongLuaScreenProxySources::default(),
         None,
         None,
@@ -5066,6 +5070,7 @@ fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
         &overlay_states,
         &overlay_states,
         SongLuaOverlayState::default(),
+        None,
         &proxy_sources,
         None,
         None,
@@ -5200,6 +5205,7 @@ fn song_lua_kenpo_capture_keeps_rotated_notes_and_rgb_split() {
             &states,
             &states,
             SongLuaOverlayState::default(),
+            None,
             &sources,
             None,
             None,
@@ -8592,6 +8598,156 @@ fn song_lua_zero_zoom_sheet_does_not_fall_back_to_native_size() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn screen_camera_projects_extensionless_sprite_at_runtime() {
+    crate::tests::init_paths();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let song_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+    let mut context =
+        deadsync_song_lua::SongLuaCompileContext::new(&song_dir, "Screen Camera Change");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua(&song_dir.join("screen-camera-change.lua"), &context)
+        .expect("local screen camera fixture compiles");
+    let screen = compiled.screen_overlay_index.expect("captured top screen");
+    let face = compiled
+        .overlays
+        .iter()
+        .find(|actor| actor.name.as_deref() == Some("Extensionless"))
+        .expect("extensionless sprite");
+    let SongLuaOverlayKind::Sprite { texture_key, .. } = &face.kind else {
+        panic!("sprite")
+    };
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(
+        texture_key.to_string(),
+        image::open(song_dir.join("Normal 2x6.png"))
+            .expect("local sheet")
+            .into_rgba8(),
+    );
+    let topology = SongLuaOverlayTopologyIndex::new(&compiled.overlays);
+    let mut order = song_lua_overlay_order_cache_from(&compiled.overlays, &[]);
+    let mut captures = SongLuaAftCaptureScratch::new(&compiled.overlays, &topology);
+    let mut projected = song_lua_projected_mesh_scratch_for(&compiled.overlays);
+    for second in [0.5, 2.1333334, 0.5] {
+        let mut states = compiled
+            .overlays
+            .iter()
+            .map(|actor| {
+                let mut state = actor.initial_state;
+                if let Some(command) = actor
+                    .message_commands
+                    .iter()
+                    .find(|command| command.message == "__songlua_actor_startup")
+                {
+                    state = song_lua_overlay_apply_blocks(state, &command.blocks, second);
+                }
+                state
+            })
+            .collect::<Vec<_>>();
+        for track in &compiled.overlay_updates {
+            if let Some(sample) = track
+                .samples
+                .iter()
+                .rev()
+                .find(|sample| sample.time <= second)
+            {
+                apply_overlay_update(
+                    &mut states[track.overlay_index],
+                    track.target,
+                    &sample.value,
+                );
+            }
+        }
+        let mut actors = Vec::new();
+        let mut targets = Vec::new();
+        push_song_lua_layer_actors(
+            &mut actors,
+            &mut targets,
+            &compiled.overlays,
+            &mut order,
+            &topology,
+            &states,
+            &states,
+            SongLuaOverlayState::default(),
+            Some(states[screen]),
+            &SongLuaScreenProxySources::default(),
+            None,
+            None,
+            &assets,
+            854.0,
+            480.0,
+            second,
+            second,
+            second,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut captures,
+            &mut projected,
+            SONG_LUA_FOREGROUND_DEPTH,
+        );
+        assert!(targets.is_empty());
+        if second < 1.0 {
+            assert!(actors.is_empty());
+            continue;
+        }
+        let mut meshes = actors.iter().filter_map(|actor| match actor {
+            Actor::TexturedMesh {
+                local_transform,
+                vertices,
+                ..
+            } => Some((*local_transform, vertices.as_ref())),
+            Actor::ReusableTexturedMesh {
+                local_transform,
+                vertices,
+                ..
+            } => Some((*local_transform, vertices.as_slice())),
+            _ => None,
+        });
+        let (local_transform, vertices) = meshes
+            .next()
+            .expect("screen camera must reach actual projected sprite rendering");
+        assert!(
+            meshes.next().is_none(),
+            "only the visible sprite emits geometry"
+        );
+        assert_eq!(vertices.len(), 6);
+        let projection =
+            glam::camera::rh::proj::opengl::orthographic(0.0, 854.0, 480.0, 0.0, -1.0, 1.0);
+        let mut bounds = [
+            f32::INFINITY,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+        ];
+        for vertex in vertices.iter() {
+            let clip = projection
+                * local_transform
+                * Vector4::new(vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0);
+            let point = [
+                (clip.x / clip.w + 1.0) * 427.0,
+                (1.0 - clip.y / clip.w) * 240.0,
+            ];
+            for axis in 0..2 {
+                bounds[axis] = bounds[axis].min(point[axis]);
+                bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+            }
+        }
+        // Independently captured native screen-camera-change Sprite bounds.
+        for (actual, expected) in bounds
+            .into_iter()
+            .zip([347.71957, 187.14638, 506.28043, 292.85364])
+        {
+            assert!((actual - expected).abs() <= 0.001, "{actual} vs {expected}");
+        }
+    }
 }
 
 #[test]

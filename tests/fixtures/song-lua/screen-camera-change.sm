@@ -1,0 +1,9 @@
+#TITLE:Screen Camera Change;
+#BPMS:0=60;
+#FGCHANGES:0=screen-camera-change.lua=1=0=0=1=====;
+#NOTES:dance-single::Challenge:1:0,0,0,0,0:
+1000
+0100
+0000
+0000
+;
