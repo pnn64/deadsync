@@ -7252,3 +7252,179 @@ fn mawaru5_local_draw_colors_match_native() {
     );
     parity.assert_complete("Mawaru5 local draw colors");
 }
+
+#[test]
+fn queued_messages_match_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/queued-broadcasts.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/queued-broadcasts.sm"),
+    );
+    let layer = &compiled[primary];
+    let messages = layer
+        .messages
+        .iter()
+        .filter(|event| matches!(event.message.as_str(), "Zero" | "Hit" | "Again" | "Never"))
+        .collect::<Vec<_>>();
+    assert_eq!(messages.len(), 3, "cancelled messages must never dispatch");
+    for (event, (frame, name)) in
+        messages
+            .into_iter()
+            .zip([(1, "Zero"), (13, "Hit"), (22, "Again")])
+    {
+        assert_eq!(event.message, name);
+        assert!((event.beat - frame as f32 / 60.0).abs() <= f32::EPSILON);
+    }
+    let native: Value =
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(root.join(
+                    "tests/fixtures/itgmania-song-lua-micro/queued-broadcasts-native.json.zst",
+                ))
+                .expect("native message queue capture"),
+            )
+            .expect("compressed native capture"),
+        )
+        .expect("native queue JSON");
+    let samples = native["samples"].as_array().expect("native frame samples");
+    assert_eq!(samples.len(), 181);
+    let mut checks = 0;
+    for sample in samples {
+        let time = value_f32(sample.get("time")).expect("native frame time");
+        let states = compiled_overlay_states_at(layer, &context, time, time);
+        for actor in sample["actors"]
+            .as_array()
+            .expect("native actors")
+            .iter()
+            .skip(1)
+        {
+            let name = actor["name"].as_str().expect("native actor name");
+            let index = layer
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == Some(name))
+                .expect("compiled queue actor");
+            for (axis, actual) in [states[index].x, states[index].y].into_iter().enumerate() {
+                let expected =
+                    value_f32(actor["current"]["position"].get(axis)).expect("native position");
+                assert!(
+                    (actual - expected).abs() <= 0.0001,
+                    "{name} at {time}, axis {axis}: native {expected}, DeadSync {actual}"
+                );
+                checks += 1;
+            }
+            for (channel, actual) in states[index].diffuse.into_iter().enumerate() {
+                let expected =
+                    value_f32(actor["current"]["diffuse"][0].get(channel)).expect("native diffuse");
+                assert!(
+                    (actual - expected).abs() <= 0.000001,
+                    "{name} at {time}, channel {channel}: native {expected}, DeadSync {actual}"
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert_eq!(
+        checks, 4344,
+        "retain every native frame, position and color"
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("queued messages"));
+    assert_eq!(
+        parity.checks(),
+        259,
+        "retain every queued-message observation"
+    );
+    parity.assert_complete("queued messages");
+}
+
+#[test]
+fn unnamed_message_child_matches_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/unnamed-broadcast.sm"),
+    );
+    let layer = &compiled[primary];
+    let family = layer
+        .overlays
+        .iter()
+        .position(|a| a.name.as_deref() == Some("Family"))
+        .expect("receiver family");
+    let native: Value =
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(root.join(
+                    "tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast-native.json.zst",
+                ))
+                .expect("native unnamed lookup capture"),
+            )
+            .expect("compressed native capture"),
+        )
+        .expect("native lookup JSON");
+    let samples = native["samples"].as_array().expect("native lookup frames");
+    assert_eq!(samples.len(), 61);
+    let mut checks = 0;
+    for sample in samples {
+        let time = value_f32(sample.get("time")).expect("native time");
+        let states = compiled_overlay_states_at(layer, &context, time, time);
+        for actor in sample["actors"]
+            .as_array()
+            .expect("native actors")
+            .iter()
+            .skip(2)
+        {
+            let name = actor["name"].as_str().expect("native child name");
+            let index = layer
+                .overlays
+                .iter()
+                .position(|a| {
+                    a.parent_index == Some(family) && a.name.as_deref().unwrap_or("") == name
+                })
+                .expect("native child in compiler tree");
+            for (channel, actual) in states[index].diffuse.into_iter().enumerate() {
+                let expected = value_f32(actor["current"]["diffuse"][0].get(channel))
+                    .expect("native child color");
+                assert_eq!(
+                    actual, expected,
+                    "child {name:?} at {time}, channel {channel}"
+                );
+                checks += 1;
+            }
+        }
+    }
+    assert_eq!(checks, 488);
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("unnamed message child"));
+    assert_eq!(
+        parity.checks(),
+        51,
+        "retain every unnamed-child observation"
+    );
+    parity.assert_complete("unnamed message child");
+}
+
+#[test]
+fn mawaru8_local_messages_match_native() {
+    crate::paths::init();
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/mawaru8-queued-messages.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Mawaru8 local queued messages"));
+    assert_eq!(
+        parity.checks(),
+        332029,
+        "retain the complete corrected local trace"
+    );
+    parity.assert_complete("Mawaru8 local queued messages");
+}

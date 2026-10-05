@@ -1,0 +1,68 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "seed": 1,
+  "screen": [
+    854,
+    480
+  ],
+  "frame_rate": 60,
+  "native_queue_samples": 181,
+  "native_field_checks": 4344,
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "54b813964df814b973aa0bce26c3e495e90f7de0fe1e9e3c710baac9197427a1",
+    "itgmania-harness-rs/build.rs": "ef9723fe365af9cef3e7504a112ef560dbfd6ba965cc65307d39b9e5473afa02",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "afc80631d446b17847ed421b8404d12033a58900ecf7f75d5182b62063d2adec",
+    "itgmania-harness-rs/native/runtime_stubs.cpp": "fbda8e8d4dd63bc454dea5b948d9b509ff4e4d085104f931e77b925258a63cb5",
+    "itgmania-harness-rs/semantic_host.lua": "cd641400dcbacc5c01d42e58df3977dd89c5d757a56262ea1f460f7da8f218bf",
+    "deadsync/tests/fixtures/song-lua/queued-broadcasts.lua": "02dd90894eab9d71334e35f65c92428dca7da08ba97689dff1dfd2a2daaf0410",
+    "deadsync/tests/fixtures/song-lua/queued-broadcasts.sm": "3f419d61a9adbc7a4f0a2eb2bd291c80c131409e3f10abd0de8226ee22687825",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/queued-broadcasts-input.json": "b7429041bfdfc47e12c5e13a565939724c1a65cdb05c58a86d86f8cec1b03775",
+    "itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania/src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "itgmania/src/MessageManager.cpp": "d7b8f7873062039d81d7d5b3b052f785c182deea731d4c4ed5d473499689c311"
+  },
+  "captures": {
+    "queued-broadcasts-native.json.zst": {
+      "raw_sha256": "a025f58e41709561bcb32df894c5471ca9440af7e2835a72c6ffee07a38f83f2",
+      "compressed_sha256": "30908cd5c83c1c5092a7f39100bd65b172562a5fdbc4c69fe5faafbb2ca2e712",
+      "raw_bytes": 12878004,
+      "compressed_bytes": 15224
+    },
+    "queued-broadcasts.json.zst": {
+      "raw_sha256": "325144e54671e4c84efc449c26c8234aaea103b5da5de0af53284e126e0826a5",
+      "compressed_sha256": "d2d98bb7b5697c82a78d77e80f09cba53b46fe75346adcd5fe2a1256b72b9c8f",
+      "raw_bytes": 42276,
+      "compressed_bytes": 6353
+    }
+  },
+  "native_dispatch_frames": {
+    "Zero": 1,
+    "Hit": 13,
+    "Again": 22,
+    "Cancel": 37,
+    "Never": null
+  },
+  "before_fix": {
+    "test": "queued_messages_match_native",
+    "exit": 101,
+    "first_failure": "Observer at 1/60: native x=50, DeadSync x=0",
+    "old_host_missing_commands": [
+      "HitMessageCommand",
+      "AgainMessageCommand"
+    ]
+  },
+  "update_rule": "New micro-fixture captured from the linked, unmodified ITGmania Actor.cpp and MessageManager.cpp. Lua host changed to dispatch !-marked queued tween entries. No existing frozen hashes or reference fixtures are changed.",
+  "comparison": {
+    "position_tolerance": 0.0001,
+    "diffuse_tolerance": 1e-06,
+    "semantic_tolerances_changed": false
+  },
+  "limits": "Native fixture proves timing, cancellation, receiver updates and startup message state; it does not establish interactive input or audible sound parity. Existing zero-duration startup command discovery remains a separate compiler timing limitation.",
+  "semantic_checks": 259,
+  "publication": {
+    "main_version": "0.5.1751",
+    "regression_tests_per_repository": 1091,
+    "harness_tests": 139
+  }
+}

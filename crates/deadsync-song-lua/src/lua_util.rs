@@ -3070,6 +3070,37 @@ pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     Ok(queue)
 }
 
+fn enqueue_actor_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
+    // Commands and messages append a zero-duration state after the active tween.
+    flush_actor_capture(actor)?;
+    record_queue_step(lua, actor, None)?;
+    let queue = actor_command_queue(lua, actor)?;
+    let index = queue.raw_len() + 1;
+    {
+        let starts = match actor.get::<Option<Table>>("__songlua_command_queue_starts")? {
+            Some(starts) => starts,
+            None => {
+                let starts = lua.create_table()?;
+                actor.set("__songlua_command_queue_starts", starts.clone())?;
+                starts
+            }
+        };
+        starts.raw_set(
+            index,
+            actor
+                .get::<Option<f32>>("__songlua_capture_cursor")?
+                .unwrap_or(0.0),
+        )?;
+    }
+    queue.raw_set(index, name)?;
+    if lua.app_data_ref::<SongLuaStartupQueues>().is_some()
+        || !actor_has_active_command(lua, actor)?
+    {
+        drain_actor_command_queue(lua, actor)?;
+    }
+    Ok(())
+}
+
 pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     // Queue dispatch owns startup, frame timing and reentrant command scopes;
     // keep these transitions together so callbacks cannot observe half a pop.
@@ -3094,13 +3125,16 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 || actor
                     .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
                     .unwrap_or(false))
-            && let Some(starts) = actor.get::<Option<Table>>("__songlua_command_queue_starts")?
-            && starts
-                .raw_get::<Option<f32>>(1)?
-                .is_some_and(|start| start > 0.0)
+            && (name.starts_with('!')
+                || actor
+                    .get::<Option<Table>>("__songlua_command_queue_starts")?
+                    .map(|starts| starts.raw_get::<Option<f32>>(1))
+                    .transpose()?
+                    .flatten()
+                    .is_some_and(|start| start > 0.0))
         {
-            // A startup sleep delays Lua state changes and broadcasts too.
-            // Leave the command queued until chronological replay reaches it.
+            // Even zero-duration startup messages need a positive Actor update.
+            // Keep Lua globals and broadcasts unchanged until replay reaches it.
             actor.set("__songlua_command_queue_deferred", true)?;
             invalidate_compile_update_plan(lua);
             return Ok(());
@@ -3207,15 +3241,28 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
             capture.queued_depth += 1;
         }
-        // This entry passed the recursion check when it was enqueued. An
-        // earlier dispatch with the same name may still be draining siblings;
-        // allow this body while preserving ancestor guards for cyclic queues.
-        let active = actor_active_commands(lua, actor)?;
-        let command = ActorCommandName::new(&name, "Command");
-        let previous_active = active.get::<Value>(command.as_str())?;
-        active.set(command.as_str(), Value::Nil)?;
-        let result = run_actor_message_with_params(lua, actor, &command, None);
-        active.set(command.as_str(), previous_active)?;
+        let result = if let Some(message) = name.strip_prefix('!') {
+            // QueueMessage shares the native tween queue, but dispatches through
+            // the host message manager only when this queue item begins.
+            (|| {
+                let manager = lua.globals().get::<Table>("MESSAGEMAN")?;
+                manager
+                    .get::<Function>("Broadcast")?
+                    .call::<Value>((manager, message))?;
+                Ok(())
+            })()
+        } else {
+            // This entry passed the recursion check when it was enqueued. An
+            // earlier dispatch with the same name may still be draining siblings;
+            // allow this body while preserving ancestor guards for cyclic queues.
+            let active = actor_active_commands(lua, actor)?;
+            let command = ActorCommandName::new(&name, "Command");
+            let previous_active = active.get::<Value>(command.as_str())?;
+            active.set(command.as_str(), Value::Nil)?;
+            let result = run_actor_message_with_params(lua, actor, &command, None);
+            active.set(command.as_str(), previous_active)?;
+            result
+        };
         if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
             capture.queued_depth -= 1;
         }
@@ -5725,34 +5772,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     }
                     return Ok(actor.clone());
                 }
-                // QueueCommand appends a zero-duration state after the active tween.
-                flush_actor_capture(&actor)?;
-                record_queue_step(lua, &actor, None)?;
-                let queue = actor_command_queue(lua, &actor)?;
-                let index = queue.raw_len() + 1;
-                {
-                    let starts =
-                        match actor.get::<Option<Table>>("__songlua_command_queue_starts")? {
-                            Some(starts) => starts,
-                            None => {
-                                let starts = lua.create_table()?;
-                                actor.set("__songlua_command_queue_starts", starts.clone())?;
-                                starts
-                            }
-                        };
-                    starts.raw_set(
-                        index,
-                        actor
-                            .get::<Option<f32>>("__songlua_capture_cursor")?
-                            .unwrap_or(0.0),
-                    )?;
-                }
-                queue.raw_set(index, name)?;
-                if lua.app_data_ref::<SongLuaStartupQueues>().is_some()
-                    || !actor_has_active_command(lua, &actor)?
-                {
-                    drain_actor_command_queue(lua, &actor)?;
-                }
+                enqueue_actor_command(lua, &actor, &name)?;
                 Ok(actor.clone())
             }
         })?,
@@ -5763,8 +5783,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(message) = args.get(1).cloned().and_then(read_string) {
-                    note_song_lua_side_effect(lua)?;
-                    crate::record_song_lua_broadcast(lua, &message, false)?;
+                    enqueue_actor_command(lua, &actor, &format!("!{message}"))?;
                 }
                 Ok(actor.clone())
             }

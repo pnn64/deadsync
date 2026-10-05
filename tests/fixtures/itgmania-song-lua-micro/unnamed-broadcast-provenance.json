@@ -1,0 +1,48 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "seed": 1,
+  "screen": [
+    854,
+    480
+  ],
+  "frame_rate": 60,
+  "native_frames": 61,
+  "native_color_checks": 488,
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "dcd0709370e6efd1afa2f0441a11aa7447dac1ec13cf2c72a3ce4f3ddf06522f",
+    "itgmania-harness-rs/semantic_host.lua": "85b230866efaab17440cd536277d332902b54e1e70388331fd939a90ad68ec7b",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "94b31d42b5efa7e5f8148a5816ce3a5e3e48cc6b6d7f586bdc50aa19cddf7cc1",
+    "itgmania-harness-rs/native/runtime_stubs.cpp": "fbda8e8d4dd63bc454dea5b948d9b509ff4e4d085104f931e77b925258a63cb5",
+    "itgmania-harness-rs/build.rs": "ef9723fe365af9cef3e7504a112ef560dbfd6ba965cc65307d39b9e5473afa02",
+    "deadsync/tests/fixtures/song-lua/unnamed-broadcast.lua": "c4c08f77d078727d965fd8c568632e17e385f1cb3bde17a41290664030fb29ac",
+    "deadsync/tests/fixtures/song-lua/unnamed-broadcast.sm": "e604540f73b7b047f62f4fcf8a43032efa8773b628a0243866670d21c22fdd90",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast-input.json": "81afaeb5736ebc3ec03aa2a9fe45ea76f82f2240669f8668532dddc69b10cf9b",
+    "itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania/src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "itgmania/src/MessageManager.cpp": "d7b8f7873062039d81d7d5b3b052f785c182deea731d4c4ed5d473499689c311"
+  },
+  "captures": {
+    "unnamed-broadcast-native.json.zst": {
+      "raw_sha256": "2a795d1407bc57c9608f35a44c6791c8f0969d0d45cc003a825695cd46ad97ac",
+      "compressed_sha256": "178d85aa6a9a161b069adcd239e80046eef524f926b61041ec849a2174622fc3",
+      "raw_bytes": 2903342,
+      "compressed_bytes": 4774
+    },
+    "unnamed-broadcast.json.zst": {
+      "raw_sha256": "3a22315f3e2941a8be60ced4b4831b7c991063fffe104c38be8eff265a2d85d7",
+      "compressed_sha256": "9b3f66787c6ad66b7f692315b86e1a4d0def9022b61ce80b5d78cb89d282c818",
+      "raw_bytes": 74295,
+      "compressed_bytes": 9487
+    }
+  },
+  "update_rule": "Capture calls the linked, unmodified ActorFrame::GetChild with an empty string and applies native SetDiffuse to its result. Fix the Lua host index that substituted definition IDs for unnamed children. Preserve named sibling state and all frame/color checks; do not change frozen chart hashes or prior reference fixtures.",
+  "comparison": "Exact RGBA equality across every child and frame; existing semantic tolerances unchanged.",
+  "before_fix": "The intermediate corrected-message Mawaru8 trace incorrectly kept the unnamed Ryuko characters white, producing 120 false color failures against DeadSync. The local ActorFrame.cpp native lookup confirms they should be black.",
+  "semantic_checks": 51,
+  "publication": {
+    "main_version": "0.5.1751",
+    "regression_tests_per_repository": 1091,
+    "harness_tests": 139
+  }
+}
