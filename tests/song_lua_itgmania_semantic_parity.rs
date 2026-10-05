@@ -7185,6 +7185,57 @@ fn short_glow_matches_native() {
 }
 
 #[test]
+fn deferred_effects_match_native() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/deferred-effects.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/deferred-effects.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("deferred effects"));
+    assert_eq!(
+        parity.checks(),
+        365,
+        "retain every deferred-effect observation"
+    );
+    parity.assert_complete("deferred effects");
+    let native: Value =
+        serde_json::from_reader(
+            zstd::stream::read::Decoder::new(
+                fs::File::open(root.join(
+                    "tests/fixtures/itgmania-song-lua-micro/deferred-effects-native.json.zst",
+                ))
+                .expect("native recurring queue capture"),
+            )
+            .expect("compressed queue capture"),
+        )
+        .expect("native queue JSON");
+    let layer = &compiled[primary];
+    let index = layer
+        .overlays
+        .iter()
+        .position(|a| a.name.as_deref() == Some("Oscillator"))
+        .expect("unrelated recurring actor");
+    let samples = native["samples"].as_array().expect("native queue samples");
+    assert_eq!(samples.len(), 421, "retain every native frame");
+    for sample in samples {
+        let time = sample["time"].as_f64().expect("native clock") as f32;
+        let expected = sample["actors"][1]["current"]["rotation"][2]
+            .as_f64()
+            .expect("native angle") as f32;
+        let actual = compiled_overlay_states_at(layer, &context, time, time)[index].rot_z_deg;
+        assert!(
+            (actual - expected).abs() <= f32::EPSILON,
+            "unrelated queue at {time}: native {expected}, DeadSync {actual}"
+        );
+    }
+    eprintln!("deferred effects: 421 native recurring-queue states");
+}
+
+#[test]
 fn mawaru5_local_draw_colors_match_native() {
     crate::paths::init();
     let trace = read_trace_file(

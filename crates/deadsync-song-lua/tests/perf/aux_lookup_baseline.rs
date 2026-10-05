@@ -1,4 +1,4 @@
-// Frozen from 02df6cae276557eb6ddc7db182c93dd5cb24704f; only test visibility/formatting differs.
+// Frozen from 02df6cae276557eb6ddc7db182c93dd5cb24704f; test visibility/formatting and side-effect result type differ.
 
 use super::*;
 
@@ -92,8 +92,9 @@ pub(super) fn capture_function_action_blocks_inner(
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
     let sound_paths = read_path_table(&sound_calls);
     restore_note_field_columns(lua, column_snapshot).map_err(|err| err.to_string())?;
-    let saw_side_effect =
-        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
+    let side_effects = song_lua_side_effect_count(lua)
+        .map_err(|err| err.to_string())?
+        .saturating_sub(side_effect_before);
     reset_actor_capture_tables(lua, &touched_actors)?;
     restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     globals
@@ -124,6 +125,6 @@ pub(super) fn capture_function_action_blocks_inner(
         tracked_aux,
         broadcasts,
         sound_paths,
-        saw_side_effect,
+        side_effects,
     })
 }

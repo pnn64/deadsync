@@ -1,0 +1,48 @@
+{
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "seed": 1,
+  "screen": [
+    854,
+    480
+  ],
+  "frame_rate": 60,
+  "native_queue_samples": 421,
+  "sources_sha256": {
+    "itgmania-harness-rs/target/debug/itgmania-harness-rs.exe": "3a5224f8c27340ad938fdf22cf9e6899ee9453a26d4013ef0595c07f56f11faa",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "424b6a846a70201a642852598ef4616027c30b0274eccbd902a58e1c1fbf3c27",
+    "itgmania-harness-rs/semantic_host.lua": "d5549f12d6700e45d4f5b458024fd77bc244d1a8d295b611d6d7dd99216f0c52",
+    "deadsync/tests/fixtures/song-lua/deferred-effects.lua": "573070435fbff9f7800c3bcd405d431f0ef39b2d783b942dc1e55467b52b86b1",
+    "deadsync/tests/fixtures/song-lua/deferred-effects.sm": "67063acbd93ee41a19dc768bff07f395cc6aad7ed34ea4545de0f073cda5c4da",
+    "deadsync/tests/fixtures/song-lua/deferred-hit.wav": "60c0b6c740c791f5d9c1b7d688aa4e6719b93c8f4e7c4b7919ab86ad78b74068",
+    "deadsync/tests/fixtures/itgmania-song-lua-micro/deferred-effects-input.json": "8eeb93047068c0930937e7727f93d9a74e624438cc82ba3e5fa963f928e5ed3e"
+  },
+  "captures": {
+    "deferred-effects-native.json.zst": {
+      "raw_sha256": "210f3e5de38a73e815ff4de04426870497b3fadafc8c5283566ad30ac6d9dab7",
+      "compressed_sha256": "23e82b9799a209b797706f284acbed2298c23b8c4768375bdb388989d4843c67",
+      "raw_bytes": 12769901,
+      "compressed_bytes": 22805
+    },
+    "deferred-effects.json.zst": {
+      "raw_sha256": "eb95e436199abb19e2b13e809d7a30af33cabec2cf373cc95c4898f58abbd6aa",
+      "compressed_sha256": "7a0631a46385e148b5119547666ad2534fde2984f3d49f4617273482eac366cb",
+      "raw_bytes": 52903,
+      "compressed_bytes": 5472
+    }
+  },
+  "before_fix": {
+    "unit_test": "compile_song_lua_scopes_deferred_effects",
+    "exit": 101,
+    "retained_gaps": [
+      "UnsentMessageCommand",
+      "UnsentSoundMessageCommand"
+    ]
+  },
+  "limits": "Semantic host sound calls do not validate audible output; compiler tests require each captured play and reject uncaptured operations.",
+  "semantic_checks": 365,
+  "comparison": {
+    "native_rotation_tolerance": "f32::EPSILON",
+    "unchanged_semantic_tolerances": true
+  }
+}

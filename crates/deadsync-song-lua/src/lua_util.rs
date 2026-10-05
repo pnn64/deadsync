@@ -13413,7 +13413,7 @@ pub struct SongLuaFunctionActionCapture {
     pub tracked_aux: Vec<(usize, f32)>,
     pub broadcasts: Vec<(String, bool)>,
     pub sound_paths: Vec<PathBuf>,
-    pub saw_side_effect: bool,
+    pub side_effects: i64,
 }
 
 struct FunctionActionTableSnapshot {
@@ -13736,8 +13736,9 @@ fn capture_function_action_blocks_inner(
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
     let sound_paths = read_path_table(&sound_calls);
     restore_note_field_columns(lua, column_snapshot).map_err(|err| err.to_string())?;
-    let saw_side_effect =
-        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
+    let side_effects = song_lua_side_effect_count(lua)
+        .map_err(|err| err.to_string())?
+        .saturating_sub(side_effect_before);
     reset_actor_capture_tables(lua, &touched_actors)?;
     restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     globals
@@ -13768,7 +13769,7 @@ fn capture_function_action_blocks_inner(
         tracked_aux,
         broadcasts,
         sound_paths,
-        saw_side_effect,
+        side_effects,
     })
 }
 
@@ -13840,18 +13841,15 @@ fn message_capture_runner(
     source: &Table,
     command_name: &str,
     command: &Function,
-    drain_tables: &[Table],
 ) -> mlua::Result<Function> {
     let params = default_message_command_params(lua, command_name)?;
     let source = source.clone();
     let command = command.clone();
     let command_name = command_name.to_owned();
-    let drain_tables = drain_tables.to_vec();
     lua.create_function(move |lua, ()| {
         run_guarded_actor_command(lua, &source, &command_name, &command, true, params.clone())?;
-        for actor in &drain_tables {
-            drain_actor_command_queue(lua, actor)?;
-        }
+        // Dispatch already drains the receiver and actors it queues. Probing
+        // a message must not execute unrelated work left on other actors.
         Ok(())
     })
 }
@@ -13870,11 +13868,6 @@ pub(crate) fn capture_deferred_messages<Kind>(
         .iter()
         .enumerate()
         .map(|(index, actor)| (index, actor.table.clone()))
-        .collect::<Vec<_>>();
-    let drain_tables = overlay_tables
-        .iter()
-        .map(|(_, table)| table.clone())
-        .chain(tracked_actors.iter().map(|actor| actor.table.clone()))
         .collect::<Vec<_>>();
     let beat = compile_song_runtime_values(lua)
         .map_err(|err| err.to_string())?
@@ -13913,14 +13906,8 @@ pub(crate) fn capture_deferred_messages<Kind>(
             .map_err(|err| err.to_string())?;
         let snapshots =
             snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
-        let runner = message_capture_runner(
-            lua,
-            &deferred.actor,
-            &deferred.command,
-            &command,
-            &drain_tables,
-        )
-        .map_err(|err| err.to_string())?;
+        let runner = message_capture_runner(lua, &deferred.actor, &deferred.command, &command)
+            .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
         let first = capture_function_action_blocks_inner(
             lua,
@@ -13945,7 +13932,13 @@ pub(crate) fn capture_deferred_messages<Kind>(
         let (Ok(first), Some(Ok(second))) = (first, second) else {
             continue;
         };
-        if first != second || first.saw_side_effect || !first.broadcasts.is_empty() {
+        // Every captured PlayOnce increments the side-effect counter once.
+        // Preserve repeated calls, while rejecting music changes, missing sound
+        // resources and other operations that cannot be replayed by these blocks.
+        if first != second
+            || first.side_effects > first.sound_paths.len() as i64
+            || !first.broadcasts.is_empty()
+        {
             // Keep the original diagnostic when a command cannot be represented
             // by stable blocks. Runtime writes remain captured at each broadcast.
             continue;
@@ -14001,10 +13994,6 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
         .enumerate()
         .map(|(index, overlay)| (index, overlay.table.clone()))
         .collect::<Vec<_>>();
-    let drain_tables = overlay_tables
-        .iter()
-        .map(|(_, table)| table.clone())
-        .collect::<Vec<_>>();
     let mut commands = Vec::new();
     for (source_index, source) in overlays.iter().enumerate() {
         for_each_actor_message_command(&source.table, |name, function| {
@@ -14026,7 +14015,7 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
     for (source_index, source, command_name, message, command) in commands {
         let table_snapshots =
             snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
-        let runner = message_capture_runner(lua, &source, &command_name, &command, &drain_tables)
+        let runner = message_capture_runner(lua, &source, &command_name, &command)
             .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
         let first =
@@ -14172,7 +14161,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         return Ok(true);
     }
     if !has_direct_effects {
-        return Ok(capture.saw_side_effect);
+        return Ok(capture.side_effects > 0);
     }
 
     let message = format!("__songlua_overlay_fn_action_{counter}");

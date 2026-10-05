@@ -10813,6 +10813,126 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_scopes_deferred_effects() {
+        let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua")
+            .canonicalize()
+            .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Deferred effects");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled =
+            test_compile_song_lua(&song_dir.join("deferred-effects.lua"), &context).unwrap();
+        assert!(
+            compiled.info.skipped_message_command_captures.is_empty(),
+            "{:?}",
+            compiled.info.skipped_message_command_captures
+        );
+        let actor = |name: &str| {
+            compiled
+                .overlays
+                .iter()
+                .find(|actor| actor.name.as_deref() == Some(name))
+                .unwrap()
+        };
+        assert!(
+            !actor("Oscillator")
+                .message_commands
+                .iter()
+                .any(|c| c.message == "Unsent")
+        );
+        let commands = &actor("Receiver").message_commands;
+        let blocks = &commands
+            .iter()
+            .find(|c| c.message == "Unsent")
+            .expect("late receiver")
+            .blocks;
+        assert!(blocks.iter().any(|b| b.delta.zoom_x == Some(0.6)));
+        assert!(
+            blocks.iter().any(|b| b.delta.zoom_y == Some(0.7)),
+            "own queued command"
+        );
+        let commands = &actor("Target").message_commands;
+        assert!(
+            commands
+                .iter()
+                .find(|c| c.message == "Unsent")
+                .expect("causal cross actor queue")
+                .blocks
+                .iter()
+                .any(|b| b.delta.rot_z_deg == Some(30.0))
+        );
+        let sounds: Vec<_> = compiled
+            .overlays
+            .iter()
+            .filter(|a| {
+                matches!(a.kind, SongLuaOverlayKind::Sound { .. })
+                    && a.message_commands
+                        .iter()
+                        .any(|c| c.message == "UnsentSound")
+            })
+            .collect();
+        assert_eq!(sounds.len(), 2, "preserve repeated plays of one resource");
+        assert_eq!(
+            compiled.sound_paths,
+            vec![song_dir.join("deferred-hit.wav")]
+        );
+        assert!(
+            !compiled
+                .messages
+                .iter()
+                .any(|m| m.message.starts_with("Unsent")),
+            "probes cannot fire messages"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_rejects_unrepresented_deferred_effects() {
+        let song_dir = test_dir("deferred-unsupported-sounds");
+        fs::write(song_dir.join("effect.wav"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local ready
+return Def.ActorFrame{
+    OnCommand=function(self) self:SetUpdateFunction(function()
+        if GAMESTATE:GetSongBeat() >= .5 then ready = {value=10} end
+    end) end,
+    Def.Quad{
+        StopMessageCommand=function(self)
+            self:x(ready.value); SOUND:PlayOnce("effect.wav"); SOUND:StopMusic()
+        end,
+        PartMessageCommand=function(self)
+            self:x(ready.value); SOUND:PlayOnce("effect.wav"); SOUND:PlayMusicPart("effect.wav", 0, 1)
+        end,
+        MissingMessageCommand=function(self)
+            self:x(ready.value); SOUND:PlayOnce("effect.wav"); SOUND:PlayOnce("absent.wav")
+        end,
+        BrokenMessageCommand=function(self) self:x(never_ready.value) end,
+    },
+}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Unsupported deferred effects");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let details = &compiled.info.skipped_message_command_captures;
+        assert_eq!(details.len(), 4, "{details:?}");
+        for name in ["Stop", "Part", "Missing", "Broken"] {
+            assert!(
+                details
+                    .iter()
+                    .any(|s| s.contains(&format!("{name}MessageCommand")))
+            );
+        }
+        assert!(
+            !compiled
+                .overlays
+                .iter()
+                .any(|a| matches!(a.kind, SongLuaOverlayKind::Sound { .. }))
+        );
+    }
+
+    #[test]
     fn compile_song_lua_defers_update_bound_messages() {
         let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/song-lua")
@@ -22680,7 +22800,7 @@ return before_x, before_dest, actor:GetX(), actor:GetDestX()
         assert_eq!(capture.overlay_blocks[0].1[0].delta.x, Some(5.0));
         assert!(capture.tracked_blocks.is_empty());
         assert_eq!(capture.broadcasts, vec![("Hit".to_string(), false)]);
-        assert!(capture.saw_side_effect);
+        assert_eq!(capture.side_effects, 1);
         assert!(actor.get::<bool>("__songlua_visible").unwrap());
         assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
     }
