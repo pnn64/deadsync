@@ -9637,6 +9637,9 @@ struct SongLuaQueueClock {
     epoch: usize,
     frame: usize,
     remaining: f64,
+    // A zero-time state becomes visible on its actor update. Following tweens
+    // inherit its destination but cannot render that pose on an earlier frame.
+    zero_frame: Option<usize>,
     steps: std::collections::VecDeque<Option<f64>>,
     dispatch: Option<(usize, f64)>,
     recurring_frame: Option<usize>,
@@ -9710,6 +9713,7 @@ pub(crate) fn set_compile_frames(
                     epoch: 0,
                     frame: 0,
                     remaining: 0.0,
+                    zero_frame: None,
                     steps,
                     dispatch: None,
                     recurring_frame: None,
@@ -9749,6 +9753,9 @@ fn advance_queue_clock(
             clock.frame += 1;
             clock.remaining = frames.delta(clock.frame);
         }
+        if duration as f32 == 0.0 {
+            clock.zero_frame = Some(clock.frame);
+        }
         // A callback after its child can enqueue a zero-time state on the final
         // captured frame. Its start still belongs to the next update, even when
         // that update lies beyond the replay. Omitting this sample makes the
@@ -9756,8 +9763,22 @@ fn advance_queue_clock(
         if let Some(samples) = &mut samples
             && samples.is_empty()
         {
+            let frame_time = frames.time(clock.frame) as f32;
             let start = frames.time(clock.frame) - if left == 0.0 { 0.0 } else { clock.remaining };
-            samples.push([start as f32, left]);
+            let mut start = start as f32;
+            if left > 0.0 && clock.frame > 0 {
+                let prior = frames.time(clock.frame - 1) as f32;
+                // A tiny remainder can put the next tween strictly after the
+                // prior update while both timestamps round to the same float.
+                // Preserve queue order: it cannot draw on that earlier frame.
+                if f64::from(frame_time) - clock.remaining > f64::from(prior) && start <= prior {
+                    start = prior.next_up();
+                }
+            }
+            if let Some(frame) = clock.zero_frame {
+                start = start.max(frames.time(frame) as f32);
+            }
+            samples.push([start, left]);
         }
         let elapsed = left.min(clock.remaining as f32);
         left -= elapsed;
@@ -9869,6 +9890,7 @@ fn record_queue_step(lua: &Lua, actor: &Table, duration: Option<f64>) -> mlua::R
             epoch,
             frame,
             remaining,
+            zero_frame: None,
             steps: std::collections::VecDeque::new(),
             dispatch: None,
             recurring_frame: None,
@@ -9908,6 +9930,7 @@ fn actor_tween_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32
             epoch: clock.epoch,
             frame: clock.frame,
             remaining: clock.remaining,
+            zero_frame: clock.zero_frame,
             steps: std::collections::VecDeque::new(),
             dispatch: None,
             recurring_frame: None,
@@ -10017,6 +10040,7 @@ pub(crate) fn bake_startup_tweens<'a>(
             epoch: 0,
             frame: 0,
             remaining: 0.0,
+            zero_frame: None,
             steps: std::collections::VecDeque::new(),
             dispatch: None,
             recurring_frame: None,

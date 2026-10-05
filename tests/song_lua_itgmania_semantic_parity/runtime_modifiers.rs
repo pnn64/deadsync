@@ -87,13 +87,28 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
         } else {
             continue;
         };
-        for (sequence, beat, second, args, _) in &track.samples {
+        for (sequence, beat, second, args, detail) in &track.samples {
             if state_setter && args.first().and_then(Value::as_str) != Some("ModsLevel_Song") {
                 continue;
             }
             let (Some(beat), Some(second)) = (beat, second) else {
                 continue;
             };
+            // Direct Song-level turns/transforms retain API state without
+            // reprocessing loaded NoteData (Player.cpp). Only omit their
+            // numeric-render audit when native getter evidence is present;
+            // compare_boolean_options checks every such call separately.
+            if detail
+                .as_ref()
+                .and_then(|value| value.get("boolean_option"))
+                .is_some()
+                && !matches!(
+                    operation,
+                    "StealthType" | "StealthPastReceptors" | "Cosecant" | "DizzyHolds" | "ZBuffer"
+                )
+            {
+                continue;
+            }
             let mut push = |key: String, value: f32| {
                 writes.push(ModWrite {
                     sequence: *sequence,
@@ -2192,14 +2207,151 @@ fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
     );
 }
 
-/// One check per recorded player/option target at each native timestamp,
-/// reported per player/option pair.
+/// Compare every update frame, carrying sparse native state through quiet frames.
+pub(super) fn compare_player_frames(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
+    parity.section("player transform frames");
+    let (mut runtime, unsupported) = modifier_runtime(compiled, context);
+    parity.check(unsupported == 0, || {
+        format!("{unsupported} unsupported player frame targets")
+    });
+    let origin = context
+        .song_timing
+        .as_ref()
+        .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
+    for track in &trace.player_render_tracks {
+        let player = track.player - 1;
+        if player >= 2 || !trace.enabled_players.unwrap_or([true; 2])[player] {
+            continue;
+        }
+        let mut transform = SongLuaPlayerTransform::default();
+        let mut prior = 0.0;
+        let mut cursor = 0;
+        for (frame, &(beat, seconds)) in trace.update_frames.iter().enumerate() {
+            while track
+                .transform_samples
+                .get(cursor + 1)
+                .is_some_and(|sample| sample[0].is_some_and(|index| index as usize <= frame))
+            {
+                cursor += 1;
+            }
+            let sample = track
+                .transform_samples
+                .get(cursor)
+                .expect("native player state");
+            let now = seconds as f32 + origin;
+            if let Some(next) = runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                transform,
+            ) {
+                transform = next;
+            }
+            prior = now;
+            let actual = [
+                Some(
+                    transform
+                        .x
+                        .unwrap_or(context.screen_width * if player == 0 { 0.25 } else { 0.75 }),
+                ),
+                Some(transform.y.unwrap_or(context.screen_height * 0.5)),
+                Some(transform.z),
+                Some(transform.rotation_x),
+                Some(transform.rotation_z),
+                Some(transform.rotation_y),
+                Some(transform.zoom_x),
+                Some(transform.zoom_y),
+                Some(transform.zoom_z),
+                Some(transform.skew_x),
+                Some(transform.skew_y),
+            ];
+            for (axis, (expected, actual)) in sample[1..].iter().zip(actual).enumerate() {
+                parity.check(expected.zip(actual).is_some_and(|(expected, actual)|
+                    (expected - actual).abs() <= EPSILON), || format!(
+                    "P{} frame {frame} beat {beat} transform axis {axis}: native {expected:?}, DeadSync {actual:?}", player + 1));
+            }
+        }
+    }
+}
+
+fn compare_boolean_options(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
+    let mut expected = BTreeMap::<(usize, String), Vec<(f32, f32, &Value)>>::new();
+    for track in &trace.timeline_tracks {
+        let Some(player) = (0..2).find(|player| {
+            track.actor.as_deref()
+                == Some(
+                    format!("player-state:PLAYER_{}/options:ModsLevel_Song", player + 1).as_str(),
+                )
+        }) else {
+            continue;
+        };
+        if !trace.enabled_players.unwrap_or([true; 2])[player] {
+            continue;
+        }
+        let Some(key) = track.operation.strip_prefix("PlayerOptions.") else {
+            continue;
+        };
+        for (_, beat, second, _, detail) in &track.samples {
+            if let (Some(beat), Some(second), Some(state)) = (
+                beat,
+                second,
+                detail
+                    .as_ref()
+                    .and_then(|value| value.get("boolean_option")),
+            ) {
+                expected
+                    .entry((player, key.to_ascii_lowercase()))
+                    .or_default()
+                    .push((*beat, *second, state));
+            }
+        }
+    }
+    if expected.is_empty() {
+        return;
+    }
+    parity.section("boolean option API");
+    for ((player, key), expected) in expected {
+        let actual = compiled
+            .iter()
+            .flat_map(|layer| &layer.boolean_writes)
+            .filter(|write| write.player == player && write.key == key)
+            .collect::<Vec<_>>();
+        parity.check(actual.len() == expected.len(), || {
+            format!(
+                "P{} {key} boolean write count: native {}, DeadSync {}",
+                player + 1,
+                expected.len(),
+                actual.len()
+            )
+        });
+        for (index, (beat, second, state)) in expected.iter().enumerate() {
+            parity.check(actual.get(index).is_some_and(|write| {
+                (write.beat - f64::from(*beat)).abs() < f64::from(EPSILON)
+                    && (write.second - f64::from(*second)).abs() < f64::from(EPSILON)
+                    && state.get("previous").and_then(Value::as_bool) == Some(write.previous)
+                    && state.get("current").and_then(Value::as_bool) == Some(write.current)
+                    && state.get("chained").and_then(Value::as_bool) == Some(write.chained)
+            }), || format!("P{} {key} boolean getter/return state differs at beat {beat}: native {state}, DeadSync {:?}",
+                player + 1, actual.get(index)));
+        }
+    }
+}
+
+/// One check per recorded player/option target at each native timestamp.
 pub(super) fn compare_runtime_modifiers(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
     parity: &mut Parity,
 ) {
+    compare_boolean_options(trace, compiled, parity);
     parity.section("runtime modifiers");
     let (writes, unsupported) = option_writes(trace);
     for (part, count) in unsupported {

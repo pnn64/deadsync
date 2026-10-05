@@ -1,5 +1,6 @@
 // Frozen from fddc06faa (0.5.1625); only dispatcher redirected to its frozen baseline.
 use super::*;
+use crate::perframe::player_snap_baseline::snap_ended_transforms;
 
 pub(super) fn compile_update_functions<Kind>(
     lua: &Lua,

@@ -5168,6 +5168,7 @@ fn compare_sprite_textures(
             continue;
         };
         let SongLuaOverlayKind::Sprite {
+            texture_key,
             texture_path,
             textures,
             ..
@@ -5192,8 +5193,11 @@ fn compare_sprite_textures(
             let expected_path = fs::canonicalize(&path);
             let active = deadsync_song_lua::sprite_texture_at(textures, second + 1e-5);
             let actual = active.map_or(texture_path, |texture| &texture.path);
-            parity.check(expected_path.as_ref().is_ok_and(|path| fs::canonicalize(actual).is_ok_and(|actual| actual == *path)),
-                || format!("Sprite.Load binding differs for {actor} at {second:.6}s: ITGmania {path:?}, DeadSync {actual:?}"));
+            let key = active.map_or(texture_key.as_ref(), |texture| texture.key.as_ref());
+            parity.check(expected_path.as_ref().is_ok_and(|path|
+                fs::canonicalize(actual).is_ok_and(|actual| actual == *path)
+                    && fs::canonicalize(key).is_ok_and(|key| key == *path)),
+                || format!("Sprite.Load binding differs for {actor} at {second:.6}s: ITGmania {path:?}, DeadSync {actual:?}, render key {key:?}"));
         }
     }
 }
@@ -8397,6 +8401,131 @@ fn warp_zone_whole_song_matches_native() {
     assert!(
         rejected.passed() < rejected.checks(),
         "missing portal updates must fail"
+    );
+}
+
+#[test]
+fn bad_apple_whole_song_matches_native() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/bad-apple-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Bad Apple whole song"));
+    parity.assert_complete("Bad Apple whole song");
+    assert_eq!(
+        parity.checks(),
+        275833,
+        "retain every native observation and quiet frame"
+    );
+    let map = projected_drawable_map(&trace, &compiled);
+    assert_eq!(
+        trace.projected_vertex_tracks.len(),
+        1,
+        "the AVI must have native geometry"
+    );
+    let track = &trace.projected_vertex_tracks[0];
+    assert_eq!(track.texture_size, [320.0, 240.0]);
+    let &(layer, index) = map.get(&track.actor).expect("movie drawable");
+    let SongLuaOverlayKind::Sprite { texture_key, .. } = &compiled[layer].overlays[index].kind
+    else {
+        panic!("movie must be a sprite");
+    };
+    // Gameplay's worker warmup supplies decoded movie dimensions. Compilation
+    // alone does not register video pixels; exercise that production path here.
+    let prepared = deadsync_assets::dynamic_media::prepare_song_lua_video(
+        Path::new(texture_key.as_ref()),
+        true,
+    );
+    let deadsync_assets::dynamic_media::SongLuaVideoPrepResult::Ready(prepared) = prepared else {
+        panic!("local movie preparation failed");
+    };
+    assert_eq!(prepared.key.as_str(), texture_key.as_ref());
+    let poster = prepared
+        .poster
+        .expect("local movie poster")
+        .expect("requested poster");
+    assert_eq!(poster.dimensions(), (320, 240));
+    deadlib_assets::register_texture_dims(&prepared.key, poster.width(), poster.height());
+    deadsync_assets::dynamic_media::retire_video_player(prepared.player);
+    let mut composer = WholeSongComposer::new(&compiled[layer].overlays);
+    let screen = [context.screen_width, context.screen_height];
+    for sample in &track.samples {
+        let sample = sample.as_array().expect("movie sample");
+        let beat = value_f32(sample.first()).expect("movie beat");
+        let second = value_f32(sample.get(1)).expect("movie second");
+        let states = compiled_overlay_states_at(&compiled[layer], &context, beat, second);
+        let frame = composer.render_overlay(
+            &compiled[layer].overlays,
+            &states,
+            index,
+            screen,
+            second,
+            beat,
+        );
+        let actual = rendered_quad_corners(&frame, screen);
+        let expected = sample[6].as_array().expect("movie corners");
+        assert_eq!(expected.len(), 4);
+        assert!(!actual.is_empty(), "movie must emit textured geometry");
+        for corner in expected {
+            let x = value_f32(corner.get(0)).expect("movie x");
+            let y = value_f32(corner.get(1)).expect("movie y");
+            assert!(
+                actual
+                    .iter()
+                    .any(|got| (got[0] - x).abs() <= 0.75 && (got[1] - y).abs() <= 0.75),
+                "missing movie corner [{x}, {y}], rendered {actual:?}"
+            );
+        }
+    }
+    assert_eq!(
+        compiled
+            .iter()
+            .map(|layer| layer.boolean_writes.len())
+            .sum::<usize>(),
+        42
+    );
+    let mut missing = compiled.clone();
+    missing[primary].boolean_writes.clear();
+    let mut rejected = Parity::default();
+    runtime_modifiers::compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "missing boolean setter evidence must fail"
+    );
+    let mut wrong = compiled.clone();
+    wrong[primary].boolean_writes[0].previous = true;
+    let mut rejected = Parity::default();
+    runtime_modifiers::compare_runtime_modifiers(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "wrong previous-value returns must fail"
+    );
+    let mut missing = compiled.clone();
+    if let SongLuaOverlayKind::Sprite {
+        texture_key,
+        textures,
+        ..
+    } = &mut missing[layer].overlays[index].kind
+    {
+        *texture_key = std::sync::Arc::from("missing-badapple.avi");
+        *textures = Default::default();
+    } else {
+        panic!("native movie must be a Sprite");
+    }
+    let mut rejected = Parity::default();
+    compare_sprite_textures(&trace, &missing, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "missing movie bindings must fail"
     );
 }
 

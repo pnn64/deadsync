@@ -1,6 +1,7 @@
 // Frozen from 2028a9df0fdd55806641dae24a9f0655df9f538f; only test visibility differs.
 
 use super::*;
+use crate::perframe::player_snap_baseline::snap_ended_transforms;
 
 pub(super) fn compile_update_functions<Kind>(
     lua: &Lua,

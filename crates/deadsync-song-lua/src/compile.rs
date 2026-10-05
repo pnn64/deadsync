@@ -702,6 +702,10 @@ where
     };
     out.overlay_updates.extend(update_overlay_tracks);
     #[cfg(feature = "test-support")]
+    if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaBoolWrites>() {
+        out.boolean_writes = writes.0;
+    }
+    #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::lua_util::SongLuaOverlayWrites>() {
         out.overlay_writes = writes.0;
     }
@@ -1236,6 +1240,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
 
     let primary = &mut outputs[primary_index];
+    #[cfg(feature = "test-support")]
+    {
+        primary.boolean_writes = compiled.boolean_writes;
+    }
     primary.startup = compiled.startup;
     primary.beat_mods = compiled.beat_mods;
     primary.time_mods = compiled.time_mods;

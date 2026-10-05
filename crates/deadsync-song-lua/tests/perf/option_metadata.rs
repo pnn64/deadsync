@@ -50,53 +50,54 @@ fn option_metadata_matches_parent_for_unchanged_options() {
         // These options follow native return and approach semantics. Source
         // tests and native probes cover their deliberate differences.
         .filter(|name| {
-            !matches!(
-                **name,
-                "Incoming"
-                    | "Space"
-                    | "Hallway"
-                    | "Distant"
-                    | "Overhead"
-                    | "Tilt"
-                    | "Skew"
-                    | "DrawSize"
-                    | "DrawSizeBack"
-                    | "ModTimerSetting"
-                    | "ModTimerMult"
-                    | "ModTimerOffset"
-                    | "BumpyX"
-                    | "BumpyXOffset"
-                    | "BumpyXPeriod"
-                    | "TanBumpy"
-                    | "TanBumpyOffset"
-                    | "TanBumpyPeriod"
-                    | "TanBumpyX"
-                    | "TanBumpyXOffset"
-                    | "TanBumpyXPeriod"
-                    | "DrunkZ"
-                    | "DrunkZOffset"
-                    | "DrunkZSpeed"
-                    | "DrunkZPeriod"
-                    | "TanDrunk"
-                    | "TanDrunkOffset"
-                    | "TanDrunkSpeed"
-                    | "TanDrunkPeriod"
-                    | "TanDrunkZ"
-                    | "TanDrunkZOffset"
-                    | "TanDrunkZSpeed"
-                    | "TanDrunkZPeriod"
-                    | "StealthType"
-                    | "ZBuffer"
-                    | "DizzyHolds"
-                    | "Cosecant"
-            )
+            !player_option_uses_bool(&name.to_ascii_lowercase())
+                && !matches!(
+                    **name,
+                    "Incoming"
+                        | "Space"
+                        | "Hallway"
+                        | "Distant"
+                        | "Overhead"
+                        | "Tilt"
+                        | "Skew"
+                        | "DrawSize"
+                        | "DrawSizeBack"
+                        | "ModTimerSetting"
+                        | "ModTimerMult"
+                        | "ModTimerOffset"
+                        | "BumpyX"
+                        | "BumpyXOffset"
+                        | "BumpyXPeriod"
+                        | "TanBumpy"
+                        | "TanBumpyOffset"
+                        | "TanBumpyPeriod"
+                        | "TanBumpyX"
+                        | "TanBumpyXOffset"
+                        | "TanBumpyXPeriod"
+                        | "DrunkZ"
+                        | "DrunkZOffset"
+                        | "DrunkZSpeed"
+                        | "DrunkZPeriod"
+                        | "TanDrunk"
+                        | "TanDrunkOffset"
+                        | "TanDrunkSpeed"
+                        | "TanDrunkPeriod"
+                        | "TanDrunkZ"
+                        | "TanDrunkZOffset"
+                        | "TanDrunkZSpeed"
+                        | "TanDrunkZPeriod"
+                        | "StealthType"
+                        | "ZBuffer"
+                        | "DizzyHolds"
+                        | "Cosecant"
+                )
         })
         .map(|name| name.to_string())
         .collect();
     names.extend([
         "Custom".repeat(16),
         "Mixed_\u{e9}\0Name".to_string(),
-        "mIrRoR".to_string(),
+        "mInI".to_string(),
     ]);
     for name in names {
         let key = name.to_ascii_lowercase();
@@ -146,7 +147,7 @@ fn option_metadata_matches_parent_for_unchanged_options() {
 
 #[test]
 fn option_metadata_keeps_live_replaced_tables_and_eager_error_order() {
-    for name in ["Mini", "Mirror", "LifeSetting"] {
+    for name in ["Mini", "CustomNumeric", "LifeSetting"] {
         for stage in [
             "none",
             "state_read",

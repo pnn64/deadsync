@@ -1706,6 +1706,19 @@ pub struct SongLuaStartup {
     pub hide_in: bool,
 }
 
+/// Direct boolean setters observed during chronological reference replay.
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaBoolWrite {
+    pub player: usize,
+    pub key: String,
+    pub beat: f64,
+    pub second: f64,
+    pub previous: bool,
+    pub current: bool,
+    pub chained: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct CompiledSongLua<OverlayActor> {
     pub startup: SongLuaStartup,
@@ -1727,6 +1740,8 @@ pub struct CompiledSongLua<OverlayActor> {
     /// Setter arguments retained only for reference audits; rendered tracks may tween them.
     #[cfg(feature = "test-support")]
     pub overlay_writes: Vec<SongLuaOverlayUpdateTrack>,
+    #[cfg(feature = "test-support")]
+    pub boolean_writes: Vec<SongLuaBoolWrite>,
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
@@ -1759,6 +1774,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             overlay_updates: Vec::new(),
             #[cfg(feature = "test-support")]
             overlay_writes: Vec::new(),
+            #[cfg(feature = "test-support")]
+            boolean_writes: Vec::new(),
             stateful_message_captures: Vec::new(),
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
@@ -9437,7 +9454,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_refines_active_player_transform_sampling() {
+    fn compile_song_lua_keeps_last_update_value() {
         let song_dir = test_dir("set-update-function-player-transform-tail");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -9468,10 +9485,12 @@ return Def.ActorFrame{
         context.song_display_bpms = [120.0, 120.0];
         context.music_length_seconds = 75.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
-        for target in [
-            SongLuaEaseTarget::PlayerRotationX,
-            SongLuaEaseTarget::PlayerRotationZ,
-            SongLuaEaseTarget::PlayerSkewX,
+        // The conditional writer stops before the endpoint. Native Actor keeps
+        // its last 60 Hz write; ending the callback does not reset its state.
+        for (target, expected) in [
+            (SongLuaEaseTarget::PlayerRotationX, 0.2),
+            (SongLuaEaseTarget::PlayerRotationZ, -354.0),
+            (SongLuaEaseTarget::PlayerSkewX, 1.0 / 3600.0),
         ] {
             let tail = compiled
                 .eases
@@ -9480,8 +9499,8 @@ return Def.ActorFrame{
                 .find(|ease| ease.target == target)
                 .expect("update function should compile player transform samples");
             assert!(
-                tail.to.abs() <= 1.0e-6,
-                "transform tail did not close: {target:?} ({})",
+                (tail.to - expected).abs() <= 1.0e-6,
+                "last authored transform was not retained: {target:?} ({})",
                 tail.to
             );
         }

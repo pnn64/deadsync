@@ -522,50 +522,51 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
-    if matches!(
-        name.as_str(),
-        "incoming"
-            | "space"
-            | "hallway"
-            | "distant"
-            | "overhead"
-            | "tilt"
-            | "skew"
-            | "drawsize"
-            | "drawsizeback"
-            | "modtimersetting"
-            | "modtimermult"
-            | "modtimeroffset"
-            | "bumpyx"
-            | "bumpyxoffset"
-            | "bumpyxperiod"
-            | "tanbumpy"
-            | "tanbumpyoffset"
-            | "tanbumpyperiod"
-            | "tanbumpyx"
-            | "tanbumpyxoffset"
-            | "tanbumpyxperiod"
-            | "drunkz"
-            | "drunkzoffset"
-            | "drunkzspeed"
-            | "drunkzperiod"
-            | "tandrunk"
-            | "tandrunkoffset"
-            | "tandrunkspeed"
-            | "tandrunkperiod"
-            | "tandrunkz"
-            | "tandrunkzoffset"
-            | "tandrunkzspeed"
-            | "tandrunkzperiod"
-            | "stealthtype"
-            | "dizzyholds"
-            | "zbuffer"
-            | "cosecant"
-    ) {
+    if (player_option_uses_bool(&name) && name != "overhead")
+        || matches!(
+            name.as_str(),
+            "incoming"
+                | "space"
+                | "hallway"
+                | "distant"
+                | "overhead"
+                | "tilt"
+                | "skew"
+                | "drawsize"
+                | "drawsizeback"
+                | "modtimersetting"
+                | "modtimermult"
+                | "modtimeroffset"
+                | "bumpyx"
+                | "bumpyxoffset"
+                | "bumpyxperiod"
+                | "tanbumpy"
+                | "tanbumpyoffset"
+                | "tanbumpyperiod"
+                | "tanbumpyx"
+                | "tanbumpyxoffset"
+                | "tanbumpyxperiod"
+                | "drunkz"
+                | "drunkzoffset"
+                | "drunkzspeed"
+                | "drunkzperiod"
+                | "tandrunk"
+                | "tandrunkoffset"
+                | "tandrunkspeed"
+                | "tandrunkperiod"
+                | "tandrunkz"
+                | "tandrunkzoffset"
+                | "tandrunkzspeed"
+                | "tandrunkzperiod"
+                | "stealthtype"
+                | "dizzyholds"
+                | "zbuffer"
+                | "cosecant"
+        )
+    {
         return create_native_option(lua, &owner, name);
     }
     let key = lua.create_string(&name)?;
-    let boolean = player_option_uses_bool(&name);
     let string = player_option_default_string(&name).is_some();
     // Only immutable method metadata is captured. State and approach tables
     // are resolved on every call, including after replacement by Lua code.
@@ -574,9 +575,7 @@ fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Re
         move |lua, (_self, value, speed): (Option<Value>, Option<Value>, Option<f32>)| {
             let state = player_option_state(lua, &owner)?;
             if let Some(value) = value {
-                let value = if boolean {
-                    Value::Boolean(read_boolish(value).unwrap_or(false))
-                } else if string {
+                let value = if string {
                     if matches!(value, Value::String(_)) {
                         value
                     } else {
@@ -685,29 +684,83 @@ fn create_timer_option(lua: &Lua, owner: &Table) -> mlua::Result<Function> {
     })
 }
 
+// Reference-only worker capture, owned by one compiler Lua VM. It lives for
+// the chronological replay and is discarded with the compiled audit data.
+// At most two million writes are retained; overflow fails the audit. Shipping
+// builds contain neither this allocation nor the recording branch.
+#[cfg(feature = "test-support")]
+#[derive(Default)]
+pub(crate) struct SongLuaBoolWrites(pub Vec<SongLuaBoolWrite>);
+
+#[cfg(feature = "test-support")]
+fn capture_bool_write(
+    lua: &Lua,
+    owner: &Table,
+    key: &str,
+    previous: bool,
+    current: bool,
+    chained: bool,
+) -> mlua::Result<()> {
+    if lua.app_data_ref::<SongLuaBoolWrites>().is_none() {
+        return Ok(());
+    }
+    let globals = lua.globals();
+    let mut player = None;
+    for (index, name) in SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
+        if globals.get::<Table>(*name)?.to_pointer() == owner.to_pointer() {
+            player = Some(index);
+            break;
+        }
+    }
+    let Some(player) = player else { return Ok(()) };
+    let runtime = globals.get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+    let write = SongLuaBoolWrite {
+        player,
+        key: key.to_owned(),
+        beat: runtime.get(SONG_LUA_RUNTIME_BEAT_KEY)?,
+        second: runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+        previous,
+        current,
+        chained,
+    };
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaBoolWrites>() {
+        if capture.0.len() >= 2_000_000 {
+            return Err(mlua::Error::runtime(
+                "boolean option audit exceeded two million writes",
+            ));
+        }
+        capture.0.push(write);
+    }
+    Ok(())
+}
+
 fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     if key == "modtimersetting" {
         return create_timer_option(lua, owner);
     }
-    let owner = owner.clone();
-    lua.create_function(move |lua, args: MultiValue| {
-        let state = player_option_state(lua, &owner)?;
-        if matches!(
-            key.as_str(),
-            "cosecant" | "dizzyholds" | "stealthtype" | "zbuffer"
-        ) {
+    if player_option_uses_bool(&key) && key != "overhead" {
+        let owner = owner.clone();
+        return lua.create_function(move |lua, mut args: crate::method_args::MethodArgs<3>| {
+            let state = player_option_state(lua, &owner)?;
             let previous = state.get::<Option<bool>>(key.as_str())?.unwrap_or(false);
-            if let Some(Value::Boolean(value)) = method_arg(&args, 0) {
-                state.set(key.as_str(), *value)?;
-            }
             // BOOL_INTERFACE chains on a boolean second argument, even false.
-            let result = if matches!(method_arg(&args, 1), Some(Value::Boolean(_))) {
+            // Read it before consuming a possible owner-less first argument.
+            let chained = matches!(args.take_method_arg(1), Some(Value::Boolean(_)));
+            if let Some(Value::Boolean(value)) = args.take_method_arg(0) {
+                state.set(key.as_str(), value)?;
+                #[cfg(feature = "test-support")]
+                capture_bool_write(lua, &owner, &key, previous, value, chained)?;
+            }
+            Ok(if chained {
                 Value::Table(owner.clone())
             } else {
                 Value::Boolean(previous)
-            };
-            return Ok(MultiValue::from_iter([result]));
-        }
+            })
+        });
+    }
+    let owner = owner.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let state = player_option_state(lua, &owner)?;
         let speeds = player_option_speeds(lua, &owner)?;
         // OptionsBinding returns the values from before the setter, unless the
         // final argument is true and requests chaining. Inactive aliases return
@@ -2076,7 +2129,16 @@ assert(options:Reverse() == 0 and options:XMod() == 1)
 
     #[test]
     fn boolean_options_match_native_binding() {
-        for (method, key) in [("StealthType", "stealthtype"), ("ZBuffer", "zbuffer")] {
+        let methods = SONG_LUA_PLAYER_OPTION_CAPABILITIES
+            .iter()
+            .copied()
+            .filter(|name| {
+                *name != "Overhead" && player_option_uses_bool(&name.to_ascii_lowercase())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(methods.len(), 40, "cover every native BOOL_INTERFACE");
+        for method in methods {
+            let key = method.to_ascii_lowercase();
             let lua = Lua::new();
             let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
                 .expect("create options");
@@ -2093,12 +2155,8 @@ end
 assert(o:StealthType(nil, false) == o)
 assert(o:StealthType(false, 0, true) == true and o:StealthType() == false)
 assert(o:StealthType(true, true) == o)
-o:FromString('*0 50% stealthtype'); assert(o:StealthType() == false)
-o:FromString('*0 51% stealthtype'); assert(o:StealthType() == true)
-o:FromString('no stealthtype'); assert(o:StealthType() == false)
 "#
-                .replace("StealthType", method)
-                .replace("stealthtype", key),
+                .replace("StealthType", method),
             )
             .exec()
             .expect("native boolean protocol");
@@ -2107,7 +2165,10 @@ o:FromString('no stealthtype'); assert(o:StealthType() == false)
             lua.load(format!("o:{method}(true, -1)"))
                 .exec()
                 .expect("numeric arg is ignored");
-            assert_eq!(speeds.get::<f32>(key).expect("unchanged speed"), 1.0);
+            assert_eq!(
+                speeds.get::<Option<f32>>(key).expect("no approach speed"),
+                None
+            );
         }
     }
 

@@ -634,79 +634,6 @@ fn player_transform_masks(
     Ok(masks)
 }
 
-fn transform_distance(left: f32, right: f32, cyclic: bool) -> f32 {
-    let distance = (left - right).abs();
-    if cyclic {
-        let wrapped = distance.rem_euclid(360.0);
-        wrapped.min(360.0 - wrapped)
-    } else {
-        distance
-    }
-}
-
-fn transform_tail_closes(
-    current: Option<f32>,
-    prior: Option<f32>,
-    baseline: Option<f32>,
-    default: f32,
-    cyclic: bool,
-) -> bool {
-    let current = current.unwrap_or(default);
-    let prior = prior.unwrap_or(default);
-    let baseline = baseline.unwrap_or(default);
-    // Crossing the baseline can be an explicit new destination. Preserve it
-    // rather than treating the smaller distance as an unfinished return tween.
-    if !cyclic
-        && ((current < baseline && prior > baseline) || (current > baseline && prior < baseline))
-    {
-        return false;
-    }
-    let remaining = transform_distance(current, baseline, cyclic);
-    let prior_remaining = transform_distance(prior, baseline, cyclic);
-    let last_step = transform_distance(current, prior, cyclic);
-    remaining < prior_remaining && remaining <= last_step + f32::EPSILON
-}
-
-fn snap_ended_transforms(
-    actor: &Table,
-    current: &mut SongLuaPerframePlayerState,
-    prior: SongLuaPerframePlayerState,
-    baseline: SongLuaPerframePlayerState,
-    ended: u16,
-) -> Result<(), String> {
-    macro_rules! snap {
-        ($index:expr, $field:ident, $state_key:literal, $default:expr, $cyclic:expr) => {
-            if ended & (1 << $index) != 0
-                && transform_tail_closes(
-                    current.$field,
-                    prior.$field,
-                    baseline.$field,
-                    $default,
-                    $cyclic,
-                )
-            {
-                current.$field = baseline.$field;
-                actor
-                    .set($state_key, baseline.$field)
-                    .map_err(|err| err.to_string())?;
-            }
-        };
-    }
-
-    snap!(0, x, "__songlua_state_x", 0.0, false);
-    snap!(1, y, "__songlua_state_y", 0.0, false);
-    snap!(2, z, "__songlua_state_z", 0.0, false);
-    snap!(3, rotation_x, "__songlua_state_rot_x_deg", 0.0, true);
-    snap!(4, rotation_z, "__songlua_state_rot_z_deg", 0.0, true);
-    snap!(5, rotation_y, "__songlua_state_rot_y_deg", 0.0, true);
-    snap!(6, zoom_x, "__songlua_state_zoom_x", 1.0, false);
-    snap!(7, zoom_y, "__songlua_state_zoom_y", 1.0, false);
-    snap!(8, zoom_z, "__songlua_state_zoom_z", 1.0, false);
-    snap!(9, skew_x, "__songlua_state_skew_x", 0.0, false);
-    snap!(10, skew_y, "__songlua_state_skew_y", 0.0, false);
-    Ok(())
-}
-
 pub fn tracked_player_tables(
     tracked_actors: &[SongLuaTrackedActor],
 ) -> [Option<Table>; LUA_PLAYERS] {
@@ -3109,6 +3036,8 @@ pub fn compile_update_functions<Kind>(
             .map(|(index, actor)| (actor.to_pointer() as usize, index)),
     );
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaBoolWrites::default());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
     restore_started_message_states(lua, overlays, &replay_overlays, started)?;
@@ -3179,8 +3108,7 @@ pub fn compile_update_functions<Kind>(
     let mut beat = start;
     let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
     let mut scheduled_states = baseline_overlays.clone();
-    let mut transform_masks = player_transform_masks(lua, &player_tables)?;
-    let mut player_capture_masks = transform_masks;
+    let mut player_capture_masks = player_transform_masks(lua, &player_tables)?;
     let mut frame_count = 0;
     crate::lua_util::set_compile_frames(lua, replay.iter().copied())
         .map_err(|err| err.to_string())?;
@@ -3225,11 +3153,6 @@ pub fn compile_update_functions<Kind>(
         restore_started_message_states(lua, overlays, &replay_overlays, started)?;
         update_overlays.copy_from_slice(&replay_overlays);
         let next_masks = player_transform_masks(lua, &player_tables)?;
-        let prior_active = if player_samples.len() >= 2 {
-            player_samples[player_samples.len() - 2]
-        } else {
-            baseline_players
-        };
         capture_update_overlay_samples(
             lua,
             context,
@@ -3401,43 +3324,7 @@ pub fn compile_update_functions<Kind>(
                 sample!(9, skew_x, skew_x);
                 sample!(10, skew_y, skew_y);
             }
-            let ended = transform_masks[player] & !next_masks[player];
-            if ended != 0 {
-                if let Some(actor) = player_tables[player].as_ref() {
-                    snap_ended_transforms(
-                        actor,
-                        &mut next_players[player],
-                        prior_active[player],
-                        baseline_players[player],
-                        ended,
-                    )?;
-                    if let Some(index) = player_capture_indices[player] {
-                        let state = &mut replay_overlays[index];
-                        let output = next_players[player];
-                        macro_rules! close {
-                            ($bit:literal, $out:ident, $field:ident) => {
-                                if ended & (1 << $bit) != 0 {
-                                    state.$field =
-                                        output.$out.unwrap_or(baseline_overlays[index].$field);
-                                }
-                            };
-                        }
-                        close!(0, x, x);
-                        close!(1, y, y);
-                        close!(2, z, z);
-                        close!(3, rotation_x, rot_x_deg);
-                        close!(4, rotation_z, rot_z_deg);
-                        close!(5, rotation_y, rot_y_deg);
-                        close!(6, zoom_x, zoom_x);
-                        close!(7, zoom_y, zoom_y);
-                        close!(8, zoom_z, zoom_z);
-                        close!(9, skew_x, skew_x);
-                        close!(10, skew_y, skew_y);
-                    }
-                }
-            }
         }
-        transform_masks = next_masks;
         sample_beats.push(next_beat);
         sample_seconds.push((seconds * rate) as f32);
         player_samples.push(next_players);
@@ -4026,6 +3913,10 @@ pub fn compile_perframes<Kind>(
 }
 
 #[cfg(test)]
+#[path = "../tests/perf/player_snap_baseline.rs"]
+pub(crate) mod player_snap_baseline;
+
+#[cfg(test)]
 #[path = "../tests/perf/sampling.rs"]
 mod sampling_perf;
 
@@ -4053,23 +3944,6 @@ mod tests {
             panic!("vector tween")
         };
         assert_eq!(actual, [516.0, 31.0, expected]);
-    }
-
-    #[test]
-    fn tail_keeps_crossing_pos() {
-        for (current, prior, baseline, cyclic, closes) in [
-            (640.5, 503.059375, 612.0, false, false),
-            (503.059375, 640.5, 612.0, false, false),
-            (0.25, 1.0, 0.0, false, true),
-            (0.0, 1.0, 0.0, false, true),
-            (2.0, 1.0, 0.0, false, false),
-            (359.75, 359.0, 0.0, true, true),
-        ] {
-            assert_eq!(
-                transform_tail_closes(Some(current), Some(prior), Some(baseline), 0.0, cyclic,),
-                closes
-            );
-        }
     }
 
     #[test]
