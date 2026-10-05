@@ -8534,37 +8534,7 @@ fn goodbye_whole_song_matches_native() {
     assert_eq!(parity.checks(), 118437, "retain every native observation");
     let map = projected_drawable_map(&trace, &compiled);
     let screen = [context.screen_width, context.screen_height];
-    let cropped_vertices = |sample: &[Value]| {
-        let [left, right, top, bottom] = native_draw_crop(sample)
-            .expect("native crop snapshot")
-            .map(|value| value.clamp(0.0, 1.0));
-        if left + right >= 1.0 || top + bottom >= 1.0 {
-            return Vec::new();
-        }
-        let corners = sample[5].as_array().expect("native clip corners");
-        // Sprite::DrawTexture crops local corners before the perspective
-        // divide. Interpolate the native homogeneous corners on that plane.
-        [
-            [left, top],
-            [1.0 - right, top],
-            [1.0 - right, 1.0 - bottom],
-            [left, 1.0 - bottom],
-        ]
-        .map(|[u, v]| {
-            let clip: [f32; 4] = std::array::from_fn(|axis| {
-                let corner = |index: usize| {
-                    value_f32(corners[index].get(axis)).expect("native clip coordinate")
-                };
-                (corner(0) * (1.0 - u) + corner(1) * u) * (1.0 - v)
-                    + (corner(3) * (1.0 - u) + corner(2) * u) * v
-            });
-            [
-                (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
-                (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
-            ]
-        })
-        .to_vec()
-    };
+
     let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
     let mut drawn_faces = 0;
     for track in trace.projected_vertex_tracks.iter().filter(|track| {
@@ -8580,7 +8550,7 @@ fn goodbye_whole_song_matches_native() {
                 return false;
             }
             let sample = sample.as_array().expect("native face sample");
-            let vertices = cropped_vertices(sample);
+            let vertices = native_crop_corners(sample, screen);
             if vertices.is_empty() {
                 return false;
             }
@@ -8638,7 +8608,7 @@ fn goodbye_whole_song_matches_native() {
                     }
                 }
             }
-            let mut expected = cropped_vertices(sample);
+            let mut expected = native_crop_corners(sample, screen);
             let shadow = native_draw_shadow(sample).expect("native shadow snapshot");
             if value_f32(sample.get(3)).is_some_and(|alpha| alpha > 0.0)
                 && (shadow[0] != 0.0 || shadow[1] != 0.0)
@@ -8868,6 +8838,44 @@ fn warm_lua_movie(key: &str, expected: (u32, u32)) {
     deadsync_assets::dynamic_media::retire_video_player(prepared.player);
 }
 
+fn warm_lua_image(key: &str, expected: (u32, u32)) {
+    let image = deadlib_assets::open_image_fallback(Path::new(key))
+        .expect("decode local sprite using production image loader");
+    assert_eq!((image.width(), image.height()), expected);
+    deadlib_assets::register_texture_dims(key, image.width(), image.height());
+}
+
+fn native_crop_corners(sample: &[Value], screen: [f32; 2]) -> Vec<[f32; 2]> {
+    let [left, right, top, bottom] = native_draw_crop(sample)
+        .expect("native crop snapshot")
+        .map(|value| value.clamp(0.0, 1.0));
+    if left + right >= 1.0 || top + bottom >= 1.0 {
+        return Vec::new();
+    }
+    let corners = sample[5].as_array().expect("native clip corners");
+    // Sprite::DrawTexture crops local corners before the perspective
+    // divide. Interpolate the native homogeneous corners on that plane.
+    [
+        [left, top],
+        [1.0 - right, top],
+        [1.0 - right, 1.0 - bottom],
+        [left, 1.0 - bottom],
+    ]
+    .map(|[u, v]| {
+        let clip: [f32; 4] = std::array::from_fn(|axis| {
+            let corner =
+                |index: usize| value_f32(corners[index].get(axis)).expect("native clip coordinate");
+            (corner(0) * (1.0 - u) + corner(1) * u) * (1.0 - v)
+                + (corner(3) * (1.0 - u) + corner(2) * u) * v
+        });
+        [
+            (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+            (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+        ]
+    })
+    .to_vec()
+}
+
 fn compare_image_draws(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -8885,7 +8893,7 @@ fn compare_image_draws(
         let &(layer, index) = map.get(&track.actor).expect("image drawable");
         if !matches!(
             compiled[layer].overlays[index].kind,
-            SongLuaOverlayKind::Sprite { .. }
+            SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::AftSprite { .. }
         ) {
             continue;
         }
@@ -8906,9 +8914,7 @@ fn compare_image_draws(
                 beat,
             );
             let actual = rendered_quad_corners(&frame, screen);
-            for corner in sample[6].as_array().expect("image corners") {
-                let x = value_f32(corner.get(0)).expect("image x");
-                let y = value_f32(corner.get(1)).expect("image y");
+            for [x, y] in native_crop_corners(sample, screen) {
                 assert!(
                     actual
                         .iter()
@@ -8924,6 +8930,14 @@ fn compare_image_draws(
                 "{} beat {beat} image draw",
                 track.actor
             );
+            if matches!(
+                compiled[layer].overlays[index].kind,
+                SongLuaOverlayKind::AftSprite { .. }
+            ) {
+                assert!(frame.ops.iter().all(|op| matches!(op,
+                    deadlib_present::render::DrawOp::Sprite(run)
+                        if deadlib_present::render::is_render_target_texture(run.texture_handle))));
+            }
             for (channel, actual) in frame.sprite_instances[0].tint.iter().enumerate() {
                 let expected = value_f32(sample[9].get(channel)).expect("image diffuse");
                 assert!(
@@ -8990,13 +9004,13 @@ fn save_tears_whole_native() {
     else {
         panic!("JPEG background must be a sprite");
     };
-    let image = deadlib_assets::open_image_fallback(Path::new(texture_key.as_ref()))
-        .expect("decode local JPEG using production image loader");
-    assert_eq!((image.width(), image.height()), (3224, 2240));
-    deadlib_assets::register_texture_dims(texture_key, image.width(), image.height());
+    warm_lua_image(texture_key, (3224, 2240));
     let draws = compare_image_draws(&trace, &compiled, &context);
     eprintln!("Save Your Tears actual image draw checks: {draws}");
-    assert_eq!(draws, 6808, "retain all visible movie and JPEG observations");
+    assert_eq!(
+        draws, 6808,
+        "retain all visible movie and JPEG observations"
+    );
     let mut wrong = compiled.clone();
     let track = wrong[layer]
         .overlay_updates
@@ -9015,5 +9029,174 @@ fn save_tears_whole_native() {
     assert!(
         !rejected.gaps.is_empty(),
         "incorrect fade values must fail full-frame checks"
+    );
+}
+
+#[test]
+fn karachi_whole_native() {
+    use deadsync_assets::song_lua::SongLuaProxyTarget as Target;
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/karachi-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    assert_eq!(
+        trace.projected_vertex_tracks.len(),
+        8,
+        "retain six named capture sprites"
+    );
+    assert_eq!(trace.update_frames.len(), 7576, "retain the entire song");
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    let map = projected_drawable_map(&trace, &compiled);
+    parity.section("capture proxy bindings");
+    let mut targets = 0;
+    for track in &trace.tween_tracks {
+        for operation in track
+            .segments
+            .iter()
+            .flat_map(|segment| &segment.operations)
+            .filter(|operation| operation.operation == "ActorProxy.SetTarget")
+        {
+            let path = operation.args[0]["path"]
+                .as_str()
+                .expect("native proxy target path");
+            let expected = match path {
+                "ScreenGameplay/Underlay" => Target::Underlay { hidden: false },
+                "ScreenGameplay/Overlay" => Target::Overlay { hidden: false },
+                "ScreenGameplay/PlayerP1/Combo" => Target::Combo { player_index: 0 },
+                "ScreenGameplay/PlayerP2/Combo" => Target::Combo { player_index: 1 },
+                "ScreenGameplay/PlayerP1/NoteField" => Target::NoteField { player_index: 0 },
+                "ScreenGameplay/PlayerP2/NoteField" => Target::NoteField { player_index: 1 },
+                "ScreenGameplay/PlayerP1/Judgment" => Target::Judgment { player_index: 0 },
+                "ScreenGameplay/PlayerP2/Judgment" => Target::Judgment { player_index: 1 },
+                _ => panic!("unexpected retained proxy target {path}"),
+            };
+            let &(layer, index) = map.get(&track.actor).expect("capture proxy actor");
+            parity.check(
+                matches!(compiled[layer].overlays[index].kind,
+                SongLuaOverlayKind::ActorProxy { target } if target == expected),
+                || {
+                    format!(
+                        "{} must capture {path}: {:?}",
+                        track.actor, compiled[layer].overlays[index].kind
+                    )
+                },
+            );
+            targets += 1;
+        }
+    }
+    assert_eq!(
+        targets, 8,
+        "include both players' note fields, judgments, combo and HUD"
+    );
+    parity.section("named capture resources");
+    let captures = trace
+        .projected_vertex_tracks
+        .iter()
+        .filter(|track| track.texture.starts_with("aft:"))
+        .collect::<Vec<_>>();
+    assert_eq!(captures.len(), 6);
+    for track in &captures {
+        let &(layer, index) = map.get(&track.actor).expect("capture sprite");
+        let &(owner_layer, owner) = map
+            .get(track.texture.strip_prefix("aft:").unwrap())
+            .expect("native capture owner");
+        let state = compiled_overlay_states_at(&compiled[owner_layer], &context, 0.0, 0.0)[owner];
+        parity.check(state.size == Some(track.texture_size), || {
+            format!("{} capture dimensions", track.actor)
+        });
+        parity.check(matches!((&compiled[layer].overlays[index].kind,
+            &compiled[owner_layer].overlays[owner].kind),
+            (SongLuaOverlayKind::AftSprite { capture_name: sprite },
+             SongLuaOverlayKind::ActorFrameTexture { capture_name: capture, .. }) if sprite == capture),
+            || format!("{} must sample {}",track.actor,track.texture));
+    }
+    eprintln!("{}", parity.summary("Karachi whole song"));
+    parity.assert_complete("Karachi whole song");
+    assert_eq!(
+        parity.checks(),
+        200040,
+        "retain every observation, binding and quiet drawable frame"
+    );
+    let background = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with(".png"))
+        .expect("local PNG background");
+    let &(layer, index) = map.get(&background.actor).expect("PNG sprite");
+    let SongLuaOverlayKind::Sprite { texture_key, .. } = &compiled[layer].overlays[index].kind
+    else {
+        panic!("PNG background must be a sprite")
+    };
+    warm_lua_image(texture_key, (1280, 720));
+    let draws = compare_image_draws(&trace, &compiled, &context);
+    eprintln!("Karachi actual image/capture draw checks: {draws}");
+    assert_eq!(
+        draws, 7600,
+        "retain every visible PNG and render-target sample"
+    );
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut capture_handle = None;
+    for track in &captures {
+        let &(_, index) = map.get(&track.actor).unwrap();
+        let sample = track
+            .samples
+            .iter()
+            .find(|sample| sample[2] == true && sample[3].as_f64().is_some_and(|alpha| alpha > 0.0))
+            .expect("visible native capture sample");
+        let beat = value_f32(sample.get(0)).unwrap();
+        let seconds = value_f32(sample.get(1)).unwrap();
+        let states = compiled_overlay_states_at(&compiled[primary], &context, beat, seconds);
+        let frame = composer.render_overlay(
+            &compiled[primary].overlays,
+            &states,
+            index,
+            [854.0, 480.0],
+            seconds,
+            beat,
+        );
+        let deadlib_present::render::DrawOp::Sprite(run) = frame.ops[0] else {
+            panic!("capture sprite draw")
+        };
+        let handle = deadlib_present::render::render_target_base_handle(run.texture_handle);
+        assert_eq!(
+            *capture_handle.get_or_insert(handle),
+            handle,
+            "all copies must sample the same target"
+        );
+        let expected =
+            if ["def-0016", "def-0017", "def-0018", "def-0019"].contains(&track.actor.as_str()) {
+                deadlib_present::render::BlendMode::Add
+            } else {
+                deadlib_present::render::BlendMode::Alpha
+            };
+        assert_eq!(run.blend, expected, "native glow/scringus blend");
+    }
+    let mut wrong = compiled.clone();
+    let &(layer, index) = map.get(&captures[0].actor).unwrap();
+    let fade = wrong[layer]
+        .overlay_updates
+        .iter_mut()
+        .find(|track| {
+            track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Diffuse
+        })
+        .expect("native glow alpha track");
+    for sample in &mut fade.samples {
+        if let SongLuaOverlayUpdateValue::Vec4(value) = &mut sample.value {
+            value[3] = 0.95;
+        }
+    }
+    let mut rejected = Parity::default();
+    compare_drawable_frames(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "incorrect capture glow must fail full-frame checks"
     );
 }

@@ -284,6 +284,7 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
 pub struct WholeSongComposer {
     assets: AssetManager,
     mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
+    topology: SongLuaOverlayTopologyIndex,
 }
 
 impl WholeSongComposer {
@@ -323,6 +324,7 @@ impl WholeSongComposer {
         Self {
             assets,
             mesh_scratch: song_lua_projected_mesh_scratch_for(overlays),
+            topology: SongLuaOverlayTopologyIndex::new(overlays),
         }
     }
 
@@ -339,7 +341,24 @@ impl WholeSongComposer {
         beat: f32,
     ) -> deadlib_render_core::RenderFrame {
         let mut actors = Vec::new();
-        if append_song_lua_multi_actor_overlay(
+        if matches!(overlays[index].kind, SongLuaOverlayKind::AftSprite { .. }) {
+            if let Some(target) = self.topology.aft_sprite_targets[index].get()
+                && let Some(built) = build_song_lua_aft_sprite_actor(
+                    states[index],
+                    self.topology.aft_texture_handles[target],
+                    states[target].size.unwrap_or(screen),
+                    0,
+                    screen[0],
+                    screen[1],
+                    seconds,
+                    beat,
+                    seconds,
+                    self.mesh_scratch.get_mut(index),
+                )
+            {
+                actors.extend(built);
+            }
+        } else if append_song_lua_multi_actor_overlay(
             &mut actors,
             &overlays[index],
             states[index],
