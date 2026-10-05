@@ -258,6 +258,10 @@ struct NativeDisplay {
 #[derive(Deserialize)]
 struct NativeFixtureContext {
     beat_step: f32,
+    #[serde(default)]
+    note_end_beat: Option<f32>,
+    #[serde(default)]
+    specified_last_beat: Option<f32>,
 }
 
 #[derive(Default)]
@@ -8914,7 +8918,32 @@ fn compare_image_draws(
                 beat,
             );
             let actual = rendered_quad_corners(&frame, screen);
-            for [x, y] in native_crop_corners(sample, screen) {
+            let expected = native_crop_corners(sample, screen);
+            let area = expected
+                .iter()
+                .zip(expected.iter().cycle().skip(1))
+                .map(|(a, b)| a[0] * b[1] - a[1] * b[0])
+                .sum::<f32>();
+            if expected.is_empty() || area == 0.0 {
+                assert!(
+                    actual.is_empty(),
+                    "{} beat {beat}: collapsed corners",
+                    track.actor
+                );
+                assert!(
+                    frame.sprite_instances.is_empty(),
+                    "{} beat {beat}: collapsed sprite",
+                    track.actor
+                );
+                assert!(
+                    frame.ops.is_empty(),
+                    "{} beat {beat}: collapsed draw",
+                    track.actor
+                );
+                checks += 3;
+                continue;
+            }
+            for [x, y] in expected {
                 assert!(
                     actual
                         .iter()
@@ -9029,6 +9058,101 @@ fn save_tears_whole_native() {
     assert!(
         !rejected.gaps.is_empty(),
         "incorrect fade values must fail full-frame checks"
+    );
+}
+
+#[test]
+fn i_ai_whole_native() {
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/i-ai-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    assert_eq!(compiled.len(), 2, "retain background and foreground");
+    assert_eq!(trace.projected_vertex_tracks.len(), 6);
+    assert_eq!(trace.update_frames.len(), 7201);
+    assert_eq!(trace.fixture_context.note_end_beat, Some(444.0));
+    assert!(
+        trace
+            .fixture_context
+            .specified_last_beat
+            .is_some_and(|beat| beat > 444.0)
+    );
+    assert_eq!(trace.end_position.beat, Some(450.0));
+    let tv = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with("TVTurnOff.png"))
+        .expect("final TV effect");
+    assert!(
+        tv.samples
+            .iter()
+            .any(|sample| sample[0].as_f64().is_some_and(|beat| beat > 444.0)
+                && sample[2] == true
+                && sample[3] == 1)
+    );
+    let collapsed = tv
+        .samples
+        .iter()
+        .find(|sample| {
+            sample[0].as_f64().is_some_and(|beat| beat > 446.0)
+                && sample[4]
+                    .as_array()
+                    .is_some_and(|corners| corners.iter().all(|corner| corner == &corners[0]))
+        })
+        .expect("retain completed final TV shutoff");
+    assert!(
+        trace.end_position.beat.unwrap() > value_f32(collapsed.get(0)).unwrap() + 3.0,
+        "retain quiet frames after the final effect"
+    );
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("I (Ai) whole song"));
+    parity.assert_complete("I (Ai) whole song");
+    assert_eq!(
+        parity.checks(),
+        241877,
+        "retain every observation and quiet frame"
+    );
+    let map = projected_drawable_map(&trace, &compiled);
+    for track in &trace.projected_vertex_tracks {
+        let &(layer, index) = map.get(&track.actor).expect("local image sprite");
+        let SongLuaOverlayKind::Sprite { texture_key, .. } = &compiled[layer].overlays[index].kind
+        else {
+            panic!("local image must be a sprite");
+        };
+        warm_lua_image(
+            texture_key,
+            (track.texture_size[0] as u32, track.texture_size[1] as u32),
+        );
+    }
+    let draws = compare_image_draws(&trace, &compiled, &context);
+    eprintln!("I (Ai) actual image draw checks: {draws}");
+    assert_eq!(draws, 598, "include both completed zero-size TV effects");
+    let &(layer, index) = map.get(&tv.actor).expect("TV sprite");
+    let mut wrong = compiled.clone();
+    let fade = wrong[layer]
+        .overlay_updates
+        .iter_mut()
+        .find(|track| {
+            track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Diffuse
+        })
+        .expect("TV alpha track");
+    for sample in &mut fade.samples {
+        if let SongLuaOverlayUpdateValue::Vec4(value) = &mut sample.value {
+            value[3] = 0.95;
+        }
+    }
+    let mut rejected = Parity::default();
+    compare_drawable_frames(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "incorrect TV alpha must fail full-frame checks"
     );
 }
 
