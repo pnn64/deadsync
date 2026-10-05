@@ -1,0 +1,19 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "raw_sha256": "94896ad46e0db774669763284359c351a18bf7060da581c7215e90c1f4d2d83d",
+  "compressed_sha256": "388445a4df574f16b3255dbbe1f486871c61ecd5a62d732ae8c54e6ddd0abef1",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "fe5427798d707616467ff2028b8aa698e4be8a9f2ee8181bcbd47d2780b63636",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "67ff922ea7c0f652a6cc437f958a8e597a10e1497083f5fe5d20af6187dccc24",
+    "itgmania-harness-rs/native/runtime_stubs.cpp": "fbda8e8d4dd63bc454dea5b948d9b509ff4e4d085104f931e77b925258a63cb5",
+    "itgmania/src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "itgmania/src/RageTexture.cpp": "209126b1acf0b3f825a55315b748c3558725183d22477ced7c198fef9bd1b6c7",
+    "deadsync/tests/fixtures/song-lua/texture-alias.lua": "7150ad6998a703332d5dbfb904be55785d0210d428b54cf568c2cbbb32656603",
+    "deadsync/tests/fixtures/song-lua/Normal 2x6.png": "51be0a4ed68b24462daaf307b5538a037c31ac54d74ad0aae461ece9a2bc44e0",
+    "deadsync/tests/fixtures/song-lua/fit-rect.png": "c21704e2430ff2c421a08438f7b2d412796fb2061312f1b9080f352eea663a15",
+    "deadsync/tests/fixtures/song-lua/texture-alias.sm": "33df15fea0d93c6cd3283431bda78b89138c0be9048c13f8bb3bdbb079f3d119"
+  }
+}

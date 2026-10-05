@@ -1,0 +1,19 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "raw_sha256": "1e2ec050f10b2d927b65bbc1ffea2bbc8506a6b1d605b46109e564eebd6eacb8",
+  "compressed_sha256": "36ff689e8b234d7da90223379e4dcb7ebc3454c7230ec668e9327a9ff69e5617",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "29a7f2fa5880444a8ee7181d20b9171d64ed0bbac62d503c61c3aa40b778f750",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "67ff922ea7c0f652a6cc437f958a8e597a10e1497083f5fe5d20af6187dccc24",
+    "itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania/src/Actor.h": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+    "itgmania/src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "itgmania/src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "deadsync/tests/fixtures/song-lua/immediate-shadow.lua": "a9cf799a808b949c29c80096a493be5ca7ac762ff533d6e1a4897a971196bd31",
+    "deadsync/tests/fixtures/song-lua/immediate-shadow.sm": "62e7c9fc7e3f045191b242cd869c09b640f71c093975957c2f0a6b32ceaeadda"
+  },
+  "coverage": "Shadow offsets and colors bypass the child tween queue; current diffuse remains queued. Verify actual shadow and diffuse draw geometry."
+}

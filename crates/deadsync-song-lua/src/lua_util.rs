@@ -3896,7 +3896,7 @@ fn capture_immediate_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlu
     set_actor_capture_state(actor, key, value)
 }
 
-fn capture_immediate_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
+fn capture_immediate_vec2(lua: &Lua, actor: &Table, key: &str, size: [f32; 2]) -> mlua::Result<()> {
     let table = lua.create_table_from(
         size.into_iter()
             .enumerate()
@@ -3905,14 +3905,14 @@ fn capture_immediate_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Res
     if !record_overlay_update_capture_immediate(
         lua,
         actor,
-        "size",
+        key,
         SongLuaOverlayUpdateValue::Vec2(size),
     ) {
         let block = actor_immediate_capture_block(lua, actor)?;
-        block.set("size", table.clone())?;
+        block.set(key, table.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    set_actor_capture_state(actor, "size", table)
+    set_actor_capture_state(actor, key, table)
 }
 
 fn capture_immediate_vec3(
@@ -5286,8 +5286,22 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
             .as_deref()
             .unwrap_or_else(|| Path::new(&raw_texture)),
     )?;
-    let (texture_width, texture_height) =
-        actor_image_texture_size(actor)?.unwrap_or((source_width, source_height));
+    // RageBitmapTexture reports its padded power-of-two allocation. DeadSync's
+    // physical UV helpers continue to use the decoded image's dimensions.
+    let (texture_width, texture_height) = actor_image_texture_size(actor)?
+        .map(|(width, height)| {
+            (
+                (width as u32)
+                    .checked_next_power_of_two()
+                    .unwrap_or(u32::MAX)
+                    .max(8) as f32,
+                (height as u32)
+                    .checked_next_power_of_two()
+                    .unwrap_or(u32::MAX)
+                    .max(8) as f32,
+            )
+        })
+        .unwrap_or((source_width, source_height));
     install_texture_proxy_methods(
         lua,
         &texture,
@@ -5335,6 +5349,17 @@ pub fn install_texture_proxy_methods(
     frame_count: u32,
 ) -> mlua::Result<()> {
     texture.set("__songlua_texture_path", path.clone())?;
+    // SetTexture uses RageTexture's frame size, independently of the Sprite's
+    // existing states. Capture it on this handle so a later Load on its owner
+    // cannot change a retained texture's dimensions.
+    let (cols, rows) = actor_sprite_sheet_dims(actor)?.unwrap_or((1, 1));
+    texture.set(
+        "__songlua_source_frame_size",
+        lua.create_sequence_from([
+            (source_width / cols.max(1) as f32).floor(),
+            (source_height / rows.max(1) as f32).floor(),
+        ])?,
+    )?;
     texture.set(
         "GetPath",
         lua.create_function(move |lua, _args: MultiValue| {
@@ -6107,7 +6132,7 @@ fn load_actor_texture(
         )?;
     }
     if let Some((width, height)) = actor_image_frame_size(actor)? {
-        capture_immediate_size(lua, actor, [width, height])?;
+        capture_immediate_vec2(lua, actor, "size", [width, height])?;
         capture_immediate_bool(lua, actor, "sprite_texture", true)?;
     }
     capture_sprite_texture(lua, actor, previous)
@@ -6135,26 +6160,18 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                 set_actor_texture_from_value(&actor, method_arg(&args, 0), false)?;
                 let size = match method_arg(&args, 0) {
                     Some(Value::Table(texture)) => {
-                        let width = texture
-                            .get::<Option<Function>>("GetSourceFrameWidth")?
-                            .or(texture.get::<Option<Function>>("GetSourceWidth")?);
-                        let height = texture
-                            .get::<Option<Function>>("GetSourceFrameHeight")?
-                            .or(texture.get::<Option<Function>>("GetSourceHeight")?);
-                        width
-                            .zip(height)
-                            .map(|(width, height)| {
-                                Ok::<_, mlua::Error>((
-                                    width.call::<f32>(texture.clone())?,
-                                    height.call::<f32>(texture.clone())?,
-                                ))
-                            })
-                            .transpose()?
+                        if let Some(size) =
+                            texture.get::<Option<Table>>("__songlua_source_frame_size")?
+                        {
+                            table_vec2(&size).map(|[width, height]| (width, height))
+                        } else {
+                            actor_image_frame_size(&actor)?
+                        }
                     }
                     _ => actor_image_frame_size(&actor)?,
                 };
                 if let Some((width, height)) = size {
-                    capture_immediate_size(lua, &actor, [width, height])?;
+                    capture_immediate_vec2(lua, &actor, "size", [width, height])?;
                 }
                 if actor_aft_capture_name(&actor)?.is_some()
                     || actor_texture_path(&actor)?.is_some()
@@ -7352,7 +7369,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                 let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
                     return Ok(actor.clone());
                 };
-                capture_block_set_vec2(lua, &actor, "shadow_len", [value, -value])?;
+                capture_immediate_vec2(lua, &actor, "shadow_len", [value, -value])?;
                 Ok(actor.clone())
             }
         })?,
@@ -7367,7 +7384,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                 };
                 let mut len = actor_shadow_len(lua, &actor)?;
                 len[0] = value;
-                capture_block_set_vec2(lua, &actor, "shadow_len", len)?;
+                capture_immediate_vec2(lua, &actor, "shadow_len", len)?;
                 Ok(actor.clone())
             }
         })?,
@@ -7382,7 +7399,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                 };
                 let mut len = actor_shadow_len(lua, &actor)?;
                 len[1] = -value;
-                capture_block_set_vec2(lua, &actor, "shadow_len", len)?;
+                capture_immediate_vec2(lua, &actor, "shadow_len", len)?;
                 Ok(actor.clone())
             }
         })?,
@@ -7395,7 +7412,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                 let Some(color) = read_color_args(&args) else {
                     return Ok(actor.clone());
                 };
-                capture_block_set_vec4(lua, &actor, "shadow_color", color)?;
+                capture_immediate_vec4(lua, &actor, "shadow_color", color)?;
                 Ok(actor.clone())
             }
         })?,
@@ -9732,8 +9749,11 @@ fn advance_queue_clock(
             clock.frame += 1;
             clock.remaining = frames.delta(clock.frame);
         }
+        // A callback after its child can enqueue a zero-time state on the final
+        // captured frame. Its start still belongs to the next update, even when
+        // that update lies beyond the replay. Omitting this sample makes the
+        // pending destination look immediate and overwrites the last draw.
         if let Some(samples) = &mut samples
-            && clock.frame < frames.times.len()
             && samples.is_empty()
         {
             let start = frames.time(clock.frame) - if left == 0.0 { 0.0 } else { clock.remaining };

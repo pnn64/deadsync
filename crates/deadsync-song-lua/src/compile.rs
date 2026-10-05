@@ -272,7 +272,7 @@ where
     // Startup queues and the initial update can consume one-shot broadcasts
     // before the sampled replay starts. Retain their events as well.
     crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
-    let (startup_states, mut startup_tweens) =
+    let (mut startup_states, mut startup_tweens) =
         run_actor_startup_commands(&lua, &root, initial_actor_states).map_err(|err| {
             format!(
                 "failed to run actor startup commands for song lua session '{}': {err}",
@@ -281,10 +281,47 @@ where
         })?;
     compile_timer.push_stage("startup_commands");
     let mut screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
+    // Later sampled callbacks must not retroactively change the skin/lead-in
+    // selected for the transition into gameplay.
+    let startup = read_startup(&lua, context).map_err(|err| err.to_string())?;
+    // The zero-delta update can enqueue a child's next-frame state. Keep its
+    // new blocks separate from Init/On and speculative queued startup commands.
+    let mut initial_updates = std::collections::HashMap::new();
+    crate::lua_util::collect_initial_states(&root, &mut initial_updates)
+        .map_err(|err| err.to_string())?;
+    let update_blocks = initial_updates
+        .iter()
+        .map(|(&pointer, (actor, _))| {
+            crate::lua_util::flush_actor_capture(actor).map_err(|err| err.to_string())?;
+            Ok((pointer, crate::lua_util::read_actor_capture_blocks(actor)?))
+        })
+        .collect::<Result<std::collections::HashMap<_, _>, String>>()?;
+    run_actor_update_functions_with_delta(&lua, &root, 0.0).map_err(|err| {
+        format!(
+            "failed to run actor update functions for song lua session '{}': {err}",
+            trace_entry_path.display()
+        )
+    })?;
+    let mut initial_updates = crate::lua_util::capture_startup_states(initial_updates)?;
+    let update_blocks = initial_updates
+        .iter()
+        .map(|(&pointer, update)| {
+            // Stop/finish tweening can replace the capture rather than append.
+            let prefix = update_blocks.get(&pointer).map_or(0, |previous| {
+                if update.blocks.starts_with(previous) {
+                    previous.len()
+                } else {
+                    0
+                }
+            });
+            (pointer, prefix)
+        })
+        .collect::<std::collections::HashMap<_, _>>();
     crate::lua_util::bake_startup_tweens(
         startup_tweens
             .values_mut()
-            .chain(screen_layer_startup.values_mut()),
+            .chain(screen_layer_startup.values_mut())
+            .chain(initial_updates.values_mut()),
         crate::perframe::update_function_replay_beats(
             context,
             0.0,
@@ -292,15 +329,17 @@ where
         )
         .into_iter(),
     );
-    // Later sampled callbacks must not retroactively change the skin/lead-in
-    // selected for the transition into gameplay.
-    let startup = read_startup(&lua, context).map_err(|err| err.to_string())?;
-    run_actor_update_functions_with_delta(&lua, &root, 0.0).map_err(|err| {
-        format!(
-            "failed to run actor update functions for song lua session '{}': {err}",
-            trace_entry_path.display()
-        )
-    })?;
+    for (pointer, mut update) in initial_updates {
+        // Baking changes progress only; the checked prefix remains in bounds.
+        update.blocks.drain(..update_blocks[&pointer]);
+        if update.blocks.iter().any(|block| block.progress.is_some()) {
+            if let Some(state) = startup_states.get_mut(&pointer) {
+                state.blocks.extend(update.blocks);
+            } else if let Some(state) = startup_tweens.get_mut(&pointer) {
+                state.blocks.extend(update.blocks);
+            }
+        }
+    }
     compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
     compile_timer.push_stage("draw_functions");

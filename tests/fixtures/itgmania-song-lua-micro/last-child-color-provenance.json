@@ -1,0 +1,17 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "raw_sha256": "0b2a0b4f075b13f177cff0719d33b24c3ab88eadfa2703531f07a30e637201dc",
+  "compressed_sha256": "98c1f45580ca56c8968daaaef6a8ec8e89a4894e1bb6c7a76d4f26938c19e49b",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "fe5427798d707616467ff2028b8aa698e4be8a9f2ee8181bcbd47d2780b63636",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "67ff922ea7c0f652a6cc437f958a8e597a10e1497083f5fe5d20af6187dccc24",
+    "itgmania/src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "itgmania/src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "deadsync/tests/fixtures/song-lua/last-child-color.lua": "750ad5a1ea3e85930502e3fdb73cbb64935ce1868ae797eecae6c0446faaabf8",
+    "deadsync/tests/fixtures/song-lua/last-child-color.sm": "2b115c679ebc6bc91f78d34bc60e5cf164faa336db02f7ce1180159fbb820774"
+  },
+  "coverage": "The last parent callback enqueues a child color for its next update; preserve the current final-frame color."
+}

@@ -165,6 +165,8 @@ struct NativeProjectedVertexTrack {
     camera_actor: String,
     sample_layout: Vec<String>,
     samples: Vec<Value>,
+    #[serde(default)]
+    texture_samples: Vec<(f32, f32, String, f32, f32)>,
 }
 
 #[derive(Deserialize)]
@@ -733,29 +735,151 @@ fn compare_layers(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mu
             });
             continue;
         };
-        let mut native = Vec::new();
-        collect_native_drawables(trace, root, &definitions, &mut native);
+        let mut instances = Vec::new();
+        collect_native_drawable_definitions(trace, root, &definitions, &mut instances);
+        let native = instances
+            .iter()
+            .map(|actor| (actor.class, actor.name))
+            .collect::<Vec<_>>();
         let deadsync = compiled
             .overlays
             .iter()
             .filter(|overlay| !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound"))
             .map(|overlay| (kind_name(&overlay.kind), overlay.name.as_deref()))
             .collect::<Vec<_>>();
-        parity.check(native == deadsync, || {
-            let first = native
+        // Lua pairs() does not promise the declaration order of texture caches.
+        // Retain every resource identity, but only ignore order when both sides
+        // prove that a uniquely named actor stays invisible and is not proxied.
+        let hidden = instances
+            .iter()
+            .filter(|actor| {
+                actor.name.is_some()
+                    && native
+                        .iter()
+                        .filter(|key| **key == (actor.class, actor.name))
+                        .count()
+                        == 1
+                    && native_never_visible(trace, actor.id)
+                    && compiled
+                        .overlays
+                        .iter()
+                        .enumerate()
+                        .any(|(index, overlay)| {
+                            (kind_name(&overlay.kind), overlay.name.as_deref())
+                                == (actor.class, actor.name)
+                                && compiled_never_visible(compiled, index)
+                        })
+            })
+            .map(|actor| (actor.class, actor.name))
+            .collect::<HashSet<_>>();
+        let mut native_members = native.clone();
+        let mut actual_members = deadsync.clone();
+        native_members.sort_unstable();
+        actual_members.sort_unstable();
+        let native_order = native
+            .iter()
+            .filter(|key| !hidden.contains(*key))
+            .collect::<Vec<_>>();
+        let actual_order = deadsync
+            .iter()
+            .filter(|key| !hidden.contains(*key))
+            .collect::<Vec<_>>();
+        parity.check(native_members == actual_members && native_order == actual_order, || {
+            let first = native_order
                 .iter()
-                .zip(&deadsync)
+                .zip(&actual_order)
                 .position(|(native, deadsync)| native != deadsync)
-                .unwrap_or_else(|| native.len().min(deadsync.len()));
+                .unwrap_or_else(|| native_order.len().min(actual_order.len()));
             format!(
-                "layer {layer} drawable order differs: ITGmania has {}, DeadSync has {}; first difference at {first}: {:?} vs {:?}",
+                "layer {layer} drawable membership/order differs: ITGmania has {}, DeadSync has {}; first visible difference at {first}: {:?} vs {:?}",
                 native.len(),
                 deadsync.len(),
-                native.get(first),
-                deadsync.get(first)
+                native_order.get(first),
+                actual_order.get(first)
             )
         });
     }
+}
+
+fn native_never_visible(trace: &NativeTrace, id: &str) -> bool {
+    trace
+        .runtime_actors
+        .iter()
+        .find(|actor| actor.id == id)
+        .is_some_and(|actor| {
+            actor
+                .render_state_samples
+                .first()
+                .is_some_and(|sample| sample.0 == 0 && !sample.2)
+                && actor.render_state_samples.iter().all(|sample| !sample.2)
+                && actor
+                    .final_render_state
+                    .as_ref()
+                    .is_some_and(|state| !state.visible)
+        })
+        && !trace.operation_tracks.iter().any(|track| {
+            track.operation == "ActorProxy.SetTarget"
+                && track.samples.iter().any(|sample| {
+                    sample
+                        .3
+                        .first()
+                        .and_then(|value| value.get("actor"))
+                        .and_then(Value::as_str)
+                        == Some(id)
+                })
+        })
+        && !trace
+            .tween_tracks
+            .iter()
+            .flat_map(|track| &track.segments)
+            .flat_map(|segment| &segment.operations)
+            .any(|operation| {
+                operation.operation == "ActorProxy.SetTarget"
+                    && operation
+                        .args
+                        .first()
+                        .and_then(|value| value.get("actor"))
+                        .and_then(Value::as_str)
+                        == Some(id)
+            })
+}
+
+fn compiled_never_visible(compiled: &CompiledSongLua, index: usize) -> bool {
+    let overlay = &compiled.overlays[index];
+    let turns_visible = |target, value: &SongLuaOverlayUpdateValue| {
+        target == SongLuaOverlayUpdateTarget::Visible
+            && !matches!(value, SongLuaOverlayUpdateValue::Bool(false))
+    };
+    !overlay.initial_state.visible
+        && !overlay
+            .message_commands
+            .iter()
+            .flat_map(|command| &command.blocks)
+            .any(|block| block.delta.visible == Some(true))
+        && !compiled.overlay_eases.iter().any(|ease| {
+            ease.overlay_index == index
+                && (ease.from.visible == Some(true) || ease.to.visible == Some(true))
+        })
+        && !compiled.overlay_updates.iter().any(|update| {
+            update.overlay_index == index
+                && update
+                    .samples
+                    .iter()
+                    .any(|sample| turns_visible(update.target, &sample.value))
+        })
+        && !compiled
+            .stateful_message_captures
+            .iter()
+            .flat_map(|capture| &capture.writes)
+            .any(|write| write.overlay_index == index && turns_visible(write.target, &write.value))
+        && !compiled.overlays.iter().any(|overlay| {
+            matches!(
+                overlay.kind,
+                SongLuaOverlayKind::ActorProxy {
+                    target: deadsync_assets::song_lua::SongLuaProxyTarget::Actor { overlay_index }
+                } if overlay_index == index
+            )
+        })
 }
 
 #[derive(Clone, Copy)]
@@ -2220,17 +2344,6 @@ fn compare_update_render_values(
     }
 }
 
-fn collect_native_drawables<'a>(
-    trace: &'a NativeTrace,
-    parent: &'a NativeDefinition,
-    definitions: &HashMap<&'a str, &'a NativeDefinition>,
-    out: &mut Vec<(&'a str, Option<&'a str>)>,
-) {
-    let mut instances = Vec::new();
-    collect_native_drawable_definitions(trace, parent, definitions, &mut instances);
-    out.extend(instances.into_iter().map(|actor| (actor.class, actor.name)));
-}
-
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
     parity.section("timeline");
     let beat_epsilon = trace.fixture_context.beat_step + EPSILON;
@@ -3305,12 +3418,25 @@ fn projected_drawable_map(
             .map(|(index, _)| index)
             .collect::<Vec<_>>();
         if native.len() == deadsync.len() {
-            drawable_map.extend(
-                native
-                    .into_iter()
-                    .zip(deadsync)
-                    .map(|(definition, index)| (definition.id.to_owned(), (layer, index))),
-            );
+            let named = |definition: &NativeInstance, index: usize| {
+                definition.name.is_some()
+                    && compiled.overlays[index].name.as_deref() == definition.name
+                    && kind_name(&compiled.overlays[index].kind) == definition.class
+            };
+            drawable_map.extend(native.into_iter().zip(deadsync).map(|(definition, index)| {
+                // Unordered hidden resource declarations retain their
+                // unique name identity. Repeated names keep draw order.
+                let mut matches = compiled
+                    .overlays
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| named(&definition, *index));
+                let index = match (matches.next(), matches.next()) {
+                    (Some((unique, _)), None) => unique,
+                    _ => index,
+                };
+                (definition.id.to_owned(), (layer, index))
+            }));
         } else {
             // A noteskin placeholder can change drawable kinds without changing
             // the authored tree. Keep checking the other actors in that tree.
@@ -3609,6 +3735,28 @@ fn native_screen_vertices(sample: &[Value]) -> Option<Vec<[f32; 2]>> {
             Some([value_f32(vertex.first())?, value_f32(vertex.get(1))?])
         })
         .collect()
+}
+
+fn native_draw_crop(sample: &[Value]) -> Option<[f32; 4]> {
+    let crop = sample.get(11)?.as_array()?;
+    Some([
+        value_f32(crop.first())?,
+        value_f32(crop.get(1))?,
+        value_f32(crop.get(2))?,
+        value_f32(crop.get(3))?,
+    ])
+}
+
+fn native_draw_shadow(sample: &[Value]) -> Option<[f32; 6]> {
+    let shadow = sample.get(12)?.as_array()?;
+    Some([
+        value_f32(shadow.first())?,
+        value_f32(shadow.get(1))?,
+        value_f32(shadow.get(2))?,
+        value_f32(shadow.get(3))?,
+        value_f32(shadow.get(4))?,
+        value_f32(shadow.get(5))?,
+    ])
 }
 
 fn compiled_world_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -> [[f32; 4]; 4] {
@@ -4522,6 +4670,10 @@ fn compare_projected_geometry(
     let drawable_map = projected_drawable_map(trace, compiled);
     let mut colors = Parity::default();
     colors.section("draw colors");
+    let mut crops = Parity::default();
+    crops.section("draw crops");
+    let mut shadows = Parity::default();
+    shadows.section("draw shadows");
     let mut state_cache = HashMap::<(usize, u32, u32), Vec<SongLuaOverlayState>>::new();
     for track in &trace.projected_vertex_tracks {
         let Some(definition_id) = track.definition_id.as_deref() else {
@@ -4536,6 +4688,8 @@ fn compare_projected_geometry(
             continue;
         };
         let mut reported_colors = [false; 8];
+        let mut reported_crops = [false; 4];
+        let mut reported_shadows = [false; 6];
         let mut reported_visibility = false;
         let mut reported_alpha = false;
         let mut reported_nonfinite = false;
@@ -4618,6 +4772,32 @@ fn compare_projected_geometry(
             let actual_diffuse = state.vertex_colors.map_or(state.diffuse, |corners| {
                 std::array::from_fn(|channel| state.diffuse[channel] * corners[0][channel])
             });
+            if let Some(native) = native_draw_crop(sample) {
+                for (channel, actual) in [
+                    state.cropleft,
+                    state.cropright,
+                    state.croptop,
+                    state.cropbottom,
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    crops.check_once((native[channel] - actual).abs() <= 0.000_1, &mut reported_crops[channel], || format!("draw crop differs for {} ({definition_id}) at beat {beat:.3}, channel {channel}: ITGmania {}, DeadSync {actual}", track.actor, native[channel]));
+                }
+            }
+            if let Some(native) = native_draw_shadow(sample) {
+                let actual = [
+                    state.shadow_len[0],
+                    -state.shadow_len[1],
+                    state.shadow_color[0],
+                    state.shadow_color[1],
+                    state.shadow_color[2],
+                    state.shadow_color[3],
+                ];
+                for channel in 0..6 {
+                    shadows.check_once((native[channel]-actual[channel]).abs() <= 0.000_1, &mut reported_shadows[channel], || format!("draw shadow differs for {} ({definition_id}) at beat {beat:.3}, channel {channel}: ITGmania {}, DeadSync {}", track.actor, native[channel], actual[channel]));
+                }
+            }
             let has_colors = sample.get(9).is_some_and(Value::is_array)
                 && sample.get(10).is_some_and(Value::is_array);
             let actual_visible = state.sprite_texture
@@ -4754,6 +4934,14 @@ fn compare_projected_geometry(
     }
     parity.sections.extend(colors.sections);
     parity.gaps.extend(colors.gaps);
+    if crops.checks() > 0 {
+        parity.sections.extend(crops.sections);
+        parity.gaps.extend(crops.gaps);
+    }
+    if shadows.checks() > 0 {
+        parity.sections.extend(shadows.sections);
+        parity.gaps.extend(shadows.gaps);
+    }
 }
 
 fn compare_projected_vibration_coverage(
@@ -4954,6 +5142,19 @@ fn compare_sprite_textures(
             }
         }
     }
+    // SetTexture receives a RageTexture handle, so setter arguments alone do
+    // not identify its image. The native draw capture retains immutable source
+    // paths on every binding/size change, including copies from hidden caches.
+    for track in &trace.projected_vertex_tracks {
+        for (_, second, path, _, _) in &track.texture_samples {
+            if !path.starts_with("aft:") {
+                loads
+                    .entry(&track.actor)
+                    .or_default()
+                    .push((u64::MAX, *second, path));
+            }
+        }
+    }
     if loads.is_empty() {
         return;
     }
@@ -5117,6 +5318,282 @@ fn native_song_lua_semantics_match_deadsync() {
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     eprintln!("{}", parity.summary(&trace.title));
     parity.assert_complete("song Lua semantic");
+}
+
+#[test]
+fn last_parent_write_waits_for_child_update() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/last-child-color.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/last-child-color.sm"),
+    );
+    compare_semantics(&trace, &compiled, primary, &context).assert_complete("last child color");
+    let beat = trace.trace_until_beat;
+    let second = trace.end_position.seconds;
+    let states = compiled_overlay_states_at(&compiled[primary], &context, beat, second);
+    let index = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Color"))
+        .unwrap();
+    assert!(
+        (states[index].diffuse[3] - 0.99).abs() <= 0.0001,
+        "last draw keeps the prior callback's color"
+    );
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let frame = composer.render_overlay(
+        &compiled[primary].overlays,
+        &states,
+        index,
+        [854.0, 480.0],
+        second,
+        beat,
+    );
+    assert!(
+        !frame.ops.is_empty(),
+        "pending transparent destination must not hide the last draw"
+    );
+    let mut wrong = compiled.clone();
+    for update in &mut wrong[primary].overlay_updates {
+        if update.overlay_index == index && update.target == SongLuaOverlayUpdateTarget::Diffuse {
+            update.samples.last_mut().unwrap().value = SongLuaOverlayUpdateValue::Vec4([0.0; 4]);
+        }
+    }
+    let mut rejected = Parity::default();
+    compare_projected_geometry(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "premature final destination must fail"
+    );
+}
+
+#[test]
+fn shadow_setters_bypass_child_tweens() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/immediate-shadow.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/immediate-shadow.sm"),
+    );
+    compare_semantics(&trace, &compiled, primary, &context).assert_complete("immediate shadows");
+    let index = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Shadow"))
+        .expect("shadow quad");
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let sample = trace.projected_vertex_tracks[0]
+        .samples
+        .iter()
+        .find(|sample| {
+            sample[1]
+                .as_f64()
+                .is_some_and(|time| time > 0.5 && time < 0.8)
+                && sample[12][0].as_f64().is_some_and(|x| x > 1.0)
+        })
+        .expect("visible shadow sample")
+        .as_array()
+        .expect("sample");
+    let beat = value_f32(sample.first()).expect("beat");
+    let second = value_f32(sample.get(1)).expect("seconds");
+    let states = compiled_overlay_states_at(&compiled[primary], &context, beat, second);
+    let frame = composer.render_overlay(
+        &compiled[primary].overlays,
+        &states,
+        index,
+        [854.0, 480.0],
+        second,
+        beat,
+    );
+    let actual = rendered_quad_corners(&frame, [854.0, 480.0]);
+    let mut expected = native_screen_vertices(sample).expect("native quad corners");
+    let shadow = native_draw_shadow(sample).expect("native current shadow");
+    assert!(shadow[0] > 1.0 && shadow[1] > 1.0);
+    expected.extend(
+        expected
+            .clone()
+            .into_iter()
+            .map(|[x, y]| [x + shadow[0], y + shadow[1]]),
+    );
+    for vertex in &expected {
+        assert!(actual.iter().any(|got| (got[0]-vertex[0]).abs() < 0.002 && (got[1]-vertex[1]).abs() < 0.002), "missing native shadow corner {vertex:?}, rendered {actual:?}");
+    }
+    let end = compiled_overlay_states_at(
+        &compiled[primary],
+        &context,
+        trace.trace_until_beat,
+        trace.end_position.seconds,
+    );
+    assert_eq!(
+        end[index].shadow_len,
+        [0.0, -0.0],
+        "the final callback changes its shadow immediately"
+    );
+    assert!(
+        (end[index].diffuse[3] - 0.99).abs() < 0.0001,
+        "the final callback's diffuse remains queued"
+    );
+    let mut wrong = compiled.clone();
+    wrong[primary].overlay_updates.retain(|update| {
+        !matches!(
+            update.target,
+            SongLuaOverlayUpdateTarget::ShadowLen | SongLuaOverlayUpdateTarget::ShadowColor
+        )
+    });
+    let mut rejected = Parity::default();
+    compare_projected_geometry(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "missing current shadow writes must fail"
+    );
+}
+
+#[test]
+fn image_texture_aliases_match_native_draws() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/texture-alias.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/texture-alias.sm"),
+    );
+    compare_semantics(&trace, &compiled, primary, &context).assert_complete("texture aliases");
+    let layer = &compiled[primary];
+    let index = |name| {
+        layer
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(name))
+            .unwrap()
+    };
+    let first = index("First");
+    let second = index("Second");
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let screen = [context.screen_width, context.screen_height];
+    let mut handles = Vec::new();
+    // Exercise the actual gameplay builder, including a backward seek after the
+    // first alias switches image; the second alias must retain its old image.
+    for time in [0.0, 0.2, 0.0] {
+        let states = compiled_overlay_states_at(layer, &context, time, time);
+        let mut pair = Vec::new();
+        for (index, center, height) in [
+            (first, 100.0, if time == 0.2 { 64.0 } else { 32.0 }),
+            (second, 200.0, 32.0),
+        ] {
+            let frame =
+                composer.render_overlay(&layer.overlays, &states, index, screen, time, time);
+            let corners = rendered_quad_corners(&frame, screen);
+            assert!(!corners.is_empty(), "aliased sprite must draw");
+            let expected = [
+                center - 32.0,
+                100.0 - height / 2.0,
+                center + 32.0,
+                100.0 + height / 2.0,
+            ];
+            let bounds = vertex_bounds(&corners);
+            assert!(
+                bounds
+                    .iter()
+                    .zip(expected)
+                    .all(|(actual, expected)| (actual - expected).abs() <= 0.002),
+                "{time}: {bounds:?} vs {expected:?}"
+            );
+            let handle = frame
+                .ops
+                .iter()
+                .find_map(|op| match op {
+                    deadlib_present::render::DrawOp::Sprite(run) => Some(run.texture_handle),
+                    deadlib_present::render::DrawOp::TexturedMesh(run) => Some(run.texture_handle),
+                    _ => None,
+                })
+                .expect("textured draw");
+            pair.push(handle);
+        }
+        handles.push(pair);
+    }
+    assert_eq!(handles[0][0], handles[0][1]);
+    assert_ne!(handles[1][0], handles[1][1]);
+    assert_eq!(
+        handles[0], handles[2],
+        "backward seek restores both bindings"
+    );
+    let mut missing = compiled.clone();
+    if let SongLuaOverlayKind::Sprite { textures, .. } = &mut missing[primary].overlays[first].kind
+    {
+        *textures = Default::default();
+    }
+    let mut rejected = Parity::default();
+    compare_sprite_textures(&trace, &missing, &context, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "missing alias swaps must fail");
+}
+
+#[test]
+fn hidden_cache_keeps_membership_and_visible_order() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/hidden-cache-order.json.zst"),
+    );
+    let (mut compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/hidden-cache-order.sm"),
+    );
+    let index = |name| {
+        compiled[primary]
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(name))
+            .unwrap()
+    };
+    let (hidden_a, hidden_b, visible_a, visible_b) = (
+        index("HiddenA"),
+        index("HiddenB"),
+        index("VisibleA"),
+        index("VisibleB"),
+    );
+    compiled[primary].overlays.swap(hidden_a, hidden_b);
+    compare_semantics(&trace, &compiled, primary, &context).assert_complete("hidden cache order");
+    for control in 0..4 {
+        let mut wrong = compiled.clone();
+        match control {
+            0 => wrong[primary].overlays.swap(visible_a, visible_b),
+            1 => {
+                wrong[primary].overlays.remove(hidden_a);
+            }
+            2 => wrong[primary].overlays[hidden_a].name = Some("missing resource".into()),
+            _ => wrong[primary].overlays[hidden_a].initial_state.visible = true,
+        }
+        let mut rejected = Parity::default();
+        compare_layers(&trace, &wrong, &mut rejected);
+        if control == 3 {
+            compare_final_render_states(&trace, &wrong, &context, &mut rejected);
+        }
+        assert!(
+            !rejected.gaps.is_empty(),
+            "visible/resource countercheck {control} must fail"
+        );
+    }
 }
 
 #[test]
@@ -7917,7 +8394,210 @@ fn warp_zone_whole_song_matches_native() {
     }
     let mut rejected = Parity::default();
     compare_projected_geometry(&trace, &missing, &context, &mut rejected);
-    assert!(rejected.passed() < rejected.checks(), "missing portal updates must fail");
+    assert!(
+        rejected.passed() < rejected.checks(),
+        "missing portal updates must fail"
+    );
+}
+
+#[test]
+fn goodbye_whole_song_matches_native() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/goodbye-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Goodbye whole song"));
+    parity.assert_complete("Goodbye whole song");
+    assert_eq!(parity.checks(), 118437, "retain every native observation");
+    let map = projected_drawable_map(&trace, &compiled);
+    let screen = [context.screen_width, context.screen_height];
+    let cropped_vertices = |sample: &[Value]| {
+        let [left, right, top, bottom] = native_draw_crop(sample)
+            .expect("native crop snapshot")
+            .map(|value| value.clamp(0.0, 1.0));
+        if left + right >= 1.0 || top + bottom >= 1.0 {
+            return Vec::new();
+        }
+        let corners = sample[5].as_array().expect("native clip corners");
+        // Sprite::DrawTexture crops local corners before the perspective
+        // divide. Interpolate the native homogeneous corners on that plane.
+        [
+            [left, top],
+            [1.0 - right, top],
+            [1.0 - right, 1.0 - bottom],
+            [left, 1.0 - bottom],
+        ]
+        .map(|[u, v]| {
+            let clip: [f32; 4] = std::array::from_fn(|axis| {
+                let corner = |index: usize| {
+                    value_f32(corners[index].get(axis)).expect("native clip coordinate")
+                };
+                (corner(0) * (1.0 - u) + corner(1) * u) * (1.0 - v)
+                    + (corner(3) * (1.0 - u) + corner(2) * u) * v
+            });
+            [
+                (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+                (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+            ]
+        })
+        .to_vec()
+    };
+    let mut composer = WholeSongComposer::new(&compiled[primary].overlays);
+    let mut drawn_faces = 0;
+    for track in trace.projected_vertex_tracks.iter().filter(|track| {
+        map.get(&track.actor).is_some_and(|&(layer, index)| {
+            matches!(
+                compiled[layer].overlays[index].kind,
+                SongLuaOverlayKind::Sprite { .. }
+            )
+        })
+    }) {
+        let on_screen = |sample: &&Value| {
+            if sample[2].as_bool() != Some(true) {
+                return false;
+            }
+            let sample = sample.as_array().expect("native face sample");
+            let vertices = cropped_vertices(sample);
+            if vertices.is_empty() {
+                return false;
+            }
+            let [left, top, right, bottom] = vertex_bounds(&vertices);
+            right > 0.0 && bottom > 0.0 && left < screen[0] && top < screen[1]
+        };
+        let Some(first) = track.samples.iter().find(on_screen) else {
+            continue;
+        };
+        let last = track
+            .samples
+            .iter()
+            .rev()
+            .find(on_screen)
+            .expect("first on-screen sample exists");
+        let &(layer, index) = map.get(&track.actor).expect("face has a drawable");
+        assert_eq!(layer, primary);
+        for sample in [first, last] {
+            let sample = sample.as_array().expect("native face sample");
+            let beat = value_f32(sample.first()).expect("native beat");
+            let second = value_f32(sample.get(1)).expect("native seconds");
+            let states = compiled_overlay_states_at(&compiled[layer], &context, beat, second);
+            let frame = composer.render_overlay(
+                &compiled[layer].overlays,
+                &states,
+                index,
+                screen,
+                second,
+                beat,
+            );
+            let actual = rendered_quad_corners(&frame, screen);
+            for op in &frame.ops {
+                let deadlib_present::render::DrawOp::TexturedMesh(run) = op else {
+                    continue;
+                };
+                for instance in &frame.tmesh_instances[run.instance_start as usize..]
+                    [..run.instance_count as usize]
+                {
+                    let matrix = deadsync_song_lua::playback::actor_conformance::matrix_rows(
+                        frame.cameras[usize::from(run.camera)] * instance.transform(),
+                    );
+                    for vertex in frame.tmesh_geometries[run.geometry as usize]
+                        .vertices
+                        .iter()
+                    {
+                        let clip = deadsync_song_lua::playback::actor_conformance::project_world(
+                            matrix,
+                            [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0],
+                        );
+                        assert!(
+                            clip[2].abs() <= clip[3] + 0.0001,
+                            "{} at {second}: visible face must stay within native orthographic depth, {clip:?}",
+                            track.actor,
+                        );
+                    }
+                }
+            }
+            let mut expected = cropped_vertices(sample);
+            let shadow = native_draw_shadow(sample).expect("native shadow snapshot");
+            if value_f32(sample.get(3)).is_some_and(|alpha| alpha > 0.0)
+                && (shadow[0] != 0.0 || shadow[1] != 0.0)
+            {
+                // Goodbye uses the orthographic screen camera. Sprite applies
+                // these offsets in world coordinates, independently of zoom.
+                assert_eq!(sample[7][0], 0);
+                expected.extend(
+                    expected
+                        .clone()
+                        .into_iter()
+                        .map(|[x, y]| [x + shadow[0], y + shadow[1]]),
+                );
+            }
+            assert!(
+                !actual.is_empty(),
+                "{} must emit a textured face at {second}",
+                track.actor
+            );
+            for vertex in &expected {
+                assert!(
+                    actual.iter().any(|got| (got[0] - vertex[0]).abs() <= 0.75
+                        && (got[1] - vertex[1]).abs() <= 0.75),
+                    "{} at {second}: missing {vertex:?}, rendered {actual:?}",
+                    track.actor
+                );
+            }
+            for vertex in &actual {
+                assert!(
+                    expected.iter().any(|got| (got[0] - vertex[0]).abs() <= 0.75
+                        && (got[1] - vertex[1]).abs() <= 0.75),
+                    "{} at {second}: unexpected {vertex:?}, native {expected:?}",
+                    track.actor
+                );
+            }
+        }
+        drawn_faces += 1;
+    }
+    assert_eq!(
+        drawn_faces, 51,
+        "all visible face sprites must use the production renderer"
+    );
+    let mut missing = compiled.clone();
+    for track in trace.projected_vertex_tracks.iter().filter(|track| {
+        map.get(&track.actor).is_some_and(|&(layer, index)| {
+            matches!(
+                compiled[layer].overlays[index].kind,
+                SongLuaOverlayKind::Sprite { .. }
+            )
+        }) && track
+            .samples
+            .iter()
+            .any(|sample| sample[2].as_bool() == Some(true))
+    }) {
+        let &(layer, index) = map.get(&track.actor).expect("aliased face");
+        if let SongLuaOverlayKind::Sprite { textures, .. } =
+            &mut missing[layer].overlays[index].kind
+        {
+            *textures = Default::default();
+        }
+    }
+    let mut rejected = Parity::default();
+    compare_sprite_textures(&trace, &missing, &context, &mut rejected);
+    assert!(
+        rejected.passed() < rejected.checks(),
+        "missing texture aliases must fail"
+    );
+    let mut uncropped = compiled.clone();
+    uncropped[primary]
+        .overlay_updates
+        .retain(|update| update.target != SongLuaOverlayUpdateTarget::CropTop);
+    let mut rejected = Parity::default();
+    compare_projected_geometry(&trace, &uncropped, &context, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "missing crop updates must fail");
 }
 
 #[test]
@@ -7939,7 +8619,10 @@ fn and_drugs_whole_song_matches_native() {
     }
     let mut rejected = Parity::default();
     runtime_modifiers::compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
-    assert!(rejected.passed() < rejected.checks(), "missing modifier targets must fail");
+    assert!(
+        rejected.passed() < rejected.checks(),
+        "missing modifier targets must fail"
+    );
 }
 
 #[test]

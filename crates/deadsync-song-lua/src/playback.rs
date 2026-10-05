@@ -8324,19 +8324,22 @@ fn song_lua_projected_sprite_geometry(
     Some((model, cropped_size))
 }
 
-fn song_lua_projected_local_transform(
-    (view, projection): (Matrix4, Matrix4),
-    model: Matrix4,
-) -> Matrix4 {
-    let screen_projection = glam::camera::rh::proj::opengl::orthographic(
+fn song_lua_screen_proj(depth: f32) -> Matrix4 {
+    glam::camera::rh::proj::opengl::orthographic(
         0.0,
         screen_width(),
         screen_height(),
         0.0,
-        -1.0,
-        1.0,
-    );
-    screen_projection.inverse() * projection * (view * model)
+        -depth,
+        depth,
+    )
+}
+
+fn song_lua_projected_local_transform(
+    (view, projection): (Matrix4, Matrix4),
+    model: Matrix4,
+) -> Matrix4 {
+    song_lua_screen_proj(1.0).inverse() * projection * (view * model)
 }
 
 fn append_projected_mesh_vertices(
@@ -8867,11 +8870,29 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
         (overlay_scale[1], false)
     };
     let overlay_blend = song_lua_overlay_blend(state.blend);
-    // Only sprites and quads that reach geometry use the camera projection.
-    let perspective_view_proj = || {
-        camera_state.and_then(|camera| {
-            song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
-        })
+    // Tilted sprites and rotated anchors need the native matrix even under an
+    // orthographic camera. Generic sprites fold X/Y angles around their center,
+    // losing the rotated anchor and combined-axis geometry.
+    let sprite_view_proj = || {
+        camera_state
+            .and_then(|camera| {
+                song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
+            })
+            .or_else(|| {
+                let rotated_anchor = (state.halign != 0.5 || state.valign != 0.5)
+                    && state.rot_z_deg.abs() > f32::EPSILON;
+                let native_matrix = state.rot_x_deg.abs() > f32::EPSILON
+                    || state.rot_y_deg.abs() > f32::EPSILON
+                    || rotated_anchor
+                    || matches!(
+                        state.effect_mode,
+                        deadlib_present::anim::EffectMode::Spin
+                            | deadlib_present::anim::EffectMode::Wag
+                    );
+                (native_matrix && !state.mask_source && !state.mask_dest)
+                    // RageDisplay::LoadMenuPerspective(0) uses +/-1000 depth.
+                    .then(|| (Matrix4::IDENTITY, song_lua_screen_proj(1000.0)))
+            })
     };
     let finalize_actor = |actor, glow, scratch| {
         song_lua_finalize_overlay_actor(state, actor, glow, x_scale, y_scale, scratch)
@@ -8922,7 +8943,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             {
                 return None;
             }
-            if let Some(view_proj) = perspective_view_proj() {
+            if let Some(view_proj) = sprite_view_proj() {
                 // Signed zoom is in the model matrix; UV/color flips are only
                 // needed by the stretched geometry path, which uses abs size.
                 let (flip_x, flip_y) = if state.stretch_rect.is_some() {
@@ -9130,7 +9151,9 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 *mask_dest = state.mask_dest;
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
-                *rot_z_deg = effect_rot[2];
+                // Native actor angles use Y-down coordinates; Sprite rotates
+                // in the renderer's Y-up space. Mesh paths convert positions.
+                *rot_z_deg = -effect_rot[2];
                 offset[0] = effect_offset[0].mul_add(x_scale, offset[0]);
                 offset[1] = effect_offset[1].mul_add(y_scale, offset[1]);
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
@@ -9579,7 +9602,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             ))
         }
         SongLuaOverlayKind::Quad => {
-            if let Some(view_proj) = perspective_view_proj() {
+            if let Some(view_proj) = sprite_view_proj() {
                 let (flip_x, flip_y) = if state.stretch_rect.is_some() {
                     (flip_x, flip_y)
                 } else {
@@ -9781,7 +9804,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 *mask_dest = state.mask_dest;
                 *rot_x_deg = effect_rot[0];
                 *rot_y_deg = effect_rot[1];
-                *rot_z_deg = effect_rot[2];
+                *rot_z_deg = -effect_rot[2];
                 offset[0] = effect_offset[0].mul_add(x_scale, offset[0]);
                 offset[1] = effect_offset[1].mul_add(y_scale, offset[1]);
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
