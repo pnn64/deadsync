@@ -8908,7 +8908,12 @@ fn compare_image_draws(
             }
             let beat = value_f32(sample.first()).expect("image beat");
             let second = value_f32(sample.get(1)).expect("image second");
-            let states = compiled_overlay_states_at(&compiled[layer], context, beat, second);
+            let mut states = compiled_overlay_states_at(&compiled[layer], context, beat, second);
+            // Native projected corners omit random vibration translation.
+            // Its active magnitudes are audited separately; compose the same
+            // nominal pose through the production image builder here.
+            states[index].vibrate = false;
+            states[index].inherited_vibrate = [0.0; 3];
             let frame = composers[layer].render_overlay(
                 &compiled[layer].overlays,
                 &states,
@@ -8924,20 +8929,32 @@ fn compare_image_draws(
                 .zip(expected.iter().cycle().skip(1))
                 .map(|(a, b)| a[0] * b[1] - a[1] * b[0])
                 .sum::<f32>();
-            if expected.is_empty() || area == 0.0 {
+            let outside = !expected.is_empty()
+                && ((0..2).any(|axis| {
+                    expected.iter().all(|point| point[axis] <= 0.0)
+                        || expected.iter().all(|point| point[axis] >= screen[axis])
+                }));
+            let shadow = native_draw_shadow(sample).expect("native image shadow");
+            let same_footprint = shadow[5] <= 0.0 || (shadow[0] == 0.0 && shadow[1] == 0.0);
+            // The native geometry oracle retains off-screen planes. Production
+            // composition may cull them; verify the absence of output as well.
+            if expected.is_empty()
+                || area == 0.0
+                || (outside && same_footprint && frame.ops.is_empty())
+            {
                 assert!(
                     actual.is_empty(),
-                    "{} beat {beat}: collapsed corners",
+                    "{} beat {beat}: empty visible plane corners",
                     track.actor
                 );
                 assert!(
                     frame.sprite_instances.is_empty(),
-                    "{} beat {beat}: collapsed sprite",
+                    "{} beat {beat}: empty visible plane sprite",
                     track.actor
                 );
                 assert!(
                     frame.ops.is_empty(),
-                    "{} beat {beat}: collapsed draw",
+                    "{} beat {beat}: empty visible plane draw",
                     track.actor
                 );
                 checks += 3;
@@ -9153,6 +9170,79 @@ fn i_ai_whole_native() {
     assert!(
         !rejected.gaps.is_empty(),
         "incorrect TV alpha must fail full-frame checks"
+    );
+}
+
+#[test]
+fn oshama_whole_native() {
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/oshama-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    assert_eq!(compiled.len(), 2);
+    assert_eq!(trace.projected_vertex_tracks.len(), 8);
+    assert_eq!(trace.fixture_context.note_end_beat, Some(608.0));
+    assert_eq!(trace.end_position.beat, Some(624.0));
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Oshama Scramble whole song"));
+    parity.assert_complete("Oshama Scramble whole song");
+    assert_eq!(trace.update_frames.len(), 8338);
+    assert_eq!(
+        parity.checks(),
+        304077,
+        "retain every observation and quiet frame"
+    );
+    let map = projected_drawable_map(&trace, &compiled);
+    for track in &trace.projected_vertex_tracks {
+        let &(layer, index) = map.get(&track.actor).expect("local image sprite");
+        let SongLuaOverlayKind::Sprite { texture_key, .. } = &compiled[layer].overlays[index].kind
+        else {
+            panic!("local image must be a sprite");
+        };
+        warm_lua_image(
+            texture_key,
+            (track.texture_size[0] as u32, track.texture_size[1] as u32),
+        );
+    }
+    let draws = compare_image_draws(&trace, &compiled, &context);
+    eprintln!("Oshama Scramble actual image draw checks: {draws}");
+    assert_eq!(draws, 2440, "retain image geometry, tint and culled output");
+    let ending = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with("MilkAngry.png"))
+        .expect("final ending sprite");
+    assert!(ending.samples.iter().any(
+        |sample| sample[0].as_f64().is_some_and(|beat| beat > 618.0)
+            && sample[2] == true
+            && sample[3] == 1
+    ));
+    let &(layer, index) = map.get(&ending.actor).expect("ending sprite");
+    let mut wrong = compiled.clone();
+    let fade = wrong[layer]
+        .overlay_updates
+        .iter_mut()
+        .find(|track| {
+            track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Diffuse
+        })
+        .expect("ending alpha track");
+    for sample in &mut fade.samples {
+        if let SongLuaOverlayUpdateValue::Vec4(value) = &mut sample.value {
+            value[3] = 0.95;
+        }
+    }
+    let mut rejected = Parity::default();
+    compare_drawable_frames(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "incorrect ending alpha must fail full-frame checks"
     );
 }
 

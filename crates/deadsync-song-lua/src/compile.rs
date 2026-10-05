@@ -296,6 +296,14 @@ where
             Ok((pointer, crate::lua_util::read_actor_capture_blocks(actor)?))
         })
         .collect::<Result<std::collections::HashMap<_, _>, String>>()?;
+    // Init/On use beat zero. The first gameplay update uses the actual song
+    // position at elapsed zero, which can be past an opening warp.
+    crate::set_compile_song_runtime_values(
+        &lua,
+        crate::song_beat_at_elapsed_seconds(0.0, context),
+        0.0,
+    )
+    .map_err(|err| err.to_string())?;
     run_actor_update_functions_with_delta(&lua, &root, 0.0).map_err(|err| {
         format!(
             "failed to run actor update functions for song lua session '{}': {err}",

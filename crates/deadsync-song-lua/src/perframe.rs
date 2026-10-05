@@ -2950,7 +2950,7 @@ pub fn compile_update_functions<Kind>(
             Vec::new(),
         ));
     }
-    let start = 0.0;
+    let start = song_beat_at_elapsed_seconds(0.0, context);
     let end = update_function_end_beat(context);
     if end <= start {
         spline_capture.finish(column_splines);

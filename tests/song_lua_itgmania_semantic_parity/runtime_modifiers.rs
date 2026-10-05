@@ -152,6 +152,44 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                         continue;
                     }
                     let key = words.last().expect("nonempty modifier part");
+                    if let Some(noop) = detail
+                        .as_ref()
+                        .and_then(|detail| detail.get("indexed_noops"))
+                        .and_then(Value::as_array)
+                        .and_then(|noops| {
+                            noops.iter().find(|noop| noop["key"].as_str() == Some(*key))
+                        })
+                    {
+                        // Native PlayerOptions ignores invalid column indices.
+                        // Compare its queried live fields instead of inventing
+                        // a target from the invalid modifier's requested level.
+                        if noop["unchanged"] != true {
+                            *unsupported
+                                .entry(format!("native no-op changed {key}"))
+                                .or_default() += 1;
+                        }
+                        if let Some(values) = noop["values"]
+                            .as_array()
+                            .filter(|values| !values.is_empty())
+                        {
+                            for value in values {
+                                if let Some((key, amount)) =
+                                    value[0].as_str().zip(value_f32(value.get(1)))
+                                {
+                                    set_option(key.to_owned(), amount);
+                                } else {
+                                    *unsupported
+                                        .entry(format!("invalid native no-op snapshot {key}"))
+                                        .or_default() += 1;
+                                }
+                            }
+                        } else {
+                            *unsupported
+                                .entry(format!("missing native no-op snapshot {key}"))
+                                .or_default() += 1;
+                        }
+                        continue;
+                    }
                     let speed = key
                         .strip_suffix('x')
                         .map(|raw| ("xmod", raw))
@@ -1899,6 +1937,66 @@ fn prefix_reader_writes_override_raw_ease_endpoints() {
             SongLuaPlayerTransform::default(),
         );
         assert_eq!(runtime_mod_value(&runtime, 0, "centered"), Some(expected));
+    }
+}
+
+#[test]
+fn opening_warp_keeps_zero_delta_options() {
+    use deadsync_rules::timing::{TimingData, TimingSegments, WarpSegment};
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("opening warp fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+return Def.ActorFrame{OnCommand=function(self)
+    assert(GAMESTATE:GetSongBeat() == 0, 'startup clock must precede playback')
+    self:SetUpdateFunction(function()
+        if GAMESTATE:GetSongBeat() >= 12 then options:Dark(1) options:Stealth(0.5) end
+    end)
+end}
+"#,
+    )
+    .expect("write opening warp Lua");
+    let mut context = SongLuaCompileContext::new(directory.path(), "Opening warp");
+    context.music_length_seconds = 1.0;
+    context.song_timing_bpms = vec![(0.0, 190.0)];
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            warps: vec![WarpSegment {
+                beat: 0.0,
+                length: 12.0,
+            }],
+            ..Default::default()
+        },
+        &[],
+    );
+    context.song_timing = Some(timing.clone());
+    context.player_timing[0] = Some(timing);
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile opening warp");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for second in [0.0, 1.0 / 60.0, 0.5] {
+        runtime.refresh_player(
+            0,
+            second,
+            1_000_000.0,
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(
+            runtime_mod_value(&runtime, 0, "dark"),
+            Some(1.0),
+            "first update at {second}"
+        );
+        assert_eq!(runtime_mod_value(&runtime, 0, "stealth"), Some(0.5));
+        assert_eq!(runtime_mod_value(&runtime, 1, "dark"), Some(0.0));
     }
 }
 
