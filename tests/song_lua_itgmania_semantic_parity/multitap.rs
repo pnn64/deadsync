@@ -461,7 +461,32 @@ pub(super) fn compare_multitap(
         return;
     }
     compare_zoom_hides(trace, compiled, parity);
+    compare_multitap_writes(trace, compiled, context, parity);
+}
+
+fn compare_multitap_writes(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
     parity.section("multitap writes");
+    let actor_layers = native_actor_layers(trace);
+    for definition in &trace.actor_definitions {
+        if definition
+            .name
+            .as_deref()
+            .is_some_and(|name| name.starts_with("Multitap") && !name.starts_with("MultitapFrame"))
+        {
+            for actor in &definition.runtime_actors {
+                if !actor_layers.contains_key(actor.as_str()) {
+                    parity.check(false, || {
+                        format!("native multitap actor has no song layer: {actor}")
+                    });
+                }
+            }
+        }
+    }
     for (layer, compiled) in compiled.iter().enumerate() {
         let mut writes = Vec::new();
         for definition in &trace.actor_definitions {
@@ -471,6 +496,14 @@ pub(super) fn compare_multitap(
             // Compare the complete Player/NoteField wrapper composition through
             // projected geometry, since those coordinate spaces are distinct.
             if !name.starts_with("Multitap") || name.starts_with("MultitapFrame") {
+                continue;
+            }
+            let actors = definition
+                .runtime_actors
+                .iter()
+                .filter(|actor| actor_layers.get(actor.as_str()) == Some(&layer))
+                .collect::<Vec<_>>();
+            if actors.is_empty() {
                 continue;
             }
             let Some(index) = compiled
@@ -483,11 +516,11 @@ pub(super) fn compare_multitap(
                 });
                 continue;
             };
-            for track in trace
-                .operation_tracks
-                .iter()
-                .filter(|track| definition.runtime_actors.contains(&track.actor))
-            {
+            for track in trace.operation_tracks.iter().filter(|track| {
+                actors
+                    .iter()
+                    .any(|actor| actor.as_str() == track.actor.as_str())
+            }) {
                 for sample in &track.samples {
                     writes.push((index, name, track, sample));
                 }
@@ -575,6 +608,65 @@ pub(super) fn compare_multitap(
                 }),
         );
     }
+}
+
+#[test]
+fn multitap_layer_writes() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/fg-comment-chain.json.zst"),
+    );
+    let (mut compiled, _, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/fg-comment-chain.sm"),
+    );
+    let mut tracks = Vec::new();
+    for (layer, original, x) in [(0, "FirstQuad", 160), (1, "SecondQuad", 480)] {
+        let definition = trace
+            .actor_definitions
+            .iter_mut()
+            .find(|definition| definition.name.as_deref() == Some(original))
+            .expect("native quad");
+        definition.name = Some("MultitapP1_1".into());
+        tracks.push(serde_json::json!({"actor":definition.runtime_actors[0], "operation":"Quad.x", "samples":[[1,0.0,0.0,[x]]]}));
+        compiled[layer]
+            .overlays
+            .iter_mut()
+            .find(|actor| actor.name.as_deref() == Some(original))
+            .expect("compiled quad")
+            .name = Some("MultitapP1_1".into());
+    }
+    trace
+        .actor_definitions
+        .iter_mut()
+        .find(|definition| definition.id == trace.roots[1])
+        .expect("native foreground")
+        .name = Some("MultitapFrameP1".into());
+    trace.operation_tracks = serde_json::from_value(Value::Array(tracks)).expect("native writes");
+    let mut parity = Parity::default();
+    compare_multitap_writes(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 2, "each native write belongs to one layer");
+    parity.assert_complete("same-name multitaps in different layers");
+    for order in &mut trace.draw_orders {
+        order.final_children.clear();
+    }
+    let mut removed = Parity::default();
+    compare_multitap_writes(&trace, &compiled, &context, &mut removed);
+    assert_eq!(
+        removed.checks(),
+        2,
+        "removed children retain their earlier observations"
+    );
+    removed.assert_complete("writes before RemoveChild");
+    compiled[1]
+        .overlays
+        .retain(|actor| actor.name.as_deref() != Some("MultitapP1_1"));
+    let mut parity = Parity::default();
+    compare_multitap_writes(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 2);
+    assert_eq!(parity.gaps.len(), 1);
+    assert!(parity.gaps[0].contains("layer 1 multitap actor missing"));
 }
 
 /// Groups mismatching multitap writes by actor family and operation, keeping

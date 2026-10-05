@@ -360,7 +360,34 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
         "GetReversePercentForColumn",
         lua.create_function({
             let table = table.clone();
-            move |lua, _args: MultiValue| player_option_number(lua, &table, "reverse")
+            move |lua, args: MultiValue| {
+                let col = method_arg(&args, 0)
+                    .cloned()
+                    .and_then(read_f32)
+                    .unwrap_or(0.0) as i32;
+                let count = song_lua_style_info(&current_song_lua_style_name(lua)).columns as i32;
+                if col < 0 || col > count {
+                    return Ok(None);
+                }
+                let mut value = player_option_number(lua, &table, "reverse")?
+                    + player_option_number(lua, &table, &format!("reverse{}", col + 1))?;
+                if col >= count / 2 {
+                    value += player_option_number(lua, &table, "split")?;
+                }
+                if col % 2 == 1 {
+                    value += player_option_number(lua, &table, "alternate")?;
+                }
+                if (count / 4..=count - 1 - count / 4).contains(&col) {
+                    value += player_option_number(lua, &table, "cross")?;
+                }
+                if value > 2.0 {
+                    value %= 2.0;
+                }
+                if value > 1.0 {
+                    value = 2.0 - value;
+                }
+                Ok(Some(value))
+            }
         })?,
     )?;
     table.set(
@@ -1777,6 +1804,66 @@ fn create_steps_by_steps_type_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reverse_columns_match_native_composition() {
+        for (name, expected) in [
+            ("single", &[0.5, 0.625, 1.0, 0.875][..]),
+            (
+                "double",
+                &[0.5, 0.375, 0.5, 0.625, 1.0, 0.875, 0.75, 0.875][..],
+            ),
+        ] {
+            let lua = Lua::new();
+            let style = crate::tables::create_style_table(&lua, name).expect("style");
+            let gamestate = lua.create_table().expect("gamestate");
+            gamestate
+                .set(
+                    "GetCurrentStyle",
+                    lua.create_function(move |_, _: MultiValue| Ok(style.clone()))
+                        .expect("style getter"),
+                )
+                .expect("install getter");
+            lua.globals()
+                .set("GAMESTATE", gamestate)
+                .expect("expose gamestate");
+            let options = create_player_options_table(&lua, SongLuaPlayerContext::default())
+                .expect("options");
+            lua.globals()
+                .set("o", options.clone())
+                .expect("expose options");
+            lua.load(
+                "o:FromString('25% Reverse, 50% Split, 12.5% Alternate, 25% Cross, 25% Reverse1')",
+            )
+            .exec()
+            .expect("write scroll options");
+            let query = options
+                .get::<Function>("GetReversePercentForColumn")
+                .expect("query");
+            for (column, &expected) in expected.iter().enumerate() {
+                assert_eq!(
+                    query
+                        .call::<f32>((options.clone(), column))
+                        .expect("column reverse"),
+                    expected,
+                    "{name} column {column}"
+                );
+            }
+            assert!(
+                query
+                    .call::<Option<f32>>((options.clone(), -1))
+                    .expect("negative column")
+                    .is_none()
+            );
+            assert!(
+                query
+                    .call::<Option<f32>>((options.clone(), expected.len() + 1))
+                    .expect("overflow column")
+                    .is_none()
+            );
+            lua.load("o:FromString('clearall, 175% Reverse'); assert(o:GetReversePercentForColumn(0) == 0.25); o:FromString('clearall, -50% Reverse'); assert(o:GetReversePercentForColumn(0) == -0.5)").exec().expect("native folding");
+        }
+    }
 
     #[test]
     fn perspective_aliases_read_shared_native_fields_and_speeds() {

@@ -321,6 +321,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 flip: visual.flip,
                 invert: visual.invert,
                 beat: visual.beat,
+                beat_period: visual.beat_period,
                 parabola_x: visual.parabola_x,
                 square: visual.square,
                 digital: visual.digital,
@@ -4128,6 +4129,8 @@ mod tests {
                                     tan_drunk_z_offset: 0.25,
                                     tan_drunk_z_speed: -0.5,
                                     tan_drunk_z_period: -0.5,
+                                    beat: amount,
+                                    beat_period: if cosecant { 4.0 } else { -0.5 },
                                     cosecant,
                                     tiny: 1.0,
                                     tipsy: 0.25,
@@ -4187,6 +4190,12 @@ mod tests {
                                             ) * 32.0)
                                             + amount / 3.0 * 40.0 * ((travel - 50.0) / 24.0).sin()
                                             + amount / 2.0 * 40.0 * wave((travel + 25.0) / 32.0)
+                                            // The chart is at beat 1: native Beat alternates sign.
+                                            - amount
+                                                * 20.0
+                                                * (travel / (if cosecant { 75.0 } else { 7.5 })
+                                                    + std::f32::consts::FRAC_PI_2)
+                                                    .sin()
                                     };
                                     let z_at = |travel: f32| {
                                         amount

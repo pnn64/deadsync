@@ -3983,6 +3983,39 @@ mod tests {
     }
 
     #[test]
+    fn beat_period_approaches_persists_and_resets() {
+        let mods = parse_attack_mods("*2 400% beatperiod");
+        assert_eq!(mods.visual.beat_period, Some(4.0));
+        assert_eq!(mods.visual_speed.beat_period, Some(2.0));
+        let mut current = VisualOverrides::default();
+        approach_visual_overrides_to_target(
+            &mut current,
+            mods.visual,
+            mods.visual_speed,
+            VisualEffects::default(),
+            0.25,
+        );
+        assert_eq!(current.beat_period, Some(0.5));
+        assert_eq!(
+            merge_attack_visual_effects(VisualEffects::default(), current).beat_period,
+            0.5
+        );
+        let window = attack_mask_window(0.0, 1.0, mods);
+        let mut values = ActiveAttackMaskValues::new(AppearanceEffects::default());
+        apply_active_attack_mask_window(&mut values, &window, Default::default(), true, 0.0);
+        assert_eq!(values.visual.beat_period, Some(4.0));
+        let reset = attack_mask_window(2.0, 3.0, parse_attack_mods("clearall"));
+        apply_active_attack_mask_window(&mut values, &reset, Default::default(), false, 0.0);
+        assert_eq!(values.visual.beat_period, None);
+        approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 0.5);
+        assert!(!current.any());
+        assert_eq!(
+            parse_attack_mods("no beatperiod").visual.beat_period,
+            Some(0.0)
+        );
+    }
+
+    #[test]
     fn mod_timer_modes_are_immediate_and_floats_approach_independently() {
         for (alias, expected) in [
             ("game", ModTimerType::Game),

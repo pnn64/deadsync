@@ -289,6 +289,7 @@ pub fn create_charman_table(lua: &Lua) -> mlua::Result<Table> {
 pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let theme = lua.create_table()?;
     let human_player_count = song_lua_human_player_count(context);
+    let screen_width = context.screen_width.max(1.0);
     let screen_height = context.screen_height.max(1.0);
     set_string_method(lua, &theme, "GetCurThemeName", SONG_LUA_THEME_NAME)?;
     set_string_method(lua, &theme, "GetThemeDisplayName", SONG_LUA_THEME_NAME)?;
@@ -356,6 +357,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
                 &group,
                 &name,
                 human_player_count,
+                screen_width,
                 screen_height,
             )
         })?,
@@ -369,10 +371,14 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
             let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
                 return Ok(Value::Nil);
             };
-            Ok(
-                theme_metric_number_for_screen(&group, &name, human_player_count, screen_height)
-                    .map_or(Value::Nil, |value| Value::Number(f64::from(value))),
+            Ok(theme_metric_number_for_screen(
+                &group,
+                &name,
+                human_player_count,
+                screen_width,
+                screen_height,
             )
+            .map_or(Value::Nil, |value| Value::Number(f64::from(value))))
         })?,
     )?;
     theme.set(
@@ -384,10 +390,14 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
             let Some(name) = method_arg(&args, 1).cloned().and_then(read_string) else {
                 return Ok(Value::Nil);
             };
-            Ok(
-                theme_metric_number_for_screen(&group, &name, human_player_count, screen_height)
-                    .map_or(Value::Nil, |value| Value::Integer(value.round() as i64)),
+            Ok(theme_metric_number_for_screen(
+                &group,
+                &name,
+                human_player_count,
+                screen_width,
+                screen_height,
             )
+            .map_or(Value::Nil, |value| Value::Integer(value.round() as i64)))
         })?,
     )?;
     theme.set(
@@ -404,6 +414,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
                 &group,
                 &name,
                 human_player_count,
+                screen_width,
                 screen_height,
             )?))
         })?,
@@ -423,6 +434,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
                     &group,
                     &name,
                     human_player_count,
+                    screen_width,
                     screen_height,
                 )?,
                 Value::Nil

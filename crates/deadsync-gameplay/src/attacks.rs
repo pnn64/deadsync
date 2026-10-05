@@ -656,6 +656,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualPulseInner,
     VisualPulseOuter,
     VisualPulsePeriod,
+    VisualBeatPeriod,
     VisualPulseOffset,
     VisualBeat,
     VisualRandomSpeed,
@@ -2324,6 +2325,7 @@ fn append_song_lua_ease_targets_key(
         "pulseinner" => push(SongLuaEaseMaskTarget::VisualPulseInner, pct_from, pct_to),
         "pulseouter" => push(SongLuaEaseMaskTarget::VisualPulseOuter, pct_from, pct_to),
         "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
+        "beatperiod" => push(SongLuaEaseMaskTarget::VisualBeatPeriod, pct_from, pct_to),
         "pulseoffset" => push(SongLuaEaseMaskTarget::VisualPulseOffset, pct_from, pct_to),
         "beat" => push(SongLuaEaseMaskTarget::VisualBeat, pct_from, pct_to),
         "randomspeed" => push(SongLuaEaseMaskTarget::VisualRandomSpeed, pct_from, pct_to),
@@ -3037,6 +3039,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualPulseInner => visual.pulse_inner = Some(value),
         SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
+        SongLuaEaseMaskTarget::VisualBeatPeriod => visual.beat_period = Some(value),
         SongLuaEaseMaskTarget::VisualPulseOffset => visual.pulse_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBeat => visual.beat = Some(value),
         SongLuaEaseMaskTarget::VisualRandomSpeed => visual.random_speed = Some(value),
@@ -3293,6 +3296,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualPulseInner => window.visual.pulse_inner.is_some(),
         SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
         SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBeatPeriod => window.visual.beat_period.is_some(),
         SongLuaEaseMaskTarget::VisualPulseOffset => window.visual.pulse_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBeat => window.visual.beat.is_some(),
         SongLuaEaseMaskTarget::VisualRandomSpeed => window.visual.random_speed.is_some(),
@@ -4670,6 +4674,7 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.pulse_inner, visual.pulse_inner);
     mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
+    mark_active_target(&mut targets.beat_period, visual.beat_period);
     mark_active_target(&mut targets.pulse_offset, visual.pulse_offset);
     mark_active_target(&mut targets.beat, visual.beat);
     mark_active_target(&mut targets.random_speed, visual.random_speed);
@@ -5568,6 +5573,9 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualPulsePeriod => {
                 attack.visual_speed.pulse_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeatPeriod => {
+                attack.visual_speed.beat_period = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualPulseOffset => {
                 attack.visual_speed.pulse_offset = Some(speed)
@@ -6634,6 +6642,15 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.beat_period,
+        &mut values.visual_speed.beat_period,
+        window.visual.beat_period,
+        window.visual_speed.beat_period,
+        active_targets.visual.beat_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.pulse_offset,
         &mut values.visual_speed.pulse_offset,
         window.visual.pulse_offset,
@@ -7424,6 +7441,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "beatperiod" => set_approached_mod(
+            &mut out.visual.beat_period,
+            &mut out.visual_speed.beat_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "pulseoffset" => set_approached_mod(
             &mut out.visual.pulse_offset,
             &mut out.visual_speed.pulse_offset,
@@ -7877,6 +7900,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         pulse_inner: merge_attack_value(base.pulse_inner, attack.pulse_inner),
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
+        beat_period: merge_attack_value(base.beat_period, attack.beat_period),
         pulse_offset: merge_attack_value(base.pulse_offset, attack.pulse_offset),
         beat: merge_attack_value(base.beat, attack.beat),
         random_speed: merge_attack_value(base.random_speed, attack.random_speed),

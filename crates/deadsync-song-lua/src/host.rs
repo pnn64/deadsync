@@ -918,9 +918,7 @@ fn arrow_effects_reverse_percent(args: &MultiValue) -> mlua::Result<f32> {
         .and_then(read_f32)
         .map(|value| value - 1.0)
         .unwrap_or(0.0);
-    Ok(read_f32(method.call::<Value>((options, column))?)
-        .unwrap_or(0.0)
-        .clamp(0.0, 1.0))
+    Ok(read_f32(method.call::<Value>((options, column))?).unwrap_or(0.0))
 }
 
 pub fn create_arrow_effects_table(
@@ -987,8 +985,20 @@ pub fn create_arrow_effects_table(
                 .cloned()
                 .and_then(read_f32)
                 .unwrap_or(THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD);
-            let receptor_y = reverse_offset * (reverse - 0.5);
-            Ok(receptor_y + y_offset * 2.0f32.mul_add(-reverse, 1.0))
+            let options = arrow_effects_player_options(&args)?;
+            let option = |name| -> mlua::Result<f32> {
+                let Some(options) = &options else {
+                    return Ok(0.0);
+                };
+                let method = options.get::<Function>(name)?;
+                Ok(read_f32(method.call::<Value>(options.clone())?).unwrap_or(0.0))
+            };
+            let zoom = 1.0 - option("Mini")? * 0.5;
+            let zoom = if zoom.abs() < 0.01 { 0.01 } else { zoom };
+            let half = reverse_offset / zoom / 2.0;
+            let shift = reverse * (half + half) - half;
+            let shift = option("Centered")? * -shift + shift;
+            Ok(y_offset * (reverse * -2.0 + 1.0) + shift)
         })?,
     )?;
     table.set(

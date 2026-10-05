@@ -716,18 +716,52 @@ pub fn theme_metric_number_for_human_players(
     name: &str,
     human_player_count: usize,
 ) -> Option<f32> {
-    theme_metric_number_for_screen(group, name, human_player_count, 480.0)
+    theme_metric_number_for_screen(group, name, human_player_count, 640.0, 480.0)
 }
+
+const THEME_PLAYER_X_STYLES: [&str; 5] = [
+    "OnePlayerOneSide",
+    "TwoPlayersTwoSides",
+    "OnePlayerBothSides",
+    "OnePlayerTwoSides",
+    "TwoPlayersSharedSides",
+];
 
 #[must_use]
 pub fn theme_metric_number_for_screen(
     group: &str,
     name: &str,
     human_player_count: usize,
+    screen_width: f32,
     screen_height: f32,
 ) -> Option<f32> {
     if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("ScreenHeight") {
         return Some(screen_height);
+    }
+    if group.eq_ignore_ascii_case("ScreenGameplay") {
+        let side = if name.get(..8)?.eq_ignore_ascii_case("PlayerP1") {
+            -1.0
+        } else if name.get(..8)?.eq_ignore_ascii_case("PlayerP2") {
+            1.0
+        } else {
+            return None;
+        };
+        let suffix = name.get(8..)?;
+        let style = suffix
+            .strip_suffix('X')
+            .or_else(|| suffix.strip_suffix('x'))?;
+        let index = THEME_PLAYER_X_STYLES
+            .iter()
+            .position(|known| style.eq_ignore_ascii_case(known))?;
+        // Simply-Love-SM5/metrics.ini: side fields use a clamped quarter-width.
+        return Some(
+            screen_width * 0.5
+                + if index < 2 {
+                    side * screen_width.clamp(640.0, 854.0) * 0.25
+                } else {
+                    0.0
+                },
+        );
     }
     if group.eq_ignore_ascii_case("Player") {
         if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
@@ -801,10 +835,11 @@ pub fn theme_metric_value_for_human_players(
     group: &str,
     name: &str,
     human_player_count: usize,
+    screen_width: f32,
     screen_height: f32,
 ) -> mlua::Result<mlua::Value> {
     if let Some(value) =
-        theme_metric_number_for_screen(group, name, human_player_count, screen_height)
+        theme_metric_number_for_screen(group, name, human_player_count, screen_width, screen_height)
     {
         return Ok(mlua::Value::Number(f64::from(value)));
     }
@@ -945,6 +980,11 @@ pub fn theme_metric_bool(value: mlua::Value) -> bool {
 
 pub fn theme_metric_names(group: &str) -> Vec<String> {
     let mut names = Vec::new();
+    if group.eq_ignore_ascii_case("ScreenGameplay") {
+        for player in 1..=2 {
+            names.extend(THEME_PLAYER_X_STYLES.map(|style| format!("PlayerP{player}{style}X")));
+        }
+    }
     if group.eq_ignore_ascii_case("Common") {
         names.push("ScreenHeight".to_owned());
     }
@@ -7308,6 +7348,10 @@ return Def.ActorFrame{
 local standard = THEME:GetMetric("Player", "ReceptorArrowsYStandard")
 local reverse = THEME:GetMetricF("Player", "ReceptorArrowsYReverse")
 local missing = THEME:GetMetric("Player", "NoSuchMetric")
+local p1 = THEME:GetMetric("ScreenGameplay", "PlayerP1TwoPlayersTwoSidesX")
+local p2 = THEME:GetMetricF("ScreenGameplay", "PlayerP2TwoPlayersTwoSidesX")
+assert(p1 == 160 and p2 == 480)
+assert(THEME:HasMetric("ScreenGameplay", "PlayerP1TwoPlayersTwoSidesX"))
 
 if standard ~= -125 then
     error("unexpected ReceptorArrowsYStandard: " .. tostring(standard))
@@ -16878,6 +16922,17 @@ return Def.ActorFrame{
             end
             assert(ArrowEffects.GetYPos(ps, 1, 32) == -103)
             assert(ArrowEffects.GetYPos(ps, 1, 0, 340) == -170)
+            po:Reverse(0.5)
+            assert(ArrowEffects.GetYPos(ps, 1, 32) == 0)
+            po:Reverse(1)
+            po:Mini(0.5)
+            assert(ArrowEffects.GetYPos(ps, 1, 32) == 148)
+            po:Centered(0.5)
+            assert(ArrowEffects.GetYPos(ps, 1, 32) == 58)
+            assert(ArrowEffects.GetYPos(ps, 1, 32, 360) == 88)
+            po:Reverse(0)
+            po:Mini(0)
+            po:Centered(0)
             mod_actions = {
                 {4, string.format("%.0f:%.0f", ArrowEffects.GetXPos(ps, 1, 0), ArrowEffects.GetYPos(ps, 1, 0)), true},
             }
@@ -17034,12 +17089,16 @@ end}
 local function spin_col(v)
     local nf = SCREENMAN:GetTopScreen():GetChild("PlayerP1"):GetChild("NoteField")
     for _, column in ipairs(nf:GetColumnActors()) do
-        local handler = column:GetRotHandler()
-        handler:SetSplineMode("NoteColumnSplineMode_Offset")
-        local spline = handler:GetSpline()
-        spline:SetSize(1)
-        spline:SetPoint(1, {0, 0, v})
-        spline:Solve()
+        assert(column:get_pos_handler() == column:GetPosHandler())
+        assert(column:get_zoom_handler() == column:GetZoomHandler())
+        local handler = column:get_rot_handler()
+        assert(handler == column:GetRotHandler())
+        handler:set_spline_mode("NoteColumnSplineMode_Offset")
+        handler:set_subtract_song_beat(true):set_receptor_t(0):set_beats_per_t(1)
+        local spline = handler:get_spline()
+        assert(spline == handler:GetSpline())
+        spline:set_loop(true):set_size(1):set_point(1, {0, 0, v}):solve()
+        assert(spline:get_loop())
     end
 end
 
@@ -23946,17 +24005,45 @@ end
     #[test]
     fn theme_metric_number_uses_screen_and_player_count() {
         assert_eq!(
-            theme_metric_number_for_screen("Player", "DrawDistanceBeforeTargetsPixels", 1, 720.0),
+            theme_metric_number_for_screen(
+                "Player",
+                "DrawDistanceBeforeTargetsPixels",
+                1,
+                1280.0,
+                720.0
+            ),
             Some(1080.0)
         );
         assert_eq!(
-            theme_metric_number_for_screen("GraphDisplay", "BodyWidth", 1, 480.0),
+            theme_metric_number_for_screen("GraphDisplay", "BodyWidth", 1, 640.0, 480.0),
             Some(610.0)
         );
         assert_eq!(
-            theme_metric_number_for_screen("GraphDisplay", "BodyWidth", 2, 480.0),
+            theme_metric_number_for_screen("GraphDisplay", "BodyWidth", 2, 854.0, 480.0),
             Some(300.0)
         );
+        for (width, expected) in [
+            (480.0, [80.0, 400.0]),
+            (640.0, [160.0, 480.0]),
+            (854.0, [213.5, 640.5]),
+            (1280.0, [426.5, 853.5]),
+        ] {
+            for (player, x) in expected.into_iter().enumerate() {
+                for style in super::THEME_PLAYER_X_STYLES {
+                    let side = matches!(style, "OnePlayerOneSide" | "TwoPlayersTwoSides");
+                    assert_eq!(
+                        theme_metric_number_for_screen(
+                            "ScreenGameplay",
+                            &format!("PlayerP{}{style}X", player + 1),
+                            2,
+                            width,
+                            480.0
+                        ),
+                        Some(if side { x } else { width * 0.5 })
+                    );
+                }
+            }
+        }
     }
 
     #[test]

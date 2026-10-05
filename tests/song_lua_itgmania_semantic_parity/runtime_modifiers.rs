@@ -320,6 +320,7 @@ fn runtime_mod_value(
         "pulseinner" => visual.pulse_inner.unwrap_or(0.0),
         "pulseouter" => visual.pulse_outer.unwrap_or(0.0),
         "pulseperiod" => visual.pulse_period.unwrap_or(0.0),
+        "beatperiod" => visual.beat_period.unwrap_or(0.0),
         "pulseoffset" => visual.pulse_offset.unwrap_or(0.0),
         "randomspeed" => visual.random_speed.unwrap_or(0.0),
         "brake" => runtime.accel[player].brake.unwrap_or(0.0),
@@ -799,13 +800,14 @@ local player = GAMESTATE:GetPlayerState(PLAYER_1)
 local options = player:GetPlayerOptions('ModsLevel_Song')
 local phase = 1
 return Def.ActorFrame{OnCommand=function(self)
-    options:FromString('*2 250% drunkoffset, *4 -50% drunkspeed, *3 -99% drunkperiod, *5 250% tipsyoffset, *6 -50% tipsyspeed, *7 150% hiddenoffset')
+    options:FromString('*2 250% drunkoffset, *4 -50% drunkspeed, *3 -99% drunkperiod, *5 250% tipsyoffset, *6 -50% tipsyspeed, *7 150% hiddenoffset, *8 400% beatperiod')
     self:SetUpdateFunction(function()
         local beat = GAMESTATE:GetSongBeat()
         if phase == 1 and beat >= 1 then
             options:DrunkOffset(200):DrunkSpeed(1.5):DrunkPeriod(0.75)
             options:TipsyOffset(-1):TipsySpeed(-1)
             options:HiddenOffset(-0.5)
+            options:BeatPeriod(-0.5)
             phase = 2
         elseif phase == 2 and beat >= 2 then
             player:SetPlayerOptions('ModsLevel_Song', '')
@@ -822,9 +824,9 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [
-        (0.25, [2.5, -0.5, -0.99, 2.5, -0.5, 1.5]),
-        (0.5, [200.0, 1.5, 0.75, -1.0, -1.0, -0.5]),
-        (1.0, [0.0; 6]),
+        (0.25, [2.5, -0.5, -0.99, 2.5, -0.5, 1.5, 4.0]),
+        (0.5, [200.0, 1.5, 0.75, -1.0, -1.0, -0.5, -0.5]),
+        (1.0, [0.0; 7]),
     ] {
         runtime.refresh_player(
             0,
@@ -841,6 +843,7 @@ end}
             "tipsyoffset",
             "tipsyspeed",
             "hiddenoffset",
+            "beatperiod",
         ]
         .into_iter()
         .zip(expected)

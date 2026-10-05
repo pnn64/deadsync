@@ -12105,6 +12105,13 @@ pub fn create_note_column_actor(
         "GetZoomHandler",
         lua.create_function(move |_, _args: MultiValue| Ok(zoom_handler.clone()))?,
     )?;
+    for (alias, name) in [
+        ("get_pos_handler", "GetPosHandler"),
+        ("get_rot_handler", "GetRotHandler"),
+        ("get_zoom_handler", "GetZoomHandler"),
+    ] {
+        actor.set(alias, actor.get::<Function>(name)?)?;
+    }
     Ok(actor)
 }
 
@@ -12169,12 +12176,22 @@ pub fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
             }
         })?,
     )?;
+    for (alias, name) in [
+        ("get_spline", "GetSpline"),
+        ("set_spline_mode", "SetSplineMode"),
+        ("set_subtract_song_beat", "SetSubtractSongBeat"),
+        ("set_receptor_t", "SetReceptorT"),
+        ("set_beats_per_t", "SetBeatsPerT"),
+    ] {
+        handler.set(alias, handler.get::<Function>(name)?)?;
+    }
     Ok(handler)
 }
 
 fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
     let spline = lua.create_table()?;
     spline.set("__songlua_spline_size", 0_i64)?;
+    spline.set("__songlua_spline_loop", false)?;
     spline.set("__songlua_spline_points", lua.create_table()?)?;
     spline.set(
         "SetSize",
@@ -12232,6 +12249,32 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
             move |_, _args: MultiValue| Ok(spline.clone())
         })?,
     )?;
+    spline.set(
+        "SetLoop",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, args: MultiValue| {
+                spline.set("__songlua_spline_loop", args.get(1).is_some_and(truthy))?;
+                Ok(spline.clone())
+            }
+        })?,
+    )?;
+    spline.set(
+        "get_loop",
+        lua.create_function({
+            let spline = spline.clone();
+            move |_, _args: MultiValue| spline.get::<bool>("__songlua_spline_loop")
+        })?,
+    )?;
+    for (alias, name) in [
+        ("set_size", "SetSize"),
+        ("set_point", "SetPoint"),
+        ("solve", "Solve"),
+        ("set_polygonal", "SetPolygonal"),
+        ("set_loop", "SetLoop"),
+    ] {
+        spline.set(alias, spline.get::<Function>(name)?)?;
+    }
     Ok(spline)
 }
 
@@ -12580,6 +12623,14 @@ fn read_position_spline(
                 });
         points.push(values);
     }
+    let constant = points.iter().all(|point| *point == points[0]);
+    if spline
+        .get::<bool>("__songlua_spline_loop")
+        .map_err(|err| err.to_string())?
+        && !constant
+    {
+        return Err("Nonconstant looping position splines are unsupported".into());
+    }
     let result = deadsync_gameplay::SongLuaSplineData {
         coefficients: if unchanged {
             std::sync::Arc::clone(&previous.expect("matching spline exists").coefficients)
@@ -12590,7 +12641,7 @@ fn read_position_spline(
         } else {
             std::sync::Arc::from(scratch.solver.solve(points))
         },
-        constant: points.iter().all(|point| *point == points[0]),
+        constant,
         beats_per_t,
         receptor_t,
         subtract_song_beat: handler
@@ -13044,6 +13095,7 @@ pub struct SongLuaNoteColumnHandlerSnapshot {
     receptor_t: Value,
     beats_per_t: Value,
     spline_size: Value,
+    spline_loop: Value,
     spline_points: Value,
 }
 
@@ -13081,6 +13133,7 @@ pub fn snapshot_note_column_handlers(
                 receptor_t: clone_lua_value(lua, handler.get::<Value>("__songlua_receptor_t")?)?,
                 beats_per_t: clone_lua_value(lua, handler.get::<Value>("__songlua_beats_per_t")?)?,
                 spline_size: clone_lua_value(lua, spline.get::<Value>("__songlua_spline_size")?)?,
+                spline_loop: spline.get::<Value>("__songlua_spline_loop")?,
                 spline_points: clone_lua_value(
                     lua,
                     spline.get::<Value>("__songlua_spline_points")?,
@@ -13143,6 +13196,9 @@ pub fn restore_note_column_handlers(
         snapshot
             .spline
             .set("__songlua_spline_size", snapshot.spline_size)?;
+        snapshot
+            .spline
+            .set("__songlua_spline_loop", snapshot.spline_loop)?;
         snapshot
             .spline
             .set("__songlua_spline_points", snapshot.spline_points)?;

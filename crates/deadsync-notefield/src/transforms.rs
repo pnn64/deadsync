@@ -211,6 +211,7 @@ pub(crate) struct NoteXParams {
     pub drunk_speed: f32,
     pub drunk_period: f32,
     pub beat: f32,
+    pub beat_period: f32,
     pub parabola_x: f32,
     pub square: f32,
     pub digital: f32,
@@ -1138,12 +1139,14 @@ pub(crate) fn tipsy_y_extra(
     tipsy * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * TIPSY_ARROW_MAGNITUDE
 }
 
-pub(crate) fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
+pub(crate) fn beat_x_extra(y: f32, beat_factor: f32, beat: f32, period: f32) -> f32 {
     if !signed_effect_active(beat) {
         return 0.0;
     }
-    let shift =
-        beat_factor * (y / BEAT_OFFSET_HEIGHT + std::f32::consts::PI / BEAT_PI_HEIGHT).sin();
+    let shift = beat_factor
+        * (y / (period * BEAT_OFFSET_HEIGHT + BEAT_OFFSET_HEIGHT)
+            + std::f32::consts::PI / BEAT_PI_HEIGHT)
+            .sin();
     beat * shift
 }
 
@@ -1343,7 +1346,7 @@ pub(crate) fn note_x_extra(
             .mul_add(params.invert, out);
     }
     if signed_effect_active(params.beat) {
-        out += beat_x_extra(y, beat_factor_value, params.beat);
+        out += beat_x_extra(y, beat_factor_value, params.beat, params.beat_period);
     }
     // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
@@ -1461,7 +1464,7 @@ pub(crate) fn note_x_offset_cached(
             .mul_add(params.invert, extra);
     }
     if signed_effect_active(params.beat) {
-        extra += beat_x_extra(y, beat_factor_value, params.beat);
+        extra += beat_x_extra(y, beat_factor_value, params.beat, params.beat_period);
     }
     // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {

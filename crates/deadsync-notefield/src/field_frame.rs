@@ -300,6 +300,7 @@ fn compose_field_contents<S, F>(
         flip: visual.flip,
         invert: visual.invert,
         beat: visual.beat,
+        beat_period: visual.beat_period,
         parabola_x: visual.parabola_x,
         square: visual.square,
         digital: visual.digital,

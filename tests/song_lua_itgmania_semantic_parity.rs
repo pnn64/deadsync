@@ -2398,12 +2398,9 @@ fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> Exp
     block
 }
 
-fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
-    let paths = trace
-        .runtime_actors
-        .iter()
-        .map(|actor| (actor.id.as_str(), actor.path.as_str()))
-        .collect::<HashMap<_, _>>();
+// Initial definition/instance parents retain ownership even after RemoveChild.
+// Final draw order cannot locate actors whose earlier writes still need auditing.
+fn native_actor_layers(trace: &NativeTrace) -> HashMap<&str, usize> {
     let parents = trace
         .actor_definitions
         .iter()
@@ -2413,6 +2410,13 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
                 .iter()
                 .map(move |child| (child.definition_id.as_str(), parent.id.as_str()))
         })
+        .chain(trace.actor_definitions.iter().flat_map(|definition| {
+            definition
+                .runtime_actors
+                .iter()
+                .filter(|actor| **actor != definition.id)
+                .map(|actor| (actor.as_str(), definition.id.as_str()))
+        }))
         .chain(trace.runtime_actors.iter().filter_map(|actor| {
             actor
                 .parent_id
@@ -2426,6 +2430,35 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
         .enumerate()
         .map(|(index, root)| (root.as_str(), index))
         .collect::<HashMap<_, _>>();
+    let mut layers = HashMap::new();
+    for actor in trace
+        .actor_definitions
+        .iter()
+        .map(|actor| actor.id.as_str())
+        .chain(trace.runtime_actors.iter().map(|actor| actor.id.as_str()))
+    {
+        let mut ancestor = actor;
+        for _ in 0..=parents.len() {
+            if let Some(layer) = root_layers.get(ancestor).copied() {
+                layers.insert(actor, layer);
+                break;
+            }
+            let Some(parent) = parents.get(ancestor).copied() else {
+                break;
+            };
+            ancestor = parent;
+        }
+    }
+    layers
+}
+
+fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
+    let paths = trace
+        .runtime_actors
+        .iter()
+        .map(|actor| (actor.id.as_str(), actor.path.as_str()))
+        .collect::<HashMap<_, _>>();
+    let actor_layers = native_actor_layers(trace);
     let mut out = Vec::<ExpectedCommand>::new();
     for track in &trace.tween_tracks {
         let Some(command) = track
@@ -2450,16 +2483,7 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
         {
             Some(NativeTarget::Player(1))
         } else {
-            let mut ancestor = track.actor.as_str();
-            let layer = loop {
-                if let Some(layer) = root_layers.get(ancestor).copied() {
-                    break Some(layer);
-                }
-                let Some(parent) = parents.get(ancestor).copied() else {
-                    break None;
-                };
-                ancestor = parent;
-            };
+            let layer = actor_layers.get(track.actor.as_str()).copied();
             layer.map(|layer| NativeTarget::Actor {
                 layer,
                 actor: track.actor.clone(),
@@ -3134,9 +3158,17 @@ fn compare_column_splines(
             else {
                 continue;
             };
-            if !matches!(handler, "GetPosHandler" | "GetPosHandler/GetSpline") {
-                continue;
-            }
+            let rotation = match handler {
+                "GetPosHandler"
+                | "GetPosHandler/GetSpline"
+                | "get_pos_handler"
+                | "get_pos_handler/get_spline" => false,
+                "GetRotHandler"
+                | "GetRotHandler/GetSpline"
+                | "get_rot_handler"
+                | "get_rot_handler/get_spline" => true,
+                _ => continue,
+            };
             let Some(column) = column
                 .parse::<usize>()
                 .ok()
@@ -3151,41 +3183,61 @@ fn compare_column_splines(
             {
                 for (sequence, beat, seconds, args) in &track.samples {
                     let expected = match track.operation.as_str() {
-                        "Spline.SetSplineMode"
+                        "Spline.SetSplineMode" | "Spline.set_spline_mode"
                             if args.first().and_then(Value::as_str)
                                 == Some("NoteColumnSplineMode_Disabled") =>
                         {
                             Some(0.0)
                         }
-                        "Spline.SetPoint" if value_f32(args.first()) == Some(1.0) => {
-                            args.get(1).and_then(|point| value_f32(point.get(1)))
+                        "Spline.SetPoint" | "Spline.set_point"
+                            if value_f32(args.first()) == Some(1.0) =>
+                        {
+                            args.get(1).and_then(|point| {
+                                value_f32(point.get(if rotation { 2 } else { 1 }))
+                            })
                         }
                         _ => None,
                     };
                     if let Some(expected) = expected {
-                        writes.push((column, *seconds, *sequence, *beat, expected));
+                        writes.push((column, rotation, *seconds, *sequence, *beat, expected));
                     }
                 }
             }
         }
-        writes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
-        let mut reported = HashMap::<usize, bool>::new();
-        for (index, &(column, seconds, _, beat, expected)) in writes.iter().enumerate() {
+        writes.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then(a.1.cmp(&b.1))
+                .then(a.2.total_cmp(&b.2))
+                .then(a.3.cmp(&b.3))
+        });
+        let mut reported = HashMap::<(usize, bool), bool>::new();
+        for (index, &(column, rotation, seconds, _, beat, expected)) in writes.iter().enumerate() {
             // Compare state after the update. A later Disable can override a
             // SetPoint in the same frame; both cannot equal the rendered value.
             if writes
                 .get(index + 1)
-                .is_some_and(|next| next.0 == column && next.1 == seconds)
+                .is_some_and(|next| next.0 == column && next.1 == rotation && next.2 == seconds)
             {
                 continue;
             }
             let (transforms, splines) =
                 deadsync_gameplay::song_lua_column_transforms(&windows, column + 1, seconds);
-            let mut actual = transforms[1].get(column).copied().unwrap_or(0.0)
-                + splines
+            let mut actual = if rotation {
+                transforms[3]
                     .get(column)
-                    .map_or(0.0, |spline| spline.receptor(beat)[1]);
-            for track in spline_tracks.iter().filter(|track| track.column == column) {
+                    .copied()
+                    .unwrap_or(0.0)
+                    .to_radians()
+            } else {
+                transforms[1].get(column).copied().unwrap_or(0.0)
+                    + splines
+                        .get(column)
+                        .map_or(0.0, |spline| spline.receptor(beat)[1])
+            };
+            for track in spline_tracks
+                .iter()
+                .filter(|track| !rotation && track.column == column)
+            {
                 if let Some(frame) = track.at_second(seconds) {
                     if let Some(position) = &frame.position {
                         actual = position.coefficients[0][1][0];
@@ -3193,9 +3245,9 @@ fn compare_column_splines(
                 }
             }
             parity.check_once(
-                actual.is_finite() && (actual - expected).abs() <= 0.03,
-                reported.entry(column).or_default(),
-                || format!("P{} column {} final spline y differs at beat {beat:.3}: ITGmania {expected:.3}, DeadSync {actual:.3}", player + 1, column + 1),
+                actual.is_finite() && (actual - expected).abs() <= if rotation { EPSILON } else { 0.03 },
+                reported.entry((column, rotation)).or_default(),
+                || format!("P{} column {} final spline {} differs at beat {beat:.3}: ITGmania {expected:.3}, DeadSync {actual:.3}", player + 1, column + 1, if rotation { "rotation" } else { "y" }),
             );
         }
     }
@@ -7844,6 +7896,37 @@ fn mawaru8_local_messages_match_native() {
         "retain the complete corrected local trace"
     );
     parity.assert_complete("Mawaru8 local queued messages");
+}
+
+#[test]
+fn igaku_whole_song_matches_native() {
+    crate::paths::init();
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Igaku whole song"));
+    parity.assert_complete("Igaku whole song");
+    assert_eq!(
+        parity.checks(),
+        331752,
+        "retain every native observation in its owning layer"
+    );
+    let mut missing = compiled.clone();
+    for layer in &mut missing {
+        layer.column_offsets.retain(|window| {
+            window.target != deadsync_song_lua::SongLuaColumnTransformTarget::RotationZ
+        });
+    }
+    let mut rejected = Parity::default();
+    compare_column_splines(&trace, &missing, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "the audit rejects missing column rotations"
+    );
 }
 
 #[test]

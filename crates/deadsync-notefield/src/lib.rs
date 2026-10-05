@@ -3186,10 +3186,13 @@ mod tests {
 
     #[test]
     fn beat_x_extra_uses_beat_factor_wave() {
-        assert_eq!(beat_x_extra(0.0, 20.0, 0.0), 0.0);
-        assert!((beat_x_extra(0.0, 20.0, 1.0) - 20.0).abs() <= 1e-6);
+        assert_eq!(beat_x_extra(0.0, 20.0, 0.0, 0.0), 0.0);
+        assert!((beat_x_extra(0.0, 20.0, 1.0, 0.0) - 20.0).abs() <= 1e-6);
         let expected = 20.0 * (1.0_f32 + std::f32::consts::FRAC_PI_2).sin();
-        assert!((beat_x_extra(15.0, 20.0, 1.0) - expected).abs() <= 1e-6);
+        assert!((beat_x_extra(15.0, 20.0, 1.0, 0.0) - expected).abs() <= 1e-6);
+        // Native ArrowEffects scales the Y wavelength by 1 + BeatPeriod.
+        assert!((beat_x_extra(75.0, 20.0, 1.0, 4.0) - expected).abs() <= 1e-6);
+        assert!((beat_x_extra(7.5, 20.0, -1.0, -0.5) + expected).abs() <= 1e-6);
     }
 
     #[test]

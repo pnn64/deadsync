@@ -260,6 +260,7 @@ pub struct VisualOverrides {
     pub pulse_inner: Option<f32>,
     pub pulse_outer: Option<f32>,
     pub pulse_period: Option<f32>,
+    pub beat_period: Option<f32>,
     pub pulse_offset: Option<f32>,
     pub beat: Option<f32>,
     pub random_speed: Option<f32>,
@@ -340,6 +341,7 @@ impl Default for VisualOverrides {
             pulse_inner: None,
             pulse_outer: None,
             pulse_period: None,
+            beat_period: None,
             pulse_offset: None,
             beat: None,
             random_speed: None,
@@ -422,6 +424,7 @@ impl VisualOverrides {
             || self.pulse_inner.is_some()
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
+            || self.beat_period.is_some()
             || self.pulse_offset.is_some()
             || self.beat.is_some()
             || self.random_speed.is_some()
@@ -611,6 +614,7 @@ pub struct VisualEffects {
     pub pulse_inner: f32,
     pub pulse_outer: f32,
     pub pulse_period: f32,
+    pub beat_period: f32,
     pub pulse_offset: f32,
     pub beat: f32,
     pub random_speed: f32,
@@ -699,6 +703,7 @@ impl VisualEffects {
             pulse_inner: 0.0,
             pulse_outer: 0.0,
             pulse_period: 0.0,
+            beat_period: 0.0,
             pulse_offset: 0.0,
             beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
             random_speed: 0.0,
@@ -868,6 +873,7 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.pulse_inner, base.pulse_inner, step);
     approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
+    approach_optional_visual(&mut visual.beat_period, base.beat_period, step);
     approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
     approach_optional_visual(&mut visual.beat, base.beat, step);
     approach_optional_visual(&mut visual.random_speed, base.random_speed, step);
@@ -1433,6 +1439,14 @@ pub fn approach_visual_overrides_to_target(
         target.pulse_period,
         base.pulse_period,
         speed.pulse_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_period,
+        target.beat_period,
+        base.beat_period,
+        speed.beat_period,
         delta_time,
         1.0,
     );

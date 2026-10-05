@@ -975,6 +975,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "pulseperiod"
         | "pulseoffset"
         | "beat"
+        | "beatperiod"
         | "randomspeed"
         | "hidden"
         | "hiddenoffset"
