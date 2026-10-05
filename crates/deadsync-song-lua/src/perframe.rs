@@ -1789,7 +1789,11 @@ fn retarget_actor_tween(
 ) -> Option<SongLuaOverlayUpdateValue> {
     // Keep current-state sampling, back-tween mutation and inherited axes in
     // one state transition: a setter must never restart the active tween.
-    if target != SongLuaOverlayUpdateTarget::Zoom && !PLAYER_TRANSFORM_TARGETS.contains(&target) {
+    if !matches!(
+        target,
+        SongLuaOverlayUpdateTarget::Zoom | SongLuaOverlayUpdateTarget::Diffuse
+    ) && !PLAYER_TRANSFORM_TARGETS.contains(&target)
+    {
         return None;
     }
     let pending = scheduled.iter().rposition(|sample| {

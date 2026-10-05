@@ -8441,21 +8441,7 @@ fn bad_apple_whole_song_matches_native() {
     };
     // Gameplay's worker warmup supplies decoded movie dimensions. Compilation
     // alone does not register video pixels; exercise that production path here.
-    let prepared = deadsync_assets::dynamic_media::prepare_song_lua_video(
-        Path::new(texture_key.as_ref()),
-        true,
-    );
-    let deadsync_assets::dynamic_media::SongLuaVideoPrepResult::Ready(prepared) = prepared else {
-        panic!("local movie preparation failed");
-    };
-    assert_eq!(prepared.key.as_str(), texture_key.as_ref());
-    let poster = prepared
-        .poster
-        .expect("local movie poster")
-        .expect("requested poster");
-    assert_eq!(poster.dimensions(), (320, 240));
-    deadlib_assets::register_texture_dims(&prepared.key, poster.width(), poster.height());
-    deadsync_assets::dynamic_media::retire_video_player(prepared.player);
+    warm_lua_movie(texture_key, (320, 240));
     let mut composer = WholeSongComposer::new(&compiled[layer].overlays);
     let screen = [context.screen_width, context.screen_height];
     for sample in &track.samples {
@@ -8813,4 +8799,221 @@ fn mawaru7_whole_song_matches_native() {
     eprintln!("{}", parity.summary("Mawaru7 whole song"));
     assert_eq!(parity.checks(), 874665, "retain every native observation");
     parity.assert_complete("Mawaru7 whole song");
+}
+
+fn compare_drawable_frames(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
+    parity.section("drawable update frames");
+    let map = projected_drawable_map(trace, compiled);
+    let mut cursors = vec![0; trace.projected_vertex_tracks.len()];
+    for (frame, &(beat, second)) in trace.update_frames.iter().enumerate() {
+        let states = compiled
+            .iter()
+            .map(|layer| compiled_local_states_at(layer, context, beat as f32, second as f32))
+            .collect::<Vec<_>>();
+        for (track, cursor) in trace.projected_vertex_tracks.iter().zip(&mut cursors) {
+            let native = trace
+                .runtime_actors
+                .iter()
+                .find(|actor| actor.id == track.actor)
+                .expect("native drawable state");
+            while native
+                .render_state_samples
+                .get(*cursor + 1)
+                .is_some_and(|sample| sample.0 <= frame)
+            {
+                *cursor += 1;
+            }
+            let &(_, alpha, visible) = native
+                .render_state_samples
+                .get(*cursor)
+                .expect("native initial drawable state");
+            let &(layer, index) = map.get(&track.actor).expect("compiled drawable");
+            let actual = states[layer][index];
+            parity.check(
+                alpha.is_some_and(|alpha| (alpha - actual.diffuse[3]).abs() <= EPSILON),
+                || {
+                    format!(
+                        "{} frame {frame} beat {beat}: native alpha {alpha:?}, DeadSync {}",
+                        track.actor, actual.diffuse[3]
+                    )
+                },
+            );
+            parity.check(visible == actual.visible, || {
+                format!(
+                    "{} frame {frame} beat {beat}: native visible {visible}, DeadSync {}",
+                    track.actor, actual.visible
+                )
+            });
+        }
+    }
+}
+
+fn warm_lua_movie(key: &str, expected: (u32, u32)) {
+    let prepared = deadsync_assets::dynamic_media::prepare_song_lua_video(Path::new(key), true);
+    let deadsync_assets::dynamic_media::SongLuaVideoPrepResult::Ready(prepared) = prepared else {
+        panic!("local movie preparation failed");
+    };
+    assert_eq!(prepared.key, key);
+    let poster = prepared
+        .poster
+        .expect("local movie poster")
+        .expect("requested poster");
+    assert_eq!(poster.dimensions(), expected);
+    deadlib_assets::register_texture_dims(&prepared.key, poster.width(), poster.height());
+    deadsync_assets::dynamic_media::retire_video_player(prepared.player);
+}
+
+fn compare_image_draws(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+) -> usize {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    let map = projected_drawable_map(trace, compiled);
+    let mut composers = compiled
+        .iter()
+        .map(|layer| WholeSongComposer::new(&layer.overlays))
+        .collect::<Vec<_>>();
+    let screen = [context.screen_width, context.screen_height];
+    let mut checks = 0;
+    for track in &trace.projected_vertex_tracks {
+        let &(layer, index) = map.get(&track.actor).expect("image drawable");
+        if !matches!(
+            compiled[layer].overlays[index].kind,
+            SongLuaOverlayKind::Sprite { .. }
+        ) {
+            continue;
+        }
+        for sample in &track.samples {
+            let sample = sample.as_array().expect("image sample");
+            if sample[2].as_bool() != Some(true) || value_f32(sample.get(3)).unwrap_or(0.0) <= 0.0 {
+                continue;
+            }
+            let beat = value_f32(sample.first()).expect("image beat");
+            let second = value_f32(sample.get(1)).expect("image second");
+            let states = compiled_overlay_states_at(&compiled[layer], context, beat, second);
+            let frame = composers[layer].render_overlay(
+                &compiled[layer].overlays,
+                &states,
+                index,
+                screen,
+                second,
+                beat,
+            );
+            let actual = rendered_quad_corners(&frame, screen);
+            for corner in sample[6].as_array().expect("image corners") {
+                let x = value_f32(corner.get(0)).expect("image x");
+                let y = value_f32(corner.get(1)).expect("image y");
+                assert!(
+                    actual
+                        .iter()
+                        .any(|got| (got[0] - x).abs() <= 0.75 && (got[1] - y).abs() <= 0.75),
+                    "{} beat {beat}: missing corner [{x},{y}], actual {actual:?}",
+                    track.actor
+                );
+                checks += 1;
+            }
+            assert_eq!(
+                frame.sprite_instances.len(),
+                1,
+                "{} beat {beat} image draw",
+                track.actor
+            );
+            for (channel, actual) in frame.sprite_instances[0].tint.iter().enumerate() {
+                let expected = value_f32(sample[9].get(channel)).expect("image diffuse");
+                assert!(
+                    (expected - actual).abs() <= EPSILON,
+                    "{} beat {beat} channel {channel}: native {expected}, DeadSync {actual}",
+                    track.actor
+                );
+                checks += 1;
+            }
+        }
+    }
+    checks
+}
+
+#[test]
+fn save_tears_whole_native() {
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/save-your-tears-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    assert_eq!(
+        trace.projected_vertex_tracks.len(),
+        5,
+        "retain JPEG background geometry"
+    );
+    assert_eq!(trace.update_frames.len(), 10252, "retain the entire song");
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Save Your Tears whole song"));
+    parity.assert_complete("Save Your Tears whole song");
+    assert_eq!(
+        parity.checks(),
+        126766,
+        "retain every observation and quiet frame"
+    );
+    let map = projected_drawable_map(&trace, &compiled);
+    let movie = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with(".mp4"))
+        .expect("local rain movie");
+    let &(layer, index) = map.get(&movie.actor).expect("rain sprite");
+    let SongLuaOverlayKind::Sprite { texture_key, .. } = &compiled[layer].overlays[index].kind
+    else {
+        panic!("rain movie must be a sprite");
+    };
+    warm_lua_movie(texture_key, (1280, 720));
+    // Gameplay warms still-image metadata with decoded pixels before building
+    // actors. The headless composer also needs that resource handoff.
+    let background = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with(".jpg"))
+        .expect("local JPEG background");
+    let &(bg_layer, bg_index) = map.get(&background.actor).expect("background sprite");
+    let SongLuaOverlayKind::Sprite { texture_key, .. } =
+        &compiled[bg_layer].overlays[bg_index].kind
+    else {
+        panic!("JPEG background must be a sprite");
+    };
+    let image = deadlib_assets::open_image_fallback(Path::new(texture_key.as_ref()))
+        .expect("decode local JPEG using production image loader");
+    assert_eq!((image.width(), image.height()), (3224, 2240));
+    deadlib_assets::register_texture_dims(texture_key, image.width(), image.height());
+    let draws = compare_image_draws(&trace, &compiled, &context);
+    eprintln!("Save Your Tears actual image draw checks: {draws}");
+    assert_eq!(draws, 6808, "retain all visible movie and JPEG observations");
+    let mut wrong = compiled.clone();
+    let track = wrong[layer]
+        .overlay_updates
+        .iter_mut()
+        .find(|track| {
+            track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::Diffuse
+        })
+        .expect("retargeted rain fade track");
+    for sample in &mut track.samples {
+        if let SongLuaOverlayUpdateValue::Vec4(value) = &mut sample.value {
+            value[3] = 0.95;
+        }
+    }
+    let mut rejected = Parity::default();
+    compare_drawable_frames(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "incorrect fade values must fail full-frame checks"
+    );
 }
