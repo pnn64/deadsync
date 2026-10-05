@@ -7899,6 +7899,28 @@ fn mawaru8_local_messages_match_native() {
 }
 
 #[test]
+fn warp_zone_whole_song_matches_native() {
+    crate::paths::init();
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/warp-zone-whole-song.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Warp Zone whole song"));
+    parity.assert_complete("Warp Zone whole song");
+    assert_eq!(parity.checks(), 9201, "retain every native observation");
+    let mut missing = compiled.clone();
+    for layer in &mut missing {
+        layer.overlay_updates.clear();
+    }
+    let mut rejected = Parity::default();
+    compare_projected_geometry(&trace, &missing, &context, &mut rejected);
+    assert!(rejected.passed() < rejected.checks(), "missing portal updates must fail");
+}
+
+#[test]
 fn igaku_whole_song_matches_native() {
     crate::paths::init();
     let trace = read_trace_file(
