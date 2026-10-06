@@ -4815,7 +4815,7 @@
     },
     {
       "simfile": "mawaru9/mawaru9.sm",
-      "fixture": "mawaru9/mawaru9.sm.semantic.json.zst",
+      "fixture": "mawaru9/mawaru9.sm.current.semantic.json.zst",
       "title": "MAWARU SIMULATOR 2016",
       "lua_entries": 3,
       "status": "ok",
@@ -4862,7 +4862,118 @@
       "tween_interpolation_correction": "Use native RageUtil::lerp for float actor fields, rounding the product before the sum. The semantic update clock and tween queue timing remain unchanged.",
       "pulse_geometry_correction": "Apply native Actor::PreDraw pulse zoom and RGB axis scaling to projected vertices, including parent frames and wrappers; normalize both scalar and table effect colors.",
       "pulse_clock_correction": "Native bgm is a beat clock; music is the seconds clock.",
-      "motion_geometry_correction": "Apply native Actor::PreDraw Bob, Bounce and Wag poses before composing parent and wrapper matrices; use native macro timer resets and float timer advancement."
+      "motion_geometry_correction": "Apply native Actor::PreDraw Bob, Bounce and Wag poses before composing parent and wrapper matrices; use native macro timer resets and float timer advancement.",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "824199e7dfc44ef6",
+        "description": "TaroNuke",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
+        "random_seed": 1,
+        "update_frames": 17930,
+        "end_position": {
+          "beat": 835.9999389648436,
+          "seconds": 298.81072998046875
+        },
+        "source_files_sha256": {
+          "mawaru9/mawaru9.sm": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
+          "mawaru9/Effect 4/default.lua": "ea81c174ca4d30e551f081fe711b927e067586c3ada2c4cfb20194b52a32ce94",
+          "mawaru9/bg5/default.lua": "448e79a9147b30973eecccfc6a523e185b7fdf163b391ed04fc3e428bd733552",
+          "mawaru9/lua/anders/default.lua": "41a0374c171a26db57a3c8b5ffd4f1738523479d225c7cf7cb9e817bab6fc32f",
+          "mawaru9/lua/bee/default.lua": "c2656bc53cbdfb3b1981df8fde7f367e476c8fc3d719c9a914977e8ffff8e767",
+          "mawaru9/lua/blomby/default.lua": "b859745373900f1c4328107c6c1a4c7ce471a80a60f7bf18834428dbec6c2de0",
+          "mawaru9/lua/body/bg.lua": "6012002e84630f6004bf5fddc8660429e897fde1ff3b7f83cb06cdd2322d6b62",
+          "mawaru9/lua/body/default.lua": "7705c932417cf66a30d32441bdc6e7feeaeb560edaf074ce34dcaabf5d080b2e",
+          "mawaru9/lua/chike/default.lua": "ba650e4e603c657adb5a08d1c14b785fcaca57912549a0d0531d7947478cbfe2",
+          "mawaru9/lua/default.lua": "18de209dc15b3f6dcbc128c80255de296d537c4f4ee5942d2d1b5c49009af589",
+          "mawaru9/lua/finale/default.lua": "6a88f1ba4ea5041ca5bc78a214c83d645708a657a1e2cb97f1e92f63d939442a",
+          "mawaru9/lua/glados/default.lua": "01de8cd087db21cdcb03a124ae170fae02e6b4f285d76ca0f905dbbe1255ba72",
+          "mawaru9/lua/limit/default.lua": "401971456bf0780c6d727ea387c4d638286826866d1da4fac6e22f1a07688a22",
+          "mawaru9/lua/lineac/default.lua": "2e4fea7763efbaccc89e581740c2084f6fd827c10c7c0f1631bbdda330593c3d",
+          "mawaru9/lua/lisa/default.lua": "f10fb142f4595b1ab66a0c0857ddaadfe47b8f6d85a22e8c452ef8525a0ff811",
+          "mawaru9/lua/mmm/default.lua": "fc727303f0292af5bd1a11591d199e013650f389e9b05a6b42f413c3ed792a7a",
+          "mawaru9/lua/mods-taro.lua": "5c90478c73627bdf530659eda6ff29fca933cf438bcbde170d60feb02f2aebca",
+          "mawaru9/lua/nayoto/default.lua": "b0ba32393b5fc79bafdacc01dd5a2394918df9f400b15ec27dfa50e07f733367",
+          "mawaru9/lua/neko/default.lua": "df35c3772e4ba6e135f367c7eb328d187efd7c33fefd617a9f0d9075cfd256a8",
+          "mawaru9/lua/nue/default.lua": "91aa31fcf24c2956db3c1b51f4c6761b6714342182890dc3aae4dd714673220a",
+          "mawaru9/lua/operation/default.lua": "6f8e63d583d99bafd9a7a11d886ac0a50a1e710772b8a3f1955cd74752a0e9df",
+          "mawaru9/lua/reisen/default.lua": "4205f79d94ee48d5cdd5fc4e011216b22725be506216e913ee7304ab8183e738",
+          "mawaru9/lua/sans/chara/default.lua": "4ca6fc16d3aff5a886b42bee8c174ed4bc985f3a641e05eb7347d2d7a09d812b",
+          "mawaru9/lua/sans/default.lua": "038599f09b77b80e936b74f0acb580acde32863ee3e63c6c3e61e7bea67dd679",
+          "mawaru9/lua/sbahj/default.lua": "a473a403dc8c01e2f81c86d01d6f1eb368103e36e07fc7d1f6e2b7f96fc850a7",
+          "mawaru9/lua/sf/default.lua": "4fcd93bb718f822a9db08487967f14bcaa8a72fa467ba77ae6c104f371eea05e",
+          "mawaru9/mawaru_finale_ch0.lua": "38d8bd974acb3e0bc8fe99951073faa0a104d479c30f0035e3ac8f9e11113a59",
+          "mawaru9/mawaru_finale_ch1.lua": "1cd75141f586f4d14706c4614d04f8c84f66c1216ce805abd08e2bfb339d83bb",
+          "mawaru9/mawaru_finale_ch2.lua": "d768ac98aed96576105d90221b9ca01e24fd111a0daac009df71a5f5667bb674",
+          "mawaru9/mawaru_finale_ch3.lua": "d2008827355fc7da3949048c9efe34e358bf30e9d40e9c341e22ced1568aa3f5",
+          "mawaru9/mawaru_finale_ch4.lua": "c5a898c0e853507dc57b02a410a806d81a10a4e1c22d1f69f3d4072c124dea1f",
+          "mawaru9/mawaru_finale_ch5.lua": "8f33fc7270998bc8d2684d008987104564cd9a248f54be90dfa76b5a04002c00",
+          "mawaru9/mawaru_glados_ch0.lua": "16d392a6f9d8e61b5dbf6beb9b1d4956a710cad9389881cba777e24e8440a0d7",
+          "mawaru9/mawaru_glados_ch1.lua": "68d5d308054639b50a151d491e4dc7e9a79678e103fe6eebcaf4919c845de95c",
+          "mawaru9/mawaru_glados_ch2.lua": "623f2943c3c569e449459b1777f6472e57723e03f805b1d353364baea2869e42",
+          "mawaru9/mawaru_glados_ch3.lua": "b29f6a11dc5f049458430d3b3ab5e3e99067235efedef45f16581ad54b64eff1",
+          "mawaru9/mawaru_glados_ch4.lua": "2955ca9a0fd859ce1edf8eabc274bffd95be65170e62c381c205afc63bd9ac63",
+          "mawaru9/mawaru_glados_ch5.lua": "650a458611b67672628b9dbb750250428e32460ff875b2efbfe16465185d82c6",
+          "mawaru9/mawaru_nue_ch0.lua": "58793c1f9ae56e16dfe1a1a63b851f28ab0ce2f854cc54d25de5e4901c65d1d6",
+          "mawaru9/mawaru_nue_ch1.lua": "b9da7d4b2ca72459e640ae16da24d6a917b3629d7e54ebe626eff6b94f3f89a4",
+          "mawaru9/mawaru_nue_ch2.lua": "298c10792b0c5ad38fcdb1f38209fbfdb202492df78e10483b44005bcc82f514",
+          "mawaru9/mawaru_nue_ch3.lua": "31d21db6c5baeb6620ea5be7f25c26e59a0bd51b007c6cf11258aaf0638814e6",
+          "mawaru9/mawaru_nue_ch4.lua": "3c9f12f9a6f47f7e8730434d77b91bb857bffe7e4dbd5a94ebf9fc7ef1ca64bb",
+          "mawaru9/mawaru_nue_ch5.lua": "efe0d679536389fae520d479021e0e0893698c6489d9cc57fb9c18029783e8b7",
+          "mawaru9/mawaru_reisen_ch0.lua": "1fd644d6aa42d435c9138c8232fbd85e2fb530d4ea32a0d8b29a3436defe1d78",
+          "mawaru9/mawaru_reisen_ch1.lua": "16f9a704c960eb81b860bcf52db45f68e24c8ae5e49e4376ce426572e648c0ea",
+          "mawaru9/mawaru_reisen_ch2.lua": "74f460c7b1de0b9f34c216eeeecb0b98f08dbf68e460c46ff72daf55c0c014d2",
+          "mawaru9/mawaru_reisen_ch3.lua": "016f95a3b3bf7105783a5f30bc47c7f71ef22bff5bf88cd20fdfabb193b54781",
+          "mawaru9/mawaru_reisen_ch4.lua": "44e7b61fd139bf43f4574f23f57443132b1d386a4c8fb0368345d63f5dca376c",
+          "mawaru9/mawaru_reisen_ch5.lua": "2c49ea2b8332ae95a0b71a54d0600e4d5828bd04d39d0e6ed2af05e6c8710c48"
+        },
+        "sha256": "db832b41d07763c548b0fd54115bd7145d00cc9653e74db4c97a72ff32d235fb",
+        "retained_sha256": "cb79cdf0c349b8a6c8efadb3481f77b5061619349eb5cd70b117f2afd85cbcb1",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs\\semantic_host.lua": "246a837eb217ec8fd9f24dc3746f8dfb0652cb9c07d5d40f611ab4bb7090fa36",
+          "itgmania-harness-rs\\native\\actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs\\native\\oracle_bridge.cpp": "c7f4bef18d02a5eae45c4ab2f4f523e072554c64a09c096d5d946735c62e1524",
+          "itgmania-harness-rs\\src\\song_lua_headless.rs": "fae42f4a4e4ed4119eb65e7e49f2d4ad9a75712c665b011dcd9a72026386837a",
+          "itgmania-harness-rs\\src\\song_lua_semantic_baseline.rs": "44bff610b67107fedf86ea90b1220ba0fa3ac1ca28d79e9a91d010796d7a5f52"
+        },
+        "headless_executable_sha256": "66cbb5ef7f681bbb5850222eea347972bab7ad7968e6a83618b44323a2ae485c",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0,
+        "judgment": {
+          "bytes": 336013,
+          "path": "Love 2x7 (doubleres).png",
+          "sha256": "5390eacdd3dea8399878783e9b0b55d7cdd34532e5d869adaa6748b8786ce28e"
+        }
+      }
     },
     {
       "simfile": "Jumper/Jumper.ssc",

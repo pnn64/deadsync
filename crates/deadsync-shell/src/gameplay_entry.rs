@@ -161,6 +161,23 @@ pub(crate) fn prepare_song_lua(
         &video_renderer.to_string(),
     );
     context.random_seed = random_seed;
+    for (player, profile) in context.players.iter_mut().zip(player_profiles) {
+        let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
+            profile.judgment_graphic.texture_key(),
+            deadsync_assets::textures::judgment_texture_choices(),
+        ) else {
+            continue;
+        };
+        let path = deadsync_assets::textures::texture_key_source_path(
+            &choice.key,
+            &choice.key,
+            deadsync_assets::resolve_asset_path,
+        );
+        match std::fs::canonicalize(&path) {
+            Ok(path) => player.judgment_texture = Some(path),
+            Err(error) => warn!("Cannot load initial Lua judgment {}: {error}", path.display()),
+        }
+    }
     deadsync_song_lua::playback::prepare_song_lua(
         song,
         &context,

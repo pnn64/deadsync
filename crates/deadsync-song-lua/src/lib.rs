@@ -651,6 +651,8 @@ pub struct SongLuaPlayerContext {
     pub perspective: deadsync_gameplay::PerspectiveEffects,
     pub display_bpms: [f32; 2],
     pub noteskin_name: String,
+    /// Profile-selected graphic already loaded by the gameplay theme.
+    pub judgment_texture: Option<PathBuf>,
     pub screen_x: f32,
     pub screen_y: f32,
 }
@@ -671,6 +673,7 @@ impl Default for SongLuaPlayerContext {
             perspective: deadsync_gameplay::PerspectiveEffects::default(),
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
+            judgment_texture: None,
             screen_x: 320.0,
             screen_y: 240.0,
         }
@@ -9683,7 +9686,10 @@ return Def.ActorFrame{
         for player_index in 0..2 {
             let player = crate::lua_util::create_top_screen_player_actor(
                 &lua,
-                SongLuaPlayerContext::default(),
+                SongLuaPlayerContext {
+                    judgment_texture: (player_index == 0).then(|| texture.clone()),
+                    ..SongLuaPlayerContext::default()
+                },
                 player_index,
                 "dance-single",
                 test_create_dummy_actor,
@@ -9692,6 +9698,10 @@ return Def.ActorFrame{
             player.set("__songlua_song_dir", song_dir.to_str()).unwrap();
             lua.globals().set("player", player).unwrap();
             lua.globals().set("texture", texture.to_str()).unwrap();
+            lua.globals().set("loaded", player_index == 0).unwrap();
+            lua.globals()
+                .set("initial_texture_path", file_path_string(&texture))
+                .unwrap();
             lua.load(
                 r#"
 local judgment = player:GetChild("Judgment")
@@ -9702,6 +9712,13 @@ assert(sprite == judgment:GetChildren().JudgmentWithOffsets)
 assert(sprite:GetParent() == judgment)
 assert(sprite:GetName() == "JudgmentWithOffsets")
 assert(sprite.__songlua_actor_type == "Sprite")
+if loaded then
+    assert(sprite:GetTexture():GetPath() == initial_texture_path)
+    assert(sprite:GetWidth() == 64 and sprite:GetHeight() == 64)
+    assert(sprite:GetNumStates() == 12)
+else
+    assert(sprite:GetTexture() == nil)
+end
 sprite:Load(texture)
 assert(sprite:GetWidth() == 64 and sprite:GetHeight() == 64)
 assert(sprite:GetNumStates() == 12)

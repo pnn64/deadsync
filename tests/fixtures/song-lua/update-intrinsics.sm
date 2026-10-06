@@ -1,0 +1,9 @@
+#TITLE:Update intrinsics;
+#BPMS:0=60;
+#FGCHANGES:0=update-intrinsics.lua=1=0=0=1;
+#NOTES:dance-single::challenge:1:0,0,0,0,0:
+1000
+0100
+0010
+0001
+;

@@ -65,6 +65,8 @@ struct NativeTrace {
     enabled_players: Option<[bool; 2]>,
     #[serde(default)]
     noteskin_reference: Option<NativeNoteskin>,
+    #[serde(default)]
+    judgment_reference: Option<NativeResourceFile>,
     simfile: String,
     source_simfile: Option<PathBuf>,
     roots: Vec<String>,
@@ -98,11 +100,11 @@ struct NativeTrace {
 struct NativeNoteskin {
     skin: String,
     #[serde(default)]
-    files: Vec<NativeNoteskinFile>,
+    files: Vec<NativeResourceFile>,
 }
 
 #[derive(Deserialize)]
-struct NativeNoteskinFile {
+struct NativeResourceFile {
     path: PathBuf,
     sha256: String,
 }
@@ -682,6 +684,25 @@ fn compile_trace_song_at(
         }
         for player in &mut context.players {
             player.noteskin_name = noteskin.skin.clone();
+        }
+    }
+
+    if let Some(graphic) = &trace.judgment_reference {
+        assert!(
+            graphic.path.components().all(|part| {
+                matches!(part, std::path::Component::Normal(_))
+            })
+        );
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets/graphics/judgements")
+            .join(&graphic.path);
+        assert_eq!(
+            whole_song_archives::hash_file(&path), graphic.sha256,
+            "initial judgment dependency changed"
+        );
+        let path = fs::canonicalize(path).expect("pinned initial judgment exists");
+        for player in &mut context.players {
+            player.judgment_texture = Some(path.clone());
         }
     }
 
@@ -1783,6 +1804,7 @@ struct NativeRenderWrite {
     target: SongLuaOverlayUpdateTarget,
     value: SongLuaOverlayUpdateValue,
     relative: bool,
+    quad_size: Option<[f32; 2]>,
 }
 
 fn native_render_values(
@@ -1915,43 +1937,87 @@ fn native_render_values(
     }
 }
 
-fn native_update_render_writes_all(trace: &NativeTrace, actor: &str) -> Vec<NativeRenderWrite> {
-    let mut writes =
-        trace
-            .tween_tracks
-            .iter()
-            .filter(|track| {
-                track.actor == actor
-                    && track.command.as_deref() == Some("UpdateCommand")
-                    && track.kind == "immediate"
+fn native_effect_period(timing: &mut [f32; 5], method: &str, args: &[Value]) -> Option<f32> {
+    let number = |index| value_f32(args.get(index));
+    let period = match method {
+        "effectperiod" => number(0),
+        "pulse" | "bob" | "bounce" | "wag" | "rainbow" => Some(2.0),
+        "diffuseblink" | "diffuseshift" | "diffuseramp" | "glowblink" | "glowshift"
+        | "glowramp" => Some(1.0),
+        _ => None,
+    };
+    if let Some(period) = period.filter(|period| *period > 0.0) {
+        *timing = [period / 2.0, 0.0, period / 2.0, 0.0, 0.0];
+    } else if method == "effecttiming" {
+        *timing = [
+            number(0)?, number(1)?, number(2)?, number(4).unwrap_or(0.0), number(3)?,
+        ];
+    } else if method == "effect_hold_at_full" {
+        timing[3] = number(0)?;
+    }
+    matches!(method, "effectperiod" | "effecttiming" | "effect_hold_at_full")
+        .then(|| timing.iter().sum())
+}
+
+// Walk setters in native call order: intrinsic size and effect timing are
+// actor state, while visibility and effect timing bypass DestTweenState.
+fn native_update_render_writes_all(
+    trace: &NativeTrace,
+    actor: &str,
+    class: &str,
+) -> Vec<NativeRenderWrite> {
+    use SongLuaOverlayUpdateTarget as Target;
+    let mut operations = trace.tween_tracks.iter()
+        .filter(|track| track.actor == actor)
+        .flat_map(|track| {
+            track.segments.iter().flat_map(move |segment| {
+                segment.operations.iter().map(move |operation| (track, segment, operation))
             })
-            .flat_map(|track| &track.segments)
-            .flat_map(|segment| {
-                segment.operations.iter().flat_map(move |operation| {
-                    native_render_values(operation)
-                        .into_iter()
-                        .map(move |(target, value)| NativeRenderWrite {
-                            seq: operation.seq,
-                            beat: segment.beat,
-                            target,
-                            value,
-                            relative: operation.operation.rsplit('.').next().is_some_and(
-                                |method| {
-                                    matches!(
-                                        method.to_ascii_lowercase().as_str(),
-                                        "addx"
-                                            | "addy"
-                                            | "addz"
-                                            | "addrotationx"
-                                            | "addrotationy"
-                                            | "addrotationz"
-                                    )
-                                },
-                            ),
-                        })
-                })
-            })
-            .collect::<Vec<_>>();
+        }).collect::<Vec<_>>();
+    operations.sort_by_key(|(_, _, operation)| operation.seq);
+    let mut size = [1.0; 2]; // Quad::Quad loads its default 1x1 texture.
+    let mut timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+    let mut writes = Vec::new();
+    for (track, segment, operation) in operations {
+        let method = operation.operation.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+        let number = |index| value_f32(operation.args.get(index));
+        match method.as_str() {
+            "setsize" => {
+                if let (Some(width), Some(height)) = (number(0), number(1)) {
+                    size = [width, height];
+                }
+            }
+            "setwidth" => {
+                if let Some(width) = number(0) { size[0] = width; }
+            }
+            "setheight" => {
+                if let Some(height) = number(0) { size[1] = height; }
+            }
+            _ => {}
+        }
+        let period = native_effect_period(&mut timing, &method, &operation.args);
+        if track.command.as_deref() != Some("UpdateCommand")
+            || (track.kind != "immediate" && method != "visible" && period.is_none())
+        {
+            continue;
+        }
+        let mut values = native_render_values(operation);
+        if let Some(period) = period {
+            values.retain(|(target, _)| *target != Target::EffectPeriod);
+            values.push((Target::EffectPeriod, SongLuaOverlayUpdateValue::F32(period)));
+        }
+        for (target, value) in values {
+            writes.push(NativeRenderWrite {
+                seq: operation.seq,
+                beat: segment.beat,
+                target,
+                value,
+                relative: matches!(method.as_str(), "addx" | "addy" | "addz"
+                    | "addrotationx" | "addrotationy" | "addrotationz"),
+                quad_size: (class == "Quad" && method == "zoomto").then_some(size),
+            });
+        }
+    }
     writes.sort_by_key(|write| write.seq);
     let mut merged = Vec::<NativeRenderWrite>::with_capacity(writes.len());
     for mut write in writes {
@@ -2245,7 +2311,7 @@ fn compare_update_render_values(
             continue;
         }
         for (overlay_index, definition) in pairs {
-            for write in native_update_render_writes_all(trace, definition.id) {
+            for write in native_update_render_writes_all(trace, definition.id, definition.class) {
                 let exact_ease_is_authoritative = compiled.overlay_eases.iter().any(|ease| {
                     if ease.overlay_index != overlay_index
                         || ease.unit != SongLuaTimeUnit::Beat
@@ -2264,11 +2330,11 @@ fn compare_update_render_values(
                 if exact_ease_is_authoritative {
                     continue;
                 }
-                let actual = compiled
+                let captured_value = |target| compiled
                     .overlay_writes
                     .iter()
                     .find(|track| {
-                        track.overlay_index == overlay_index && track.target == write.target
+                        track.overlay_index == overlay_index && track.target == target
                     })
                     .and_then(|track| {
                         track
@@ -2299,14 +2365,14 @@ fn compare_update_render_values(
                                     .find_map(|block| {
                                         (block.duration == 0.0
                                             && block.start <= 0.0
-                                            && block.delta.has_update_target(write.target))
+                                            && block.delta.has_update_target(target))
                                         .then(|| {
                                             let state = overlay_state_after_blocks(
                                                 SongLuaOverlayState::default(),
                                                 [block],
                                                 0.0,
                                             );
-                                            overlay_state_render_value(&state, write.target)
+                                            overlay_state_render_value(&state, target)
                                         })
                                         .flatten()
                                     })
@@ -2317,7 +2383,7 @@ fn compare_update_render_values(
                             context,
                             compiled,
                             overlay_index,
-                            write.target,
+                            target,
                             write.beat,
                             song_elapsed_seconds_at(write.beat, context),
                         )
@@ -2331,8 +2397,24 @@ fn compare_update_render_values(
                             write.beat,
                             seconds,
                         );
-                        overlay_state_render_value(&state, write.target)
+                        overlay_state_render_value(&state, target)
                     });
+                let actual = if let Some([width, height]) = write.quad_size {
+                    // ZoomTo stores width/height divided by intrinsic size.
+                    // Convert the captured zoom back to pixels so the existing
+                    // 0.03 pixel tolerance is preserved, including sized Quads.
+                    match (
+                        captured_value(SongLuaOverlayUpdateTarget::ZoomX),
+                        captured_value(SongLuaOverlayUpdateTarget::ZoomY),
+                    ) {
+                        (Some(SongLuaOverlayUpdateValue::F32(x)), Some(SongLuaOverlayUpdateValue::F32(y))) => {
+                            Some(SongLuaOverlayUpdateValue::Vec2([width * x, height * y]))
+                        }
+                        _ => None,
+                    }
+                } else {
+                    captured_value(write.target)
+                };
                 let Some(actual) = actual else {
                     parity.check(false, || {
                         format!(
@@ -4507,7 +4589,7 @@ fn additive_update_matches_native() {
         .iter()
         .find(|a| a.name.as_deref() == Some("SetterAdd"))
         .unwrap();
-    let writes = native_update_render_writes_all(&trace, &definition.id);
+    let writes = native_update_render_writes_all(&trace, &definition.id, &definition.class);
     use SongLuaOverlayUpdateTarget as Target;
     for (target, expected) in [
         (Target::X, 105.0),
@@ -4527,6 +4609,53 @@ fn additive_update_matches_native() {
     let parity = compare_semantics(&trace, &compiled, 0, &context);
     assert!(parity.checks() > 500);
     parity.assert_complete("native additive update");
+}
+
+#[test]
+fn update_intrinsics_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/update-intrinsics.json.zst"),
+    );
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/update-intrinsics.sm"),
+    );
+    let definition = trace.actor_definitions.iter()
+        .find(|actor| actor.name.as_deref() == Some("Probe")).unwrap();
+    let writes = native_update_render_writes_all(&trace, &definition.id, &definition.class);
+    use SongLuaOverlayUpdateTarget as Target;
+    use SongLuaOverlayUpdateValue as UpdateValue;
+    assert_eq!(writes.len(), 4, "retain all four effective update observations");
+    for (target, expected) in [
+        (Target::Size, UpdateValue::Vec2([60.0, 40.0])),
+        (Target::Visible, UpdateValue::Bool(false)),
+        (Target::EffectPeriod, UpdateValue::F32(1.0)),
+        (Target::EffectMode, UpdateValue::EffectMode(EffectMode::Pulse)),
+    ] {
+        let write = writes.iter().find(|write| write.target == target).unwrap();
+        assert_eq!(write.value, expected, "{target:?}");
+        assert!(write.beat > 1.0, "exercise a gameplay update after startup");
+    }
+    assert_eq!(writes.iter().find(|write| write.target == Target::Size).unwrap().quad_size,
+        Some([20.0, 10.0]));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("native update intrinsics"));
+    parity.assert_complete("native update intrinsics");
+
+    let mut wrong = compiled.clone();
+    let index = wrong[0].overlays.iter()
+        .position(|overlay| overlay.name.as_deref() == Some("Probe")).unwrap();
+    let sample = wrong[0].overlay_writes.iter_mut()
+        .find(|track| track.overlay_index == index && track.target == Target::ZoomX)
+        .unwrap().samples.first_mut().unwrap();
+    let UpdateValue::F32(zoom) = &mut sample.value else { panic!("expected captured zoom"); };
+    *zoom += 0.002; // 0.04 pixels on the sized Quad must exceed the 0.03 tolerance.
+    let mut rejected = Parity::default();
+    compare_update_render_values(&trace, &wrong, &context, &mut rejected);
+    assert_eq!(rejected.checks(), 4);
+    assert!(rejected.gaps.iter().any(|gap| gap.contains("Size differs")));
 }
 
 #[test]
@@ -5802,6 +5931,18 @@ fn compare_sprite_textures(
                 Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("assets/noteskins")
                     .join(relative)
+            } else if let Some(relative) = raw.strip_prefix("judgment:/") {
+                if !trace.judgment_reference.as_ref().is_some_and(|graphic| {
+                    graphic.path == Path::new(relative)
+                }) {
+                    parity.check(false, || {
+                        format!("Sprite.Load judgment asset is absent from the native inventory: {raw}")
+                    });
+                    continue;
+                }
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets/graphics/judgements")
+                    .join(relative)
             } else {
                 raw.strip_prefix("song:/").map_or_else(
                     || {
@@ -5869,7 +6010,19 @@ fn compare_judgment_textures(
                 .first()
                 .and_then(Value::as_str)
                 .expect("Sprite.Load path");
-            let expected_path = if let Some(relative) = raw.strip_prefix("song:/") {
+            let expected_path = if let Some(relative) = raw.strip_prefix("judgment:/") {
+                if !trace.judgment_reference.as_ref().is_some_and(|graphic| {
+                    graphic.path == Path::new(relative)
+                }) {
+                    parity.check(false, || {
+                        format!("judgment asset is absent from the native inventory: {raw}")
+                    });
+                    continue;
+                }
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets/graphics/judgements")
+                    .join(relative)
+            } else if let Some(relative) = raw.strip_prefix("song:/") {
                 context.song_dir.join(relative)
             } else if Path::new(raw).is_absolute() {
                 PathBuf::from(raw)

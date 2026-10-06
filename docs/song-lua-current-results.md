@@ -1,18 +1,18 @@
 # Current project song Lua results
 
-Resume from the listed failures below. Keep accepted passes closed unless
+All available listed chart results pass. Keep accepted passes closed unless
 an actual regression appears. Use local resources and the native headless
 CLI, with the existing semantic and runtime-modifier scope and tolerances.
 Do not download resources or launch visible ITGmania instances.
 
 The frozen project has 63 chart entries. Current evidence:
 
-- **57 passing exact project charts**
-- **1 failing exact project charts**
+- **58 passing exact project charts**
+- **0 failing exact project charts**
 - **3 passing supplied variants with different chart hashes**
 - **2 unavailable locally** (Get Into It and Rhythm Hell)
 
-Thus 60 of 61 available listed results pass.
+Thus 61 of 61 available listed results pass.
 The original single audit also included Mawaru 2–4, which are outside the
 frozen list. Their failures are separate and do not expand this work queue.
 The audit was run at 0.5.1795; subsequent targeted results supersede only
@@ -29,16 +29,16 @@ their own failures. No whole-game pixel or interactive parity claim.
 | Waltz Capriccio | 0.5.1802, `12095dbf8` | 148,479/148,479 |
 | Ultimate taste | 0.5.1803, `891a189d6` | 309,553/309,553 |
 | Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ | 0.5.1804, `2c9f0b3cd` | 1,067,542/1,067,542 |
-| MAWARUCHI SURVIVER | 0.5.1805 | 1,454,202/1,454,202 |
+| MAWARUCHI SURVIVER | 0.5.1805, `c92bf4c47` | 1,454,202/1,454,202 |
+| MAWARU SIMULATOR 2016 | 0.5.1806 | 3,663,408/3,663,408 |
 
 ## Remaining listed failures
 
-- [Lua] MAWARU SIMULATOR 2016 (9) (`mawaru9`)
 
-Mawaru 9 currently fails on nil `Sprite:GetTexture()` while walking the
-player Judgment tree during startup: its default Sprite is untextured.
-The earlier Song:GetAllSteps gap is already fixed. Diagnose only the
-remaining listed failures above.
+No available listed result remains failing. Mawaru 9 now receives its
+profile judgment texture before startup Lua runs. The earlier
+Song:GetAllSteps gap is also fixed. Only the supplied-resource gaps below
+remain; do not rerun accepted passes without evidence of a regression.
 
 ## Supplied-resource gaps
 
@@ -46,6 +46,17 @@ Keep the frozen list unchanged. The available Mawaru 5, Mawaru 8 and Brain
 Power charts have different hashes. Their local results pass; the user
 will resolve the hash mismatches. Get Into It and Rhythm Hell have no
 local resources. Do not download or silently substitute their identities.
+
+| Chart | Frozen project hash | Supplied local hash |
+| --- | --- | --- |
+| Mawaru 5 | `74765c1936186d20` | `8e0b6274cb33af5e` |
+| Mawaru 8 | `cadefe09888e9ab8` | `8224fb7e0b05040f` |
+| Brain Power | `a73ec5f2f3015620` | `f40ebaf45ea6e26d` |
+
+Missing: Get Into It (`9c208360a9b25133`) and Rhythm Hell
+(`be38aa9e3c88c32b`). These are content blockers for the frozen 63-entry
+list. Preserve the passing local variants and await corrected resources
+or a user change to the list; do not repeat their accepted comparisons.
 
 ## Promotion and evidence
 

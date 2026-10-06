@@ -514,6 +514,7 @@ pub fn song_lua_compile_context(
             center_1player_notefield,
         ),
         screen_y: viewport.center_y(),
+        judgment_texture: None,
     });
     context
 }

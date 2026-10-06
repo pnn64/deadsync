@@ -11578,6 +11578,9 @@ pub fn create_named_child_actor(
             sprite.set("__songlua_sprite_animate", false)?;
             sprite.set("__songlua_visible", false)?;
             sprite.set("__songlua_judgment_sprite_player", player_index)?;
+            if let Some(path) = parent.get::<Option<String>>("__songlua_judgment_texture")? {
+                set_actor_texture_from_path(&sprite, &path)?;
+            }
             actor_children(lua, &frame)?.set("JudgmentWithOffsets", sprite)?;
             frame
         } else if player_child_proxy_name(name).is_some() {
@@ -11922,6 +11925,9 @@ pub fn create_top_screen_player_actor(
     actor.set("__songlua_visible", true)?;
     actor.set("__songlua_state_x", player.screen_x)?;
     actor.set("__songlua_state_y", player.screen_y)?;
+    if let Some(path) = &player.judgment_texture {
+        actor.set("__songlua_judgment_texture", file_path_string(path))?;
+    }
     Ok(actor)
 }
 
