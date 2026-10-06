@@ -685,10 +685,12 @@
     },
     {
       "simfile": "Karachi/Jorts - Karachi.ssc",
-      "fixture": "Karachi/Jorts - Karachi.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/karachi-whole-song.json.zst",
       "title": "Karachi",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",

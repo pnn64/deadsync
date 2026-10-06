@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "702b3a5f5aba3b98",
+    "local": "702b3a5f5aba3b98",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 78804,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/karachi-whole-song.json.zst",
+  "retained_sha256": "e0cef6996cd27b392356977f067f8951679f1cfb8e8ffe1cecdc2794c194c4b0",
+  "end_position": {
+    "beat": 324,
+    "seconds": 126.23376623376625
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}
