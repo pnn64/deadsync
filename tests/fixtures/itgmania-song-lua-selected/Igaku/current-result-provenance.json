@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "3e9fa53d70b9aa19",
+    "local": "3e9fa53d70b9aa19",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 331752,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.json.zst",
+  "retained_sha256": "fece1ddd8058038018b4d14b44d610e0883e6b8e3d8ab8a78f75a1478655e7f5",
+  "end_position": {
+    "beat": 335.5,
+    "seconds": 118.41176470588236
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}

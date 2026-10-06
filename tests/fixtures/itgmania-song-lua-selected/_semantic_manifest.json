@@ -676,10 +676,12 @@
     },
     {
       "simfile": "Igaku/Igaku.ssc",
-      "fixture": "Igaku/Igaku.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/igaku-whole-song.json.zst",
       "title": "ã‚¤ã‚¬ã‚¯",
       "lua_entries": 2,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Karachi/Jorts - Karachi.ssc",
