@@ -1,73 +1,64 @@
-# Current song Lua result queue
+# Current project song Lua results
 
-Resume from this queue. Do not reopen passing results without an observed
-failure. Use local resources and the native headless CLI; do not download
-resources or launch visible ITGmania instances. Keep the existing semantic
-and runtime-modifier comparison scope and tolerances.
+Resume from the listed failures below. Keep accepted passes closed unless
+an actual regression appears. Use local resources and the native headless
+CLI, with the existing semantic and runtime-modifier scope and tolerances.
+Do not download resources or launch visible ITGmania instances.
 
-The single completion audit at MAIN version 0.5.1795 found 50 passing and
-14 failing selected chart results (64 total, including Feelyourtouch's
-single and double results). Subsequent targeted verification closes two
-failures: **52 verified passes, 12 remaining failures**. This count combines
-the audit with those targeted results; the entire audit has not been rerun.
+The frozen project has 63 chart entries. Current evidence:
+
+- **50 passing exact project charts**
+- **8 failing exact project charts**
+- **3 passing supplied variants with different chart hashes**
+- **2 unavailable locally** (Get Into It and Rhythm Hell)
+
+Thus 53 of 61 available listed results pass.
+The original single audit also included Mawaru 2–4, which are outside the
+frozen list. Their failures are separate and do not expand this work queue.
+The audit was run at 0.5.1795; subsequent targeted results supersede only
+their own failures. No whole-game pixel or interactive parity claim.
 
 | Closed result | MAIN version | Complete result | Change |
 | --- | --- | --- | --- |
-| Jumper | 0.5.1796, `190fef272` | 6,411/6,411 | Replace the stale retained capture; keep hash and seed 2 |
-| Botanic Panic | 0.5.1797 | 655,940/655,940 | Preserve exact zero-duration setter values; native blink regression |
+| Jumper | 0.5.1796, `190fef272` | 6,411/6,411 | Current headless reference; seed 2 unchanged |
+| Botanic Panic | 0.5.1797, `d4393135b` | 655,940/655,940 | Preserve immediate setter bits; native blink regression |
+| LALA | 0.5.1798 | 40,708/40,708 | Current headless reference; frozen Challenge chart pinned |
 
-The audit's other 50 passing results remain closed, including Flying,
-Kagetsu, Finite, Bunny House and Lake of Lost Nostalgia. The current audit
-scope does not establish whole-game pixel parity or interactive gameplay
-parity.
+## Remaining listed failures
 
-## Remaining observed failures
+- [Lua] 7th Gear [SX11] (`seventh_gear`)
+- [Lua] Step Your Game Up (Director's Cut) [SX14] (`step_your_game_up`)
+- [Lua] Ultimate taste [SX15] (`ultimate_taste`)
+- [Lua] Waltz Capriccio (`waltz_capriccio`)
+- [Lua] 666 (`song_666`)
+- [Lua] Someone Special (`someone_special`)
+- [Lua] MAWARUCHI SURVIVER (7) (`mawaru7`)
+- [Lua] MAWARU SIMULATOR 2016 (9) (`mawaru9`)
 
-- LALA
-- Mawaru 2
-- Mawaru 3
-- Mawaru 4
-- Mawaru 7
-- Mawaru 9
-- Seventh Gear
-- 666
-- Step Your Game Up
-- Someone Special
-- Waltz Capriccio
-- Ultimate Taste
+Mawaru 9 currently fails on nil `Sprite:GetTexture()` while walking
+SongBackground during startup; `_black.png` exists locally. The earlier
+Song:GetAllSteps gap is already fixed. Someone Special's failures are
+initial multitap writes; other sections pass. Mawaru 7 has two projected
+visibility differences. Diagnose these specific failures before large
+recaptures.
 
-Mawaru 9's observed failure is now a nil `Sprite:GetTexture()` while walking
-SongBackground during startup. The earlier Song:GetAllSteps gap is fixed.
-Its `_black.png` exists locally. Someone Special's remaining failures are
-initial multitap writes; the audit passes its other sections. Mawaru 7 has
-two projected-visibility differences. Diagnose those specific failures
-before repeating large captures.
+## Supplied-resource gaps
 
-## Selection and promotion rules
+Keep the frozen list unchanged. The available Mawaru 5, Mawaru 8 and Brain
+Power charts have different hashes. Their local results pass; the user
+will resolve the hash mismatches. Get Into It and Rhythm Hell have no
+local resources. Do not download or silently substitute their identities.
 
-Keep the frozen project list unchanged. Its 63 entries have 58 exact local
-hash matches. Get Into It and Rhythm Hell are unavailable locally. Mawaru
-5, Mawaru 8 and Brain Power have different supplied chart hashes; their
-available local results pass, and the user will resolve hash mismatches.
-Do not download replacements or silently substitute project identities.
+## Promotion and evidence
 
-For each newly passing result, verify the complete pinned corpus result,
-copy only its curated changes into `C:\GitHub\deadsync`, bump the workspace
-patch by exactly one in both Cargo.toml and Cargo.lock, and commit there.
-Keep the corresponding changes in REWORK uncommitted. Preserve unrelated
-work and never copy the entire dirty REWORK tree.
+For each new pass, verify the complete pinned corpus result, copy only its
+curated changes into `C:\GitHub\deadsync`, bump the patch by exactly one in
+both Cargo.toml and Cargo.lock, and commit there. Keep the corresponding
+REWORK changes uncommitted and preserve unrelated work.
 
-## Local evidence
-
-The original audit and failing observations are in
-`C:\GitHub\rework\.tmp\project-completion-audit.log` and
-`project-completion-test-status.json`. The immutable audit provenance is
-`project-completion-audit.json`. Jumper and Botanic's targeted logs are
-`jumper-current-main.log` and `botanic-current-main.log`; their committed
-result documents and selected fixtures retain capture provenance.
-
-The curated validation checkout is
-`C:\GitHub\rework\.tmp\lua-main-check`. Its Cargo version reflects its
-original base; the promoted MAIN version is authoritative. Continue only
-the remaining queue and rerun broader tests when a shared production fix
-creates a concrete regression concern.
+Evidence under `C:\GitHub\rework\.tmp`: `project-completion-audit.log`,
+`project-completion-test-status.json`, `project-completion-audit.json`,
+`current-project-results.json` and each `<song>-current-main.log`.
+Per-result documents and selected manifests retain capture provenance.
+The curated validation checkout is `lua-main-check`; its base Cargo
+version differs from promoted MAIN, whose version is authoritative.
