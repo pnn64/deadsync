@@ -4260,10 +4260,70 @@
     },
     {
       "simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
-      "fixture": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc.semantic.json",
+      "fixture": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc.semantic.json.zst",
       "title": "[FULL SONG] 花月ノ夢",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "813d600a24bdd875",
+        "description": "MODS STR [24'7|1-15'8'7/7]",
+        "steps_type": "dance-single",
+        "random_seed": 1,
+        "update_frames": 13358,
+        "end_position": {
+          "beat": 511.9983825683594,
+          "seconds": 222.6079924210258
+        },
+        "source_files_sha256": {
+          "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc": "3411f1a367d7f605ce2322893bb2cbd2f5697bcbb923a703a31d17cffd5cdbb9",
+          "[FULL SONG] Kagetsu no Yume [wrsw]/lua/default.lua": "8fd01b2ee2b33dca149c1e70be96a2bc4cc78f8b435dab1e0ba6291df5f3563c",
+          "[FULL SONG] Kagetsu no Yume [wrsw]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "[FULL SONG] Kagetsu no Yume [wrsw]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+          "[FULL SONG] Kagetsu no Yume [wrsw]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+        },
+        "sha256": "f2a21dbc53d8774de46f4291ec3c0f266e1d4e225ed9940f26290a242cb6a152",
+        "retained_sha256": "62c410ba9ad3d71e0ae547ed89509bac8011c3217a53914cdbba41e6bb7ee240",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "[TPE2] LALA/lala.ssc",
