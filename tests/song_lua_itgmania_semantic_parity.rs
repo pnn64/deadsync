@@ -3840,6 +3840,60 @@ fn compiled_world_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -
 }
 
 #[test]
+fn replay_keeps_final_callback() {
+    crate::paths::init();
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&dir, "Final Callback");
+    context.song_timing_bpms = vec![
+        (0.0, 137.0),
+        (112.0, 210.0),
+        (168.0, 220.0),
+        (182.0, 230.0),
+        (189.0, 240.0),
+        (196.0, 250.0),
+        (210.0, 260.0),
+        (218.0, 137.0),
+        (346.0, 200.0),
+        (349.0, 240.0),
+        (363.0, 250.0),
+        (377.0, 270.0),
+        (384.0, 285.0),
+        (391.0, 300.0),
+        (398.0, 315.0),
+        (405.0, 67.8),
+    ];
+    context.music_length_seconds = 153.427_175_168_180_2_f64 as f32;
+    let compile = |context: &SongLuaCompileContext| {
+        deadsync_assets::song_lua::compile_song_lua(&dir.join("final-callback.lua"), context)
+            .expect("compile final queued callback")
+    };
+    let compiled = compile(&context);
+    let fade = compiled
+        .overlays
+        .iter()
+        .position(|overlay| overlay.name.as_deref() == Some("Fade"))
+        .expect("fixture has its fader");
+    assert_eq!(
+        compiled_local_states_at(&compiled, &context, 411.988_13, 153.416_67)[fade].diffuse[3],
+        0.0
+    );
+    // Native Actor::Update consumes the clipped final float delta after the
+    // earlier sibling starts this two-second tween on beat 412.
+    assert_eq!(
+        compiled_local_states_at(&compiled, &context, 412.0, context.music_length_seconds)[fade]
+            .diffuse[3],
+        0.005_249_023_4
+    );
+    context.music_length_seconds = 153.416_67;
+    let clipped = compile(&context);
+    assert_eq!(
+        compiled_local_states_at(&clipped, &context, 412.0, context.music_length_seconds)[fade]
+            .diffuse[3],
+        0.0
+    );
+}
+
+#[test]
 fn song_position_keeps_strict_beat_boundaries() {
     crate::paths::init();
     let song_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");

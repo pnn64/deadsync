@@ -819,7 +819,9 @@ pub(crate) fn update_function_replay_beats(
 ) -> Vec<(f64, f64)> {
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
     let end_seconds = f64::from(
-        if context.song_timing.is_some() && end == update_function_end_beat(context) {
+        if end == update_function_end_beat(context) {
+            // Keep the supplied horizon. Converting its rounded beat back to
+            // seconds can truncate the final frame and skip boundary callbacks.
             context.music_length_seconds / song_music_rate(context)
         } else {
             song_elapsed_seconds_at(end, context)
