@@ -4362,6 +4362,24 @@ fn zero_queue_keeps_current_position() {
 }
 
 #[test]
+fn queued_blink_matches_native_clock() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/queued-blink.json"));
+    let mut context = SongLuaCompileContext::new(&dir, &trace.title);
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(&[dir.join("queued-blink.lua").as_path()], 0, &context)
+        .expect("compile queued blink timer");
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native queued blink timer phase");
+}
+
+#[test]
 fn retarget_update_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

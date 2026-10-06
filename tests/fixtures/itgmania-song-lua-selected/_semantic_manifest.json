@@ -3572,7 +3572,7 @@
     },
     {
       "simfile": "Cuphead [TaroNuke]/botanic.sm",
-      "fixture": "Cuphead [TaroNuke]/botanic.sm.semantic.json.zst",
+      "fixture": "Cuphead [TaroNuke]/botanic.sm.current.semantic.json.zst",
       "title": "Botanic Panic",
       "lua_entries": 2,
       "status": "ok",
@@ -3595,21 +3595,19 @@
             480
           ],
           "beat_step": 0.125,
-          "max_events": 2000000
+          "max_events": 2000000,
+          "random_seed": 1
         },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "30448d01c606fce9",
+        "description": "TaroNuke",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
         "random_seed": 1,
         "update_frames": 8154,
-        "lua_song_beat_precision": "native_float",
-        "arrow_timing": "native",
-        "noteskin": "cel",
-        "description": "TaroNuke",
         "end_position": {
           "beat": 362,
           "seconds": 135.87825149525844
-        },
-        "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "a93cc6d58aa7b88bdb1a88178dc3755fd8ec50dd6925df97207ab00026b470e0",
-          "itgmania-harness-rs/native/actor_oracle.cpp": "ede41c27560de2a36b4645018e09f5d36102ba7f5978d38b25136b9d49e22ee8"
         },
         "source_files_sha256": {
           "Cuphead [TaroNuke]/botanic.sm": "6d4f35389c80992011e7b143c5959d32fb5887dfc189975153fbab4885aacd96",
@@ -3618,11 +3616,24 @@
           "Cuphead [TaroNuke]/lua/modhelpers.lua": "86e7105441fff23c0e75c8c948c14739b350df4f76349a02be28c54b6e2eff14",
           "Cuphead [TaroNuke]/lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
         },
-        "raw_capture_sha256": "8e73a17f3169924fe004ca6e93018c25a1df7af3f6c5a8db0125fdc8c26885a3",
-        "sha256": "e20fe58933e9451c707e1c7347a6885095fe25a09daabba6a3ad54202257c2c3",
-        "uncompressed_sha256": "8e73a17f3169924fe004ca6e93018c25a1df7af3f6c5a8db0125fdc8c26885a3",
-        "compressed_bytes": 2476851,
-        "uncompressed_bytes": 46987229
+        "sha256": "202a0bee8bb4b62335f618eb10ff9ef23f8bcbaedf338f52696b60adec6a9105",
+        "retained_sha256": "a482432d986f131c2655ce9cf6d9be48ac48185e3eff7c1088495a33ffcf12d5",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
       },
       "runtime_errors": 0,
       "dropped_events": 0

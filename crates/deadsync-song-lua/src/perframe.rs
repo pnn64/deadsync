@@ -2371,6 +2371,19 @@ fn scheduled_overlay_clock(sample: &SongLuaScheduledOverlaySample, seconds: f64)
     }
 }
 
+fn scheduled_overlay_value(
+    sample: &SongLuaScheduledOverlaySample,
+    factor: f32,
+) -> SongLuaOverlayUpdateValue {
+    if sample.duration <= 0.0 {
+        // Zero-time destinations are copied, not interpolated. Even at 1.0,
+        // subtraction and addition can change a timer period's float bits.
+        sample.value.clone()
+    } else {
+        lerp_scheduled_value(&sample.from, &sample.value, factor)
+    }
+}
+
 fn scheduled_clocks_match(
     left: &SongLuaScheduledOverlaySample,
     right: &SongLuaScheduledOverlaySample,
@@ -2406,7 +2419,7 @@ fn apply_scheduled_overlay_states_uncached<Actor: std::borrow::Borrow<Table>>(
         let Some(state) = states.get_mut(sample.overlay_index) else {
             continue;
         };
-        let value = lerp_scheduled_value(&sample.from, &sample.value, factor);
+        let value = scheduled_overlay_value(sample, factor);
         set_overlay_state_update_value(state, sample.target, &value);
         if let Some(overlay) = overlays.get(sample.overlay_index) {
             crate::lua_util::set_actor_overlay_update_getter_value(
@@ -2476,7 +2489,7 @@ fn apply_scheduled_overlay_states<Actor: std::borrow::Borrow<Table>>(
         let Some(state) = states.get_mut(sample.overlay_index) else {
             continue;
         };
-        let value = lerp_scheduled_value(&sample.from, &sample.value, factor);
+        let value = scheduled_overlay_value(sample, factor);
         set_overlay_state_update_value(state, sample.target, &value);
         if let Some(overlay) = overlays.get(sample.overlay_index) {
             crate::lua_util::set_actor_overlay_update_getter_value(
