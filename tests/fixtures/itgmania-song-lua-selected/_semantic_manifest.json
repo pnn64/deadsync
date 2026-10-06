@@ -4128,7 +4128,7 @@
     },
     {
       "simfile": "Ultimate taste/Ultimate taste.ssc",
-      "fixture": "Ultimate taste/Ultimate taste.ssc.semantic.json.zst",
+      "fixture": "Ultimate taste/Ultimate taste.ssc.current.semantic.json.zst",
       "title": "Ultimate taste",
       "lua_entries": 2,
       "status": "ok",
@@ -4136,7 +4136,7 @@
       "dropped_events": 0,
       "reference": {
         "itgmania": {
-          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
           "git_dirty": "false",
           "execution": "embedded_bundled_lua",
           "launches_executable": false
@@ -4152,20 +4152,47 @@
             854,
             480
           ],
-          "beat_step": 0.03125,
-          "max_events": 5000000
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
         },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "d7c1e7bb11c85644",
+        "description": "BR+ FS+ SS XO JA DS BT BU RH- STR(1/8*/15)",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
         "random_seed": 1,
         "update_frames": 15626,
-        "lua_song_beat_precision": "native_float",
-        "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "9516d886ae110b489aa550969d85c599278dcdfa58d4c942da47bc01945f03fe",
-          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
+        "end_position": {
+          "beat": 736,
+          "seconds": 260.4070323653511
         },
-        "sha256": "b21c1299e9af586849bb92438ea8cd6338d551e8fe91b7bb3bc9fdc60ae6c1a6",
-        "uncompressed_sha256": "84552ab051aefef91eb26ffc5b15b2fd4c61969bc99784c223d08f1a6b4b5375",
-        "compressed_bytes": 1370157,
-        "uncompressed_bytes": 33864162
+        "source_files_sha256": {
+          "Ultimate taste/Ultimate taste.ssc": "b01a15355bb6cf7f033fd2316b9e874d6d5083289e82251f98e2b80bbcefc959",
+          "Ultimate taste/bg/default.lua": "082d016c7ba5a330bfce80ed836d405ca5f9891f01a4579d80a2cbdef6806e75",
+          "Ultimate taste/lua/default.lua": "682f131882241fabeb2f0f5ad3d1e3fad11c4ea1e22b3c7896321994a2f6a43d",
+          "Ultimate taste/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "Ultimate taste/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+          "Ultimate taste/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+        },
+        "sha256": "fc6ec76b4edb4180f5c8367506704401ca38f2a615dececce0b6a62e37f45301",
+        "retained_sha256": "7946a6e993c945e097b2a147a1566390584c3974a8c2c076ac2dec3c4f96462d",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
       },
       "contexts": [
         {
