@@ -4831,6 +4831,64 @@ fn base_rotation_keeps_getters_and_draw_pose() {
     }
 }
 
+#[test]
+fn projected_colors_keep_nonfinite_kind() {
+    for (kind, value) in [
+        ("infinity", f32::INFINITY),
+        ("-infinity", f32::NEG_INFINITY),
+        ("nan", f32::NAN),
+    ] {
+        let trace: NativeTrace = serde_json::from_value(serde_json::json!({
+            "oracle": "itgmania_native_actor_conformance", "title": "nonfinite color", "style": "single",
+            "simfile": "", "roots": ["root"], "runtime_actors": [],
+            "actor_definitions": [
+                {"id": "root", "class": "ActorFrame", "children": [{"layer_index": 1, "definition_id": "quad"}]},
+                {"id": "quad", "class": "Quad", "name": "quad"}
+            ],
+            "timeline_tracks": [], "tween_tracks": [], "end_position": {"seconds": 1.0},
+            "display": {"width": 640, "height": 480, "logical_width": 640, "logical_height": 480},
+            "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 1.0,
+            "projected_vertex_tracks": [{"actor": "quad", "definition_id": "quad", "texture": "",
+                "texture_size": [1, 1], "camera_actor": "orthographic-screen", "sample_layout": [],
+                "samples": [[0, 0, true, 1, [], [], [], [], [],
+                    [{"type": "number", "value": kind}, 1, 1, 1], [1, 1, 1, 0]]]}]
+        })).expect("native nonfinite color reference");
+        let mut compiled = CompiledSongLua {
+            overlays: vec![deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: Some("quad".into()),
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    diffuse: [value, 1.0, 1.0, 1.0],
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            }],
+            ..CompiledSongLua::default()
+        };
+        let context = SongLuaCompileContext::new("", "nonfinite color");
+        let mut parity = Parity::default();
+        compare_projected_geometry(
+            &trace,
+            std::slice::from_ref(&compiled),
+            &context,
+            &mut parity,
+        );
+        assert_eq!(parity.checks(), 10, "keep every color and visibility check");
+        parity.assert_complete(kind);
+        compiled.overlays[0].initial_state.diffuse[0] = if value.is_nan() { 1.0 } else { -value };
+        let mut regression = Parity::default();
+        compare_projected_geometry(&trace, &[compiled], &context, &mut regression);
+        assert!(
+            regression
+                .gaps
+                .iter()
+                .any(|gap| gap.contains("draw color differs")),
+            "the wrong nonfinite sign or class must fail"
+        );
+    }
+}
+
 fn compare_projected_geometry(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -4982,9 +5040,11 @@ fn compare_projected_geometry(
                 for (field, actual) in [(9, actual_diffuse), (10, state.glow)] {
                     let native = sample[field].as_array().expect("native RGBA array");
                     for channel in 0..4 {
-                        let expected = value_f32(native.get(channel));
+                        let expected = native.get(channel).and_then(projected_alpha);
                         colors.check_once(
-                            expected.is_some_and(|expected| (expected - actual[channel]).abs() <= 0.000_1),
+                            expected.is_some_and(|expected| expected == actual[channel]
+                                || (expected.is_nan() && actual[channel].is_nan())
+                                || (expected - actual[channel]).abs() <= 0.000_1),
                             &mut reported_colors[(field - 9) * 4 + channel],
                             || format!("draw color differs for {} ({definition_id}) at beat {beat:.3}, field {field} channel {channel}: ITGmania {expected:?}, DeadSync {}", track.actor, actual[channel]),
                         );
