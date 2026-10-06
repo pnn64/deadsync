@@ -246,31 +246,32 @@ fn assert_song_parity(corpus: &Corpus, simfile: &str) {
 fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let project_chart = match simfile {
-        "Apollo/Apollo.ssc" => Some(("450ff4f0585fdae3", 1, "dance-double")),
-        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc" => Some(("813d600a24bdd875", 1, "dance-single")),
-        "Flying Castle/flying castle.ssc" => Some(("c9f1235a63d75076", 1, "dance-single")),
-        "BroGamer/BroGamer.ssc" => Some(("e5b7f2be78829f4e", 1, "dance-single")),
-        "bunny-house/steps.sm" => Some(("13c007f1b2cc142d", 1, "dance-single")),
-        "broadcast/broadcast.ssc" => Some(("81612ed8c89ac4b9", 1, "dance-single")),
-        "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc" => Some(("47017d8cec7dc992", 1, "dance-single")),
-        "Jumper/Jumper.ssc" => Some(("7c085505e95af69a", 2, "dance-single")),
+        "Apollo/Apollo.ssc" => Some(("450ff4f0585fdae3", 1, "dance-double", "Challenge")),
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc" => Some(("813d600a24bdd875", 1, "dance-single", "Challenge")),
+        "Flying Castle/flying castle.ssc" => Some(("c9f1235a63d75076", 1, "dance-single", "Challenge")),
+        "BroGamer/BroGamer.ssc" => Some(("e5b7f2be78829f4e", 1, "dance-single", "Challenge")),
+        "bunny-house/steps.sm" => Some(("13c007f1b2cc142d", 1, "dance-single", "Challenge")),
+        "broadcast/broadcast.ssc" => Some(("81612ed8c89ac4b9", 1, "dance-single", "Challenge")),
+        "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc" => Some(("47017d8cec7dc992", 1, "dance-single", "Challenge")),
+        "Jumper/Jumper.ssc" => Some(("7c085505e95af69a", 2, "dance-single", "Challenge")),
         "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc" => {
-            Some(("d5bd4dd7224f68ff", 1, "dance-single"))
+            Some(("d5bd4dd7224f68ff", 1, "dance-single", "Challenge"))
         }
         "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc" => {
-            Some(("a147dd828cd08fc7", 1, "dance-double"))
+            Some(("a147dd828cd08fc7", 1, "dance-double", "Challenge"))
         }
+        "finite/sta - Finite.sm" => Some(("c4ba45c6133c8abd", 1, "dance-single", "Edit")),
         _ => None,
     };
-    if let Some((hash, seed, steps_type)) = project_chart {
+    if let Some((hash, seed, steps_type, difficulty)) = project_chart {
         assert_eq!(trace.random_seed, Some(seed));
         assert_eq!(trace.steps_type, steps_type);
-        assert_eq!(trace.difficulty, "Difficulty_Challenge");
+        assert_eq!(trace.difficulty, format!("Difficulty_{difficulty}"));
         let song = parse_song(&corpus_root(corpus).join(simfile));
         assert!(
             song.charts.iter().any(|chart| {
                 chart.chart_type == steps_type
-                    && chart.difficulty == "Challenge"
+                    && chart.difficulty == difficulty
                     && chart.short_hash == hash
                     && chart.description == trace.description
             }),

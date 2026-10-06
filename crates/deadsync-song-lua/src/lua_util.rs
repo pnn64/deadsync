@@ -1139,35 +1139,16 @@ fn record_overlay_update_capture(
     // Sleep appends an empty zero-time tail. A setter reached through a
     // parent's command changes that tail, not the last earlier tween that
     // happened to write this property.
-    let empty_tail = cursor <= f32::EPSILON
-        && duration <= f32::EPSILON
-        && lua
-            .app_data_ref::<SongLuaCompileFrames>()
-            .is_some_and(|frames| {
-                frames
-                    .clocks
-                    .get(&(actor.to_pointer() as usize))
-                    .is_some_and(|clock| clock.steps.back() == Some(&Some(0.0)))
-            });
-    let progress = (cursor > f32::EPSILON || duration > f32::EPSILON || empty_tail)
-        .then(|| actor_tween_progress(lua, actor))
-        .flatten();
-    let empty_tail = empty_tail
-        && progress.as_ref().is_some_and(|samples| {
-            lua.app_data_ref::<SongLuaCompileFrames>()
-                .is_some_and(|frames| {
-                    samples.first().is_some_and(|sample| {
-                        // The baked clock uses float timestamps. Comparing
-                        // it with an unrounded double marks this frame's
-                        // zero-time tail as future after the song gets long.
-                        sample[0] > frames.time(frames.frame) as f32
-                    })
-                })
-        });
+    let timed = cursor > f32::EPSILON || duration > f32::EPSILON;
+    let progress = if timed {
+        actor_tween_progress(lua, actor)
+    } else {
+        queued_zero_progress(lua, actor)
+    };
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|mut capture| {
-            if cursor > f32::EPSILON || duration > f32::EPSILON || empty_tail {
+            if timed || progress.is_some() {
                 let recorded = capture
                     .record_scheduled(actor, beat, cursor, duration, easing, opt1, target, value);
                 if recorded {
@@ -4234,7 +4215,8 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
             .get::<Option<f32>>("__songlua_capture_duration")?
             .unwrap_or(0.0)
             .max(0.0)
-            > f32::EPSILON;
+            > f32::EPSILON
+        || queued_zero_progress(lua, actor).is_some();
     if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::F32(value)) {
         let block = actor_current_capture_block(lua, actor)?;
         block.set(key, value)?;
@@ -10263,6 +10245,32 @@ fn actor_tween_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32
     let progress = clock.progress.clone();
     frames.clocks.insert(actor, clock);
     progress
+}
+
+fn queued_zero_progress(lua: &Lua, actor: &Table) -> Option<std::sync::Arc<[[f32; 2]]>> {
+    let empty_tail = lua
+        .app_data_ref::<SongLuaCompileFrames>()?
+        .clocks
+        .get(&(actor.to_pointer() as usize))
+        .is_some_and(|clock| clock.steps.back() == Some(&Some(0.0)));
+    if !empty_tail {
+        return None;
+    }
+    let progress = actor_tween_progress(lua, actor)?;
+    let frames = lua.app_data_ref::<SongLuaCompileFrames>()?;
+    // Even sleep(0) waits for a positive actor update. Its queued destination
+    // cannot become a current position during another callback in this frame.
+    // Both clocks use native float timestamps, including long song times.
+    let later = lua
+        .app_data_ref::<SongLuaCompileUpdatePhase>()
+        .is_some_and(|phase| {
+            phase.active && queue_actor_order(lua, actor.to_pointer() as usize) > phase.order
+        });
+    (later
+        || progress
+            .first()
+            .is_some_and(|sample| sample[0] > frames.time(frames.frame) as f32))
+    .then_some(progress)
 }
 
 fn drain_queue_clock(lua: &Lua, actor: &Table) -> Option<(usize, f64)> {

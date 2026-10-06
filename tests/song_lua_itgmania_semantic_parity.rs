@@ -4341,6 +4341,27 @@ fn queued_update_matches_native_order() {
 }
 
 #[test]
+fn zero_queue_keeps_current_position() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/message-read-order.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&dir, &trace.title);
+    context.music_length_seconds = trace.end_position.seconds;
+    context.song_display_bpms = [60.0; 2];
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled =
+        compile_song_lua_layers(&[dir.join("message-read-order.lua").as_path()], 0, &context)
+            .expect("compile repeated queued reader");
+    let mut parity = compare_semantics(&trace, &compiled, 0, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("zero-duration tween current position");
+}
+
+#[test]
 fn retarget_update_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

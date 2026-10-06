@@ -4475,10 +4475,71 @@
     },
     {
       "simfile": "finite/sta - Finite.sm",
-      "fixture": "finite/sta - Finite.sm.semantic.json",
+      "fixture": "finite/sta - Finite.sm.semantic.json.zst",
       "title": "finite",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Edit",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "c4ba45c6133c8abd",
+        "description": "TaroNuke (Mods 17)",
+        "steps_type": "dance-single",
+        "difficulty": "Edit",
+        "random_seed": 1,
+        "update_frames": 6473,
+        "end_position": {
+          "beat": 258,
+          "seconds": 107.86400604248048
+        },
+        "source_files_sha256": {
+          "finite/sta - Finite.sm": "189f2fa6c07555b2f6e7426bcd127a328a9bb9564bdeb8cd540613c3b552baf6",
+          "finite/lua/default.lua": "8cbdd31cfd483af61a38dda4e9961e83cf53bc2c529bea2b5967f2afeaa217d9",
+          "finite/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+          "finite/lua/modhelpers.lua": "a40f82833fa39dac27dbce2d43943ae27e39e712800dee71d8a66bf7df38db8b",
+          "finite/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+        },
+        "sha256": "efbbdf63c585472b1c43602c53920da88446316bb16e7340dcc0b05bd2b4f897",
+        "retained_sha256": "1f0170d953edbf7644a641a683fef6b63f661f206c24f6030617f211cd14daa9",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "flowers/flowers.ssc",
