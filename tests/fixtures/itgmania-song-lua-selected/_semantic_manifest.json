@@ -4064,10 +4064,70 @@
     },
     {
       "simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
-      "fixture": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc.semantic.json",
+      "fixture": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc.semantic.json.zst",
       "title": "[CRYSTAL_ACCESS]",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "47017d8cec7dc992",
+        "description": "[FX] BR+ BS BU FS+ XO",
+        "steps_type": "dance-single",
+        "random_seed": 1,
+        "update_frames": 8641,
+        "end_position": {
+          "beat": 384,
+          "seconds": 144
+        },
+        "source_files_sha256": {
+          "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc": "a06fe2689903ae221bab090525689fd025bbc78ad1cbde931aad23dd18baa6ec",
+          "[CRYSTAL_ACCESS]/lua/default.lua": "3ab7f6ca01fe3e16c54567a88dc02771bc527141e96be10e81bee61e3b9d32d6",
+          "[CRYSTAL_ACCESS]/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+          "[CRYSTAL_ACCESS]/lua/modhelpers.lua": "95137697735498b5573a064ded1a6300d27fc1abe51b6cfc75ec932175ea30e2",
+          "[CRYSTAL_ACCESS]/lua/mods.lua": "fd99a26cd06f7dbf8fe3a36c858c31c01e4a64ad773c1dfdbd7f19eea149c7c2"
+        },
+        "sha256": "a72eeaf73419a052e3037d82082682092c4ebef0cd720b1ef55774cddef1b7af",
+        "retained_sha256": "35c6362b9d661ac688cfdd79a07ee001c95cf98f6cb815568ce8bc54ece9c269",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9eb7edc5865bf2d14b6e5ff423cd5de8b7977ef57a05cf999662cdbe1ed5e165",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "9aa7c9d448dd3bd8c50e74d25c63ed3fdbff368ec01bd8d4b448d345ef828225",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
