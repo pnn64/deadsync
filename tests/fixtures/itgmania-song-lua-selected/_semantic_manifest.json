@@ -324,7 +324,7 @@
     },
     {
       "simfile": "7th Gear/7th Gear.ssc",
-      "fixture": "7th Gear/7th Gear.ssc.semantic.json.zst",
+      "fixture": "7th Gear/7th Gear.ssc.current.semantic.json.zst",
       "title": "7th Gear",
       "lua_entries": 1,
       "status": "ok",
@@ -332,7 +332,7 @@
       "dropped_events": 0,
       "reference": {
         "itgmania": {
-          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
           "git_dirty": "false",
           "execution": "embedded_bundled_lua",
           "launches_executable": false
@@ -348,13 +348,46 @@
             854,
             480
           ],
-          "beat_step": 0.03125,
-          "max_events": 5000000
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
         },
-        "sha256": "fc36429dac82f7dce7581613f76c78ca250eb8bc89236d4e6410af886aff453f",
-        "uncompressed_sha256": "1641d95ce6c50ba19c8b4d91faa8d7a6eae02861be63918211cc14c8aa4496df",
-        "compressed_bytes": 18682642,
-        "uncompressed_bytes": 212193452
+        "oracle_schema_version": 2,
+        "project_chart_hash": "477fed829d289df2",
+        "description": "FS+ XO BR- BU- MODS",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
+        "random_seed": 1,
+        "update_frames": 7815,
+        "end_position": {
+          "beat": 238.75,
+          "seconds": 130.22727272727272
+        },
+        "source_files_sha256": {
+          "7th Gear/7th Gear.ssc": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+          "7th Gear/lua/default.lua": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+          "7th Gear/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "7th Gear/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+          "7th Gear/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+        },
+        "sha256": "662382dcb034b156b5bb2f0a3dc1dd0b57ae6032da39e7e1a0fda3575b743277",
+        "retained_sha256": "140c2a97aeb84c44eb6042492eaa45d268cf6567cb5ce8af6a3b0c52ac17fe56",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
       }
     },
     {

@@ -7,12 +7,12 @@ Do not download resources or launch visible ITGmania instances.
 
 The frozen project has 63 chart entries. Current evidence:
 
-- **51 passing exact project charts**
-- **7 failing exact project charts**
+- **52 passing exact project charts**
+- **6 failing exact project charts**
 - **3 passing supplied variants with different chart hashes**
 - **2 unavailable locally** (Get Into It and Rhythm Hell)
 
-Thus 54 of 61 available listed results pass.
+Thus 55 of 61 available listed results pass.
 The original single audit also included Mawaru 2–4, which are outside the
 frozen list. Their failures are separate and do not expand this work queue.
 The audit was run at 0.5.1795; subsequent targeted results supersede only
@@ -23,11 +23,11 @@ their own failures. No whole-game pixel or interactive parity claim.
 | Jumper | 0.5.1796, `190fef272` | 6,411/6,411 |
 | Botanic Panic | 0.5.1797, `d4393135b` | 655,940/655,940 |
 | LALA | 0.5.1798, `a1116ccb3` | 40,708/40,708 |
-| Step Your Game Up | 0.5.1799 | 654,997/654,997 |
+| Step Your Game Up | 0.5.1799, `da644d501` | 654,997/654,997 |
+| 7th Gear | 0.5.1800 | 1,410,424/1,410,424 |
 
 ## Remaining listed failures
 
-- [Lua] 7th Gear [SX11] (`seventh_gear`)
 - [Lua] Ultimate taste [SX15] (`ultimate_taste`)
 - [Lua] Waltz Capriccio (`waltz_capriccio`)
 - [Lua] 666 (`song_666`)
