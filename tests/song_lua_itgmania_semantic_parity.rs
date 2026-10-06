@@ -4713,6 +4713,48 @@ fn projected_corners_keep_negative_w() {
     );
 }
 
+#[test]
+fn projected_quad_uses_unit_geometry() {
+    let trace: NativeTrace = serde_json::from_value(serde_json::json!({
+        "oracle": "itgmania_native_actor_conformance", "title": "quad size", "style": "single",
+        "simfile": "", "roots": ["root"], "runtime_actors": [],
+        "actor_definitions": [
+            {"id": "root", "class": "ActorFrame", "children": [{"layer_index": 1, "definition_id": "quad"}]},
+            {"id": "quad", "class": "Quad", "name": "quad"}
+        ],
+        "timeline_tracks": [], "tween_tracks": [], "end_position": {"seconds": 1.0},
+        "display": {"width": 854, "height": 480, "logical_width": 854, "logical_height": 480},
+        "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 1.0,
+        "projected_vertex_tracks": [{"actor": "quad", "definition_id": "quad", "texture": "",
+            "texture_size": [854, 480], "camera_actor": "orthographic-screen", "sample_layout": [],
+            "samples": [[0, 0, true, 1, [], [], [[0, 0], [854, 0], [854, 480], [0, 480]]]]}]
+    })).expect("native zoomed quad reference");
+    let mut compiled = CompiledSongLua {
+        screen_width: 854.0,
+        screen_height: 480.0,
+        overlays: vec![deadsync_song_lua::SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: Some("quad".into()),
+            parent_index: None,
+            initial_state: SongLuaOverlayState {
+                x: 427.0, y: 240.0, zoom_x: 854.0, zoom_y: 480.0,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        }],
+        ..CompiledSongLua::default()
+    };
+    let context = SongLuaCompileContext::new("", "quad size");
+    let mut parity = Parity::default();
+    compare_projected_geometry(&trace, std::slice::from_ref(&compiled), &context, &mut parity);
+    assert_eq!(parity.checks(), 4);
+    parity.assert_complete("zoomed quad");
+    compiled.overlays[0].initial_state.zoom_x *= 2.0;
+    let mut regression = Parity::default();
+    compare_projected_geometry(&trace, &[compiled], &context, &mut regression);
+    assert!(regression.gaps.iter().any(|gap| gap.contains("projected bounds differ")));
+}
+
 fn compare_projected_geometry(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -4936,8 +4978,15 @@ fn compare_projected_geometry(
                 .and_then(Value::as_array)
                 .and_then(|camera| value_f32(camera.first()))
                 .is_some_and(|fov| fov != 0.0);
+            // A Quad has unit geometry, including when an older capture stores
+            // its already zoomed dimensions in the texture size field.
+            let size = if matches!(compiled[layer].overlays[overlay_index].kind, SongLuaOverlayKind::Quad) {
+                [1.0; 2]
+            } else {
+                track.texture_size
+            };
             let actual_vertices = if track.camera_actor == "orthographic-screen" && !perspective {
-                compiled_world_vertices(state, track.texture_size).map(|[x, y, _, _]| [x, y])
+                compiled_world_vertices(state, size).map(|[x, y, _, _]| [x, y])
             } else {
                 let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
                 let Some(vertices) = compiled_perspective_vertices(
@@ -4945,7 +4994,7 @@ fn compare_projected_geometry(
                     states,
                     overlay_index,
                     state,
-                    track.texture_size,
+                    size,
                     screen_states
                         .get(&(beat.to_bits(), seconds.to_bits()))
                         .copied(),
