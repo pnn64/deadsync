@@ -7,12 +7,12 @@ Do not download resources or launch visible ITGmania instances.
 
 The frozen project has 63 chart entries. Current evidence:
 
-- **53 passing exact project charts**
-- **5 failing exact project charts**
+- **54 passing exact project charts**
+- **4 failing exact project charts**
 - **3 passing supplied variants with different chart hashes**
 - **2 unavailable locally** (Get Into It and Rhythm Hell)
 
-Thus 56 of 61 available listed results pass.
+Thus 57 of 61 available listed results pass.
 The original single audit also included Mawaru 2–4, which are outside the
 frozen list. Their failures are separate and do not expand this work queue.
 The audit was run at 0.5.1795; subsequent targeted results supersede only
@@ -25,12 +25,12 @@ their own failures. No whole-game pixel or interactive parity claim.
 | LALA | 0.5.1798, `a1116ccb3` | 40,708/40,708 |
 | Step Your Game Up | 0.5.1799, `da644d501` | 654,997/654,997 |
 | 7th Gear | 0.5.1800, `ca9e88ac4` | 1,410,424/1,410,424 |
-| 666 | 0.5.1801 | 222,644/222,644 |
+| 666 | 0.5.1801, `2751f7129` | 222,644/222,644 |
+| Waltz Capriccio | 0.5.1802 | 148,479/148,479 |
 
 ## Remaining listed failures
 
 - [Lua] Ultimate taste [SX15] (`ultimate_taste`)
-- [Lua] Waltz Capriccio (`waltz_capriccio`)
 - [Lua] Someone Special (`someone_special`)
 - [Lua] MAWARUCHI SURVIVER (7) (`mawaru7`)
 - [Lua] MAWARU SIMULATOR 2016 (9) (`mawaru9`)
