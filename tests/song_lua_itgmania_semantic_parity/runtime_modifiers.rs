@@ -1657,6 +1657,61 @@ end}
 }
 
 #[test]
+fn boolean_audit_keeps_repeated_writes() {
+    let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
+    trace.enabled_players = Some([true, false]);
+    trace.timeline_tracks = vec![NativeTimelineTrack {
+        kind: "modifier".into(),
+        actor: Some("player-state:PLAYER_1/options:ModsLevel_Song".into()),
+        operation: "PlayerOptions.StealthPastReceptors".into(),
+        samples: [0.1_f32, 0.15].into_iter().enumerate().map(|(index, second)| (
+            index as u64 + 1, Some(second * 2.0), Some(second),
+            vec![serde_json::json!(true)], Some(serde_json::json!({
+                "boolean_option": { "previous": index > 0, "current": true, "chained": false },
+            })),
+        )).collect(),
+    }];
+    let mut compiled = vec![CompiledSongLua {
+        boolean_writes: [0.1_f32, 0.15]
+            .into_iter()
+            .enumerate()
+            .map(|(index, second)| deadsync_song_lua::SongLuaBoolWrite {
+                player: 0,
+                key: "stealthpastreceptors".into(),
+                beat: f64::from(second * 2.0),
+                second: f64::from(second),
+                previous: index > 0,
+                current: true,
+                chained: false,
+            })
+            .collect(),
+        ..CompiledSongLua::default()
+    }];
+    let mut parity = Parity::default();
+    compare_boolean_options(&trace, &compiled, &mut parity);
+    assert_eq!(parity.checks(), 3, "count and both repeated writes");
+    parity.assert_complete("complete boolean writes");
+    let correct = compiled[0].boolean_writes.clone();
+    for mutation in 0..4 {
+        compiled[0].boolean_writes.clone_from(&correct);
+        match mutation {
+            0 => {
+                compiled[0].boolean_writes.pop();
+            }
+            1 => compiled[0].boolean_writes[1].previous = false,
+            2 => compiled[0].boolean_writes[1].chained = true,
+            _ => compiled[0].boolean_writes.swap(0, 1),
+        }
+        let mut parity = Parity::default();
+        compare_boolean_options(&trace, &compiled, &mut parity);
+        assert!(
+            !parity.gaps.is_empty(),
+            "reject altered boolean sequence {mutation}"
+        );
+    }
+}
+
+#[test]
 fn boolean_option_queries_are_not_modifier_targets() {
     let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
     trace.timeline_tracks = [
