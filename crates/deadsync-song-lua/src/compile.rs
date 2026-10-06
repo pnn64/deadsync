@@ -358,14 +358,14 @@ where
         )
         .into_iter(),
     );
-    for (pointer, mut update) in initial_updates {
+    for (pointer, update) in &mut initial_updates {
         // Baking changes progress only; the checked prefix remains in bounds.
-        update.blocks.drain(..update_blocks[&pointer]);
+        update.blocks.drain(..update_blocks[pointer]);
         if update.blocks.iter().any(|block| block.progress.is_some()) {
-            if let Some(state) = startup_states.get_mut(&pointer) {
-                state.blocks.extend(update.blocks);
-            } else if let Some(state) = startup_tweens.get_mut(&pointer) {
-                state.blocks.extend(update.blocks);
+            if let Some(state) = startup_states.get_mut(pointer) {
+                state.blocks.extend(update.blocks.iter().cloned());
+            } else if let Some(state) = startup_tweens.get_mut(pointer) {
+                state.blocks.extend(update.blocks.iter().cloned());
             }
         }
     }
@@ -654,6 +654,7 @@ where
         &mut out.messages,
     );
     crate::perframe::apply_startup_tweens(&mut overlays, &startup_tweens, &mut out.messages);
+    crate::perframe::apply_initial_updates(&mut overlays, &initial_updates);
     let (perframe_eases, perframe_overlay_eases, perframe_info) = compile_perframes(
         &lua,
         prefix_perframes,

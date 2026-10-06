@@ -4004,13 +4004,13 @@
     },
     {
       "simfile": "Someone Special - hubert/Someone Special.ssc",
-      "fixture": "Someone Special - hubert/Someone Special.ssc.semantic.json.zst",
+      "fixture": "Someone Special - hubert/Someone Special.ssc.current.semantic.json.zst",
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "lua_entries": 1,
       "status": "ok",
       "reference": {
         "itgmania": {
-          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
           "git_dirty": "false",
           "execution": "embedded_bundled_lua",
           "launches_executable": false
@@ -4026,34 +4026,44 @@
             854,
             480
           ],
-          "beat_step": 0.03125,
-          "max_events": 5000000
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
         },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "59bba16f2331d939",
+        "description": "Hubert x Crash Cringle",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
         "random_seed": 1,
         "update_frames": 8720,
-        "lua_song_beat_precision": "native_float",
-        "arrow_timing": "native",
-        "noteskin": "cel",
-        "description": "Hubert x Crash Cringle",
         "end_position": {
           "beat": 352,
           "seconds": 145.30443146289736
         },
-        "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00",
-          "itgmania-harness-rs/native/actor_oracle.cpp": "66c08d3f569b65d8e940f8db5e86c05eedc050c291fe0356f958fde77d45ff82"
-        },
         "source_files_sha256": {
           "Someone Special - hubert/Someone Special.ssc": "b279384ecd66c19bd62f6969503bb0c93854027ec88fbf6e21d59fe361116cf2",
           "Someone Special - hubert/lua/default.lua": "fc0e5549d7f6b235175e71e73e42faf8edc6754cc629e0faf806398984d83c08",
-          "Someone Special - hubert/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
-          "Someone Special - hubert/lua/multitap_data.lua": "0a0c6079f135cd13170e504d431034a93df7d4c2d25d4d9bd9d423798cc5ed15"
+          "Someone Special - hubert/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e"
         },
-        "raw_capture_sha256": "d9a9a276005401520cef0da02fa2db40ffe1ac4cfe0f62c02543ab7cf8998cea",
-        "sha256": "a2034ff4c9fecca22d6dcf445fabc27b1ce4e793f692b1e90b96a4a82d17a0b4",
-        "uncompressed_sha256": "d9a9a276005401520cef0da02fa2db40ffe1ac4cfe0f62c02543ab7cf8998cea",
-        "compressed_bytes": 3196439,
-        "uncompressed_bytes": 44767266
+        "sha256": "eca595592f11aacd049c589d13591d2385e89fc4cc8432d4c2cec763a8953dd8",
+        "retained_sha256": "2f5cb11fb3dfffefd9a91d648f04557010be2e8e16803bdb79f99355fc10d0c6",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "c7f4bef18d02a5eae45c4ab2f4f523e072554c64a09c096d5d946735c62e1524"
+        },
+        "headless_executable_sha256": "71d5ca1d5e4f2faaf0a68c848e191172278addbca9c83f47143f152c7b4b30b6",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
       },
       "runtime_errors": 0,
       "dropped_events": 0

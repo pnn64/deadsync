@@ -58,6 +58,28 @@ pub(crate) fn apply_startup_states<Kind>(
         });
     }
 }
+pub(crate) fn apply_initial_updates<Kind>(
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    states: &std::collections::HashMap<usize, crate::lua_util::SongLuaStartupState>,
+) {
+    for overlay in overlays {
+        let Some(update) = states.get(&(overlay.table.to_pointer() as usize)) else {
+            continue;
+        };
+        // Actor::Update(0) calls UpdateFunction without advancing queued tweens.
+        // Its immediate writes already belong to the initial gameplay frame.
+        for block in &update.blocks {
+            if block.duration == 0.0
+                && block.start <= 0.0
+                && !block.queued
+                && block.progress.is_none()
+            {
+                crate::apply_overlay_delta(&mut overlay.actor.initial_state, &block.delta);
+            }
+        }
+    }
+}
+
 pub(crate) fn apply_layer_startup(
     actors: &mut [SongLuaTrackedActor],
     states: &std::collections::HashMap<usize, crate::lua_util::SongLuaStartupState>,

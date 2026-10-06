@@ -5787,16 +5787,33 @@ fn compare_sprite_textures(
             continue;
         };
         for (_, second, raw) in expected {
-            let path = raw.strip_prefix("song:/").map_or_else(
-                || {
-                    if Path::new(raw).is_absolute() {
-                        PathBuf::from(raw)
-                    } else {
-                        context.song_dir.join(raw)
-                    }
-                },
-                |relative| context.song_dir.join(relative),
-            );
+            let path = if let Some(relative) = raw.strip_prefix("noteskin:/") {
+                let relative = Path::new(relative);
+                if !trace.noteskin_reference.as_ref().is_some_and(|skin| {
+                    skin.files.iter().any(|file| file.path == relative)
+                }) {
+                    parity.check(false, || {
+                        format!("Sprite.Load noteskin asset is absent from the native inventory: {raw}")
+                    });
+                    continue;
+                }
+                // Compilation has verified the complete native inventory's
+                // hashes against this local noteskin root.
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets/noteskins")
+                    .join(relative)
+            } else {
+                raw.strip_prefix("song:/").map_or_else(
+                    || {
+                        if Path::new(raw).is_absolute() {
+                            PathBuf::from(raw)
+                        } else {
+                            context.song_dir.join(raw)
+                        }
+                    },
+                    |relative| context.song_dir.join(relative),
+                )
+            };
             let expected_path = fs::canonicalize(&path);
             let active = deadsync_song_lua::sprite_texture_at(textures, second + 1e-5);
             let actual = active.map_or(texture_path, |texture| &texture.path);
