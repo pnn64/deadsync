@@ -9381,6 +9381,42 @@ fn mawaru6_whole_song_matches_native() {
 }
 
 #[test]
+fn mawaru7_idle_holds_match_native() {
+    crate::paths::init();
+    let mut trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-selected/mawaru7/mawaru7.sm.current.semantic.json.zst"),
+    );
+    let (compiled, _, context) = compile_trace_song(&trace);
+    // Check both the idle interval and the next immediate write. The full
+    // corpus comparison retains every other native observation as well.
+    trace.projected_vertex_tracks.retain(|track| {
+        matches!(
+            track.actor.as_str(),
+            "def-0569" | "def-0570" | "def-0671" | "def-0672"
+        )
+    });
+    assert_eq!(trace.projected_vertex_tracks.len(), 4);
+    for track in &mut trace.projected_vertex_tracks {
+        track.samples.retain(|sample| {
+            let beat = value_f32(sample.as_array().and_then(|sample| sample.first()))
+                .expect("native beat");
+            [59.898, 135.255, 218.019, 456.015]
+                .iter()
+                .any(|target| (beat - target).abs() < 0.2)
+        });
+        assert!(
+            !track.samples.is_empty(),
+            "both hold boundaries remain observable"
+        );
+    }
+    let mut parity = Parity::default();
+    compare_projected_geometry(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Mawaru7 idle holds"));
+    parity.assert_complete("Mawaru7 idle holds");
+}
+
+#[test]
 fn mawaru7_whole_song_matches_native() {
     crate::paths::init();
     let trace = read_trace_file(

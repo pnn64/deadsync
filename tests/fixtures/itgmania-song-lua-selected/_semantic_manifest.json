@@ -4731,12 +4731,71 @@
     },
     {
       "simfile": "mawaru7/mawaru7.sm",
-      "fixture": "../itgmania-song-lua-micro/mawaru7-whole-song.json.zst",
+      "fixture": "mawaru7/mawaru7.sm.current.semantic.json.zst",
       "title": "MAWARUCHI SURVIVER",
       "lua_entries": 3,
       "status": "ok",
       "runtime_errors": 0,
-      "dropped_events": 0
+      "dropped_events": 0,
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "f7fdd8fafaee6188",
+        "description": "TaroNuke (converted by MrThatKid4)",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
+        "random_seed": 1,
+        "update_frames": 17086,
+        "end_position": {
+          "beat": 816,
+          "seconds": 284.7352863536562
+        },
+        "source_files_sha256": {
+          "mawaru7/mawaru7.sm": "16daf42ecde7e00d77cd7bd7b68bda40a6fda0949ea7d16d838ea6d98ce227cd",
+          "mawaru7/bgf/default.lua": "23f9c330c92b3950ece3a8fe07bf27eac1a931206b99dae2c0ea2ededce0c669",
+          "mawaru7/bgl/default.lua": "808b2d59d95d8c63de2c95b45db008f39ac5438f7d5f6b35b10094452a6e6945",
+          "mawaru7/lua/default.lua": "dc7e509519680b26374b3cc139e5a8d529290bb8c3a18c11746277173bd4c339",
+          "mawaru7/lua/mods-taro.lua": "0a7bdbd31a0a10ff829c100dfa10aa2d55563f61f6d89a82b4f17d370aec09ae"
+        },
+        "sha256": "c8b74a49a46838cf0085873289c81211c59f30eaa4cfb75ec645568ecd68d309",
+        "retained_sha256": "009e58c917ff8072f956b2ddac3fabd9157ebfbb35afe23e395334d553086c79",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
+      }
     },
     {
       "simfile": "mawaru8/mawaru8.sm",

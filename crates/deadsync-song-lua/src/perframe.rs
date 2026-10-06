@@ -1432,6 +1432,36 @@ pub fn current_overlay_compile_actor_states<Kind>(
     Ok(out)
 }
 
+// Close an idle interval before a command that has already changed the current
+// state. Keep that command at its original frame rather than ramping across the
+// idle interval or delaying it until the following capture frame.
+fn push_overlay_gap(
+    samples: &mut Vec<SongLuaOverlayUpdateSample>,
+    time: f32,
+    next_time: f32,
+    current: impl FnOnce() -> SongLuaOverlayUpdateValue,
+) {
+    let Some(last) = samples.last() else {
+        return;
+    };
+    if last.time >= time - f32::EPSILON {
+        return;
+    }
+    let current = current();
+    let hold_time = time - (next_time - time);
+    if last.value != current && hold_time > last.time + f32::EPSILON {
+        let value = last.value.clone();
+        samples.push(SongLuaOverlayUpdateSample {
+            time: hold_time,
+            value,
+        });
+    }
+    samples.push(SongLuaOverlayUpdateSample {
+        time,
+        value: current,
+    });
+}
+
 fn push_update_overlay_value(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<
@@ -1470,16 +1500,7 @@ fn push_update_overlay_value(
         return track_index;
     }
     let track = &mut tracks[track_index];
-    if track
-        .samples
-        .last()
-        .is_some_and(|sample| sample.time < time - f32::EPSILON)
-    {
-        track.samples.push(SongLuaOverlayUpdateSample {
-            time: time,
-            value: current,
-        });
-    }
+    push_overlay_gap(&mut track.samples, time, next_time, || current);
     track.samples.push(SongLuaOverlayUpdateSample {
         time: next_time,
         value: next,
@@ -1530,16 +1551,9 @@ fn push_captured_overlay_value(
         return track_index;
     }
     let track = &mut tracks[track_index];
-    if track
-        .samples
-        .last()
-        .is_some_and(|sample| sample.time < time - f32::EPSILON)
-    {
-        track.samples.push(SongLuaOverlayUpdateSample {
-            time: time,
-            value: overlay_state_update_value(current, target),
-        });
-    }
+    push_overlay_gap(&mut track.samples, time, next_time, || {
+        overlay_state_update_value(current, target)
+    });
     track.samples.push(SongLuaOverlayUpdateSample {
         time: next_time,
         value: next.clone(),

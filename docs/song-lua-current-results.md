@@ -7,12 +7,12 @@ Do not download resources or launch visible ITGmania instances.
 
 The frozen project has 63 chart entries. Current evidence:
 
-- **56 passing exact project charts**
-- **2 failing exact project charts**
+- **57 passing exact project charts**
+- **1 failing exact project charts**
 - **3 passing supplied variants with different chart hashes**
 - **2 unavailable locally** (Get Into It and Rhythm Hell)
 
-Thus 59 of 61 available listed results pass.
+Thus 60 of 61 available listed results pass.
 The original single audit also included Mawaru 2–4, which are outside the
 frozen list. Their failures are separate and do not expand this work queue.
 The audit was run at 0.5.1795; subsequent targeted results supersede only
@@ -28,11 +28,11 @@ their own failures. No whole-game pixel or interactive parity claim.
 | 666 | 0.5.1801, `2751f7129` | 222,644/222,644 |
 | Waltz Capriccio | 0.5.1802, `12095dbf8` | 148,479/148,479 |
 | Ultimate taste | 0.5.1803, `891a189d6` | 309,553/309,553 |
-| Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ | 0.5.1804 | 1,067,542/1,067,542 |
+| Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ | 0.5.1804, `2c9f0b3cd` | 1,067,542/1,067,542 |
+| MAWARUCHI SURVIVER | 0.5.1805 | 1,454,202/1,454,202 |
 
 ## Remaining listed failures
 
-- [Lua] MAWARUCHI SURVIVER (7) (`mawaru7`)
 - [Lua] MAWARU SIMULATOR 2016 (9) (`mawaru9`)
 
 Mawaru 9 currently fails on nil `Sprite:GetTexture()` while walking the
