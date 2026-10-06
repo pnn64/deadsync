@@ -190,6 +190,8 @@ mod lua_songs {
         save_your_tears => "Save Your Tears/SaveYourTears.ssc",
         pale => "Pale/Pale.ssc",
         someone_special => "Someone Special - hubert/Someone Special.ssc",
+        cursed_metamorph => "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+        spectrum_sequence => "Spectrum Sequence/spectrumsequence.ssc",
     }
 }
 
@@ -245,8 +247,10 @@ fn assert_song_parity(corpus: &Corpus, simfile: &str) {
 
 fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
-    let project_chart = match simfile {
+    let pinned_chart = match simfile {
         "Apollo/Apollo.ssc" => Some(("450ff4f0585fdae3", 1, "dance-double", "Challenge")),
+        "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc" => Some(("0866bcc47435a591", 1, "dance-single", "Challenge")),
+        "Spectrum Sequence/spectrumsequence.ssc" => Some(("75df84a1b1e08f31", 1, "dance-single", "Challenge")),
         "mawaru9/mawaru9.sm" => Some(("824199e7dfc44ef6", 1, "dance-single", "Challenge")),
         "Someone Special - hubert/Someone Special.ssc" => Some(("59bba16f2331d939", 1, "dance-single", "Challenge")),
         "mawaru7/mawaru7.sm" => Some(("f7fdd8fafaee6188", 1, "dance-single", "Challenge")),
@@ -273,7 +277,7 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
         "finite/sta - Finite.sm" => Some(("c4ba45c6133c8abd", 1, "dance-single", "Edit")),
         _ => None,
     };
-    if let Some((hash, seed, steps_type, difficulty)) = project_chart {
+    if let Some((hash, seed, steps_type, difficulty)) = pinned_chart {
         assert_eq!(trace.random_seed, Some(seed));
         assert_eq!(trace.steps_type, steps_type);
         assert_eq!(trace.difficulty, format!("Difficulty_{difficulty}"));
@@ -285,7 +289,7 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
                     && chart.short_hash == hash
                     && chart.description == trace.description
             }),
-            "missing frozen project chart {hash}: {simfile}"
+            "missing pinned chart {hash}: {simfile}"
         );
     }
     let (compiled, primary_index, context) =
