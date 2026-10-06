@@ -251,9 +251,10 @@ struct OffscreenTarget {
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
     texture: Texture,
     framebuffer: glow::Framebuffer,
-    depth: glow::Renderbuffer,
+    depth: Option<glow::Renderbuffer>,
     initialized: bool,
 }
 
@@ -1026,6 +1027,8 @@ fn create_offscreen_target(
     handle: TextureHandle,
     width: u32,
     height: u32,
+    float_color: bool,
+    with_depth: bool,
 ) -> Result<OffscreenTarget, String> {
     let width = width.max(1);
     let height = height.max(1);
@@ -1057,7 +1060,11 @@ fn create_offscreen_target(
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            glow::RGBA8 as i32,
+            if float_color {
+                glow::RGBA16F
+            } else {
+                glow::RGBA8
+            } as i32,
             width as i32,
             height as i32,
             0,
@@ -1074,22 +1081,29 @@ fn create_offscreen_target(
             Some(raw),
             0,
         );
-        let depth = gl.create_renderbuffer()?;
-        gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
-        gl.renderbuffer_storage(
-            glow::RENDERBUFFER,
-            glow::DEPTH_COMPONENT24,
-            width as i32,
-            height as i32,
-        );
-        gl.framebuffer_renderbuffer(
-            glow::FRAMEBUFFER,
-            glow::DEPTH_ATTACHMENT,
-            glow::RENDERBUFFER,
-            Some(depth),
-        );
+        let depth = if with_depth {
+            let depth = gl.create_renderbuffer()?;
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(depth));
+            gl.renderbuffer_storage(
+                glow::RENDERBUFFER,
+                glow::DEPTH_COMPONENT16,
+                width as i32,
+                height as i32,
+            );
+            gl.framebuffer_renderbuffer(
+                glow::FRAMEBUFFER,
+                glow::DEPTH_ATTACHMENT,
+                glow::RENDERBUFFER,
+                Some(depth),
+            );
+            Some(depth)
+        } else {
+            None
+        };
         if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
-            gl.delete_renderbuffer(depth);
+            if let Some(depth) = depth {
+                gl.delete_renderbuffer(depth);
+            }
             gl.delete_framebuffer(framebuffer);
             gl.delete_texture(raw);
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
@@ -1100,6 +1114,7 @@ fn create_offscreen_target(
             handle,
             width,
             height,
+            float_color,
             texture: Texture(TextureImages::Rgba(raw), AtomicBool::new(false)),
             framebuffer,
             depth,
@@ -1114,7 +1129,9 @@ fn destroy_offscreen_target(gl: &glow::Context, target: OffscreenTarget) {
     unsafe {
         gl.delete_texture(target.texture.primary());
         gl.delete_framebuffer(target.framebuffer);
-        gl.delete_renderbuffer(target.depth);
+        if let Some(depth) = target.depth {
+            gl.delete_renderbuffer(depth);
+        }
     }
 }
 
@@ -1124,12 +1141,20 @@ fn ensure_offscreen_targets(state: &mut State, frame: &RenderFrame) -> Result<()
             target.handle == pass.texture_handle
                 && target.width == pass.width.max(1)
                 && target.height == pass.height.max(1)
+                && target.float_color == pass.float_color
+                && target.depth.is_some() == pass.depth
         });
         if matches {
             continue;
         }
-        let target =
-            create_offscreen_target(&state.gl, pass.texture_handle, pass.width, pass.height)?;
+        let target = create_offscreen_target(
+            &state.gl,
+            pass.texture_handle,
+            pass.width,
+            pass.height,
+            pass.float_color,
+            pass.depth,
+        )?;
         if index < state.offscreen_targets.len() {
             let old = std::mem::replace(&mut state.offscreen_targets[index], target);
             destroy_offscreen_target(&state.gl, old);
@@ -1227,9 +1252,9 @@ fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>
             BlendMode::Alpha => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
             BlendMode::Add => (glow::SRC_ALPHA, glow::ONE),
             BlendMode::Multiply => (glow::DST_COLOR, glow::ZERO),
-            BlendMode::Subtract => (glow::ONE, glow::ONE),
+            BlendMode::Subtract => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
         };
-        gl.blend_func(src, dst);
+        gl.blend_func_separate(src, dst, glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
     }
 }
 
@@ -1415,7 +1440,7 @@ fn draw_modern_offscreen_pass(
         let mut last_depth = None;
 
         for op in frame.ops.iter().copied() {
-            if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+            if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                 gl.clear(glow::DEPTH_BUFFER_BIT);
             }
             match op {
@@ -1529,7 +1554,7 @@ fn draw_modern_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, run.depth_test, &mut last_depth);
+                    apply_depth_test(gl, frame.depth && run.depth_test, &mut last_depth);
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(tmesh_vao));
@@ -1651,7 +1676,7 @@ fn draw_legacy_offscreen_pass(
         let mut last_blend = None;
         let mut last_depth = None;
         for op in frame.ops.iter().copied() {
-            if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+            if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
                 gl.clear(glow::DEPTH_BUFFER_BIT);
             }
             match op {
@@ -1800,7 +1825,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, run.depth_test, &mut last_depth);
+                    apply_depth_test(gl, frame.depth && run.depth_test, &mut last_depth);
                     gl.use_program(Some(state.tmesh_program));
                     gl.enable_vertex_attrib_array(0);
                     gl.enable_vertex_attrib_array(1);
@@ -1942,6 +1967,8 @@ pub fn draw(
             );
         }
         let target = &state.offscreen_targets[index];
+        let [viewport_width, viewport_height] =
+            deadlib_render_core::render_target_viewport(target_frame);
         // SAFETY: this framebuffer belongs to the current context and remains
         // alive for the whole pass.
         unsafe {
@@ -1950,16 +1977,19 @@ pub fn draw(
                 .bind_framebuffer(glow::FRAMEBUFFER, Some(target.framebuffer));
             state
                 .gl
-                .viewport(0, 0, target.width as i32, target.height as i32);
+                .viewport(0, 0, viewport_width as i32, viewport_height as i32);
             state.gl.color_mask(true, true, true, true);
             // Offscreen cameras invert Y to match top-down texture storage.
             state.gl.front_face(glow::CW);
-            let mut clear = glow::DEPTH_BUFFER_BIT;
+            let mut clear = 0;
             if !target_frame.preserve || !target.initialized {
                 state
                     .gl
                     .clear_color(0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 });
                 clear |= glow::COLOR_BUFFER_BIT;
+                if target_frame.depth {
+                    clear |= glow::DEPTH_BUFFER_BIT;
+                }
             }
             state.gl.clear(clear);
             if !target_frame.alpha {
@@ -2783,7 +2813,9 @@ pub fn cleanup(state: &mut State) {
         for target in state.offscreen_targets.drain(..) {
             state.gl.delete_texture(target.texture.primary());
             state.gl.delete_framebuffer(target.framebuffer);
-            state.gl.delete_renderbuffer(target.depth);
+            if let Some(depth) = target.depth {
+                state.gl.delete_renderbuffer(depth);
+            }
         }
         // Release the active program at teardown so deletion is immediate.
         state.gl.use_program(None);

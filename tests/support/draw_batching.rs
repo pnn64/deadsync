@@ -131,6 +131,8 @@ pub fn offscreen(mut f: RenderFrame) -> RenderFrame {
         texture_handle: handle,
         width: 64,
         height: 64,
+        viewport: [64, 64],
+        float_color: false,
         alpha: true,
         depth: true,
         preserve: false,

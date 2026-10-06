@@ -475,9 +475,14 @@ pub fn create_lua_compat_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table
     )?;
     table.set(
         "ReportScriptError",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(())
+        lua.create_function(|lua, args: MultiValue| {
+            let message = method_arg(&args, 0)
+                .cloned()
+                .and_then(read_string)
+                .ok_or_else(|| {
+                    mlua::Error::RuntimeError("ReportScriptError: string expected".into())
+                })?;
+            crate::lua_util::report_script_error(lua, &message)
         })?,
     )?;
     Ok(table)

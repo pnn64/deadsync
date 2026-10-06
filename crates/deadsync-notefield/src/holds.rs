@@ -2076,7 +2076,7 @@ pub(crate) const fn hold_strip_draw(
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: FlatMeshVertices::Shared(vertices),
@@ -2104,7 +2104,7 @@ pub(crate) const fn hold_strip_glow_draw(
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices: FlatMeshVertices::Shared(vertices),
@@ -2133,7 +2133,7 @@ const fn hold_reusable_strip_draw(
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 1.0],
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: FlatMeshVertices::Reusable(vertices),
@@ -2161,7 +2161,7 @@ const fn hold_reusable_strip_glow_draw(
         offset: [0.0, 0.0],
         world_z: 0.0,
         local_transform: Matrix4::IDENTITY,
-        texture,
+        texture: deadlib_present::actors::MeshTexture::Key(texture),
         tint: [1.0, 1.0, 1.0, 0.0],
         glow: [1.0, 1.0, 1.0, 1.0],
         vertices: FlatMeshVertices::Reusable(vertices),
@@ -2695,7 +2695,10 @@ mod tests {
                                         .iter()
                                         .map(|v| v.pos[0])
                                         .fold(f32::NEG_INFINITY, f32::max);
-                                    (mesh.texture.as_ref(), right - left)
+                                    (
+                                        mesh.texture.texture_key().expect("asset mesh"),
+                                        right - left,
+                                    )
                                 }
                                 _ => panic!("unexpected hold draw"),
                             };
@@ -2795,7 +2798,8 @@ mod tests {
                             assert!(
                                 draws.iter().any(|draw| match draw {
                                     FlatDraw::Sprite(_) => sprite_key(draw) == key,
-                                    FlatDraw::TexturedMesh(m) => m.texture.as_ref() == key,
+                                    FlatDraw::TexturedMesh(m) =>
+                                        m.texture.texture_key().expect("asset mesh") == key,
                                     _ => false,
                                 }),
                                 "{key}"
@@ -2888,7 +2892,7 @@ mod tests {
                         panic!("Twirl requires hold mesh rows")
                     };
                     assert!(mesh.depth_test);
-                    parts.push(mesh.texture.as_ref());
+                    parts.push(mesh.texture.texture_key().expect("asset mesh"));
                     let vertices = match &mesh.vertices {
                         FlatMeshVertices::Shared(v) => v.as_ref(),
                         FlatMeshVertices::Reusable(v) => v.as_slice(),
@@ -3204,7 +3208,7 @@ mod tests {
                         panic!("curved hold must use mesh")
                     };
                     assert_eq!(mesh.depth_test, z_amount != 0.0);
-                    parts.push(mesh.texture.as_ref());
+                    parts.push(mesh.texture.texture_key().expect("asset mesh"));
                     let vertices = reusable_vertices(draw);
                     for quad in vertices.chunks_exact(6) {
                         assert!(

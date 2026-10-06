@@ -711,6 +711,7 @@ pub(super) fn song_lua_style_capture_actor(
             blend: blend.or(actor_blend),
         },
         Actor::SharedTransform {
+            isolate_order,
             transform,
             source_view_proj,
             children,
@@ -718,6 +719,7 @@ pub(super) fn song_lua_style_capture_actor(
             tint: actor_tint,
             blend: actor_blend,
         } => Actor::SharedTransform {
+            isolate_order,
             transform,
             source_view_proj,
             children,

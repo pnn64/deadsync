@@ -557,7 +557,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform,
-        texture: slot.texture_key_shared(),
+        texture: slot.texture_key_shared().into(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
@@ -595,7 +595,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
         offset: xy,
         world_z: 0.0,
         local_transform,
-        texture: slot.texture_key_shared(),
+        texture: slot.texture_key_shared().into(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: deadlib_present::actors::FlatMeshVertices::Shared(vertices),
@@ -1264,7 +1264,7 @@ mod tests {
             [SizeSpec::Px(width), SizeSpec::Px(height)] if width == 0.0 && height == 0.0
         ));
         assert_matrix_eq(local_transform, expected_transform);
-        assert_eq!(texture.as_ref(), "test-model");
+        assert_eq!(texture.texture_key(), Some("test-model"));
         assert_eq!(tint, [0.4, 0.1, 0.2, 0.375]);
         assert_eq!(glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(vertices.len(), 1);

@@ -1188,6 +1188,7 @@ pub(crate) fn compose_frame(
         judgment_draw_range: hud_result.judgment_draw_range,
         combo_actors: hud_result.combo_actors,
         combo_draw_range: hud_result.combo_draw_range,
+        hud_parts: hud_result.parts,
     }
 }
 

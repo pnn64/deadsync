@@ -265,7 +265,7 @@ mod runtime_regression_tests {
                     (),
                     Vec::new(),
                     [false; MAX_PLAYERS],
-                    [(); 3],
+                    [(); 4],
                     std::array::from_fn(|_| Vec::new()),
                     std::array::from_fn(|_| SongLuaNoteHideWindows::default()),
                     std::array::from_fn(|_| Vec::new()),

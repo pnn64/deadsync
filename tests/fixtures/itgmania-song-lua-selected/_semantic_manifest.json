@@ -784,10 +784,12 @@
     },
     {
       "simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
-      "fixture": "Sharkmode [Ky_Dash]/Sharkmode.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/sharkmode-whole-song.json.zst",
       "title": "Sharkmode",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Slamurai/Slamurai.ssc",

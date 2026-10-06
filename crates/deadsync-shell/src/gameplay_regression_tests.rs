@@ -3364,7 +3364,10 @@ return root
                                     texture,
                                     uv_tex_shift,
                                     ..
-                                } if texture.contains("cyber") => {
+                                } if texture
+                                    .texture_key()
+                                    .is_some_and(|key| key.contains("cyber")) =>
+                                {
                                     Some(uv_tex_shift[1].rem_euclid(1.0))
                                 }
                                 _ => None,
@@ -4225,7 +4228,9 @@ return Def.ActorFrame{
                                     (mini - 155.0).abs() < 0.1,
                                     "{skin} P{player} Mini: {mini}"
                                 );
-                                assert!((state.field_zoom_for_player(player) - 0.225).abs() < 0.001);
+                                assert!(
+                                    (state.field_zoom_for_player(player) - 0.225).abs() < 0.001
+                                );
                             }
                         }
                         actors.clear();

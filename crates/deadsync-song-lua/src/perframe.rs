@@ -1545,6 +1545,8 @@ fn overlay_state_update_value(
         Target::ZBias => value!(F32, z_bias),
         Target::DrawOrder => value!(I32, draw_order),
         Target::DrawByZPosition => value!(Bool, draw_by_z_position),
+        Target::AftCreated => value!(Bool, aft_created),
+        Target::AftPreserve => value!(Bool, aft_preserve),
         Target::HAlign => value!(F32, halign),
         Target::VAlign => value!(F32, valign),
         Target::TextAlign => value!(TextAlign, text_align),
@@ -1678,6 +1680,8 @@ fn set_overlay_state_update_value(
     set_value!(ZBias, F32, z_bias);
     set_value!(DrawOrder, I32, draw_order);
     set_value!(DrawByZPosition, Bool, draw_by_z_position);
+    set_value!(AftCreated, Bool, aft_created);
+    set_value!(AftPreserve, Bool, aft_preserve);
     set_value!(HAlign, F32, halign);
     set_value!(VAlign, F32, valign);
     set_value!(TextAlign, TextAlign, text_align);
@@ -2754,6 +2758,12 @@ pub fn call_update_functions_at(
     }
     let result =
         crate::lua_util::run_actor_compile_update_functions_with_delta(lua, root, delta_seconds)
+            .and_then(|()| {
+                if let Value::Table(root) = root {
+                    crate::lua_util::run_actor_draw_functions_for_table(lua, root)?;
+                }
+                Ok(())
+            })
             .map_err(|err| err.to_string());
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, previous_delta.0, previous_delta.1)

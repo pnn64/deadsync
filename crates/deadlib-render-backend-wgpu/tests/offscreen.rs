@@ -100,6 +100,8 @@ fn target(id: u64) -> RenderTargetFrame {
         texture_handle: render_target_texture_handle(id),
         width: 64,
         height: 64,
+        viewport: [64, 64],
+        float_color: false,
         alpha: true,
         depth: true,
         preserve: false,
@@ -116,6 +118,7 @@ fn scene() -> RenderFrame {
     let mut first = target(1);
     first.alpha = false;
     first.width = 96;
+    first.viewport = [96, 64];
     first.tmesh_geometries = vec![
         quad([-1.0, 0.0, -1.0, 1.0], 0),
         quad([-0.9, -0.6, 0.6, 0.9], 7),
@@ -132,6 +135,7 @@ fn scene() -> RenderFrame {
     // follows it in the first pass and precedes it in the dependent pass.
     let mut second = target(3);
     second.height = 96;
+    second.viewport = [64, 96];
     second
         .cameras
         .push(Mat4::from_translation([0.1, 0.0, 0.0].into()));
@@ -202,6 +206,7 @@ fn rotated_field(angle: f32, offscreen: bool) -> (RenderFrame, Mat4) {
     let mut field = target(4);
     field.width = 128;
     field.height = 128;
+    field.viewport = [128, 128];
     field.cameras = vec![camera];
     field
         .tmesh_geometries

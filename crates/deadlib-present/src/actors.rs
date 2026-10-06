@@ -214,6 +214,41 @@ pub enum SpriteSource {
     Solid,
 }
 
+/// Mesh sampling uses either a prewarmed asset key or an existing GPU target.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MeshTexture {
+    Key(Arc<str>),
+    Handle(TextureHandle),
+}
+
+impl MeshTexture {
+    pub fn texture_key(&self) -> Option<&str> {
+        match self {
+            Self::Key(key) => Some(key),
+            Self::Handle(_) => None,
+        }
+    }
+
+    pub const fn texture_handle(&self) -> Option<TextureHandle> {
+        match self {
+            Self::Handle(handle) => Some(*handle),
+            Self::Key(_) => None,
+        }
+    }
+}
+
+impl From<Arc<str>> for MeshTexture {
+    fn from(key: Arc<str>) -> Self {
+        Self::Key(key)
+    }
+}
+
+impl From<&str> for MeshTexture {
+    fn from(key: &str) -> Self {
+        Self::Key(Arc::from(key))
+    }
+}
+
 impl SpriteSource {
     #[inline(always)]
     #[must_use]
@@ -416,7 +451,7 @@ pub enum Actor {
         world_z: f32,
         size: [SizeSpec; 2],
         local_transform: Matrix4,
-        texture: Arc<str>,
+        texture: MeshTexture,
         tint: [f32; 4],
         glow: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
@@ -444,7 +479,7 @@ pub enum Actor {
         world_z: f32,
         size: [SizeSpec; 2],
         local_transform: Matrix4,
-        texture: Arc<str>,
+        texture: MeshTexture,
         tint: [f32; 4],
         glow: [f32; 4],
         vertices: Arc<Vec<TexturedMeshVertex>>,
@@ -492,6 +527,9 @@ pub enum Actor {
         transform: Matrix4,
         source_view_proj: Matrix4,
         children: Arc<[Self]>,
+        /// Sort child layers locally, then keep them together at this actor's
+        /// layer. Explicit draw sequences must not interleave sibling sources.
+        isolate_order: bool,
         z: i16,
         tint: [f32; 4],
         blend: Option<BlendMode>,
@@ -542,8 +580,12 @@ pub struct RenderTarget {
     pub texture_handle: TextureHandle,
     /// Backing texture dimensions in render pixels.
     pub size: [u32; 2],
+    /// Drawing viewport at the texture's logical top left. Remaining backing
+    /// pixels are padding and still participate in attachment clears.
+    pub viewport: [u32; 2],
     /// Coordinate-space dimensions used while composing the children.
     pub logical_size: [f32; 2],
+    pub float_color: bool,
     pub alpha: bool,
     pub depth: bool,
     pub preserve: bool,
@@ -597,7 +639,7 @@ pub struct FlatTexturedMesh {
     pub offset: [f32; 2],
     pub world_z: f32,
     pub local_transform: Matrix4,
-    pub texture: Arc<str>,
+    pub texture: MeshTexture,
     pub tint: [f32; 4],
     pub glow: [f32; 4],
     pub vertices: FlatMeshVertices,

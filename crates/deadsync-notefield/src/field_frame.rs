@@ -35,7 +35,6 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
 use glam::Mat4 as Matrix4;
 use std::ops::Range;
-use std::sync::Arc;
 
 /// Borrowed runtime state needed by the canonical field presentation pass.
 ///
@@ -1905,7 +1904,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 world_z: mesh.world_z,
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 local_transform: mesh.local_transform,
-                texture: Arc::clone(&mesh.texture),
+                texture: mesh.texture.clone(),
                 tint: mesh.tint,
                 glow: mesh.glow,
                 vertices,
@@ -2047,6 +2046,7 @@ mod note_layer_tests {
     use super::*;
     use deadsync_noteskin::{ModelDrawState, ModelMesh, SpriteDefinition};
     use std::cell::Cell;
+    use std::sync::Arc;
 
     struct TestSlot {
         def: SpriteDefinition,
@@ -2371,7 +2371,7 @@ mod camera_wrap_tests {
             offset: [12.0, 34.0],
             world_z: 5.0,
             local_transform: Mat4::IDENTITY,
-            texture: Arc::from("capture-hold"),
+            texture: "capture-hold".into(),
             tint: [0.8, 0.7, 0.6, 0.5],
             glow: [1.0, 1.0, 1.0, 0.25],
             vertices: FlatMeshVertices::Reusable(Arc::clone(&vertices)),

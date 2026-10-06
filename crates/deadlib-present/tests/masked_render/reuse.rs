@@ -142,7 +142,9 @@ fn target_scene(count: usize) -> Vec<actors::RenderTarget> {
         actors.push(actors::RenderTarget {
             texture_handle: renderer::render_target_texture_handle((i + 1) as u64),
             size: [64 + i as u32, 32 + i as u32],
+            viewport: [64 + i as u32, 32 + i as u32],
             logical_size: [100.0; 2],
+            float_color: false,
             alpha: i % 2 == 0,
             depth: i % 3 == 0,
             preserve: i % 4 == 0,

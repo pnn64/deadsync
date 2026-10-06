@@ -71,6 +71,20 @@ fn compare_render_targets(
         compare_value(
             "render_target",
             index,
+            "viewport",
+            expected.viewport,
+            actual.viewport,
+        )?;
+        compare_value(
+            "render_target",
+            index,
+            "float_color",
+            expected.float_color,
+            actual.float_color,
+        )?;
+        compare_value(
+            "render_target",
+            index,
             "alpha",
             expected.alpha,
             actual.alpha,

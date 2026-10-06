@@ -1145,6 +1145,8 @@ macro_rules! overlay_value_fields {
         $visit!(z_bias);
         $visit!(draw_order);
         $visit!(draw_by_z_position);
+        $visit!(aft_created);
+        $visit!(aft_preserve);
         $visit!(halign);
         $visit!(valign);
         $visit!(text_align);

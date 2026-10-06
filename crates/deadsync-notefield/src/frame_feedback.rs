@@ -173,7 +173,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let measure_column_xs = notes.measure_column_xs;
 
     compose_column_feedback(
-        draws,
         hud_draws,
         ColumnFeedbackRequest {
             hud_style: request.hud_style,
@@ -1166,6 +1165,105 @@ mod tests {
     }
 
     #[test]
+    fn hud_ownership_survives_flat_and_player_captures() {
+        use crate::{
+            CapturedActorScratch, ComboHudFrame, JudgmentHudFrame, MiniHudFrame,
+            NotefieldHudFrameView, TapJudgmentHudFrame, TapJudgmentSprite, compose_notefield_hud,
+        };
+        use deadlib_present::actors::{Actor, TextContent};
+        use deadsync_gameplay::JudgmentRenderInfo;
+        use deadsync_rules::judgment::{Judgment, TimingWindow};
+
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let render = JudgmentRenderInfo {
+            judgment: Judgment {
+                time_error_ms: -12.0,
+                time_error_music_ns: -12_000_000,
+                grade: JudgeGrade::Great,
+                window: Some(TimingWindow::W3),
+                miss_because_held: false,
+            },
+            started_at_screen_s: 0.0,
+        };
+        for player_capture in [false, true] {
+            let mut req = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            req.options.frame_features.combo_visible = true;
+            req.capture_requests.player = player_capture;
+            req.capture_requests.direct_combo = !player_capture;
+            req.capture_requests.direct_judgment = !player_capture;
+            let prepared = prepare_notefield(&req).expect("two-column HUD geometry");
+            let frame = NotefieldHudFrameView {
+                combo: Some(ComboHudFrame {
+                    milestones: &[],
+                    milestone_assets: None,
+                    combo: 100,
+                    miss_combo: 0,
+                    player_color: [1.0; 4],
+                    combo_color: [1.0; 4],
+                    font: Some("combo"),
+                    number_text_slot: 0,
+                }),
+                error_bar: None,
+                counter: None,
+                mini: Some(MiniHudFrame {
+                    text: TextContent::Owned("underlay".into()),
+                    color: [1.0; 4],
+                    failed: false,
+                    font: "widget",
+                }),
+                judgment: Some(JudgmentHudFrame {
+                    tap: Some(TapJudgmentHudFrame {
+                        render: &render,
+                        sprite: TapJudgmentSprite {
+                            source: SpriteSource::Texture("judgment".into()),
+                            frame_size: [100.0, 40.0],
+                            frame_cols: 1,
+                            frame_rows: 7,
+                        },
+                    }),
+                    held_misses: &[],
+                    held_miss_sprite: None,
+                    hold_judgments: &[],
+                    hold_sprite: None,
+                }),
+            };
+            let mut actors = Vec::new();
+            let mut draws = Vec::new();
+            let result = compose_notefield_hud(
+                &mut actors,
+                &mut draws,
+                &req,
+                &prepared,
+                &frame,
+                &mut CapturedActorScratch::with_capacities(32, 16),
+            );
+            if player_capture {
+                assert!(draws.is_empty());
+                assert_eq!(result.parts.underlay_actors, 1);
+                assert_eq!(result.parts.combo_actors, 1);
+                assert!(matches!(&actors[0], Actor::Text { font, .. } if *font == "widget"));
+                assert!(matches!(&actors[1], Actor::Text { font, .. } if *font == "combo"));
+                assert!(
+                    matches!(&actors[2], Actor::Sprite { source: SpriteSource::Texture(key), .. } if key.as_ref() == "judgment")
+                );
+            } else {
+                assert_eq!(result.parts.underlay_actors, 1);
+                assert_eq!(result.parts.underlay_draws, 0);
+                assert_eq!(result.parts.combo_draws, 1);
+                assert!(matches!(&actors[0], Actor::Text { font, .. } if *font == "widget"));
+                assert!(matches!(&draws[0], FlatDraw::PreparedU32(draw) if draw.font == "combo"));
+                assert!(
+                    matches!(&draws[1], FlatDraw::Sprite(draw) if matches!(&draw.source, SpriteSource::Texture(key) if key.as_ref() == "judgment"))
+                );
+                assert_eq!(result.combo_draw_range, Some(0..1));
+                assert_eq!(result.judgment_draw_range, Some(1..2));
+            }
+        }
+    }
+
+    #[test]
     fn prepared_spline_receptors_follow_clock_track_changes_and_rewinds() {
         use deadsync_gameplay::{
             SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
@@ -1535,7 +1633,7 @@ mod tests {
         );
 
         assert!(matches!(
-            actors.first(),
+            hud.first(),
             Some(FlatDraw::Sprite(FlatSprite {
                 source: SpriteSource::Solid,
                 ..
@@ -1598,7 +1696,7 @@ mod tests {
                 rotation.to_bits()
             );
         }
-        assert!(hud.is_empty());
+        assert_eq!(hud.len(), 1, "miss flash belongs to Underlay");
     }
 
     #[test]
@@ -2009,10 +2107,11 @@ mod tests {
             countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
+        let mut hud = Vec::new();
 
         compose_notefield_feedback(
             &mut actors,
-            &mut Vec::new(),
+            &mut hud,
             &mut ModelMeshCache::default(),
             &request,
             &prepared,
@@ -2021,6 +2120,7 @@ mod tests {
         );
 
         assert!(actors.is_empty());
+        assert!(hud.is_empty());
     }
 
     #[test]
@@ -2194,10 +2294,11 @@ mod tests {
             countdown_text_slot: 17,
         };
         let mut actors = Vec::new();
+        let mut hud = Vec::new();
 
         compose_notefield_feedback(
             &mut actors,
-            &mut Vec::new(),
+            &mut hud,
             &mut ModelMeshCache::default(),
             &request,
             &prepared,
@@ -2209,9 +2310,9 @@ mod tests {
             source: SpriteSource::Solid,
             center,
             ..
-        }) = &actors[0]
+        }) = &hud[0]
         else {
-            panic!("P2 global cue should emit first");
+            panic!("P2 global cue should emit in Underlay");
         };
         let expected_x = prepared.field.playfield_center_x + 32.0;
         assert!((center[0] - expected_x).abs() <= 0.001);
@@ -2576,7 +2677,7 @@ mod tests {
                         &frame,
                         &source,
                     );
-                    assert!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref() == "body")));
+                    assert!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key().expect("asset mesh") == "body")));
                     format!("{draws:?}")
                 };
                 assert_eq!(render(&empty), render(&distant));
@@ -2812,7 +2913,9 @@ mod tests {
             let vertices: Vec<_> = draws
                 .iter()
                 .filter_map(|draw| match draw {
-                    FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref() == "body" => {
+                    FlatDraw::TexturedMesh(mesh)
+                        if mesh.texture.texture_key().expect("asset mesh") == "body" =>
+                    {
                         Some(match &mesh.vertices {
                             FlatMeshVertices::Shared(v) => v.as_ref(),
                             FlatMeshVertices::Reusable(v) => v.as_slice(),
@@ -3223,7 +3326,8 @@ mod tests {
                                     .iter()
                                     .find_map(|draw| match draw {
                                         FlatDraw::TexturedMesh(mesh)
-                                            if mesh.texture.as_ref() == part =>
+                                            if mesh.texture.texture_key().expect("asset mesh")
+                                                == part =>
                                         {
                                             Some(mesh)
                                         }
@@ -3254,7 +3358,7 @@ mod tests {
                                         < 0.001)
                                 );
                             }
-                            assert!(after.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref()=="body")));
+                            assert!(after.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key().expect("asset mesh")=="body")));
                         }
                         if matches!(kind, NoteType::Hold | NoteType::Roll) {
                             request.song_lua.column_offsets = &flat_spline;
@@ -3262,7 +3366,7 @@ mod tests {
                             request.song_lua.column_offsets = &[];
                             assert_eq!(sprite(&flat, "note"), sprite(&before, "note"));
                             assert!(!flat.iter().any(|draw| matches!(draw,
-                                FlatDraw::TexturedMesh(mesh) if ["body","top","bottom"].contains(&mesh.texture.as_ref()))));
+                                FlatDraw::TexturedMesh(mesh) if ["body","top","bottom"].contains(&mesh.texture.texture_key().expect("asset mesh")))));
                         }
                         request.song_lua.column_offsets = &[];
                         let restored = render(&request);
@@ -3313,7 +3417,7 @@ mod tests {
                             }
                         }
                         if matches!(kind, NoteType::Hold | NoteType::Roll) {
-                            assert!(absolute.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref()=="body")));
+                            assert!(absolute.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key().expect("asset mesh")=="body")));
                             for curve in
                                 [[points[0]; 4], [points[0], points[0], points[1], points[1]]]
                             {
@@ -3335,7 +3439,7 @@ mod tests {
                                 curve_request.geometry.field_zoom = zoom;
                                 curve_request.song_lua.column_splines = &tracks;
                                 let draws = render(&curve_request);
-                                assert_eq!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref()=="body")), !constant,
+                                assert_eq!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key().expect("asset mesh")=="body")), !constant,
                                     "hold path depends on the whole spline");
                             }
                         }
@@ -3415,7 +3519,9 @@ mod tests {
                                     FlatDraw::Sprite(sprite) => {
                                         sprite.source.texture_key() == Some(part)
                                     }
-                                    FlatDraw::TexturedMesh(mesh) => mesh.texture.as_ref() == part,
+                                    FlatDraw::TexturedMesh(mesh) => {
+                                        mesh.texture.texture_key().expect("asset mesh") == part
+                                    }
                                     _ => false,
                                 })
                                 .expect("rendered hold part");
@@ -3881,7 +3987,7 @@ mod tests {
                                         }
                                         FlatDraw::TexturedMesh(mesh)
                                             if matches!(
-                                                mesh.texture.as_ref(),
+                                                mesh.texture.texture_key().expect("asset mesh"),
                                                 "body" | "top" | "bottom"
                                             ) =>
                                         {
@@ -3899,7 +4005,13 @@ mod tests {
                                                 }))
                                                 .map(f32::to_bits)
                                                 .collect::<Vec<_>>();
-                                            body.push((mesh.texture.to_string(), geometry));
+                                            body.push((
+                                                mesh.texture
+                                                    .texture_key()
+                                                    .expect("asset mesh")
+                                                    .to_owned(),
+                                                geometry,
+                                            ));
                                         }
                                         _ => {}
                                     }
@@ -4261,8 +4373,13 @@ mod tests {
                                             format!("top{col}"),
                                             format!("bottom{col}"),
                                         ]
-                                        .contains(&mesh.texture.to_string())
-                                        {
+                                        .contains(
+                                            &mesh
+                                                .texture
+                                                .texture_key()
+                                                .expect("asset mesh")
+                                                .to_owned(),
+                                        ) {
                                             continue;
                                         }
                                         meshes[col] += 1;
@@ -4566,8 +4683,9 @@ mod tests {
                                     format!("top{col}"),
                                     format!("bottom{col}"),
                                 ]
-                                .contains(&mesh.texture.to_string())
-                                {
+                                .contains(
+                                    &mesh.texture.texture_key().expect("asset mesh").to_owned(),
+                                ) {
                                     continue;
                                 }
                                 meshes[col] += 1;

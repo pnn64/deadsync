@@ -1,7 +1,7 @@
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use image::image_dimensions;
-use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
+use mlua::{FromLua, Function, Lua, MultiValue, Table, Value, ffi};
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::c_int;
@@ -970,6 +970,8 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "z_bias" => Target::ZBias,
         "draw_order" => Target::DrawOrder,
         "draw_by_z_position" => Target::DrawByZPosition,
+        "aft_preserve" => Target::AftPreserve,
+        "aft_created" => Target::AftCreated,
         "halign" => Target::HAlign,
         "valign" => Target::VAlign,
         "text_align" => Target::TextAlign,
@@ -1663,7 +1665,10 @@ pub fn read_tracked_compile_actors(
         song_foreground,
         SongLuaTrackedActorTarget::SongForeground,
     )?);
-    for (index, name) in ["Underlay", "Overlay", "SongBackground"].iter().enumerate() {
+    for (index, name) in ["Underlay", "Overlay", "SongBackground", "In"]
+        .iter()
+        .enumerate()
+    {
         if let Some(actor) = children
             .get::<Option<Table>>(*name)
             .map_err(|err| err.to_string())?
@@ -1953,15 +1958,193 @@ pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         return Ok(children);
     }
     let children = lua.create_table()?;
+    let mt = lua.create_table()?;
+    let order = lua.create_table()?;
+    mt.set("__songlua_child_names", order.clone())?;
+    mt.set(
+        "__newindex",
+        lua.create_function(move |_, (registry, key, value): (Table, Value, Value)| {
+            if !value.is_nil() {
+                order.raw_set(order.raw_len() + 1, key.clone())?;
+            }
+            registry.raw_set(key, value)
+        })?,
+    )?;
+    children.set_metatable(Some(mt))?;
     actor.set("__songlua_children", children.clone())?;
     Ok(children)
 }
 
 pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let children = lua.create_table()?;
-    actor_children(lua, actor)?.for_each::<Value, Value>(|key, value| children.set(key, value))?;
-    merge_actor_sequence_children(lua, actor, &children)?;
+    let mut names = Vec::new();
+    let source = actor_children(lua, actor)?;
+    let mut copy = |key: Value, value: Value| -> mlua::Result<()> {
+        if value.is_nil() || !children.raw_get::<Value>(key.clone())?.is_nil() {
+            return Ok(());
+        }
+        let value = match value {
+            Value::Table(group) if actor_is_child_group(&group)? => {
+                let snapshot = create_actor_child_group(lua)?;
+                for child in group.sequence_values::<Table>() {
+                    push_sequence_child_once(&snapshot, child?)?;
+                }
+                if snapshot.raw_len() == 1 {
+                    snapshot.raw_get::<Value>(1)?
+                } else {
+                    Value::Table(snapshot)
+                }
+            }
+            value => value,
+        };
+        if let Value::String(name) = &key {
+            names.push(name.clone());
+        }
+        children.raw_set(key, value)
+    };
+    if let Some(order) = source
+        .metatable()
+        .map(|mt| mt.raw_get::<Option<Table>>("__songlua_child_names"))
+        .transpose()?
+        .flatten()
+    {
+        for key in order.sequence_values::<Value>() {
+            let key = key?;
+            copy(key.clone(), source.raw_get::<Value>(key)?)?;
+        }
+    }
+    // Raw registries also occur in embedded actors and preserve their lookup
+    // aliases. Registered runtime children use the creation order above.
+    source.for_each::<Value, Value>(&mut copy)?;
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        let name = child.get::<Option<String>>("Name")?.unwrap_or_default();
+        match children.raw_get::<Value>(name.as_str())? {
+            Value::Table(group) if actor_is_child_group(&group)? => {
+                push_sequence_child_once(&group, child)?;
+            }
+            Value::Table(existing) => {
+                if existing.to_pointer() != child.to_pointer() {
+                    let group = create_actor_child_group(lua)?;
+                    group.raw_set(1, existing)?;
+                    group.raw_set(2, child)?;
+                    children.raw_set(name.as_str(), group)?;
+                }
+            }
+            _ => {
+                children.raw_set(name.as_str(), child)?;
+                names.push(lua.create_string(name.as_str())?);
+            }
+        }
+    }
+    // ITGmania constructs a fresh Lua 5.1 table in actor-vector order. Lua
+    // 5.4 randomizes string hashes, so its pairs order changes custom draws.
+    let order: Vec<_> = lua51_string_order(&names)
+        .into_iter()
+        .map(|index| names[index].clone())
+        .collect();
+    let mt = lua.create_table()?;
+    mt.set(
+        "__pairs",
+        lua.create_function(move |lua, table: Table| {
+            let order = order.clone();
+            let next = lua.create_function(move |_, (table, key): (Table, Value)| {
+                let start = match key {
+                    Value::Nil => 0,
+                    Value::String(key) => order
+                        .iter()
+                        .position(|name| name.as_bytes().as_ref() == key.as_bytes().as_ref())
+                        .map(|index| index + 1)
+                        .ok_or_else(|| mlua::Error::runtime("invalid key to 'next'"))?,
+                    _ => return Err(mlua::Error::runtime("invalid key to 'next'")),
+                };
+                for name in &order[start..] {
+                    let value = table.raw_get::<Value>(name.clone())?;
+                    if !value.is_nil() {
+                        return Ok((Some(name.clone()), value));
+                    }
+                }
+                Ok((None, Value::Nil))
+            })?;
+            Ok((next, table, Value::Nil))
+        })?,
+    )?;
+    children.set_metatable(Some(mt))?;
     Ok(children)
+}
+
+fn lua51_string_hash(bytes: &[u8]) -> u32 {
+    let mut hash = bytes.len() as u32;
+    let step = (bytes.len() >> 5) + 1;
+    let mut left = bytes.len();
+    while left >= step {
+        hash ^= (hash << 5)
+            .wrapping_add(hash >> 2)
+            .wrapping_add(u32::from(bytes[left - 1]));
+        left -= step;
+    }
+    hash
+}
+
+#[derive(Clone, Copy, Default)]
+struct Lua51StringNode {
+    key: Option<usize>,
+    next: Option<usize>,
+}
+
+// This is Lua 5.1's string-only fresh-table insertion, including descending
+// rehash and collision relocation (extern/lua-5.1/src/ltable.c). GetChildren
+// inserts only names; duplicate names replace values without inserting keys.
+fn lua51_string_order(keys: &[mlua::LuaString]) -> Vec<usize> {
+    let hashes: Vec<_> = keys
+        .iter()
+        .map(|key| lua51_string_hash(key.as_bytes().as_ref()))
+        .collect();
+    let mut nodes = Vec::<Lua51StringNode>::new();
+    let mut pending: Vec<_> = (0..keys.len()).rev().collect();
+    let mut last_free = 0;
+    let mut occupied = 0usize;
+    while let Some(key) = pending.pop() {
+        let main = hashes[key] as usize & nodes.len().saturating_sub(1);
+        let mut slot = main;
+        if nodes.is_empty() || nodes[main].key.is_some() {
+            let free = (0..last_free)
+                .rev()
+                .find(|&index| nodes[index].key.is_none());
+            let Some(free) = free else {
+                pending.push(key);
+                // resize reinserts old nodes from highest to lowest index.
+                pending.extend(nodes.iter().filter_map(|node| node.key));
+                nodes = vec![Lua51StringNode::default(); (occupied + 1).next_power_of_two()];
+                last_free = nodes.len();
+                occupied = 0;
+                continue;
+            };
+            last_free = free;
+            let existing = nodes[main].key.expect("occupied hash node has a key");
+            let other_main = hashes[existing] as usize & (nodes.len() - 1);
+            if other_main != main {
+                let mut previous = other_main;
+                while nodes[previous].next != Some(main) {
+                    previous = nodes[previous]
+                        .next
+                        .expect("collision remains in its hash chain");
+                }
+                nodes[previous].next = Some(free);
+                nodes[free] = nodes[main];
+                nodes[main] = Lua51StringNode::default();
+            } else {
+                nodes[free].next = nodes[main].next;
+                nodes[main].next = Some(free);
+                slot = free;
+            }
+        }
+        nodes[slot].key = Some(key);
+        occupied += 1;
+    }
+    nodes.into_iter().filter_map(|node| node.key).collect()
 }
 
 pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
@@ -2038,7 +2221,27 @@ pub fn top_screen_steps_text(parent: &Table, player_index: usize) -> mlua::Resul
 }
 
 pub fn remove_actor_child(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
-    actor_children(lua, actor)?.set(name, Value::Nil)?;
+    let children = actor_children(lua, actor)?;
+    children.set(name, Value::Nil)?;
+    if let Some(order) = children
+        .metatable()
+        .map(|mt| mt.raw_get::<Option<Table>>("__songlua_child_names"))
+        .transpose()?
+        .flatten()
+    {
+        let mut write = 1;
+        for read in 1..=order.raw_len() {
+            let key = order.raw_get::<Value>(read)?;
+            if matches!(&key, Value::String(key) if key.as_bytes().as_ref() == name.as_bytes()) {
+                continue;
+            }
+            order.raw_set(write, key)?;
+            write += 1;
+        }
+        for index in write..=order.raw_len() {
+            order.raw_set(index, Value::Nil)?;
+        }
+    }
     let mut write = 1;
     for read in 1..=actor.raw_len() {
         let value = actor.raw_get::<Value>(read)?;
@@ -2069,6 +2272,14 @@ pub fn remove_all_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let children = actor_children(lua, actor)?;
     // Retain the registry's identity, metatable, and reusable capacity.
     children.clear()?;
+    if let Some(order) = children
+        .metatable()
+        .map(|mt| mt.raw_get::<Option<Table>>("__songlua_child_names"))
+        .transpose()?
+        .flatten()
+    {
+        order.clear()?;
+    }
     Ok(())
 }
 
@@ -2214,31 +2425,6 @@ pub fn call_table_method(table: &Table, method_name: &str) -> mlua::Result<Value
     method.call::<Value>(table.clone())
 }
 
-fn merge_actor_sequence_children(lua: &Lua, actor: &Table, children: &Table) -> mlua::Result<()> {
-    for value in actor.sequence_values::<Value>() {
-        let Value::Table(child) = value? else {
-            continue;
-        };
-        let name = child.get::<Option<String>>("Name")?.unwrap_or_default();
-        match children.get::<Option<Value>>(name.as_str())? {
-            Some(Value::Table(group)) if actor_is_child_group(&group)? => {
-                group.raw_set(group.raw_len() + 1, child)?;
-            }
-            Some(Value::Table(existing)) => {
-                let group = create_actor_child_group(lua)?;
-                group.raw_set(1, existing)?;
-                group.raw_set(2, child)?;
-                children.set(name.as_str(), group)?;
-            }
-            Some(_) => {}
-            None => {
-                children.set(name.as_str(), child)?;
-            }
-        }
-    }
-    Ok(())
-}
-
 pub fn create_actor_child_group(lua: &Lua) -> mlua::Result<Table> {
     let group = lua.create_table()?;
     let mt = lua.create_table()?;
@@ -2246,21 +2432,27 @@ pub fn create_actor_child_group(lua: &Lua) -> mlua::Result<Table> {
     mt.set(
         "__index",
         lua.create_function(|lua, (group, key): (Table, Value)| {
+            if lua.coerce_number(key.clone())?.is_some() {
+                return group.raw_get::<Value>(key);
+            }
             let Some(actor) = group.raw_get::<Option<Table>>(group.raw_len())? else {
                 return Ok(Value::Nil);
             };
-            let value = actor.get::<Value>(key)?;
-            let Value::Function(method) = value else {
+            let value = actor.get::<Value>(key.clone())?;
+            let Value::Function(_) = value else {
                 return Ok(value);
             };
             Ok(Value::Function(lua.create_function(
                 move |_, args: MultiValue| {
                     let mut args = args.into_vec();
-                    if args.is_empty() {
-                        args.push(Value::Table(actor.clone()));
-                    } else {
-                        args[0] = Value::Table(actor.clone());
-                    }
+                    let Some(Value::Table(group)) = args.first() else {
+                        return Err(mlua::Error::runtime("child group receiver must be a table"));
+                    };
+                    let actor = group.raw_get::<Table>(group.raw_len())?;
+                    // Dummy actor methods bind their receiver. Resolve the
+                    // current last child's method at call time as well.
+                    let method = actor.get::<Function>(key.clone())?;
+                    args[0] = Value::Table(actor);
                     method.call::<MultiValue>(MultiValue::from_vec(args))
                 },
             )?))
@@ -2316,6 +2508,7 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
         || key.starts_with("__songlua_capture_")
         || key.starts_with("__songlua_graph_display_")
         || key.starts_with("__songlua_scroller_")
+        || key.starts_with("__songlua_aft_")
         || key.starts_with("__songlua_command_queue")
         || key.starts_with("__songlua_recurring_update_")
         || matches!(
@@ -2328,7 +2521,6 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
                 | "__songlua_text_attributes"
                 | "__songlua_stroke_color"
                 | "__songlua_aux"
-                | "__songlua_aft_capture_name"
                 | "__songlua_stream_width"
                 | "__songlua_sprite_animation_length_seconds"
                 | "__songlua_sprite_effect_mode"
@@ -4102,6 +4294,8 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "z_bias" => "__songlua_state_z_bias",
         "draw_order" => "__songlua_state_draw_order",
         "draw_by_z_position" => "__songlua_state_draw_by_z_position",
+        "aft_preserve" => "__songlua_state_aft_preserve",
+        "aft_created" => "__songlua_state_aft_created",
         "halign" => "__songlua_state_halign",
         "valign" => "__songlua_state_valign",
         "uppercase" => "__songlua_state_uppercase",
@@ -5244,7 +5438,6 @@ pub fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
 
 pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let texture = lua.create_table()?;
-    let (screen_width, screen_height) = song_lua_screen_size(lua)?;
     let frame_count = actor_sprite_frame_count(actor)?;
     if actor
         .get::<Option<String>>("__songlua_actor_type")?
@@ -5254,21 +5447,77 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         if let Some(capture_name) = actor_aft_capture_name(actor)? {
             texture.set("__songlua_aft_capture_name", capture_name)?;
         }
-        let (screen_width, screen_height) = actor
-            .get::<Option<Table>>("__songlua_state_size")?
-            .and_then(|size| table_vec2(&size))
-            .map(|[width, height]| (width, height))
-            .unwrap_or((screen_width, screen_height));
+        let globals = lua.globals();
+        let meta = if let Some(meta) =
+            globals.raw_get::<Option<Table>>("__songlua_aft_texture_meta")?
+        {
+            meta
+        } else {
+            let meta = lua.create_table()?;
+            meta.set(
+                "__eq",
+                lua.create_function(|_, (left, right): (Table, Table)| {
+                    let name = left.raw_get::<Option<String>>("__songlua_aft_capture_name")?;
+                    Ok(name.is_some()
+                        && name == right.raw_get::<Option<String>>("__songlua_aft_capture_name")?)
+                })?,
+            )?;
+            globals.raw_set("__songlua_aft_texture_meta", meta.clone())?;
+            meta
+        };
+        texture.set_metatable(Some(meta))?;
+        let allocation = actor.get::<Table>("__songlua_aft_allocation")?;
+        let size = allocation.get::<Table>("size")?;
+        let width: f32 = size.raw_get(1)?;
+        let height: f32 = size.raw_get(2)?;
         install_texture_proxy_methods(
             lua,
             &texture,
             actor,
-            String::new(),
-            screen_width,
-            screen_height,
-            screen_width,
-            screen_height,
-            frame_count,
+            allocation.get("name")?,
+            width,
+            height,
+            (width as u32)
+                .checked_next_power_of_two()
+                .unwrap_or(u32::MAX) as f32,
+            (height as u32)
+                .checked_next_power_of_two()
+                .unwrap_or(u32::MAX) as f32,
+            1,
+        )?;
+        texture.set(
+            "GetImageWidth",
+            lua.create_function(move |_, _: MultiValue| Ok(width))?,
+        )?;
+        texture.set(
+            "GetImageHeight",
+            lua.create_function(move |_, _: MultiValue| Ok(height))?,
+        )?;
+        texture.set(
+            "BeginRenderingTo",
+            lua.create_function({
+                let actor = actor.clone();
+                let texture = texture.clone();
+                move |lua, args: MultiValue| {
+                    crate::draw_capture::begin(
+                        lua,
+                        &actor,
+                        method_arg(&args, 0).is_some_and(truthy),
+                    )?;
+                    Ok(texture.clone())
+                }
+            })?,
+        )?;
+        texture.set(
+            "FinishRenderingTo",
+            lua.create_function({
+                let actor = actor.clone();
+                let texture = texture.clone();
+                move |lua, _: MultiValue| {
+                    crate::draw_capture::finish(lua, &actor)?;
+                    Ok(texture.clone())
+                }
+            })?,
         )?;
         return Ok(texture);
     }
@@ -5321,16 +5570,19 @@ pub fn install_actor_texture_proxy_getter_methods(lua: &Lua, actor: &Table) -> m
         "GetTexture",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _self: Table| match actor.get::<Value>("Texture")? {
-                Value::Nil
-                    if !actor
-                        .get::<Option<String>>("__songlua_actor_type")?
-                        .as_deref()
-                        .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture")) =>
-                {
+            move |lua, _self: Table| {
+                let created = if actor_type_is(&actor, "ActorFrameTexture")? {
+                    actor
+                        .raw_get::<Option<Table>>("__songlua_aft_allocation")?
+                        .is_some()
+                } else {
+                    !matches!(actor.get::<Value>("Texture")?, Value::Nil)
+                };
+                if created {
+                    Ok(Value::Table(create_texture_proxy(lua, &actor)?))
+                } else {
                     Ok(Value::Nil)
                 }
-                _ => Ok(Value::Table(create_texture_proxy(lua, &actor)?)),
             }
         })?,
     )?;
@@ -5352,7 +5604,11 @@ pub fn install_texture_proxy_methods(
     // SetTexture uses RageTexture's frame size, independently of the Sprite's
     // existing states. Capture it on this handle so a later Load on its owner
     // cannot change a retained texture's dimensions.
-    let (cols, rows) = actor_sprite_sheet_dims(actor)?.unwrap_or((1, 1));
+    let (cols, rows) = if actor_type_is(actor, "ActorFrameTexture")? {
+        (1, 1)
+    } else {
+        actor_sprite_sheet_dims(actor)?.unwrap_or((1, 1))
+    };
     texture.set(
         "__songlua_source_frame_size",
         lua.create_sequence_from([
@@ -5871,6 +6127,9 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                // A direct hibernate call replaces the theme's initial sleep,
+                // including hibernate(0), which wakes an engine HUD actor.
+                actor.raw_set("__songlua_theme_hibernating", false)?;
                 prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
                 let duration = args
@@ -6173,11 +6432,9 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                 if let Some((width, height)) = size {
                     capture_immediate_vec2(lua, &actor, "size", [width, height])?;
                 }
-                if actor_aft_capture_name(&actor)?.is_some()
-                    || actor_texture_path(&actor)?.is_some()
-                {
-                    capture_block_set_bool(lua, &actor, "sprite_texture", true)?;
-                }
+                let bound = actor_aft_capture_name(&actor)?.is_some()
+                    || actor_texture_path(&actor)?.is_some();
+                capture_immediate_bool(lua, &actor, "sprite_texture", bound)?;
                 capture_sprite_texture(lua, &actor, previous)?;
                 Ok(actor.clone())
             }
@@ -6417,10 +6674,10 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "SetTextureName",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
-                if let Some(name) = args.get(1).cloned().and_then(read_string) {
-                    actor.set("__songlua_aft_capture_name", name)?;
-                }
+            move |lua, args: MultiValue| {
+                let value = method_arg(&args, 0).cloned().unwrap_or(Value::Nil);
+                let name = mlua::LuaString::from_lua(value, lua)?;
+                actor.set("__songlua_aft_capture_name", name)?;
                 Ok(actor.clone())
             }
         })?,
@@ -6843,8 +7100,10 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "SetDrawFunction",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(Value::Function(function)) = args.get(1).cloned() {
+                    lua.globals()
+                        .raw_set(crate::draw_capture::DRAW_INSTALLED_KEY, true)?;
                     actor.set("__songlua_draw_function", function)?;
                 } else {
                     actor.set("__songlua_draw_function", Value::Nil)?;
@@ -7240,9 +7499,12 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "SetDrawState",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(Value::Table(state)) = method_arg(&args, 0).cloned() {
-                    actor.set("__songlua_draw_state", state.clone())?;
+                    actor.set(
+                        "__songlua_draw_state",
+                        clone_lua_value(lua, Value::Table(state.clone()))?,
+                    )?;
                     if let Some(mode) = state.get::<Option<String>>("Mode")? {
                         actor.set("__songlua_draw_state_mode", mode)?;
                     }
@@ -7309,10 +7571,13 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "SetVertices",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(Value::Table(vertices)) = method_arg(&args, 0).cloned() {
                     actor.set("__songlua_vertex_count", vertices.raw_len() as i64)?;
-                    actor.set("__songlua_vertices", vertices)?;
+                    actor.set(
+                        "__songlua_vertices",
+                        clone_lua_value(lua, Value::Table(vertices))?,
+                    )?;
                 }
                 Ok(actor.clone())
             }
@@ -8336,8 +8601,6 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
 pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     for name in [
         "clearzbuffer",
-        "EnableFloat",
-        "Create",
         "SetAmbientLightColor",
         "SetDiffuseLightColor",
         "SetLightDirection",
@@ -8352,21 +8615,43 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
-    for (name, key) in [
-        ("EnableAlphaBuffer", "__songlua_aft_alpha_buffer"),
-        ("EnableDepthBuffer", "__songlua_aft_depth_buffer"),
-        ("EnablePreserveTexture", "__songlua_aft_preserve_texture"),
-    ] {
+    if actor_type_is(actor, "ActorFrameTexture")? {
         actor.set(
-            name,
+            "Create",
             lua.create_function({
                 let actor = actor.clone();
-                move |_, args: MultiValue| {
-                    actor.set(key, method_arg(&args, 0).is_none_or(truthy))?;
+                move |lua, _: MultiValue| {
+                    create_aft(lua, &actor)?;
                     Ok(actor.clone())
                 }
             })?,
         )?;
+        for (name, key) in [
+            ("EnableAlphaBuffer", "__songlua_aft_alpha_buffer"),
+            ("EnableDepthBuffer", "__songlua_aft_depth_buffer"),
+            ("EnableFloat", "__songlua_aft_float_buffer"),
+            ("EnablePreserveTexture", "__songlua_state_aft_preserve"),
+        ] {
+            actor.set(
+                name,
+                lua.create_function({
+                    let actor = actor.clone();
+                    move |lua, args: MultiValue| {
+                        let Some(Value::Boolean(value)) = method_arg(&args, 0) else {
+                            return Err(mlua::Error::RuntimeError(format!(
+                                "{name}: boolean expected"
+                            )));
+                        };
+                        if name == "EnablePreserveTexture" {
+                            capture_immediate_bool(lua, &actor, "aft_preserve", *value)?;
+                        } else {
+                            actor.set(key, *value)?;
+                        }
+                        Ok(actor.clone())
+                    }
+                })?,
+            )?;
+        }
     }
     actor.set(
         "Draw",
@@ -8381,11 +8666,17 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
                     .get::<Option<bool>>("__songlua_visible")?
                     .unwrap_or(true);
                 if in_draw_callback && visible {
-                    let state = lua.create_table()?;
-                    for (key, value) in snapshot_actor_semantic_state(lua, &actor)? {
-                        state.set(key, value)?;
+                    let player = actor
+                        .raw_get::<Option<String>>("__songlua_top_screen_child_name")?
+                        .is_some_and(|name| matches!(name.as_str(), "PlayerP1" | "PlayerP2"));
+                    if !player {
+                        let state = lua.create_table()?;
+                        for (key, value) in snapshot_actor_semantic_state(lua, &actor)? {
+                            state.set(key, value)?;
+                        }
+                        actor.set(MANUAL_DRAW_STATE_KEY, state)?;
                     }
-                    actor.set(MANUAL_DRAW_STATE_KEY, state)?;
+                    crate::draw_capture::draw(lua, &actor)?;
                 }
                 Ok(actor.clone())
             }
@@ -9574,7 +9865,17 @@ pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::R
         let Value::Table(child) = child? else {
             continue;
         };
-        child.set("__songlua_parent", actor.clone())?;
+        // The session's root list is a loader container, not an ActorFrame.
+        // Keep each root's previously installed screen-layer parent.
+        if actor
+            .raw_get::<Option<String>>("__songlua_actor_type")?
+            .is_some()
+            || child
+                .raw_get::<Option<Table>>("__songlua_parent")?
+                .is_none()
+        {
+            child.set("__songlua_parent", actor.clone())?;
+        }
         run_actor_startup_commands_for_table(lua, &child)?;
     }
     run_song_meter_stream_startup_command(lua, actor)?;
@@ -10097,7 +10398,7 @@ pub(crate) fn screen_layer_states(
     let top = lua.globals().get::<Table>("__songlua_top_screen")?;
     let children = actor_children(lua, &top)?;
     let mut states = HashMap::new();
-    for name in ["Underlay", "Overlay", "SongBackground"] {
+    for name in ["Underlay", "Overlay", "SongBackground", "In"] {
         if let Some(actor) = children.get::<Option<Table>>(name)? {
             let initial = actor_overlay_initial_state(&actor).map_err(mlua::Error::external)?;
             states.insert(actor.to_pointer() as usize, (actor, initial));
@@ -11133,34 +11434,19 @@ pub fn run_actor_draw_functions(lua: &Lua, root: &Value) {
 }
 
 pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
-    if let Some(draw) = actor.get::<Option<Function>>("__songlua_draw_function")? {
-        let globals = lua.globals();
-        let prior_draw_state = globals.raw_get::<Value>(DRAW_CALLBACK_ACTIVE_KEY)?;
-        globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, true)?;
-        let draw_result = call_actor_function(lua, actor, &draw, None);
-        globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, prior_draw_state)?;
-        let drain_result = drain_actor_command_queue(lua, actor);
-        if let Err(err) = draw_result {
-            log::debug!(
-                "Skipping song lua draw capture for {}: {}",
-                actor_debug_label(actor),
-                err
-            );
-        }
-        if let Err(err) = drain_result {
-            log::debug!(
-                "Skipping queued song lua draw commands for {}: {}",
-                actor_debug_label(actor),
-                err
-            );
-        }
-    }
-    for child in actor.sequence_values::<Value>() {
-        let Value::Table(child) = child? else {
-            continue;
-        };
-        child.set("__songlua_parent", actor.clone())?;
-        run_actor_draw_functions_for_table(lua, &child)?;
+    let globals = lua.globals();
+    let prior = globals.raw_get::<Value>(DRAW_CALLBACK_ACTIVE_KEY)?;
+    globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, true)?;
+    let result = crate::draw_capture::run(lua, actor);
+    globals.raw_set(DRAW_CALLBACK_ACTIVE_KEY, prior)?;
+    if let Err(err) = result {
+        report_update_error(
+            lua,
+            actor,
+            "__songlua_draw_error_reported",
+            "draw callback",
+            &err,
+        )?;
     }
     Ok(())
 }
@@ -11170,6 +11456,9 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
     if actor
         .get::<Option<Function>>("__songlua_update_function")?
         .is_some()
+        || actor
+            .get::<Option<Function>>("__songlua_draw_function")?
+            .is_some()
         || actor
             .get::<Option<String>>("__songlua_recurring_update_command")?
             .is_some()
@@ -11311,6 +11600,7 @@ pub fn create_named_child_actor(
     } else {
         create_dummy_actor(lua, "ChildActor")?
     };
+    child.set("Name", name)?;
     copy_dummy_actor_tags(parent, &child)?;
     child.set("__songlua_parent", parent.clone())?;
     // A theme child is a distinct target, not another alias of its Underlay.
@@ -11356,7 +11646,10 @@ pub fn create_top_screen_theme_actor(
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
-    if name.eq_ignore_ascii_case("Underlay") || name.eq_ignore_ascii_case("Overlay") {
+    if name.eq_ignore_ascii_case("Underlay")
+        || name.eq_ignore_ascii_case("Overlay")
+        || name.eq_ignore_ascii_case("In")
+    {
         let actor = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
         if name.eq_ignore_ascii_case("Underlay") {
             copy_dummy_actor_tags(parent, &actor)?;
@@ -11442,6 +11735,17 @@ pub fn create_underlay_theme_actor(
     name: &str,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
 ) -> mlua::Result<Option<Table>> {
+    if name.eq_ignore_ascii_case("BPMDisplay") {
+        return Ok(Some(create_named_text_actor(
+            lua,
+            "BPMDisplay",
+            name,
+            parent
+                .get::<Option<String>>("__songlua_bpm_text")?
+                .unwrap_or_default(),
+            create_dummy_actor,
+        )?));
+    }
     if let Some(player_index) = underlay_score_index(name) {
         return Ok(Some(create_named_text_actor(
             lua,
@@ -11612,7 +11916,16 @@ pub fn install_top_screen_theme_children(
         top_screen,
         TOP_SCREEN_THEME_CHILD_NAMES,
         create_named_child_actor,
-    )
+    )?;
+    // Simply-Love-SM5 [ScreenGameplay] hibernates the engine score and
+    // difficulty displays. Its visible replacements belong to Underlay.
+    let children = actor_children(lua, top_screen)?;
+    for name in ["ScoreP1", "ScoreP2", "StepsDisplayP1", "StepsDisplayP2"] {
+        children
+            .get::<Table>(name)?
+            .raw_set("__songlua_theme_hibernating", true)?;
+    }
+    Ok(())
 }
 
 pub fn install_underlay_theme_children(
@@ -11830,6 +12143,9 @@ pub fn create_top_screen_table(
     }
     for (player_index, life_meter) in life_meters.iter().enumerate() {
         life_meter.set("__songlua_parent", top_screen.clone())?;
+        // Simply Love replaces these engine meters in its Underlay and
+        // hibernates them indefinitely; GetVisible still returns true.
+        life_meter.raw_set("__songlua_theme_hibernating", true)?;
         life_meter.set(
             "__songlua_top_screen_child_name",
             top_screen_life_meter_name(player_index),
@@ -11843,9 +12159,11 @@ pub fn create_top_screen_table(
             children.set(top_screen_player_name(player_index), player_actor.clone())?;
         }
     }
-    children.set("LifeP1", life_meters[0].clone())?;
-    children.set("LifeP2", life_meters[1].clone())?;
-    children.set("LifeMeter", life_meters[0].clone())?;
+    for (player_index, life_meter) in life_meters.iter().enumerate() {
+        if players[player_index].enabled {
+            children.set(top_screen_life_meter_name(player_index), life_meter.clone())?;
+        }
+    }
     install_top_screen_theme_children(lua, &top_screen, create_named_child_actor)?;
     top_screen.set(
         "SetMinSecondsToMusic",
@@ -14690,10 +15008,17 @@ pub fn tracked_song_lua_actor(
     table: Table,
     target: SongLuaTrackedActorTarget,
 ) -> Result<SongLuaTrackedActor, String> {
-    let initial_state = match table
-        .get::<Option<Table>>(MANUAL_DRAW_STATE_KEY)
-        .map_err(|err| err.to_string())?
-    {
+    // Whole-Player draws now replay their individual draw records. The ordinary
+    // Player source must retain the actual state after the callback, including
+    // hiding/resetting it; replacing it with the last Draw resurrects originals.
+    let draw_state = if matches!(target, SongLuaTrackedActorTarget::Player(_)) {
+        None
+    } else {
+        table
+            .get::<Option<Table>>(MANUAL_DRAW_STATE_KEY)
+            .map_err(|err| err.to_string())?
+    };
+    let initial_state = match draw_state {
         Some(draw_state) => actor_overlay_initial_state(&draw_state)?,
         None => actor_overlay_initial_state(&table)?,
     };
@@ -14986,6 +15311,12 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                     .map_err(|err| err.to_string())?,
                 draw_by_z_position: block
                     .get::<Option<bool>>("draw_by_z_position")
+                    .map_err(|err| err.to_string())?,
+                aft_preserve: block
+                    .get::<Option<bool>>("aft_preserve")
+                    .map_err(|err| err.to_string())?,
+                aft_created: block
+                    .get::<Option<bool>>("aft_created")
                     .map_err(|err| err.to_string())?,
                 halign: block
                     .get::<Option<f32>>("halign")
@@ -15313,6 +15644,18 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         .map_err(|err| err.to_string())?
     {
         state.draw_by_z_position = value;
+    }
+    if let Some(value) = actor
+        .raw_get::<Option<bool>>("__songlua_state_aft_preserve")
+        .map_err(|err| err.to_string())?
+    {
+        state.aft_preserve = value;
+    }
+    if let Some(value) = actor
+        .raw_get::<Option<bool>>("__songlua_state_aft_created")
+        .map_err(|err| err.to_string())?
+    {
+        state.aft_created = value;
     }
     if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_halign")
@@ -15778,6 +16121,8 @@ pub fn set_actor_overlay_getter_state(
     }
     set!("__songlua_visible", state.visible);
     set!("__songlua_state_sprite_texture", state.sprite_texture);
+    set!("__songlua_state_aft_preserve", state.aft_preserve);
+    set!("__songlua_state_aft_created", state.aft_created);
     set!("__songlua_state_x", state.x);
     set!("__songlua_state_y", state.y);
     set!("__songlua_state_z", state.z);
@@ -16261,6 +16606,10 @@ pub fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Re
         .map_err(|err| err.to_string())?
         .as_deref()
         .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
+        && actor
+            .raw_get::<Option<Table>>("__songlua_aft_allocation")
+            .map_err(|err| err.to_string())?
+            .is_some()
         && let Some(capture_name) = actor_aft_capture_name(actor).map_err(|err| err.to_string())?
     {
         out.insert(capture_name);
@@ -16316,9 +16665,131 @@ fn global_actor_references(lua: &Lua) -> Result<HashSet<usize>, String> {
 }
 
 pub fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
-    Ok(actor
-        .get::<Option<String>>("__songlua_aft_capture_name")?
-        .filter(|name| !name.trim().is_empty()))
+    if let Some(allocation) = actor.raw_get::<Option<Table>>("__songlua_aft_allocation")? {
+        return allocation.get("name");
+    }
+    actor.get("__songlua_aft_capture_name")
+}
+
+/// Successful Create owns these settings; later setters only change requests.
+pub fn read_aft_kind<N, M, T>(actor: &Table) -> Result<SongLuaOverlayKind<N, M, T>, String> {
+    let allocation = actor
+        .raw_get::<Option<Table>>("__songlua_aft_allocation")
+        .map_err(|err| err.to_string())?;
+    let flags = allocation.as_ref().unwrap_or(actor);
+    Ok(SongLuaOverlayKind::ActorFrameTexture {
+        capture_name: actor_aft_capture_name(actor)
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| "ActorFrameTexture has no texture name".to_string())?,
+        capture_size: allocation
+            .as_ref()
+            .map(|allocation| {
+                allocation
+                    .get::<Table>("size")
+                    .map(|size| table_vec2(&size))
+            })
+            .transpose()
+            .map_err(|err| err.to_string())?
+            .flatten(),
+        alpha_buffer: flags
+            .get::<Option<bool>>("__songlua_aft_alpha_buffer")
+            .map_err(|err| err.to_string())?
+            .unwrap_or(false),
+        depth_buffer: flags
+            .get::<Option<bool>>("__songlua_aft_depth_buffer")
+            .map_err(|err| err.to_string())?
+            .unwrap_or(false),
+        float_buffer: flags
+            .get::<Option<bool>>("__songlua_aft_float_buffer")
+            .map_err(|err| err.to_string())?
+            .unwrap_or(false),
+    })
+}
+
+pub fn report_script_error(lua: &Lua, message: &str) -> mlua::Result<()> {
+    const GUARD: &str = "__songlua_reporting_script_error";
+    let globals = lua.globals();
+    if globals.raw_get::<Option<bool>>(GUARD)?.unwrap_or(false) {
+        return Ok(());
+    }
+    globals.raw_set(GUARD, true)?;
+    let result = (|| {
+        crate::note_song_lua_side_effect(lua)?;
+        let params = lua.create_table()?;
+        params.set("message", message)?;
+        broadcast_song_lua_message(lua, "ScriptError", Some(Value::Table(params)))?;
+        log::warn!("{message}");
+        Ok(())
+    })();
+    globals.raw_set(GUARD, false)?;
+    result
+}
+
+// RageTextureID preserves a leading ./ and a final ..; only slash-terminated
+// components are collapsed (RageUtil.cpp:1855).
+fn collapse_texture_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for part in name.split_inclusive('/') {
+        if (part == "/" || part == "./") && !out.is_empty() {
+            continue;
+        }
+        if part == "../" && !out.is_empty() && out != "/" {
+            let start = out[..out.len() - 1].rfind('/').map_or(0, |index| index + 1);
+            if &out[start..] != "../" {
+                out.truncate(start);
+                continue;
+            }
+        }
+        out.push_str(part);
+    }
+    out
+}
+
+fn create_aft(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if actor
+        .raw_get::<Option<Table>>("__songlua_aft_allocation")?
+        .is_some()
+    {
+        return report_script_error(lua, "Can't Create an already created ActorFrameTexture");
+    }
+    let name = collapse_texture_name(&actor.get::<String>("__songlua_aft_capture_name")?);
+    for other in song_lua_actor_registry(lua)?.sequence_values::<Table>() {
+        let other = other?;
+        if let Some(allocation) = other.raw_get::<Option<Table>>("__songlua_aft_allocation")?
+            && allocation.get::<String>("name")? == name
+        {
+            return report_script_error(lua, "ActorFrameTexture: Texture Name already in use.");
+        }
+        if let Some(path) = actor_texture_path(&other)?
+            && collapse_texture_name(&file_path_string(&path)) == name
+        {
+            return report_script_error(lua, "ActorFrameTexture: Texture Name already in use.");
+        }
+    }
+    let size = actor
+        .raw_get::<Option<Table>>("__songlua_state_size")?
+        .and_then(|size| table_vec2(&size))
+        .unwrap_or([1.0; 2])
+        .map(f32::trunc);
+    if size.iter().any(|value| !value.is_finite() || *value < 1.0) {
+        return report_script_error(
+            lua,
+            "ActorFrameTexture: Cannot have width or height less than 1",
+        );
+    }
+    let allocation = lua.create_table()?;
+    allocation.set("name", name)?;
+    allocation.set("size", lua.create_sequence_from(size)?)?;
+    for key in [
+        "__songlua_aft_alpha_buffer",
+        "__songlua_aft_depth_buffer",
+        "__songlua_aft_float_buffer",
+    ] {
+        allocation.set(key, actor.get::<Option<bool>>(key)?.unwrap_or(false))?;
+    }
+    actor.raw_set("__songlua_aft_allocation", allocation)?;
+    crate::note_song_lua_side_effect(lua)?;
+    capture_immediate_bool(lua, actor, "aft_created", true)
 }
 
 pub fn read_overlay_compile_actors<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin, OnSkipped>(
@@ -16539,23 +17010,7 @@ where
         }
         SongLuaOverlayKind::ActorFrame
     } else if actor_type.eq_ignore_ascii_case("ActorFrameTexture") {
-        SongLuaOverlayKind::ActorFrameTexture {
-            capture_name: actor_aft_capture_name(actor)
-                .map_err(|err| err.to_string())?
-                .ok_or_else(|| "ActorFrameTexture has no texture name".to_string())?,
-            alpha_buffer: actor
-                .get::<Option<bool>>("__songlua_aft_alpha_buffer")
-                .map_err(|err| err.to_string())?
-                .unwrap_or(false),
-            depth_buffer: actor
-                .get::<Option<bool>>("__songlua_aft_depth_buffer")
-                .map_err(|err| err.to_string())?
-                .unwrap_or(false),
-            preserve_texture: actor
-                .get::<Option<bool>>("__songlua_aft_preserve_texture")
-                .map_err(|err| err.to_string())?
-                .unwrap_or(false),
-        }
+        read_aft_kind(actor)?
     } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
         // Some foregrounds bind proxies from an UpdateFunction after startup.
         // Keep their draw-tree position so the compiler can resolve the target
@@ -16568,7 +17023,6 @@ where
         if let Some(capture_name) = actor
             .get::<Option<String>>("__songlua_aft_capture_name")
             .map_err(|err| err.to_string())?
-            .filter(|name| !name.trim().is_empty())
         {
             SongLuaOverlayKind::AftSprite { capture_name }
         } else {
@@ -16580,10 +17034,9 @@ where
                 .get::<Option<String>>("Texture")
                 .map_err(|err| err.to_string())?;
             if let Some(texture) = texture {
-                if aft_capture_names.contains(&texture) {
-                    SongLuaOverlayKind::AftSprite {
-                        capture_name: texture,
-                    }
+                let capture_name = collapse_texture_name(&texture);
+                if aft_capture_names.contains(&capture_name) {
+                    SongLuaOverlayKind::AftSprite { capture_name }
                 } else {
                     let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
                         return Ok(None);
@@ -16659,6 +17112,12 @@ where
             vertices,
             texture_path,
             texture_key,
+            capture_name: actor_aft_capture_name(actor)
+                .map_err(|err| err.to_string())?
+                .or(actor
+                    .get::<Option<String>>("Texture")
+                    .map_err(|err| err.to_string())?
+                    .filter(|name| aft_capture_names.contains(name))),
         }
     } else if actor_type.eq_ignore_ascii_case("Model") {
         if let Some(slots) = read_noteskin_tap_actor_slots(actor, context)? {

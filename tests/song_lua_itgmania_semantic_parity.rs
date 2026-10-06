@@ -85,6 +85,8 @@ struct NativeTrace {
     #[serde(default)]
     projected_vertex_tracks: Vec<NativeProjectedVertexTrack>,
     #[serde(default)]
+    manual_draw_frames: Vec<(f64, f64, Vec<Value>)>,
+    #[serde(default)]
     update_frames: Vec<(f64, f64)>,
     end_position: NativePosition,
     display: NativeDisplay,
@@ -556,6 +558,7 @@ fn compile_trace_song_at(
         song.title.clone(),
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
+    context.background_layer_count = song.background_lua_changes.len();
     if let Some(seed) = trace.random_seed {
         context.random_seed = seed;
     }
@@ -4471,11 +4474,13 @@ fn compiled_perspective_vertices(
     let mut viewport = screen;
     let mut parent = compiled.overlays[index].parent_index;
     while let Some(index) = parent {
-        if matches!(
-            compiled.overlays[index].kind,
-            SongLuaOverlayKind::ActorFrameTexture { .. }
-        ) {
-            viewport = states[index].size.unwrap_or(screen);
+        if let SongLuaOverlayKind::ActorFrameTexture { capture_size, .. } =
+            compiled.overlays[index].kind
+        {
+            if !states[index].aft_created {
+                return None;
+            }
+            viewport = capture_size?;
             break;
         }
         parent = compiled.overlays[index].parent_index;
@@ -5103,10 +5108,279 @@ fn compare_semantics(
     compare_column_splines(trace, compiled, context, &mut parity);
     multitap::compare_multitap(trace, compiled, context, &mut parity);
     compare_projected_geometry(trace, compiled, context, &mut parity);
+    compare_manual_meshes(trace, compiled, context, &mut parity);
     compare_projected_vibration_coverage(trace, compiled, context, &mut parity);
     compare_timeline(trace, &compiled[primary_index], &mut parity);
     compare_commands(trace, compiled, primary_index, &mut parity);
     parity
+}
+
+/// Explicit native mesh Draw calls must reach the production textured draw
+/// pipeline. This exposes lost AFT bindings even when actor-state checks pass.
+fn compare_manual_meshes(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    parity: &mut Parity,
+) {
+    use deadlib_present::render::DrawOp;
+    use deadlib_present::render::render_target_base_handle;
+    use deadsync_song_lua::playback::actor_conformance::{
+        WholeSongComposer, matrix_rows, project_world,
+    };
+    if trace.manual_draw_frames.is_empty() {
+        return;
+    }
+    compare_manual_plans(trace, compiled, parity);
+    parity.section("manual mesh bindings");
+    let map = projected_drawable_map(trace, compiled);
+    let mut composers = compiled
+        .iter()
+        .map(|layer| {
+            let mut composer = WholeSongComposer::new(&layer.overlays);
+            composer.set_draw_frames(&layer.overlays, &layer.draw_frames);
+            composer
+        })
+        .collect::<Vec<_>>();
+    let mut reported = HashSet::new();
+    let mut poses = Parity::default();
+    poses.section("manual mesh poses");
+    let mut colors = Parity::default();
+    colors.section("manual mesh colors");
+    let mut pose_reported = HashSet::new();
+    let mut color_reported = HashSet::new();
+    let screen = [context.screen_width, context.screen_height];
+    for (beat, second, calls) in &trace.manual_draw_frames {
+        let mut states = HashMap::new();
+        let mut rendered = HashMap::new();
+        for call in calls
+            .iter()
+            .filter(|call| call["class"] == "ActorMultiVertex")
+        {
+            let Some(texture) = call["texture"].as_str() else {
+                continue;
+            };
+            let Some(target) = texture.strip_prefix("aft:") else {
+                continue;
+            };
+            let Some(actor) = call["actor"].as_str() else {
+                continue;
+            };
+            let mut failed = reported.contains(actor);
+            let Some(&(layer, index)) = map.get(actor) else {
+                parity.check_once(false, &mut failed, || {
+                    format!("manual mesh {actor} is missing from compiled overlays")
+                });
+                reported.insert(actor.to_owned());
+                continue;
+            };
+            let expected_handle = map.get(target).and_then(|&(target_layer, target_index)| {
+                (target_layer == layer)
+                    .then(|| composers[layer].capture_handle(target_index))
+                    .flatten()
+            });
+            let states = states.entry(layer).or_insert_with(|| {
+                compiled_overlay_states_at(&compiled[layer], context, *beat as f32, *second as f32)
+            });
+            let frames = rendered.entry(layer).or_insert_with(|| {
+                std::collections::VecDeque::from(composers[layer].render_manual_frame(
+                    &compiled[layer].overlays,
+                    states,
+                    screen,
+                    *second as f32,
+                    *beat as f32,
+                ))
+            });
+            let frame = frames
+                .iter()
+                .position(|(overlay, _)| *overlay == index)
+                .and_then(|position| frames.remove(position))
+                .map(|(_, frame)| frame);
+            let Some(frame) = frame else {
+                parity.check_once(false, &mut failed, || {
+                    format!("manual mesh {actor} has no rendered pass at beat {beat:.3}")
+                });
+                poses.check(false, || {
+                    format!("manual mesh {actor} has no rendered pose at beat {beat:.3}")
+                });
+                colors.check(false, || {
+                    format!("manual mesh {actor} has no rendered color at beat {beat:.3}")
+                });
+                continue;
+            };
+            let bound = expected_handle.is_some_and(|expected| frame.ops.iter().any(|op| {
+                matches!(op, DrawOp::TexturedMesh(run) if render_target_base_handle(run.texture_handle) == expected)
+            }));
+            parity.check_once(bound, &mut failed, || {
+                format!("manual mesh {actor} loses capture identity {target} at beat {beat:.3}")
+            });
+            if failed {
+                reported.insert(actor.to_owned());
+            }
+            let mut actual = Vec::new();
+            for op in &frame.ops {
+                let DrawOp::TexturedMesh(run) = op else {
+                    continue;
+                };
+                for instance in &frame.tmesh_instances[run.instance_start as usize..]
+                    [..run.instance_count as usize]
+                {
+                    let matrix =
+                        matrix_rows(frame.cameras[usize::from(run.camera)] * instance.transform());
+                    for vertex in frame.tmesh_geometries[run.geometry as usize]
+                        .vertices
+                        .iter()
+                    {
+                        let clip = project_world(
+                            matrix,
+                            [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0],
+                        );
+                        let position = [
+                            (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+                            (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+                        ];
+                        let color = std::array::from_fn::<_, 4, _>(|axis| {
+                            vertex.color[axis] * instance.tint[axis]
+                        });
+                        actual.push((position, vertex.uv, color));
+                    }
+                }
+            }
+            let mut pose_ok = true;
+            let mut color_ok = true;
+            let mut native_vertices = 0;
+            for primitive in call["primitives"].as_array().into_iter().flatten() {
+                if primitive["texture_mode"] != "modulate" {
+                    continue;
+                }
+                for vertex in primitive["vertices"].as_array().into_iter().flatten() {
+                    native_vertices += 1;
+                    let uv = [
+                        vertex["uv"][0].as_f64().unwrap_or(f64::NAN) as f32,
+                        vertex["uv"][1].as_f64().unwrap_or(f64::NAN) as f32,
+                    ];
+                    let expected = [
+                        vertex["screen"][0].as_f64().unwrap_or(f64::NAN) as f32,
+                        vertex["screen"][1].as_f64().unwrap_or(f64::NAN) as f32,
+                    ];
+                    let matches = actual
+                        .iter()
+                        .filter(|(_, actual_uv, _)| {
+                            actual_uv
+                                .iter()
+                                .zip(uv)
+                                .all(|(a, b)| (a - b).abs() <= 0.00001)
+                        })
+                        .collect::<Vec<_>>();
+                    pose_ok &= matches.iter().any(|(position, _, _)| {
+                        position
+                            .iter()
+                            .zip(expected)
+                            .all(|(a, b)| (a - b).abs() <= 0.75)
+                    });
+                    color_ok &= matches.iter().any(|(_, _, color)| {
+                        color.iter().enumerate().all(|(axis, actual)| {
+                            let expected =
+                                vertex["color"][axis].as_f64().unwrap_or(f64::NAN) as f32;
+                            (actual.clamp(0.0, 1.0) * 255.0 - expected).abs() <= 1.01
+                        })
+                    });
+                }
+            }
+            let mut failed = pose_reported.contains(actor);
+            poses.check_once(native_vertices > 0 && pose_ok, &mut failed, || {
+                format!("manual mesh {actor} loses a draw pose or UV at beat {beat:.3}")
+            });
+            if failed {
+                pose_reported.insert(actor.to_owned());
+            }
+            let mut failed = color_reported.contains(actor);
+            colors.check_once(native_vertices > 0 && color_ok, &mut failed, || {
+                format!("manual mesh {actor} loses a draw color at beat {beat:.3}")
+            });
+            if failed {
+                color_reported.insert(actor.to_owned());
+            }
+        }
+    }
+    parity.sections.extend(poses.sections);
+    parity.sections.extend(colors.sections);
+    parity.gaps.extend(poses.gaps);
+    parity.gaps.extend(colors.gaps);
+}
+
+fn compare_manual_plans(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
+    use deadsync_song_lua::{SongLuaDrawOp as Op, SongLuaDrawSource as Source};
+    parity.section("custom draw plan");
+    let map = projected_drawable_map(trace, compiled);
+    let mut reported = false;
+    for (beat, second, calls) in &trace.manual_draw_frames {
+        let mut actual = Vec::new();
+        for (layer, compiled) in compiled.iter().enumerate() {
+            let end = compiled
+                .draw_frames
+                .partition_point(|frame| frame.second <= *second as f32 + 0.0001);
+            if let Some(frame) = end.checked_sub(1).map(|index| &compiled.draw_frames[index]) {
+                actual.extend(frame.ops.iter().map(|op| (layer, op)));
+            }
+        }
+        let source_matches = |call: &Value, layer, source| match source {
+            Source::Overlay(index) => {
+                call["actor"].as_str().and_then(|id| map.get(id)) == Some(&(layer, index))
+            }
+            Source::Player(index) => call["path"] == format!("ScreenGameplay/PlayerP{}", index + 1),
+            Source::Judgment(index) => {
+                call["path"] == format!("ScreenGameplay/PlayerP{}/Judgment", index + 1)
+            }
+            Source::Combo(index) => {
+                call["path"] == format!("ScreenGameplay/PlayerP{}/Combo", index + 1)
+            }
+            Source::SongForeground => call["path"] == "ScreenGameplay/SongForeground",
+            Source::ScreenLayer(index) => {
+                call["path"]
+                    == [
+                        "ScreenGameplay/Underlay",
+                        "ScreenGameplay/Overlay",
+                        "ScreenGameplay/SongBackground",
+                        "ScreenGameplay/In",
+                    ][index]
+            }
+        };
+        let matches = actual.len() == calls.len()
+            && actual
+                .iter()
+                .zip(calls)
+                .all(|((layer, op), call)| match op {
+                    Op::Begin { capture, preserve } => {
+                        call["operation"] == "begin"
+                            && call["target"].as_str().and_then(|id| map.get(id))
+                                == Some(&(*layer, *capture))
+                            && call["preserve"]
+                                .as_bool()
+                                .is_none_or(|native| native == *preserve)
+                    }
+                    Op::Finish { capture } => {
+                        call["operation"] == "finish"
+                            && call["target"].as_str().and_then(|id| map.get(id))
+                                == Some(&(*layer, *capture))
+                    }
+                    Op::Draw { source, .. } => {
+                        call["operation"] == "draw" && source_matches(call, *layer, *source)
+                    }
+                });
+        parity.check_once(matches, &mut reported, || {
+            let native = calls.iter().map(|call| format!("{}:{}",
+                call["operation"].as_str().unwrap_or("?"),
+                call["path"].as_str().or_else(|| call["target"].as_str()).unwrap_or("?")))
+                .collect::<Vec<_>>().join(", ");
+            let retained = actual.iter().map(|(layer, op)| match op {
+                Op::Begin { capture, .. } => format!("begin:{layer}/{capture}"),
+                Op::Finish { capture } => format!("finish:{layer}/{capture}"),
+                Op::Draw { source, .. } => format!("draw:{layer}/{source:?}"),
+            }).collect::<Vec<_>>().join(", ");
+            format!("custom draw order/sources differ at beat {beat:.3}: {} native operations vs {} retained\nnative: {native}\nretained: {retained}", calls.len(), actual.len())
+        });
+    }
 }
 
 fn compare_sprite_textures(
@@ -9244,6 +9518,48 @@ fn oshama_whole_native() {
         !rejected.gaps.is_empty(),
         "incorrect ending alpha must fail full-frame checks"
     );
+}
+
+#[test]
+fn sharkmode_whole_song_matches_native() {
+    crate::paths::init();
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    let trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua-micro/sharkmode-whole-song.json.zst"),
+    );
+    assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
+    assert_eq!(trace.steps_type, "dance-single");
+    assert_eq!(trace.difficulty, "Difficulty_Challenge");
+    assert!(trace.end_position.beat >= 400.0);
+    assert_eq!(trace.manual_draw_frames.len(), 9292);
+    assert_eq!(
+        trace
+            .manual_draw_frames
+            .iter()
+            .flat_map(|(_, _, ops)| ops)
+            .filter(|op| { op["path"] == "ScreenGameplay/In" && op["operation"] == "draw" })
+            .count(),
+        1351,
+        "retain explicit stage-label draws"
+    );
+    let song = parse_song(&locate_simfile(&trace));
+    assert!(
+        song.charts.iter().any(|chart| {
+            chart.chart_type == "dance-single"
+                && chart.difficulty == "Challenge"
+                && chart.short_hash == "f13226ac1b5eedcc"
+        }),
+        "retain the frozen Sharkmode chart identity"
+    );
+    let (compiled, primary, context) = compile_trace_song(&trace);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Sharkmode whole song"));
+    parity.assert_complete("Sharkmode whole song");
+    assert_eq!(parity.checks(), 109825, "retain every existing comparison");
 }
 
 #[test]

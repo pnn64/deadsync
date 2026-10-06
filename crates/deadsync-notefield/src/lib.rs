@@ -34,7 +34,7 @@ mod perf;
 
 pub use actor_builder::{
     BuiltNotefield, CapturedActorScratch, CapturedActorSource, NotefieldFrameFeatures,
-    NotefieldFramePlan,
+    NotefieldFramePlan, NotefieldHudParts,
 };
 pub use combo_feedback::{ComboMilestoneAssets, ComboMilestoneSprite};
 pub use compose::{

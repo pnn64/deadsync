@@ -1885,7 +1885,9 @@ mod tests {
                         .iter()
                         .map(|draw| match draw {
                             FlatDraw::Sprite(sprite) => sprite.source.texture_key().unwrap(),
-                            FlatDraw::TexturedMesh(mesh) => mesh.texture.as_ref(),
+                            FlatDraw::TexturedMesh(mesh) => {
+                                mesh.texture.texture_key().expect("asset mesh")
+                            }
                             _ => panic!("unexpected mine draw"),
                         })
                         .collect::<Vec<_>>();
@@ -1963,7 +1965,7 @@ mod tests {
                     };
                     assert_eq!(mesh.z, 140);
                     assert_eq!(mesh.world_z, 9.0);
-                    mesh.texture.as_ref()
+                    mesh.texture.texture_key().expect("asset mesh")
                 })
                 .collect();
             assert_eq!(actual, expected);

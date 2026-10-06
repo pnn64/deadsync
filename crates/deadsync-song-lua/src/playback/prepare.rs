@@ -109,6 +109,7 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
     song_title: &str,
     path: &Path,
     start_beat: f32,
+    background: bool,
     label: &str,
     context: &crate::SongLuaCompileContext,
     compile_song_lua: &impl Fn(
@@ -116,7 +117,9 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
         &crate::SongLuaCompileContext,
     ) -> Result<CompiledSongLua<S>, String>,
 ) -> Option<GameplaySongLuaLayer<S>> {
-    match compile_song_lua(path, context) {
+    let mut context = context.clone();
+    context.background_layer_count = usize::from(background);
+    match compile_song_lua(path, &context) {
         Ok(compiled) => Some(GameplaySongLuaLayer {
             start_beat,
             compiled,
@@ -157,6 +160,8 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
         paths.push(change.path.as_path());
         targets.push(SongLuaLayerTarget::Background(change.start_beat));
     }
+    let mut context = context.clone();
+    context.background_layer_count = paths.len();
     for (index, change) in song.foreground_lua_changes.iter().enumerate() {
         if !change.path.is_file() {
             continue;
@@ -176,7 +181,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
         return Ok(PreparedGameplaySongLua::default());
     }
     let compile_started = Instant::now();
-    let compiled = compile_song_lua_layers(&paths, primary_index, context)?;
+    let compiled = compile_song_lua_layers(&paths, primary_index, &context)?;
     if compiled.len() != targets.len() {
         return Err("song lua session returned the wrong layer count".to_string());
     }
@@ -230,6 +235,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                true,
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -246,6 +252,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                false,
                 "foreground lua layer",
                 context,
                 &compile_song_lua,
@@ -275,6 +282,7 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                true,
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -290,6 +298,7 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 song.title.as_str(),
                 &change.path,
                 change.start_beat,
+                false,
                 "foreground lua layer",
                 context,
                 &compile_song_lua,
@@ -486,9 +495,17 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
         timing_player,
         global_offset_seconds,
     );
-    if !tracks.is_empty() {
+    if !tracks.is_empty() || !compiled.draw_frames.is_empty() {
+        let mut draw_frames = compiled.draw_frames.clone();
+        for frame in &mut draw_frames {
+            // Match the chart-second clock used by rendered update tracks.
+            frame.second -= global_offset_seconds;
+        }
         overlays.push(SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::UpdateTracks { tracks },
+            kind: SongLuaOverlayKind::UpdateTracks {
+                tracks,
+                draw_frames: draw_frames.into(),
+            },
             name: None,
             parent_index: None,
             initial_state: SongLuaOverlayState::default(),

@@ -247,8 +247,12 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let project_chart = match simfile {
         "Jumper/Jumper.ssc" => Some(("7c085505e95af69a", 2, "dance-single")),
-        "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc" => Some(("d5bd4dd7224f68ff", 1, "dance-single")),
-        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc" => Some(("a147dd828cd08fc7", 1, "dance-double")),
+        "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc" => {
+            Some(("d5bd4dd7224f68ff", 1, "dance-single"))
+        }
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc" => {
+            Some(("a147dd828cd08fc7", 1, "dance-double"))
+        }
         _ => None,
     };
     if let Some((hash, seed, steps_type)) = project_chart {
@@ -256,10 +260,15 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
         assert_eq!(trace.steps_type, steps_type);
         assert_eq!(trace.difficulty, "Difficulty_Challenge");
         let song = parse_song(&corpus_root(corpus).join(simfile));
-        assert!(song.charts.iter().any(|chart| {
-            chart.chart_type == steps_type && chart.difficulty == "Challenge"
-                && chart.short_hash == hash && chart.description == trace.description
-        }), "missing frozen project chart {hash}: {simfile}");
+        assert!(
+            song.charts.iter().any(|chart| {
+                chart.chart_type == steps_type
+                    && chart.difficulty == "Challenge"
+                    && chart.short_hash == hash
+                    && chart.description == trace.description
+            }),
+            "missing frozen project chart {hash}: {simfile}"
+        );
     }
     let (compiled, primary_index, context) =
         compile_trace_song_at(trace, &corpus_root(corpus).join(simfile));

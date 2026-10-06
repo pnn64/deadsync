@@ -38,6 +38,11 @@ pub struct RenderTargetFrame {
     pub texture_handle: TextureHandle,
     pub width: u32,
     pub height: u32,
+    /// Drawing viewport at the texture's logical top left; allocation and
+    /// attachment clears still use width/height, including padding.
+    pub viewport: [u32; 2],
+    /// Store color in a 16-bit float attachment instead of normalized bytes.
+    pub float_color: bool,
     /// Whether the target stores child alpha. RGB targets sample as opaque.
     pub alpha: bool,
     pub depth: bool,

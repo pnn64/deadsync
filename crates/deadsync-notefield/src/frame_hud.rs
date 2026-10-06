@@ -1,4 +1,6 @@
-use crate::actor_builder::{CapturedActorScratch, CapturedActorSource, share_actor_range};
+use crate::actor_builder::{
+    CapturedActorScratch, CapturedActorSource, NotefieldHudParts, share_actor_range,
+};
 use crate::combo_feedback::{
     ComboFeedbackRequest, ComboMilestoneAssets, compose_combo_milestones, compose_combo_number,
 };
@@ -148,6 +150,7 @@ impl NotefieldHudFrameView<'_> {
 
 /// Proxy captures produced while composing the canonical HUD sequence.
 pub struct NotefieldHudComposeResult {
+    pub parts: NotefieldHudParts,
     pub combo_actors: Option<CapturedActorSource>,
     pub combo_draw_range: Option<Range<usize>>,
     pub judgment_actors: Option<CapturedActorSource>,
@@ -156,8 +159,9 @@ pub struct NotefieldHudComposeResult {
 
 /// Compose the complete canonical HUD sequence after concrete theme chrome.
 ///
-/// Ordering is fixed as combo, combo capture, error bar, counter, mini
-/// indicator, judgment feedback, then judgment capture.
+/// Theme chrome, error bar, counter and mini indicator form the Underlay
+/// prefix. Player combo follows; judgments form the final prefix-free tail.
+/// The screen inserts the field between combo and judgments.
 pub fn compose_notefield_hud<S>(
     actors: &mut Vec<Actor>,
     draws: &mut Vec<FlatDraw>,
@@ -176,22 +180,6 @@ pub fn compose_notefield_hud<S>(
             || (!request.capture_requests.combo && !request.capture_requests.player),
         "direct Combo capture requires a retained HUD draw range"
     );
-    let combo_capture_start = actors.len();
-    let combo_draw_start = draws.len();
-    if let Some(combo) = frame.combo.as_ref() {
-        compose_combo(actors, draws, request, prepared, combo, combo_draw_start);
-    }
-    let combo_actors = request
-        .capture_requests
-        .combo
-        .then(|| share_actor_range(actors, combo_capture_start, &mut capture_scratch.combo))
-        .flatten();
-    let combo_draw_range = request
-        .capture_requests
-        .direct_combo
-        .then_some(combo_draw_start..draws.len())
-        .filter(|range| !range.is_empty());
-
     if let Some(error_bar) = frame.error_bar.as_ref() {
         compose_error(draws, request, prepared, error_bar);
     }
@@ -248,12 +236,37 @@ pub fn compose_notefield_hud<S>(
         );
     }
 
+    if request.capture_requests.player {
+        actors.extend(draws.drain(..).map(actor_from_flat_draw));
+    }
+    let underlay_actors = actors.len();
+    let underlay_draws = draws.len();
+
+    let combo_capture_start = actors.len();
+    let combo_draw_start = draws.len();
+    if let Some(combo) = frame.combo.as_ref() {
+        compose_combo(actors, draws, request, prepared, combo, combo_draw_start);
+    }
+    let combo_actors = request
+        .capture_requests
+        .combo
+        .then(|| share_actor_range(actors, combo_capture_start, &mut capture_scratch.combo))
+        .flatten();
+    let combo_draw_range = request
+        .capture_requests
+        .direct_combo
+        .then_some(combo_draw_start..draws.len())
+        .filter(|range| !range.is_empty());
+
+    let combo_actors_len = actors.len() - underlay_actors;
+    let combo_draws_len = draws.len() - underlay_draws;
+
     let judgment_capture_start = actors.len();
     let judgment_draw_start = draws.len();
     if let Some(judgment) = frame.judgment.as_ref() {
         compose_judgment(draws, request, prepared, judgment);
     }
-    if request.capture_requests.judgment {
+    if request.capture_requests.judgment || request.capture_requests.player {
         actors.extend(draws.drain(judgment_draw_start..).map(actor_from_flat_draw));
     }
     let judgment_actors = request
@@ -273,11 +286,13 @@ pub fn compose_notefield_hud<S>(
         .then_some(judgment_draw_start..draws.len())
         .filter(|range| !range.is_empty());
 
-    if request.capture_requests.player {
-        actors.extend(draws.drain(..).map(actor_from_flat_draw));
-    }
-
     NotefieldHudComposeResult {
+        parts: NotefieldHudParts {
+            underlay_actors,
+            underlay_draws,
+            combo_actors: combo_actors_len,
+            combo_draws: combo_draws_len,
+        },
         combo_actors,
         combo_draw_range,
         judgment_actors,
@@ -336,7 +351,7 @@ fn compose_combo<S>(
     };
     compose_combo_milestones(draws, &feedback);
     compose_combo_number(draws, &feedback);
-    if request.capture_requests.combo {
+    if request.capture_requests.combo || request.capture_requests.player {
         actors.extend(draws.drain(draw_start..).map(actor_from_flat_draw));
     }
 }

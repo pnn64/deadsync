@@ -1,0 +1,66 @@
+{
+  "local_only": true,
+  "reference_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+  "reference_dirty": false,
+  "chart_identity": {
+    "frozen": "f13226ac1b5eedcc",
+    "local": "f13226ac1b5eedcc",
+    "steps_type": "dance-single",
+    "difficulty": "Difficulty_Challenge",
+    "frozen_manifest_changed": false
+  },
+  "execution": "embedded_bundled_lua",
+  "launches_executable": false,
+  "seed": 1,
+  "end_position": {
+    "beat": 400,
+    "seconds": 154.83870967741936
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "manual_draw_frames": 9292,
+  "explicit_in_draws": 1351,
+  "modeled_external_actors": 48,
+  "semantic_comparisons": 109825,
+  "capture": {
+    "file": "sharkmode-whole-song.json.zst",
+    "raw_sha256": "94c6ac9aa212aac3be0a7c4d29044a59b3bff6f880f96f40831b638754b83bcd",
+    "compressed_sha256": "9870177a9b115f6d06c9c42e49d60288eb34b7eaeef5123343ef808656320bce",
+    "raw_bytes": 61707310,
+    "compressed_bytes": 1917757
+  },
+  "sources_sha256": {
+    "itgmania-harness-rs/semantic_host.lua": "be69205744813a77a2ffa0785e9f08d1810cc0b443202b05694b21eb6bcf24ea",
+    "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+    "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf",
+    "itgmania-harness-rs/native/runtime_stubs.cpp": "0bef21ab9727c8edf154f800392d36414e7a32869867e38c8435154b64143692",
+    "itgmania-harness-rs/src/song_lua_semantic_baseline.rs": "44bff610b67107fedf86ea90b1220ba0fa3ac1ca28d79e9a91d010796d7a5f52",
+    "lua-songs/Sharkmode [Ky_Dash]/cdtitle.png": "4b94076530079098aa4335e2a633b5f84ab780a2aab7f26f1a06b3d1722d825b",
+    "lua-songs/Sharkmode [Ky_Dash]/default.lua": "500fc3f94b28c76d96ebba3e6c660ab78cce538d2bc650adeb0f6563f9daf26d",
+    "lua-songs/Sharkmode [Ky_Dash]/sharkmode-bg.png": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2",
+    "lua-songs/Sharkmode [Ky_Dash]/sharkmode-bn.png": "a629ade54660a043036959204568486a370cddc343457cfad3316e78c4fad5b7",
+    "lua-songs/Sharkmode [Ky_Dash]/Sharkmode.ssc": "1e28512dd3481ef7d34e72fbee9f0c252c258544fcc2d267aac2dfb8541edb91",
+    "lua-songs/Sharkmode [Ky_Dash]/code/draw.lua": "d7d036a9d577c766d0a4313e4365d0c59003e0e9bc6a52dd9b6ffbbbeb4407d7",
+    "lua-songs/Sharkmode [Ky_Dash]/code/update.lua": "45f61ecb879e762a92131234f910d03c793b3d791cf0cf01580b579a1b684984",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/core/jazz.jpg": "b0f9d9ad7f979f17254655a5c13ac49c0a81584ccc55ae02dd411c21a74233c7",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/core/main.lua": "e0ff7ba0ee4c33a685a92a802b3237e48f942c4ee810ccc7cfffcad16a773703",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/core/modparser.lua": "032ff3742b37a584de39e3ffc9d85d0445929d7f5f14d43fbae0f9caf64b7d96",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/core/players.lua": "fad50389bdced4f8312542b4d03ca002514e6a55925af071474c68969fd70b1d",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/conversions.lua": "4bcdb1b4a175d07a5eb403c27bca0c8b0a0f1a77f4c5b7616bccbb73083ac17c",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/fakemods.lua": "3d30a573d1fe4e1d5236ad0482ec8728a1cfb3bfe60cd5be06add9487d03e22b",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/grabactors.lua": "0294e1a4e0ad38f36fbb23bd8db1f30b1993d9667f47a32e6a33def8029d56ba",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/helpers.lua": "40d8883835415e589cf27cc534d857ccf63f264191cc94d848551efcc8625f97",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/multipliers.lua": "35d698a0f8211d148b39046701f97a2063575152aa56f99db2381236f3601ec9",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf",
+    "lua-songs/Sharkmode [Ky_Dash]/sm5/modules/speedmods.lua": "3038b831549aeb5dfd5c13664941337406cf621a85774b663dc543057da9f79c"
+  },
+  "limitations": [
+    "Semantic comparison uses the modeled headless screen host, not the complete native ScreenGameplay theme tree.",
+    "The retained sprite-marker fixture checks geometry and ownership, not native font glyph pixels.",
+    "Complete native screen inventory, initial In animation, and full-chart framebuffer output remain unverified."
+  ]
+}

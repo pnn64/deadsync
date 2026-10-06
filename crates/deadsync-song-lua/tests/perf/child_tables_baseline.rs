@@ -2,16 +2,6 @@
 
 use super::*;
 
-pub(super) fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
-    let children = lua.create_table()?;
-    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
-        let (key, value) = pair?;
-        children.set(key, value)?;
-    }
-    merge_actor_sequence_children(lua, actor, &children)?;
-    Ok(children)
-}
-
 pub(super) fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
     let mut out = Vec::new();
     let mut seen = ActorChildPointers::new();

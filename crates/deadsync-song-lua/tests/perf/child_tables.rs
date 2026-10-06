@@ -14,14 +14,6 @@ fn direct(lua: &Lua, actor: &Table, old: bool) -> mlua::Result<Vec<Table>> {
     }
 }
 
-fn named(lua: &Lua, actor: &Table, old: bool) -> mlua::Result<Table> {
-    if old {
-        baseline::actor_named_children(lua, actor)
-    } else {
-        actor_named_children(lua, actor)
-    }
-}
-
 fn pointers(tables: &[Table]) -> Vec<usize> {
     tables.iter().map(|t| t.to_pointer() as usize).collect()
 }
@@ -111,10 +103,7 @@ fn lua_traversal_children_preserve_order_groups_aliases_and_mixed_keys() {
                 pointers(&direct(&lua, &actor, true).unwrap()),
                 pointers(&direct(&lua, &actor, false).unwrap())
             );
-            let old = named(&lua, &actor, true).unwrap();
-            let new = named(&lua, &actor, false).unwrap();
-            assert_eq!(entries(&old), entries(&new));
-            assert_ne!(old.to_pointer(), source.to_pointer());
+            let new = actor_named_children(&lua, &actor).unwrap();
             assert_ne!(new.to_pointer(), source.to_pointer());
             assert_eq!(
                 new.raw_get::<Table>(true).unwrap().to_pointer(),
@@ -126,7 +115,7 @@ fn lua_traversal_children_preserve_order_groups_aliases_and_mixed_keys() {
 }
 
 #[test]
-fn lua_traversal_children_keep_shared_group_append_and_missing_registry_behavior() {
+fn lua_traversal_children_deduplicate_shared_groups_without_mutating_registry() {
     for old in [true, false] {
         let lua = Lua::new();
         let actor = lua.create_table().unwrap();
@@ -139,12 +128,12 @@ fn lua_traversal_children_keep_shared_group_append_and_missing_registry_behavior
         let group = create_actor_child_group(&lua).unwrap();
         group.raw_set(1, child.clone()).unwrap();
         source.raw_set("shared", group.clone()).unwrap();
-        let out = named(&lua, &actor, old).unwrap();
+        let out = actor_named_children(&lua, &actor).unwrap();
         assert_eq!(
             out.raw_get::<Table>("shared").unwrap().to_pointer(),
-            group.to_pointer()
+            child.to_pointer()
         );
-        assert_eq!(group.raw_len(), 2);
+        assert_eq!(group.raw_len(), 1);
         assert_eq!(
             pointers(&direct(&lua, &actor, old).unwrap()),
             pointers(&[child])
@@ -218,7 +207,7 @@ fn lua_traversal_children_preserve_lookup_mutation_order_and_errors() {
         let actor = lua.create_table().unwrap();
         actor.raw_set("__songlua_children", 42).unwrap();
         assert!(direct(&lua, &actor, old).is_err());
-        assert!(named(&lua, &actor, old).is_err());
+        assert!(actor_named_children(&lua, &actor).is_err());
     }
 }
 
@@ -250,35 +239,23 @@ fn lua_traversal_bench_child_tables() {
             pointers(&direct(&lua, &actor, true).unwrap()),
             pointers(&direct(&lua, &actor, false).unwrap())
         );
-        assert_eq!(
-            entries(&named(&lua, &actor, true).unwrap()),
-            entries(&named(&lua, &actor, false).unwrap())
-        );
         lua.gc_collect().unwrap();
         lua.gc_stop();
-        for named_read in [false, true] {
-            let order = if std::env::var_os("DEADSYNC_PERF_REVERSE").is_some() {
-                [false, true]
-            } else {
-                [true, false]
-            };
-            for old in order {
-                crate::perf::measure_sampled(
-                    &format!(
-                        "children_{kind}_{count}_named_{named_read}/{}",
-                        if old { "old" } else { "new" }
-                    ),
-                    64,
-                    count.max(1),
-                    || {
-                        if named_read {
-                            drop(black_box(named(&lua, &actor, black_box(old)).unwrap()));
-                        } else {
-                            drop(black_box(direct(&lua, &actor, black_box(old)).unwrap()));
-                        }
-                    },
-                );
-            }
+        let order = if std::env::var_os("DEADSYNC_PERF_REVERSE").is_some() {
+            [false, true]
+        } else {
+            [true, false]
+        };
+        for old in order {
+            crate::perf::measure_sampled(
+                &format!(
+                    "children_{kind}_{count}/{}",
+                    if old { "old" } else { "new" }
+                ),
+                64,
+                count.max(1),
+                || drop(black_box(direct(&lua, &actor, black_box(old)).unwrap())),
+            );
         }
     }
 }

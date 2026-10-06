@@ -1165,6 +1165,11 @@ where
             texture_handle: target.texture_handle,
             width,
             height,
+            viewport: [
+                target.viewport[0].clamp(1, width),
+                target.viewport[1].clamp(1, height),
+            ],
+            float_color: target.float_color,
             alpha: target.alpha,
             depth: target.depth,
             preserve: target.preserve,
@@ -6443,7 +6448,7 @@ struct TexturedMeshActorView<'a> {
     world_z: f32,
     size: [actors::SizeSpec; 2],
     local_transform: Matrix4,
-    texture: &'a Arc<str>,
+    texture: &'a actors::MeshTexture,
     tint: [f32; 4],
     glow: [f32; 4],
     vertices: TexturedMeshActorVertices<'a>,
@@ -6669,9 +6674,13 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, mesh.world_z))
         * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
         * mesh.local_transform;
-    let texture_key = mesh.texture.as_ref();
-    let texture_key_ptr = str_ptr(texture_key);
-    let texture_handle = texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
+    let texture_handle = mesh.texture.texture_handle().unwrap_or_else(|| {
+        let key = mesh
+            .texture
+            .texture_key()
+            .expect("asset-backed mesh has a key");
+        texture_cache.texture_handle(texture_ctx, str_ptr(key), key)
+    });
     let mut sphere_rows = [[0.0; 4]; 3];
     let mut additive_texture = 0;
     let mut additive_uv = [1.0, 1.0, 0.0, 0.0];
@@ -7155,6 +7164,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             transform,
             source_view_proj,
             children,
+            isolate_order,
             z,
             tint,
             blend,
@@ -7167,6 +7177,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             let prefix = root * source_view_proj.inverse();
             cameras.push(root);
             let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+            let start = out.len();
+            let first_order = *order_counter;
             build_actor_list(
                 children,
                 parent,
@@ -7189,6 +7201,16 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 total_elapsed,
                 Some(prefix),
             );
+            if *isolate_order {
+                // Reuse the frame's prewarmed sort scratch. Only this already
+                // emitted subtree is visited; no new payloads or storage exist.
+                let items = &mut out.items[start..];
+                sort_draw_items(items, scratch);
+                for (index, item) in items.iter_mut().enumerate() {
+                    item.z = base_z.saturating_add(*z);
+                    item.order = first_order.saturating_add(saturating_u32(index));
+                }
+            }
         }
 
         actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
@@ -10022,7 +10044,9 @@ mod tests {
             crate::actors::RenderTarget {
                 texture_handle: screen,
                 size: [128, 64],
+                viewport: [128, 64],
                 logical_size: [64.0, 32.0],
+                float_color: false,
                 alpha: false,
                 depth: false,
                 preserve: false,
@@ -10031,7 +10055,9 @@ mod tests {
             crate::actors::RenderTarget {
                 texture_handle: strips,
                 size: [128, 64],
+                viewport: [128, 64],
                 logical_size: [64.0, 32.0],
+                float_color: false,
                 alpha: true,
                 depth: false,
                 preserve: false,
@@ -10432,6 +10458,57 @@ mod tests {
     }
 
     #[test]
+    fn isolated_subtrees_keep_local_layers_and_sibling_order() {
+        let metrics = Metrics::centered(640.0, 480.0);
+        let quad = |color: [f32; 4], z: i16| Actor::Frame {
+            align: [0.0; 2],
+            offset: [10.0; 2],
+            size: [SizeSpec::Px(10.0); 2],
+            children: Vec::new(),
+            background: Some(crate::actors::Background::Color(color)),
+            z,
+        };
+        let red = [1.0, 0.0, 0.0, 1.0];
+        let green = [0.0, 1.0, 0.0, 1.0];
+        let blue = [0.0, 0.0, 1.0, 1.0];
+        for isolated in [false, true] {
+            let children: Arc<[Actor]> =
+                Arc::from([quad(blue, 200), quad(red, 90), quad(green, 140)]);
+            let actors = std::array::from_fn::<_, 2, _>(|_| Actor::SharedTransform {
+                transform: Matrix4::IDENTITY,
+                source_view_proj: metrics.projection(),
+                children: Arc::clone(&children),
+                isolate_order: isolated,
+                z: 0,
+                tint: [1.0; 4],
+                blend: None,
+            });
+            let frame = build_screen(&actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0);
+            let colors: Vec<_> = frame
+                .ops
+                .iter()
+                .flat_map(|op| {
+                    let deadlib_render_core::DrawOp::Sprite(run) = op else {
+                        panic!("quad stays a sprite")
+                    };
+                    frame.sprite_instances[run.instance_start as usize
+                        ..(run.instance_start + run.instance_count) as usize]
+                        .iter()
+                        .map(|instance| instance.tint)
+                })
+                .collect();
+            assert_eq!(
+                colors,
+                if isolated {
+                    vec![red, green, blue, red, green, blue]
+                } else {
+                    vec![red, red, green, green, blue, blue]
+                }
+            );
+        }
+    }
+
+    #[test]
     fn shared_transform_remaps_nested_source_cameras() {
         let metrics = Metrics {
             left: -800.0,
@@ -10447,6 +10524,7 @@ mod tests {
             * Matrix4::from_scale(Vector3::new(1600.0 / 854.0, 1600.0 / 854.0, 1.0))
             * Matrix4::from_translation(Vector3::new(800.0, -450.0, 0.0));
         let actors = [Actor::SharedTransform {
+            isolate_order: false,
             transform,
             source_view_proj,
             children: Arc::from([
@@ -10557,7 +10635,7 @@ mod tests {
             offset: [16.0, 20.0],
             world_z: 9.0,
             local_transform: Matrix4::from_rotation_z(0.25),
-            texture: Arc::from("flat-model.png"),
+            texture: "flat-model.png".into(),
             tint: [0.4, 0.5, 0.6, 0.7],
             glow: [0.8, 0.9, 1.0, 0.2],
             vertices: FlatMeshVertices::Shared(Arc::clone(&vertices)),
@@ -10619,7 +10697,7 @@ mod tests {
             world_z: mesh.world_z,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             local_transform: mesh.local_transform,
-            texture: Arc::clone(&mesh.texture),
+            texture: mesh.texture.clone(),
             tint: mesh.tint,
             glow: mesh.glow,
             vertices,
@@ -13688,7 +13766,7 @@ mod tests {
             world_z: 0.0,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             local_transform: Matrix4::IDENTITY,
-            texture: Arc::from("mesh"),
+            texture: "mesh".into(),
             tint: [0.25, 0.5, 0.75, 0.8],
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
@@ -13890,7 +13968,7 @@ mod tests {
                 world_z: 0.0,
                 size: [SizeSpec::Px(0.0); 2],
                 local_transform: Matrix4::IDENTITY,
-                texture: Arc::from("depth-fixture"),
+                texture: "depth-fixture".into(),
                 tint: [1.0, 1.0, 1.0, alpha],
                 glow: [1.0; 4],
                 vertices: Arc::from([TexturedMeshVertex::default(); 3]),
@@ -14076,7 +14154,7 @@ mod tests {
             world_z: 0.0,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             local_transform: Matrix4::IDENTITY,
-            texture: Arc::from("reusable"),
+            texture: "reusable".into(),
             tint: [1.0; 4],
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::clone(&vertices),
@@ -14124,7 +14202,7 @@ mod tests {
             offset: [0.0, 0.0],
             world_z: 0.0,
             local_transform: Matrix4::IDENTITY,
-            texture: Arc::from("flat-reusable"),
+            texture: "flat-reusable".into(),
             tint: [1.0; 4],
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: FlatMeshVertices::Reusable(Arc::clone(&vertices)),
@@ -14646,7 +14724,7 @@ mod tests {
             offset: [0.0; 2],
             world_z: 0.0,
             local_transform: Matrix4::IDENTITY,
-            texture: Arc::from("proxy-mesh"),
+            texture: "proxy-mesh".into(),
             tint: [0.0; 4],
             glow: [0.0; 4],
             vertices: FlatMeshVertices::Shared(Arc::from([TexturedMeshVertex::default(); 3])),
@@ -14757,7 +14835,7 @@ mod tests {
             world_z: 0.0,
             size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
             local_transform: Matrix4::IDENTITY,
-            texture: Arc::from("mesh"),
+            texture: "mesh".into(),
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.5, 0.25, 1.0, 0.4],
             vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),

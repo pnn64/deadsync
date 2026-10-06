@@ -285,9 +285,20 @@ pub struct WholeSongComposer {
     assets: AssetManager,
     mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
     topology: SongLuaOverlayTopologyIndex,
+    manual: SongLuaManualScratch,
 }
 
 impl WholeSongComposer {
+    /// Stable resource identity allocated by the production song topology.
+    #[must_use]
+    pub fn capture_handle(&self, index: usize) -> Option<deadlib_render_core::TextureHandle> {
+        self.topology
+            .aft_texture_handles
+            .get(index)
+            .copied()
+            .filter(|handle| *handle != 0)
+    }
+
     #[must_use]
     pub fn new<S: NoteskinSlot + Clone>(overlays: &[SongLuaOverlayActor<S>]) -> Self {
         let mut assets = AssetManager::new();
@@ -325,7 +336,86 @@ impl WholeSongComposer {
             assets,
             mesh_scratch: song_lua_projected_mesh_scratch_for(overlays),
             topology: SongLuaOverlayTopologyIndex::new(overlays),
+            manual: SongLuaManualScratch::new(overlays),
         }
+    }
+
+    /// Initialize the same song-entry draw plan as gameplay from compile data.
+    pub fn set_draw_frames<S: NoteskinSlot + Clone>(
+        &mut self,
+        overlays: &[SongLuaOverlayActor<S>],
+        frames: &[SongLuaDrawFrame],
+    ) {
+        self.manual = SongLuaManualScratch::with_frames(overlays, Arc::from(frames));
+    }
+
+    /// Materialize every pass together before inspecting leaves. Repeated RGB
+    /// draws therefore cannot pass by mutating one shared geometry buffer.
+    #[must_use]
+    pub fn render_manual_frame<S: NoteskinSlot + Clone>(
+        &mut self,
+        overlays: &[SongLuaOverlayActor<S>],
+        states: &[SongLuaOverlayState],
+        screen: [f32; 2],
+        seconds: f32,
+        beat: f32,
+    ) -> Vec<(usize, deadlib_render_core::RenderFrame)> {
+        let Some(index) = self.manual.frame_at(seconds) else {
+            return Vec::new();
+        };
+        self.manual.begin_frame();
+        let mut actors = Vec::new();
+        let mut targets = Vec::new();
+        for batch in 0..self.manual.frames[index].owners.len() {
+            let owner = self.manual.frames[index].owners[batch];
+            song_lua_draw_owner(
+                &mut actors,
+                &mut targets,
+                overlays,
+                states,
+                &self.topology,
+                &mut self.manual,
+                index,
+                owner,
+                &SongLuaScreenProxySources::default(),
+                &self.assets,
+                screen,
+                [seconds, beat],
+                seconds,
+                0,
+            );
+        }
+        self.manual.frames[index]
+            .ops
+            .iter()
+            .enumerate()
+            .filter_map(|(op, draw)| {
+                let SongLuaDrawOp::Draw {
+                    source: SongLuaDrawSource::Overlay(overlay),
+                    ..
+                } = draw
+                else {
+                    return None;
+                };
+                if !matches!(
+                    overlays[*overlay].kind,
+                    SongLuaOverlayKind::ActorMultiVertex { .. }
+                ) {
+                    return None;
+                }
+                Some((
+                    *overlay,
+                    deadlib_present::compose::build_screen_with_texture_context(
+                        &self.manual.banks[self.manual.bank][op].actors,
+                        [0.0; 4],
+                        &deadlib_present::space::Metrics::centered(screen[0], screen[1]),
+                        &font::FontMap::default(),
+                        seconds,
+                        self.assets.texture_context(),
+                    ),
+                ))
+            })
+            .collect()
     }
 
     /// Exercise the warmed gameplay builder and final draw-pass composition,
@@ -343,10 +433,11 @@ impl WholeSongComposer {
         let mut actors = Vec::new();
         if matches!(overlays[index].kind, SongLuaOverlayKind::AftSprite { .. }) {
             if let Some(target) = self.topology.aft_sprite_targets[index].get()
+                && let Some(size) = song_lua_aft_size(&overlays[target], states[target])
                 && let Some(built) = build_song_lua_aft_sprite_actor(
                     states[index],
                     self.topology.aft_texture_handles[target],
-                    states[target].size.unwrap_or(screen),
+                    size,
                     0,
                     screen[0],
                     screen[1],
@@ -383,6 +474,7 @@ impl WholeSongComposer {
                 seconds,
                 beat,
                 seconds,
+                self.topology.texture_handle(index),
                 self.mesh_scratch.get_mut(index),
             )
         {

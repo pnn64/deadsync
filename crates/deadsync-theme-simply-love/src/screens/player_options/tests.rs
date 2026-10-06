@@ -2656,7 +2656,7 @@ pub(super) mod tests {
                 .iter()
                 .filter_map(|actor| {
                     if let Actor::TexturedMesh { texture, tint, .. } = actor {
-                        Some((texture.as_ref(), tint[0]))
+                        Some((texture.texture_key().expect("asset mesh"), tint[0]))
                     } else {
                         None
                     }
@@ -2722,7 +2722,7 @@ pub(super) mod tests {
                         uv_offset,
                         ..
                     } = actor
-                        && texture.as_ref() == "synthetic-model-frames"
+                        && texture.texture_key().expect("asset mesh") == "synthetic-model-frames"
                     {
                         Some((uv_scale, uv_offset))
                     } else {
@@ -2817,7 +2817,10 @@ pub(super) mod tests {
                                 } => {
                                     assert!(slot.model.is_some(), "{name}: {part:?}");
                                     assert!(!vertices.is_empty());
-                                    assert_eq!(texture.as_ref(), slot.texture_key());
+                                    assert_eq!(
+                                        texture.texture_key().expect("asset mesh"),
+                                        slot.texture_key()
+                                    );
                                 }
                                 Actor::Sprite {
                                     source, rot_z_deg, ..
@@ -3146,7 +3149,9 @@ pub(super) mod tests {
                         for actor in &actors {
                             let key = match actor {
                                 Actor::Sprite { source, .. } => source.texture_key().unwrap(),
-                                Actor::TexturedMesh { texture, .. } => texture,
+                                Actor::TexturedMesh { texture, .. } => {
+                                    texture.texture_key().expect("asset mesh")
+                                }
                                 _ => panic!("unexpected preview actor"),
                             };
                             assert!(

@@ -493,6 +493,8 @@ pub const fn song_lua_overlay_delta_mask(
     field!(z_bias);
     field!(draw_order);
     field!(draw_by_z_position);
+    field!(aft_created);
+    field!(aft_preserve);
     field!(halign);
     field!(valign);
     field!(text_align);

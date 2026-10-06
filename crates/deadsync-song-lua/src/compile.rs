@@ -204,6 +204,9 @@ where
     if entry_paths.is_empty() {
         return Ok(Vec::new());
     }
+    if context.background_layer_count > entry_paths.len() {
+        return Err("song lua background count exceeds its session entries".to_owned());
+    }
     if primary_index >= entry_paths.len() {
         return Err(format!(
             "song lua primary index {primary_index} is outside {} entries",
@@ -239,6 +242,24 @@ where
     for (index, entry_path) in entry_paths.iter().enumerate() {
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
+        if let Value::Table(actor) = &root {
+            let screen = lua
+                .globals()
+                .get::<Table>("__songlua_top_screen")
+                .map_err(|err| err.to_string())?;
+            let children = crate::actor_children(&lua, &screen).map_err(|err| err.to_string())?;
+            let name = if index < context.background_layer_count {
+                "SongBackground"
+            } else {
+                "SongForeground"
+            };
+            let parent = children.get::<Table>(name).map_err(|err| err.to_string())?;
+            actor
+                .set("__songlua_parent", parent.clone())
+                .map_err(|err| err.to_string())?;
+            crate::lua_util::push_sequence_child_once(&parent, actor.clone())
+                .map_err(|err| err.to_string())?;
+        }
         crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
             .map_err(|err| err.to_string())?;
         run_actor_init_commands(&lua, &root).map_err(|err| {
@@ -770,6 +791,23 @@ where
     }
     resolve_late_actor_targets(&mut overlays, &mut hidden_players)?;
     for overlay in &mut overlays {
+        if matches!(
+            overlay.actor.kind,
+            SongLuaOverlayKind::ActorFrameTexture { .. }
+        ) {
+            overlay.actor.kind = crate::lua_util::read_aft_kind(&overlay.table)?;
+        } else if matches!(overlay.actor.kind, SongLuaOverlayKind::Actor)
+            && crate::lua_util::actor_type_is(&overlay.table, "Sprite")
+                .map_err(|err| err.to_string())?
+            && let Some(capture_name) = overlay
+                .table
+                .raw_get::<Option<String>>("__songlua_aft_capture_name")
+                .map_err(|err| err.to_string())?
+        {
+            overlay.actor.kind = SongLuaOverlayKind::AftSprite { capture_name };
+        }
+    }
+    for overlay in &mut overlays {
         if let SongLuaOverlayKind::Sprite { textures, .. } = &mut overlay.actor.kind {
             let pointer = overlay.table.to_pointer() as usize;
             let mut bindings = sprite_textures
@@ -872,6 +910,7 @@ where
             }
         }
     }
+    let draw_frames = crate::draw_capture::take(&lua, &overlays, &tracked_actors)?;
     let mut overlay_layers = overlays
         .iter()
         .map(|overlay| {
@@ -883,6 +922,7 @@ where
         })
         .collect::<Result<Vec<_>, _>>()?;
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
+    out.draw_frames = draw_frames.into_iter().map(|(_, frame)| frame).collect();
     for (layer, message, sound_path) in message_sounds {
         // Runtime listener calls were captured at their actual frame. Do not
         // also play the speculative sound attached to the named message.
@@ -1174,6 +1214,47 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     if let Some(index) = compiled.screen_overlay_index {
         let (layer, local) = overlay_map[index];
         outputs[layer].screen_overlay_index = Some(local);
+    }
+
+    for mut frame in compiled.draw_frames.drain(..) {
+        let owner = *frame
+            .owners
+            .first()
+            .ok_or("custom draw frame has no owner")?;
+        let (layer, _) = overlay_map[owner];
+        let remap = |index: &mut usize| -> Result<(), String> {
+            let &(target_layer, local) = overlay_map
+                .get(*index)
+                .ok_or("custom draw has an invalid overlay index")?;
+            if target_layer != layer {
+                return Err("custom draw crosses separately played song layers".to_owned());
+            }
+            *index = local;
+            Ok(())
+        };
+        for owner in &mut frame.owners {
+            remap(owner)?;
+        }
+        for op in &mut frame.ops {
+            match op {
+                crate::SongLuaDrawOp::Begin { capture, .. }
+                | crate::SongLuaDrawOp::Finish { capture } => remap(capture)?,
+                crate::SongLuaDrawOp::Draw {
+                    source: crate::SongLuaDrawSource::Overlay(index),
+                    ..
+                } => remap(index)?,
+                _ => {}
+            }
+        }
+        let frames = &mut outputs[layer].draw_frames;
+        if let Some(last) = frames.last_mut().filter(|last| last.second == frame.second) {
+            last.owner_ends
+                .extend(frame.owner_ends.iter().map(|end| last.ops.len() + end));
+            last.owners.extend(frame.owners);
+            last.ops.extend(frame.ops);
+        } else {
+            frames.push(frame);
+        }
     }
 
     for (global_index, mut overlay) in compiled.overlays.drain(..).enumerate() {

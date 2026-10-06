@@ -66,25 +66,17 @@ pub const SONG_LUA_TOP_SCREEN_OPTION_ROWS: &[&str] = &[
 pub const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
     "Underlay",
     "Overlay",
-    "BPMDisplay",
-    "LifeFrame",
-    "ScoreFrame",
-    "Lyrics",
     "SongBackground",
     "SongForeground",
-    "StageDisplay",
-    "SongTitle",
+    "In",
     "ScoreP1",
     "ScoreP2",
-    "SongMeterDisplayP1",
-    "SongMeterDisplayP2",
     "StepsDisplayP1",
     "StepsDisplayP2",
-    "LifeMeterBarP1",
-    "LifeMeterBarP2",
 ];
 
 pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
+    "BPMDisplay",
     "Header",
     "StepStatsPaneP1",
     "StepStatsPaneP2",

@@ -229,6 +229,8 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
                 texture_handle: deadlib_render_core::render_target_texture_handle(1),
                 width: 64,
                 height: 64,
+                viewport: [64, 64],
+                float_color: false,
                 alpha: true,
                 depth: true,
                 preserve: false,
@@ -244,6 +246,14 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
     let expected = target_frame(split);
     let mut actual = target_frame(joined);
     assert_eq!(compare_render_frames_semantic(&expected, &actual), Ok(()));
+    actual.render_targets[0].viewport[0] = 32;
+    let mismatch = compare_render_frames_semantic(&expected, &actual).unwrap_err();
+    assert_eq!(mismatch.field, "viewport");
+    actual.render_targets[0].viewport = [64, 64];
+    actual.render_targets[0].float_color = true;
+    let mismatch = compare_render_frames_semantic(&expected, &actual).unwrap_err();
+    assert_eq!(mismatch.field, "float_color");
+    actual.render_targets[0].float_color = false;
     actual.render_targets[0].depth = false;
     assert!(compare_render_frames_semantic(&expected, &actual).is_err());
 }

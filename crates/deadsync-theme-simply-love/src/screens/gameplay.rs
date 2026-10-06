@@ -1813,7 +1813,7 @@ fn intro_text_target_x(
         .mul_add(side_sign, screen_center_x())
 }
 
-fn push_system_stage_label(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
+fn push_stage_label(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
     let intro_text = state.stage_intro_text.as_ref();
     let is_restart_label = intro_text.starts_with("RESTART ");
     if intro_text.is_empty()
@@ -5044,8 +5044,8 @@ pub fn frame_layers<'a>(
                 },
             );
         }
+        ScreenLayer::Stage => push_stage_label(actors, state, asset_manager),
         ScreenLayer::System => {
-            push_system_stage_label(actors, state, asset_manager);
             push_system_profile_footer(actors, state, visual_policy, presentation_skeleton);
             push_sync_overlay(actors, state);
         }

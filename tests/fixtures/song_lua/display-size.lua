@@ -5,7 +5,10 @@ for index, name in ipairs({"ScreenTex", "VStripsTex", "HStripsTex"}) do
     local capture = Def.ActorFrameTexture{
         Name = name,
         InitCommand = function(self)
-            self:SetTextureName(name):SetWidth(width):SetHeight(height):Create()
+            -- Create truncates to integer image pixels; keep every chained
+            -- sample inside that viewport rather than the backing padding.
+            self:SetTextureName(name):SetWidth(width + 0.75):SetHeight(height + 0.75)
+                :EnableFloat(true):Create()
         end,
     }
     if index == 1 then

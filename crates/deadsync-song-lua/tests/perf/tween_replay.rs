@@ -6,7 +6,7 @@ use std::hint::black_box;
 mod baseline;
 
 // Insert the complete enum order from the existing behavior fixture below.
-const TARGETS: [SongLuaOverlayUpdateTarget; 80] = [
+const TARGETS: [SongLuaOverlayUpdateTarget; 82] = [
     SongLuaOverlayUpdateTarget::X,
     SongLuaOverlayUpdateTarget::Y,
     SongLuaOverlayUpdateTarget::Z,
@@ -87,6 +87,8 @@ const TARGETS: [SongLuaOverlayUpdateTarget; 80] = [
     SongLuaOverlayUpdateTarget::TexcoordVelocity,
     SongLuaOverlayUpdateTarget::Size,
     SongLuaOverlayUpdateTarget::StretchRect,
+    SongLuaOverlayUpdateTarget::AftCreated,
+    SongLuaOverlayUpdateTarget::AftPreserve,
 ];
 
 fn fingerprint(state: &SongLuaOverlayState) -> Vec<(String, Vec<u32>)> {
@@ -96,6 +98,7 @@ fn fingerprint(state: &SongLuaOverlayState) -> Vec<(String, Vec<u32>)> {
             let value = overlay_state_update_value(state, target);
             use SongLuaOverlayUpdateValue as V;
             let bits = match &value {
+                V::Bool(x) => vec![u32::from(*x)],
                 V::F32(x) => vec![x.to_bits()],
                 V::Vec2(x) => x.map(f32::to_bits).to_vec(),
                 V::Vec3(x) => x.map(f32::to_bits).to_vec(),

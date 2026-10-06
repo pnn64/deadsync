@@ -322,7 +322,13 @@ fn capture_dispatch_key_tracks_live_handlers_and_preserves_suppression() {
             .unwrap();
     }
     assert!(old.update(true, 0, true, "zoom_x", SongLuaOverlayUpdateValue::F32(9.0)));
-    assert!(new.update(false, 0, true, "zoom_x", SongLuaOverlayUpdateValue::F32(9.0)));
+    assert!(new.update(
+        false,
+        0,
+        true,
+        "zoom_x",
+        SongLuaOverlayUpdateValue::F32(9.0)
+    ));
     assert_capture(&new, &old);
     assert_eq!(
         new.lua

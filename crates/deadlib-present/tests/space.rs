@@ -62,7 +62,9 @@ fn offscreen_camera_uses_logical_bounds_without_window_centering() {
     let targets = [[1024, 64], [64, 1024], [0, 0]].map(|size| RenderTarget {
         texture_handle: render_target_texture_handle(u64::from(size[0]) + 1),
         size,
+        viewport: [40, 20],
         logical_size: [40.0, 20.0],
+        float_color: false,
         alpha: true,
         depth: false,
         preserve: false,
@@ -89,6 +91,7 @@ fn offscreen_camera_uses_logical_bounds_without_window_centering() {
             (target.size[0].max(1), target.size[1].max(1))
         );
         let corner = pass.cameras[0].transform_point3(Vec3::new(20.0, 10.0, 0.0));
+        assert_eq!(pass.viewport, [40.min(pass.width), 20.min(pass.height)]);
         assert!(corner.abs_diff_eq(Vec3::new(1.0, 1.0, 0.0), 1e-6));
     }
 }

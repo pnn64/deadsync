@@ -544,7 +544,12 @@ mod tests {
                     texture,
                     uv_tex_shift,
                     ..
-                } if texture.contains("arrow_tex") => Some(*uv_tex_shift),
+                } if texture
+                    .texture_key()
+                    .is_some_and(|key| key.contains("arrow_tex")) =>
+                {
+                    Some(*uv_tex_shift)
+                }
                 _ => None,
             })
         };

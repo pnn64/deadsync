@@ -15,6 +15,10 @@ mod compat;
 mod compile;
 mod compile_timing;
 mod crypto;
+mod draw_capture;
+pub use draw_capture::{
+    DrawFrame as SongLuaDrawFrame, DrawOp as SongLuaDrawOp, DrawSource as SongLuaDrawSource,
+};
 mod eases;
 mod files;
 mod host;
@@ -1340,6 +1344,9 @@ impl SongLuaNoteskinResolver {
 
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
+    /// Session entry paths list backgrounds first, then foregrounds.
+    /// A single-entry compile defaults to the foreground layer.
+    pub background_layer_count: usize,
     pub song_dir: PathBuf,
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
@@ -1371,6 +1378,7 @@ pub struct SongLuaCompileContext {
 impl SongLuaCompileContext {
     pub fn new(song_dir: impl Into<PathBuf>, main_title: impl Into<String>) -> Self {
         Self {
+            background_layer_count: 0,
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
@@ -1731,6 +1739,8 @@ pub struct CompiledSongLua<OverlayActor> {
     pub messages: Vec<SongLuaMessageEvent>,
     pub sound_paths: Vec<PathBuf>,
     pub overlays: Vec<OverlayActor>,
+    /// Chronological explicit draw passes, baked on the song-load worker.
+    pub draw_frames: Vec<SongLuaDrawFrame>,
     /// Captured ScreenGameplay translation and vibration shared by all screen draws.
     pub screen_overlay_index: Option<usize>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
@@ -1746,7 +1756,7 @@ pub struct CompiledSongLua<OverlayActor> {
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
     /// Underlay, Overlay, and SongBackground retain their own visibility/tweens.
-    pub screen_layers: [SongLuaCapturedActor; 3],
+    pub screen_layers: [SongLuaCapturedActor; 4],
     pub hidden_players: [bool; LUA_PLAYERS],
     pub note_hides: Vec<SongLuaNoteHideWindow>,
     pub column_offsets: Vec<SongLuaColumnOffsetWindow>,
@@ -1768,6 +1778,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             messages: Vec::new(),
             sound_paths: Vec::new(),
             overlays: Vec::new(),
+            draw_frames: Vec::new(),
             screen_overlay_index: None,
             overlay_eases: Vec::new(),
             overlay_update_unit: SongLuaTimeUnit::Beat,
@@ -1964,12 +1975,15 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     WrapperState,
     UpdateTracks {
         tracks: Vec<SongLuaOverlayRuntimeUpdateTrack>,
+        draw_frames: Arc<[SongLuaDrawFrame]>,
     },
     ActorFrameTexture {
         capture_name: String,
         alpha_buffer: bool,
         depth_buffer: bool,
-        preserve_texture: bool,
+        float_buffer: bool,
+        /// Integer viewport fixed by the successful Create call.
+        capture_size: Option<[f32; 2]>,
     },
     ActorProxy {
         target: SongLuaProxyTarget,
@@ -1999,6 +2013,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         vertices: Arc<[SongLuaOverlayMeshVertex]>,
         texture_path: Option<PathBuf>,
         texture_key: Option<Arc<str>>,
+        capture_name: Option<String>,
     },
     Model {
         layers: Arc<[SongLuaOverlayModelLayer<ModelVertex>]>,
@@ -2600,6 +2615,8 @@ pub struct SongLuaOverlayState {
     pub z_bias: f32,
     pub draw_order: i32,
     pub draw_by_z_position: bool,
+    pub aft_created: bool,
+    pub aft_preserve: bool,
     pub halign: f32,
     pub valign: f32,
     pub text_align: TextAlign,
@@ -2696,6 +2713,8 @@ impl Default for SongLuaOverlayState {
             z_bias: 0.0,
             draw_order: 0,
             draw_by_z_position: false,
+            aft_created: false,
+            aft_preserve: false,
             halign: 0.5,
             valign: 0.5,
             text_align: TextAlign::Center,
@@ -2844,6 +2863,8 @@ pub struct SongLuaOverlayStateDelta {
     pub z_bias: Option<f32>,
     pub draw_order: Option<i32>,
     pub draw_by_z_position: Option<bool>,
+    pub aft_created: Option<bool>,
+    pub aft_preserve: Option<bool>,
     pub halign: Option<f32>,
     pub valign: Option<f32>,
     pub text_align: Option<TextAlign>,
@@ -2931,6 +2952,8 @@ impl SongLuaOverlayStateDelta {
             Target::ZBias => self.z_bias.is_some(),
             Target::DrawOrder => self.draw_order.is_some(),
             Target::DrawByZPosition => self.draw_by_z_position.is_some(),
+            Target::AftPreserve => self.aft_preserve.is_some(),
+            Target::AftCreated => self.aft_created.is_some(),
             Target::HAlign => self.halign.is_some(),
             Target::VAlign => self.valign.is_some(),
             Target::TextAlign => self.text_align.is_some(),
@@ -3266,6 +3289,12 @@ pub const fn apply_overlay_delta(
     if let Some(value) = delta.draw_by_z_position {
         state.draw_by_z_position = value;
     }
+    if let Some(value) = delta.aft_preserve {
+        state.aft_preserve = value;
+    }
+    if let Some(value) = delta.aft_created {
+        state.aft_created = value;
+    }
     if let Some(value) = delta.halign {
         state.halign = value;
     }
@@ -3528,6 +3557,16 @@ pub fn overlay_state_lerp(
         && t >= 1.0 - f32::EPSILON
     {
         from.draw_by_z_position = to;
+    }
+    if let Some(to) = delta.aft_preserve
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.aft_preserve = to;
+    }
+    if let Some(to) = delta.aft_created
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.aft_created = to;
     }
     if let Some(to) = delta.halign {
         from.halign = actor_lerp(from.halign, to, t);
@@ -3862,6 +3901,8 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.z_bias.is_none()
         && delta.draw_order.is_none()
         && delta.draw_by_z_position.is_none()
+        && delta.aft_preserve.is_none()
+        && delta.aft_created.is_none()
         && delta.halign.is_none()
         && delta.valign.is_none()
         && delta.text_align.is_none()
@@ -3956,6 +3997,12 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.draw_by_z_position.is_some() {
         into.draw_by_z_position = from.draw_by_z_position;
+    }
+    if from.aft_preserve.is_some() {
+        into.aft_preserve = from.aft_preserve;
+    }
+    if from.aft_created.is_some() {
+        into.aft_created = from.aft_created;
     }
     if from.halign.is_some() {
         into.halign = from.halign;
@@ -4231,6 +4278,8 @@ pub fn overlay_delta_intersection(
     copy_pair!(z_bias);
     copy_pair!(draw_order);
     copy_pair!(draw_by_z_position);
+    copy_pair!(aft_preserve);
+    copy_pair!(aft_created);
     copy_pair!(halign);
     copy_pair!(valign);
     copy_pair!(text_align);
@@ -4691,6 +4740,8 @@ pub enum SongLuaOverlayUpdateTarget {
     TexcoordVelocity,
     Size,
     StretchRect,
+    AftCreated,
+    AftPreserve,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -5240,23 +5291,23 @@ mod tests {
         SONG_LUA_RUNTIME_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
         SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaColumnOffsetBuildParams,
         SongLuaColumnOffsetSample, SongLuaColumnTransformTarget, SongLuaCompileContext,
-        SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent,
-        SongLuaModWindow, SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaOverlayActor,
-        SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayCompileActor,
-        SongLuaOverlayEase, SongLuaOverlayEaseBuildParams, SongLuaOverlayKind,
-        SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
-        SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget,
-        SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
-        SongLuaSpeedMod, SongLuaSpriteState, SongLuaTextGlowMode, SongLuaTimeUnit,
-        THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
-        UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers, actor_overlay_initial_state,
-        add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
-        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
-        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
-        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
-        compile_song_lua_layers_with_actors, compile_song_lua_with_actors,
-        compile_song_runtime_values, compiled_song_lua_sound_paths, create_chunk_env_proxy,
-        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
+        SongLuaDifficulty, SongLuaDrawOp, SongLuaDrawSource, SongLuaEaseTarget, SongLuaEaseWindow,
+        SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow, SongLuaNoteskinResolver,
+        SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock,
+        SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
+        SongLuaOverlayKind, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
+        SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
+        SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext,
+        SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaSpriteState,
+        SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+        TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers,
+        actor_overlay_initial_state, add_actor_child_from_path as add_lua_actor_child_from_path,
+        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
+        capture_function_action_blocks, capture_indexed_actor_function_blocks,
+        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
+        column_offset_windows_from_samples, compile_song_lua_layers_with_actors,
+        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
+        create_chunk_env_proxy, create_debug_table, create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -14795,6 +14846,67 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn capture_mesh_copies_vertex_input() {
+        let song_dir = test_dir("capture-mesh-copy");
+        let entry = song_dir.join("default.lua");
+        for binding in [
+            "self:GetParent():GetChild('Capture'):GetTexture()",
+            "'Capture'",
+        ] {
+            fs::write(
+            &entry,
+            r#"
+local vertices = {
+    {{0, 0, 0}, {1, 1, 1, 1}, {0, 0}},
+    {{32, 0, 0}, {1, 1, 1, 1}, {1, 0}},
+    {{0, 32, 0}, {1, 1, 1, 1}, {0, 1}},
+}
+local state = {Mode="DrawMode_Triangles", First=1, Num=-1}
+return Def.ActorFrame{
+    Def.ActorFrameTexture{
+        Name="Capture",
+        InitCommand=function(self) self:SetTextureName("Capture"):SetWidth(64):SetHeight(64):Create() end,
+    },
+    Def.ActorMultiVertex{
+        InitCommand=function(self)
+            self:SetTexture(CAPTURE_BINDING)
+                :SetDrawState(state):SetVertices(vertices)
+            vertices[2][1][1] = 999
+            vertices[2][3][1] = 0.25
+            state.First = 3
+        end,
+    },
+}
+"#.replace("CAPTURE_BINDING", binding),
+        )
+        .unwrap();
+            let compiled = test_compile_song_lua(
+                &entry,
+                &SongLuaCompileContext::new(&song_dir, "Capture mesh copy"),
+            )
+            .unwrap();
+            let mesh = compiled
+                .overlays
+                .iter()
+                .find_map(|overlay| match &overlay.kind {
+                    SongLuaOverlayKind::ActorMultiVertex {
+                        vertices,
+                        capture_name,
+                        texture_path,
+                        ..
+                    } => Some((vertices, capture_name, texture_path)),
+                    _ => None,
+                })
+                .expect("capture mesh must remain compiled");
+            assert_eq!(mesh.1.as_deref(), Some("Capture"));
+            assert!(mesh.2.is_none());
+            assert_eq!(mesh.0.len(), 3);
+            assert_eq!(mesh.0[1].pos, [32.0, 0.0]);
+            assert_eq!(mesh.0[1].uv, [1.0, 0.0]);
+        }
+    }
+
+    #[test]
     fn compile_song_lua_triangulates_actor_multi_vertex_line_strip() {
         let song_dir = test_dir("actor-multi-vertex-line-strip");
         let entry = song_dir.join("default.lua");
@@ -16348,6 +16460,25 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_matches_native_child_tables() {
+        let song_dir = test_dir("native-child-table");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            include_str!("../../../tests/fixtures/song-lua/child-table.lua"),
+        )
+        .unwrap();
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Native Child Table"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+    }
+
+    #[test]
     fn compile_song_lua_supports_propagate_command_helpers() {
         let song_dir = test_dir("propagate-command");
         let entry = song_dir.join("default.lua");
@@ -16448,6 +16579,221 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn custom_draws_keep_capture_order_and_snapshots() {
+        use crate::{SongLuaDrawOp, SongLuaDrawSource};
+        let song_dir = test_dir("ordered-draw-capture");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local vertices = {
+    {{0,0,0},{1,1,1,1},{0,0}}, {{0,10,0},{1,1,1,1},{0,1}},
+    {{10,0,0},{1,1,1,1},{1,0}}, {{10,10,0},{1,1,1,1},{1,1}},
+}
+return Def.ActorFrame {
+    Name="DrawRoot",
+    InitCommand=function(self) self:xy(40,50):SetFOV(45) end,
+    OnCommand=function(self)
+        local target, mesh = self:GetChild("target"), self:GetChild("mesh")
+        local screen = SCREENMAN:GetTopScreen()
+        local children = screen:GetChildren()
+        local foreground = screen:GetChild("SongForeground")
+        assert(self:GetParent() == foreground)
+        assert(foreground:GetChildren().DrawRoot == self)
+        for _, name in ipairs({"LifeMeter", "LifeMeterBarP1", "SongTitle", "BPMDisplay"}) do
+            assert(children[name] == nil, name .. " is not a top-level screen child")
+        end
+        local engine_hud = {}
+        for _, name in ipairs({"LifeP1", "LifeP2", "ScoreP1", "ScoreP2", "StepsDisplayP1", "StepsDisplayP2"}) do
+            assert(children[name]:GetVisible(), "hibernation preserves visibility")
+            engine_hud[#engine_hud+1] = children[name]
+        end
+        target:SetSize(640,480):EnablePreserveTexture(true):Create()
+        local texture = target:GetTexture()
+        assert(texture:GetTextureWidth() == 1024 and texture:GetTextureHeight() == 512)
+        mesh:SetTexture(texture):SetVertices(vertices)
+            :SetDrawState{Mode="DrawMode_QuadStrip",First=1,Num=-1}
+        self:SetDrawFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            texture:BeginRenderingTo(beat >= 1)
+            mesh:xy(beat,0):diffuse(1,0,0,1):Draw()
+            mesh:xy(beat+20,0):diffuse(0,1,0,1):Draw()
+            vertices[1][1][2] = beat
+            mesh:SetVertices(vertices):xy(beat+40,0):diffuse(0,0,1,1):Draw()
+            texture:FinishRenderingTo()
+            local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+            player:visible(true):Draw():visible(false)
+            local screen = SCREENMAN:GetTopScreen()
+            screen:GetChild("Underlay"):Draw()
+            screen:GetChild("Overlay"):Draw()
+            screen:GetChild("SongBackground"):Draw()
+            for _, actor in ipairs(engine_hud) do actor:visible(true):Draw() end
+        end)
+    end,
+    Def.ActorFrameTexture{Name="target"},
+    Def.ActorMultiVertex{Name="mesh"},
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Ordered Draw");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(
+            compiled.info.unsupported_perframes, 0,
+            "{:?}",
+            compiled.info
+        );
+        assert_eq!(compiled.draw_frames.len(), 121);
+        for (index, frame) in compiled.draw_frames.iter().enumerate() {
+            assert!((frame.second - index as f32 / 60.0).abs() < 1e-5);
+            assert_eq!(frame.ops.len(), 9);
+            assert!(
+                matches!(frame.ops[0], SongLuaDrawOp::Begin{preserve, ..} if preserve == (index >= 60))
+            );
+            assert!(matches!(frame.ops[4], SongLuaDrawOp::Finish { .. }));
+            for pass in 0..3 {
+                let SongLuaDrawOp::Draw {
+                    state,
+                    parents,
+                    camera,
+                    vertices,
+                    ..
+                } = &frame.ops[pass + 1]
+                else {
+                    panic!("missing mesh pass")
+                };
+                assert!((state.x - frame.second - pass as f32 * 20.0).abs() < 1e-5);
+                assert_eq!(state.diffuse[pass], 1.0);
+                assert_eq!(state.diffuse[(pass + 1) % 3], 0.0);
+                assert!(parents.is_empty());
+                assert!(camera.is_none());
+                assert_eq!(vertices.as_ref().expect("copied mesh").len(), 6);
+            }
+            let SongLuaDrawOp::Draw {
+                source,
+                state,
+                parents,
+                camera,
+                ..
+            } = &frame.ops[5]
+            else {
+                panic!("missing player draw")
+            };
+            assert_eq!(*source, SongLuaDrawSource::Player(0));
+            assert!(state.visible);
+            assert!(
+                parents
+                    .iter()
+                    .any(|state| state.x == 40.0 && state.y == 50.0)
+            );
+            assert_eq!(camera.expect("restored caller camera").fov, Some(45.0));
+            for layer in 0..3 {
+                assert!(matches!(frame.ops[layer + 6], SongLuaDrawOp::Draw {
+                    source: SongLuaDrawSource::ScreenLayer(index), ..
+                } if index == layer));
+            }
+        }
+        let SongLuaDrawOp::Draw { vertices, .. } = &compiled.draw_frames[0].ops[1] else {
+            unreachable!()
+        };
+        assert_eq!(vertices.as_ref().unwrap()[0].pos[1], 0.0);
+    }
+
+    #[test]
+    fn song_roots_have_layer_parents() {
+        let song_dir = test_dir("song-layer-parents");
+        let paths = [
+            song_dir.join("background.lua"),
+            song_dir.join("foreground.lua"),
+        ];
+        for (path, name, parent) in [
+            (&paths[0], "BackgroundRoot", "SongBackground"),
+            (&paths[1], "ForegroundRoot", "SongForeground"),
+        ] {
+            fs::write(
+                path,
+                format!(
+                    r#"
+return Def.ActorFrame {{
+    Name="{name}",
+    InitCommand=function(self)
+        assert(self:GetParent():GetName() == "{parent}")
+    end,
+    OnCommand=function(self)
+        local screen = SCREENMAN:GetTopScreen()
+        local layer = screen:GetChild("{parent}")
+        assert(self:GetParent() == layer)
+        assert(layer:GetParent() == screen)
+        assert(layer:GetChildren()[self:GetName()] == self)
+        mod_actions = mod_actions or {{}}
+        table.insert(mod_actions, {{1,"{name}:{parent}",true}})
+    end,
+}}
+"#
+                ),
+            )
+            .unwrap();
+        }
+        let mut context = SongLuaCompileContext::new(&song_dir, "Layer Parents");
+        context.background_layer_count = 1;
+        let compiled =
+            test_compile_song_lua_layers(&[paths[0].as_path(), paths[1].as_path()], 1, &context)
+                .unwrap();
+        assert_eq!(compiled.len(), 2);
+        for layer in &compiled {
+            let mut messages = layer
+                .messages
+                .iter()
+                .map(|message| message.message.as_str())
+                .collect::<Vec<_>>();
+            messages.sort_unstable();
+            assert_eq!(
+                messages,
+                [
+                    "BackgroundRoot:SongBackground",
+                    "ForegroundRoot:SongForeground"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn custom_draws_keep_empty_tail_frames() {
+        let song_dir = test_dir("draw-empty-tail");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame {
+    Name="Root",
+    OnCommand=function(self)
+        local child = self:GetChild("Quad")
+        self:SetDrawFunction(function()
+            if GAMESTATE:GetSongBeat() >= 1 then self:visible(false) return end
+            child:Draw()
+        end)
+    end,
+    Def.Quad {Name="Quad"},
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Draw Tail");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.draw_frames.len(), 121);
+        assert_eq!(compiled.draw_frames[59].ops.len(), 1);
+        assert!(
+            compiled.draw_frames[60..]
+                .iter()
+                .all(|frame| frame.ops.is_empty() && frame.owners.len() == 1)
+        );
+    }
+
+    #[test]
     fn compile_song_lua_accepts_set_draw_function() {
         let song_dir = test_dir("set-draw-function");
         let entry = song_dir.join("default.lua");
@@ -16482,6 +16828,60 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages[0].message, "true");
         assert_eq!(compiled.overlays.len(), 1);
         assert!(compiled.overlays[0].initial_state.visible);
+    }
+
+    #[test]
+    fn draw_callbacks_replay_after_each_update() {
+        let song_dir = test_dir("draw-replay");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Name="DrawRoot",
+    OnCommand=function(self)
+        local screen = SCREENMAN:GetTopScreen()
+        self:SetDrawFunction(function()
+            screen:x(GAMESTATE:GetSongBeat() * 10)
+        end)
+    end,
+    Def.ActorFrame{
+        Name="Skipped",
+        OnCommand=function(self)
+            self:SetDrawFunction(function() self:x(999) end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Draw Replay");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let screen = compiled.screen_overlay_index.expect("captured screen");
+        let skipped = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Skipped"))
+            .unwrap();
+        assert_eq!(compiled.overlays[skipped].initial_state.x, 0.0);
+        assert!(
+            !compiled
+                .overlay_updates
+                .iter()
+                .any(|track| track.overlay_index == skipped)
+        );
+        let x = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == screen && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .expect("draw-only callbacks need chronological replay");
+        for beat in [0.5, 1.0, 2.0] {
+            assert!(x.samples.iter().any(|sample| (sample.time - beat).abs() < 1e-5 && matches!(sample.value, SongLuaOverlayUpdateValue::F32(value) if (value - beat * 10.0).abs() < 1e-4)), "missing draw state at beat {beat}");
+        }
     }
 
     #[test]
@@ -16613,7 +17013,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_ignores_unsupported_draw_function_errors() {
+    fn compile_song_lua_reports_draw_function_errors() {
         let song_dir = test_dir("set-draw-function-error");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -16642,6 +17042,8 @@ return Def.ActorFrame{
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "draw-ok");
+        assert_eq!(compiled.info.unsupported_perframes, 1);
+        assert!(compiled.info.unsupported_perframe_captures[0].contains("draw callback"));
     }
 
     #[test]
@@ -17795,13 +18197,10 @@ return Def.ActorFrame{
             "PlayerP2",
             "Underlay",
             "Overlay",
-            "BPMDisplay",
             "SongForeground",
             "SongBackground",
             "ScoreP1",
             "ScoreP2",
-            "SongTitle",
-            "SongMeterDisplayP1",
             "StepsDisplayP1",
         }
         for _, name in ipairs(wanted) do
@@ -17815,8 +18214,8 @@ return Def.ActorFrame{
                 1,
                 string.format(
                     "%s:%s:%s:%s:%s:%s",
-                    tostring(top:GetNumChildren() >= 20),
-                    children.BPMDisplay:GetText(),
+                    tostring(top:GetNumChildren() >= 12),
+                    underlay_children.BPMDisplay:GetText(),
                     children.StepsDisplayP1:GetText(),
                     underlay_children.P1Score:GetName(),
                     underlay_children.SongMeter:GetChild("SongTitle"):GetText(),
@@ -19386,6 +19785,7 @@ return Def.ActorFrame{
             self:EnableAlphaBuffer(true)
             self:EnableDepthBuffer(true)
             self:EnablePreserveTexture(true)
+            self:SetSize(640, 480):Create()
         end,
         Def.ActorProxy{
             Name="ProxyP1",
@@ -19430,11 +19830,12 @@ return Def.ActorFrame{
             compiled.overlays[0].kind,
             SongLuaOverlayKind::ActorFrameTexture {
                 alpha_buffer: true,
+                float_buffer: false,
                 depth_buffer: true,
-                preserve_texture: true,
                 ..
             }
         ));
+        assert!(compiled.overlays[0].initial_state.aft_preserve);
         assert!(matches!(
             compiled.overlays[1].kind,
             SongLuaOverlayKind::ActorProxy {
@@ -19455,6 +19856,175 @@ return Def.ActorFrame{
             compiled.overlays[2].initial_state.effect_magnitude,
             [8.0, 4.0, 0.0]
         );
+    }
+
+    #[test]
+    fn compile_song_lua_freezes_aft_creation_and_captures_late_creation() {
+        let song_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua")
+            .canonicalize()
+            .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "AFT creation");
+        context.music_length_seconds = 2.0;
+        context.song_timing_bpms = vec![(0.0, 60.0)];
+        let compiled = test_compile_song_lua(&song_dir.join("aft-create.lua"), &context).unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0);
+        let index = |name: &str| {
+            compiled
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == Some(name))
+                .unwrap()
+        };
+        let frozen = &compiled.overlays[index("Frozen")];
+        assert!(matches!(&frozen.kind, TestOverlayKind::ActorFrameTexture {
+            capture_name, capture_size: Some([65.0, 33.0]),
+            alpha_buffer: true, depth_buffer: true, float_buffer: true,
+        } if capture_name == "FrozenCapture"));
+        assert_eq!(frozen.initial_state.size, Some([17.0, 9.0]));
+        assert!(frozen.initial_state.aft_created);
+        assert!(matches!(
+            compiled.overlays[index("Unused")].kind,
+            TestOverlayKind::ActorFrameTexture {
+                capture_size: None,
+                ..
+            }
+        ));
+        assert!(!compiled.overlays[index("Unused")].initial_state.aft_created);
+        let late = index("Late");
+        assert!(matches!(
+            compiled.overlays[late].kind,
+            TestOverlayKind::ActorFrameTexture {
+                capture_size: Some([23.0, 11.0]),
+                ..
+            }
+        ));
+        assert!(!compiled.overlays[late].initial_state.aft_created);
+        assert!(matches!(
+            compiled.overlays[index("LateOutput")].kind,
+            TestOverlayKind::AftSprite { .. }
+        ));
+        assert!(
+            !compiled.overlays[index("LateOutput")]
+                .initial_state
+                .sprite_texture
+        );
+        for (overlay, target) in [
+            (late, SongLuaOverlayUpdateTarget::AftCreated),
+            (
+                index("LateOutput"),
+                SongLuaOverlayUpdateTarget::SpriteTexture,
+            ),
+            (index("Frozen"), SongLuaOverlayUpdateTarget::AftPreserve),
+        ] {
+            let track = compiled
+                .overlay_updates
+                .iter()
+                .find(|track| track.overlay_index == overlay && track.target == target)
+                .unwrap_or_else(|| panic!("missing {target:?} track"));
+            assert!(track.samples.iter().any(|sample| sample.time >= 1.0
+                && sample.value == SongLuaOverlayUpdateValue::Bool(true)));
+            assert!(
+                track
+                    .samples
+                    .iter()
+                    .filter(|sample| sample.time < 1.0)
+                    .all(|sample| sample.value == SongLuaOverlayUpdateValue::Bool(false))
+            );
+        }
+    }
+
+    #[test]
+    fn custom_draws_skip_uncreated_afts_and_wrap_created_callbacks() {
+        let song_dir = test_dir("aft-draw-lifetime");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local unused, late = self:GetChild("Unused"), self:GetChild("Late")
+        local child = unused:GetChild("DirectChild")
+        self:SetDrawFunction(function()
+            unused:Draw()
+            late:Draw()
+            -- Explicit draws use the caller's stack even for an uncreated parent.
+            child:Draw()
+        end)
+        self:SetUpdateFunction(function()
+            if GAMESTATE:GetSongBeat() >= 1 and late:GetTexture() == nil then
+                late:SetSize(32,16):Create():SetSize(99,88)
+            end
+        end)
+    end,
+    Def.ActorFrameTexture{
+        Name="Unused",
+        InitCommand=function(self)
+            self:SetDrawFunction(function() error("uncreated callback must not run") end)
+        end,
+        Def.Quad{ Name="DirectChild", InitCommand=function(self) self:zoomto(4,4) end },
+    },
+    Def.ActorFrameTexture{
+        Name="Late",
+        OnCommand=function(self)
+            local child = self:GetChild("CapturedChild")
+            self:SetDrawFunction(function() child:Draw() end)
+        end,
+        Def.Quad{ Name="CapturedChild", InitCommand=function(self) self:zoomto(4,4) end },
+    },
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "AFT draw lifetime");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let index = |name: &str| {
+            compiled
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == Some(name))
+                .unwrap()
+        };
+        let late = index("Late");
+        assert!(matches!(
+            compiled.overlays[late].kind,
+            TestOverlayKind::ActorFrameTexture {
+                capture_size: Some([32.0, 16.0]),
+                ..
+            }
+        ));
+        assert!(!compiled.draw_frames.is_empty());
+        for frame in compiled.draw_frames.iter() {
+            let captures: Vec<_> = frame
+                .ops
+                .iter()
+                .filter_map(|op| {
+                    if let SongLuaDrawOp::Begin { capture, .. } = op {
+                        Some(*capture)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(
+                captures,
+                if frame.second < 1.0 {
+                    vec![]
+                } else {
+                    vec![late]
+                }
+            );
+            assert!(matches!(frame.ops.last(), Some(SongLuaDrawOp::Draw {
+                source: SongLuaDrawSource::Overlay(child), ..
+            }) if *child == index("DirectChild")));
+            if frame.second >= 1.0 {
+                assert!(matches!(frame.ops[1], SongLuaDrawOp::Draw {
+                    source: SongLuaDrawSource::Overlay(child), ..
+                } if child == index("CapturedChild")));
+                assert!(matches!(frame.ops[2], SongLuaDrawOp::Finish {capture} if capture == late));
+            }
+        }
     }
 
     #[test]
@@ -19522,7 +20092,7 @@ return Def.ActorFrame{
     Def.ActorFrameTexture{
         InitCommand=function(self)
             capture = self
-            self:Create()
+            self:SetSize(640, 480):Create()
         end,
         Def.ActorProxy{
             ProxyStartMessageCommand=function(self)
@@ -19601,7 +20171,7 @@ return Def.ActorFrame{
     Def.ActorFrameTexture{
         InitCommand=function(self)
             capture = self
-            self:Create()
+            self:SetSize(640, 480):Create()
         end,
         Def.ActorProxy{
             Name="LocalProxy",
@@ -19767,8 +20337,12 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::ActorFrameTexture { .. }
+            SongLuaOverlayKind::ActorFrameTexture {
+                capture_size: Some([1.0, 1.0]),
+                ..
+            }
         ));
+        assert!(compiled.overlays[0].initial_state.aft_created);
         assert!(compiled.overlays[0].initial_state.visible);
     }
 
@@ -19802,9 +20376,30 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Manual Player Draw"),
         )
         .unwrap();
-        assert!(!compiled.hidden_players[0]);
-        assert!(compiled.player_actors[0].initial_state.visible);
-        assert_eq!(compiled.player_actors[0].initial_state.x, 222.0);
+        assert!(compiled.hidden_players[0]);
+        assert!(!compiled.player_actors[0].initial_state.visible);
+        assert_eq!(compiled.player_actors[0].initial_state.x, 333.0);
+        let draws: Vec<_> = compiled
+            .draw_frames
+            .iter()
+            .flat_map(|frame| &frame.ops)
+            .filter_map(|op| match op {
+                SongLuaDrawOp::Draw {
+                    source: SongLuaDrawSource::Player(0),
+                    state,
+                    ..
+                } => Some(state),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !draws.is_empty(),
+            "every explicit draw retains its own pose"
+        );
+        for state in draws {
+            assert!(state.visible);
+            assert_eq!(state.x, 222.0);
+        }
         assert!(compiled.player_actors[0].manual_hud_draw);
     }
 
@@ -22982,9 +23577,10 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn top_screen_theme_child_names_include_compat_children() {
-        assert!(TOP_SCREEN_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
+    fn theme_children_follow_screen_hierarchy() {
+        assert!(!TOP_SCREEN_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
         assert!(TOP_SCREEN_THEME_CHILD_NAMES.contains(&"StepsDisplayP2"));
+        assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
         assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"StepStatsPaneP1"));
         assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"SongMeter"));
     }

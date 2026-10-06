@@ -182,6 +182,8 @@ fn sphere_material_pixels() {
             texture_handle: target,
             width: 64,
             height: 64,
+            viewport: [64, 64],
+            float_color: false,
             alpha: true,
             depth: true,
             preserve: false,

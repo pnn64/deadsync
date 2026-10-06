@@ -26,7 +26,7 @@ pub(super) fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let transform = Matrix4::from_translation(Vector3::new(base_x, base_y, mesh.world_z))
         * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
         * mesh.local_transform;
-    let texture_key = mesh.texture.as_ref();
+    let texture_key = mesh.texture.texture_key().expect("asset mesh baseline");
     let texture_key_ptr = str_ptr(texture_key);
     let texture_handle = texture_cache.texture_handle(texture_ctx, texture_key_ptr, texture_key);
     let actor_blend = style.blend.unwrap_or(mesh.blend);

@@ -20,6 +20,15 @@ pub type TextureHandle = u64;
 /// Engine cameras output OpenGL clip coordinates (-w <= z <= w). Backends
 /// whose clip depth is 0 <= z <= w must remap z to (z + w) / 2 before clipping.
 pub type ProjectionMatrix = Matrix4;
+
+/// Clamp a target's pixel viewport to its backing allocation.
+pub fn render_target_viewport(frame: &RenderTargetFrame) -> [u32; 2] {
+    [
+        frame.viewport[0].clamp(1, frame.width.max(1)),
+        frame.viewport[1].clamp(1, frame.height.max(1)),
+    ]
+}
+
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 /// Render-target handles occupy a namespace that can never overlap asset-store
 /// handles. Backends resolve these from their render-thread-owned offscreen

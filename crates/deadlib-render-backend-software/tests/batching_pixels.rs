@@ -50,7 +50,7 @@ mod backend {
                     96,
                     start,
                     start + rows.len() / 96,
-                    rows,
+                    &mut byte_writer(rows),
                     fixed,
                     &mut [],
                 );

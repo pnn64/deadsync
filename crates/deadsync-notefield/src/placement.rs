@@ -269,6 +269,34 @@ impl NotefieldCameraCache {
         self.camera.zip(self.view)
     }
 
+    /// Player::Draw installs a fresh menu camera using that draw's GetX/GetY.
+    /// Return the native screen-space camera and the local field tilt separately:
+    /// the caller/player matrix precedes tilt, but follows camera projection.
+    #[must_use]
+    pub fn draw_camera(&self, position: [f32; 2]) -> Option<(Matrix4, Matrix4)> {
+        let key = self.key?;
+        let width = f32::from_bits(key.screen_w);
+        let height = f32::from_bits(key.screen_h);
+        let center_offset = f32::from_bits(key.center_y) - 0.5 * height;
+        let vanish_x = sm_scale(f32::from_bits(key.skew), 0.1, 1.0, position[0], 0.5 * width);
+        let (projection, view) = menu_camera(width, height, vanish_x, position[1] + center_offset)?;
+        let reverse = if key.reverse { -1.0 } else { 1.0 };
+        let tilt = f32::from_bits(key.tilt).clamp(-1.0, 1.0);
+        let zoom = 0.1f32.mul_add(-tilt.abs(), 1.0);
+        let y_offset = if tilt > 0.0 {
+            -45.0 * tilt
+        } else {
+            20.0 * tilt
+        } * reverse;
+        // Actor::BeginDraw uses Y-down rotations. Conjugating the established
+        // world-space tilt flips X rotation while retaining native translation.
+        let field = Matrix4::from_translation(Vector3::new(0.0, y_offset + center_offset, 0.0))
+            * Matrix4::from_rotation_x((30.0 * tilt * reverse).to_radians())
+            * Matrix4::from_scale(Vector3::splat(zoom))
+            * Matrix4::from_translation(Vector3::new(0.0, -center_offset, 0.0));
+        Some((projection * view, field))
+    }
+
     #[must_use]
     pub const fn stats(&self) -> NotefieldCameraCacheStats {
         self.stats
@@ -290,43 +318,10 @@ pub(crate) fn notefield_camera(
     skew: f32,
     reverse: bool,
 ) -> Option<(Matrix4, Matrix4)> {
-    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
-        return None;
-    }
-
     let half_w = 0.5 * screen_w;
     let half_h = 0.5 * screen_h;
-
-    let fov_deg = 45.0_f32;
-    let theta = (0.5 * fov_deg).to_radians();
-    let tan_theta = theta.tan();
-    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
-        return None;
-    }
-    let dist = half_w / tan_theta;
-    if !dist.is_finite() || dist <= 0.0 {
-        return None;
-    }
-
     let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
-    let vanish_y = center_y;
-
-    let near = 1.0_f32;
-    let far = dist + 1000.0_f32;
-
-    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
-    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
-    vp_x -= half_w;
-    vp_y -= half_h;
-    let l = (vp_x - half_w) / dist;
-    let r = (vp_x + half_w) / dist;
-    let b = (vp_y + half_h) / dist;
-    let t = (vp_y - half_h) / dist;
-    let proj = rage_frustum(l, r, b, t, near, far);
-
-    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
-    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = glam::camera::rh::view::look_at_mat4(eye, at, Vector3::Y);
+    let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, center_y)?;
 
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
     let tilt = tilt.clamp(-1.0, 1.0);
@@ -356,6 +351,50 @@ pub(crate) fn notefield_camera(
 
     let eye = view * world_to_screen * field;
     Some((proj * eye, eye))
+}
+
+fn menu_camera(
+    screen_w: f32,
+    screen_h: f32,
+    vanish_x: f32,
+    vanish_y: f32,
+) -> Option<(Matrix4, Matrix4)> {
+    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
+        return None;
+    }
+
+    let half_w = 0.5 * screen_w;
+    let half_h = 0.5 * screen_h;
+
+    let fov_deg = 45.0_f32;
+    let theta = (0.5 * fov_deg).to_radians();
+    let tan_theta = theta.tan();
+    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
+        return None;
+    }
+    let dist = half_w / tan_theta;
+    if !dist.is_finite() || dist <= 0.0 {
+        return None;
+    }
+
+    let near = 1.0_f32;
+    let far = dist + 1000.0_f32;
+
+    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
+    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
+    vp_x -= half_w;
+    vp_y -= half_h;
+    let l = (vp_x - half_w) / dist;
+    let r = (vp_x + half_w) / dist;
+    let b = (vp_y + half_h) / dist;
+    let t = (vp_y - half_h) / dist;
+    let proj = rage_frustum(l, r, b, t, near, far);
+
+    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
+    let view = glam::camera::rh::view::look_at_mat4(eye, at, Vector3::Y);
+
+    Some((proj, view))
 }
 
 pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {

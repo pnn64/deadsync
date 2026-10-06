@@ -1,4 +1,5 @@
 use super::*;
+use crate::actors::MeshTexture;
 use crate::perf;
 use std::hint::black_box;
 
@@ -24,7 +25,7 @@ impl TextureContext for Textures {
 }
 
 fn mesh<'a>(
-    texture: &'a Arc<str>,
+    texture: &'a MeshTexture,
     vertices: &'a Arc<[renderer::TexturedMeshVertex]>,
     alpha: f32,
     glow: f32,
@@ -92,7 +93,7 @@ fn compose<const OLD: bool>(
 
 #[test]
 fn invisible_meshes_preserve_output_and_order_without_texture_lookups() {
-    let texture = Arc::from("mesh.png");
+    let texture = MeshTexture::from("mesh.png");
     let vertices: Arc<[renderer::TexturedMeshVertex]> =
         Arc::from([renderer::TexturedMeshVertex::default(); 3]);
     let reusable = Arc::new(vertices.to_vec());
@@ -181,7 +182,7 @@ fn invisible_meshes_preserve_output_and_order_without_texture_lookups() {
 #[test]
 #[ignore = "manual release CPU benchmark; --ignored --nocapture --test-threads=1"]
 fn mesh_visibility_bench() {
-    let texture = Arc::from("mesh.png");
+    let texture = MeshTexture::from("mesh.png");
     let vertices = Arc::from([renderer::TexturedMeshVertex::default(); 3]);
     let reverse = std::env::var_os("DEADSYNC_PERF_REVERSE").is_some();
     for (name, alpha, glow) in [
