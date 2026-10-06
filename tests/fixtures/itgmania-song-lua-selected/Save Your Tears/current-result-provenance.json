@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "657399e28076dbdf",
+    "local": "657399e28076dbdf",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 24246,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/save-your-tears-whole-song.json.zst",
+  "retained_sha256": "1c7d42682aa4c14d2512c2b5798fb595cd1b81a9b25a323bf9a3f923fa0a11d9",
+  "end_position": {
+    "beat": 336,
+    "seconds": 170.84745762711864
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}

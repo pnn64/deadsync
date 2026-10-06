@@ -787,10 +787,12 @@
     },
     {
       "simfile": "Save Your Tears/SaveYourTears.ssc",
-      "fixture": "Save Your Tears/SaveYourTears.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/save-your-tears-whole-song.json.zst",
       "title": "Episode 01",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
