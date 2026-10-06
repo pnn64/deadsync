@@ -752,10 +752,12 @@
     },
     {
       "simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
-      "fixture": "Megalovania SM5 [TaroNuke]/megalovania.ssc.semantic.json",
+      "fixture": "Megalovania SM5 [TaroNuke]/megalovania.ssc.semantic.json.zst",
       "title": "MEGALOVANIA",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "My Exes Bestfriend/ExBestFriend.ssc",

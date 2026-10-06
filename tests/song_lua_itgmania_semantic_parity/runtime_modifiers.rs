@@ -265,6 +265,48 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             .total_cmp(&b.second)
             .then(a.sequence.cmp(&b.sequence))
     });
+    // clearall invokes PlayerOptions::Init; it has no numeric getter. Observe
+    // every numeric option used by this trace at its native reset value, plus
+    // the shared speed mode, perspective and timer defaults. Later writes in
+    // the same native call/frame retain their original order and supersede it.
+    let keys: [std::collections::BTreeSet<String>; 2] = std::array::from_fn(|player| {
+        writes
+            .iter()
+            .filter(|write| write.player == player && write.key != "clearall")
+            .map(|write| write.key.clone())
+            .chain(
+                ["cmod", "mmod", "xmod", "tilt", "skew", "modtimersetting"]
+                    .into_iter()
+                    .map(str::to_owned),
+            )
+            .collect()
+    });
+    let writes = writes
+        .into_iter()
+        .flat_map(|write| {
+            if write.key != "clearall" {
+                return vec![write];
+            }
+            keys[write.player]
+                .iter()
+                .map(|key| ModWrite {
+                    sequence: write.sequence,
+                    second: write.second,
+                    beat: write.beat,
+                    player: write.player,
+                    key: key.clone(),
+                    // PlayerOptions.cpp Init zeros numeric fields, except 1x/200 CMod
+                    // and ModTimerType_Default. CMod/MMod getters are inactive at 1x.
+                    value: match key.as_str() {
+                        "xmod" => 1.0,
+                        "cmod" => 200.0,
+                        "modtimersetting" => 3.0,
+                        _ => 0.0,
+                    },
+                })
+                .collect()
+        })
+        .collect();
     (writes, unsupported)
 }
 
@@ -840,6 +882,90 @@ end}
     assert!(
         !parity.gaps.is_empty(),
         "the audit rejects missing sampled targets"
+    );
+}
+
+#[test]
+fn clearall_audit_checks_reset_and_later_writes() {
+    crate::paths::init();
+    let directory = tempfile::tempdir().expect("create reset fixture");
+    let entry = directory.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+local phase = 1
+return Def.ActorFrame{OnCommand=function(self)
+    options:FromString('3x, 125% drunk, modtimerbeat')
+    self:SetUpdateFunction(function()
+        local beat = GAMESTATE:GetSongBeat()
+        if phase == 1 and beat >= 1 then
+            options:FromString('clearall')
+            phase = 2
+        elseif phase == 2 and beat >= 1.5 then
+            options:FromString('clearall, C500, 25% drunk')
+            phase = 3
+        end
+    end)
+end}
+"#,
+    )
+    .expect("write reset fixture");
+    let mut context = SongLuaCompileContext::new(directory.path(), "ClearAll");
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile production reset targets");
+    let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
+    trace.enabled_players = Some([true, false]);
+    trace.timeline_tracks = vec![NativeTimelineTrack {
+        kind: "modifier".into(),
+        actor: Some("player-state:PLAYER_1/options:ModsLevel_Song".into()),
+        operation: "PlayerOptions.FromString".into(),
+        samples: [
+            (0.0, "3x, 125% drunk, modtimerbeat"),
+            (1.0, "clearall"),
+            (1.5, "clearall, C500, 25% drunk"),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(i, (beat, mods))| {
+            (
+                i as u64,
+                Some(beat),
+                Some(beat),
+                vec![serde_json::json!(mods)],
+                None,
+            )
+        })
+        .collect(),
+    }];
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(
+        parity.checks(),
+        17,
+        "retain resets and final same-frame speed mode"
+    );
+    parity.assert_complete("native Init defaults and subsequent FromString writes");
+    let mut wrong = compiled;
+    let mut changed = 0;
+    for ease in &mut wrong[0].eases {
+        if matches!(&ease.target, SongLuaEaseTarget::Mod(key) if key == "drunk")
+            && ease.start >= 1.0
+            && ease.to == 0.0
+        {
+            ease.from = 0.25;
+            ease.to = 0.25;
+            changed += 1;
+        }
+    }
+    assert!(changed > 0, "mutate the sampled clearall reset");
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &wrong, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "incorrect reset values must fail the audit"
     );
 }
 
