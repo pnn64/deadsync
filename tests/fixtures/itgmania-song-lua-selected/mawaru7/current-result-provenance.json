@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "f7fdd8fafaee6188",
+    "local": "f7fdd8fafaee6188",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 874665,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/mawaru7-whole-song.json.zst",
+  "retained_sha256": "2fafbe8c9001925f9042b75121f26d32fbfa2cf97f6b273bb58445821f02ff07",
+  "end_position": {
+    "beat": 816,
+    "seconds": 284.7352863536562
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}

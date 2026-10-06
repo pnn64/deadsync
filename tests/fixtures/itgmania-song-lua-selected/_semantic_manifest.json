@@ -1215,10 +1215,12 @@
     },
     {
       "simfile": "mawaru7/mawaru7.sm",
-      "fixture": "mawaru7/mawaru7.sm.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/mawaru7-whole-song.json.zst",
       "title": "MAWARUCHI SURVIVER",
       "lua_entries": 3,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "mawaru8/mawaru8.sm",
