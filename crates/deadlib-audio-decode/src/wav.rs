@@ -464,7 +464,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/packet_work/mod.rs"]
-mod packet_work;

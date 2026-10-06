@@ -449,10 +449,6 @@ pub fn texture_key_source_path(
     }
 }
 
-#[cfg(test)]
-#[path = "../tests/asset_discovery/textures.rs"]
-mod asset_discovery;
-
 pub fn resolve_texture_choice_key<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],

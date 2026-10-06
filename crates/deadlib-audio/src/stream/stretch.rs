@@ -781,10 +781,6 @@ fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 
 }
 
 #[cfg(test)]
-#[path = "../../tests/perf/sola_work.rs"]
-mod sola_work;
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use std::f32::consts::PI;

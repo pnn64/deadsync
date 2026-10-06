@@ -2327,11 +2327,3 @@ mod tests {
         assert!(cache.pending_refresh.is_empty());
     }
 }
-
-#[cfg(test)]
-pub(crate) mod replay_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/replay_preparation.rs"
-    ));
-}

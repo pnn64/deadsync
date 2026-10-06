@@ -994,7 +994,3 @@ mod tests {
         dir
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/song_timing_ownership.rs"]
-mod song_timing_ownership_perf;

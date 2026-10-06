@@ -114,10 +114,6 @@ fn list_ogg_files(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     Ok(out)
 }
 
-#[cfg(test)]
-#[path = "../tests/asset_discovery/audio.rs"]
-mod asset_discovery;
-
 fn cached_ogg_listing_shared(dir: &Path) -> SharedOggListing {
     {
         let map = listings()

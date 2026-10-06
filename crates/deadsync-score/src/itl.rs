@@ -12,10 +12,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, LazyLock, Mutex};
 
-#[cfg(test)]
-#[path = "../tests/perf/itl_unlocks.rs"]
-mod unlocks_perf;
-
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ItlFileData {
     #[serde(rename = "pathMap", default)]
@@ -850,10 +846,6 @@ pub fn runtime_set_online_srpg_self_score_for_profile_dirs<P>(
 // Hashbrown's cache can use the existing bincode map layout directly:
 // a u64 entry count followed by key/value pairs, with no second hash table.
 struct OnlineItlSelfIndexRef<'a>(&'a OnlineItlSelfCacheMap);
-
-#[cfg(test)]
-#[path = "../tests/perf/itl_index_encoding.rs"]
-mod index_encoding_perf;
 
 impl Encode for OnlineItlSelfIndexRef<'_> {
     fn encode<E: bincode::enc::Encoder>(
@@ -3348,17 +3340,5 @@ mod tests {
                 total_points: 150,
             }
         );
-    }
-    mod ranking_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/itl_ranking.rs"
-        ));
-    }
-    mod online_cache_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/online_itl.rs"
-        ));
     }
 }

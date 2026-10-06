@@ -187,10 +187,6 @@ pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
         .any(|window| window.eq_ignore_ascii_case(b".ini") || window.eq_ignore_ascii_case(b".xml"))
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/bg_field_filter.rs"]
-mod bg_field_filter_perf;
-
 #[must_use]
 pub fn parse_bgchange_rate(field: Option<&str>) -> f32 {
     match field {

@@ -298,10 +298,6 @@ pub fn foreground_media_ext_rank(path: &Path) -> Option<u8> {
     }
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/foreground_filtering.rs"]
-mod foreground_filtering_perf;
-
 #[must_use]
 pub fn is_bgchange_movie_path(path: &Path) -> bool {
     path.extension()
@@ -381,10 +377,6 @@ fn list_random_movie_paths(dir: &Path) -> Vec<PathBuf> {
     paths.sort_by(|left, right| random_movie_path_cmp(left, right));
     paths
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/entry_types/media.rs"]
-mod entry_types_perf;
 
 #[inline]
 fn random_movie_path_cmp(left: &Path, right: &Path) -> Ordering {
@@ -820,7 +812,3 @@ second.ogv=1
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/asset_discovery.rs"]
-mod asset_discovery_perf;

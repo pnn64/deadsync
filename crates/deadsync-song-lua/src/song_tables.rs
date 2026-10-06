@@ -2217,23 +2217,3 @@ assert(options:NoHolds() == true)
         assert_eq!(player_option_number(&lua, &options, "drunk").unwrap(), 0.5);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/mod_tokens.rs"]
-mod mod_tokens_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/speed_access.rs"]
-mod speed_access_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/speed_read.rs"]
-mod speed_read_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/option_call_args.rs"]
-mod option_call_args_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/option_metadata.rs"]
-mod option_metadata_perf;

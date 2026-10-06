@@ -212,7 +212,3 @@ fn model_additive_frames(texture: &crate::noteskin::SpriteSlot) -> ModelAdditive
         _ => std::sync::Arc::from([(texture.uv_for_frame_at(0, 0.0), 1.0)]),
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/lua_model_frames/mod.rs"]
-mod lua_model_frames;

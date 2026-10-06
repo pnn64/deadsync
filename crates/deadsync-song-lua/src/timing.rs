@@ -138,7 +138,3 @@ mod tests {
         assert_eq!(timing_window_name(Value::Integer(8)), None);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/judgment_offsets.rs"]
-mod judgment_offsets_perf;

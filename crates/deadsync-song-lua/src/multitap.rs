@@ -1466,11 +1466,3 @@ mod tests {
         assert_eq!(actual, expected);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/multitap_work.rs"]
-mod multitap_work_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/multitap_compile.rs"]
-mod multitap_compile_perf;

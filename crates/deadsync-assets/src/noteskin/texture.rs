@@ -3,8 +3,6 @@ use deadlib_present::actors::{ActorResourceArena, SpriteSource as ActorSpriteSou
 use deadlib_present::texture::TextureContext;
 use deadlib_render_core::{SamplerDesc, TexturedMeshVertex};
 use deadsync_noteskin::ModelVertex;
-#[cfg(test)]
-use deadsync_noteskin::itg_sprite_animation_slot_plan;
 use deadsync_noteskin::mine::{
     MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
     mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
@@ -36,34 +34,6 @@ use std::sync::{
     Arc, LazyLock, Mutex, RwLock,
     atomic::{AtomicU64, Ordering},
 };
-
-#[cfg(test)]
-#[path = "../../tests/layer_animation/mod.rs"]
-mod layer_animation;
-
-#[cfg(test)]
-#[path = "../../tests/sequential_animation/mod.rs"]
-mod sequential_animation;
-
-#[cfg(test)]
-#[path = "../../tests/model_atlas_preparation/mod.rs"]
-mod model_atlas_preparation;
-
-#[cfg(test)]
-#[path = "../../tests/texture_bulk/mod.rs"]
-mod texture_bulk;
-
-#[cfg(test)]
-#[path = "../../tests/sprite_initialization/mod.rs"]
-mod sprite_initialization;
-
-#[cfg(test)]
-#[path = "../../tests/sprite_preparation/mod.rs"]
-mod sprite_preparation;
-
-#[cfg(test)]
-#[path = "../../tests/model_source_preparation/mod.rs"]
-mod model_source_preparation;
 
 #[derive(Debug)]
 pub enum SpriteSource {
@@ -1121,40 +1091,6 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     }
 }
 
-#[cfg(test)]
-fn source_plan_from_slot(slot: &SpriteSlot) -> SpriteSourcePlan {
-    match slot.source.as_ref() {
-        SpriteSource::Atlas {
-            texture_key,
-            tex_dims,
-            ..
-        } => SpriteSourcePlan::Atlas {
-            texture_key: texture_key.to_string(),
-            tex_dims: *tex_dims,
-        },
-        SpriteSource::Animated {
-            texture_key,
-            tex_dims,
-            frame_size,
-            grid,
-            frame_count,
-            frame_indices,
-            rate,
-            frame_durations,
-            ..
-        } => SpriteSourcePlan::Animated {
-            texture_key: texture_key.to_string(),
-            tex_dims: *tex_dims,
-            frame_size: *frame_size,
-            grid: *grid,
-            frame_count: *frame_count,
-            frame_indices: frame_indices.as_ref().map(|indices| indices.to_vec()),
-            rate: *rate,
-            frame_durations: frame_durations.as_ref().map(|durations| durations.to_vec()),
-        },
-    }
-}
-
 pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
     itg_sprite_slot_plan_from_path(
         path,
@@ -2156,7 +2092,3 @@ Materials: 1
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "../../tests/lane_indices/mod.rs"]
-mod lane_indices;

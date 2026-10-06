@@ -314,13 +314,6 @@ pub fn update_runtime_catalog(
 mod tests {
     use super::*;
 
-    mod palette_loading_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/palette_loading.rs"
-        ));
-    }
-
     const PRESET: JudgmentPalettePreset = JudgmentPalettePreset {
         id: "test-theme",
         name: "Test Theme",

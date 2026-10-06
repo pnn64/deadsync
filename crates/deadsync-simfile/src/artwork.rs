@@ -140,10 +140,6 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
     paths
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/entry_types/artwork.rs"]
-mod entry_types_perf;
-
 #[derive(Clone, Copy)]
 struct ArtworkSortKey {
     start: usize,
@@ -427,7 +423,3 @@ mod tests {
         dir
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/asset_filtering.rs"]
-mod asset_filtering_perf;

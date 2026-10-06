@@ -3470,27 +3470,6 @@ mod tests {
         dir
     }
 
-    mod metadata_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/chart_metadata.rs"
-        ));
-    }
-
-    mod gameplay_note_loading_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/gameplay_note_loading.rs"
-        ));
-    }
-
-    mod metadata_timing_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/metadata_timing.rs"
-        ));
-    }
-
     fn test_serializable_chart(
         chart_type: &str,
         difficulty: &str,
@@ -3583,7 +3562,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/directory_hash.rs"]
-mod directory_hash_perf;

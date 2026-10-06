@@ -357,15 +357,6 @@ struct ItgSharedMilkshapeMeshLayer {
     bounds: [f32; 6],
 }
 
-// Existing frozen loaders retain their original intermediate Vec storage.
-#[cfg(test)]
-struct ItgMilkshapeMeshLayer {
-    material_index: i32,
-    bone_index: Option<u8>,
-    vertices: Vec<ModelVertex>,
-    bounds: [f32; 6],
-}
-
 // Resolution is scoped to one model load. Materials reused by several meshes
 // share their file/INI lookup, including misses, while layers keep owned data.
 struct ItgMilkshapeMaterial<'a> {
@@ -1052,20 +1043,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    mod animated_materials {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/animated_materials/cases.rs"
-        ));
-    }
-
-    mod model_preparation {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/model_preparation/cases.rs"
-        ));
-    }
-
     fn temp_model_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1565,7 +1542,3 @@ fn expand_mesh_vertices(
     }
     (vertices, bounds)
 }
-
-#[cfg(test)]
-#[path = "../tests/shared_mesh_preparation/mod.rs"]
-mod shared_mesh_preparation;

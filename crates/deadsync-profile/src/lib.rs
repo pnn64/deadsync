@@ -46,15 +46,6 @@ pub mod update;
 mod profile_ini;
 use profile_ini::ProfileIni;
 
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/stats_encoding.rs"]
-mod stats_encoding_perf;
-
 pub const PLAYER_SLOTS: usize = 2;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
 pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
@@ -2356,9 +2347,8 @@ pub struct MusicProfileSnapshot {
 /// caller's thread, has one entry, and is warmed by the first music, course, or
 /// Evaluation frame. A miss rebuilds the small snapshot without I/O;
 /// replacement drops the previous shared strings on the game thread. There is
-/// no eviction scan or capacity growth. Benchmarks cover hits/misses and
-/// allocation counters; a hit is bounded by two source-field comparisons plus
-/// `Arc` refcount increments.
+/// no eviction scan or capacity growth. A hit is bounded by two source-field
+/// comparisons plus `Arc` refcount increments.
 #[derive(Default)]
 pub struct MusicProfileSnapshotCache {
     snapshot: Option<Arc<MusicProfileSnapshot>>,

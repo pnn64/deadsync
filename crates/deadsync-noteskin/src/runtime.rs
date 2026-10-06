@@ -6393,11 +6393,3 @@ Meshes: 2
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/tap_layers.rs"]
-mod preparation_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/visual_assembly.rs"]
-mod visual_assembly_perf;

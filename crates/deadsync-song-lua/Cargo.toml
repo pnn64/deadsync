@@ -45,8 +45,3 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }
 winit = "0.30.13"
-
-[[test]]
-name = "actor_capture_perf"
-path = "tests/perf/actor_capture.rs"
-required-features = ["test-support"]

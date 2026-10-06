@@ -375,48 +375,4 @@ mod tests {
         let replay = run(&mut stages, &input, 997);
         assert_eq!(&replay[..256], &input[..256]);
     }
-
-    #[test]
-    #[ignore = "manual release benchmark of the decoder DSP stages"]
-    fn music_stages_benchmark() {
-        use std::hint::black_box;
-        use std::time::Instant;
-
-        let mono = sine(440.0, 48_000, 96_000);
-        let input: Vec<i16> = mono.iter().flat_map(|&sample| [sample, -sample]).collect();
-        for rate in [0.8, 1.2, 1.5] {
-            let mut stages = MusicStages::new(2, 48_000, 48_000);
-            stages.set_rate(rate, true).unwrap();
-            let mut output = Vec::with_capacity(OUT_FRAMES_PER_CALL * 2);
-            let mut times = Vec::with_capacity(40);
-            for iteration in 0..41 {
-                stages.reset();
-                let started = Instant::now();
-                for packet in input.chunks(4096 * 2) {
-                    stages.push(black_box(packet));
-                    while stages.pull(&mut output, 2).unwrap().is_some() {
-                        black_box(&output);
-                    }
-                }
-                stages.finish();
-                while stages.pull(&mut output, 2).unwrap().is_some() {
-                    black_box(&output);
-                }
-                if iteration > 0 {
-                    times.push(started.elapsed().as_secs_f64() * 1_000.0);
-                }
-            }
-            times.sort_by(f64::total_cmp);
-            eprintln!(
-                "rate={rate} converter={} median_ms={:.3} p95_ms={:.3}",
-                stages.converter.is_some(),
-                times[20],
-                times[38]
-            );
-        }
-    }
 }
-
-#[cfg(test)]
-#[path = "../../tests/perf/processing_perf.rs"]
-mod processing_perf;

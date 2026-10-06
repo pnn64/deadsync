@@ -2,33 +2,6 @@
 mod tests {
     use super::*;
 
-    mod chart_modifier_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/chart_modifiers.rs"
-        ));
-    }
-
-    mod tap_insertion_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/tap_insertion.rs"
-        ));
-    }
-
-    mod preparation_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/preparation.rs"
-        ));
-    }
-
-    mod chart_transform_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/chart_transforms.rs"
-        ));
-    }
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::song_time::{
         INVALID_SONG_TIME_NS, song_time_ns_from_seconds, song_time_ns_to_seconds,
@@ -19011,24 +18984,6 @@ mod tests {
         .expect("expected the unjudged tap to remain hittable");
 
         assert_eq!(note_index, 2);
-    }
-    mod pump_checkpoint_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/pump_checkpoints.rs"
-        ));
-    }
-    mod pump_hold_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/pump_holds.rs"
-        ));
-    }
-    mod crossover_row_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/crossover_rows.rs"
-        ));
     }
 
     #[test]

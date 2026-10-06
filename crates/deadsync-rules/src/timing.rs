@@ -2431,23 +2431,6 @@ fn count_hist_bins<'a>(
     pack_dense_hist_counts(Cow::Owned(dense), scan.min_bin, scan.count)
 }
 
-#[cfg(test)]
-#[inline(always)]
-fn hist_count_at(counts: &HistCounts<'_>, bin: i32) -> u32 {
-    if !counts.dense.is_empty() {
-        let idx = bin - counts.min_bin;
-        if idx >= 0 && (idx as usize) < counts.dense.len() {
-            return counts.dense[idx as usize];
-        }
-        return 0;
-    }
-
-    counts
-        .bins
-        .binary_search_by_key(&bin, |(key, _)| *key)
-        .map_or(0, |idx| counts.bins[idx].1)
-}
-
 fn smooth_hist_counts(counts: &HistCounts<'_>, worst_window_bin: i32) -> Vec<(i32, f32)> {
     // Select a lookup once, outside the smoothing loop. Resolve Cow once too,
     // so dense samples retain direct slice access without ownership branches.
@@ -2679,13 +2662,6 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod histogram_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/histogram.rs"
-        ));
-    }
 
     #[inline(always)]
     fn test_note(row_index: usize, column: usize, grade: JudgeGrade, time_error_ms: f32) -> Note {
@@ -3687,27 +3663,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/timing_construction.rs"]
-mod construction_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/histogram_storage.rs"]
-mod histogram_storage_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/row_traversal.rs"]
-mod row_traversal_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/timing_queries.rs"]
-mod timing_queries_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/timing_storage.rs"]
-mod timing_storage_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/timing_full.rs"]
-mod timing_full_perf;

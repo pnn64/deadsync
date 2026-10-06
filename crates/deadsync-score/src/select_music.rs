@@ -736,7 +736,4 @@ mod tests {
             assert_eq!(actual_grade, expected_grade);
         }
     }
-    mod popularity_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/popularity.rs"));
-    }
 }

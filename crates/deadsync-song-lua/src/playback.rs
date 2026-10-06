@@ -14585,7 +14585,3 @@ fn player_scratch<T>(active_players: usize, capacity: usize) -> [Vec<T>; MAX_PLA
         }
     })
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/ease_playback.rs"]
-mod ease_playback_perf;

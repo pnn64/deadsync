@@ -1555,23 +1555,3 @@ mod tests {
         fs::remove_dir_all(root).expect("clean fixture root");
     }
 }
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/smo_preparation.rs"
-    ));
-}
-
-#[cfg(test)]
-#[path = "../tests/perf/install_queue.rs"]
-mod install_queue_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/catalog_completion.rs"]
-mod catalog_completion_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/pack_index.rs"]
-mod pack_index_perf;

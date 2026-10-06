@@ -1,5 +1,4 @@
-//! Compiles the production composer unchanged so private hot paths can be
-//! measured without adding benchmark-only APIs to the library.
+//! Tests production composition and allocation behavior through private hot paths.
 #[path = "../src/actors.rs"]
 pub mod actors;
 #[path = "../src/anim.rs"]
@@ -77,27 +76,6 @@ unsafe impl GlobalAlloc for CountingAlloc {
 
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc;
-
-#[cfg(windows)]
-fn thread_cycles() -> u64 {
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GetCurrentThread() -> *mut std::ffi::c_void;
-        fn QueryThreadCycleTime(thread: *mut std::ffi::c_void, cycles: *mut u64) -> i32;
-    }
-    let mut cycles = 0;
-    // SAFETY: the pseudo-handle refers to this thread and cycles is writable.
-    assert_ne!(
-        unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut cycles) },
-        0
-    );
-    cycles
-}
-
-#[cfg(not(windows))]
-fn thread_cycles() -> u64 {
-    0
-}
 
 pub mod compose {
     include!("../src/compose.rs");

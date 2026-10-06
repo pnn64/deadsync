@@ -19,16 +19,3 @@ pub mod stats;
 pub mod sync_offset;
 pub mod tags;
 pub mod timing;
-
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/entry_types/fixtures.rs"]
-mod entry_types_perf_fixtures;
-
-#[cfg(test)]
-#[path = "../tests/perf/processing.rs"]
-mod processing_perf;

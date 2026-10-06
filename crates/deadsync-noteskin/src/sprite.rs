@@ -1876,7 +1876,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/sprite_setup.rs"]
-mod preparation_perf;

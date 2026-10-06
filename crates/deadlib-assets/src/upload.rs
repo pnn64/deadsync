@@ -344,7 +344,3 @@ mod tests {
         assert_eq!(queued, 42);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/upload_perf.rs"]
-mod upload_perf;

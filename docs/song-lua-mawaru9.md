@@ -279,10 +279,6 @@ from the same process.
 The verifier now resolves active update tracks once per frame while retaining
 the original write order and last-active-track precedence. Its regression
 checks duplicate, empty, future and out-of-range tracks across a BPM change.
-The ignored `frame_track_sampling_benchmark` compares every state field for
-2,000 actors with 16,000 tracks. The per-actor sampler took 2.880 seconds;
-the frame sampler took 21.15 milliseconds, with identical output. This is
-a verifier benchmark, not a gameplay frametime measurement.
 
 After the probe fix and before the affine rendering fix, the complete
 Mawaru9 audit took 566.30 seconds and passed 104,988/117,464 checks. Its
@@ -458,10 +454,7 @@ cargo test --test song_lua_itgmania_semantic_parity recurring_stop_matches_nativ
 The 0.5.1720 complete audit took **419.22 seconds**: 332.73 seconds compiling,
 54.91 seconds comparing projected geometry and 23.18 seconds comparing
 vibration. The regular regression passes alongside all 962 Lua/profile tests
-and all 78 regular semantic tests. The synthetic dispatch benchmark fixtures
-now explicitly schedule their next cycle instead of assuming a command
-repeats without another queue; their frozen comparison implementations remain
-unchanged. These timings measure the debug audit, not gameplay performance.
+and all 78 regular semantic tests. These timings measure the debug audit, not gameplay performance.
 
 The Reisen investigation isolates its original Lua scene and chart tables in
 `.tmp/reisen-probe`. Its setter comparisons all pass, but the original

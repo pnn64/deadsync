@@ -10,7 +10,6 @@ mod backend {
     mod stripe_bins {
         use super::*;
         use crate::perf;
-        use std::hint::black_box;
 
         fn sprite(rows: ScreenRows) -> PreparedObject {
             PreparedObject::Sprite {
@@ -184,41 +183,6 @@ mod backend {
                     assert_eq!(bins.offsets.last().copied(), Some(bins.items.len() as u32));
                     perf::assert_no_churn(|| bins.build(&objects, &meshes, &tmeshes, height));
                 }
-            }
-        }
-
-        #[test]
-        #[ignore = "manual release benchmark"]
-        fn benchmark_stripe_build() {
-            for (name, height, count, span) in [
-                ("empty", 1080, 0, 1),
-                ("small", 1080, 16, 32),
-                ("one-stripe", 1080, 1024, 1),
-                ("four-stripes", 1080, 1024, 128),
-                ("full-height", 1080, 1024, 1080),
-                ("mixed", 1080, 1024, 0),
-                ("4k-mixed", 2160, 1024, 0),
-            ] {
-                let objects: Vec<_> = (0..count)
-                    .map(|index| {
-                        let span = if span == 0 {
-                            [1, 32, 128, height][index % 4]
-                        } else {
-                            span
-                        };
-                        let start = (index * 37) % (height - span + 1);
-                        sprite(ScreenRows {
-                            start: start as u32,
-                            end: (start + span) as u32,
-                        })
-                    })
-                    .collect();
-                let mut bins = StripeBins::warmed();
-                bins.build(&objects, &[], &[], height);
-                perf::measure_sampled(name, 8192, count.max(1), || {
-                    bins.build(black_box(&objects), &[], &[], black_box(height));
-                    black_box(&bins);
-                });
             }
         }
     }

@@ -1573,7 +1573,6 @@ dependencies = [
  "rand 0.10.3",
  "serde",
  "serde_json",
- "smallvec",
  "tungstenite",
  "zip",
 ]
@@ -1629,7 +1628,6 @@ dependencies = [
  "deadsync-chart",
  "deadsync-core",
  "deadsync-rules",
- "deadsync-simfile",
  "hashbrown 0.17.1",
  "log",
  "rustc-hash 2.1.3",

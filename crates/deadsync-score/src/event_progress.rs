@@ -630,7 +630,3 @@ fn event_progress_with_leaderboards(
     }
     progress
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/event_skills.rs"]
-mod skills_perf;

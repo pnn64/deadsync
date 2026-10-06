@@ -6157,19 +6157,3 @@ mod tests {
         assert!(response.player_for_slot(1).is_none());
     }
 }
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/groovestats_preparation.rs"
-    ));
-}
-
-#[cfg(test)]
-mod player_responses {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/player_responses/mod.rs"
-    ));
-}

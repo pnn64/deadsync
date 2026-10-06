@@ -933,15 +933,6 @@ pub fn itg_partition_tap_explosion_sources<T>(
     (dim, bright)
 }
 
-#[cfg(test)]
-pub(crate) fn parse_itg_tap_explosion_animation<T>(
-    source: &ItgTapExplosionSource<T>,
-    mode: ItgTapExplosionMode,
-    command: &str,
-) -> ExplosionAnimation {
-    parse_itg_tap_explosion_animation_commands(&source.commands, mode, command)
-}
-
 pub(crate) fn parse_itg_tap_explosion_animation_commands(
     commands: &HashMap<String, String>,
     mode: ItgTapExplosionMode,
@@ -1344,13 +1335,6 @@ fn for_each_direct_tap_explosion_element(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod command_preparation_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/command_preparation/cases.rs"
-        ));
-    }
 
     #[test]
     fn animation_seek_and_movie_rate_do_not_split_tweens() {

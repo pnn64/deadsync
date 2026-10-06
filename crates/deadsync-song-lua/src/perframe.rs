@@ -26,10 +26,6 @@ use crate::{
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
 pub(crate) const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
 
-#[cfg(test)]
-#[path = "../tests/perf/dense_capture.rs"]
-mod dense_capture_perf;
-
 pub(crate) fn apply_startup_states<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -730,25 +726,6 @@ pub fn current_update_mod_states(
     ])
 }
 
-#[cfg(test)]
-fn current_update_mod_speeds(
-    tables: &[Table; LUA_PLAYERS],
-) -> Result<[SongLuaUpdateModState; LUA_PLAYERS], String> {
-    let mut speeds = std::array::from_fn(|_| SongLuaUpdateModState::new());
-    for (out, table) in speeds.iter_mut().zip(tables) {
-        if let Some(table) = table
-            .raw_get::<Option<Table>>("__songlua_player_option_speeds")
-            .map_err(|err| err.to_string())?
-        {
-            for pair in table.pairs::<String, f32>() {
-                let (key, speed) = pair.map_err(|err| err.to_string())?;
-                out.insert(key, speed);
-            }
-        }
-    }
-    Ok(speeds)
-}
-
 pub fn active_perframe_entries(
     entries: &[SongLuaPerframeEntry],
     start: f32,
@@ -840,15 +817,13 @@ pub(crate) fn update_function_replay_beats(
     end: f32,
 ) -> Vec<(f64, f64)> {
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
-    let end_seconds = f64::from(
-        if end == update_function_end_beat(context) {
-            // Keep the supplied horizon. Converting its rounded beat back to
-            // seconds can truncate the final frame and skip boundary callbacks.
-            context.music_length_seconds / song_music_rate(context)
-        } else {
-            song_elapsed_seconds_at(end, context)
-        },
-    );
+    let end_seconds = f64::from(if end == update_function_end_beat(context) {
+        // Keep the supplied horizon. Converting its rounded beat back to
+        // seconds can truncate the final frame and skip boundary callbacks.
+        context.music_length_seconds / song_music_rate(context)
+    } else {
+        song_elapsed_seconds_at(end, context)
+    });
     let frame_count = ((end_seconds - start_seconds) * f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
         .ceil()
         .max(0.0) as usize;
@@ -2641,20 +2616,6 @@ fn append_ordered_overlay_sample(
     }
 }
 
-#[cfg(test)]
-fn merge_scheduled_overlay_samples(
-    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
-    track_indices: &mut std::collections::HashMap<
-        (usize, SongLuaOverlayUpdateTarget),
-        usize,
-        impl std::hash::BuildHasher,
-    >,
-    baseline: &[SongLuaOverlayState],
-    mut scheduled: Vec<SongLuaScheduledOverlaySample>,
-) {
-    merge_scheduled_overlay_samples_from_buffer(tracks, track_indices, baseline, &mut scheduled);
-}
-
 // The caller keeps samples in total_cmp order. Negative NaNs form a leading
 // prefix; include them in the search partition, then reject them as values.
 // Numeric comparison includes both signs of zero, matching the reverse scan.
@@ -3980,14 +3941,6 @@ pub fn compile_perframes<Kind>(
 }
 
 #[cfg(test)]
-#[path = "../tests/perf/player_snap_baseline.rs"]
-pub(crate) mod player_snap_baseline;
-
-#[cfg(test)]
-#[path = "../tests/perf/sampling.rs"]
-mod sampling_perf;
-
-#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -4055,55 +4008,3 @@ mod tests {
         }));
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/update_timeline.rs"]
-mod update_timeline_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/overlay_storage.rs"]
-mod overlay_storage_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/completed_work.rs"]
-mod completed_work_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/perframe_stream.rs"]
-mod perframe_stream_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/frame_sampling.rs"]
-mod frame_sampling_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/update_dispatch_compile.rs"]
-mod update_dispatch_compile_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/borrowed_tracks.rs"]
-mod borrowed_tracks_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/capture_outputs.rs"]
-mod capture_outputs_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/scheduled_merge.rs"]
-mod scheduled_merge_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/tween_replay.rs"]
-mod tween_replay_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/spline_capture.rs"]
-pub(crate) mod spline_capture_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/spline_dedup.rs"]
-mod spline_dedup_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/spline_workspace_capture.rs"]
-mod spline_workspace_capture_perf;

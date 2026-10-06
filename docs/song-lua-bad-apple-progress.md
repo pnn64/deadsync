@@ -29,9 +29,7 @@ texture allocation or decoded pixels.
 
 The expanded frame audit also exposed an old endpoint heuristic that snapped
 nearby player destinations to the initial position. That heuristic was removed
-from production and its implementation-only unit test was deleted. Frozen
-performance baselines retain their old algorithm in test-only source.
-Chronological replay preserves the actual destination instead. A queued tween
+from production and its implementation-only unit test was deleted. Chronological replay preserves the actual destination instead. A queued tween
 whose tiny remaining duration rounds onto the prior timestamp now starts after
 that prior frame. Following tweens also wait for preceding zero-time states to
 reach their actor update before displaying the copied destination. Both changes

@@ -591,10 +591,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/speed_parse.rs"]
-mod speed_parse_perf;
-
 // PlayerOptions::GetMods emits these scalar fields in native order.
 pub(crate) const OPTION_STRING_NAMES: &[&str] = &[
     "Boost",

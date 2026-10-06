@@ -2170,7 +2170,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/lookup.rs"]
-mod preparation_perf;

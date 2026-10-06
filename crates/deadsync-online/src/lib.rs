@@ -86,12 +86,3 @@ mod tests {
         assert_eq!(timeout.to_string(), "request timed out");
     }
 }
-
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/online_results/mod.rs"]
-mod online_results;

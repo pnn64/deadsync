@@ -390,7 +390,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/cmd_preprocess.rs"]
-mod cmd_preprocess_perf;

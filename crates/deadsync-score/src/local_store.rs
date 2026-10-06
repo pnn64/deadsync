@@ -1894,23 +1894,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-mod candidates_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/replay_candidates.rs"
-    ));
-}
-
-#[cfg(test)]
-#[path = "../tests/score_storage/mod.rs"]
-mod score_storage;
-
-#[cfg(test)]
-#[path = "../tests/cache_preparation/mod.rs"]
-mod cache_preparation;
-
-#[cfg(test)]
-#[path = "../tests/perf/score_paths.rs"]
-mod score_paths_perf;

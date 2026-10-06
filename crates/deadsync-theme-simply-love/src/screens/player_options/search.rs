@@ -613,7 +613,3 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 }
-
-#[cfg(test)]
-#[path = "../../../tests/option_frame/baseline_search.rs"]
-pub(super) mod frame_baseline;

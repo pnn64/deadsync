@@ -1901,10 +1901,6 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/value_clone.rs"]
-mod value_clone_perf;
-
 fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
     use std::io::Write;
     let value = args.front().cloned().and_then(read_f32).unwrap_or(0.0);
@@ -1916,11 +1912,3 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
     let len = 64 - remaining.len();
     Ok(Value::String(lua.create_string(&buffer[..len])?))
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/percent_score.rs"]
-mod percent_score_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/env_write.rs"]
-mod env_write_perf;

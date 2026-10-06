@@ -5362,14 +5362,6 @@ mod tests {
     type TestOverlayActor = SongLuaOverlayActor<TestOverlayKind>;
     type TestCompiledSongLua = CompiledSongLua<TestOverlayActor>;
 
-    mod sampling_compile {
-        use super::*;
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/sampling_compile.rs"
-        ));
-    }
-
     fn test_sprite_overlay(path: PathBuf, decode_movie: bool) -> TestOverlayActor {
         TestOverlayActor {
             kind: TestOverlayKind::Sprite {
@@ -24785,34 +24777,6 @@ end
     }
 }
 
-#[cfg(test)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/state_perf.rs"]
-mod state_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/column_capture.rs"]
-mod column_capture_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/alignment_access.rs"]
-mod alignment_access_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/lua_integration.rs"]
-mod lua_integration_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/key_dispatch.rs"]
-mod key_dispatch_perf;
-
 mod method_args;
 
 mod state_text;
-
-#[cfg(test)]
-#[path = "../tests/perf/actor_preparation.rs"]
-mod actor_preparation_perf;

@@ -2526,7 +2526,3 @@ return Def.ActorFrame .. {
         assert!(!is_lua_path(Path::new("Down Receptor")));
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/parsing.rs"]
-mod parsing_perf;

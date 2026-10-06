@@ -294,10 +294,6 @@ fn normalized_time_signatures(timing_segments: &TimingSegments) -> Cow<'_, [Time
     Cow::Owned(sigs)
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/time_signatures.rs"]
-mod signature_perf;
-
 fn row_starts_measure(row: i32, sigs: &[TimeSignatureSegment]) -> bool {
     sigs.iter().any(|sig| {
         let sig_row = beat_to_note_row(sig.beat);

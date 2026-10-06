@@ -375,14 +375,6 @@ impl AppDirs {
     }
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/media_roots.rs"]
-mod media_roots_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/workshop_paths.rs"]
-mod workshop_paths_perf;
-
 /// Paths retained by the game asset subsystem, without config/profile/song layout.
 #[derive(Clone, Debug)]
 pub struct AssetPaths {

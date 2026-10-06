@@ -970,13 +970,6 @@ mod tests {
     use deadsync_chart::{ChartData, SongData};
     use std::path::PathBuf;
 
-    mod live_search_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/live_search/perf.rs"
-        ));
-    }
-
     fn test_chart(meter: u32) -> ChartData {
         ChartData {
             chart_type: "dance-single".to_string(),

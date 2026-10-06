@@ -29,8 +29,7 @@ errors and dropped events. Compressed files have an exact zstd round-trip
 check. Original captures are retained locally under `.tmp/float-native-micros`.
 
 Validation: all 781 song-Lua unit tests, 102 regular DeadSync semantic
-tests and 131 local harness tests pass. The performance baselines use the
-same native clock precision so their dispatch comparisons remain valid.
+tests and 131 local harness tests pass.
 The queued-vibration unit expectation follows the refreshed native
 `DoneCommand` frame at beat 1.8166667.
 

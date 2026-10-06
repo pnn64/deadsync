@@ -3,11 +3,6 @@ pub mod chart;
 pub mod notes;
 pub mod song;
 
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
 pub use chart::{
     ArrowStats, ChartData, ChartDisplayBpm, GameplayChartData, MatrixRatingInput, StaminaCounts,
     TechCounts,

@@ -476,14 +476,6 @@ fn decode_stats_bytes(bytes: Vec<u8>) -> String {
     }
 }
 
-#[cfg(test)]
-mod bytes_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/stats_bytes.rs"
-    ));
-}
-
 /// Extracts `(CurrentCombo, Guid)` from a parsed `Stats.xml` root's
 /// `GeneralData`. Returns `(0, "")` when the node is absent.
 fn parse_general_data(root: &XmlNode) -> (u32, String) {

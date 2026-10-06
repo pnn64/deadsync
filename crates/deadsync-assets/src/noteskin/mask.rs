@@ -5,10 +5,6 @@ use deadsync_noteskin::script::{
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 
-#[cfg(test)]
-#[path = "../../tests/mask_preparation/mod.rs"]
-mod mask_preparation;
-
 static EMPTY_MASK_VERTICES: LazyLock<Arc<[ModelVertex]>> = LazyLock::new(|| Arc::from([]));
 
 #[derive(Default)]

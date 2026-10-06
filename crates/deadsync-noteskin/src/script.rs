@@ -1717,13 +1717,6 @@ pub(crate) fn model_draw_program_from_scripts(
 mod tests {
     use super::*;
 
-    mod model_loading_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/model_loading/cases.rs"
-        ));
-    }
-
     #[test]
     fn script_token_reuses_split_semantics() {
         let source = " SetStateProperties, 4, { 0.1, 0.2 }, nested(1, 2) ";

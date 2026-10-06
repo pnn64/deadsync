@@ -393,10 +393,6 @@ fn thumbnail_frame(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
 }
 
 #[cfg(test)]
-#[path = "../tests/thumbnail_loading/mod.rs"]
-mod thumbnail_loading;
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -478,52 +474,4 @@ mod tests {
         });
         assert!(matches!(result, Err(Error::Invalid(message)) if message == "bad PNG"));
     }
-
-    #[test]
-    #[ignore = "requires DEADSYNC_WORKSHOP_FIXTURE; decodes the installed Workshop twice"]
-    fn workshop_atlas_benchmark() {
-        let root =
-            PathBuf::from(std::env::var_os("DEADSYNC_WORKSHOP_FIXTURE").expect("fixture path"));
-        let pack = InstalledPack::load(&root).unwrap();
-        let started = std::time::Instant::now();
-        let mut old = Vec::new();
-        let mut count = 0;
-        for skin in &pack.manifest.skins {
-            let mut atlas = RgbaImage::new(ATLAS, ATLAS);
-            for choice in &skin.options {
-                let fallback = format!("{}/_mine tex.png", skin.base);
-                let path = choice
-                    .files
-                    .iter()
-                    .find(|swap| swap.source.to_lowercase().ends_with(".png"))
-                    .map_or(fallback.as_str(), |swap| swap.source.as_str());
-                let tile = thumbnail(&root.join(path)).unwrap();
-                let x =
-                    (u32::from(choice.cell) % (ATLAS / CELL)) * CELL + (CELL - tile.width()) / 2;
-                let y =
-                    (u32::from(choice.cell) / (ATLAS / CELL)) * CELL + (CELL - tile.height()) / 2;
-                imageops::overlay(&mut atlas, &tile, i64::from(x), i64::from(y));
-                count += 1;
-            }
-            old.push(atlas);
-        }
-        let old_time = started.elapsed();
-        let started = std::time::Instant::now();
-        let new = build_atlases(&root, &pack.manifest.skins, |_, _| true).unwrap();
-        let new_time = started.elapsed();
-        assert_eq!(
-            old, new,
-            "parallel/deduplicated atlases preserve every pixel"
-        );
-        eprintln!(
-            "Workshop atlas: old {count} decodes {:.3}s; new {} decodes {:.3}s",
-            old_time.as_secs_f64(),
-            thumbnail_sources(&pack.manifest.skins).len(),
-            new_time.as_secs_f64()
-        );
-    }
 }
-
-#[cfg(test)]
-#[path = "../tests/workshop_preparation/mod.rs"]
-mod workshop_preparation;

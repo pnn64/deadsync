@@ -1090,7 +1090,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/spline_sampling/mod.rs"]
-mod spline_sampling_perf;

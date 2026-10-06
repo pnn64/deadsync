@@ -774,22 +774,4 @@ mod tests {
                 .collect::<Vec<_>>()
         );
     }
-    mod grouping_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/song_grouping.rs"
-        ));
-    }
-    mod library_sort_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/library_sort.rs"
-        ));
-    }
-    mod library_compare_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/library_compare.rs"
-        ));
-    }
 }

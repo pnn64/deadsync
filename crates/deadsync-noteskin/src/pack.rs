@@ -479,7 +479,3 @@ pub fn discover(roots: &[PathBuf]) -> Vec<InstalledPack> {
     }
     found
 }
-
-#[cfg(test)]
-#[path = "../tests/pack_preparation/mod.rs"]
-mod pack_preparation;

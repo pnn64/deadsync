@@ -86,8 +86,3 @@ pub use sprite::{
     sprite_sheet_frame, sprite_state_properties_animation, sprite_state_properties_animation_owned,
     sprite_uv_scroll_clock, state_properties_source_plan,
 };
-
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;

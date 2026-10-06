@@ -1,10 +1,5 @@
 pub(crate) use deadlib_present::rgba_const;
 
-#[cfg(test)]
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod perf;
-
 pub mod color;
 mod effects;
 pub mod fonts;

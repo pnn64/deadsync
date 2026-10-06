@@ -1536,35 +1536,3 @@ mod tests {
         assert!(result.download.is_none());
     }
 }
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/srpg_shop.rs"
-    ));
-}
-
-#[cfg(test)]
-#[path = "../tests/perf/shop_effects.rs"]
-mod shop_effects_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/shop_objects.rs"]
-mod shop_objects_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/owned_download_rows.rs"]
-mod owned_download_rows_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/purchase_projection.rs"]
-mod purchase_projection_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/owned_download_urls.rs"]
-mod owned_download_urls_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/simfile_titles.rs"]
-mod simfile_titles_perf;

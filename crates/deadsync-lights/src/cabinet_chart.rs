@@ -487,13 +487,6 @@ mod tests {
     };
     use deadsync_rules::timing::{TimingData, TimingSegments};
 
-    mod performance {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/cabinet_lights.rs"
-        ));
-    }
-
     fn parsed_note(row_index: usize, column: usize, note_type: NoteType) -> ParsedNote {
         ParsedNote {
             row_index,

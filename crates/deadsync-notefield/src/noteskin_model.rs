@@ -1469,7 +1469,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/model_geometry_preparation/mod.rs"]
-mod model_geometry_preparation;

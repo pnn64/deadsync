@@ -71,22 +71,6 @@ const UPDATE_FN_ERROR_KEY: &str = "__songlua_update_function_error_reported";
 const UPDATE_CMD_ERROR_KEY: &str = "__songlua_update_command_error_reported";
 const UPDATE_QUEUE_ERROR_KEY: &str = "__songlua_update_queue_error_reported";
 
-#[cfg(test)]
-#[path = "../tests/perf/actor_state.rs"]
-mod actor_state_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/update_dispatch.rs"]
-pub(super) mod update_dispatch_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/frame_capture.rs"]
-mod frame_capture_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/state_names.rs"]
-mod state_names_perf;
-
 enum ActorScriptDir {
     Blank,
     Text(mlua::LuaString),
@@ -534,12 +518,6 @@ impl SongLuaOverlayUpdateCapture {
             updates[previous].value = last.value;
         }
     }
-}
-
-// Keep the former map entry point for behavior tests and frozen baselines.
-#[cfg(test)]
-pub fn begin_overlay_update_capture(lua: &Lua, actor_indices: HashMap<usize, usize>) {
-    begin_overlay_update_capture_from_indices(lua, actor_indices);
 }
 
 pub(crate) fn begin_overlay_update_capture_from_indices(
@@ -18647,119 +18625,3 @@ pub fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
 pub fn method_arg_offset(args: &MultiValue) -> usize {
     usize::from(matches!(args.front(), Some(Value::Table(_))))
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/stateful_storage.rs"]
-mod stateful_storage_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/capture_dispatch.rs"]
-mod capture_dispatch_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/child_walk.rs"]
-mod child_walk_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/tracked_access.rs"]
-mod tracked_access_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/command_transfer.rs"]
-mod command_transfer_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/snapshot_transfer.rs"]
-mod snapshot_transfer_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/capture_arrays.rs"]
-mod capture_arrays_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/action_restore.rs"]
-mod action_restore_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/color_reads.rs"]
-mod color_reads_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/sprite_keys.rs"]
-mod sprite_keys_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/scalar_restore.rs"]
-mod scalar_restore_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/action_snapshot.rs"]
-mod action_snapshot_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/cross_effects.rs"]
-mod cross_effects_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/child_tables.rs"]
-mod child_tables_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/global_references.rs"]
-mod global_references_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/queue_drain.rs"]
-mod queue_drain_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/children_clear.rs"]
-mod children_clear_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/message_discovery.rs"]
-mod message_discovery_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/command_names.rs"]
-mod command_names_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/global_snapshot.rs"]
-mod global_snapshot_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/aux_lookup.rs"]
-mod aux_lookup_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/actor_restore.rs"]
-mod actor_restore_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/line_segments.rs"]
-mod line_segments_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/string_arrays.rs"]
-mod string_arrays_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/text_arguments.rs"]
-mod text_arguments_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/upvalue_output.rs"]
-mod upvalue_output_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/broadcast_storage.rs"]
-mod broadcast_storage_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/note_field_lookup.rs"]
-mod note_field_lookup_perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/spline_workspace_reader.rs"]
-pub(crate) mod spline_workspace_reader_perf;

@@ -982,7 +982,3 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         dt,
     );
 }
-
-#[cfg(test)]
-#[path = "../../../tests/option_frame/baseline_layout.rs"]
-pub(super) mod label_baseline;

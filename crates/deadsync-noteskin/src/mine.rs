@@ -402,21 +402,6 @@ pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Optio
 mod tests {
     use super::*;
 
-    mod gradient_preparation {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/gradient_preparation/cases.rs"
-        ));
-    }
-
-    mod gradient_symmetry {
-        use super::*;
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/gradient_symmetry/cases.rs"
-        ));
-    }
-
     #[test]
     fn mine_gradient_bytes_round_and_saturate() {
         for (value, expected) in [

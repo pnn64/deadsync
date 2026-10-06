@@ -1282,14 +1282,6 @@ pub struct ActiveHoldColumnResolution {
     pub resolution: ActiveHoldResolution,
 }
 
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ActiveHoldColumnsUpdate {
-    pub columns_scanned: usize,
-    pub event_count: usize,
-    pub stopped: bool,
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MaskedActiveHoldUpdate {
     pub remaining_mask: LaneMask,

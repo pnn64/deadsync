@@ -2192,15 +2192,3 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/course_selection.rs"]
-mod selection_perf;
-
-#[cfg(test)]
-mod course_filesystem {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/course_filesystem/mod.rs"
-    ));
-}

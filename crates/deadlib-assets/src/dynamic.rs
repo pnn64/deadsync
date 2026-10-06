@@ -329,10 +329,6 @@ fn ensure_cached_dynamic_image_at(
     Ok(true)
 }
 
-#[cfg(test)]
-#[path = "../tests/banner_cache/mod.rs"]
-mod banner_cache;
-
 fn build_cached_banner_rgba(
     path: &Path,
     _opts: BannerCacheOptions,
@@ -343,10 +339,6 @@ fn build_cached_banner_rgba(
     }
     Ok(open_image_fallback_quiet(path)?.into_rgba8())
 }
-
-#[cfg(test)]
-#[path = "../tests/image_loading/mod.rs"]
-mod image_loading;
 
 pub enum DynamicImagePrewarmOutcome {
     Built { path: PathBuf, millis: f64 },

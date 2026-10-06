@@ -575,10 +575,6 @@ fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/entry_types/movies.rs"]
-mod entry_types_perf;
-
 fn upsert_background_change(out: &mut Vec<SongBackgroundChange>, change: SongBackgroundChange) {
     if let Some(slot) = out
         .iter_mut()
@@ -1031,7 +1027,3 @@ mod tests {
         dir
     }
 }
-
-#[cfg(test)]
-#[path = "../tests/perf/movie_filtering.rs"]
-mod movie_filtering_perf;

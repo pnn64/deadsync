@@ -1419,11 +1419,3 @@ mod tests {
         assert_eq!(parse_binding_token(&token), Some(binding));
     }
 }
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/keymap_preparation.rs"
-    ));
-}

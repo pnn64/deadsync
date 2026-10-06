@@ -4660,11 +4660,3 @@ mod tests {
         assert!(result_dialog_urls_from_body(&oversized).is_empty());
     }
 }
-
-#[cfg(test)]
-mod preparation_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/arrowcloud_preparation.rs"
-    ));
-}

@@ -416,20 +416,6 @@ mod tests {
 
     use super::*;
 
-    mod title_search_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/title_search.rs"
-        ));
-    }
-
-    mod search_sort_perf {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/perf/search_sort.rs"
-        ));
-    }
-
     fn test_song(title: &str, subtitle: &str) -> Arc<SongData> {
         Arc::new(SongData {
             simfile_path: PathBuf::from("test.sm"),

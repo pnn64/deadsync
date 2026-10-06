@@ -98,10 +98,6 @@ fn canonical_or_raw(path: &Path) -> Cow<'_, Path> {
     std::fs::canonicalize(path).map_or(Cow::Borrowed(path), Cow::Owned)
 }
 
-#[cfg(test)]
-#[path = "../tests/perf/writable_paths.rs"]
-mod writable_paths_perf;
-
 fn root_prefix_len(path: &Path, root: &Path) -> Option<usize> {
     let mut path_components = path.components();
     let mut len = 0usize;

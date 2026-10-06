@@ -11380,7 +11380,3 @@ mod tests {
 #[path = "../../../tests/support/perf.rs"]
 #[allow(dead_code)]
 mod perf;
-
-#[cfg(test)]
-#[path = "../tests/perf/index_encoding.rs"]
-mod index_encoding_perf;

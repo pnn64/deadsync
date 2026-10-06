@@ -385,14 +385,6 @@ fn predefined_entity(s: &str) -> Option<(char, usize)> {
     }
 }
 
-#[cfg(test)]
-pub(crate) mod content_perf {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/perf/xml_content.rs"
-    ));
-}
-
 fn decode_numeric_entity(entity: &str) -> Option<char> {
     let rest = entity.strip_prefix('#')?;
     let code = if let Some(hex) = rest.strip_prefix(['x', 'X']) {
