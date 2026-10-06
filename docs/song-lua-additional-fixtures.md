@@ -8,6 +8,7 @@ These additions do not change the frozen project list or its counts.
 | Song | Complete DS result | MAIN result version |
 | --- | --- | --- |
 | Spectrum Sequence | 142,520/142,520 | 0.5.1807 |
+| Cursed Metamorph | 13,656/13,656 | 0.5.1808 |
 
 Audits used the isolated validation checkout with production and test
 sources verified equal to MAIN revision `f55911a69` (0.5.1806). Each newly
@@ -17,18 +18,20 @@ This is the existing harness scope, not a whole-game pixel parity claim.
 
 | Exercised comparison | Spectrum Sequence | Cursed Metamorph |
 | --- | --- | --- |
-| compile info | 4/4 | — |
-| layer order | 2/2 | — |
-| final render | 34/34 | — |
-| player proxy sources | 4/4 | — |
-| render persistence | 604/604 | — |
-| update values | 15,860/15,860 | — |
-| projected geometry | 15,888/15,888 | — |
-| draw colors | 31,376/31,376 | — |
-| draw crops | 16,488/16,488 | — |
-| draw shadows | 24,732/24,732 | — |
-| projected vibration | 4,122/4,122 | — |
-| runtime modifiers | 33,406/33,406 | — |
+| compile info | 4/4 | 4/4 |
+| layer order | 2/2 | 2/2 |
+| final render | 34/34 | 22/22 |
+| player proxy sources | 4/4 | 4/4 |
+| render persistence | 604/604 | 14/14 |
+| update values | 15,860/15,860 | 518/518 |
+| projected geometry | 15,888/15,888 | 489/489 |
+| draw colors | 31,376/31,376 | 960/960 |
+| draw crops | 16,488/16,488 | 516/516 |
+| draw shadows | 24,732/24,732 | 774/774 |
+| projected vibration | 4,122/4,122 | 129/129 |
+| runtime modifiers | 33,406/33,406 | 10,222/10,222 |
+| sprite textures | — | 1/1 |
+| timeline | — | 1/1 |
 
 A dash means that comparison has no recorded checks for that chart.
 Full totals include runtime modifiers; sections with zero checks are

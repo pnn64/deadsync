@@ -40,6 +40,7 @@ existing semantic and runtime-modifier audit; no parity fixes were needed.
 | Closed result | Complete result | MAIN version |
 | --- | --- | --- |
 | Spectrum Sequence | 142,520/142,520 | 0.5.1807 |
+| Cursed Metamorph | 13,656/13,656 | 0.5.1808 |
 
 Capture identities and all exercised section results are recorded in
 [song-lua-additional-fixtures.md](song-lua-additional-fixtures.md).

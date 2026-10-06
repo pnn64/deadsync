@@ -6591,7 +6591,77 @@
         },
         "runtime_errors": [],
         "dropped_events": 0,
-        "deadsync_parity": "not_run"
+        "deadsync_parity": {
+          "status": "ok",
+          "passed": 13656,
+          "checks": 13656,
+          "main_version": "0.5.1808",
+          "audited_main_version": "0.5.1806",
+          "audited_main_revision": "f55911a69f42113341cb759cb1b4d0f03bbb5955",
+          "test": "corpora::lua_songs::cursed_metamorph",
+          "sections": {
+            "compile info": {
+              "passed": 4,
+              "checks": 4
+            },
+            "layer order": {
+              "passed": 2,
+              "checks": 2
+            },
+            "final render": {
+              "passed": 22,
+              "checks": 22
+            },
+            "player proxy sources": {
+              "passed": 4,
+              "checks": 4
+            },
+            "sprite textures": {
+              "passed": 1,
+              "checks": 1
+            },
+            "render persistence": {
+              "passed": 14,
+              "checks": 14
+            },
+            "update values": {
+              "passed": 518,
+              "checks": 518
+            },
+            "projected geometry": {
+              "passed": 489,
+              "checks": 489
+            },
+            "draw colors": {
+              "passed": 960,
+              "checks": 960
+            },
+            "draw crops": {
+              "passed": 516,
+              "checks": 516
+            },
+            "draw shadows": {
+              "passed": 774,
+              "checks": 774
+            },
+            "projected vibration": {
+              "passed": 129,
+              "checks": 129
+            },
+            "timeline": {
+              "passed": 1,
+              "checks": 1
+            },
+            "runtime modifiers": {
+              "passed": 10222,
+              "checks": 10222
+            }
+          },
+          "log": "C:\\GitHub\\rework\\.tmp\\cursed-ds-audit.log",
+          "log_sha256": "844ace2da11ad298c8506783593a9b2ca57dfb4ba679c48019c2e240279069d3",
+          "scope": "existing semantic and runtime-modifier comparisons; unchanged tolerances",
+          "parity_fixes": false
+        }
       },
       "runtime_errors": 0,
       "dropped_events": 0
