@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "0a977b622e3d2b0f",
+    "local": "0a977b622e3d2b0f",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 326,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/bad-apple-whole-song.json.zst",
+  "retained_sha256": "7f348ca09c9e24dd4fe5e39d9bc16bd950ce299581fa4c7c68ec3ec997e9d4fb",
+  "end_position": {
+    "beat": 416,
+    "seconds": 208.69525146484375
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}

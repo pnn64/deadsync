@@ -423,10 +423,12 @@
     },
     {
       "simfile": "Bad Apple!!/Bad Apple!!.sm",
-      "fixture": "Bad Apple!!/Bad Apple!!.sm.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/bad-apple-whole-song.json.zst",
       "title": "Bad Apple!!",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Bank Account/Bank Account.ssc",
