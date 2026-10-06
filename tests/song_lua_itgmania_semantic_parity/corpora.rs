@@ -247,6 +247,7 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let project_chart = match simfile {
         "Apollo/Apollo.ssc" => Some(("450ff4f0585fdae3", 1, "dance-double")),
+        "Flying Castle/flying castle.ssc" => Some(("c9f1235a63d75076", 1, "dance-single")),
         "BroGamer/BroGamer.ssc" => Some(("e5b7f2be78829f4e", 1, "dance-single")),
         "bunny-house/steps.sm" => Some(("13c007f1b2cc142d", 1, "dance-single")),
         "broadcast/broadcast.ssc" => Some(("81612ed8c89ac4b9", 1, "dance-single")),

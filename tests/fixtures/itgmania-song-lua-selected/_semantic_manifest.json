@@ -3681,10 +3681,70 @@
     },
     {
       "simfile": "Flying Castle/flying castle.ssc",
-      "fixture": "Flying Castle/flying castle.ssc.semantic.json",
+      "fixture": "Flying Castle/flying castle.ssc.semantic.json.zst",
       "title": "Flying Castle",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "c9f1235a63d75076",
+        "description": "[FX+] BR+ DS DT FS+ XO-",
+        "steps_type": "dance-single",
+        "random_seed": 1,
+        "update_frames": 7369,
+        "end_position": {
+          "beat": 356.0765075683594,
+          "seconds": 122.7850026097791
+        },
+        "source_files_sha256": {
+          "Flying Castle/flying castle.ssc": "a41993d60eb67a8775607758aced9182ea7432a9ceb865cce6073ec4b47b8522",
+          "Flying Castle/lua/default.lua": "b51a0e43804ce93d05aa68b84fd96da5311f6bd13f17579602b6c8cf2b0936aa",
+          "Flying Castle/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "Flying Castle/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+          "Flying Castle/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+        },
+        "sha256": "f246a013cff36a3de22c3d2bfa541df0029572c7723216e95ee0033f004e8f93",
+        "retained_sha256": "62ff30633ef93623fe508a3f80187e13c410406143b3fbae9d120108c221ef6c",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Goodbye/Goodbye.ssc",
