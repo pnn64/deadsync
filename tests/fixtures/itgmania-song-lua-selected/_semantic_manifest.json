@@ -4154,10 +4154,70 @@
     },
     {
       "simfile": "broadcast/broadcast.ssc",
-      "fixture": "broadcast/broadcast.ssc.semantic.json",
+      "fixture": "broadcast/broadcast.ssc.semantic.json.zst",
       "title": "放送",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "reference": {
+        "itgmania": {
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+          "git_dirty": "false",
+          "execution": "embedded_bundled_lua",
+          "launches_executable": false
+        },
+        "context": {
+          "players": [
+            "PLAYER_1",
+            "PLAYER_2"
+          ],
+          "preferred_difficulty": "Challenge",
+          "preferred_steps_type": "dance-single",
+          "screen": [
+            854,
+            480
+          ],
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
+        },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "81612ed8c89ac4b9",
+        "description": "(FX) XO DS",
+        "steps_type": "dance-single",
+        "random_seed": 1,
+        "update_frames": 6313,
+        "end_position": {
+          "beat": 280.5,
+          "seconds": 105.1875
+        },
+        "source_files_sha256": {
+          "broadcast/broadcast.ssc": "cc32bf4b2e18fb53710cce82a55d2d34959a804e99d21179b1c5c2fd57b38771",
+          "broadcast/lua/default.lua": "627a0b938687db29863f6e70d45acbb811084e9756b071e36df439020a16a99d",
+          "broadcast/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "broadcast/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+          "broadcast/lua/mods.lua": "160dcc2f6f23d0a5f352751aa243c4c4b170d99b5e988e4546fcdbe6f48dd71a"
+        },
+        "sha256": "b8996c22d9697828baffebb6efc7aa90e6830a4d311642fbf8ce83a42c2ac0f4",
+        "retained_sha256": "298469eccb6cb639a3b837c90252d2e1d9f2a6760263df417203e4985a259b00",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "9eb7edc5865bf2d14b6e5ff423cd5de8b7977ef57a05cf999662cdbe1ed5e165",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "9aa7c9d448dd3bd8c50e74d25c63ed3fdbff368ec01bd8d4b448d345ef828225",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "bunny-house/steps.sm",
