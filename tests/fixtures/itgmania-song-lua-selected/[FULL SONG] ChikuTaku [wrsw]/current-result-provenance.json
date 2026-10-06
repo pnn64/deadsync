@@ -1,0 +1,48 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "a1c95e9c47363527",
+    "local": "a1c95e9c47363527",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 70574,
+  "execution": "embedded_bundled_lua",
+  "launches_executable": false,
+  "end_position": {
+    "beat": 580,
+    "seconds": 221.77818298339844
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "update_frames": 13308,
+  "source_sha256": "15c28de23182ce73f0e018f41ab6381e565b18d22447d1b7d61f714512eb0746",
+  "retained_sha256": "6b3adaa72f616efa4fa927c6932aa224ddf27047a03c62e8c3f924f3d7ef763d",
+  "comparison": "all current semantic sections and runtime modifier observations",
+  "limitation": "Current headless comparisons do not establish full native screen pixels or interactive input branches.",
+  "reference_manifest": {
+    "fixture_schema_version": 1,
+    "oracle_schema_version": 2,
+    "harness_version": "0.1.0",
+    "itgmania": {
+      "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
+      "git_dirty": "false",
+      "execution": "embedded_bundled_lua",
+      "launches_executable": false
+    },
+    "context": {
+      "players": [
+        "PLAYER_1",
+        "PLAYER_2"
+      ],
+      "preferred_difficulty": "Challenge",
+      "preferred_steps_type": "dance-single",
+      "screen": [
+        854,
+        480
+      ],
+      "beat_step": 0.125,
+      "max_events": 2000000,
+      "random_seed": 1
+    }
+  }
+}
