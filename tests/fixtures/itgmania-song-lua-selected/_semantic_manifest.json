@@ -658,10 +658,12 @@
     },
     {
       "simfile": "Goodbye/Goodbye.ssc",
-      "fixture": "Goodbye/Goodbye.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/goodbye-whole-song.json.zst",
       "title": "Goodbye",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "I (Ai)/I (Ai).ssc",

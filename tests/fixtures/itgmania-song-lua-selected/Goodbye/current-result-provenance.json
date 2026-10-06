@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "b21f3f83be7fbaad",
+    "local": "b21f3f83be7fbaad",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 118437,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/goodbye-whole-song.json.zst",
+  "retained_sha256": "e220e77f458995d739e327a8611bc8848782695789de89ab039f575611ecd026",
+  "end_position": {
+    "beat": 223.5,
+    "seconds": 124.16666666666669
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}
