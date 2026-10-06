@@ -176,4 +176,4 @@ inline_always = "allow"
 
 [workspace.dependencies]
 serde_json = "1.0.151"
-windows-core = "0.62.2"
+windows-core = "0.100.0"
