@@ -4674,7 +4674,7 @@
     },
     {
       "simfile": "Jumper/Jumper.ssc",
-      "fixture": "Jumper/Jumper.ssc.semantic.json.zst",
+      "fixture": "Jumper/Jumper.ssc.current.semantic.json.zst",
       "title": "Jumper",
       "lua_entries": 1,
       "status": "ok",
@@ -4700,36 +4700,42 @@
           "max_events": 2000000,
           "random_seed": 2
         },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "7c085505e95af69a",
+        "description": "Mild Gallopy Chart",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
         "random_seed": 2,
         "update_frames": 12298,
-        "lua_song_beat_precision": "native_float",
-        "arrow_timing": "native",
-        "noteskin": "cel",
-        "description": "Mild Gallopy Chart",
         "end_position": {
           "beat": 608,
           "seconds": 204.9438202247191
-        },
-        "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "9c6791a539865d234af68d77fb4e08911de524662dda5e9001ebf7963762a606",
-          "itgmania-harness-rs/native/actor_oracle.cpp": "ede41c27560de2a36b4645018e09f5d36102ba7f5978d38b25136b9d49e22ee8",
-          "itgmania-harness-rs/native/oracle_bridge.cpp": "cfb973fc40b3eed66eaf8098e34ae62453d5297515f586bb2d167a270a13e15f"
         },
         "source_files_sha256": {
           "Jumper/Jumper.ssc": "5c0fd85553d9b7148d297d805e6c4370e511375d92ca8997681baf969ccbec38",
           "Jumper/lua/./AlphabetCharacterMT.lua": "6e6fa2a39dd6cf5db1d9cc4e7bd472f377d8f2b47aefd13d1097c319a98cbc03",
           "Jumper/lua/./Consensual-sick_wheel.lua": "0b2745c1f85e7c6724b40291c4f257e150bf62b25ed78a28437c2510c32cfa56",
           "Jumper/lua/InputHandler.lua": "d82466722bbeb5829938740dc28caa9ba2f9adecb17dd04badfe2606fee2ab1c",
-          "Jumper/lua/default.lua": "798f99d517ddfab488f8dcded584f41fecbddb0ffceff5a3d2b27d05f336956b",
-          "Jumper/data/data.txt": "d559eaea867039de90a0d4fa44d99b0bd0afa837c398279acb428c58f334f47c",
-          "Jumper/data/dictionary.txt": "52a04f4fb860953c2a29c2769014bd8b12d090a19e7577a460a2a2586bd6d4ce",
-          "Jumper/data/todaysPlayers.txt": "c99b31bd6d460460090bc7c2a3b796fa7269bae81dbb1e193108acb22ca57d8d"
+          "Jumper/lua/default.lua": "798f99d517ddfab488f8dcded584f41fecbddb0ffceff5a3d2b27d05f336956b"
         },
-        "raw_capture_sha256": "db441fd6a8db15e37013e0e27f9c8c7a20432f1fb06c45acadce9e28be0217a6",
-        "sha256": "f9672a8752a0f51bbb83904a8cb6fedeac388e385b3624a8a5fffa141834b7eb",
-        "uncompressed_sha256": "db441fd6a8db15e37013e0e27f9c8c7a20432f1fb06c45acadce9e28be0217a6",
-        "compressed_bytes": 90791,
-        "uncompressed_bytes": 1055256
+        "sha256": "b596c5bcaa4cf4a1abc46eeb18218e6268bccc0b21d36aad7cdd98029d9fd17a",
+        "retained_sha256": "c2c38b6ba882173dee6be213cd378a1e5d2dc324c6f50dbfdd78ebff8ddc027c",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
       },
       "runtime_errors": 0,
       "dropped_events": 0
