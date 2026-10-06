@@ -667,10 +667,12 @@
     },
     {
       "simfile": "I (Ai)/I (Ai).ssc",
-      "fixture": "I (Ai)/I (Ai).ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/i-ai-whole-song.json.zst",
       "title": "I",
       "lua_entries": 2,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Igaku/Igaku.ssc",
