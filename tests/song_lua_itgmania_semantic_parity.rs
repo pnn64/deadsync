@@ -2198,6 +2198,10 @@ fn compare_update_render_values(
                         compiled.overlays[*index].kind,
                         SongLuaOverlayKind::WrapperState
                     )
+                    // Native collection omits leaf Actors. Lua can retain one
+                    // as a tween variable without adding a drawable actor.
+                    && (!matches!(compiled.overlays[*index].kind, SongLuaOverlayKind::Actor)
+                        || compiled.overlays.iter().any(|actor| actor.parent_index == Some(*index)))
             })
             .collect::<Vec<_>>();
         let pairs = if native_len == overlay_indices.len() {
@@ -2349,6 +2353,50 @@ fn compare_update_render_values(
             }
         }
     }
+}
+
+#[test]
+fn update_matching_keeps_retained_actor_variables() {
+    let trace: NativeTrace = serde_json::from_value(serde_json::json!({
+        "oracle": "itgmania_native_actor_conformance", "title": "actor variable", "style": "single",
+        "simfile": "", "roots": ["root"], "runtime_actors": [],
+        "actor_definitions": [
+            {"id": "root", "class": "ActorFrame", "children": [
+                {"layer_index": 1, "definition_id": "aux"},
+                {"layer_index": 2, "definition_id": "mover"}
+            ]},
+            {"id": "aux", "class": "Actor"},
+            {"id": "mover", "class": "ActorFrame"}
+        ],
+        "timeline_tracks": [],
+        "tween_tracks": [{"actor": "mover", "command": "UpdateCommand", "kind": "immediate",
+            "segments": [{"enqueue_seq": 1, "beat": 0, "duration": 0,
+                "operations": [{"seq": 2, "operation": "ActorFrame.x", "args": [13]}]}]}],
+        "end_position": {"seconds": 1.0},
+        "display": {"width": 640, "height": 480, "logical_width": 640, "logical_height": 480},
+        "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 1.0
+    })).expect("actor variable reference");
+    let mut compiled = CompiledSongLua {
+        overlays: [SongLuaOverlayKind::Actor, SongLuaOverlayKind::ActorFrame]
+            .into_iter()
+            .map(|kind| deadsync_song_lua::SongLuaOverlayActor {
+                kind,
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState { x: 13.0, ..SongLuaOverlayState::default() },
+                message_commands: Vec::new(),
+            }).collect(),
+        ..CompiledSongLua::default()
+    };
+    let context = SongLuaCompileContext::new("", "actor variable");
+    let mut parity = Parity::default();
+    compare_update_render_values(&trace, std::slice::from_ref(&compiled), &context, &mut parity);
+    assert_eq!(parity.checks(), 1, "retain the native transform comparison");
+    parity.assert_complete("actor variable");
+    compiled.overlays[1].initial_state.x = 0.0;
+    let mut regression = Parity::default();
+    compare_update_render_values(&trace, &[compiled], &context, &mut regression);
+    assert_eq!(regression.gaps.len(), 1, "incorrect transforms must still fail");
 }
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
