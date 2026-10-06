@@ -49,19 +49,18 @@ impl TweenProgramTarget {
 #[inline(always)]
 #[must_use]
 pub fn __dsl_parse_effect_clock(raw: &str) -> anim::EffectClock {
-    let lower = raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    match lower.as_str() {
-        // ITGmania Actor::SetEffectClockString()
-        "beat" | "beatnooffset" | "bgm" => anim::EffectClock::Beat,
-        "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
-            anim::EffectClock::Time
-        }
-        _ if lower.contains("beat") => anim::EffectClock::Beat,
-        _ => anim::EffectClock::Time,
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    // ITGmania Actor::SetEffectClockString(): all beat aliases contain "beat"
+    // except "bgm"; every other value uses time.
+    if raw.eq_ignore_ascii_case("bgm")
+        || raw
+            .as_bytes()
+            .windows(4)
+            .any(|part| part.eq_ignore_ascii_case(b"beat"))
+    {
+        anim::EffectClock::Beat
+    } else {
+        anim::EffectClock::Time
     }
 }
 

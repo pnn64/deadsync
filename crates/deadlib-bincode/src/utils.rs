@@ -8,10 +8,10 @@ pub fn can_memcpy<T, C>() -> bool
 where
     C: InternalEndianConfig + InternalIntEncodingConfig,
 {
-    // i8 is always encoded as its single in-memory byte, independently of
+    // u8 and i8 are encoded as their single in-memory byte, independently of
     // integer encoding or byte order, and every bit pattern is valid. Keep
     // this direct gate separate so its hot-path code generation stays minimal.
-    if crate::unty::type_equal::<T, i8>() {
+    if crate::unty::type_equal::<T, u8>() || crate::unty::type_equal::<T, i8>() {
         return true;
     }
 

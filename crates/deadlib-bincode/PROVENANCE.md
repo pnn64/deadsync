@@ -79,3 +79,5 @@ produced by the retained surface under `config::standard()`.
   fixed-encoding dispatch and scalar reader fallbacks.
 - Parse opposite-endian fixed integers and floating-point vectors from one
   contiguous input region for owned, borrowed, and caller-reused decoding.
+- Copy allocating byte vectors directly from slice readers without zero-filling
+  their destination first; retain initialized buffers for other readers.

@@ -126,11 +126,17 @@ fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
 }
 
 pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageResult<RgbaImage> {
-    let mut image = open_image_fallback(path)?.into_rgba8();
+    let source = open_image_fallback(path)?;
+    // Sources without alpha become opaque RGBA. Applied alphamaps have white
+    // RGB everywhere, including transparent pixels, so neither needs cleanup.
+    let needs_alpha_fix = source.color().has_alpha() && (hints.is_default() || !hints.alphamap);
+    let mut image = source.into_rgba8();
     if !hints.is_default() {
         apply_texture_hints(&mut image, hints);
     }
-    fix_hidden_alpha(&mut image);
+    if needs_alpha_fix {
+        fix_hidden_alpha(&mut image);
+    }
     Ok(image)
 }
 
