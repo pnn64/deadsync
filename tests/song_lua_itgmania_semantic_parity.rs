@@ -9533,7 +9533,7 @@ fn sharkmode_whole_song_matches_native() {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     assert_eq!(trace.steps_type, "dance-single");
     assert_eq!(trace.difficulty, "Difficulty_Challenge");
-    assert!(trace.end_position.beat >= 400.0);
+    assert!(trace.end_position.beat.is_some_and(|beat| beat >= 400.0));
     assert_eq!(trace.manual_draw_frames.len(), 9292);
     assert_eq!(
         trace

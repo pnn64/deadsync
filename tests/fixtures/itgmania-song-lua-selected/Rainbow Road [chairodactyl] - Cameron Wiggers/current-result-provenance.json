@@ -1,0 +1,22 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "ae23d77e63189e02",
+    "local": "ae23d77e63189e02",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 217,
+  "execution": "embedded_bundled_lua",
+  "launches_executable": false,
+  "end_position": {
+    "beat": 216.125,
+    "seconds": 89.43103448275862
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "update_frames": 0,
+  "source_sha256": "7614d3ed464462d593efdc65d17f7b3c9909cae81f04e6f240450739133d2b03",
+  "retained_sha256": "7614d3ed464462d593efdc65d17f7b3c9909cae81f04e6f240450739133d2b03",
+  "comparison": "all current semantic sections and runtime modifier observations",
+  "limitation": "Current headless comparisons do not establish full native screen pixels or interactive input branches."
+}
