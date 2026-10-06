@@ -25,10 +25,12 @@
   "simfiles": [
     {
       "simfile": "(R10) Warp Zone/warp zone.ssc",
-      "fixture": "(R10) Warp Zone/warp zone.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/warp-zone-whole-song.json.zst",
       "title": "Warp Zone",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "(R5) Let Me Hear That/let me hear that.sm",
