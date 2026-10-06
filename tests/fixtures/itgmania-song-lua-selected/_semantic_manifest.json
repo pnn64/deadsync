@@ -1155,10 +1155,12 @@
     },
     {
       "simfile": "fof_guys/fof.ssc",
-      "fixture": "fof_guys/fof.ssc.semantic.json",
+      "fixture": "fof_guys/fof.ssc.semantic.json.zst",
       "title": "Fof Guys",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "mawaru2/mawaru2.sm",
