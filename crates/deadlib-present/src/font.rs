@@ -1209,12 +1209,11 @@ fn fmt_char(ch: char) -> String {
 /// Parse "(res `WxH`)" from a filename or path (case-insensitive). Returns sheet base res.
 #[inline(always)]
 fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
-    let s = path_or_name.to_ascii_lowercase();
-    let bytes = s.as_bytes();
+    let bytes = path_or_name.as_bytes();
     let needle = b"(res";
     let mut i = 0usize;
     while i + needle.len() <= bytes.len() {
-        if &bytes[i..i + needle.len()] == needle {
+        if bytes[i..i + needle.len()].eq_ignore_ascii_case(needle) {
             // skip whitespace
             let mut k = i + needle.len();
             while k < bytes.len() && bytes[k].is_ascii_whitespace() {
@@ -1233,7 +1232,7 @@ fn parse_base_res_from_filename(path_or_name: &str) -> Option<(u32, u32)> {
                 k += 1;
             }
             // expect 'x'
-            if k >= bytes.len() || bytes[k] != b'x' {
+            if k >= bytes.len() || !bytes[k].eq_ignore_ascii_case(&b'x') {
                 i += 1;
                 continue;
             }
@@ -2162,63 +2161,41 @@ fn apply_range_mapping<S: BuildHasher>(
     hex_range: Option<(u32, u32)>,
     first_frame: usize,
 ) {
-    match codeset.to_ascii_lowercase().as_str() {
-        "unicode" => {
-            if let Some((start, end)) = hex_range {
-                let count = end.saturating_sub(start).saturating_add(1);
-                for i in 0..count {
-                    if let Some(ch) = char::from_u32(start + i) {
-                        map.insert(ch, first_frame + i as usize);
-                    }
+    if codeset.eq_ignore_ascii_case("unicode") {
+        if let Some((start, end)) = hex_range {
+            let count = end.saturating_sub(start).saturating_add(1);
+            for i in 0..count {
+                if let Some(ch) = char::from_u32(start + i) {
+                    map.insert(ch, first_frame + i as usize);
                 }
-            } else {
-                warn!("range Unicode without #start-end ignored");
             }
+        } else {
+            warn!("range Unicode without #start-end ignored");
         }
-        "ascii" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_ASCII, map_offset, first_frame, count);
-        }
-        "cp1252" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_CP1252, map_offset, first_frame, count);
-        }
-        "iso-8859-1" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_ISO_8859_1, map_offset, first_frame, count);
-        }
-        "iso-8859-2" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_ISO_8859_2, map_offset, first_frame, count);
-        }
-        "korean-jamo" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_KOREAN_JAMO, map_offset, first_frame, count);
-        }
-        "basic-japanese" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_BASIC_JAPANESE, map_offset, first_frame, count);
-        }
-        "numbers" => {
-            let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
-                (start, Some(end.saturating_sub(start).saturating_add(1)))
-            });
-            apply_charmap_range(map, MAP_NUMBERS, map_offset, first_frame, count);
-        }
-        other => warn!("Unsupported codeset '{other}' in RANGE; skipping."),
+        return;
     }
+    let charmap = [
+        ("ascii", MAP_ASCII),
+        ("cp1252", MAP_CP1252),
+        ("iso-8859-1", MAP_ISO_8859_1),
+        ("iso-8859-2", MAP_ISO_8859_2),
+        ("korean-jamo", MAP_KOREAN_JAMO),
+        ("basic-japanese", MAP_BASIC_JAPANESE),
+        ("numbers", MAP_NUMBERS),
+    ]
+    .into_iter()
+    .find_map(|(name, map)| codeset.eq_ignore_ascii_case(name).then_some(map));
+    let Some(charmap) = charmap else {
+        warn!(
+            "Unsupported codeset '{}' in RANGE; skipping.",
+            codeset.to_ascii_lowercase()
+        );
+        return;
+    };
+    let (map_offset, count) = hex_range.map_or((0, None), |(start, end)| {
+        (start, Some(end.saturating_sub(start).saturating_add(1)))
+    });
+    apply_charmap_range(map, charmap, map_offset, first_frame, count);
 }
 
 /* ======================= PARSE ======================= */
@@ -2994,6 +2971,64 @@ fn synthesize_space_from_nbsp(all_glyphs: &mut GlyphMap) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolution_tags_preserve_whitespace_case_and_numeric_limits() {
+        for (input, expected) in [
+            ("sheet (ReS 640 X 480).png", Some((640, 480))),
+            ("sheet (res640x480).png", Some((640, 480))),
+            ("sheet (res\t640\nX\r480 ).png", Some((640, 480))),
+            ("sheet (res 0x480) (RES 32x16).png", Some((32, 16))),
+            ("(res invalid) (res 32x16)", Some((32, 16))),
+            ("(res 4294967295x4294967295)", Some((u32::MAX, u32::MAX))),
+            ("é/日本語 (rEs 32x16).png", Some((32, 16))),
+            ("(other (res 32x16))", Some((32, 16))),
+            ("(res 32x16extra) (res 8x4)", Some((8, 4))),
+            ("(res 32x16", None),
+            ("(res 32×16)", None),
+            ("(res 32\u{a0}x16)", None),
+            ("sheet 32x16.png", None),
+            ("", None),
+        ] {
+            assert_eq!(parse_base_res_from_filename(input), expected, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn range_codesets_preserve_case_ranges_and_existing_mappings() {
+        for (codeset, charmap) in [
+            ("ASCII", MAP_ASCII),
+            ("Cp1252", MAP_CP1252),
+            ("ISO-8859-1", MAP_ISO_8859_1),
+            ("Iso-8859-2", MAP_ISO_8859_2),
+            ("Korean-Jamo", MAP_KOREAN_JAMO),
+            ("Basic-Japanese", MAP_BASIC_JAPANESE),
+            ("NUMBERS", MAP_NUMBERS),
+        ] {
+            for range in [
+                None,
+                Some((0, 3)),
+                Some((32, 40)),
+                Some((9, 2)),
+                Some((u32::MAX, u32::MAX)),
+            ] {
+                let mut expected = HashMap::from([('A', 999), ('雪', 7)]);
+                let mut actual = expected.clone();
+                let (offset, count) = range.map_or((0, None), |(start, end)| {
+                    (start, Some(end.saturating_sub(start).saturating_add(1)))
+                });
+                apply_charmap_range(&mut expected, charmap, offset, 17, count);
+                apply_range_mapping(&mut actual, codeset, range, 17);
+                assert_eq!(actual, expected, "{codeset:?} {range:?}");
+            }
+        }
+        let mut map = HashMap::from([('A', 999)]);
+        apply_range_mapping(&mut map, "UnIcOdE", Some((65, 66)), 3);
+        assert_eq!(map, HashMap::from([('A', 3), ('B', 4)]));
+        apply_range_mapping(&mut map, "Unicode", None, 7);
+        apply_range_mapping(&mut map, "Unsupported", None, 7);
+        assert_eq!(map, HashMap::from([('A', 3), ('B', 4)]));
+    }
 
     #[test]
     fn space_nbsp_symmetry_fills_only_missing_mappings() {

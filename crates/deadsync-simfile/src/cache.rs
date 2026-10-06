@@ -1413,7 +1413,15 @@ fn compute_cached_chart_meta(
     chart: &SerializableChartData,
     global_offset_seconds: f32,
 ) -> ComputedCachedChartMeta {
-    let timing_segments: TimingSegments = chart.timing_segments.clone().into();
+    // Metadata needs elapsed time and judgability, not visual speed/scroll
+    // caches or signature/tick/combo tables. Retain fakes for chart totals.
+    let mut timing_segments = chart.timing_segments.elapsed_time_segments();
+    timing_segments.fakes = chart
+        .timing_segments
+        .fakes
+        .iter()
+        .map(|&(beat, length)| FakeSegment { beat, length })
+        .collect();
     // Keep the row table borrowed for totals instead of cloning it into timing.
     let timing =
         TimingData::from_segments(-chart.offset, global_offset_seconds, &timing_segments, &[]);
@@ -2694,6 +2702,75 @@ mod tests {
         FakeSegment, SpeedUnit, TimeSignatureSegment, TimingData, TimingSegments,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn cached_metadata_matches_full_timing_with_visual_segments_and_fakes() {
+        for visual_count in [0, 1, 32] {
+            for reversed in [false, true] {
+                let mut chart = test_serializable_chart("dance-single", "Hard", 0, None);
+                chart.offset = 0.25;
+                chart.notes = b"1000\n".to_vec();
+                chart.chart_attacks = Some("mod,0,1".into());
+                chart.measure_nps_vec = vec![1.0; 32];
+                chart.row_to_beat = (0..64).map(|row| row as f32).collect();
+                chart.parsed_notes = (0..64)
+                    .map(|row| CachedParsedNote {
+                        row_index: row,
+                        column: 0,
+                        note_type: match row % 4 {
+                            0 => CachedNoteType::Tap,
+                            1 => CachedNoteType::Hold,
+                            2 => CachedNoteType::Roll,
+                            _ => CachedNoteType::Mine,
+                        },
+                        tail_row_index: Some(row + 1),
+                    })
+                    .collect();
+                let segments = &mut chart.timing_segments;
+                segments.beat0_offset_adjust = 0.125;
+                segments.bpms = vec![(0.0, 120.0), (16.0, 180.0)];
+                segments.stops = vec![(4.0, 0.5), (12.0, 0.25)];
+                segments.delays = vec![(6.0, 0.25), (13.0, 0.5)];
+                segments.warps = vec![(8.0, 2.0), (20.0, 4.0)];
+                segments.fakes = vec![(2.0, 2.0), (18.0, 3.0)];
+                segments.speeds = (0..visual_count)
+                    .map(|index| CachedSpeedSegment {
+                        beat: index as f32,
+                        ratio: 1.5,
+                        delay: 0.5,
+                        unit: CachedSpeedUnit::Seconds,
+                    })
+                    .collect();
+                segments.scrolls = (0..visual_count)
+                    .map(|index| (index as f32, -1.0))
+                    .collect();
+                segments.time_signatures = vec![(0.0, 3, 4), (8.0, 7, 8)];
+                segments.tickcounts = vec![(0.0, 4), (8.0, 8)];
+                segments.combos = vec![(0.0, 1, 1), (8.0, 3, 2)];
+                if reversed {
+                    segments.bpms.reverse();
+                    segments.stops.reverse();
+                    segments.delays.reverse();
+                    segments.warps.reverse();
+                    segments.fakes.reverse();
+                    segments.speeds.reverse();
+                    segments.scrolls.reverse();
+                }
+                for offset in [-0.25, 0.0, 0.125] {
+                    let cached = build_cached_chart_meta(&chart, offset);
+                    let original = build_chart_meta(chart.clone(), offset);
+                    assert_eq!(cached.measure_seconds_vec, original.measure_seconds_vec);
+                    assert_eq!(cached.first_second, original.first_second);
+                    assert_eq!(cached.has_note_data, original.has_note_data);
+                    assert_eq!(cached.has_chart_attacks, original.has_chart_attacks);
+                    assert_eq!(cached.possible_grade_points, original.possible_grade_points);
+                    assert_eq!(cached.holds_total, original.holds_total);
+                    assert_eq!(cached.rolls_total, original.rolls_total);
+                    assert_eq!(cached.mines_total, original.mines_total);
+                }
+            }
+        }
+    }
 
     #[test]
     fn cached_note_round_trips_to_parsed_note() {

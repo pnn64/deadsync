@@ -225,17 +225,18 @@ fn fill_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec
 #[inline]
 fn fill_small_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec<u32>) {
     meters.clear();
-    let has_non_edit = song.charts.iter().any(|chart| {
-        chart.has_note_data
-            && chart.chart_type.eq_ignore_ascii_case(chart_type)
-            && !chart.difficulty.eq_ignore_ascii_case("edit")
-    });
+    let mut has_non_edit = false;
     for chart in &song.charts {
-        if !chart.has_note_data
-            || !chart.chart_type.eq_ignore_ascii_case(chart_type)
-            || has_non_edit == chart.difficulty.eq_ignore_ascii_case("edit")
-        {
+        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
+        }
+        if chart.difficulty.eq_ignore_ascii_case("edit") {
+            if has_non_edit {
+                continue;
+            }
+        } else if !has_non_edit {
+            has_non_edit = true;
+            meters.clear();
         }
         if meters.is_empty() {
             meters.reserve(song.charts.len());
@@ -672,6 +673,54 @@ mod tests {
             test_chart("Edit", 19, true),
         ];
         assert_eq!(song_meters_for_sort(&song, "dance-single"), vec![19, 21]);
+    }
+
+    #[test]
+    fn meters_match_two_pass_selection_across_edit_prefixes_and_overflow() {
+        let mut song = test_song();
+        let mut scratch = Vec::new();
+        let mut seed = 1u32;
+        for count in [0, 1, 4, 16, 17, 32, 129] {
+            for standard_at in 0..=count {
+                song.charts = (0..count)
+                    .map(|index| {
+                        seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                        let mut chart = test_chart(
+                            if index < standard_at { "EdIt" } else { "Hard" },
+                            [0, 1, 63, 64, 127, 128, u32::MAX][seed as usize % 7],
+                            !seed.is_multiple_of(5),
+                        );
+                        if seed.is_multiple_of(7) {
+                            chart.chart_type = "pump-single".into();
+                        }
+                        chart
+                    })
+                    .collect();
+                let matching = |chart: &&ChartData| {
+                    chart.has_note_data && chart.chart_type.eq_ignore_ascii_case("DANCE-SINGLE")
+                };
+                let has_standard = song
+                    .charts
+                    .iter()
+                    .filter(matching)
+                    .any(|chart| !chart.difficulty.eq_ignore_ascii_case("edit"));
+                let mut expected: Vec<_> = song
+                    .charts
+                    .iter()
+                    .filter(matching)
+                    .filter(|chart| has_standard != chart.difficulty.eq_ignore_ascii_case("edit"))
+                    .map(|chart| chart.meter)
+                    .collect();
+                expected.sort_unstable();
+                expected.dedup();
+                fill_song_meters_for_sort(&song, "DANCE-SINGLE", &mut scratch);
+                assert_eq!(
+                    scratch, expected,
+                    "{count} charts, {standard_at} leading edits"
+                );
+                assert_eq!(song_meters_for_sort(&song, "DANCE-SINGLE"), expected);
+            }
+        }
     }
 
     #[test]
