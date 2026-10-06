@@ -40,8 +40,8 @@ const SHADER: &str = include_str!("shaders/renderer.metal");
 
 const _: () = assert!(mem::size_of::<SpriteInstanceRaw>() == 100);
 const _: () = assert!(mem::size_of::<MeshVertex>() == 24);
-const _: () = assert!(mem::size_of::<TexturedMeshVertex>() == 44);
-const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 112);
+const _: () = assert!(mem::size_of::<TexturedMeshVertex>() == 60);
+const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 184);
 
 pub struct Texture {
     id: u64,
