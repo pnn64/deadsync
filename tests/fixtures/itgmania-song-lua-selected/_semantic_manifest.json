@@ -764,10 +764,12 @@
     },
     {
       "simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
-      "fixture": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/oshama-whole-song.json.zst",
       "title": "Oshama Scramble!",
       "lua_entries": 2,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Pale/Pale.ssc",

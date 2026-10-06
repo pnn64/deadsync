@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "b2f5af049eeeb8f9",
+    "local": "b2f5af049eeeb8f9",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 170669,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/oshama-whole-song.json.zst",
+  "retained_sha256": "48f649381af86fdb4dfceb65591a6e5038224091936952a729e5306cffffb3f9",
+  "end_position": {
+    "beat": 624,
+    "seconds": 138.94737243652344
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}
