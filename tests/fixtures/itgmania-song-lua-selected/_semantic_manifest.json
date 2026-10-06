@@ -1197,10 +1197,12 @@
     },
     {
       "simfile": "mawaru5/mawaru5.sm",
-      "fixture": "mawaru5/mawaru5.sm.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/mawaru5-draw-colors.json.zst",
       "title": "MAWARU FINALE",
       "lua_entries": 41,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "mawaru6/mawaru6.sm",

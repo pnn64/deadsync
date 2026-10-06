@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "74765c1936186d20",
+    "local": "8e0b6274cb33af5e",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 77718,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/mawaru5-draw-colors.json.zst",
+  "retained_sha256": "176236b6fc53578af0dcd9c6c912552678334ee5b02cb5da7a18a25be4577cbc",
+  "end_position": {
+    "beat": 981.0208129882812,
+    "seconds": 244.0354766845703
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}
