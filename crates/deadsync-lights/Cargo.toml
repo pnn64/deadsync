@@ -13,7 +13,7 @@ deadsync-rules = { path = "../deadsync-rules" }
 log = "0.4.34"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2.189"
+libc = "0.2.190"
 
 [target.'cfg(windows)'.dependencies]
 hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }

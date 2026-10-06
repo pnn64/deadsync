@@ -59,7 +59,7 @@ deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love", features = ["test-support"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
+objc2 = { version = "0.6.5", features = ["relax-sign-encoding"] }
 objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
 

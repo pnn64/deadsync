@@ -11,7 +11,7 @@ deadsync-input = { path = "../deadsync-input" }
 deadsync-rules = { path = "../deadsync-rules" }
 log = "0.4.34"
 memchr = "2.8.3"
-twox-hash = "2.1.4"
+twox-hash = "2.1.5"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

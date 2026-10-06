@@ -7,7 +7,7 @@ license = "GPL-3.0"
 [target.'cfg(target_os = "freebsd")'.dependencies]
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-platform = { path = "../deadlib-platform" }
-libc = "0.2.189"
+libc = "0.2.190"
 log = "0.4.34"
 
 [lints.clippy]
