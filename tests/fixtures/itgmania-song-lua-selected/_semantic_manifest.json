@@ -359,10 +359,12 @@
     },
     {
       "simfile": "And Drugs/and drugs.ssc",
-      "fixture": "And Drugs/and drugs.ssc.semantic.json",
+      "fixture": "../itgmania-song-lua-micro/and-drugs-whole-song.json.zst",
       "title": "And Drugs↑↑",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "runtime_errors": 0,
+      "dropped_events": 0
     },
     {
       "simfile": "Apollo/Apollo.ssc",

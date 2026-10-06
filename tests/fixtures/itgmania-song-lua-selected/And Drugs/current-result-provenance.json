@@ -1,0 +1,20 @@
+{
+  "local_only": true,
+  "chart_identity": {
+    "frozen": "d79aed6b06cb7912",
+    "local": "d79aed6b06cb7912",
+    "frozen_manifest_changed": false
+  },
+  "semantic_checks": 29680,
+  "retained_fixture": "tests/fixtures/itgmania-song-lua-micro/and-drugs-whole-song.json.zst",
+  "retained_sha256": "4df49f5829c94ac45cf9aa7186ffd109a13911bc3a6f263883416683ab61428a",
+  "end_position": {
+    "beat": 265,
+    "seconds": 127.20000776367236
+  },
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "validation": "The current generic comparison reads the already retained full-song reference from an isolated MAIN checkout.",
+  "comparison": "Every standard semantic section and runtime modifier observation; regular retained tests keep their additional frame assertions.",
+  "limitation": "Headless observations do not assert complete native screen pixels or unsampled interactive branches."
+}
