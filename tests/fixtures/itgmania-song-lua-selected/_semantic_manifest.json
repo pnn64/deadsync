@@ -5137,7 +5137,69 @@
         },
         "runtime_errors": [],
         "dropped_events": 0,
-        "deadsync_parity": "not_run"
+        "deadsync_parity": {
+          "status": "ok",
+          "passed": 142520,
+          "checks": 142520,
+          "main_version": "0.5.1807",
+          "audited_main_version": "0.5.1806",
+          "audited_main_revision": "f55911a69f42113341cb759cb1b4d0f03bbb5955",
+          "test": "corpora::lua_songs::spectrum_sequence",
+          "sections": {
+            "compile info": {
+              "passed": 4,
+              "checks": 4
+            },
+            "layer order": {
+              "passed": 2,
+              "checks": 2
+            },
+            "final render": {
+              "passed": 34,
+              "checks": 34
+            },
+            "player proxy sources": {
+              "passed": 4,
+              "checks": 4
+            },
+            "render persistence": {
+              "passed": 604,
+              "checks": 604
+            },
+            "update values": {
+              "passed": 15860,
+              "checks": 15860
+            },
+            "projected geometry": {
+              "passed": 15888,
+              "checks": 15888
+            },
+            "draw colors": {
+              "passed": 31376,
+              "checks": 31376
+            },
+            "draw crops": {
+              "passed": 16488,
+              "checks": 16488
+            },
+            "draw shadows": {
+              "passed": 24732,
+              "checks": 24732
+            },
+            "projected vibration": {
+              "passed": 4122,
+              "checks": 4122
+            },
+            "runtime modifiers": {
+              "passed": 33406,
+              "checks": 33406
+            }
+          },
+          "log": "C:\\GitHub\\rework\\.tmp\\spectrum-ds-audit.log",
+          "log_sha256": "3a15a5c7eb4daa6a48b5ecb321b7c9013a09cb49d6dc9546ae7ac971644e172d",
+          "scope": "existing semantic and runtime-modifier comparisons; unchanged tolerances",
+          "parity_fixes": false
+        }
       },
       "runtime_errors": 0,
       "dropped_events": 0

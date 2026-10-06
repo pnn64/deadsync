@@ -32,6 +32,18 @@ their own failures. No whole-game pixel or interactive parity claim.
 | MAWARUCHI SURVIVER | 0.5.1805, `c92bf4c47` | 1,454,202/1,454,202 |
 | MAWARU SIMULATOR 2016 | 0.5.1806 | 3,663,408/3,663,408 |
 
+## Additional requested results
+
+These charts are outside the frozen 63-entry list. Each passes the full
+existing semantic and runtime-modifier audit; no parity fixes were needed.
+
+| Closed result | Complete result | MAIN version |
+| --- | --- | --- |
+| Spectrum Sequence | 142,520/142,520 | 0.5.1807 |
+
+Capture identities and all exercised section results are recorded in
+[song-lua-additional-fixtures.md](song-lua-additional-fixtures.md).
+
 ## Remaining listed failures
 
 
