@@ -813,8 +813,8 @@ fn operation_values(
             .collect::<Option<Vec<_>>>()
     };
     let pair = match method {
-        // Base rotation and ordinary rotation are separate in ITGmania, but
-        // DeadSync stores their sum. Check the sum after the ordinary write.
+        // Native drawing adds base and ordinary rotation. Check both captured
+        // components after the ordinary write without changing Lua getters.
         "baserotationz" => return None,
         "rotationz" => {
             let base = trace
@@ -828,7 +828,7 @@ fn operation_values(
                 .unwrap_or(0.0);
             (
                 vec![V::F32(base + value_f32(operation.args.first())?)],
-                vec![V::F32(state.rot_z_deg)],
+                vec![V::F32(state.rot_z_deg + state.base_rotation[2])],
             )
         }
         "diffusealpha" => (

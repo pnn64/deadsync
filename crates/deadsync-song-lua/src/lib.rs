@@ -2654,6 +2654,7 @@ pub struct SongLuaOverlayState {
     pub rot_x_deg: f32,
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
+    pub base_rotation: [f32; 3],
     pub skew_x: f32,
     pub skew_y: f32,
     pub blend: SongLuaOverlayBlendMode,
@@ -2750,6 +2751,7 @@ impl Default for SongLuaOverlayState {
             rot_x_deg: 0.0,
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
+            base_rotation: [0.0; 3],
             skew_x: 0.0,
             skew_y: 0.0,
             blend: SongLuaOverlayBlendMode::Alpha,
@@ -2899,6 +2901,7 @@ pub struct SongLuaOverlayStateDelta {
     pub rot_x_deg: Option<f32>,
     pub rot_y_deg: Option<f32>,
     pub rot_z_deg: Option<f32>,
+    pub base_rotation: Option<[f32; 3]>,
     pub skew_x: Option<f32>,
     pub skew_y: Option<f32>,
     pub blend: Option<SongLuaOverlayBlendMode>,
@@ -2988,6 +2991,7 @@ impl SongLuaOverlayStateDelta {
             Target::RotationX => self.rot_x_deg.is_some(),
             Target::RotationY => self.rot_y_deg.is_some(),
             Target::RotationZ => self.rot_z_deg.is_some(),
+            Target::BaseRotation => self.base_rotation.is_some(),
             Target::SkewX => self.skew_x.is_some(),
             Target::SkewY => self.skew_y.is_some(),
             Target::Blend => self.blend.is_some(),
@@ -3397,6 +3401,9 @@ pub const fn apply_overlay_delta(
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
+    if let Some(value) = delta.base_rotation {
+        state.base_rotation = value;
+    }
     if let Some(value) = delta.skew_x {
         state.skew_x = value;
     }
@@ -3691,6 +3698,9 @@ pub fn overlay_state_lerp(
     if let Some(to) = delta.rot_z_deg {
         from.rot_z_deg = actor_lerp(from.rot_z_deg, to, t);
     }
+    if let Some(to) = delta.base_rotation {
+        from.base_rotation = to;
+    }
     if let Some(to) = delta.skew_x {
         from.skew_x = actor_lerp(from.skew_x, to, t);
     }
@@ -3937,6 +3947,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.rot_x_deg.is_none()
         && delta.rot_y_deg.is_none()
         && delta.rot_z_deg.is_none()
+        && delta.base_rotation.is_none()
         && delta.skew_x.is_none()
         && delta.skew_y.is_none()
         && delta.blend.is_none()
@@ -4123,6 +4134,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.rot_z_deg.is_some() {
         into.rot_z_deg = from.rot_z_deg;
+    }
+    if from.base_rotation.is_some() {
+        into.base_rotation = from.base_rotation;
     }
     if from.skew_x.is_some() {
         into.skew_x = from.skew_x;
@@ -4314,6 +4328,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(rot_x_deg);
     copy_pair!(rot_y_deg);
     copy_pair!(rot_z_deg);
+    copy_pair!(base_rotation);
     copy_pair!(skew_x);
     copy_pair!(skew_y);
     copy_pair!(blend);
@@ -4700,6 +4715,7 @@ pub enum SongLuaOverlayUpdateTarget {
     RotationX,
     RotationY,
     RotationZ,
+    BaseRotation,
     SkewX,
     SkewY,
     Blend,
@@ -6824,7 +6840,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "ring_model.txt:ring_model.txt:ring_model.txt:-60:20:50"
+            "ring_model.txt:ring_model.txt:ring_model.txt:0:0:0"
         );
         assert!(compiled.overlays.is_empty());
     }

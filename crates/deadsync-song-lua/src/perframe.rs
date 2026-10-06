@@ -1584,6 +1584,7 @@ fn overlay_state_update_value(
         Target::RotationX => value!(F32, rot_x_deg),
         Target::RotationY => value!(F32, rot_y_deg),
         Target::RotationZ => value!(F32, rot_z_deg),
+        Target::BaseRotation => value!(Vec3, base_rotation),
         Target::SkewX => value!(F32, skew_x),
         Target::SkewY => value!(F32, skew_y),
         Target::Blend => value!(Blend, blend),
@@ -1723,6 +1724,7 @@ fn set_overlay_state_update_value(
     set_value!(RotationX, F32, rot_x_deg);
     set_value!(RotationY, F32, rot_y_deg);
     set_value!(RotationZ, F32, rot_z_deg);
+    set_value!(BaseRotation, Vec3, base_rotation);
     set_value!(SkewX, F32, skew_x);
     set_value!(SkewY, F32, skew_y);
     set_value!(Blend, Blend, blend);

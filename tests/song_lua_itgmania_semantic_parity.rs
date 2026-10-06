@@ -2042,7 +2042,10 @@ fn sample_update_track(
     if next_index == 0 {
         return None;
     }
-    if target == SongLuaOverlayUpdateTarget::EffectTime {
+    if matches!(
+        target,
+        SongLuaOverlayUpdateTarget::EffectTime | SongLuaOverlayUpdateTarget::BaseRotation
+    ) {
         return Some(samples[next_index - 1].value.clone());
     }
     let current = &samples[next_index - 1];
@@ -2375,7 +2378,8 @@ fn update_matching_keeps_retained_actor_variables() {
         "end_position": {"seconds": 1.0},
         "display": {"width": 640, "height": 480, "logical_width": 640, "logical_height": 480},
         "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 1.0
-    })).expect("actor variable reference");
+    }))
+    .expect("actor variable reference");
     let mut compiled = CompiledSongLua {
         overlays: [SongLuaOverlayKind::Actor, SongLuaOverlayKind::ActorFrame]
             .into_iter()
@@ -2383,20 +2387,33 @@ fn update_matching_keeps_retained_actor_variables() {
                 kind,
                 name: None,
                 parent_index: None,
-                initial_state: SongLuaOverlayState { x: 13.0, ..SongLuaOverlayState::default() },
+                initial_state: SongLuaOverlayState {
+                    x: 13.0,
+                    ..SongLuaOverlayState::default()
+                },
                 message_commands: Vec::new(),
-            }).collect(),
+            })
+            .collect(),
         ..CompiledSongLua::default()
     };
     let context = SongLuaCompileContext::new("", "actor variable");
     let mut parity = Parity::default();
-    compare_update_render_values(&trace, std::slice::from_ref(&compiled), &context, &mut parity);
+    compare_update_render_values(
+        &trace,
+        std::slice::from_ref(&compiled),
+        &context,
+        &mut parity,
+    );
     assert_eq!(parity.checks(), 1, "retain the native transform comparison");
     parity.assert_complete("actor variable");
     compiled.overlays[1].initial_state.x = 0.0;
     let mut regression = Parity::default();
     compare_update_render_values(&trace, &[compiled], &context, &mut regression);
-    assert_eq!(regression.gaps.len(), 1, "incorrect transforms must still fail");
+    assert_eq!(
+        regression.gaps.len(),
+        1,
+        "incorrect transforms must still fail"
+    );
 }
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, parity: &mut Parity) {
@@ -4737,7 +4754,10 @@ fn projected_quad_uses_unit_geometry() {
             name: Some("quad".into()),
             parent_index: None,
             initial_state: SongLuaOverlayState {
-                x: 427.0, y: 240.0, zoom_x: 854.0, zoom_y: 480.0,
+                x: 427.0,
+                y: 240.0,
+                zoom_x: 854.0,
+                zoom_y: 480.0,
                 ..SongLuaOverlayState::default()
             },
             message_commands: Vec::new(),
@@ -4746,13 +4766,69 @@ fn projected_quad_uses_unit_geometry() {
     };
     let context = SongLuaCompileContext::new("", "quad size");
     let mut parity = Parity::default();
-    compare_projected_geometry(&trace, std::slice::from_ref(&compiled), &context, &mut parity);
+    compare_projected_geometry(
+        &trace,
+        std::slice::from_ref(&compiled),
+        &context,
+        &mut parity,
+    );
     assert_eq!(parity.checks(), 4);
     parity.assert_complete("zoomed quad");
     compiled.overlays[0].initial_state.zoom_x *= 2.0;
     let mut regression = Parity::default();
     compare_projected_geometry(&trace, &[compiled], &context, &mut regression);
-    assert!(regression.gaps.iter().any(|gap| gap.contains("projected bounds differ")));
+    assert!(
+        regression
+            .gaps
+            .iter()
+            .any(|gap| gap.contains("projected bounds differ"))
+    );
+}
+
+#[test]
+fn base_rotation_keeps_getters_and_draw_pose() {
+    crate::paths::init();
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&dir, "Base rotation");
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.song_display_bpms = [60.0; 2];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[dir.join("base-rotation.lua").as_path()], 0, &context)
+        .expect("base rotation compile");
+    let layer = &compiled[0];
+    assert!(
+        layer
+            .messages
+            .iter()
+            .any(|event| event.message == "10:15:5"),
+        "getters exclude base rotation"
+    );
+    let index = layer
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("BaseRotation"))
+        .expect("quad actor");
+    assert!(
+        layer
+            .overlay_updates
+            .iter()
+            .any(|track| track.overlay_index == index
+                && track.target == SongLuaOverlayUpdateTarget::BaseRotation),
+        "capture dynamic base rotation"
+    );
+    for (beat, base, rotation) in [(0.5, 90.0, 95.0), (1.5, 45.0, 60.0)] {
+        let local = compiled_local_states_at(layer, &context, beat, beat)[index];
+        assert_eq!(local.base_rotation, [-60.0, 20.0, base]);
+        assert!((local.rot_z_deg - beat * 10.0).abs() < 0.001);
+        let drawn =
+            deadsync_song_lua::playback::actor_conformance::transform_state(local, [beat, beat]);
+        assert_eq!([drawn.rot_x_deg, drawn.rot_y_deg], [-50.0, 35.0]);
+        assert!((drawn.rot_z_deg - rotation).abs() < 0.001);
+        assert_eq!(
+            drawn.base_rotation, [0.0; 3],
+            "composition consumes base rotation once"
+        );
+    }
 }
 
 fn compare_projected_geometry(
@@ -4980,7 +5056,10 @@ fn compare_projected_geometry(
                 .is_some_and(|fov| fov != 0.0);
             // A Quad has unit geometry, including when an older capture stores
             // its already zoomed dimensions in the texture size field.
-            let size = if matches!(compiled[layer].overlays[overlay_index].kind, SongLuaOverlayKind::Quad) {
+            let size = if matches!(
+                compiled[layer].overlays[overlay_index].kind,
+                SongLuaOverlayKind::Quad
+            ) {
                 [1.0; 2]
             } else {
                 track.texture_size

@@ -1006,6 +1006,7 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "rot_x_deg" => Target::RotationX,
         "rot_y_deg" => Target::RotationY,
         "rot_z_deg" => Target::RotationZ,
+        "base_rotation" => Target::BaseRotation,
         "skew_x" => Target::SkewX,
         "skew_y" => Target::SkewY,
         "blend" => Target::Blend,
@@ -4319,6 +4320,7 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "basezoom_x" => "__songlua_state_basezoom_x",
         "basezoom_y" => "__songlua_state_basezoom_y",
         "basezoom_z" => "__songlua_state_basezoom_z",
+        "base_rotation" => "__songlua_state_base_rotation",
         "rot_x_deg" => "__songlua_state_rot_x_deg",
         "rot_y_deg" => "__songlua_state_rot_y_deg",
         "rot_z_deg" => "__songlua_state_rot_z_deg",
@@ -7714,18 +7716,27 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "rotationz",
         make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
     )?;
-    actor.set(
-        "baserotationx",
-        make_actor_capture_f32_method(lua, actor, "rot_x_deg", Some("rotationx"))?,
-    )?;
-    actor.set(
-        "baserotationy",
-        make_actor_capture_f32_method(lua, actor, "rot_y_deg", Some("rotationy"))?,
-    )?;
-    actor.set(
-        "baserotationz",
-        make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
-    )?;
+    for (axis, method) in ["baserotationx", "baserotationy", "baserotationz"]
+        .into_iter()
+        .enumerate()
+    {
+        let actor = actor.clone();
+        actor.clone().set(
+            method,
+            lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+                record_probe_method_call(lua, &actor, method)?;
+                if let Some(value) = value.and_then(read_f32) {
+                    let mut rotation = actor
+                        .get::<Option<Table>>("__songlua_state_base_rotation")?
+                        .and_then(|table| table_vec3(&table))
+                        .unwrap_or([0.0; 3]);
+                    rotation[axis] = value;
+                    capture_immediate_vec3(lua, &actor, "base_rotation", rotation)?;
+                }
+                Ok(actor.clone())
+            })?,
+        )?;
+    }
     actor.set(
         "zoomx",
         lua.create_function({
@@ -15428,6 +15439,10 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                 rot_z_deg: block
                     .get::<Option<f32>>("rot_z_deg")
                     .map_err(|err| err.to_string())?,
+                base_rotation: block
+                    .get::<Option<Table>>("base_rotation")
+                    .map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec3(&value)),
                 skew_x: block
                     .get::<Option<f32>>("skew_x")
                     .map_err(|err| err.to_string())?,
@@ -15854,6 +15869,13 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         state.rot_z_deg = value;
     }
     if let Some(value) = actor
+        .get::<Option<Table>>("__songlua_state_base_rotation")
+        .map_err(|err| err.to_string())?
+        .and_then(|value| table_vec3(&value))
+    {
+        state.base_rotation = value;
+    }
+    if let Some(value) = actor
         .get::<Option<f32>>("__songlua_state_skew_x")
         .map_err(|err| err.to_string())?
     {
@@ -16140,6 +16162,11 @@ pub fn set_actor_overlay_getter_state(
     set!("__songlua_state_rot_x_deg", state.rot_x_deg);
     set!("__songlua_state_rot_y_deg", state.rot_y_deg);
     set!("__songlua_state_rot_z_deg", state.rot_z_deg);
+    set!(
+        "__songlua_state_base_rotation",
+        lua.create_sequence_from(state.base_rotation)
+            .map_err(|err| err.to_string())?
+    );
     set!("__songlua_state_halign", state.halign);
     set!("__songlua_state_valign", state.valign);
     set!(
@@ -16231,6 +16258,7 @@ pub fn set_actor_overlay_update_getter_value(
         Target::RotationX => "rot_x_deg",
         Target::RotationY => "rot_y_deg",
         Target::RotationZ => "rot_z_deg",
+        Target::BaseRotation => "base_rotation",
         Target::SkewX => "skew_x",
         Target::SkewY => "skew_y",
         Target::CropLeft => "cropleft",

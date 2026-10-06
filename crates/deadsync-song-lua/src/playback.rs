@@ -6368,6 +6368,7 @@ pub fn apply_overlay_update(
     set_value!(RotationX, F32, rot_x_deg);
     set_value!(RotationY, F32, rot_y_deg);
     set_value!(RotationZ, F32, rot_z_deg);
+    set_value!(BaseRotation, Vec3, base_rotation);
     set_value!(SkewX, F32, skew_x);
     set_value!(SkewY, F32, skew_y);
     set_value!(Blend, Blend, blend);
@@ -6446,8 +6447,12 @@ fn apply_song_lua_overlay_runtime_updates_for(
         {
             t = snap.t;
         }
-        // A native timer wrap or restart is an instantaneous phase change.
-        let value = if track.target == crate::SongLuaOverlayUpdateTarget::EffectTime {
+        // Timer phase changes and native base rotations take effect immediately.
+        let value = if matches!(
+            track.target,
+            crate::SongLuaOverlayUpdateTarget::EffectTime
+                | crate::SongLuaOverlayUpdateTarget::BaseRotation
+        ) {
             from.value.clone()
         } else {
             from.value.lerp(&to.value, t)
@@ -7212,6 +7217,11 @@ fn song_lua_apply_motion(
 fn song_lua_pre_draw_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
     use deadlib_present::anim::EffectMode;
     let clock = song_lua_effect_clock(state, clock);
+    // Actor::BeginDraw adds the independent base pose after tween/effect state.
+    state.rot_x_deg += state.base_rotation[0];
+    state.rot_y_deg += state.base_rotation[1];
+    state.rot_z_deg += state.base_rotation[2];
+    state.base_rotation = [0.0; 3];
     if state.rainbow || song_lua_color_effect(state.effect_mode) {
         let mut tint = state.diffuse;
         tint[3] = state.vertex_colors.map_or(tint[3], |colors| colors[0][3]);
@@ -9498,7 +9508,7 @@ fn build_song_lua_aft_sprite_actor(
         align,
         offset,
         // This sprite uses the main pass's normalized depth. ITG's menu
-        // camera spans ±1000, so a ten-pixel RGB vibration must not clip it.
+        // camera spans Â±1000, so a ten-pixel RGB vibration must not clip it.
         world_z: song_lua_biased_world_z(state, effect_offset[2] / 1000.0),
         size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
         source: SpriteSource::RenderTarget {
@@ -12350,8 +12360,8 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                 };
                 let Some(children) = capture_scratch.refill([0.0, 0.0], |source| {
                     // RageTextureRenderTarget::BeginRenderingTo resets the
-                    // camera to LoadMenuPerspective(0), whose depth is ±1000.
-                    // The default presentation camera clips at ±1 instead.
+                    // camera to LoadMenuPerspective(0), whose depth is Â±1000.
+                    // The default presentation camera clips at Â±1 instead.
                     source.push(Actor::CameraPush {
                         view_proj: glam::camera::rh::proj::opengl::orthographic(
                             -size[0] * 0.5,
