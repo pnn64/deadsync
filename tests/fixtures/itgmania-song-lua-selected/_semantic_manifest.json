@@ -125,13 +125,13 @@
     },
     {
       "simfile": "666/666.ssc",
-      "fixture": "666/666.ssc.semantic.json.zst",
+      "fixture": "666/666.ssc.current.semantic.json.zst",
       "title": "666",
       "lua_entries": 1,
       "status": "ok",
       "reference": {
         "itgmania": {
-          "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
+          "git_revision": "5b205125ad53b9867bb4a494ff858f8d38ad4406",
           "git_dirty": "false",
           "execution": "embedded_bundled_lua",
           "launches_executable": false
@@ -147,19 +147,48 @@
             854,
             480
           ],
-          "beat_step": 0.03125,
-          "max_events": 5000000
+          "beat_step": 0.125,
+          "max_events": 2000000,
+          "random_seed": 1
         },
+        "oracle_schema_version": 2,
+        "project_chart_hash": "bcc24d0383531e4d",
+        "description": "MODS Tech+",
+        "steps_type": "dance-single",
+        "difficulty": "Challenge",
         "random_seed": 1,
         "update_frames": 7093,
-        "lua_song_beat_precision": "native_float",
-        "harness_sources_sha256": {
-          "itgmania-harness-rs/semantic_host.lua": "0bb96e517de44922334dbb9bd75fcde736f60e92cb0c34499e3727e1421dfa00"
+        "end_position": {
+          "beat": 680,
+          "seconds": 118.1981981981982
         },
-        "sha256": "8f2839665bb9493a46188291d8bf1c6fd7a4c70f03a0801a7eb6d343aa6442fa",
-        "uncompressed_sha256": "c900d3df3fa4d24dfea5964a543cab7829ebce833e9fc59b35e4fe9ecdca071e",
-        "compressed_bytes": 295767,
-        "uncompressed_bytes": 6910310
+        "source_files_sha256": {
+          "666/666.ssc": "a0201f2924e2cb06e229909c49dd51d8c1b1cf158044d84560bafc8040b29e1f",
+          "666/lua/_script.lua": "b70666ee31676dd1ff507bc84258c1d3be72d80a4a4c6105a6b198dadf8b7c39",
+          "666/lua/default.lua": "eb3917ac0f3c70d298a58a3dee6f848160e96b209cd91630b9de8706c261c8db",
+          "666/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+          "666/lua/gfx/_gfx.lua": "ea1af4637c42c59cc9dd727b6254701006d35c1fb0161323ac5fe15a06eb607d",
+          "666/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+          "666/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46"
+        },
+        "sha256": "56f0de9301e1de4015f4c275811cf26d6f51356e2445395c694de9a35e2cee72",
+        "retained_sha256": "d1f5934572cb47b20af3bf44d3413e79426717162760aea730921ca8f7039bfc",
+        "noteskin": {
+          "skin": "cel",
+          "game": "dance",
+          "reference_sha256": "e63fac1c7517cda6dc04e5edb7e564b429dcd972bd79ebad792278d708a1a712",
+          "detail": "complete noteskin inventory and source hashes retained in the compressed trace"
+        },
+        "harness_sources_sha256": {
+          "itgmania-harness-rs/semantic_host.lua": "c08c64e55dcbf9ceca5e2fc81b08f3c30c1d1d65cac761c9b98d40650f1b801b",
+          "itgmania-harness-rs/native/actor_oracle.cpp": "31fc4f7b64a609523a28fc91b56ce7f639cfa49bc95e9dd22e2da24e4249e46f",
+          "itgmania-harness-rs/native/oracle_bridge.cpp": "e8cd59caef1fd8b0255999aa8a8021983bb38411caf66130ffc1b38e41ab99cf"
+        },
+        "headless_executable_sha256": "6e115a9b8e55032e4f579d0f34bcb8023e3c83da9ed348e05555322120d83f6d",
+        "lua_song_beat_precision": "native_float",
+        "tween_countdown_precision": "native_float",
+        "runtime_errors": [],
+        "dropped_events": 0
       },
       "runtime_errors": 0,
       "dropped_events": 0,
