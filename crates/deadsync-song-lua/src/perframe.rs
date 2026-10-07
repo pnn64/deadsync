@@ -3563,6 +3563,7 @@ pub fn compile_update_functions<Kind>(
 struct SongLuaPerframeActiveMessage {
     command_index: usize,
     start_beat: f32,
+    elapsed: Option<f32>,
     base: SongLuaOverlayState,
 }
 
@@ -3676,6 +3677,7 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                 self.active[overlay_index] = Some(SongLuaPerframeActiveMessage {
                     command_index,
                     start_beat: event_beat,
+                    elapsed: None,
                     base,
                 });
                 self.started.insert(overlay_index, self.active.len());
@@ -3742,8 +3744,42 @@ fn apply_perframe_active_message<Kind>(
     let keep = |block: &&crate::SongLuaOverlayCommandBlock| {
         !block.queued || command.message.starts_with("__songlua_")
     };
-    let state =
+    let mut state =
         overlay_state_after_blocks(message.base, command.blocks.iter().filter(keep), elapsed);
+    // Actor.h stores effects outside TweenState. A queued effect survives later
+    // tween frames; only a newly reached command block can replace it.
+    let current = actor_overlay_initial_state(&overlay.table)?;
+    use SongLuaOverlayUpdateTarget as Target;
+    for target in [
+        Target::Vibrate,
+        Target::EffectMagnitude,
+        Target::EffectClock,
+        Target::EffectTimer,
+        Target::EffectMode,
+        Target::EffectColor1,
+        Target::EffectColor2,
+        Target::EffectPeriod,
+        Target::EffectOffset,
+        Target::EffectTime,
+        Target::EffectTiming,
+        Target::Rainbow,
+    ] {
+        let written = command.blocks.iter().filter(keep).any(|block| {
+            block.delta.has_update_target(target)
+                && crate::overlay_block_factor(block, elapsed).is_some()
+                && message
+                    .elapsed
+                    .is_none_or(|prior| crate::overlay_block_factor(block, prior).is_none())
+        });
+        if !written {
+            let value = overlay_state_update_value(&current, target);
+            set_overlay_state_update_value(&mut state, target, &value);
+        }
+    }
+    active
+        .as_mut()
+        .expect("active message was read above")
+        .elapsed = Some(elapsed);
     if let Some(epoch) = crate::motion_restart_epoch(
         message.base,
         &command.blocks,

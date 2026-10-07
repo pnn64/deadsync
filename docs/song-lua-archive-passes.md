@@ -185,3 +185,32 @@ The complete replacement passes all 174,897 comparisons on DeadSync
 commit records the corrected archive and this pass's patch-version increment.
 
 Verification log SHA-256: `59b95d29493eb670a3581474179397f28ef1a3d2e27c38eaa754c966fb41daba`.
+
+## Pass 6: preserve queued effects during tween replay
+
+The original 10:35 archive,
+`86d614310d0cfd0f681d6c7c2c52032448765c1d4ce31f95a2e0ed079c19742c.tar.zst`,
+failed 920 projected-geometry comparisons. At beat 34.2667 its queued
+InitPulse command applies a native scale near 1.01115, while DeadSync reverted
+to the unpulsed size on the next tween frame.
+
+ITGmania `src/Actor.h::TweenState` owns pose, crop, fade, and colors; the
+actor's effect selector, clock, timing, and magnitude are separate fields.
+`src/Actor.cpp::PreDraw` applies pulse to the temporary draw scale.
+DeadSync's chronological message replay incorrectly restored the entire
+old state every frame. It now preserves effect properties until another
+command block writes them. The replacement removes that repeated reset;
+it does not change pulse math or fixture comparison tolerances.
+
+The capture path was also checked: the harness's `_ITG_PULSE_ZOOM` calls
+native `Actor::SetEffectPulse` and `Actor::PreDraw`. Its independent
+`late_pulse_matches_native` check passes. Simply Love's gameplay overlay
+contains no pulse override for this custom song foreground. No harness or
+archive change is required. A new compiler regression verifies pulse mode,
+clock, magnitude changes, and explicit stop across concurrent startup
+tweens; all 466 song-Lua unit tests pass.
+
+The complete original archive passes all 248,156 comparisons on DeadSync
+`0.5.1828`.
+
+Verification log SHA-256: `f41303e1ce2fd3ff22006f223349c40743896989dbca119043dc871758a86a4f`.

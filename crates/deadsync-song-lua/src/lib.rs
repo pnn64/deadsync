@@ -21139,6 +21139,74 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn queued_pulse_survives_startup_tweens() {
+        let song_dir = test_dir("queued-pulse-tweens");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.Quad{
+    OnCommand=function(self)
+        self:linear(.5):diffusealpha(.5):sleep(.5)
+        self:queuecommand("Pulse"):smooth(.5):rotationz(10)
+        self:sleep(.5):queuecommand("Stronger"):linear(.5):rotationz(20)
+        self:sleep(.5):queuecommand("Stop")
+    end,
+    PulseCommand=function(self)
+        self:pulse():effectperiod(1):effectclock("bgm"):effectmagnitude(1, 1.015, 0)
+    end,
+    StrongerCommand=function(self) self:effectmagnitude(1, 1.04, 0) end,
+    StopCommand=function(self) self:stopeffect() end,
+}
+"#,
+        )
+        .expect("write queued pulse fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Queued Pulse");
+        context.music_length_seconds = 4.0;
+        context.song_display_bpms = [60.0; 2];
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile queued pulse");
+        let track = |target| {
+            compiled
+                .overlay_updates
+                .iter()
+                .find(|track| track.target == target)
+                .expect("captured effect property")
+        };
+        let value = |target, time| {
+            track(target)
+                .samples
+                .iter()
+                .rev()
+                .find(|sample| sample.time <= time)
+                .expect("sample precedes probe")
+                .value
+                .clone()
+        };
+        use SongLuaOverlayUpdateTarget as Target;
+        use SongLuaOverlayUpdateValue as Value;
+        // Actor::TweenState does not own the effect selector or its parameters.
+        for time in [1.25, 1.75, 2.25, 2.75] {
+            assert_eq!(
+                value(Target::EffectMode, time),
+                Value::EffectMode(EffectMode::Pulse)
+            );
+            assert_eq!(
+                value(Target::EffectClock, time),
+                Value::EffectClock(EffectClock::Beat)
+            );
+            assert_eq!(value(Target::EffectTimer, time), Value::Bool(false));
+            assert_eq!(
+                value(Target::EffectMagnitude, time),
+                Value::Vec3([1.0, if time < 2.0 { 1.015 } else { 1.04 }, 0.0])
+            );
+        }
+        assert_eq!(
+            value(Target::EffectMode, 3.25),
+            Value::EffectMode(EffectMode::None)
+        );
+    }
+
+    #[test]
     fn compile_song_lua_keeps_stateful_cross_actor_broadcast_updates() {
         let song_dir = test_dir("stateful-broadcast-update");
         let entry = song_dir.join("default.lua");
