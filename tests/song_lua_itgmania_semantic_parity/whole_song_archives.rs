@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_song_lua::playback::actor_conformance::{compose_overlay_states, WholeSongComposer};
+use deadsync_song_lua::playback::actor_conformance::{WholeSongComposer, compose_overlay_states};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
@@ -24,6 +24,8 @@ struct ArchiveEntry {
     archive: String,
     sha256: String,
     compressed_bytes: u64,
+    #[serde(default)]
+    local_only: bool,
     #[serde(default)]
     aliases: Vec<String>,
     #[serde(skip)]
@@ -224,12 +226,27 @@ fn archive_index() -> ArchiveIndex {
             compressed_bytes: file.metadata().unwrap().len(),
             archive: name,
             aliases: historical,
+            local_only: false,
             retained_version: true,
         });
     }
     extra.sort_by(|a, b| a.archive.cmp(&b.archive));
     index.archives.extend(extra);
+    let unavailable = index
+        .archives
+        .iter()
+        .filter(|entry| !archive_available(entry))
+        .count();
+    if unavailable > 0 {
+        eprintln!(
+            "{unavailable} local-only archives are unavailable; generate them with the harness to run their comparisons"
+        );
+    }
     index
+}
+
+fn archive_available(entry: &ArchiveEntry) -> bool {
+    !entry.local_only || archive_root().join(&entry.archive).is_file()
 }
 
 fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
@@ -237,6 +254,7 @@ fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
     let selected = index
         .archives
         .iter()
+        .filter(|entry| archive_available(entry))
         .filter(|entry| {
             filter.as_ref().is_none_or(|filter| {
                 entry.title.contains(filter)
@@ -583,10 +601,21 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         return ExitCode::SUCCESS;
     }
     let selected = if args == ["--all"] {
-        index.archives.iter().collect::<Vec<_>>()
+        index
+            .archives
+            .iter()
+            .filter(|entry| archive_available(entry))
+            .collect::<Vec<_>>()
     } else if args.len() == 1 && !args[0].starts_with('-') {
         match select_archive(&index, &args[0]) {
-            Ok(entry) => vec![entry],
+            Ok(entry) if archive_available(entry) => vec![entry],
+            Ok(entry) => {
+                eprintln!(
+                    "{} is a local-only archive; generate it with the harness before selecting it",
+                    entry.archive
+                );
+                return ExitCode::FAILURE;
+            }
             Err(matches) => {
                 eprintln!(
                     "selector {:?} matched {} archives; choose one filename from --list",
@@ -693,9 +722,16 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             if succeeded { "ok" } else { "FAILED" }
         );
     }
-    eprintln!("\nresult: {}; {}/{} fixtures passed; {} comparisons passed, {} failed ({} total); elapsed {:.2}s",
-        if failed == 0 { "ok" } else { "FAILED" }, selected.len() - failed, selected.len(),
-        checks - failed_checks, failed_checks, checks, started.elapsed().as_secs_f64());
+    eprintln!(
+        "\nresult: {}; {}/{} fixtures passed; {} comparisons passed, {} failed ({} total); elapsed {:.2}s",
+        if failed == 0 { "ok" } else { "FAILED" },
+        selected.len() - failed,
+        selected.len(),
+        checks - failed_checks,
+        failed_checks,
+        checks,
+        started.elapsed().as_secs_f64()
+    );
     if failed == 0 {
         ExitCode::SUCCESS
     } else {
@@ -712,6 +748,7 @@ fn full_song_selector_rejects_missing_and_ambiguous_matches_and_preserves_aliase
         archive: format!("{hash}.tar.zst"),
         sha256: hash.into(),
         compressed_bytes: 1,
+        local_only: false,
         aliases: vec![format!("old-{hash}.tar.zst")],
         retained_version: false,
     };
@@ -742,11 +779,21 @@ fn consolidated_song_lua_references_resolve_and_are_compressed() {
     )
     .unwrap();
     assert!(!references.is_empty());
+    let index = archive_index();
     for (alias, filename) in references {
         let original = Path::new(env!("CARGO_MANIFEST_DIR")).join(&alias);
         let resolved = reference_path(&original);
         assert_eq!(resolved, archive_root().join(&filename), "{alias}");
-        assert!(resolved.is_file(), "{filename}");
+        if !resolved.is_file() {
+            assert!(
+                index
+                    .archives
+                    .iter()
+                    .any(|entry| entry.archive == filename && entry.local_only),
+                "{filename}"
+            );
+            continue;
+        }
         if !filename.ends_with(".manifest.json") {
             assert!(filename.ends_with(".zst"));
         }

@@ -58,7 +58,8 @@
         "058ab150014913091397e9b345272d887f17c96663859140e5b494ca417c36b7.tar.zst",
         "cd076a0f887e93f2ec4e6e54d4065943c984a99c750218ab1b2abe4e7dc4d7f4.tar.zst",
         "aecc5841c5b16f4195b9b5fe9f798212554c4e38dfd9a3e1a75ba5823f232cb4.tar.zst"
-      ]
+      ],
+      "local_only": true
     },
     {
       "title": "Episode 16",
@@ -73,7 +74,8 @@
         "f4aefa1e0577a06195de4e2562f00f103ac963b253a608c1cec8fe5960f57b25.tar.zst",
         "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst",
         "7f65fd0494b4b76cd59553aa2dacae6c154275667c690ad6b5a48621dc528384.tar.zst"
-      ]
+      ],
+      "local_only": true
     },
     {
       "title": "10:35",

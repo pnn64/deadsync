@@ -85,3 +85,13 @@ archive manifest. New harness captures write the same version in both files.
 The runner checks the values match and reports the version before comparison.
 Retained archives report their own manifest version. Versions describe the
 generating harness; recompression does not change that provenance.
+
+## Local movie archives
+
+Archives over 100,000,000 bytes are kept locally and explicitly ignored by
+Git. Their index entries retain hashes, aliases, harness version, and
+`local_only: true`. When present, they receive every normal comparison.
+Fresh checkouts report unavailable local-only archives and omit them from
+bulk runs; explicitly selecting an absent archive fails with an explanation.
+Missing tracked fixtures still fail validation. Recreate the two Episode 16
+captures from the original corpus using harness `0.1.4` and level-22 zstd.

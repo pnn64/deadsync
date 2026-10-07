@@ -231,3 +231,13 @@ playback behavior passes without further changes. Old archive selectors
 still resolve; superseded bytes remain in Git history and local diagnostics.
 
 Verification log SHA-256: `37364c9494ad0e6f9c8765aaa62ce77aed5d7b1015decc9c6acffabbd62b45f3`.
+
+## Archive size policy (after pass 7)
+
+The user requested excluding files over 100 MB from Git. Both complete
+Episode 16 archives are 129.9 MB and now remain local, with explicit ignore
+entries and `local_only` metadata. Their source-backed recaptures and full
+comparison results remain valid. Only this session's unpublished commits
+were rewritten to remove these blobs from pushable history; the published
+parent and each repair's version and message were preserved. Both local
+archives remain available for all comparisons in this workspace.
