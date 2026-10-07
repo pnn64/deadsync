@@ -1302,7 +1302,13 @@ pub fn build_gameplay_chart_from_payload(
 }
 
 pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32) -> ChartData {
-    let timing_segments: TimingSegments = chart.timing_segments.into();
+    // Metadata never queries visual modifiers; discard them before conversion.
+    let timing_segments: TimingSegments = CachedTimingSegments {
+        speeds: Vec::new(),
+        scrolls: Vec::new(),
+        ..chart.timing_segments
+    }
+    .into();
     // Totals borrow the source row table below; the temporary timing only
     // answers beat-based queries and need not copy that potentially large table.
     let timing =
@@ -2705,7 +2711,7 @@ mod tests {
 
     #[test]
     fn cached_metadata_matches_full_timing_with_visual_segments_and_fakes() {
-        for visual_count in [0, 1, 32] {
+        for visual_count in [0, 1, 32, 256] {
             for reversed in [false, true] {
                 let mut chart = test_serializable_chart("dance-single", "Hard", 0, None);
                 chart.offset = 0.25;
@@ -2757,8 +2763,36 @@ mod tests {
                     segments.scrolls.reverse();
                 }
                 for offset in [-0.25, 0.0, 0.125] {
+                    let full_segments: TimingSegments = chart.timing_segments.clone().into();
+                    let full_timing = TimingData::from_segments(
+                        -chart.offset,
+                        offset,
+                        &full_segments,
+                        &chart.row_to_beat,
+                    );
+                    let expected_totals =
+                        build_chart_totals_with_rows(&chart.parsed_notes, &full_timing, |row| {
+                            chart.row_to_beat.get(row).copied()
+                        });
                     let cached = build_cached_chart_meta(&chart, offset);
                     let original = build_chart_meta(chart.clone(), offset);
+                    assert_eq!(
+                        original.measure_seconds_vec,
+                        build_measure_seconds(&full_timing, chart.measure_nps_vec.len())
+                    );
+                    assert_eq!(
+                        original.first_second.to_bits(),
+                        0.0_f32.min(full_timing.get_time_for_beat(0.0)).to_bits()
+                    );
+                    assert_eq!(
+                        (
+                            original.possible_grade_points,
+                            original.holds_total,
+                            original.rolls_total,
+                            original.mines_total
+                        ),
+                        expected_totals
+                    );
                     assert_eq!(cached.measure_seconds_vec, original.measure_seconds_vec);
                     assert_eq!(cached.first_second, original.first_second);
                     assert_eq!(cached.has_note_data, original.has_note_data);

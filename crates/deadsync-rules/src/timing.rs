@@ -579,6 +579,9 @@ pub struct FakeSegment {
 }
 
 fn sorted_timing_table<T: Clone>(values: &[T], beat: impl Fn(&T) -> f32) -> Arc<[T]> {
+    if values.is_empty() {
+        return Arc::default();
+    }
     let mut output: Arc<[T]> = Arc::from(values);
     if !values
         .windows(2)
@@ -1035,22 +1038,6 @@ impl TimingData {
         self.get_beat_info_from_time_ns(target_time_ns).beat
     }
 
-    fn get_bpm_point_index_for_beat(&self, target_beat: f32) -> usize {
-        let points = &self.beat_to_time;
-        if points.is_empty() {
-            return 0;
-        }
-
-        match points.binary_search_by(|p| {
-            p.beat
-                .partial_cmp(&target_beat)
-                .unwrap_or(std::cmp::Ordering::Less)
-        }) {
-            Ok(i) => i,
-            Err(i) => i.saturating_sub(1),
-        }
-    }
-
     #[must_use]
     pub fn get_time_for_beat(&self, target_beat: f32) -> f32 {
         timing_ns_to_seconds(self.get_time_for_beat_ns(target_beat))
@@ -1198,12 +1185,22 @@ impl TimingData {
 
     #[must_use]
     pub fn get_bpm_for_beat(&self, target_beat: f32) -> f32 {
-        let points = &self.beat_to_time;
-        if points.is_empty() {
-            return 60.0;
-        } // Fallback BPM
-        let point_idx = self.get_bpm_point_index_for_beat(target_beat);
-        points[point_idx].bpm
+        match self.beat_to_time.as_ref() {
+            [] => 60.0,
+            [point] => point.bpm,
+            points => {
+                let index = match points.binary_search_by(|point| {
+                    point
+                        .beat
+                        .partial_cmp(&target_beat)
+                        .unwrap_or(Ordering::Less)
+                }) {
+                    Ok(i) => i,
+                    Err(i) => i.saturating_sub(1),
+                };
+                points[index].bpm
+            }
+        }
     }
 
     #[inline(always)]
@@ -2642,6 +2639,81 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timing_tables_preserve_empty_and_stable_ordering() {
+        let empty = sorted_timing_table::<(f32, u8)>(&[], |_| panic!("empty table"));
+        assert!(empty.is_empty());
+        for values in [
+            vec![],
+            vec![(0.0, 0)],
+            vec![(0.0, 0), (1.0, 1), (1.0, 2)],
+            vec![(2.0, 0), (1.0, 1), (1.0, 2), (-1.0, 3)],
+        ] {
+            let mut expected = values.clone();
+            expected.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            let table = sorted_timing_table(&values, |value| value.0);
+            assert_eq!(&*table, expected);
+            assert_eq!(&*table.clone(), expected);
+        }
+        let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &[]);
+        assert!(timing.stops.is_empty());
+        assert!(timing.delays.is_empty());
+        assert!(timing.warps.is_empty());
+        assert!(timing.speeds.is_empty());
+        assert!(timing.scrolls.is_empty());
+        assert!(timing.fakes.is_empty());
+        assert_eq!(timing.get_time_for_beat(4.0), 4.0);
+        assert_eq!(timing.get_displayed_beat(4.0), 4.0);
+        assert_eq!(timing.get_speed_multiplier_ns(4.0, 4_000_000_000), 1.0);
+    }
+
+    #[test]
+    fn bpm_lookup_preserves_boundaries_duplicates_and_nonfinite_queries() {
+        let queries = [
+            f32::NEG_INFINITY,
+            -8.0,
+            0.0,
+            0.5,
+            4.0,
+            8.0,
+            64.0,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        for beat in queries {
+            assert_eq!(TimingData::default().get_bpm_for_beat(beat), 60.0);
+        }
+        for bpms in [
+            vec![],
+            vec![(0.0, 120.0)],
+            vec![(4.0, 180.0)],
+            vec![(0.0, 120.0), (4.0, 180.0), (4.0, 90.0), (8.0, 150.0)],
+            vec![(8.0, 150.0), (4.0, 90.0), (0.0, 120.0)],
+        ] {
+            let timing = TimingData::from_segments(
+                0.0,
+                0.0,
+                &TimingSegments {
+                    bpms,
+                    ..Default::default()
+                },
+                &[],
+            );
+            for beat in queries {
+                let index = timing
+                    .beat_to_time
+                    .binary_search_by(|point| {
+                        point.beat.partial_cmp(&beat).unwrap_or(Ordering::Less)
+                    })
+                    .unwrap_or_else(|index| index.saturating_sub(1));
+                assert_eq!(
+                    timing.get_bpm_for_beat(beat).to_bits(),
+                    timing.beat_to_time[index].bpm.to_bits()
+                );
+            }
+        }
+    }
 
     #[inline(always)]
     fn test_note(row_index: usize, column: usize, grade: JudgeGrade, time_error_ms: f32) -> Note {
