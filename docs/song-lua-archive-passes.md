@@ -341,3 +341,29 @@ passes all 194,374 comparisons on DeadSync `0.5.1832`.
 
 Verification log SHA-256:
 `359dab369c354fc8dd287c71e63f2ebe2f01bb20822183410161678470ed7ea1`.
+
+## Final batch verification
+
+All ten repaired archives were replayed and composed again on DeadSync `0.5.1832`. Every archive and member was validated before comparison. The batch passes all 2,157,171 comparisons, with zero failures. This includes both complete local-only movie archives.
+
+| Song | Comparisons |
+|---|---:|
+| Warp Zone | 212,220 |
+| Let Me Hear That | 205,071 |
+| Waltz Capriccio | 260,300 |
+| 100 Bad Days (SM) | 174,897 |
+| 100 Bad Days (SSC) | 174,897 |
+| 10:35 | 248,156 |
+| ChikuTaku | 328,107 |
+| Spooky | 157,678 |
+| Riddle | 201,471 |
+| Crystal Access | 194,374 |
+
+Final test executable SHA-256: `67323b080ad11958cc0fbcb595ed0bf8839642372ccad01287b8088fc1e91e68`.
+Local verification receipt SHA-256: `2b633fe1655a70026f2683fb396771091f383ff6cf7e147d7e4194e4db926fc6`.
+
+The consolidated reference-resolution test and the selected Crystal Access archive integrity test also pass. Earlier source checks passed all 467 song-Lua, 198 simfile, and 162 harness tests (five harness tests ignored); source code did not change in passes 9 and 10.
+
+An unfiltered archive-integrity check still stops on its existing nonempty Lua-closure assertion. The corpus includes recovered charts without Lua, documented in the capture audit. This separate validation gap and the 18 uncaptured charts remain outside the ten repaired archives; this batch does not establish parity for the entire corpus.
+
+The final outgoing-history audit finds no Git blobs at or above 100,000,000 bytes. Both 129.9 MB Episode 16 archives remain present with matching content hashes, ignored, and untracked. The upstream is an ancestor of this branch, so these commits support an ordinary push. No push was performed by this repair.
