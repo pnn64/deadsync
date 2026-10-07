@@ -765,5 +765,16 @@
       "unchanged raw bytes after level-22 recompression",
       "all pre-existing fixture files and 412 primary index entries preserved"
     ]
-  }
+  },
+  "parity_recaptures": [
+    {
+      "pass_number": 2,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "ded3626a5b627270035ff26730920fbc17f4bf8187666176e747adb54b178b80.tar.zst",
+      "archive": "b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst",
+      "harness_version": "0.1.2",
+      "reason": "Replace obsolete quarter-beat scheduler with native 60 Hz actor timing",
+      "update_frames": 8707
+    }
+  ]
 }

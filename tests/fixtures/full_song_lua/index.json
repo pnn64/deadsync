@@ -17,12 +17,14 @@
     {
       "title": "Let Me Hear That",
       "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
-      "archive": "ded3626a5b627270035ff26730920fbc17f4bf8187666176e747adb54b178b80.tar.zst",
-      "sha256": "ded3626a5b627270035ff26730920fbc17f4bf8187666176e747adb54b178b80",
-      "compressed_bytes": 679128,
-      "uncompressed_sha256": "ae582f6976b4bfe595067050b39bdb6fe9079f61bd6648d11a476057a29b0f0e",
+      "archive": "b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst",
+      "sha256": "b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc",
+      "compressed_bytes": 758890,
+      "uncompressed_sha256": "c43f3d5b8e6258e4a1ef18aeabb1d6c60a5583e3b86ff1ecf143366f6129233e",
       "compression_level": 22,
       "aliases": [
+        "0a88b6ea96e7abe307b749a10c76005b34c117ae20bfde30de635b27e3ab45db.tar.zst",
+        "ded3626a5b627270035ff26730920fbc17f4bf8187666176e747adb54b178b80.tar.zst",
         "375e45dd917ebe44dd960f0ceae76f66bc208c6e5e1f8a9f2d23773d4be34481.tar.zst"
       ]
     },

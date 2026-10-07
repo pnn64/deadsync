@@ -504,6 +504,28 @@ impl WholeSongComposer {
             .enumerate()
             .map(|(index, overlay)| {
                 let state = states.get(index).copied().unwrap_or_default();
+                // AFT sprites are built from capture topology in gameplay,
+                // rather than from an uploaded image texture.
+                if matches!(overlay.kind, SongLuaOverlayKind::AftSprite { .. }) {
+                    return self.topology.aft_sprite_targets[index]
+                        .get()
+                        .and_then(|target| {
+                            let size = song_lua_aft_size(&overlays[target], states[target])?;
+                            build_song_lua_aft_sprite_actor(
+                                state,
+                                self.topology.aft_texture_handles[target],
+                                size,
+                                0,
+                                screen[0],
+                                screen[1],
+                                seconds,
+                                beat,
+                                seconds,
+                                None,
+                            )
+                        })
+                        .map_or(0, |actors| actors.len());
+                }
                 let camera = song_lua_overlay_camera_state(overlays, states, overlay.parent_index);
                 build_song_lua_overlay_actor(
                     overlay,
