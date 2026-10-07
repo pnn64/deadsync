@@ -32,8 +32,9 @@ based on the number of raw events in the native trace.
 
 Full-song references must use native song timing, have complete update-frame
 coverage, and report no native runtime errors or dropped events. Captures
-with positive hibernation calls require harness `0.1.6` or later. The runner
-rejects obsolete references before comparing gameplay; regenerate them with
+with positive hibernation calls require harness `0.1.6` or later; non-default
+`SetUpdateRate` calls require `0.1.7` or later. The runner rejects obsolete
+references before comparing gameplay; regenerate them with
 the sibling harness. Songs without Lua references have empty compiled layers
 and still receive root, command, player, and modifier checks. All 18 recovered
 songs with empty Lua closures were recaptured with `0.1.6` and pass on DeadSync

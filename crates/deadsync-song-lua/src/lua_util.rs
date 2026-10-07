@@ -6100,9 +6100,14 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 let duration = args
                     .get(1)
                     .cloned()
-                    .and_then(read_f32)
+                    .and_then(|value| match value {
+                        // Simply Love uses math.huge for engine HUD actors.
+                        Value::Number(value) => Some(value as f32),
+                        value => read_f32(value),
+                    })
                     .unwrap_or(0.0)
                     .max(0.0);
+                actor.raw_set("__songlua_hibernate_seconds", duration)?;
                 if duration <= f32::EPSILON {
                     return Ok(actor.clone());
                 }
@@ -10595,20 +10600,22 @@ pub fn run_actor_update_functions_with_delta(
 
 #[derive(Clone)]
 enum SongLuaCompileUpdateJob {
+    Enter {
+        actor: Table,
+        parent: Option<Table>,
+        wrapper: bool,
+    },
     Advance {
         actor: Table,
-        rate: f64,
         order: usize,
         recurring: bool,
     },
     Recurring {
         actor: Table,
-        rate: f64,
         order: usize,
     },
     Callback {
         actor: Table,
-        rate: f64,
         order: usize,
     },
 }
@@ -10624,15 +10631,23 @@ fn invalidate_compile_update_plan(lua: &Lua) {
 fn collect_compile_update_jobs(
     lua: &Lua,
     actor: &Table,
-    parent_rate: f64,
+    parent: Option<&Table>,
+    wrapper: bool,
     jobs: &mut Vec<SongLuaCompileUpdateJob>,
     order: &mut usize,
 ) -> mlua::Result<()> {
+    // Actor::Update checks hibernation before its wrappers. Retain that entry
+    // phase separately from UpdateInternal so paused owners block the tree.
+    jobs.push(SongLuaCompileUpdateJob::Enter {
+        actor: actor.clone(),
+        parent: parent.cloned(),
+        wrapper,
+    });
     // Actor::Update advances wrappers before the wrapped actor. A wrapper
     // receives its owner's delta, before ActorFrame's child update rate.
     if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
         for wrapper in wrappers.sequence_values::<Table>() {
-            collect_compile_update_jobs(lua, &wrapper?, parent_rate, jobs, order)?;
+            collect_compile_update_jobs(lua, &wrapper?, Some(actor), true, jobs, order)?;
         }
     }
     *order += 1;
@@ -10643,20 +10658,17 @@ fn collect_compile_update_jobs(
         .expect("orders installed")
         .0
         .insert(actor.to_pointer() as usize, *order);
-    let rate = parent_rate * actor_update_rate(actor)?;
     let recurring = actor
         .get::<Option<String>>("__songlua_recurring_update_command")?
         .is_some();
     jobs.push(SongLuaCompileUpdateJob::Advance {
         actor: actor.clone(),
-        rate,
         order: *order,
         recurring,
     });
     if recurring {
         jobs.push(SongLuaCompileUpdateJob::Recurring {
             actor: actor.clone(),
-            rate,
             order: *order,
         });
     }
@@ -10665,10 +10677,10 @@ fn collect_compile_update_jobs(
             continue;
         };
         child.set("__songlua_parent", actor.clone())?;
-        collect_compile_update_jobs(lua, &child, rate, jobs, order)?;
+        collect_compile_update_jobs(lua, &child, Some(actor), false, jobs, order)?;
     }
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
-        collect_compile_update_jobs(lua, &stream, rate, jobs, order)?;
+        collect_compile_update_jobs(lua, &stream, Some(actor), false, jobs, order)?;
     }
     if actor
         .get::<Option<Function>>("__songlua_update_function")?
@@ -10676,7 +10688,6 @@ fn collect_compile_update_jobs(
     {
         jobs.push(SongLuaCompileUpdateJob::Callback {
             actor: actor.clone(),
-            rate,
             order: *order,
         });
     }
@@ -10686,7 +10697,7 @@ fn collect_compile_update_jobs(
 fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Rc<[SongLuaCompileUpdateJob]>> {
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
-        collect_compile_update_jobs(lua, root, 1.0, &mut jobs, &mut 0)?;
+        collect_compile_update_jobs(lua, root, None, false, &mut jobs, &mut 0)?;
         lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
     }
     Ok(lua
@@ -10702,16 +10713,22 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
     let jobs = compile_update_jobs(lua, root)?;
     for job in jobs.iter() {
         if let SongLuaCompileUpdateJob::Advance { actor, .. } = job
-            && actor
-                .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
-                .unwrap_or(false)
+            && (actor
+                .raw_get::<Option<f32>>("__songlua_hibernate_seconds")?
+                .is_some_and(|left| left > 0.0)
+                || actor
+                    .raw_get::<Option<bool>>("__songlua_command_queue_deferred")?
+                    .unwrap_or(false))
         {
             return Ok(false);
         }
     }
-    let mut jobs = jobs
-        .iter()
-        .filter(|job| !matches!(job, SongLuaCompileUpdateJob::Advance { .. }));
+    let mut jobs = jobs.iter().filter(|job| {
+        !matches!(
+            job,
+            SongLuaCompileUpdateJob::Advance { .. } | SongLuaCompileUpdateJob::Enter { .. }
+        )
+    });
     match (jobs.next(), jobs.next()) {
         (None, None) => Ok(true),
         (Some(SongLuaCompileUpdateJob::Callback { actor, .. }), None) => {
@@ -11062,10 +11079,46 @@ pub fn run_actor_compile_update_functions_with_delta(
         .expect("phase installed");
     let result = (|| {
         for job in jobs.iter() {
-            let order = match job {
-                SongLuaCompileUpdateJob::Advance { order, .. }
-                | SongLuaCompileUpdateJob::Recurring { order, .. }
-                | SongLuaCompileUpdateJob::Callback { order, .. } => *order,
+            let (actor, order) = match job {
+                SongLuaCompileUpdateJob::Enter {
+                    actor,
+                    parent,
+                    wrapper,
+                } => {
+                    let incoming = match parent {
+                        Some(parent) => parent.raw_get::<Option<f64>>(if *wrapper {
+                            "__songlua_compile_wrapper_delta"
+                        } else {
+                            "__songlua_compile_update_delta"
+                        })?,
+                        None => Some(delta_seconds),
+                    };
+                    let delta = incoming
+                        .map(|delta| advance_hibernation(actor, delta))
+                        .transpose()?
+                        .flatten();
+                    actor.raw_set("__songlua_compile_wrapper_delta", delta)?;
+                    actor.raw_set("__songlua_compile_update_delta", Value::Nil)?;
+                    continue;
+                }
+                SongLuaCompileUpdateJob::Advance { actor, order, .. }
+                | SongLuaCompileUpdateJob::Recurring { actor, order, .. }
+                | SongLuaCompileUpdateJob::Callback { actor, order, .. } => (actor, *order),
+            };
+            let delta = if matches!(job, SongLuaCompileUpdateJob::Advance { .. }) {
+                // A wrapper callback can change the owner's update rate. Native
+                // ActorFrame reads it only after Actor has updated its wrappers.
+                let rate = actor_update_rate(actor)? as f32;
+                let delta = actor
+                    .raw_get::<Option<f64>>("__songlua_compile_wrapper_delta")?
+                    .map(|delta| f64::from(delta as f32 * rate));
+                actor.raw_set("__songlua_compile_update_delta", delta)?;
+                delta
+            } else {
+                actor.raw_get::<Option<f64>>("__songlua_compile_update_delta")?
+            };
+            let Some(delta_seconds) = delta else {
+                continue;
             };
             *lua.app_data_mut::<SongLuaCompileUpdatePhase>()
                 .expect("phase installed") = SongLuaCompileUpdatePhase {
@@ -11078,13 +11131,10 @@ pub fn run_actor_compile_update_functions_with_delta(
             }
             match job {
                 SongLuaCompileUpdateJob::Advance {
-                    actor,
-                    rate,
-                    recurring,
-                    ..
+                    actor, recurring, ..
                 } => {
-                    advance_motion_clock(lua, actor, delta_seconds * rate)?;
-                    advance_spin_pose(lua, actor, delta_seconds * rate)?;
+                    advance_motion_clock(lua, actor, delta_seconds)?;
+                    advance_spin_pose(lua, actor, delta_seconds)?;
                     advance_capture_position(lua, actor)?;
                     let ready = lua
                         .app_data_ref::<SongLuaCompileFrames>()
@@ -11121,11 +11171,11 @@ pub fn run_actor_compile_update_functions_with_delta(
                                         })
                                 });
                         if !started {
-                            run_recurring_update(lua, actor, delta_seconds * rate, true)?;
+                            run_recurring_update(lua, actor, delta_seconds, true)?;
                         }
                     }
                 }
-                SongLuaCompileUpdateJob::Recurring { actor, rate, .. } => {
+                SongLuaCompileUpdateJob::Recurring { actor, .. } => {
                     let started =
                         lua.app_data_ref::<SongLuaCompileFrames>()
                             .is_some_and(|frames| {
@@ -11137,12 +11187,13 @@ pub fn run_actor_compile_update_functions_with_delta(
                                     })
                             });
                     if !started {
-                        run_recurring_update(lua, actor, delta_seconds * rate, true)?;
+                        run_recurring_update(lua, actor, delta_seconds, true)?;
                     }
                 }
-                SongLuaCompileUpdateJob::Callback { actor, rate, .. } => {
-                    run_update_callback(lua, actor, delta_seconds * rate)?
+                SongLuaCompileUpdateJob::Callback { actor, .. } => {
+                    run_update_callback(lua, actor, delta_seconds)?
                 }
+                SongLuaCompileUpdateJob::Enter { .. } => unreachable!("actor entry handled above"),
             }
         }
         Ok(())
@@ -11229,6 +11280,26 @@ fn actor_update_rate(actor: &Table) -> mlua::Result<f64> {
     } else {
         1.0
     })
+}
+
+fn advance_hibernation(actor: &Table, delta_seconds: f64) -> mlua::Result<Option<f64>> {
+    if actor
+        .raw_get::<Option<bool>>("__songlua_theme_hibernating")?
+        .unwrap_or(false)
+    {
+        return Ok(None);
+    }
+    let left = actor
+        .raw_get::<Option<f32>>("__songlua_hibernate_seconds")?
+        .unwrap_or(0.0);
+    if left <= 0.0 {
+        return Ok(Some(f64::from(delta_seconds as f32)));
+    }
+    // Actor.cpp::Update subtracts native floats before wrappers and before the
+    // ActorFrame update rate. Its wake-up frame receives only the overshoot.
+    let left = left - delta_seconds as f32;
+    actor.raw_set("__songlua_hibernate_seconds", left.max(0.0))?;
+    Ok((left <= 0.0).then(|| f64::from(-left)))
 }
 
 fn report_update_error(
@@ -11385,6 +11456,9 @@ fn run_actor_update_functions_for_table_inner(
     parent_delta_seconds: f64,
     run_recurring_commands: bool,
 ) -> mlua::Result<()> {
+    let Some(parent_delta_seconds) = advance_hibernation(actor, parent_delta_seconds)? else {
+        return Ok(());
+    };
     if let Some(wrappers) = actor.get::<Option<Table>>("__songlua_wrappers")? {
         for wrapper in wrappers.sequence_values::<Table>() {
             run_actor_update_functions_for_table_inner(
@@ -11395,7 +11469,7 @@ fn run_actor_update_functions_for_table_inner(
             )?;
         }
     }
-    let delta_seconds = parent_delta_seconds * actor_update_rate(actor)?;
+    let delta_seconds = f64::from(parent_delta_seconds as f32 * actor_update_rate(actor)? as f32);
     // ITGmania runs Actor::UpdateInternal (including queued UpdateCommands),
     // then child updates, then the ActorFrame update function.
     run_recurring_update(lua, actor, delta_seconds, run_recurring_commands)?;
@@ -11453,8 +11527,11 @@ pub fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Res
 pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Result<bool> {
     // Motion clocks need chronological advancement even without a Lua callback.
     if actor
-        .get::<Option<Function>>("__songlua_update_function")?
-        .is_some()
+        .raw_get::<Option<f32>>("__songlua_hibernate_seconds")?
+        .is_some_and(|left| left > 0.0)
+        || actor
+            .get::<Option<Function>>("__songlua_update_function")?
+            .is_some()
         || actor
             .get::<Option<Function>>("__songlua_draw_function")?
             .is_some()

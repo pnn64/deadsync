@@ -13249,6 +13249,112 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn hibernate_tree_callbacks() {
+        for (compiled, owner_rate) in [(false, 2.0), (true, 2.0), (false, 4.0), (true, 4.0)] {
+            let lua = Lua::new();
+            let runtime =
+                create_song_runtime_table(&lua, &SongLuaCompileContext::new("", "")).unwrap();
+            lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+            let root = test_create_dummy_actor(&lua, "ActorFrame").unwrap();
+            let child = test_create_dummy_actor(&lua, "ActorFrame").unwrap();
+            root.raw_set(1, child.clone()).unwrap();
+            lua.globals().set("root", root.clone()).unwrap();
+            lua.globals().set("child", child).unwrap();
+            lua.globals().set("owner_rate", owner_rate).unwrap();
+            lua.load(
+                r#"
+events = {}
+local function update(label)
+    return function(actor, delta)
+        assert(actor:GetVisible(), "hibernation preserves GetVisible")
+        events[#events + 1] = {label, delta}
+    end
+end
+root:AddWrapperState()
+root:GetWrapperState(1):SetUpdateFunction(function(actor, delta)
+    update("wrapper")(actor, delta)
+    root:SetUpdateRate(owner_rate)
+end)
+root:SetUpdateRate(2):SetUpdateFunction(update("parent")):hibernate(0.125)
+child:SetUpdateRate(3):SetUpdateFunction(update("child"))
+"#,
+            )
+            .exec()
+            .unwrap();
+            let root = Value::Table(root);
+            for frame in 0..=8 {
+                let delta = if frame == 0 {
+                    0.0
+                } else {
+                    frame as f32 / 60.0 - (frame - 1) as f32 / 60.0
+                };
+                if compiled {
+                    crate::lua_util::run_actor_compile_update_functions_with_delta(
+                        &lua,
+                        &root,
+                        f64::from(delta),
+                    )
+                    .unwrap();
+                } else {
+                    crate::lua_util::run_actor_update_functions_with_delta(
+                        &lua,
+                        &root,
+                        f64::from(delta),
+                    )
+                    .unwrap();
+                }
+                let events: Table = lua.globals().get("events").unwrap();
+                assert_eq!(events.raw_len(), if frame == 8 { 3 } else { 0 });
+            }
+            let events: Table = lua.globals().get("events").unwrap();
+            // Linked Actor::Update wakes at frame eight with 1/120 second left.
+            // Wrappers receive it before ActorFrame applies the rate, including
+            // a rate changed by that wrapper in this same native update.
+            for (index, label, delta) in [
+                (1, "wrapper", 1.0 / 120.0),
+                (2, "child", owner_rate / 40.0),
+                (3, "parent", owner_rate / 120.0),
+            ] {
+                let event: Table = events.raw_get(index).unwrap();
+                assert_eq!(event.raw_get::<String>(1).unwrap(), label);
+                assert!((event.raw_get::<f64>(2).unwrap() - delta).abs() < 1.0e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn hibernate_wake_replace() {
+        for compiled in [false, true] {
+            let lua = Lua::new();
+            let runtime =
+                create_song_runtime_table(&lua, &SongLuaCompileContext::new("", "")).unwrap();
+            lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+            let root = test_create_dummy_actor(&lua, "ActorFrame").unwrap();
+            lua.globals().set("root", root.clone()).unwrap();
+            lua.load("calls = 0; root:SetUpdateFunction(function() calls = calls + 1 end):hibernate(math.huge)").exec().unwrap();
+            let root = Value::Table(root);
+            for (command, delta, calls) in [
+                ("", 10.0, 0),
+                ("root:hibernate(0)", 0.0, 1),
+                ("root:hibernate(0.25)", 0.125, 1),
+                ("root:hibernate(0.03125)", 0.0625, 2),
+            ] {
+                lua.load(command).exec().unwrap();
+                if compiled {
+                    crate::lua_util::run_actor_compile_update_functions_with_delta(
+                        &lua, &root, delta,
+                    )
+                    .unwrap();
+                } else {
+                    crate::lua_util::run_actor_update_functions_with_delta(&lua, &root, delta)
+                        .unwrap();
+                }
+                assert_eq!(lua.globals().get::<usize>("calls").unwrap(), calls);
+            }
+        }
+    }
+
+    #[test]
     fn compile_song_lua_captures_hibernate_visibility_window() {
         let song_dir = test_dir("actor-hibernate-visibility");
         let entry = song_dir.join("default.lua");

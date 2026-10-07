@@ -433,27 +433,29 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
             }),
         "native replay must cover the complete song from frame zero",
     );
-    let hibernates = |operation: &str, args: &[Value]| {
-        operation
-            .rsplit('.')
-            .next()
-            .is_some_and(|name| name.eq_ignore_ascii_case("hibernate"))
-            && args
-                .first()
-                .and_then(projected_alpha)
-                .is_some_and(|value| value > 0.0)
-    };
-    let positive_hibernate = trace.operation_tracks.iter().any(|track| {
-        track
-            .samples
+    let has_operation = |name: &str, predicate: fn(f32) -> bool| {
+        let matches = |operation: &str, args: &[Value]| {
+            operation
+                .rsplit('.')
+                .next()
+                .is_some_and(|operation| operation.eq_ignore_ascii_case(name))
+                && args
+                    .first()
+                    .and_then(projected_alpha)
+                    .is_some_and(predicate)
+        };
+        trace.operation_tracks.iter().any(|track| {
+            track
+                .samples
+                .iter()
+                .any(|sample| matches(&track.operation, &sample.3))
+        }) || trace
+            .tween_tracks
             .iter()
-            .any(|sample| hibernates(&track.operation, &sample.3))
-    }) || trace
-        .tween_tracks
-        .iter()
-        .flat_map(|track| &track.segments)
-        .flat_map(|segment| &segment.operations)
-        .any(|operation| hibernates(&operation.operation, &operation.args));
+            .flat_map(|track| &track.segments)
+            .flat_map(|segment| &segment.operations)
+            .any(|operation| matches(&operation.operation, &operation.args))
+    };
     let version = manifest
         .harness_version
         .split('.')
@@ -461,8 +463,14 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         .collect::<Result<Vec<_>, _>>()
         .expect("numeric harness version");
     assert!(
-        !positive_hibernate || version.as_slice() >= [0, 1, 6].as_slice(),
+        !has_operation("hibernate", |value| value > 0.0)
+            || version.as_slice() >= [0, 1, 6].as_slice(),
         "obsolete hibernation replay; recapture with harness 0.1.6 or later",
+    );
+    assert!(
+        !has_operation("SetUpdateRate", |value| value != 1.0)
+            || version.as_slice() >= [0, 1, 7].as_slice(),
+        "obsolete ActorFrame update-rate replay; recapture with harness 0.1.7 or later",
     );
 }
 
@@ -663,6 +671,28 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
     archive.manifest.harness_version = "0.1.6".into();
     trace.harness_version = "0.1.6".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.operation_tracks.push(NativeOperationTrack {
+        actor: "probe".into(),
+        operation: "ActorFrame.SetUpdateRate".into(),
+        samples: vec![(0, 0.0, 0.0, vec![serde_json::json!(2)])],
+    });
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace
+        .operation_tracks
+        .last_mut()
+        .expect("update-rate probe")
+        .samples[0]
+        .3 = vec![serde_json::json!(1)];
+    validate_native_trace(&trace, &archive.manifest);
+    trace
+        .operation_tracks
+        .last_mut()
+        .expect("update-rate probe")
+        .samples[0]
+        .3 = vec![serde_json::json!(2)];
+    archive.manifest.harness_version = "0.1.7".into();
+    trace.harness_version = "0.1.7".into();
     validate_native_trace(&trace, &archive.manifest);
     trace.dropped_events = 1;
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());

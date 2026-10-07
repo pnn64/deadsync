@@ -525,3 +525,65 @@ does not establish parity for the rest of the corpus.
 
 Verification log SHA-256:
 `826d4d12656e072e43e358a014e9c24a6c24d9c9b179cfb1cc510533dd5bc92c`.
+
+## Pass 16: repair hibernating callbacks and native update rates
+
+The linked `Actor::Update` and `ActorFrame::UpdateInternal` method bodies
+match the latest local ITGmania reference byte-for-byte. The first checks
+hibernation before wrappers, preserves a native float wake-up remainder,
+and then enters the actor. The second reads its update rate after those
+wrappers, multiplies a native float delta, advances children, and finally
+runs its callback. Simply Love's ScreenGameplay metrics use `math.huge`
+to hibernate engine HUD actors through this same mechanism.
+
+DeadSync now applies that entry gate in both its recursive and compiled
+callback paths. Sleeping owners block their wrappers, descendants, recurring
+commands, and chronological motion updates. A waking owner passes its
+remaining delta to wrappers before applying its current rate to its own
+work and children. The compiler reads that rate after wrapper callbacks;
+it no longer retains a precomputed product of ancestor rates. Regression
+checks cover callback order, nested rates, a rate changed by a wrapper in
+that frame, own visibility, indefinite sleep, explicit wake-up, and replacing
+an existing sleep. Song cache version 29 invalidates earlier baked results.
+
+The source crosscheck also found that the harness ignored `SetUpdateRate`.
+Harness `0.1.7`, commit `aca10de`, retains the native float rate and applies
+it after hibernation and wrappers. Its scaled fixture checks the resulting
+parent and child alpha as well as callback deltas. The same fixture fails
+two delta assertions on `0.1.6`, then captures the complete four-second
+probe with no errors or dropped events on `0.1.7`. A further probe changes
+the owner's rate from its wrapper during the wake-up frame and passes.
+All 163 harness tests pass, with five existing tests ignored. DeadSync's
+reference gate now rejects earlier captures with non-default update rates;
+its positive and negative regression checks pass.
+
+DeadSync `0.5.1837` passes all 470 song Lua unit tests, two overlay-state
+checks, and 182 playback checks, with three existing playback tests ignored.
+The stale-cache rejection test and 19 profile/gameplay checks pass.
+The final sweep from the top passes the first 13 archives and all 2,757,351
+comparisons on executable SHA-256
+`5ecfab7cbd235a6387c5bcc44cbb442732b68d411b0d7ffee412f230cdf7e186`.
+The next indexed archive is Nishi-Shinjuku's obsolete clock reference, which
+the runner correctly rejects before compilation.
+
+This repairs the callback scheduling phase, not the complete hibernation
+model. Queued tween progress still needs an actor clock that pauses, and
+the visibility capture workaround still needs replacement. The corrected
+Nishi-Shinjuku archive still fails the whole-song composition assertion
+on this executable and remains unindexed. No assertion or tolerance was
+relaxed, and no failed archive was published.
+
+The updated audit covers all 492 indexed and retained variants, including
+serialized infinite hibernation. It finds 375 obsolete clocks, 22 pre-`0.1.6`
+hibernation references, and 53 missing frame histories. These sets overlap;
+at least 386 variants need regeneration. No stored variant records a
+non-default update rate. A full corpus pass remains outstanding.
+
+Audit SHA-256:
+`74caaca889dc0070859b02ba1bb7cf15502718d44f3bafc7779edc11f8719d87`.
+Song Lua verification log SHA-256:
+`7f66f49f7fbc5ab5d52daa26fb4d821b452f0d632b0b8848a537825608078dfd`.
+Nishi-Shinjuku failure log SHA-256:
+`dbe27cfc067c2cba0f4c80e67943e202d97fee0f053230f8b06a72a244ae5db9`.
+Top-of-corpus verification receipt SHA-256:
+`a572568f61126544db8b227baec940df682ef56e60db84d02e1cfabbb2a29315`.
