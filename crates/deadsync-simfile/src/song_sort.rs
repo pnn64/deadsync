@@ -526,6 +526,9 @@ fn alpha_grouped_songs(
             bucket
         })
         .collect();
+    if bucket_indices.len() <= 1 {
+        return grouped_contiguous_songs(songs, |_| group_for(bucket_indices[0]));
+    }
     let mut buckets: [Vec<Arc<SongData>>; ALPHA_GROUP_COUNT] =
         std::array::from_fn(|bucket| Vec::with_capacity(counts[bucket]));
     for (song, bucket) in songs.into_iter().zip(bucket_indices) {
@@ -549,6 +552,48 @@ fn alpha_grouped_songs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn alpha_tiny_inputs_preserve_buckets_identity_and_capacity() {
+        for artist in [false, true] {
+            let empty = Vec::with_capacity(64);
+            let groups = if artist {
+                artist_grouped_songs(empty)
+            } else {
+                title_grouped_songs(empty)
+            };
+            assert!(groups.is_empty());
+            assert_eq!(groups.capacity(), 0);
+            for (label, bucket) in [("", 0), ("\u{2003}7th", 1), ("Zulu", 27), ("\u{66f2}", 0)] {
+                for capacity in [1, 64] {
+                    let mut song = test_song();
+                    song.translit_title = label.into();
+                    song.title = label.into();
+                    song.artist = label.into();
+                    let song = Arc::new(song);
+                    let mut songs = Vec::with_capacity(capacity);
+                    songs.push(Arc::clone(&song));
+                    let groups = if artist {
+                        artist_grouped_songs(songs)
+                    } else {
+                        title_grouped_songs(songs)
+                    };
+                    assert_eq!(groups.len(), 1);
+                    assert_eq!(groups.capacity(), 1);
+                    assert_eq!(
+                        groups[0].group,
+                        if artist {
+                            SongSortGroup::Artist(bucket)
+                        } else {
+                            SongSortGroup::Title(bucket)
+                        }
+                    );
+                    assert_eq!(groups[0].songs.capacity(), 1);
+                    assert!(Arc::ptr_eq(&groups[0].songs[0], &song));
+                }
+            }
+        }
+    }
 
     #[test]
     fn bpm_single_group_preserves_order_ties_and_trims_spare_capacity() {

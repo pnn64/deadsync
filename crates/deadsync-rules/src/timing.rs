@@ -1200,14 +1200,6 @@ impl TimingData {
 
     pub fn get_capped_max_bpm(&self, cap: Option<f32>) -> f32 {
         let mut max_bpm = self.max_bpm.max(0.0);
-        if max_bpm == 0.0 {
-            max_bpm = self
-                .bpms
-                .iter()
-                .map(|point| point.bpm)
-                .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-                .fold(0.0, f32::max);
-        }
 
         if let Some(cap_value) = cap
             && cap_value > 0.0
@@ -1555,16 +1547,24 @@ impl TimingData {
         (beat - prefix.beat).mul_add(prefix.ratio, prefix.cum_displayed)
     }
 
+    #[inline]
     #[must_use]
     pub fn get_speed_multiplier(&self, beat: f32, time: f32) -> f32 {
-        self.get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
+        self.get_speed_multiplier_with(beat, || timing_ns_from_seconds(time))
     }
 
+    #[inline]
     #[must_use]
     pub fn get_speed_multiplier_ns(&self, beat: f32, time_ns: i64) -> f32 {
+        self.get_speed_multiplier_with(beat, || time_ns)
+    }
+
+    #[inline(always)]
+    fn get_speed_multiplier_with(&self, beat: f32, time_ns: impl FnOnce() -> i64) -> f32 {
         if self.speeds.is_empty() {
             return 1.0;
         }
+        let time_ns = time_ns();
         let pos = self.speeds.partition_point(|seg| seg.beat <= beat);
         let Some(i) = pos.checked_sub(1) else {
             let first = self.speeds[0];
@@ -2631,6 +2631,93 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capped_max_bpm_preserves_invalid_maps_and_cap_rules() {
+        for bpms in [
+            vec![],
+            vec![(0.0, -0.0), (4.0, 0.0)],
+            vec![(0.0, -120.0)],
+            vec![(0.0, f32::NAN), (4.0, f32::INFINITY)],
+            vec![(8.0, 120.0), (0.0, 240.0), (4.0, f32::NEG_INFINITY)],
+        ] {
+            let valid = bpms.iter().any(|&(_, bpm)| bpm == 240.0);
+            let empty = bpms.is_empty();
+            let timing = TimingData::from_segments(
+                0.0,
+                0.0,
+                &TimingSegments {
+                    bpms,
+                    ..TimingSegments::default()
+                },
+                &[],
+            );
+            let expected = if valid {
+                [240.0, 240.0, 240.0, 240.0, 240.0, 1.0, 180.0]
+            } else if empty {
+                [60.0, 60.0, 60.0, 60.0, 60.0, 1.0, 60.0]
+            } else {
+                [60.0; 7]
+            };
+            for (cap, expected) in [
+                None,
+                Some(-1.0),
+                Some(0.0),
+                Some(f32::NAN),
+                Some(f32::INFINITY),
+                Some(1.0),
+                Some(180.0),
+            ]
+            .into_iter()
+            .zip(expected)
+            {
+                assert_eq!(timing.get_capped_max_bpm(cap), expected);
+            }
+        }
+        assert_eq!(TimingData::default().get_capped_max_bpm(None), 60.0);
+    }
+
+    #[test]
+    fn speed_float_queries_preserve_empty_tables_and_extreme_times() {
+        for timing in [
+            TimingData::default(),
+            TimingData::from_segments(0.125, -0.25, &TimingSegments::default(), &[]),
+        ] {
+            for beat in [-4.0, 0.0, 4.0, f32::NAN, f32::INFINITY] {
+                for time in [-0.0, 0.0, 1.0, f32::MIN, f32::MAX, f32::NAN, f32::INFINITY] {
+                    assert_eq!(
+                        timing.get_speed_multiplier(beat, time).to_bits(),
+                        1.0f32.to_bits()
+                    );
+                }
+            }
+        }
+        let timing = TimingData::from_segments(
+            0.125,
+            -0.25,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds: vec![SpeedSegment {
+                    beat: 0.0,
+                    ratio: 0.5,
+                    delay: 2.0,
+                    unit: SpeedUnit::Seconds,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        for beat in [-4.0, 0.0, 4.0, f32::NAN, f32::INFINITY] {
+            for time in [-0.0, 0.0, 1.0, f32::MIN, f32::MAX, f32::NAN, f32::INFINITY] {
+                assert_eq!(
+                    timing.get_speed_multiplier(beat, time).to_bits(),
+                    timing
+                        .get_speed_multiplier_ns(beat, timing_ns_from_seconds(time))
+                        .to_bits()
+                );
+            }
+        }
+    }
 
     #[test]
     fn unsorted_bpms_preserve_stable_ties_offsets_and_source_data() {
