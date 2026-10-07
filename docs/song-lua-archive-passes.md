@@ -18,6 +18,7 @@ an interactive ITGmania process. Local ITGmania sources are the reference.
 | 1 | `fc4f528d0fe0b68e691c222b2b2d58d8deb0f10d938f6eac3f57533cb06bb7ff.tar.zst` / `(R10) Warp Zone/warp zone.ssc` | 10 player-transform frames | 212,220/212,220 | `0.5.1823` |
 | 2 | `b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst` / `(R5) Let Me Hear That/let me hear that.sm` | 382 modifier checks in obsolete capture; AFT output omitted by composition adapter | 205,075/205,075 | `0.5.1824` |
 | 3 | `e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908.tar.zst` / `(R6) Waltz Capriccio/waltz_capriccio.ssc` | Missing hinted overlay asset prevented compilation | 260,292/260,292 | `0.5.1825` |
+| 4 | `54d5c782bdbdf43c6fd23825be53039fd343ad7db5ca37464d24f1bd1e99bf4e.tar.zst` / `100 Bad Days/100 Bad Days.sm` | Missing movie; rounded song offset delayed eight modifier checks; numeric prefix uncovered | 174,897/174,897 | `0.5.1826` |
 
 ## Pass 1: preserve sampled transform time
 
@@ -126,3 +127,42 @@ version is `0.5.1825`; the complete fixture log is
 `target/song-lua-archive-passes/pass-03-verify.log`.
 
 Verification log SHA-256: `ab8c4dca4770e9a2001fd29389c069f0a870c909426c97c4d2073762df510a3f`.
+
+## Pass 4: retain movie assets and authored song offsets
+
+The old archive `cd076a0f887e93f2ec4e6e54d4065943c984a99c750218ab1b2abe4e7dc4d7f4.tar.zst`
+omitted `lua/100BadDays.mp4`. ITGmania `src/ActorUtil.cpp::InitFileTypeLists`
+classifies eleven movie formats as Sprite textures. The harness collector
+now retains these required texture assets, including exact and extensionless
+references, and reuses captured dimensions before probing disk. Harness
+`0.1.4`, commit `275a0ff`, passes 161 tests with five ignored tests, plus
+checks covering every supported movie extension. The new archive preserves
+the original movie bytes and all 7,920 native frames over 131.98 seconds.
+
+That complete archive exposed ten modifier gaps. Eight came from runtime
+song metadata using RSSP's report-rounded `0.066` instead of the authored
+`0.065760` offset. ITGmania `NotesLoaderSM.cpp::SMSetOffset` stores the
+original float; its `TimingData.cpp::GetBeatInternal` evaluates float song
+position. With the original offset, frame 25 crosses beat one at
+`1.0000001192092896`. Report rounding made DeadSync wait until frame 26.
+Runtime metadata now reads the original global offset through RSSP's parser;
+report formatting remains RSSP's responsibility. Song cache version 27
+invalidates offsets stored by the previous loader. A split-timing regression
+checks the original song offset, separate chart offset, and exact native
+beat-one frame. All 197 simfile unit tests pass.
+
+The remaining two gaps involved `*50 30+0% beat`.
+`PlayerOptions.cpp::FromOneModString` calls `StringToFloat`, whose `strtof`
+accepts the numeric prefix `30`. DeadSync's amount parser and the independent
+reference audit now accept that prefix. Numeric and Lua-level regressions
+verify the returned 0.3 target; all 465 song-Lua unit tests passed during
+this repair. The two unsupported-write sentinels become normal option probes,
+merged with same-frame writes under the runner's existing last-write rule.
+No tolerance or required comparison was relaxed.
+
+The complete archive passes all 174,897 comparisons. Warp Zone, Let Me Hear
+That, and Waltz Capriccio also pass on this parser change. Obsolete archive
+bytes remain in Git history and local diagnostic storage, with old selectors
+preserved. DeadSync version is `0.5.1826`.
+
+Verification log SHA-256: `f436bf2aa9dc0c73692ec6609902fac31f99e6f709189a65dcb898bb8a561caa`.

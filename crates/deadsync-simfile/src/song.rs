@@ -160,7 +160,7 @@ pub fn parse_song_file_in(
     file.read_to_end(input)
         .map_err(|e| format!("Could not read file: {e}"))?;
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let summary = analyze_prepared_in_with_notes(
+    let mut summary = analyze_prepared_in_with_notes(
         input,
         extension,
         &analyzer.prepared,
@@ -168,6 +168,10 @@ pub fn parse_song_file_in(
         parsed_notes,
         cached_note_from_rssp,
     )?;
+    // RSSP rounds its report offset to milliseconds. Runtime song timing
+    // uses the authored float, as NotesLoaderSM::SMSetOffset does.
+    let parsed = rssp::parse::extract_sections(input, extension).map_err(|error| error.to_string())?;
+    summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
     let simfile_dir = path
         .parent()
         .ok_or_else(|| "Could not determine simfile directory".to_string())?;
@@ -891,6 +895,37 @@ mod tests {
 
         assert_eq!(song.charts.len(), 1);
         assert_eq!(song.charts[0].difficulty, "Hard");
+    }
+
+    #[test]
+    fn song_clock_keeps_authored_offset_with_split_timing() {
+        let root = test_dir("authored-song-offset");
+        let simfile = root.join("song.ssc");
+        fs::write(root.join("default.lua"), "return Def.Actor{}").expect("Lua layer");
+        fs::write(
+            &simfile,
+            b"#VERSION:0.83;\n#TITLE:Authored offset;\n\
+            #OFFSET:0.065760;\n#BPMS:0=144;\n#STOPS:4=0.5;\n\
+            #FGCHANGES:0=default.lua;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n\
+            #DIFFICULTY:Challenge;\n#METER:1;\n#OFFSET:0.25;\n#BPMS:0=144;\n\
+            #NOTES:\n1000\n0100\n0010\n0001\n;",
+        )
+        .expect("split timing simfile");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let data = parse_song_file(&simfile, &options, |_| 2.0).expect("song data");
+        assert_eq!(data.charts[0].offset, 0.25);
+        let song = build_song_meta(data, 0.0);
+        assert_eq!(song.offset, 0.065760);
+        let timing = song.song_timing.expect("global Lua clock");
+        let origin = timing.get_time_for_beat_exact(0.0);
+        assert_eq!(origin, -0.065760);
+        // Native float arithmetic crosses beat one on frame 25, rather
+        // than waiting for frame 26 after report rounding to 0.066.
+        assert_eq!(
+            timing.get_song_position(origin + 25.0 / 60.0).beat,
+            1.0_f32.next_up()
+        );
+        fs::remove_dir_all(root).expect("remove offset fixture");
     }
 
     #[test]

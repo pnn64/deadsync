@@ -14,3 +14,7 @@ GEMINI.md
 .DS_Store
 optimize.*
 rust-performance.md
+
+# Complete movie archives over 100 MB stay local.
+/tests/fixtures/full_song_lua/257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst
+/tests/fixtures/full_song_lua/54d5c782bdbdf43c6fd23825be53039fd343ad7db5ca37464d24f1bd1e99bf4e.tar.zst

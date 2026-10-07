@@ -293,7 +293,13 @@ pub fn split_first_word(text: &str) -> (&str, &str) {
 pub fn parse_player_option_amount(text: &str) -> Option<f32> {
     let text = text.trim();
     let raw = text.trim_end_matches('%');
-    let value = raw.parse::<f32>().ok()?;
+    // Native StringToFloat uses strtof: authored suffixes such as "30+0%"
+    // stop at the end of the first number rather than rejecting the token.
+    let value = raw.parse::<f32>().ok().or_else(|| {
+        (1..raw.len())
+            .rev()
+            .find_map(|end| raw.get(..end)?.parse::<f32>().ok())
+    })?;
     // PlayerOptions::FromOneModString uses StringToFloat, which turns
     // non-finite numeric strings (for example Lua's `-inf`) into zero.
     Some(if value.is_finite() {
@@ -519,6 +525,8 @@ mod tests {
         assert_eq!(parse_player_option_amount("-inf"), Some(0.0));
         assert_eq!(parse_player_option_amount("-nan"), Some(0.0));
         assert_eq!(parse_player_option_amount("1e999"), Some(0.0));
+        assert_eq!(parse_player_option_amount("30+0%"), Some(0.3));
+        assert_eq!(parse_player_option_amount("1.5e2suffix"), Some(1.5));
         assert_eq!(parse_player_option_amount("Mini"), None);
     }
 

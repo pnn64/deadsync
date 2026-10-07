@@ -42,12 +42,16 @@ fn mod_string_level(words: &[&str]) -> Option<f32> {
                 // strtof stops before a trailing '%' as in "150% drunk", and
                 // StringToFloat turns a non-finite result into 0.
                 let text = word.strip_suffix('%').unwrap_or(word);
-                match text.parse::<f32>() {
-                    Ok(value) if value.is_finite() => value / 100.0,
-                    Ok(_) => 0.0,
+                // Native strtof accepts the numeric prefix of "30+0%".
+                let number = (1..=text.len())
+                    .rev()
+                    .find_map(|end| text.get(..end)?.parse::<f32>().ok());
+                match number {
+                    Some(value) if value.is_finite() => value / 100.0,
+                    Some(_) => 0.0,
                     // strtof also reads C spellings of NaN such as "-nan(ind)".
-                    Err(_) if text.contains("nan") => 0.0,
-                    Err(_) => return None,
+                    None if text.contains("nan") => 0.0,
+                    None => return None,
                 }
             }
             _ => return None,

@@ -17800,6 +17800,8 @@ return Def.ActorFrame{
         mod_actions = {
             {1, table.concat({parsed_x, parsed_c, parsed_set}, "|"), true},
         }
+        po:FromString("*50 30+0% Beat")
+        assert(math.abs(po:Beat() - 0.3) < 0.000001)
     end,
 }
 "#,
