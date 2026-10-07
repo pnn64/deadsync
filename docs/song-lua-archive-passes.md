@@ -294,3 +294,24 @@ records the current native-clock fixtures. Legacy clocks in other, unverified
 archives remain a reason for future source-backed regeneration.
 
 Verification log SHA-256: `23e4e97c4c7886af55787769d8dff0b990e4d23bfcc72f62f1bcd76e97672b28`.
+
+## Pass 9: refresh Riddle with native song timing
+
+The original Riddle archive
+`dd2642a3338bc3f53179bbbe4a55ba44db0369dc1ab8f5b4c3f30471477b3132.tar.zst`
+failed eight player-modifier comparisons, including mini at beat 152,
+stealth at beat 40, and tornado at beat 56. It used the harness's legacy
+continuous double clock. The pass-8 native timing correction applies:
+ITGmania `SongPosition.cpp::UpdateSongPosition` takes its float song position
+from `TimingData`, and Simply Love reads that engine position.
+
+Harness `0.1.5` recaptured the complete song through native beat
+300.0000305175781 at 140.625 seconds, with no errors or dropped events.
+Original source and member hashes were verified. The replacement
+`45be98118e8a0ab0db2cfb017f52de2475650620cda25a3639686f424f9e900c.tar.zst`
+passes all 201,471 comparisons on DeadSync `0.5.1831`. The changed sample
+count reflects actual native callback writes; no playback code or
+comparison tolerance was changed in this pass.
+
+Verification log SHA-256:
+`4f6c2ee19fd4f5c978ad205d5eaa885002ee8920968b5331ba13eab3d0780cf2`.

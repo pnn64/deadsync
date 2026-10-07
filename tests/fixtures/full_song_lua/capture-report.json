@@ -847,6 +847,14 @@
       "archive": "9930bef5335a264f7182e991bb690ca96dc6b5ed63a17e942166ce82c1d08d7f.tar.zst",
       "harness_version": "0.1.5",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "dd2642a3338bc3f53179bbbe4a55ba44db0369dc1ab8f5b4c3f30471477b3132.tar.zst",
+      "archive": "45be98118e8a0ab0db2cfb017f52de2475650620cda25a3639686f424f9e900c.tar.zst",
+      "harness_version": "0.1.5",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }
