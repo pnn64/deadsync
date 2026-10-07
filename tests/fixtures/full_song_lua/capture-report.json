@@ -1023,6 +1023,14 @@
       "archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst",
       "harness_version": "0.1.6",
       "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 15,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "19cfb02cece56439ea15f4db005401c01effaa85e22af2e3ef982035c3ae206c.tar.zst",
+      "archive": "db0f05f4ae045a58688bccfcdfcaba9bdf415081af2d8eb5d998a5a9fbbfe31f.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

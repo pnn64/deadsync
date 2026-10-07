@@ -101,13 +101,15 @@
     {
       "title": "188|HS|Holdswitch[lv.08] the shadow",
       "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
-      "harness_version": "0.1.0",
-      "archive": "19cfb02cece56439ea15f4db005401c01effaa85e22af2e3ef982035c3ae206c.tar.zst",
-      "sha256": "19cfb02cece56439ea15f4db005401c01effaa85e22af2e3ef982035c3ae206c",
-      "compressed_bytes": 85197,
-      "uncompressed_sha256": "e991dee4b869ac22a2b949822214f1d47908ca07f44189685f4e2d26df066e98",
+      "harness_version": "0.1.6",
+      "archive": "db0f05f4ae045a58688bccfcdfcaba9bdf415081af2d8eb5d998a5a9fbbfe31f.tar.zst",
+      "sha256": "db0f05f4ae045a58688bccfcdfcaba9bdf415081af2d8eb5d998a5a9fbbfe31f",
+      "compressed_bytes": 87433,
+      "uncompressed_sha256": "72d51ee22e47cea60e3317cb9a5a6fdb64032bf6f4f4866c9853c8be70dd9afe",
       "compression_level": 22,
       "aliases": [
+        "11aafebc0c10d3ef727c38875540e00c2de325484fb6866a92934df51c250049.tar.zst",
+        "19cfb02cece56439ea15f4db005401c01effaa85e22af2e3ef982035c3ae206c.tar.zst",
         "ae0fbb874a0605c3955d23ab104689737d3fd0cf6c8f66e1167eb8f81db21868.tar.zst"
       ]
     },

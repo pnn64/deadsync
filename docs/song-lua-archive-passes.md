@@ -507,3 +507,21 @@ Empty-Lua batch receipt SHA-256:
 
 Final Bank Account verification log SHA-256:
 `82af3da8a421bb53a8fbef07947d4cc96b9c5c9e15f7af0b1659f90d842c137e`.
+
+## Pass 15: refresh The Shadow with native song timing
+
+The Shadow's original continuous-clock reference passed replay comparisons,
+but could not establish timing parity. Its complete harness `0.1.6` capture
+uses the linked ITGmania `TimingData` position through beat 338 at 130 seconds,
+with zero runtime errors or dropped events. Source bytes, member hashes, and
+lossless level-22 recompression are verified.
+
+The replacement
+`db0f05f4ae045a58688bccfcdfcaba9bdf415081af2d8eb5d998a5a9fbbfe31f.tar.zst`
+passes all 193,506 comparisons on DeadSync `0.5.1836`, including the native
+reference validation gate. No playback code or comparison tolerance changed.
+Nishi-Shinjuku's production hibernation failure remains pending; this result
+does not establish parity for the rest of the corpus.
+
+Verification log SHA-256:
+`826d4d12656e072e43e358a014e9c24a6c24d9c9b179cfb1cc510533dd5bc92c`.
