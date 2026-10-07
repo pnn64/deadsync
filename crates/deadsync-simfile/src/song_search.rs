@@ -288,16 +288,56 @@ fn song_title_contains(song: &SongData, translit: bool, needle: &str) -> bool {
     )
 }
 
-#[inline]
-fn lowercase_full_title_tail(song: &SongData, title_start: usize) -> impl Iterator<Item = u8> + '_ {
-    let subtitle = song.display_subtitle(false);
-    let has_subtitle = !subtitle.trim().is_empty();
-    song.display_title(false).as_bytes()[title_start..]
-        .iter()
-        .copied()
-        .chain(has_subtitle.then_some(b' '))
-        .chain(if has_subtitle { subtitle } else { "" }.bytes())
-        .map(|byte| byte.to_ascii_lowercase())
+// Keep the common title-prefix comparison small; only matching prefixes need
+// to compare the remaining title bytes and optional subtitle separator.
+#[inline(never)]
+fn display_full_title_tail_cmp(left: &SongData, right: &SongData) -> Ordering {
+    let left_title = left.display_title(false).as_bytes();
+    let right_title = right.display_title(false).as_bytes();
+    if left_title.len() == right_title.len() {
+        let left_subtitle = left.display_subtitle(false);
+        let right_subtitle = right.display_subtitle(false);
+        return match (
+            left_subtitle.trim().is_empty(),
+            right_subtitle.trim().is_empty(),
+        ) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            (false, false) => {
+                crate::song_sort::cmp_ignore_ascii_case(left_subtitle, right_subtitle)
+            }
+        };
+    }
+    let shared = left_title.len().min(right_title.len());
+    let (longer, shorter, reversed) = if left_title.len() > right_title.len() {
+        (left, right, false)
+    } else {
+        (right, left, true)
+    };
+    let subtitle = shorter.display_subtitle(false);
+    let order = if subtitle.trim().is_empty() {
+        Ordering::Greater
+    } else {
+        match longer.display_title(false).as_bytes()[shared]
+            .to_ascii_lowercase()
+            .cmp(&b' ')
+        {
+            Ordering::Equal => {
+                let longer_subtitle = longer.display_subtitle(false);
+                let has_subtitle = !longer_subtitle.trim().is_empty();
+                longer.display_title(false).as_bytes()[shared + 1..]
+                    .iter()
+                    .copied()
+                    .chain(has_subtitle.then_some(b' '))
+                    .chain(if has_subtitle { longer_subtitle } else { "" }.bytes())
+                    .map(|byte| byte.to_ascii_lowercase())
+                    .cmp(subtitle.bytes().map(|byte| byte.to_ascii_lowercase()))
+            }
+            order => order,
+        }
+    };
+    if reversed { order.reverse() } else { order }
 }
 
 #[inline]
@@ -312,8 +352,7 @@ fn display_full_title_cmp(left: &SongData, right: &SongData) -> Ordering {
             }
         }
     }
-    let shared = left_title.len().min(right_title.len());
-    lowercase_full_title_tail(left, shared).cmp(lowercase_full_title_tail(right, shared))
+    display_full_title_tail_cmp(left, right)
 }
 
 fn sort_song_search_candidates(candidates: &mut [SongSearchCandidate]) {
@@ -746,6 +785,39 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].song.title, "Alpha");
+    }
+
+    #[test]
+    fn full_title_comparison_preserves_subtitles_whitespace_and_utf8() {
+        let songs: Vec<_> = [
+            ("Alpha", ""),
+            ("ALPHA", " \t"),
+            ("alpha", "Mix"),
+            ("Alpha", "mIX"),
+            ("Alpha", " Mix"),
+            ("Alpha", "Zoo"),
+            ("ALPHA MIX", ""),
+            ("Alph", "a Mix"),
+            ("", "Mix"),
+            ("", ""),
+            ("\u{c4}lpha", "Mix"),
+            ("\u{e4}lpha", "mix"),
+            ("Alpha", "\u{a0}"),
+            ("Alpha", "\u{e9}Mix"),
+        ]
+        .into_iter()
+        .map(|(title, subtitle)| test_song(title, subtitle))
+        .collect();
+        for left in &songs {
+            for right in &songs {
+                assert_eq!(
+                    display_full_title_cmp(left, right),
+                    left.display_full_title(false)
+                        .to_ascii_lowercase()
+                        .cmp(&right.display_full_title(false).to_ascii_lowercase())
+                );
+            }
+        }
     }
 
     #[test]

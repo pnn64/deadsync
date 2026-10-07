@@ -379,8 +379,8 @@ struct ScrollPrefix {
 pub struct TimingData {
     /// A pre-calculated mapping from a note row index to its precise beat.
     row_to_beat: Arc<[f32]>,
-    /// A pre-calculated mapping from a beat to its precise time in seconds.
-    beat_to_time: Arc<[BeatTimePoint]>,
+    /// Immutable BPM events shared across offset changes.
+    bpms: Arc<[BpmPoint]>,
     // Song-lifetime, exact-size tables built at chart load. They are immutable
     // during play, shared by TimingData clones, and freed with the last clone.
     // Reads never allocate, miss, evict, prune, or require synchronization.
@@ -396,13 +396,13 @@ pub struct TimingData {
     scroll_prefix_sorted: bool,
     global_offset_sec: f32,
     global_offset_ns: TimingNs,
+    beat0_offset_ns: TimingNs,
     max_bpm: f32,
 }
 
 #[derive(Debug, Clone, Default, Copy)]
-struct BeatTimePoint {
+struct BpmPoint {
     beat: f32,
-    time_ns: TimingNs,
     bpm: f32,
 }
 
@@ -607,29 +607,23 @@ fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[
     unsafe { output.assume_init() }
 }
 
-fn beat_time_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BeatTimePoint]>, f32) {
-    let mut current_time = 0.0;
-    let mut last_beat = 0.0;
-    let mut last_bpm = bpms[0].1;
+fn bpm_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BpmPoint]>, f32, TimingNs) {
+    let (first_beat, first_bpm) = bpms[0];
+    let first_time = if first_beat > 0.0 && first_bpm > 0.0 {
+        (first_beat - 0.0).mul_add(60.0 / first_bpm, 0.0)
+    } else {
+        0.0
+    };
+    let beat0_offset_ns = timing_ns_add_seconds(song_offset_ns, first_time);
     let mut max_bpm = 0.0;
     let points = exact_arc(bpms.len(), |index| {
         let (beat, bpm) = bpms[index];
-        if beat > last_beat && last_bpm > 0.0 {
-            current_time = (beat - last_beat).mul_add(60.0 / last_bpm, current_time);
-        }
-        let point = BeatTimePoint {
-            beat,
-            time_ns: timing_ns_add_seconds(song_offset_ns, current_time),
-            bpm,
-        };
         if bpm.is_finite() && bpm > max_bpm {
             max_bpm = bpm;
         }
-        last_beat = beat;
-        last_bpm = bpm;
-        point
+        BpmPoint { beat, bpm }
     });
-    (points, max_bpm)
+    (points, max_bpm, beat0_offset_ns)
 }
 
 // Stop/delay tables are private and immutable. Validate row order at load,
@@ -687,7 +681,7 @@ impl TimingData {
         let song_offset_ns = timing_ns_from_seconds(song_offset_sec);
         let global_offset_ns = timing_ns_from_seconds(global_offset_sec);
 
-        let (beat_to_time, max_bpm) = beat_time_points(&parsed_bpms, song_offset_ns);
+        let (bpms, max_bpm, beat0_offset_ns) = bpm_points(&parsed_bpms, song_offset_ns);
 
         // sorted_timing_table orders non-NaN beats. Row rounding and the
         // saturating float-to-int cast are monotonic, including infinities.
@@ -703,7 +697,7 @@ impl TimingData {
             } else {
                 Arc::from(row_to_beat)
             },
-            beat_to_time,
+            bpms,
             stops,
             delays,
             warps,
@@ -716,29 +710,14 @@ impl TimingData {
             scroll_prefix_sorted,
             global_offset_sec,
             global_offset_ns,
+            beat0_offset_ns,
             max_bpm,
         };
 
-        let mut beat_time_cache = BeatTimeCache::new(&timing_with_stops);
-        // Time conversion reads each point's beat/BPM and the first point's
-        // offset. Keep that offset unchanged until every conversion is done;
-        // later timestamps can be overwritten in the uniquely owned buffer.
-        let mut first_time_ns = 0;
-        for index in 0..timing_with_stops.beat_to_time.len() {
-            let beat = timing_with_stops.beat_to_time[index].beat;
-            let time_ns =
-                timing_with_stops.get_time_for_beat_internal_ns_cached(beat, &mut beat_time_cache);
-            if index == 0 {
-                first_time_ns = time_ns;
-            } else {
-                Arc::get_mut(&mut timing_with_stops.beat_to_time)
-                    .expect("new timing points are uniquely owned")[index]
-                    .time_ns = time_ns;
-            }
-        }
-        Arc::get_mut(&mut timing_with_stops.beat_to_time)
-            .expect("new timing points are uniquely owned")[0]
-            .time_ns = first_time_ns;
+        // Only the first BPM's canonical time anchors conversions. Later
+        // event timestamps are never read by the timing state machine.
+        timing_with_stops.beat0_offset_ns =
+            timing_with_stops.get_time_for_beat_internal_ns(parsed_bpms[0].0);
 
         timing_with_stops.rebuild_speed_runtime();
 
@@ -926,7 +905,7 @@ impl TimingData {
                 start,
                 0.0,
                 false,
-                &self.beat_to_time,
+                &self.bpms,
                 &self.warps,
                 &self.stops,
                 &self.delays,
@@ -947,7 +926,7 @@ impl TimingData {
             match event {
                 TimingEvent::WarpDest => start.is_warping = false,
                 TimingEvent::Bpm => {
-                    bpm = self.beat_to_time[start.bpm_idx].bpm;
+                    bpm = self.bpms[start.bpm_idx].bpm;
                     bps = bpm / 60.0;
                     start.bpm_idx += 1;
                 }
@@ -1068,7 +1047,7 @@ impl TimingData {
     where
         I: Iterator<Item = f32>,
     {
-        let cached = self.beat_to_time.len() > 8
+        let cached = self.bpms.len() > 8
             && self.stops.is_empty()
             && self.delays.is_empty()
             && self.warps.is_empty()
@@ -1100,7 +1079,7 @@ impl TimingData {
             && self.delays.is_empty()
             && self.warps.is_empty()
             && self
-                .beat_to_time
+                .bpms
                 .iter()
                 .map(|point| (point.beat, point.bpm))
                 .eq(bpms.iter().copied())
@@ -1119,7 +1098,7 @@ impl TimingData {
     #[must_use]
     pub fn supports_row_time_cache(&self) -> bool {
         let mut previous = None;
-        for point in self.beat_to_time.iter() {
+        for point in self.bpms.iter() {
             if !point.bpm.is_finite()
                 || point.bpm <= 0.0
                 || note_row_to_beat(beat_to_note_row(point.beat)) != point.beat
@@ -1189,7 +1168,7 @@ impl TimingData {
 
     #[must_use]
     pub fn get_bpm_for_beat(&self, target_beat: f32) -> f32 {
-        match self.beat_to_time.as_ref() {
+        match self.bpms.as_ref() {
             [] => 60.0,
             [point] => point.bpm,
             points => {
@@ -1210,20 +1189,20 @@ impl TimingData {
     #[inline(always)]
     #[must_use]
     pub fn first_bpm(&self) -> f32 {
-        self.beat_to_time.first().map_or(60.0, |p| p.bpm)
+        self.bpms.first().map_or(60.0, |p| p.bpm)
     }
 
     #[inline(always)]
     #[must_use]
     pub fn has_bpm_changes(&self) -> bool {
-        self.beat_to_time.len() > 1
+        self.bpms.len() > 1
     }
 
     pub fn get_capped_max_bpm(&self, cap: Option<f32>) -> f32 {
         let mut max_bpm = self.max_bpm.max(0.0);
         if max_bpm == 0.0 {
             max_bpm = self
-                .beat_to_time
+                .bpms
                 .iter()
                 .map(|point| point.bpm)
                 .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
@@ -1241,12 +1220,8 @@ impl TimingData {
 }
 
 impl TimingData {
-    fn beat0_offset_ns(&self) -> TimingNs {
-        self.beat_to_time.first().map_or(0, |p| p.time_ns)
-    }
-
     fn beat_start_time_ns(&self) -> TimingNs {
-        self.beat0_offset_ns()
+        self.beat0_offset_ns
             .saturating_neg()
             .saturating_sub(self.global_offset_ns)
     }
@@ -1292,9 +1267,9 @@ impl TimingData {
         let new_offset_ns = timing_ns_from_seconds(new_offset);
         // Adjust beat0 offset so that beat→time mapping shifts by (old - new)
         // instead of being recomputed from raw timing data.
-        if let Some(first) = Arc::make_mut(&mut self.beat_to_time).first_mut() {
-            first.time_ns = first
-                .time_ns
+        if !self.bpms.is_empty() {
+            self.beat0_offset_ns = self
+                .beat0_offset_ns
                 .saturating_add(self.global_offset_ns.saturating_sub(new_offset_ns));
         }
         self.global_offset_sec = new_offset;
@@ -1310,8 +1285,8 @@ impl TimingData {
         if delta_seconds.abs() < f32::EPSILON {
             return;
         }
-        if let Some(first) = Arc::make_mut(&mut self.beat_to_time).first_mut() {
-            first.time_ns = timing_ns_add_seconds(first.time_ns, delta_seconds);
+        if !self.bpms.is_empty() {
+            self.beat0_offset_ns = timing_ns_add_seconds(self.beat0_offset_ns, delta_seconds);
         }
         self.rebuild_speed_runtime();
     }
@@ -1327,7 +1302,7 @@ impl TimingData {
         args: &mut GetBeatArgs,
         max_segment: usize,
     ) {
-        let bpms = &self.beat_to_time;
+        let bpms = &self.bpms;
         let warps = &self.warps;
         let stops = &self.stops;
         let delays = &self.delays;
@@ -1438,7 +1413,7 @@ impl TimingData {
         max_segment: usize,
         continuous: bool,
     ) -> TimingNs {
-        let bpms = &self.beat_to_time;
+        let bpms = &self.bpms;
         let warps = &self.warps;
         let stops = &self.stops;
         let delays = &self.delays;
@@ -1623,7 +1598,7 @@ fn find_event(
     start: GetBeatStarts,
     beat: f32,
     find_marker: bool,
-    bpms: &[BeatTimePoint],
+    bpms: &[BpmPoint],
     warps: &[WarpSegment],
     stops: &[StopSegment],
     delays: &[DelaySegment],
@@ -2709,14 +2684,14 @@ mod tests {
             );
             for beat in queries {
                 let index = timing
-                    .beat_to_time
+                    .bpms
                     .binary_search_by(|point| {
                         point.beat.partial_cmp(&beat).unwrap_or(Ordering::Less)
                     })
                     .unwrap_or_else(|index| index.saturating_sub(1));
                 assert_eq!(
                     timing.get_bpm_for_beat(beat).to_bits(),
-                    timing.beat_to_time[index].bpm.to_bits()
+                    timing.bpms[index].bpm.to_bits()
                 );
             }
         }
