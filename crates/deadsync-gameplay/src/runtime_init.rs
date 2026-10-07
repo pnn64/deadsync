@@ -278,7 +278,10 @@ where
         Arc::new(t)
     };
     let first_player_timing = build_player_timing(0);
-    let timing_players = if num_players == 1 {
+    let timing_players = if num_players == 1
+        || (Arc::ptr_eq(&gameplay_charts[0], &gameplay_charts[1])
+            && player_global_offset_shift_seconds[0] == player_global_offset_shift_seconds[1])
+    {
         [Arc::clone(&first_player_timing), first_player_timing]
     } else {
         [first_player_timing, build_player_timing(1)]

@@ -24,6 +24,7 @@ mod runtime_regression_tests {
         fantastic_feedback_options: FantasticFeedbackOptions,
         noteskin_name: &'static str,
         mini_percent: f32,
+        global_offset_shift_ms: i32,
         mini_indicator_options: GameplayMiniIndicatorOptions,
         target_score: GameplayTargetScoreSetting,
         density_graph: bool,
@@ -47,6 +48,7 @@ mod runtime_regression_tests {
                 fantastic_feedback_options: FantasticFeedbackOptions::default(),
                 noteskin_name: DEFAULT_NOTESKIN_NAME,
                 mini_percent: 0.0,
+                global_offset_shift_ms: 0,
                 mini_indicator_options: GameplayMiniIndicatorOptions::default(),
                 target_score: GameplayTargetScoreSetting::default(),
                 density_graph: false,
@@ -168,7 +170,7 @@ mod runtime_regression_tests {
         }
 
         fn global_offset_shift_ms(&self) -> i32 {
-            0
+            self.global_offset_shift_ms
         }
 
         fn visual_delay_ms(&self) -> i32 {
@@ -898,6 +900,95 @@ mod runtime_regression_tests {
             timing_segments,
             timing,
             chart_attacks: None,
+        }
+    }
+
+    #[test]
+    fn player_timing_preserves_chart_offsets_and_copy_on_write_isolation() {
+        for play_style in [
+            GameplayInputPlayStyle::Single,
+            GameplayInputPlayStyle::Versus,
+        ] {
+            for separate_charts in [false, true] {
+                for shifts in [[0, 0], [15, 15], [-15, -15], [0, 20], [15, -10]] {
+                    let song = Arc::new(regression_song());
+                    let chart = Arc::new(song.charts[0].clone());
+                    let first = Arc::new(regression_payload_with_segments(
+                        TimingSegments::default(),
+                        96,
+                    ));
+                    let second = if separate_charts {
+                        let mut data = (*first).clone();
+                        data.timing.shift_song_offset_seconds(0.075);
+                        Arc::new(data)
+                    } else {
+                        Arc::clone(&first)
+                    };
+                    let source = [first, second];
+                    let config = GameplayConfig {
+                        global_offset_seconds: -0.025,
+                        machine_allow_per_player_global_offsets: true,
+                        ..Default::default()
+                    };
+                    let mut state = init_gameplay_runtime(
+                        song,
+                        [Arc::clone(&chart), chart],
+                        source.clone(),
+                        GameplayViewport::default(),
+                        GameplaySession {
+                            play_style,
+                            ..Default::default()
+                        },
+                        config,
+                        SyncPref::Default,
+                        GameplayMiniIndicatorData::default(),
+                        GameplayNoteskinData::default(),
+                        NoSongLuaRuntime,
+                        empty_crossover_annotations,
+                        5,
+                        1.0,
+                        [ScrollSpeedSetting::default(); MAX_PLAYERS],
+                        std::array::from_fn(|p| TestProfile {
+                            global_offset_shift_ms: shifts[p],
+                            ..Default::default()
+                        }),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        [CourseLifeConfig::Bar; MAX_PLAYERS],
+                        false,
+                        [0; MAX_PLAYERS],
+                    );
+                    for player in 0..MAX_PLAYERS {
+                        let active = if play_style.player_count() == 1 {
+                            0
+                        } else {
+                            player
+                        };
+                        let mut expected = source[active].timing.clone();
+                        expected.set_global_offset_seconds(-0.025 + shifts[active] as f32 / 1000.0);
+                        for beat in [-4.0, 0.0, 1.0, 2.0, 16.0] {
+                            assert_eq!(
+                                state.timing_runtime.timing_players[player]
+                                    .get_time_for_beat_ns(beat),
+                                expected.get_time_for_beat_ns(beat)
+                            );
+                        }
+                    }
+                    let p2_before =
+                        state.timing_runtime.timing_players[1].get_time_for_beat_ns(1.0);
+                    Arc::make_mut(&mut state.timing_runtime.timing_players[0])
+                        .shift_song_offset_seconds(0.125);
+                    assert_eq!(
+                        state.timing_runtime.timing_players[1].get_time_for_beat_ns(1.0),
+                        p2_before
+                    );
+                }
+            }
         }
     }
 

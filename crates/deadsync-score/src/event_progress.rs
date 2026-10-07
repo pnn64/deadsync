@@ -167,7 +167,7 @@ fn push_capitalized_first(out: &mut String, text: &str) {
         return;
     };
     out.extend(first.to_uppercase());
-    out.extend(chars);
+    out.push_str(chars.as_str());
 }
 
 fn push_stat_improvement_lines(out: &mut String, progress: Option<&SubmitProgress>) -> bool {
@@ -601,10 +601,10 @@ pub fn event_progress_from_submit_owned(
         .and_then(|event| event.progress.as_mut())
         .map(|progress| {
             let skills = &mut progress.skill_improvements;
-            if skills.capacity() == skills.len()
-                && skills.iter().all(|skill| skill.capacity() == skill.len())
-            {
-                std::mem::take(skills)
+            if skills.iter().all(|skill| skill.capacity() == skill.len()) {
+                let mut skills = std::mem::take(skills);
+                skills.shrink_to_fit();
+                skills
             } else {
                 skills.clone()
             }
@@ -629,4 +629,101 @@ fn event_progress_with_leaderboards(
         progress.push(itl);
     }
     progress
+}
+
+#[cfg(test)]
+mod performance_event_regressions {
+    use super::*;
+
+    #[test]
+    fn capitalized_text_preserves_unicode_and_existing_output() {
+        for (input, expected) in [
+            ("", ""),
+            ("staminaLevel", "StaminaLevel"),
+            (
+                "\u{e9}nergie \u{6771}\u{4eac}",
+                "\u{c9}nergie \u{6771}\u{4eac}",
+            ),
+            ("\u{df}peed", "SSpeed"),
+            ("\u{1f0}ump", "J\u{30c}ump"),
+            ("\u{301}accent", "\u{301}accent"),
+            ("\u{1f980}rust\n", "\u{1f980}rust\n"),
+        ] {
+            let mut output = "prefix:".to_string();
+            push_capitalized_first(&mut output, input);
+            assert_eq!(output, format!("prefix:{expected}"));
+        }
+    }
+
+    #[test]
+    fn owned_progress_preserves_compact_skills_and_all_pages() {
+        for count in [0, 1, 4, 17] {
+            for spare_vector in [false, true] {
+                for spare_strings in [false, true] {
+                    let mut skills = Vec::with_capacity(count + usize::from(spare_vector) * 32);
+                    for i in 0..count {
+                        let text = format!("Skill {i}: \u{e9}lan \u{6771}\u{4eac}");
+                        let mut skill =
+                            String::with_capacity(text.len() + usize::from(spare_strings) * 512);
+                        skill.push_str(&text);
+                        skills.push(skill);
+                    }
+                    let event = SubmitEventProgressData {
+                        name: " Event ".into(),
+                        progress: Some(SubmitProgress {
+                            skill_improvements: skills,
+                            stat_improvements: vec![SubmitStatImprovement {
+                                name: "staminaLevel".into(),
+                                gained: 2,
+                                current: 3,
+                            }],
+                            quests_completed: vec![SubmitQuest {
+                                title: " Quest ".into(),
+                                ..Default::default()
+                            }],
+                            achievements_completed: vec![SubmitAchievement {
+                                title: "Achievement".into(),
+                                ..Default::default()
+                            }],
+                        }),
+                        ..Default::default()
+                    };
+                    for include_itl_score in [false, true] {
+                        let mut input = SubmitEventProgressInput {
+                            result: "success".into(),
+                            score_10000: 9876,
+                            rate_hundredths: 105,
+                            itl_score_hundredths: include_itl_score.then_some(9950),
+                            itl: Some(event.clone()),
+                            srpg: Some(event.clone()),
+                        };
+                        // Clone compacts buffers; recreate their spare capacity in the owned input.
+                        let owned_skills = &mut input
+                            .srpg
+                            .as_mut()
+                            .unwrap()
+                            .progress
+                            .as_mut()
+                            .unwrap()
+                            .skill_improvements;
+                        if spare_vector {
+                            owned_skills.reserve(32);
+                        }
+                        if spare_strings {
+                            for skill in owned_skills {
+                                skill.reserve(512);
+                            }
+                        }
+                        let expected = event_progress_from_submit(&input);
+                        let actual = event_progress_from_submit_owned(input);
+                        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+                        let skills = &actual[0].skill_improvements;
+                        assert_eq!(skills.capacity(), skills.len());
+                        assert!(skills.iter().all(|s| s.capacity() == s.len()));
+                    }
+                }
+            }
+        }
+        assert!(event_progress_from_submit_owned(SubmitEventProgressInput::default()).is_empty());
+    }
 }
