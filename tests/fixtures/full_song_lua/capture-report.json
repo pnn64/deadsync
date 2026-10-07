@@ -879,6 +879,150 @@
       "archive": "fb753c9cf62a0d6daf502468ec752d5a22809b14a5c0f835e2af3dfd699bedfe.tar.zst",
       "harness_version": "0.1.5",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "superseded_archive": "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8.tar.zst",
+      "archive": "cc5b053ddbb5ff0166a3d531326bd07ff6bfb9f82c1f9cce4e7cf36a90fcc494.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "assgore/goatdad.sm",
+      "superseded_archive": "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4.tar.zst",
+      "archive": "27e2c9e2dce21a88566df0de99a47dc5ef9a98fbf931abf2bd02d13be7619855.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "superseded_archive": "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589.tar.zst",
+      "archive": "f57eb16400d31576642620a501576e4a219c0cbed7bac182baf404345e689cfb.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "superseded_archive": "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44.tar.zst",
+      "archive": "febef967d24ae62d421aa7b24505619895043093c5d3c15393181e2f9a5bcf60.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "If You Crump Stand Up/crump.sm",
+      "superseded_archive": "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081.tar.zst",
+      "archive": "282d4c0ada943e0175405a583209a303a2bfc9b0541f5764cf9c5013f3c5a346.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Longinus - [Zaia]/Longinus.sm",
+      "superseded_archive": "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12.tar.zst",
+      "archive": "130bf8daad51399eabf6a5bd26afdc90173cc76c67da654a96a06ab176fdd3eb.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+      "superseded_archive": "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27.tar.zst",
+      "archive": "5648c7c99bcfb981c4e2bb2559c523074b3faba69855f4941429faec9ff5da1d.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "mawaru1/mawaru.sm",
+      "superseded_archive": "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f.tar.zst",
+      "archive": "84bca9032bf72170351c50fc5462a468095e4b9d39c8328f77b7d6eb22d9e5df.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Midnight Madness/midnight.sm",
+      "superseded_archive": "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4.tar.zst",
+      "archive": "455f21464f636b3a35fe11a9fc1c8842eee2a467c78af915875e70c9eab8bed4.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "No Role Modelz/No Role Modelz.sm",
+      "superseded_archive": "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
+      "archive": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Number 9/1556 - Number 9.sm",
+      "superseded_archive": "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
+      "archive": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Oil Ocean Act 2/steps.sm",
+      "superseded_archive": "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
+      "archive": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "OK/OK.ssc",
+      "superseded_archive": "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703.tar.zst",
+      "archive": "69fc891af534ad9d704967906bfc8a8c48b6e0271227995d092ce817a4e73aaa.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+      "superseded_archive": "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
+      "archive": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+      "superseded_archive": "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
+      "archive": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+      "superseded_archive": "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2.tar.zst",
+      "archive": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+      "superseded_archive": "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
+      "archive": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
+    },
+    {
+      "pass_number": 14,
+      "source_simfile": "Ztar Trek/steps.sm",
+      "superseded_archive": "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
+      "archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Use native song timing and verify genuine empty Lua layers"
     }
   ]
 }

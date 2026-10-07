@@ -332,12 +332,22 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
         manifest.lua_closure.strategy,
         "executed-sources-plus-static-loads"
     );
-    assert!(!manifest.lua_closure.files.is_empty());
+    if manifest.lua_closure.files.is_empty() {
+        let song = parse_song(&archive.root.join(&manifest.chart.simfile));
+        assert!(
+            song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty(),
+            "empty Lua closure omitted authored song layers"
+        );
+    }
     for lua in &manifest.lua_closure.files {
         assert!(lua.ends_with(".lua"), "non-Lua closure member: {lua}");
         assert!(
             archive.root.join(lua).is_file(),
             "missing Lua member: {lua}"
+        );
+        assert!(
+            manifest.files.iter().any(|file| file.path == *lua),
+            "Lua closure member is not hash-validated: {lua}"
         );
     }
     for reference in &manifest.lua_closure.external_references {
@@ -385,6 +395,75 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
     }
     assert!(archive.root.join(&manifest.chart.simfile).is_file());
     assert!(archive.root.join(&manifest.chart.trace).is_file());
+}
+
+// Full-song archives must describe native engine timing and complete replay.
+// Focused Lua-only micro fixtures can legitimately use a synthetic clock.
+fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
+    assert_eq!(
+        trace.harness_version, manifest.harness_version,
+        "trace and manifest capture versions differ"
+    );
+    assert!(
+        matches!(
+            trace.song_clock.as_deref(),
+            Some("native-song-timing" | "native-pauses")
+        ),
+        "obsolete song clock {:?}; recapture this archive with native timing",
+        trace.song_clock,
+    );
+    assert!(
+        trace.runtime_errors.is_empty(),
+        "native runtime errors invalidate the reference"
+    );
+    assert_eq!(
+        trace.dropped_events, 0,
+        "dropped native events invalidate the reference"
+    );
+    assert!(
+        trace
+            .update_frames
+            .first()
+            .is_some_and(|frame| frame.1 == 0.0)
+            && trace.update_frames.last().is_some_and(|frame| {
+                frame.1 as f32 >= trace.end_position.seconds
+                    && trace
+                        .trace_until_seconds
+                        .is_none_or(|end| frame.1 + 0.0000001 >= end)
+            }),
+        "native replay must cover the complete song from frame zero",
+    );
+    let hibernates = |operation: &str, args: &[Value]| {
+        operation
+            .rsplit('.')
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("hibernate"))
+            && args
+                .first()
+                .and_then(projected_alpha)
+                .is_some_and(|value| value > 0.0)
+    };
+    let positive_hibernate = trace.operation_tracks.iter().any(|track| {
+        track
+            .samples
+            .iter()
+            .any(|sample| hibernates(&track.operation, &sample.3))
+    }) || trace
+        .tween_tracks
+        .iter()
+        .flat_map(|track| &track.segments)
+        .flat_map(|segment| &segment.operations)
+        .any(|operation| hibernates(&operation.operation, &operation.args));
+    let version = manifest
+        .harness_version
+        .split('.')
+        .map(str::parse::<u32>)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("numeric harness version");
+    assert!(
+        !positive_hibernate || version.as_slice() >= [0, 1, 6].as_slice(),
+        "obsolete hibernation replay; recapture with harness 0.1.6 or later",
+    );
 }
 
 fn compose_entire_song_with_progress(
@@ -502,6 +581,8 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
         assert!(names.insert(&entry.archive), "duplicate indexed archive");
         let archive = extract_archive(entry);
         validate_archive(entry, &archive);
+        let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+        validate_native_trace(&trace, &archive.manifest);
         if !entry.retained_version
             && entry
                 .source_simfile
@@ -518,6 +599,79 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
             }
         }
     }
+}
+
+#[test]
+fn empty_song_layers_match_native_archive() {
+    crate::paths::init();
+    let index = archive_index();
+    let entry = index
+        .archives
+        .iter()
+        .find(|entry| entry.source_simfile == "Bank Account/Bank Account.sm")
+        .expect("complete empty-Lua reference");
+    let archive = extract_archive(entry);
+    validate_archive(entry, &archive);
+    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    validate_native_trace(&trace, &archive.manifest);
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &archive.root.join(&archive.manifest.chart.simfile));
+    assert!(compiled.is_empty());
+    assert!(trace.roots.is_empty());
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("song without Lua layers");
+    // Missing compiled roots must still fail instead of skipping native actors.
+    trace.roots.push("missing-layer".into());
+    let rejected = compare_semantics(&trace, &compiled, primary, &context);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "uncompiled native layers must fail"
+    );
+}
+
+#[test]
+fn archive_reference_rejects_obsolete_replays() {
+    crate::paths::init();
+    let index = archive_index();
+    let entry = index
+        .archives
+        .iter()
+        .find(|entry| entry.source_simfile == "Bank Account/Bank Account.sm")
+        .expect("complete native reference");
+    let mut archive = extract_archive(entry);
+    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    validate_native_trace(&trace, &archive.manifest);
+    trace.song_clock = Some("continuous-bpm".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.song_clock = Some("native-song-timing".into());
+    trace.operation_tracks.push(NativeOperationTrack {
+        actor: "probe".into(),
+        operation: "Actor.hibernate".into(),
+        samples: vec![(0, 0.0, 0.0, vec![serde_json::json!(0.125)])],
+    });
+    archive.manifest.harness_version = "0.1.5".into();
+    trace.harness_version = "0.1.5".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace
+        .operation_tracks
+        .last_mut()
+        .expect("hibernation probe")
+        .samples[0]
+        .3 = vec![serde_json::json!({"type": "number", "value": "infinity"})];
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.6".into();
+    trace.harness_version = "0.1.6".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.dropped_events = 1;
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.dropped_events = 0;
+    trace.runtime_errors.push(serde_json::json!("native error"));
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.runtime_errors.clear();
+    trace.update_frames.clear();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
 }
 
 const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
@@ -656,6 +810,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             validate_archive(entry, &archive);
             progress.stage("reading native trace");
             let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+            validate_native_trace(&trace, &archive.manifest);
             eprintln!(
                 "  native duration: {:.2}s, {} recorded update frames",
                 trace.end_position.seconds,

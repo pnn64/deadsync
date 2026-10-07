@@ -30,6 +30,15 @@ mismatch or an extraction/compile/composition error returns a nonzero exit code.
 The comparison total is discovered as the comparators run; it is not an estimate
 based on the number of raw events in the native trace.
 
+Full-song references must use native song timing, have complete update-frame
+coverage, and report no native runtime errors or dropped events. Captures
+with positive hibernation calls require harness `0.1.6` or later. The runner
+rejects obsolete references before comparing gameplay; regenerate them with
+the sibling harness. Songs without Lua references have empty compiled layers
+and still receive root, command, player, and modifier checks. All 18 recovered
+songs with empty Lua closures were recaptured with `0.1.6` and pass on DeadSync
+`0.5.1835`; the historical capture audit below predates this verification.
+
 All retained full-song references live directly in this folder:
 
 - `<sha256>.tar.zst`: self-contained simfile, Lua dependencies, assets, manifest,

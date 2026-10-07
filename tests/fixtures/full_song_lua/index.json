@@ -1348,13 +1348,15 @@
     {
       "title": "ASGORE",
       "source_simfile": "assgore/goatdad.sm",
-      "harness_version": "0.1.0",
-      "archive": "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4.tar.zst",
-      "sha256": "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4",
-      "compressed_bytes": 112218,
-      "uncompressed_sha256": "83c1495e6b5f7dd223b2453b8d9df92cbcd2a35225c6f02e98a36492071ec823",
+      "harness_version": "0.1.6",
+      "archive": "27e2c9e2dce21a88566df0de99a47dc5ef9a98fbf931abf2bd02d13be7619855.tar.zst",
+      "sha256": "27e2c9e2dce21a88566df0de99a47dc5ef9a98fbf931abf2bd02d13be7619855",
+      "compressed_bytes": 95613,
+      "uncompressed_sha256": "4baaebf033139565e74f17ec7a882c85eb551bf3b825dd66b2359c9994c5f25c",
       "compression_level": 22,
       "aliases": [
+        "dc71aec3763dfe6d9305654a193f38e8424c09db8788543b42aec21c71e5e7ba.tar.zst",
+        "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4.tar.zst",
         "bd083417df26e1c34e7a5b5500eacef2a6224c3ddb358aa0763e3c6c92e284f3.tar.zst"
       ]
     },
@@ -1504,13 +1506,15 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.sm",
-      "harness_version": "0.1.0",
-      "archive": "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8.tar.zst",
-      "sha256": "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8",
-      "compressed_bytes": 30397,
-      "uncompressed_sha256": "99b87065c0d9c497c91d90fc6870132207509fd541605e5b1cfc451700bf0974",
+      "harness_version": "0.1.6",
+      "archive": "cc5b053ddbb5ff0166a3d531326bd07ff6bfb9f82c1f9cce4e7cf36a90fcc494.tar.zst",
+      "sha256": "cc5b053ddbb5ff0166a3d531326bd07ff6bfb9f82c1f9cce4e7cf36a90fcc494",
+      "compressed_bytes": 38335,
+      "uncompressed_sha256": "96735759fb30e224ea5ff1dca4822c43fb16e8b5982689b6ab780100fb6ab420",
       "compression_level": 22,
       "aliases": [
+        "f866f7a8d6b2db79246044cb261a21625dc8e7ea0525f6dca0fbe5cdc0fe0c9f.tar.zst",
+        "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8.tar.zst",
         "05b1f3435d3a8892b8172bf6b2c7dd7c28f2782d8cadd36e8cd6b17d96b2643f.tar.zst"
       ]
     },
@@ -2583,13 +2587,15 @@
     {
       "title": "Fortuna Redux",
       "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
-      "harness_version": "0.1.0",
-      "archive": "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589.tar.zst",
-      "sha256": "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589",
-      "compressed_bytes": 39662,
-      "uncompressed_sha256": "653dfeab27fe8630cd274389cf30f373c90f204a1a3c2f40f8efbb34aa88846f",
+      "harness_version": "0.1.6",
+      "archive": "f57eb16400d31576642620a501576e4a219c0cbed7bac182baf404345e689cfb.tar.zst",
+      "sha256": "f57eb16400d31576642620a501576e4a219c0cbed7bac182baf404345e689cfb",
+      "compressed_bytes": 40718,
+      "uncompressed_sha256": "1bedbb6886ea6967c9632f0a012002f1a0f2e224d0aeaace507dbfc57ef02434",
       "compression_level": 22,
       "aliases": [
+        "c97dc09e9652e93455ac393a3eb645764819392f2f76d0eb12774a641b2874a7.tar.zst",
+        "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589.tar.zst",
         "f9f013c432264dc034f8f511279f4a68a6b77c88ac831be0e635ef39ec03e874.tar.zst"
       ]
     },
@@ -3038,13 +3044,15 @@
     {
       "title": "I Really Like You",
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
-      "harness_version": "0.1.0",
-      "archive": "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44.tar.zst",
-      "sha256": "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44",
-      "compressed_bytes": 51409,
-      "uncompressed_sha256": "5d19e495ac8f67e0401ee7a472fb486f4f4d45508d0ba02bc6428200363ad816",
+      "harness_version": "0.1.6",
+      "archive": "febef967d24ae62d421aa7b24505619895043093c5d3c15393181e2f9a5bcf60.tar.zst",
+      "sha256": "febef967d24ae62d421aa7b24505619895043093c5d3c15393181e2f9a5bcf60",
+      "compressed_bytes": 51439,
+      "uncompressed_sha256": "6cbbc467b794e7424715c38b83375294e33b24ac74a19745a45246464924b976",
       "compression_level": 22,
       "aliases": [
+        "a76b1484efedcde072235ce1c2b9e74c1107a73a3d295db92cd604c55080a06a.tar.zst",
+        "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44.tar.zst",
         "8ae83411d24c32b61e11852c5454bc65bf3aef929a5663fbe2f26501a29dd3d1.tar.zst"
       ]
     },
@@ -3116,13 +3124,15 @@
     {
       "title": "If You Crump Stand Up",
       "source_simfile": "If You Crump Stand Up/crump.sm",
-      "harness_version": "0.1.0",
-      "archive": "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081.tar.zst",
-      "sha256": "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081",
-      "compressed_bytes": 45912,
-      "uncompressed_sha256": "8085a36f6e068491da6372475d1669b903dac2d94b284685f223dad86c7c30a4",
+      "harness_version": "0.1.6",
+      "archive": "282d4c0ada943e0175405a583209a303a2bfc9b0541f5764cf9c5013f3c5a346.tar.zst",
+      "sha256": "282d4c0ada943e0175405a583209a303a2bfc9b0541f5764cf9c5013f3c5a346",
+      "compressed_bytes": 45971,
+      "uncompressed_sha256": "a37f6b6fcfb0d6c7598b47917c6908d82dd7eb6a7ef2964c4248e25e2d95644f",
       "compression_level": 22,
       "aliases": [
+        "1d1d3fe4ba6ed093835ba228dfa0c4be7cf09d77fcd06f2185b7c44d9c0edfd9.tar.zst",
+        "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081.tar.zst",
         "f98af8d957e0b1c118db49aff1cfc1ab587dab4b0d213ec87192d5a93b1094b3.tar.zst"
       ]
     },
@@ -3740,13 +3750,15 @@
     {
       "title": "Longinus",
       "source_simfile": "Longinus - [Zaia]/Longinus.sm",
-      "harness_version": "0.1.0",
-      "archive": "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12.tar.zst",
-      "sha256": "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12",
-      "compressed_bytes": 66322,
-      "uncompressed_sha256": "2d13aac0a3e7eded4bb68b6f0e2247a3b9ab19f0fdb4344ae5d556ce87911eed",
+      "harness_version": "0.1.6",
+      "archive": "130bf8daad51399eabf6a5bd26afdc90173cc76c67da654a96a06ab176fdd3eb.tar.zst",
+      "sha256": "130bf8daad51399eabf6a5bd26afdc90173cc76c67da654a96a06ab176fdd3eb",
+      "compressed_bytes": 77385,
+      "uncompressed_sha256": "44b75262ee935042b75c127922f12c8fd737d90b684d8904b48f5d98aced1a74",
       "compression_level": 22,
       "aliases": [
+        "924fafa319452c80fb356a940e1758660ede80d43b96bf5cd0a45b5968e1176b.tar.zst",
+        "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12.tar.zst",
         "c1f98347facad7734640f71dd4c9d3850dd60ab29253c51f2828798219342634.tar.zst"
       ]
     },
@@ -3805,13 +3817,15 @@
     {
       "title": "Loyal Divide",
       "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
-      "harness_version": "0.1.0",
-      "archive": "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27.tar.zst",
-      "sha256": "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27",
-      "compressed_bytes": 31647,
-      "uncompressed_sha256": "fcf15743cdb58434fe526241d87e9168c6cdc80fcc736f7c4f1a891934d691fc",
+      "harness_version": "0.1.6",
+      "archive": "5648c7c99bcfb981c4e2bb2559c523074b3faba69855f4941429faec9ff5da1d.tar.zst",
+      "sha256": "5648c7c99bcfb981c4e2bb2559c523074b3faba69855f4941429faec9ff5da1d",
+      "compressed_bytes": 31582,
+      "uncompressed_sha256": "a95b075c081558130d97c7cbde0858677a4143567d26f591dd65e53edc687f46",
       "compression_level": 22,
       "aliases": [
+        "616d020e02f7122b3788d40706a5c87c3f792bb57432909eeddc575de3dabf62.tar.zst",
+        "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27.tar.zst",
         "beaec019cc51b6a07578fb1a2a9ef20b3fe01eba1af31a5f49caa1af1c00c739.tar.zst"
       ]
     },
@@ -3909,13 +3923,15 @@
     {
       "title": "MAWARU",
       "source_simfile": "mawaru1/mawaru.sm",
-      "harness_version": "0.1.0",
-      "archive": "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f.tar.zst",
-      "sha256": "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f",
-      "compressed_bytes": 49141,
-      "uncompressed_sha256": "6489b5fb986d0c4ede9ac96fc6aacddabee0eb9d69848ab02af6ffa09831e7b6",
+      "harness_version": "0.1.6",
+      "archive": "84bca9032bf72170351c50fc5462a468095e4b9d39c8328f77b7d6eb22d9e5df.tar.zst",
+      "sha256": "84bca9032bf72170351c50fc5462a468095e4b9d39c8328f77b7d6eb22d9e5df",
+      "compressed_bytes": 49210,
+      "uncompressed_sha256": "9286d2ce9eb067c7aa65d68588540e2fe3029b4b01803081185549856d71d86e",
       "compression_level": 22,
       "aliases": [
+        "b8698ff1a11a53d5326de26728bd0d6aa8356258d12167d1c13443db9336091d.tar.zst",
+        "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f.tar.zst",
         "823383cca32c448076510241bfbd2833f0fc4b11d8a1e3a82793b139834f1306.tar.zst"
       ]
     },
@@ -4106,13 +4122,15 @@
     {
       "title": "Midnight Madness",
       "source_simfile": "Midnight Madness/midnight.sm",
-      "harness_version": "0.1.0",
-      "archive": "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4.tar.zst",
-      "sha256": "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4",
-      "compressed_bytes": 12224,
-      "uncompressed_sha256": "59f4cf2e1a056086fc90f16b91babc8c535c0063d906eb7df454e5fe10203962",
+      "harness_version": "0.1.6",
+      "archive": "455f21464f636b3a35fe11a9fc1c8842eee2a467c78af915875e70c9eab8bed4.tar.zst",
+      "sha256": "455f21464f636b3a35fe11a9fc1c8842eee2a467c78af915875e70c9eab8bed4",
+      "compressed_bytes": 12331,
+      "uncompressed_sha256": "3027b6210cc610f3ccf65dbd6b413b1eb102686cfc6e7aa723d3bfd44341c5cb",
       "compression_level": 22,
       "aliases": [
+        "f01f6c4342b52537e95274e2b0e710e0b502eb2ecb9bec0aa9b5274e15e79eb2.tar.zst",
+        "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4.tar.zst",
         "1d397eca76ea49b4d3e2784431949abef34fc67a3230b5cbc33beb0f645bc724.tar.zst"
       ]
     },
@@ -4275,13 +4293,15 @@
     {
       "title": "Episode 18",
       "source_simfile": "No Role Modelz/No Role Modelz.sm",
-      "harness_version": "0.1.0",
-      "archive": "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
-      "sha256": "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3",
-      "compressed_bytes": 49983,
-      "uncompressed_sha256": "d44134421388d48806a9e767231bc6a8e13e62407aab6c74f3b5438056d5b7f2",
+      "harness_version": "0.1.6",
+      "archive": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c.tar.zst",
+      "sha256": "b2d3d483e492d9961d18ae497fa00e9bf11c93a85a351190a2b1f78ba87c138c",
+      "compressed_bytes": 47849,
+      "uncompressed_sha256": "5bd899bf4c281d50d18c7d3bd57e21a4dc66e7963a0b837f2fb48f66ee1ef7f1",
       "compression_level": 22,
       "aliases": [
+        "88e19e04fe1e6a109484172de1be35c6d1bffe1f1fca26e935cf95d92fb1c4e1.tar.zst",
+        "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
         "de1eac44ef926556502087dda583ef057342943dd38e34143152cdc658e5f478.tar.zst"
       ]
     },
@@ -4340,13 +4360,15 @@
     {
       "title": "Number 9",
       "source_simfile": "Number 9/1556 - Number 9.sm",
-      "harness_version": "0.1.0",
-      "archive": "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
-      "sha256": "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c",
-      "compressed_bytes": 72642,
-      "uncompressed_sha256": "678084cbe9f4c04ca5c306adc8ee86694b0af06563e0a56ef56c6db9edcd0635",
+      "harness_version": "0.1.6",
+      "archive": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e.tar.zst",
+      "sha256": "b42b38c99ad528dd0f4abff0253c557ba59f0b8ae120838c938dfedc0bd42c3e",
+      "compressed_bytes": 66847,
+      "uncompressed_sha256": "969744c5d2252abcffe24dfa1f37d7fddcde5af0106293952c680138338ede95",
       "compression_level": 22,
       "aliases": [
+        "07813d09dda5bfb0ce7e25ec33cdb3c909f131268847606255b57d16a7cc3e74.tar.zst",
+        "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
         "ea31c720307f1908534fff40c4539049dfff1d25b1ea74a582f173ceefc66239.tar.zst"
       ]
     },
@@ -4379,26 +4401,30 @@
     {
       "title": "Oil Ocean Zone Act 2",
       "source_simfile": "Oil Ocean Act 2/steps.sm",
-      "harness_version": "0.1.0",
-      "archive": "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
-      "sha256": "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a",
-      "compressed_bytes": 85765,
-      "uncompressed_sha256": "91242229ce7b088a4ab76a364a8a6ddc97d13bea85cd19d50e84baf042c9f387",
+      "harness_version": "0.1.6",
+      "archive": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20.tar.zst",
+      "sha256": "5e21ad2cbaf342b90f71d856bc3c82543a58209717936f44683a7c7bf38fde20",
+      "compressed_bytes": 48147,
+      "uncompressed_sha256": "9d457d2f4fc55788a0bd751221ed3df01342f28d0510a47de6906b329bb31ed8",
       "compression_level": 22,
       "aliases": [
+        "d15ccbb7d8989d80c785ff8ff3cd89e350d9086857dc5bf992e17b0f1c1c83cf.tar.zst",
+        "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
         "76df1fa9497edd71b4489e55214c0db9286367cf22681d0b0e7525063c630df9.tar.zst"
       ]
     },
     {
       "title": "OK",
       "source_simfile": "OK/OK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703.tar.zst",
-      "sha256": "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703",
-      "compressed_bytes": 33317,
-      "uncompressed_sha256": "3f3f858e144efc2609ca4d76d11076c0a8353051528bd3a9ae370c6bf397fb1a",
+      "harness_version": "0.1.6",
+      "archive": "69fc891af534ad9d704967906bfc8a8c48b6e0271227995d092ce817a4e73aaa.tar.zst",
+      "sha256": "69fc891af534ad9d704967906bfc8a8c48b6e0271227995d092ce817a4e73aaa",
+      "compressed_bytes": 36805,
+      "uncompressed_sha256": "c0522b594f4a10f1e6f0548a800ef6af4b59fd1adc0a3466fbeadf998a4169ee",
       "compression_level": 22,
       "aliases": [
+        "37686fabfd020455e204ea2c93eb417dcac766c020fc29ca85ff5301f2ccbe10.tar.zst",
+        "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703.tar.zst",
         "71d8a89a36303a5a1d83fb05f730a0a6ec6052fbe89cebe32560a55b10eaba75.tar.zst"
       ]
     },
@@ -4431,13 +4457,15 @@
     {
       "title": "Over the Top",
       "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
-      "harness_version": "0.1.0",
-      "archive": "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
-      "sha256": "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28",
-      "compressed_bytes": 72208,
-      "uncompressed_sha256": "c822042ae056685dfd3d5b10bd9f2d29977e5db3f07a02d554601222556651c5",
+      "harness_version": "0.1.6",
+      "archive": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f.tar.zst",
+      "sha256": "11b5b82104a97131808f449ad56128851c733e4c5c587bc7876900bf3e7a731f",
+      "compressed_bytes": 83885,
+      "uncompressed_sha256": "d18fec60f8ffd39d64d46e43941ee151822d6f0822f037abe6c92dbe8ffb4b5d",
       "compression_level": 22,
       "aliases": [
+        "5c6dcaa297d2b658b8ac100ebc20542ab67aae31598aa1b7f03ea79ccb9d36ed.tar.zst",
+        "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
         "d0badb6635fcf9337633ef0319729eff287817b68d250c89dbbcaed948774b49.tar.zst"
       ]
     },
@@ -4704,13 +4732,15 @@
     {
       "title": "Potion",
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
-      "harness_version": "0.1.0",
-      "archive": "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
-      "sha256": "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde",
-      "compressed_bytes": 34178,
-      "uncompressed_sha256": "33ff1320d22810ff234cf658b258eee4d8bca1d2ab3df5eb7d09de50cc89d828",
+      "harness_version": "0.1.6",
+      "archive": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41.tar.zst",
+      "sha256": "41de42083e4692a244bf2cd6cc48c5d03acc29788c785b6c01b07341dcba7f41",
+      "compressed_bytes": 39205,
+      "uncompressed_sha256": "321ec0a47b7d35de081a2fa0afd68b75d921d8ee81298de9231fab8760490ff5",
       "compression_level": 22,
       "aliases": [
+        "aa49ec1b0afe32afd748af339f1475bf4b3c8d94c9926a032cb9f99ea18b54a6.tar.zst",
+        "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
         "3a2bf4f8c398ec685e5b5b863c172595f9ccfc6066ec0c56720e43c73648986b.tar.zst"
       ]
     },
@@ -5653,13 +5683,15 @@
     {
       "title": "The Fresh Prince Of Bel Air",
       "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
-      "harness_version": "0.1.0",
-      "archive": "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2.tar.zst",
-      "sha256": "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2",
-      "compressed_bytes": 31081,
-      "uncompressed_sha256": "08fc3171c29b35243308e0957178d3bee984d2d453f04fb8a8a2a2c17d03a693",
+      "harness_version": "0.1.6",
+      "archive": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2.tar.zst",
+      "sha256": "0e87d1cda1c314a3fc97ce47b81afa0281e3b5f8b182648018ea5646f3ef77a2",
+      "compressed_bytes": 34284,
+      "uncompressed_sha256": "4bfd445b4b48c74e2056e2572b573333754bdf4ac3b293fda02413f82b4576de",
       "compression_level": 22,
       "aliases": [
+        "151bbcbb280fa01d87952853f48155e743f22b48114db09571aee4dbebcc34dd.tar.zst",
+        "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2.tar.zst",
         "7857a1427bd018402ffb8534d0ae64a23a6d9939b911a44e2f3db8d9e891807e.tar.zst"
       ]
     },
@@ -5978,13 +6010,15 @@
     {
       "title": "Vanishing Point",
       "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
-      "harness_version": "0.1.0",
-      "archive": "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
-      "sha256": "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49",
-      "compressed_bytes": 63250,
-      "uncompressed_sha256": "6465cbd24b0a021d2018b58125d37494b49fd3610180e1e91f94329598ddeaf0",
+      "harness_version": "0.1.6",
+      "archive": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6.tar.zst",
+      "sha256": "30e0a5a698a6406e42c5b8379ac5a974b57f5dfd6e74d201f4e151875166a5b6",
+      "compressed_bytes": 66697,
+      "uncompressed_sha256": "022c2d38667b6cd85b0e63c2599bb1f11704ebcf1a7dafd66f8cde052c4c373f",
       "compression_level": 22,
       "aliases": [
+        "a1fac014639c6ca4610359eab48ac413ecfca62fa0111cb0268e1fe6fd9deded.tar.zst",
+        "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
         "2cedd84ae3907afd4c87a05e71e0055ab9a5b9350951e9769fab9429dad88491.tar.zst"
       ]
     },
@@ -6303,13 +6337,15 @@
     {
       "title": "Ztar Trek",
       "source_simfile": "Ztar Trek/steps.sm",
-      "harness_version": "0.1.0",
-      "archive": "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
-      "sha256": "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c",
-      "compressed_bytes": 19636,
-      "uncompressed_sha256": "88050cb069ab5efbe6afccb54a775f59167bcee59dbc9b9b85bafaf76ef5cc56",
+      "harness_version": "0.1.6",
+      "archive": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6.tar.zst",
+      "sha256": "0edac4c296c7f9f71f47b66bd7316e618c860967ddc61a596a95a3b56c34dfc6",
+      "compressed_bytes": 19664,
+      "uncompressed_sha256": "eb8605578320fa2b883a5d873169cf8c763df49a258e9b1f806a5e66c0bd61ee",
       "compression_level": 22,
       "aliases": [
+        "90f9ec6b5ff5382b4429b604a6625ab68d1d11a23f7bc2f16aac3a9f5c50b547.tar.zst",
+        "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
         "c3537fc854086b4f0004446fd017d65c59b4f8a8adc57ffe2853980050e3f245.tar.zst"
       ]
     }

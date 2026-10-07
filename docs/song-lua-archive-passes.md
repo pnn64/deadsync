@@ -432,3 +432,78 @@ comparison tolerances did not change in this pass.
 
 Verification log SHA-256:
 `826e78dc5ecca7a2aa7e74a9cafc56142f588ffe6f73ffafcfbcf7555bb42d35`.
+
+## Pass 13: repair native hibernation (DeadSync repair pending)
+
+The initial native-timing recapture of Nishi-Shinjuku removed missing movie
+assets and four player-rotation differences, leaving five final visibility
+differences. Source inspection found a further reference defect: the harness
+only hid hibernating actors from drawing while continuing their tweens,
+effects, children, and update callbacks.
+
+ITGmania `Actor.cpp::Update` subtracts the hibernation timer as native floats,
+returns while it remains positive, and supplies the leftover delta on the
+wake-up frame. `Actor.h::GetVisible` is independent of that timer, while
+`ActorFrame.cpp::GetTweenTimeLeft` includes its sleep and child queues.
+Simply Love hibernates its engine HUD through these same Actor methods.
+Harness commit `74cf6c3` removes its draw-only deadline and calls linked
+`Actor::Update` for that phase. The paused tree, current aux, child alpha,
+callback delta, visibility, and queue-time regression passes. All 163
+harness tests pass, with five existing tests ignored; release version is
+`0.1.6`.
+
+The complete corrected Nishi-Shinjuku candidate reaches beat 290 at
+102.42857360839844 seconds with zero runtime errors or dropped events.
+Its source bytes, members, and lossless normalization are verified, but
+DeadSync `0.5.1834` emits no composed actors despite visible native geometry.
+The candidate remains unindexed until the production hibernation gap is
+closed and verified. No comparison was removed or relaxed.
+
+Corrected candidate:
+`75ab9a044b221eae9f6d2abf2c8fd119072f737c9ff47d8cef44edf3bc3f3582.tar.zst`.
+Diagnostic log SHA-256:
+`25f8d2e37fdde6c7a0de0c82e0dfebd3d2c2fb9a69700d11f6ad7f52a51ef745`.
+
+## Pass 14: enforce native references and handle empty Lua layers
+
+The audit of all 492 indexed and retained archive variants found 388 legacy
+continuous clocks, at least 21 positive hibernation captures made before harness
+`0.1.6`, 53 captures without update frames, and 18 genuine empty Lua closures.
+These sets overlap; at least 398 archive variants require reference regeneration at
+that audit snapshot, before the Bank Account repair below. Passing replay
+comparisons against those references cannot establish engine parity.
+
+The whole-song runner and integrity gate now reject obsolete clocks,
+unpaused hibernation captures, native runtime errors, dropped events,
+and missing or incomplete frame coverage. Trace and manifest capture
+versions must agree. Synthetic Lua-only micro fixtures retain their own
+clock because the gate applies to full-song archives.
+
+Empty closure validation requires the parsed simfile to have no foreground
+or background Lua layers. Every nonempty closure member must remain in the
+hash-validated member list. The production compiler already returns an
+empty layer list for an empty input; the runner now accepts that result,
+keeps the native root-count check, rejects uncompiled native actors or
+commands, and still compares player and modifier state. No placeholder
+compiled layer is created. This matches `Foreground.cpp::LoadFromSong`,
+which instantiates only the song's referenced foreground changes.
+
+A complete harness `0.1.6` Bank Account capture replaces its obsolete clock
+reference. The archive
+`cc5b053ddbb5ff0166a3d531326bd07ff6bfb9f82c1f9cce4e7cf36a90fcc494.tar.zst`
+passes all 116,603 comparisons on DeadSync `0.5.1835`. A missing-root
+countercheck fails, and separate negative checks reject each obsolete
+reference condition. Source bytes, members, and lossless recompression
+are verified.
+
+All 17 other empty-Lua charts were then recaptured, hash-validated, normalized,
+and individually verified on the same executable before publication. They
+pass 3,638,158 comparisons; together with Bank Account, all 18 pass 3,754,761.
+The Warp Zone control still passes all 212,220 comparisons through the stricter
+reference gate. The two new regression tests pass.
+
+Empty-Lua batch receipt SHA-256:
+`4e85179385a9e2ca1607339673dbf066a6158f3d3643a38fca50aaf9ed93980a`.
+
+Final Bank Account verification log SHA-256:
+`82af3da8a421bb53a8fbef07947d4cc96b9c5c9e15f7af0b1659f90d842c137e`.

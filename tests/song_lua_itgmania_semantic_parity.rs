@@ -52,6 +52,16 @@ mod corpora;
 #[derive(Deserialize)]
 struct NativeTrace {
     #[serde(default)]
+    harness_version: String,
+    #[serde(default)]
+    song_clock: Option<String>,
+    #[serde(default)]
+    runtime_errors: Vec<Value>,
+    #[serde(default)]
+    dropped_events: u64,
+    #[serde(default)]
+    trace_until_seconds: Option<f64>,
+    #[serde(default)]
     arrow_timing: String,
     #[serde(default)]
     random_seed: Option<u32>,
@@ -582,11 +592,6 @@ fn compile_trace_song_at(
         song.foreground_lua_changes
             .iter()
             .map(|change| change.path.as_path()),
-    );
-    assert!(
-        !paths.is_empty(),
-        "{} has no song Lua layers",
-        simfile.display()
     );
     let primary_index = song
         .foreground_lua_changes
@@ -5551,12 +5556,17 @@ fn compare_semantics_with_progress(
     context: &SongLuaCompileContext,
     progress: Option<std::sync::Arc<progress::Progress>>,
 ) -> Parity {
-    let mut parity = Parity { progress, ..Parity::default() };
+    let mut parity = Parity {
+        progress,
+        ..Parity::default()
+    };
     compare_compile_info(compiled, &mut parity);
     compare_layers(trace, compiled, &mut parity);
     compare_final_render_states(trace, compiled, context, &mut parity);
     compare_player_proxy_sources(trace, compiled, &mut parity);
-    compare_judgment_textures(trace, &compiled[primary_index], context, &mut parity);
+    if let Some(primary) = compiled.get(primary_index) {
+        compare_judgment_textures(trace, primary, context, &mut parity);
+    }
     compare_sprite_textures(trace, compiled, context, &mut parity);
     compare_update_render_persistence(context, trace, compiled, &mut parity);
     compare_update_render_values(trace, compiled, context, &mut parity);
@@ -5566,7 +5576,18 @@ fn compare_semantics_with_progress(
     compare_projected_geometry(trace, compiled, context, &mut parity);
     compare_manual_meshes(trace, compiled, context, &mut parity);
     compare_projected_vibration_coverage(trace, compiled, context, &mut parity);
-    compare_timeline(trace, &compiled[primary_index], &mut parity);
+    if let Some(primary) = compiled.get(primary_index) {
+        compare_timeline(trace, primary, &mut parity);
+    } else {
+        parity.section("empty Lua layers");
+        parity.check(
+            trace.actor_definitions.is_empty()
+                && trace.runtime_actors.is_empty()
+                && trace.timeline_tracks.is_empty()
+                && trace.command_tracks.is_empty(),
+            || "native Lua actors or commands have no compiled layers".to_string(),
+        );
+    }
     compare_commands(trace, compiled, primary_index, &mut parity);
     parity
 }
