@@ -378,7 +378,7 @@ struct ScrollPrefix {
 #[derive(Debug, Clone, Default)]
 pub struct TimingData {
     /// A pre-calculated mapping from a note row index to its precise beat.
-    row_to_beat: Arc<Vec<f32>>,
+    row_to_beat: Arc<[f32]>,
     /// A pre-calculated mapping from a beat to its precise time in seconds.
     beat_to_time: Arc<[BeatTimePoint]>,
     // Song-lifetime, exact-size tables built at chart load. They are immutable
@@ -695,7 +695,7 @@ impl TimingData {
         ];
         let scroll_prefix_sorted = scrolls.windows(2).all(|pair| pair[0].beat <= pair[1].beat);
         let mut timing_with_stops = Self {
-            row_to_beat: Arc::new(row_to_beat.to_vec()),
+            row_to_beat: Arc::from(row_to_beat),
             beat_to_time,
             stops,
             delays,
@@ -831,6 +831,7 @@ impl TimingData {
         !self.is_warp_at_beat(beat) && !self.is_fake_at_beat(beat)
     }
 
+    #[inline(always)]
     #[must_use]
     pub fn get_beat_for_row(&self, row_index: usize) -> Option<f32> {
         self.row_to_beat.get(row_index).copied()
@@ -1251,7 +1252,7 @@ impl TimingData {
 
     fn rebuild_speed_runtime(&mut self) {
         if self.speeds.is_empty() {
-            self.speed_runtime = Arc::default();
+            // The immutable speed table already has an empty runtime.
             return;
         }
 
@@ -1588,29 +1589,17 @@ impl TimingData {
         if self.speeds.is_empty() {
             return 1.0;
         }
-        let segment_index = self.get_speed_segment_index_at_beat(beat);
-        if segment_index < 0 {
+        let pos = self.speeds.partition_point(|seg| seg.beat <= beat);
+        let Some(i) = pos.checked_sub(1) else {
             let first = self.speeds[0];
             if beat.is_finite() && first.delay <= 0.0 {
                 return first.ratio;
             }
             return 1.0;
-        }
-        let i = segment_index as usize;
+        };
         let seg = self.speeds[i];
-        let rt = self
-            .speed_runtime
-            .get(i)
-            .copied()
-            .unwrap_or_else(|| SpeedRuntime {
-                start_time_ns: self.get_time_for_beat_ns(seg.beat),
-                end_time_ns: if seg.unit == SpeedUnit::Seconds {
-                    timing_ns_add_seconds(self.get_time_for_beat_ns(seg.beat), seg.delay)
-                } else {
-                    self.get_time_for_beat_ns(seg.beat + seg.delay)
-                },
-                prev_ratio: if i > 0 { self.speeds[i - 1].ratio } else { 1.0 },
-            });
+        // Construction and every offset update build one runtime per speed.
+        let rt = self.speed_runtime[i];
 
         if time_ns >= rt.end_time_ns || seg.delay <= 0.0 {
             return seg.ratio;
@@ -1624,15 +1613,6 @@ impl TimingData {
         }
         let progress = timing_ns_delta_seconds(time_ns, rt.start_time_ns) / duration_seconds;
         (seg.ratio - rt.prev_ratio).mul_add(progress, rt.prev_ratio)
-    }
-
-    fn get_speed_segment_index_at_beat(&self, beat: f32) -> isize {
-        if self.speeds.is_empty() {
-            return -1;
-        }
-        let pos = self.speeds.partition_point(|seg| seg.beat <= beat);
-
-        if pos == 0 { -1 } else { (pos - 1) as isize }
     }
 }
 
@@ -2717,6 +2697,87 @@ mod tests {
             },
             &[],
         )
+    }
+
+    #[test]
+    fn timing_rows_are_owned_and_shared_without_changing_searches() {
+        let mut rows = vec![-1.0, 0.0, 0.5, 2.0, 8.0];
+        let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &rows);
+        let cloned = timing.clone();
+        rows.fill(99.0);
+        assert!(Arc::ptr_eq(&timing.row_to_beat, &cloned.row_to_beat));
+        for (index, beat) in [-1.0, 0.0, 0.5, 2.0, 8.0].into_iter().enumerate() {
+            assert_eq!(cloned.get_beat_for_row(index), Some(beat));
+        }
+        assert_eq!(cloned.get_beat_for_row(5), None);
+        for (beat, row) in [
+            (-2.0, 0),
+            (-1.0, 0),
+            (0.25, 1),
+            (0.375, 2),
+            (1.25, 2),
+            (1.5, 3),
+            (5.0, 3),
+            (9.0, 4),
+            (f32::NEG_INFINITY, 0),
+            (f32::INFINITY, 4),
+            (f32::NAN, 4),
+        ] {
+            assert_eq!(cloned.get_row_for_beat(beat), Some(row));
+        }
+        for cutoff in [-49, -48, -1, 0, 1, 24, 25, 96, 97, 385] {
+            let expected = [-48, 0, 24, 96, 384].partition_point(|&row| row < cutoff);
+            assert_eq!(cloned.cutoff_row_for_note_row(cutoff), expected);
+        }
+        for rows in [&[][..], &[3.0][..]] {
+            let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), rows);
+            assert_eq!(
+                timing.get_row_for_beat(0.0),
+                (!rows.is_empty()).then_some(0)
+            );
+            assert_eq!(timing.get_beat_for_row(0), rows.first().copied());
+        }
+    }
+
+    #[test]
+    fn speed_runtime_covers_every_segment_after_clones_and_offsets() {
+        for count in [0, 1, 2, 32] {
+            let speeds = (0..count)
+                .map(|i| SpeedSegment {
+                    beat: (i / 2) as f32 * 4.0,
+                    ratio: [0.5, 2.0, 0.0][i % 3],
+                    delay: [-1.0, 0.0, 2.0][i % 3],
+                    unit: if i % 2 == 0 {
+                        SpeedUnit::Beats
+                    } else {
+                        SpeedUnit::Seconds
+                    },
+                })
+                .collect();
+            let timing = timing_with_speeds(speeds);
+            let mut shifted = timing.clone();
+            for offset in [-0.125, 0.0, 0.25] {
+                shifted.set_global_offset_seconds(offset);
+                shifted.shift_song_offset_seconds(offset);
+                assert_eq!(shifted.speed_runtime.len(), shifted.speeds.len());
+                for beat in [
+                    -1.0,
+                    0.0,
+                    4.0,
+                    16.0,
+                    64.0,
+                    f32::NEG_INFINITY,
+                    f32::NAN,
+                    f32::INFINITY,
+                ] {
+                    let time = shifted.get_time_for_beat_ns(beat);
+                    for time in [time.saturating_sub(1), time, time.saturating_add(1)] {
+                        assert!(shifted.get_speed_multiplier_ns(beat, time).is_finite());
+                    }
+                }
+            }
+            assert_eq!(timing.speed_runtime.len(), timing.speeds.len());
+        }
     }
 
     #[test]
