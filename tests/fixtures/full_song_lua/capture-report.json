@@ -855,6 +855,14 @@
       "archive": "45be98118e8a0ab0db2cfb017f52de2475650620cda25a3639686f424f9e900c.tar.zst",
       "harness_version": "0.1.5",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2.tar.zst",
+      "archive": "a03a6bec25440238c8d3fa0206e4ab165058e50a4640f252fadbd57d30e5f48d.tar.zst",
+      "harness_version": "0.1.5",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

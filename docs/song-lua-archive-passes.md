@@ -315,3 +315,29 @@ comparison tolerance was changed in this pass.
 
 Verification log SHA-256:
 `4f6c2ee19fd4f5c978ad205d5eaa885002ee8920968b5331ba13eab3d0780cf2`.
+
+## Pass 10: refresh Crystal Access's easing boundary
+
+The original Crystal Access archive
+`5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2.tar.zst`
+failed two drunk-modifier comparisons at beat 84: the reference was -1,
+while DeadSync produced -0.9944757. The authored Lua uses an outCirc easing
+function starting at beat 84, with a 0.5-beat duration. Its BPM is 160 and
+its offset is -0.588 seconds.
+
+The old harness recorded exactly beat 84 at 31.5 seconds using its legacy
+double clock. ITGmania `SongPosition.cpp::UpdateSongPosition` stores the
+float beat computed by `TimingData.cpp::GetBeatInternal`; the fallback Lua
+`GameState:GetSongBeat` alias reads that position. The native harness now
+records beat 84.00000762939453 on the same frame. The pass-8 corrections in
+both implementations therefore close this gap without changing easing or
+comparison tolerance. Simply Love consumes the same engine song position.
+
+Harness `0.1.5` recaptured all 8,641 frames through beat 384 at 144 seconds,
+with no errors or dropped events. Source bytes, archive members, and
+lossless level-22 normalization were verified. The complete replacement
+`a03a6bec25440238c8d3fa0206e4ab165058e50a4640f252fadbd57d30e5f48d.tar.zst`
+passes all 194,374 comparisons on DeadSync `0.5.1832`.
+
+Verification log SHA-256:
+`359dab369c354fc8dd287c71e63f2ebe2f01bb20822183410161678470ed7ea1`.

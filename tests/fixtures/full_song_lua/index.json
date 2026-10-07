@@ -159,13 +159,15 @@
     {
       "title": "273|MODS|[lv.03] [CRYSTAL_ACCESS]",
       "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
-      "harness_version": "0.1.0",
-      "archive": "5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2.tar.zst",
-      "sha256": "5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2",
-      "compressed_bytes": 127611,
-      "uncompressed_sha256": "ae792ade48e4830d10f00a241899016b2e7cd558e3ccf6e46f44abdad120ee7a",
+      "harness_version": "0.1.5",
+      "archive": "a03a6bec25440238c8d3fa0206e4ab165058e50a4640f252fadbd57d30e5f48d.tar.zst",
+      "sha256": "a03a6bec25440238c8d3fa0206e4ab165058e50a4640f252fadbd57d30e5f48d",
+      "compressed_bytes": 132261,
+      "uncompressed_sha256": "5daad0e2f458d6f13e96d39fbf9774edfd560e27ce814e5b698660e29a67d86a",
       "compression_level": 22,
       "aliases": [
+        "8a0a71a271ea837e400be992dfcba577073ed03572b309a5d1e5d94737da8c81.tar.zst",
+        "5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2.tar.zst",
         "06de3fa8f9c4052b1d66b192856d9149e92777a7bf967a010b7c2b4fcc3f42e8.tar.zst"
       ]
     },
