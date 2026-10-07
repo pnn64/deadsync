@@ -214,3 +214,20 @@ The complete original archive passes all 248,156 comparisons on DeadSync
 `0.5.1828`.
 
 Verification log SHA-256: `f41303e1ce2fd3ff22006f223349c40743896989dbca119043dc871758a86a4f`.
+
+## Pass 7: complete ChikuTaku's movie archive
+
+The old archive `a3792891b461050fa08a726beb23cab5ad5fc508002adf27a482df1927ad3bb2.tar.zst`
+omitted the movie loaded twice by `lua/default.lua`. The source movie is
+68,632,900 bytes. ITGmania's `ActorUtil.cpp::InitFileTypeLists` classifies MP4
+as a Sprite texture; the pass-4 harness fix therefore collects this required
+dependency without any new harness code. Harness `0.1.4` recaptured all
+13,308 native frames through the 221.778-second endpoint with no errors or
+dropped events. Member hashes and the original source bytes were verified.
+
+The replacement `4d492047030008443585021530eb446c0ef3e87a6eb74f24467777927dd342d1.tar.zst`
+passes all 328,107 comparisons on DeadSync `0.5.1829`. Existing parser and
+playback behavior passes without further changes. Old archive selectors
+still resolve; superseded bytes remain in Git history and local diagnostics.
+
+Verification log SHA-256: `37364c9494ad0e6f9c8765aaa62ce77aed5d7b1015decc9c6acffabbd62b45f3`.

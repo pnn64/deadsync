@@ -799,6 +799,14 @@
       "archive": "257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst",
       "harness_version": "0.1.4",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "a3792891b461050fa08a726beb23cab5ad5fc508002adf27a482df1927ad3bb2.tar.zst",
+      "archive": "4d492047030008443585021530eb446c0ef3e87a6eb74f24467777927dd342d1.tar.zst",
+      "harness_version": "0.1.4",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }
