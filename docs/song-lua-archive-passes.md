@@ -19,6 +19,7 @@ an interactive ITGmania process. Local ITGmania sources are the reference.
 | 2 | `b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst` / `(R5) Let Me Hear That/let me hear that.sm` | 382 modifier checks in obsolete capture; AFT output omitted by composition adapter | 205,075/205,075 | `0.5.1824` |
 | 3 | `e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908.tar.zst` / `(R6) Waltz Capriccio/waltz_capriccio.ssc` | Missing hinted overlay asset prevented compilation | 260,292/260,292 | `0.5.1825` |
 | 4 | `54d5c782bdbdf43c6fd23825be53039fd343ad7db5ca37464d24f1bd1e99bf4e.tar.zst` / `100 Bad Days/100 Bad Days.sm` | Missing movie; rounded song offset delayed eight modifier checks; numeric prefix uncovered | 174,897/174,897 | `0.5.1826` |
+| 5 | `257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst` / `100 Bad Days/100 Bad Days.ssc` | Missing movie prevented compilation | 174,897/174,897 | `0.5.1827` |
 
 ## Pass 1: preserve sampled transform time
 
@@ -166,3 +167,21 @@ bytes remain in Git history and local diagnostic storage, with old selectors
 preserved. DeadSync version is `0.5.1826`.
 
 Verification log SHA-256: `f436bf2aa9dc0c73692ec6609902fac31f99e6f709189a65dcb898bb8a561caa`.
+
+## Pass 5: complete the Episode 16 SSC archive
+
+The next indexed archive,
+`87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst`,
+is the separate SSC simfile for Episode 16. It failed compilation because it
+also omitted `lua/100BadDays.mp4`. The native movie dependency repair from
+pass 4 applies to this archive too. Its replacement was captured with harness
+`0.1.4`, preserving this simfile's original bytes and all 7,920 native update
+frames over 131.98 seconds. Asset and archive hashes were verified; the old
+archive is retained in Git history and local diagnostic storage, with its
+selectors mapped to the replacement.
+
+The complete replacement passes all 174,897 comparisons on DeadSync
+`0.5.1827`. No additional source or harness change was needed. Its separate
+commit records the corrected archive and this pass's patch-version increment.
+
+Verification log SHA-256: `59b95d29493eb670a3581474179397f28ef1a3d2e27c38eaa754c966fb41daba`.

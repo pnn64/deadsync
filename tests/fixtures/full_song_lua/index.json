@@ -63,13 +63,15 @@
     {
       "title": "Episode 16",
       "source_simfile": "100 Bad Days/100 Bad Days.ssc",
-      "harness_version": "0.1.0",
-      "archive": "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst",
-      "sha256": "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0",
-      "compressed_bytes": 75978,
-      "uncompressed_sha256": "b07e92131f0fa341ebd49d3913d5d66de6c6b630dc04870f3ef50f267d7bf376",
+      "harness_version": "0.1.4",
+      "archive": "257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst",
+      "sha256": "257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5",
+      "compressed_bytes": 129859837,
+      "uncompressed_sha256": "2f7cc37aa4c90deae243665b975b875a41b74715df44d73463b3f9e2c30aad68",
       "compression_level": 22,
       "aliases": [
+        "f4aefa1e0577a06195de4e2562f00f103ac963b253a608c1cec8fe5960f57b25.tar.zst",
+        "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst",
         "7f65fd0494b4b76cd59553aa2dacae6c154275667c690ad6b5a48621dc528384.tar.zst"
       ]
     },

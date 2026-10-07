@@ -791,6 +791,14 @@
       "archive": "54d5c782bdbdf43c6fd23825be53039fd343ad7db5ca37464d24f1bd1e99bf4e.tar.zst",
       "harness_version": "0.1.4",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 5,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst",
+      "archive": "257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst",
+      "harness_version": "0.1.4",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }
