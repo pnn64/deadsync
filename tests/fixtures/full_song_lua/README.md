@@ -79,3 +79,9 @@ data only in an isolated capture copy. Every new archive uses level-22 zstd
 compression, with decompressed contents and member hashes verified. Existing
 fixtures were preserved. DeadSync fixture tests have not been run for this
 capture update.
+
+Each primary entry in `index.json` records `harness_version`, read from its
+archive manifest. New harness captures write the same version in both files.
+The runner checks the values match and reports the version before comparison.
+Retained archives report their own manifest version. Versions describe the
+generating harness; recompression does not change that provenance.

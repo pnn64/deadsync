@@ -5,6 +5,7 @@
     {
       "title": "Warp Zone",
       "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "harness_version": "0.1.0",
       "archive": "fc4f528d0fe0b68e691c222b2b2d58d8deb0f10d938f6eac3f57533cb06bb7ff.tar.zst",
       "sha256": "fc4f528d0fe0b68e691c222b2b2d58d8deb0f10d938f6eac3f57533cb06bb7ff",
       "compressed_bytes": 478640,
@@ -17,6 +18,7 @@
     {
       "title": "Let Me Hear That",
       "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "harness_version": "0.1.2",
       "archive": "b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst",
       "sha256": "b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc",
       "compressed_bytes": 758890,
@@ -31,18 +33,22 @@
     {
       "title": "Waltz Capriccio",
       "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
-      "archive": "c05dc759b9709606a61148a0ea1b6e59a69eb17bc706e2105f02ab5283d2424d.tar.zst",
-      "sha256": "c05dc759b9709606a61148a0ea1b6e59a69eb17bc706e2105f02ab5283d2424d",
-      "compressed_bytes": 7268043,
-      "uncompressed_sha256": "45f9f7be30d57076f35481b443da546e8431c3cae6a56a1632e73eda88a13fbd",
+      "harness_version": "0.1.3",
+      "archive": "e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908.tar.zst",
+      "sha256": "e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908",
+      "compressed_bytes": 8573705,
+      "uncompressed_sha256": "462129378577d1660ed1ff61a4181b17fb7da072ef9b0e8809df79cf220cc5da",
       "compression_level": 22,
       "aliases": [
+        "74fbbff3280c609547ed3517772b121bd57476a46dcfe136c76ff31300a5415c.tar.zst",
+        "c05dc759b9709606a61148a0ea1b6e59a69eb17bc706e2105f02ab5283d2424d.tar.zst",
         "d726158238380b3a345dcc3e79ed1bafdafae3b37b94f39dc68e98b178a849cf.tar.zst"
       ]
     },
     {
       "title": "Episode 16",
       "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "harness_version": "0.1.0",
       "archive": "cd076a0f887e93f2ec4e6e54d4065943c984a99c750218ab1b2abe4e7dc4d7f4.tar.zst",
       "sha256": "cd076a0f887e93f2ec4e6e54d4065943c984a99c750218ab1b2abe4e7dc4d7f4",
       "compressed_bytes": 75911,
@@ -55,6 +61,7 @@
     {
       "title": "Episode 16",
       "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "harness_version": "0.1.0",
       "archive": "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst",
       "sha256": "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0",
       "compressed_bytes": 75978,
@@ -67,6 +74,7 @@
     {
       "title": "10:35",
       "source_simfile": "1035/1035.sm",
+      "harness_version": "0.1.0",
       "archive": "86d614310d0cfd0f681d6c7c2c52032448765c1d4ce31f95a2e0ed079c19742c.tar.zst",
       "sha256": "86d614310d0cfd0f681d6c7c2c52032448765c1d4ce31f95a2e0ed079c19742c",
       "compressed_bytes": 55342,
@@ -79,6 +87,7 @@
     {
       "title": "188|HS|Holdswitch[lv.08] the shadow",
       "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "harness_version": "0.1.0",
       "archive": "19cfb02cece56439ea15f4db005401c01effaa85e22af2e3ef982035c3ae206c.tar.zst",
       "sha256": "19cfb02cece56439ea15f4db005401c01effaa85e22af2e3ef982035c3ae206c",
       "compressed_bytes": 85197,
@@ -91,6 +100,7 @@
     {
       "title": "242|MISC.|[lv.02] ChikuTaku",
       "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "harness_version": "0.1.0",
       "archive": "a3792891b461050fa08a726beb23cab5ad5fc508002adf27a482df1927ad3bb2.tar.zst",
       "sha256": "a3792891b461050fa08a726beb23cab5ad5fc508002adf27a482df1927ad3bb2",
       "compressed_bytes": 236692,
@@ -103,6 +113,7 @@
     {
       "title": "271|MODS|[lv.01] Spooky",
       "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "harness_version": "0.1.0",
       "archive": "bc2abb30e2bafa458fec4c897ed1d1b38659b7a6566b747ca890d888b28bfd15.tar.zst",
       "sha256": "bc2abb30e2bafa458fec4c897ed1d1b38659b7a6566b747ca890d888b28bfd15",
       "compressed_bytes": 147802,
@@ -115,6 +126,7 @@
     {
       "title": "272|MODS|[lv.02] Riddle",
       "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "harness_version": "0.1.0",
       "archive": "dd2642a3338bc3f53179bbbe4a55ba44db0369dc1ab8f5b4c3f30471477b3132.tar.zst",
       "sha256": "dd2642a3338bc3f53179bbbe4a55ba44db0369dc1ab8f5b4c3f30471477b3132",
       "compressed_bytes": 124282,
@@ -127,6 +139,7 @@
     {
       "title": "273|MODS|[lv.03] [CRYSTAL_ACCESS]",
       "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "harness_version": "0.1.0",
       "archive": "5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2.tar.zst",
       "sha256": "5c254c50d281cc55f60385b7a991560390c2f26ca13cd740395a2042ada60fe2",
       "compressed_bytes": 127611,
@@ -139,6 +152,7 @@
     {
       "title": "274|MODS|[lv.04] 最強STRONGER",
       "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "harness_version": "0.1.0",
       "archive": "c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8.tar.zst",
       "sha256": "c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8",
       "compressed_bytes": 7809129,
@@ -151,6 +165,7 @@
     {
       "title": "275|MODS|[lv.05] BroGamer",
       "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "harness_version": "0.1.0",
       "archive": "7dacf9294c7d4164b2cd7ea87ffa855cad33479aff1573b484c266b6b92c6849.tar.zst",
       "sha256": "7dacf9294c7d4164b2cd7ea87ffa855cad33479aff1573b484c266b6b92c6849",
       "compressed_bytes": 313231,
@@ -163,6 +178,7 @@
     {
       "title": "276|MODS|[lv.06] 西新宿清掃曲",
       "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "6dcdd139b34f6c0d1a2edba7cfeae6acd328022dcf2dd56016d77e8e840182c4.tar.zst",
       "sha256": "6dcdd139b34f6c0d1a2edba7cfeae6acd328022dcf2dd56016d77e8e840182c4",
       "compressed_bytes": 2014683,
@@ -175,6 +191,7 @@
     {
       "title": "277|MODS|[lv.07] CO5M1C R4ILR0AD",
       "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "7d58277dcee3097b755bf22f2bf998f7cccaed65f102157935fce2c37a811f9b.tar.zst",
       "sha256": "7d58277dcee3097b755bf22f2bf998f7cccaed65f102157935fce2c37a811f9b",
       "compressed_bytes": 1691599,
@@ -187,6 +204,7 @@
     {
       "title": "278|MODS|[lv.08] And Drugs↑↑",
       "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "harness_version": "0.1.0",
       "archive": "30525568cc581a65c8b48ae00dc23056490d494e9d715c6fe38c17d8cb63e54d.tar.zst",
       "sha256": "30525568cc581a65c8b48ae00dc23056490d494e9d715c6fe38c17d8cb63e54d",
       "compressed_bytes": 238132,
@@ -199,6 +217,7 @@
     {
       "title": "279|MODS|[lv.09] Karachi",
       "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "harness_version": "0.1.0",
       "archive": "5c21fcf0142b8e17cb4e295191b19731dc629257b7ddbff6a6cca4c9289e7032.tar.zst",
       "sha256": "5c21fcf0142b8e17cb4e295191b19731dc629257b7ddbff6a6cca4c9289e7032",
       "compressed_bytes": 1095094,
@@ -211,6 +230,7 @@
     {
       "title": "280|MODS|[MASTER] Sharkmode",
       "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "harness_version": "0.1.0",
       "archive": "2f43fed7122972e6b7d272a1c239ea38058c5e845d49b58ffbe41c0158bcafa9.tar.zst",
       "sha256": "2f43fed7122972e6b7d272a1c239ea38058c5e845d49b58ffbe41c0158bcafa9",
       "compressed_bytes": 26531,
@@ -223,6 +243,7 @@
     {
       "title": "303|MODS|[lv.memes] KABOOOOOM!!!!",
       "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "harness_version": "0.1.0",
       "archive": "50592d66df8ccd3b06d810115692dac1e6f470eb57bd889833d85f0debc31d90.tar.zst",
       "sha256": "50592d66df8ccd3b06d810115692dac1e6f470eb57bd889833d85f0debc31d90",
       "compressed_bytes": 34834996,
@@ -235,6 +256,7 @@
     {
       "title": "303|MODS|[lv.memes] KABOOOOOM!!!!",
       "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "harness_version": "0.1.0",
       "archive": "3c79fdaee3e6f39968b0ae6fa9b058e946d93bb07724588a72f7efc382b70a61.tar.zst",
       "sha256": "3c79fdaee3e6f39968b0ae6fa9b058e946d93bb07724588a72f7efc382b70a61",
       "compressed_bytes": 34835363,
@@ -247,6 +269,7 @@
     {
       "title": "307|MISC|[lv.Death] The Boys Are Back in Town (to kill you)",
       "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "harness_version": "0.1.0",
       "archive": "5c5efbf89acefb3000319f2a61251b772f792b281fd38a6503f3b3ce8cddc5a2.tar.zst",
       "sha256": "5c5efbf89acefb3000319f2a61251b772f792b281fd38a6503f3b3ce8cddc5a2",
       "compressed_bytes": 333901,
@@ -259,6 +282,7 @@
     {
       "title": "307|MISC|[lv.Death] The Boys Are Back in Town (to kill you)",
       "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "harness_version": "0.1.0",
       "archive": "96deaee746e4c016085fe15706dd7c9f321d07d11247e9746ed9c5822898d101.tar.zst",
       "sha256": "96deaee746e4c016085fe15706dd7c9f321d07d11247e9746ed9c5822898d101",
       "compressed_bytes": 333761,
@@ -271,6 +295,7 @@
     {
       "title": "319|TECH SOUP|[lv.P.Clark] Epidermis",
       "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "harness_version": "0.1.0",
       "archive": "acf53b348af9c3b12930cf8eb07f6a15728f729b19185f71e3da11622ec66f63.tar.zst",
       "sha256": "acf53b348af9c3b12930cf8eb07f6a15728f729b19185f71e3da11622ec66f63",
       "compressed_bytes": 157572,
@@ -283,6 +308,7 @@
     {
       "title": "319|TECH SOUP|[lv.P.Clark] Epidermis",
       "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "harness_version": "0.1.0",
       "archive": "cadff24c20d748d1be439876ef826cfb6db249d7b055546d4a91896ba85621f1.tar.zst",
       "sha256": "cadff24c20d748d1be439876ef826cfb6db249d7b055546d4a91896ba85621f1",
       "compressed_bytes": 158311,
@@ -295,6 +321,7 @@
     {
       "title": "321STARS",
       "source_simfile": "321STARS/321STARS.ssc",
+      "harness_version": "0.1.0",
       "archive": "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8.tar.zst",
       "sha256": "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8",
       "compressed_bytes": 470270,
@@ -307,6 +334,7 @@
     {
       "title": "666",
       "source_simfile": "666/666.ssc",
+      "harness_version": "0.1.0",
       "archive": "fe07775fff235c63a1278f079b21eadd86dd1b4d135742fb03b9b33eaef626f2.tar.zst",
       "sha256": "fe07775fff235c63a1278f079b21eadd86dd1b4d135742fb03b9b33eaef626f2",
       "compressed_bytes": 377580,
@@ -319,6 +347,7 @@
     {
       "title": "7th Gear",
       "source_simfile": "7th Gear/7th Gear.ssc",
+      "harness_version": "0.1.0",
       "archive": "8212e118c8866bc755091fd249497fdb853c6c2cdb99219a6776ad70563d3984.tar.zst",
       "sha256": "8212e118c8866bc755091fd249497fdb853c6c2cdb99219a6776ad70563d3984",
       "compressed_bytes": 4456369,
@@ -331,6 +360,7 @@
     {
       "title": "99+",
       "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "harness_version": "0.1.0",
       "archive": "f05d58b8dd90acfdc101dd853723379ef3dffc9b25d5d32108758aa4befa210a.tar.zst",
       "sha256": "f05d58b8dd90acfdc101dd853723379ef3dffc9b25d5d32108758aa4befa210a",
       "compressed_bytes": 1103090,
@@ -343,6 +373,7 @@
     {
       "title": "[07] 7th Gear",
       "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "harness_version": "0.1.0",
       "archive": "7a7232e518056e7db219999c22e7e742e1effd2a53dd94cf6cfe4da979779f19.tar.zst",
       "sha256": "7a7232e518056e7db219999c22e7e742e1effd2a53dd94cf6cfe4da979779f19",
       "compressed_bytes": 6456698,
@@ -355,6 +386,7 @@
     {
       "title": "[1115] [07] Spooky (Medium)",
       "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061.tar.zst",
       "sha256": "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061",
       "compressed_bytes": 117064,
@@ -367,6 +399,7 @@
     {
       "title": "[08] And Drugs↑↑",
       "source_simfile": "[08] And Drugs - (NO CMOD)/and drugs.ssc",
+      "harness_version": "0.1.0",
       "archive": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst",
       "sha256": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a",
       "compressed_bytes": 237731,
@@ -379,6 +412,7 @@
     {
       "title": "[09] Delightful Day",
       "source_simfile": "[09] Delightful Day - (NO CMOD)/Delightful Day.ssc",
+      "harness_version": "0.1.0",
       "archive": "94383304ec7beb36cd8c721e9209af6791f3a118f156012cd8d4bf503c2751cc.tar.zst",
       "sha256": "94383304ec7beb36cd8c721e9209af6791f3a118f156012cd8d4bf503c2751cc",
       "compressed_bytes": 64055,
@@ -391,6 +425,7 @@
     {
       "title": "[3878] [09] LALA (Hard)",
       "source_simfile": "[09] LALA (SH) [Exschwasion]/lala.ssc",
+      "harness_version": "0.1.0",
       "archive": "13c1e34ac23ac8c1b9f1a216f5085359db3805d4c61f5d06953e09079fa896f8.tar.zst",
       "sha256": "13c1e34ac23ac8c1b9f1a216f5085359db3805d4c61f5d06953e09079fa896f8",
       "compressed_bytes": 189498,
@@ -403,6 +438,7 @@
     {
       "title": "[3959] [09] Spectrum Sequence (Hard)",
       "source_simfile": "[09] Spectrum Sequence (SH) [DRILLBOT vs. valgrind]/spectrumsequence.ssc",
+      "harness_version": "0.1.0",
       "archive": "7e3430c811167ef32d22ba6abccddfab07452fc98403c98c778c92d867025b5a.tar.zst",
       "sha256": "7e3430c811167ef32d22ba6abccddfab07452fc98403c98c778c92d867025b5a",
       "compressed_bytes": 268925,
@@ -415,6 +451,7 @@
     {
       "title": "[3752] [09] Who the Hell Is Edgar?",
       "source_simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+      "harness_version": "0.1.0",
       "archive": "d23beb53ddd55aec57ebb37566545a86aaeecc1136c274cd17687481cc6abf2d.tar.zst",
       "sha256": "d23beb53ddd55aec57ebb37566545a86aaeecc1136c274cd17687481cc6abf2d",
       "compressed_bytes": 938768,
@@ -427,6 +464,7 @@
     {
       "title": "[5604] [10] flip69",
       "source_simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+      "harness_version": "0.1.0",
       "archive": "3b29f7f3251b6c8ed1e014a79f626cf9f98c68498391ae664ea80ad612507d48.tar.zst",
       "sha256": "3b29f7f3251b6c8ed1e014a79f626cf9f98c68498391ae664ea80ad612507d48",
       "compressed_bytes": 1124808,
@@ -439,6 +477,7 @@
     {
       "title": "[5811] [10] Lake of Lost Nostalgia",
       "source_simfile": "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc",
+      "harness_version": "0.1.0",
       "archive": "0d8d6fc8d0be410f146f2b6c775180aa5bc71e35380ca93c25df1fcfda584d61.tar.zst",
       "sha256": "0d8d6fc8d0be410f146f2b6c775180aa5bc71e35380ca93c25df1fcfda584d61",
       "compressed_bytes": 228450,
@@ -451,6 +490,7 @@
     {
       "title": "[4252] [10] media offline (Medium)",
       "source_simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
+      "harness_version": "0.1.0",
       "archive": "57c84a2898d55076cec4bfe559c1fad4ad3f55584f434e1b91d3e8c62c458271.tar.zst",
       "sha256": "57c84a2898d55076cec4bfe559c1fad4ad3f55584f434e1b91d3e8c62c458271",
       "compressed_bytes": 40257,
@@ -463,6 +503,7 @@
     {
       "title": "[4914] [10] Riddle",
       "source_simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+      "harness_version": "0.1.0",
       "archive": "9c3094c0b30d092a7475c2eedfe2980fe01a275ce23c8236976fb769b9a9c43e.tar.zst",
       "sha256": "9c3094c0b30d092a7475c2eedfe2980fe01a275ce23c8236976fb769b9a9c43e",
       "compressed_bytes": 75819,
@@ -475,6 +516,7 @@
     {
       "title": "[10] Riddle",
       "source_simfile": "[10] Riddle (No CMOD) [SX]/Riddle.ssc",
+      "harness_version": "0.1.0",
       "archive": "20dd896450cd19d147858b492510323abf20127d77bac542eb1d4595695408dc.tar.zst",
       "sha256": "20dd896450cd19d147858b492510323abf20127d77bac542eb1d4595695408dc",
       "compressed_bytes": 124757,
@@ -487,6 +529,7 @@
     {
       "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
       "source_simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "6806347d912748a3351032ecdec12caee63ae2af38da2b756cd2dc205b9623c2.tar.zst",
       "sha256": "6806347d912748a3351032ecdec12caee63ae2af38da2b756cd2dc205b9623c2",
       "compressed_bytes": 1662921,
@@ -499,6 +542,7 @@
     {
       "title": "[11] 時計の国のジェミニ",
       "source_simfile": "[11] Gemini in Clockland/Gemini in Clockland.ssc",
+      "harness_version": "0.1.0",
       "archive": "8d1fa22c047c19ab654d1f2cb84f4e67f4eb60b4403f5cb4e3550ee8f484a72f.tar.zst",
       "sha256": "8d1fa22c047c19ab654d1f2cb84f4e67f4eb60b4403f5cb4e3550ee8f484a72f",
       "compressed_bytes": 108886,
@@ -511,6 +555,7 @@
     {
       "title": "[5800] [11] KENPO SAITO",
       "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "bd7cd2a1266a6882f7329ec2ec01ce7856112d489155cb0e0a61114aee948339.tar.zst",
       "sha256": "bd7cd2a1266a6882f7329ec2ec01ce7856112d489155cb0e0a61114aee948339",
       "compressed_bytes": 31265,
@@ -523,6 +568,7 @@
     {
       "title": "[5916] [11] Let Me Hear That",
       "source_simfile": "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ssc",
+      "harness_version": "0.1.0",
       "archive": "ceca039cfa27d42846a6f5ddfa7ff49a2639a5c00e35d2093dc5eb177554e605.tar.zst",
       "sha256": "ceca039cfa27d42846a6f5ddfa7ff49a2639a5c00e35d2093dc5eb177554e605",
       "compressed_bytes": 756758,
@@ -535,6 +581,7 @@
     {
       "title": "[5813] [11] 西新宿清掃曲",
       "source_simfile": "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "e8b2f04707b665c334a8495abac3cb3e719c314283bbe2be17a90f1707bb6d0b.tar.zst",
       "sha256": "e8b2f04707b665c334a8495abac3cb3e719c314283bbe2be17a90f1707bb6d0b",
       "compressed_bytes": 2014748,
@@ -547,6 +594,7 @@
     {
       "title": "[5408] [11] Palette Lab (Hard)",
       "source_simfile": "[11] Palette Lab (SH) [Exschwasion]/palette lab.ssc",
+      "harness_version": "0.1.0",
       "archive": "a11bca34fbf709dccf0c7e28fe3bc498dc37e843dd24a89ef0e27202820c4edd.tar.zst",
       "sha256": "a11bca34fbf709dccf0c7e28fe3bc498dc37e843dd24a89ef0e27202820c4edd",
       "compressed_bytes": 80515,
@@ -559,6 +607,7 @@
     {
       "title": "[6210] [11] Slamurai",
       "source_simfile": "[11] Slamurai (SX) [Zaia]/Slamurai.ssc",
+      "harness_version": "0.1.0",
       "archive": "6d72b842ce7444a01f63d445d479553970cb8a63f348cc51dd5c1699834b3bf7.tar.zst",
       "sha256": "6d72b842ce7444a01f63d445d479553970cb8a63f348cc51dd5c1699834b3bf7",
       "compressed_bytes": 64656,
@@ -571,6 +620,7 @@
     {
       "title": "[12] And Drugs↑↑",
       "source_simfile": "[12] And Drugs (No CMOD) [SX]/and drugs.ssc",
+      "harness_version": "0.1.0",
       "archive": "4a5da65d0da95cc9b429b0d0a9a46065d8e676ca7b614221e9291aa9f884ccde.tar.zst",
       "sha256": "4a5da65d0da95cc9b429b0d0a9a46065d8e676ca7b614221e9291aa9f884ccde",
       "compressed_bytes": 238455,
@@ -583,6 +633,7 @@
     {
       "title": "[7086] [12] Blacksphere",
       "source_simfile": "[12] Blacksphere (SX) [Exschwasion]/music.ssc",
+      "harness_version": "0.1.0",
       "archive": "beea2deb43135a974029410cdf0b1c343d2c9b2601ab567e77a3e56ba560e3f5.tar.zst",
       "sha256": "beea2deb43135a974029410cdf0b1c343d2c9b2601ab567e77a3e56ba560e3f5",
       "compressed_bytes": 78479,
@@ -595,6 +646,7 @@
     {
       "title": "[12] Bunny House",
       "source_simfile": "[12] bunny-house - (No CMOD)/steps.ssc",
+      "harness_version": "0.1.0",
       "archive": "9f8be6ab2b5190cf33bb2aeb570fc4f3a8aa99801d711ca74e39cff3532a977e.tar.zst",
       "sha256": "9f8be6ab2b5190cf33bb2aeb570fc4f3a8aa99801d711ca74e39cff3532a977e",
       "compressed_bytes": 952635,
@@ -607,6 +659,7 @@
     {
       "title": "[6804] [12] Godspeed",
       "source_simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+      "harness_version": "0.1.0",
       "archive": "f16aaf979e6c41b0955e9717b7c50df138de0157ff66bec74cbe7de5cddbdbbf.tar.zst",
       "sha256": "f16aaf979e6c41b0955e9717b7c50df138de0157ff66bec74cbe7de5cddbdbbf",
       "compressed_bytes": 40062,
@@ -619,6 +672,7 @@
     {
       "title": "[7287] [12] Myths You Forgot",
       "source_simfile": "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot.ssc",
+      "harness_version": "0.1.0",
       "archive": "c2fced0ab658ce25f0a1a54d722162af378df050d61bcb8e7eade94dd0619e61.tar.zst",
       "sha256": "c2fced0ab658ce25f0a1a54d722162af378df050d61bcb8e7eade94dd0619e61",
       "compressed_bytes": 58731,
@@ -631,6 +685,7 @@
     {
       "title": "[7124] [12] Picture in My Mind",
       "source_simfile": "[12] Picture in My Mind (SX) [Zaia]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "harness_version": "0.1.0",
       "archive": "43370fdafa237430555b5dae4b134cec8287c7a6e3149c3450e9d54b9681afa9.tar.zst",
       "sha256": "43370fdafa237430555b5dae4b134cec8287c7a6e3149c3450e9d54b9681afa9",
       "compressed_bytes": 73593,
@@ -643,6 +698,7 @@
     {
       "title": "[12] Tacos",
       "source_simfile": "[12] Tacos [DX]/Tacos.ssc",
+      "harness_version": "0.1.0",
       "archive": "d4489b565e4307f1426cea08dcbe180cc2af95b6f8eb3b2145623c3a02f54563.tar.zst",
       "sha256": "d4489b565e4307f1426cea08dcbe180cc2af95b6f8eb3b2145623c3a02f54563",
       "compressed_bytes": 43456,
@@ -655,6 +711,7 @@
     {
       "title": "Flying Castle",
       "source_simfile": "[13] Flying Castle/flying castle.ssc",
+      "harness_version": "0.1.0",
       "archive": "e10c3b5a71ea7cd083294fde8d7cb217c3dad1d7d603b24dda30cddd2e32fa93.tar.zst",
       "sha256": "e10c3b5a71ea7cd083294fde8d7cb217c3dad1d7d603b24dda30cddd2e32fa93",
       "compressed_bytes": 243414,
@@ -667,6 +724,7 @@
     {
       "title": "[14] [CRYSTAL_ACCESS]",
       "source_simfile": "[14] [CRYSTAL_ACCESS] (No CMOD) [SX]/[CRYSTAL_ACCESS].ssc",
+      "harness_version": "0.1.0",
       "archive": "9ebd173d388e4379fcf837a73699ab5adee9f8251613a526ac7111e22c03bd19.tar.zst",
       "sha256": "9ebd173d388e4379fcf837a73699ab5adee9f8251613a526ac7111e22c03bd19",
       "compressed_bytes": 128015,
@@ -679,6 +737,7 @@
     {
       "title": "[14] I'm For You",
       "source_simfile": "[14] [Zaia] I_m For You/I_m For You.ssc",
+      "harness_version": "0.1.0",
       "archive": "70e9def6c6bd9e11df1f9c063dc213e032b57472b4ea9655d76fba3f3dd797ad.tar.zst",
       "sha256": "70e9def6c6bd9e11df1f9c063dc213e032b57472b4ea9655d76fba3f3dd797ad",
       "compressed_bytes": 4674085,
@@ -691,6 +750,7 @@
     {
       "title": "[CRYSTAL_ACCESS]",
       "source_simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm",
+      "harness_version": "0.1.0",
       "archive": "f657ae12b7c7f7e63701a1e6f2af48f16526ee682720c38ca915fae9705aa9cd.tar.zst",
       "sha256": "f657ae12b7c7f7e63701a1e6f2af48f16526ee682720c38ca915fae9705aa9cd",
       "compressed_bytes": 70191,
@@ -703,6 +763,7 @@
     {
       "title": "[CRYSTAL_ACCESS]",
       "source_simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "harness_version": "0.1.0",
       "archive": "941c8b6f4e5e354ae12f9a5b66e810549a09a5e2326a69a4b60c9444bcfd1884.tar.zst",
       "sha256": "941c8b6f4e5e354ae12f9a5b66e810549a09a5e2326a69a4b60c9444bcfd1884",
       "compressed_bytes": 70636,
@@ -715,6 +776,7 @@
     {
       "title": "[F]FS+BR(lv.9) Bunny House",
       "source_simfile": "[F]FS+BR(lv.9) Bunny House/steps.sm",
+      "harness_version": "0.1.0",
       "archive": "55b9c5648c2d1049f82756577313be2cedbd54fba46da2678a68f7d966434ebc.tar.zst",
       "sha256": "55b9c5648c2d1049f82756577313be2cedbd54fba46da2678a68f7d966434ebc",
       "compressed_bytes": 1045123,
@@ -727,6 +789,7 @@
     {
       "title": "[F]FS+BR(lv.9) Bunny House",
       "source_simfile": "[F]FS+BR(lv.9) Bunny House/steps.ssc",
+      "harness_version": "0.1.0",
       "archive": "70e03d62dfa31a8768b31a31026e2cb1aeb20d021ca72d32f49e72d7268aa931.tar.zst",
       "sha256": "70e03d62dfa31a8768b31a31026e2cb1aeb20d021ca72d32f49e72d7268aa931",
       "compressed_bytes": 1046950,
@@ -739,6 +802,7 @@
     {
       "title": "[FULL SONG] ChikuTaku",
       "source_simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
+      "harness_version": "0.1.0",
       "archive": "fb774a03318543e9d9a06853ebfac4355dca010496be83c5f655583ebfdcbedf.tar.zst",
       "sha256": "fb774a03318543e9d9a06853ebfac4355dca010496be83c5f655583ebfdcbedf",
       "compressed_bytes": 148926,
@@ -751,6 +815,7 @@
     {
       "title": "[FULL SONG] 花月ノ夢",
       "source_simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
+      "harness_version": "0.1.0",
       "archive": "b2442d671f5092fce6f8b59ed6fc0e52983d2f79a8027fad0a02a1e79d0dd883.tar.zst",
       "sha256": "b2442d671f5092fce6f8b59ed6fc0e52983d2f79a8027fad0a02a1e79d0dd883",
       "compressed_bytes": 185680,
@@ -763,6 +828,7 @@
     {
       "title": "[FULL SONG] 粛聖!! ロリ神レクイエム☆",
       "source_simfile": "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+      "harness_version": "0.1.0",
       "archive": "2d1af2fb210edff23de59a0b3af57e44198473493701f86cc38d8adaec0ae29f.tar.zst",
       "sha256": "2d1af2fb210edff23de59a0b3af57e44198473493701f86cc38d8adaec0ae29f",
       "compressed_bytes": 331042,
@@ -775,6 +841,7 @@
     {
       "title": "[FULL SONG] Stuck in the Abyss",
       "source_simfile": "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+      "harness_version": "0.1.0",
       "archive": "5b717410c59dc966a671f037adabe5f78d6c9c21ce8edbda72ed12bccefe42cd.tar.zst",
       "sha256": "5b717410c59dc966a671f037adabe5f78d6c9c21ce8edbda72ed12bccefe42cd",
       "compressed_bytes": 1203288,
@@ -787,6 +854,7 @@
     {
       "title": "[N]TECH SOUP(MASTER) Flying Castle",
       "source_simfile": "[N]TECH SOUP(MASTER) Flying Castle/flying castle.sm",
+      "harness_version": "0.1.0",
       "archive": "cb6422f5f30e65931d09bd34da4ce770604c3eceacb17cfa4b2ca2316d85628d.tar.zst",
       "sha256": "cb6422f5f30e65931d09bd34da4ce770604c3eceacb17cfa4b2ca2316d85628d",
       "compressed_bytes": 236388,
@@ -799,6 +867,7 @@
     {
       "title": "[N]TECH SOUP(MASTER) Flying Castle",
       "source_simfile": "[N]TECH SOUP(MASTER) Flying Castle/flying castle.ssc",
+      "harness_version": "0.1.0",
       "archive": "25ebde6ad5afc8e81fcb5a7aa1d91c3d216c4f60f36ee832c711eaf1161d66ba.tar.zst",
       "sha256": "25ebde6ad5afc8e81fcb5a7aa1d91c3d216c4f60f36ee832c711eaf1161d66ba",
       "compressed_bytes": 243308,
@@ -811,6 +880,7 @@
     {
       "title": "happy century",
       "source_simfile": "[recognize m.] happy century/steps.ssc",
+      "harness_version": "0.1.0",
       "archive": "0e7b0bb0742a02c5f0f652a6ca2fd9730d2f0715f9a81c0faa41c7aaacefe3d0.tar.zst",
       "sha256": "0e7b0bb0742a02c5f0f652a6ca2fd9730d2f0715f9a81c0faa41c7aaacefe3d0",
       "compressed_bytes": 43638,
@@ -823,6 +893,7 @@
     {
       "title": "[T04] Palette Lab (Hard)",
       "source_simfile": "[T04] Palette Lab (SH)/palette lab.ssc",
+      "harness_version": "0.1.0",
       "archive": "7eeed9c8196eeab88adaacecae9d598a81271694f77ee75e962063a2aefb73ab.tar.zst",
       "sha256": "7eeed9c8196eeab88adaacecae9d598a81271694f77ee75e962063a2aefb73ab",
       "compressed_bytes": 80636,
@@ -835,6 +906,7 @@
     {
       "title": "[T08] CO5M1C R4ILR0AD (No CMOD)",
       "source_simfile": "[T08] CO5M1C R4ILR0AD (No CMOD)/CO5M1C R4ILR0AD-chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "ea0ed31813534d266fb032d0b41367ec9ce22e175a3cb7e2007132ea1a5b8ec6.tar.zst",
       "sha256": "ea0ed31813534d266fb032d0b41367ec9ce22e175a3cb7e2007132ea1a5b8ec6",
       "compressed_bytes": 1692053,
@@ -847,6 +919,7 @@
     {
       "title": "[T09] Picture in My Mind",
       "source_simfile": "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "harness_version": "0.1.0",
       "archive": "f5b651e7284a4fe72f527a7a9cc3d221454203dde7aeb33ed2b087322dc92e87.tar.zst",
       "sha256": "f5b651e7284a4fe72f527a7a9cc3d221454203dde7aeb33ed2b087322dc92e87",
       "compressed_bytes": 73715,
@@ -859,6 +932,7 @@
     {
       "title": "Palette Lab",
       "source_simfile": "[TLD] Palette Lab/palette lab.ssc",
+      "harness_version": "0.1.0",
       "archive": "ab653a15cfa4fa5627d7228278cfda6fb0ef336f802fec6f2d075214b78a0825.tar.zst",
       "sha256": "ab653a15cfa4fa5627d7228278cfda6fb0ef336f802fec6f2d075214b78a0825",
       "compressed_bytes": 82057,
@@ -871,6 +945,7 @@
     {
       "title": "LALA",
       "source_simfile": "[TPE2] LALA/lala.ssc",
+      "harness_version": "0.1.0",
       "archive": "fa46a880b50e602e5dc83a722daa0a08540c0c37970db2c1f339d764778ed824.tar.zst",
       "sha256": "fa46a880b50e602e5dc83a722daa0a08540c0c37970db2c1f339d764778ed824",
       "compressed_bytes": 191007,
@@ -883,6 +958,7 @@
     {
       "title": "I'm For You",
       "source_simfile": "[Zaia] I'm For You/I'm For You.ssc",
+      "harness_version": "0.1.0",
       "archive": "4bb812d63353f77fae6304d3c64617922b85afd85b84772e8e8c53acb5a48f8b.tar.zst",
       "sha256": "4bb812d63353f77fae6304d3c64617922b85afd85b84772e8e8c53acb5a48f8b",
       "compressed_bytes": 4242307,
@@ -895,6 +971,7 @@
     {
       "title": "Think of a happy place",
       "source_simfile": "[Zaia] Think of a happy place/Think of a happy place.sm",
+      "harness_version": "0.1.0",
       "archive": "928a881a590f97ff4ebf7f8f67662b389bae367619042ab67dfebcfa7f7f3bdc.tar.zst",
       "sha256": "928a881a590f97ff4ebf7f8f67662b389bae367619042ab67dfebcfa7f7f3bdc",
       "compressed_bytes": 78112,
@@ -907,6 +984,7 @@
     {
       "title": "A Dramatic Irony",
       "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+      "harness_version": "0.1.0",
       "archive": "6dd2dc541fb78654743572555b3e3e8cd6f8b5a7c00f8b7cf54df0cd2733e91c.tar.zst",
       "sha256": "6dd2dc541fb78654743572555b3e3e8cd6f8b5a7c00f8b7cf54df0cd2733e91c",
       "compressed_bytes": 12435299,
@@ -919,6 +997,7 @@
     {
       "title": "A Op.01",
       "source_simfile": "A Op.01/A Op.01.ssc",
+      "harness_version": "0.1.0",
       "archive": "0f09956bc2c88edd7edb073794a0ea4d89d30b8d7f7ed5bc5c3078fc6cf358d6.tar.zst",
       "sha256": "0f09956bc2c88edd7edb073794a0ea4d89d30b8d7f7ed5bc5c3078fc6cf358d6",
       "compressed_bytes": 40241,
@@ -931,6 +1010,7 @@
     {
       "title": "Abraham's OP",
       "source_simfile": "Abraham's OP/Abraham's OP.ssc",
+      "harness_version": "0.1.0",
       "archive": "6a6cc679a4810a89d98f3932944f98d639d66e1a0e36f0ca70669dda7c09f450.tar.zst",
       "sha256": "6a6cc679a4810a89d98f3932944f98d639d66e1a0e36f0ca70669dda7c09f450",
       "compressed_bytes": 100534,
@@ -943,6 +1023,7 @@
     {
       "title": "Accelerator",
       "source_simfile": "Accelerator/Accelerator.sm",
+      "harness_version": "0.1.0",
       "archive": "905a16f3c18a97dd39f5ceec4ca262e09ae31bb3cb252d7e156a2de00e6c5098.tar.zst",
       "sha256": "905a16f3c18a97dd39f5ceec4ca262e09ae31bb3cb252d7e156a2de00e6c5098",
       "compressed_bytes": 60986,
@@ -955,6 +1036,7 @@
     {
       "title": "Accelerator",
       "source_simfile": "Accelerator/Accelerator.ssc",
+      "harness_version": "0.1.0",
       "archive": "d6107bb073549b87484b63a849b3d043140c04a69017dd1ca27b343cc30bce8b.tar.zst",
       "sha256": "d6107bb073549b87484b63a849b3d043140c04a69017dd1ca27b343cc30bce8b",
       "compressed_bytes": 61227,
@@ -967,6 +1049,7 @@
     {
       "title": "Accendio",
       "source_simfile": "ACCENDIO/aCCENDIO.sm",
+      "harness_version": "0.1.0",
       "archive": "a7533b69615805cdf933c9443cf3a30e5cd1bb1d667a96a448dc163aaeeb63ad.tar.zst",
       "sha256": "a7533b69615805cdf933c9443cf3a30e5cd1bb1d667a96a448dc163aaeeb63ad",
       "compressed_bytes": 54882,
@@ -979,6 +1062,7 @@
     {
       "title": "Accendio",
       "source_simfile": "ACCENDIO/aCCENDIO.ssc",
+      "harness_version": "0.1.0",
       "archive": "0ad6e716bc4ee233ec9d9873ef1517e9a18cb18a9d69643962d3b1bf43b81862.tar.zst",
       "sha256": "0ad6e716bc4ee233ec9d9873ef1517e9a18cb18a9d69643962d3b1bf43b81862",
       "compressed_bytes": 55240,
@@ -991,6 +1075,7 @@
     {
       "title": "Actin' Up",
       "source_simfile": "Actin Up/actinup-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "898409c37b21205b1ad8ec8e8314f0e70706cebcdf1ea8e84f9731a17e02efa0.tar.zst",
       "sha256": "898409c37b21205b1ad8ec8e8314f0e70706cebcdf1ea8e84f9731a17e02efa0",
       "compressed_bytes": 60229,
@@ -1003,6 +1088,7 @@
     {
       "title": "Actin' Up",
       "source_simfile": "Actin Up/actinup-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "3dcd718715170a902586ec7e18989758e3102f67d6ebe75fc6e0da9afc285516.tar.zst",
       "sha256": "3dcd718715170a902586ec7e18989758e3102f67d6ebe75fc6e0da9afc285516",
       "compressed_bytes": 61305,
@@ -1015,6 +1101,7 @@
     {
       "title": "Aegleseeker",
       "source_simfile": "Aegleseeker/Aegleseeker.ssc",
+      "harness_version": "0.1.0",
       "archive": "aae1d802a0ed0130e995886a5b3c2986399986693a049fb54db6564d6ff46e07.tar.zst",
       "sha256": "aae1d802a0ed0130e995886a5b3c2986399986693a049fb54db6564d6ff46e07",
       "compressed_bytes": 980034,
@@ -1027,6 +1114,7 @@
     {
       "title": "After Dark",
       "source_simfile": "After Dark/After Dark.ssc",
+      "harness_version": "0.1.0",
       "archive": "475f5f6ca0aefbbb7d5d4943793b3b51c6401823d470bcc0f4e5345083a88b69.tar.zst",
       "sha256": "475f5f6ca0aefbbb7d5d4943793b3b51c6401823d470bcc0f4e5345083a88b69",
       "compressed_bytes": 973239,
@@ -1039,6 +1127,7 @@
     {
       "title": "Afterburn",
       "source_simfile": "Afterburn/Afterburn.ssc",
+      "harness_version": "0.1.0",
       "archive": "8fa43e91d314aaa0fda600fac96603d577d449c8f974b6eac5cbf692dbe4646f.tar.zst",
       "sha256": "8fa43e91d314aaa0fda600fac96603d577d449c8f974b6eac5cbf692dbe4646f",
       "compressed_bytes": 79269,
@@ -1051,6 +1140,7 @@
     {
       "title": "合縁事変",
       "source_simfile": "Aien-Jihen [Gpop]/Aien-Jihen.ssc",
+      "harness_version": "0.1.0",
       "archive": "505c7044020696f14a35476d87aeff802e82bee098745834a567cd1dbc9bf285.tar.zst",
       "sha256": "505c7044020696f14a35476d87aeff802e82bee098745834a567cd1dbc9bf285",
       "compressed_bytes": 369036,
@@ -1063,6 +1153,7 @@
     {
       "title": "Airman First Class",
       "source_simfile": "Airman First Class - [glory limited.]/kpopmix.ssc",
+      "harness_version": "0.1.0",
       "archive": "ebf1c207285e977b49d2753dd264f1d448d69ade80ea013755aecb16fc0635db.tar.zst",
       "sha256": "ebf1c207285e977b49d2753dd264f1d448d69ade80ea013755aecb16fc0635db",
       "compressed_bytes": 59219,
@@ -1075,6 +1166,7 @@
     {
       "title": "Among Us in Real Life - Single",
       "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+      "harness_version": "0.1.0",
       "archive": "98dd5f567bc286f73bf7e83fdc63a3895dda4ce3e4f9ec3fa61de3ee92337c82.tar.zst",
       "sha256": "98dd5f567bc286f73bf7e83fdc63a3895dda4ce3e4f9ec3fa61de3ee92337c82",
       "compressed_bytes": 81464,
@@ -1087,6 +1179,7 @@
     {
       "title": "And Drugs↑↑",
       "source_simfile": "And Drugs/and drugs.sm",
+      "harness_version": "0.1.0",
       "archive": "b1115ea8905297d629aedee9e2f090e093755ee577aaef16d2116f2452cfcb22.tar.zst",
       "sha256": "b1115ea8905297d629aedee9e2f090e093755ee577aaef16d2116f2452cfcb22",
       "compressed_bytes": 238202,
@@ -1099,6 +1192,7 @@
     {
       "title": "And Drugs↑↑",
       "source_simfile": "And Drugs/and drugs.ssc",
+      "harness_version": "0.1.0",
       "archive": "8a0eeda7135a95a5d2527d948106a15420b8510a4f709d21d2888e83cfcc87f1.tar.zst",
       "sha256": "8a0eeda7135a95a5d2527d948106a15420b8510a4f709d21d2888e83cfcc87f1",
       "compressed_bytes": 239740,
@@ -1111,6 +1205,7 @@
     {
       "title": "Answers",
       "source_simfile": "Answers2/Answers.sm",
+      "harness_version": "0.1.0",
       "archive": "8e4494677b8a4174e4ae41b7de18339142920e2883a1bfdcca7f269cc851aa00.tar.zst",
       "sha256": "8e4494677b8a4174e4ae41b7de18339142920e2883a1bfdcca7f269cc851aa00",
       "compressed_bytes": 64743,
@@ -1123,6 +1218,7 @@
     {
       "title": "Answers",
       "source_simfile": "Answers2/Answers.ssc",
+      "harness_version": "0.1.0",
       "archive": "6d4b5633b6949f2a0d234faed705c2582750aca3b070a2a26d45d2bcc9fbafa8.tar.zst",
       "sha256": "6d4b5633b6949f2a0d234faed705c2582750aca3b070a2a26d45d2bcc9fbafa8",
       "compressed_bytes": 66031,
@@ -1135,6 +1231,7 @@
     {
       "title": "Episode 04",
       "source_simfile": "Anxiety/Anxiety.sm",
+      "harness_version": "0.1.0",
       "archive": "f7c15cafd655f36e213004b340bb60b3b4c473a0f94be3a8dd21f7bf2fec9913.tar.zst",
       "sha256": "f7c15cafd655f36e213004b340bb60b3b4c473a0f94be3a8dd21f7bf2fec9913",
       "compressed_bytes": 367310,
@@ -1147,6 +1244,7 @@
     {
       "title": "Episode 04",
       "source_simfile": "Anxiety/Anxiety.ssc",
+      "harness_version": "0.1.0",
       "archive": "56d4a0c3f9cfae5e9184f6b7aeae3156972708a54e80872a5419ffdd49da0f8c.tar.zst",
       "sha256": "56d4a0c3f9cfae5e9184f6b7aeae3156972708a54e80872a5419ffdd49da0f8c",
       "compressed_bytes": 366284,
@@ -1159,6 +1257,7 @@
     {
       "title": "あんずのうた",
       "source_simfile": "Anzu no Uta (U.P.S.)/Anzu no Uta.sm",
+      "harness_version": "0.1.0",
       "archive": "6be680fedffec89b430e572a9566ab2c0a891c640bc72663e4bde18fb830e350.tar.zst",
       "sha256": "6be680fedffec89b430e572a9566ab2c0a891c640bc72663e4bde18fb830e350",
       "compressed_bytes": 995694,
@@ -1171,6 +1270,7 @@
     {
       "title": "ao no lie",
       "source_simfile": "ao no lie/ae no lie.sm",
+      "harness_version": "0.1.0",
       "archive": "1fa8866daa83cf0006e441d0efd9f8b773683cad0ff746757c6401e56175a64d.tar.zst",
       "sha256": "1fa8866daa83cf0006e441d0efd9f8b773683cad0ff746757c6401e56175a64d",
       "compressed_bytes": 56069,
@@ -1183,6 +1283,7 @@
     {
       "title": "ao no lie",
       "source_simfile": "ao no lie/ae no lie.ssc",
+      "harness_version": "0.1.0",
       "archive": "aad6154697a456fc7e44f4c43468a90a5d0ccebc138e8db8f02f050539a6d504.tar.zst",
       "sha256": "aad6154697a456fc7e44f4c43468a90a5d0ccebc138e8db8f02f050539a6d504",
       "compressed_bytes": 56130,
@@ -1195,6 +1296,7 @@
     {
       "title": "Apollo",
       "source_simfile": "Apollo/Apollo.sm",
+      "harness_version": "0.1.0",
       "archive": "6aa7a235e8678caa459399893e7c0e828d80843574fe3231966bf704cf26a0f0.tar.zst",
       "sha256": "6aa7a235e8678caa459399893e7c0e828d80843574fe3231966bf704cf26a0f0",
       "compressed_bytes": 491412,
@@ -1207,6 +1309,7 @@
     {
       "title": "Apollo",
       "source_simfile": "Apollo/Apollo.ssc",
+      "harness_version": "0.1.0",
       "archive": "b9f24536e87b75f62a882317c002f3e0cd24a00e78751155b0340f764581831d.tar.zst",
       "sha256": "b9f24536e87b75f62a882317c002f3e0cd24a00e78751155b0340f764581831d",
       "compressed_bytes": 490069,
@@ -1219,6 +1322,7 @@
     {
       "title": "ASGORE",
       "source_simfile": "assgore/goatdad.sm",
+      "harness_version": "0.1.0",
       "archive": "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4.tar.zst",
       "sha256": "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4",
       "compressed_bytes": 112218,
@@ -1231,6 +1335,7 @@
     {
       "title": "ASGORE",
       "source_simfile": "assgore/goatdad.ssc",
+      "harness_version": "0.1.0",
       "archive": "e93c968811d66cd38638e8354d58a2c03c2876f01389d3f3605e8e3f6cb1e454.tar.zst",
       "sha256": "e93c968811d66cd38638e8354d58a2c03c2876f01389d3f3605e8e3f6cb1e454",
       "compressed_bytes": 40172430,
@@ -1243,6 +1348,7 @@
     {
       "title": "Astrogirl",
       "source_simfile": "Astrogirl [wrsw]/Astrogirl.ssc",
+      "harness_version": "0.1.0",
       "archive": "019a21797c929c64cc3d9f121f507ae14d11308d8e625dd86ee955e5f67b6528.tar.zst",
       "sha256": "019a21797c929c64cc3d9f121f507ae14d11308d8e625dd86ee955e5f67b6528",
       "compressed_bytes": 133137,
@@ -1255,6 +1361,7 @@
     {
       "title": "Atmosphere",
       "source_simfile": "Atmosphere/atmosphere-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "2209fb12c20e864b2c4036061b955256f2f6e0e76eb139a421055bd8961040c2.tar.zst",
       "sha256": "2209fb12c20e864b2c4036061b955256f2f6e0e76eb139a421055bd8961040c2",
       "compressed_bytes": 66528,
@@ -1267,6 +1374,7 @@
     {
       "title": "Atmosphere",
       "source_simfile": "Atmosphere/atmosphere-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "0b1946715d0c541032b6f44e464ad2e29f6c9623b6b76c6abb33fb87fb1fbdd9.tar.zst",
       "sha256": "0b1946715d0c541032b6f44e464ad2e29f6c9623b6b76c6abb33fb87fb1fbdd9",
       "compressed_bytes": 67226,
@@ -1279,6 +1387,7 @@
     {
       "title": "Backwards",
       "source_simfile": "Backwards/Backwards.sm",
+      "harness_version": "0.1.0",
       "archive": "0a77b52c1e1c39e95dbbd90a5d0b9baf2b4c2bac5176711aa3df4bfcb1a75bf4.tar.zst",
       "sha256": "0a77b52c1e1c39e95dbbd90a5d0b9baf2b4c2bac5176711aa3df4bfcb1a75bf4",
       "compressed_bytes": 64187,
@@ -1291,6 +1400,7 @@
     {
       "title": "Bad Apple!!",
       "source_simfile": "Bad Apple!!/Bad Apple!!.sm",
+      "harness_version": "0.1.0",
       "archive": "567fb2b0b26c6b2ada4947da7416ff433a902544373888d5b035b637a5b7dd37.tar.zst",
       "sha256": "567fb2b0b26c6b2ada4947da7416ff433a902544373888d5b035b637a5b7dd37",
       "compressed_bytes": 19840,
@@ -1303,6 +1413,7 @@
     {
       "title": "Bad Intentions",
       "source_simfile": "Bad Intentions/Bad Intentions.ssc",
+      "harness_version": "0.1.0",
       "archive": "917f2f11312ee53b542a591986ccb1e5d0722d7a308e35c00e5a1d1c4f94836f.tar.zst",
       "sha256": "917f2f11312ee53b542a591986ccb1e5d0722d7a308e35c00e5a1d1c4f94836f",
       "compressed_bytes": 184711,
@@ -1315,6 +1426,7 @@
     {
       "title": "Bad Trails",
       "source_simfile": "Bad Trails/Maybe it was fated.sm",
+      "harness_version": "0.1.0",
       "archive": "3002a9f06919773b53a229d53e85ef2b2017b14124e26bffd41ec72cc2dda05d.tar.zst",
       "sha256": "3002a9f06919773b53a229d53e85ef2b2017b14124e26bffd41ec72cc2dda05d",
       "compressed_bytes": 857601,
@@ -1327,6 +1439,7 @@
     {
       "title": "Bad Trails",
       "source_simfile": "Bad Trails/Maybe it was fated.ssc",
+      "harness_version": "0.1.0",
       "archive": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf.tar.zst",
       "sha256": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf",
       "compressed_bytes": 856986,
@@ -1339,6 +1452,7 @@
     {
       "title": "Badlands",
       "source_simfile": "Badlands/Badlands.ssc",
+      "harness_version": "0.1.0",
       "archive": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7.tar.zst",
       "sha256": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7",
       "compressed_bytes": 127088,
@@ -1351,6 +1465,7 @@
     {
       "title": "竹",
       "source_simfile": "Bamboo/Take.ssc",
+      "harness_version": "0.1.0",
       "archive": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e.tar.zst",
       "sha256": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e",
       "compressed_bytes": 143451,
@@ -1363,6 +1478,7 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.sm",
+      "harness_version": "0.1.0",
       "archive": "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8.tar.zst",
       "sha256": "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8",
       "compressed_bytes": 30397,
@@ -1375,6 +1491,7 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.ssc",
+      "harness_version": "0.1.0",
       "archive": "43a8ae83ecfaa854abe00df53c2d6528b760ce58836dd58505325dfb5c73a1b9.tar.zst",
       "sha256": "43a8ae83ecfaa854abe00df53c2d6528b760ce58836dd58505325dfb5c73a1b9",
       "compressed_bytes": 95294,
@@ -1387,6 +1504,7 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKBBKK/BBKKBKK.ssc",
+      "harness_version": "0.1.0",
       "archive": "6b6d748837ab1854de17f43ac475e52d3cd52506bb9fb02265e432a2a70ab95b.tar.zst",
       "sha256": "6b6d748837ab1854de17f43ac475e52d3cd52506bb9fb02265e432a2a70ab95b",
       "compressed_bytes": 493031,
@@ -1399,6 +1517,7 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS 3]/BBKKBKK.ssc",
+      "harness_version": "0.1.0",
       "archive": "8bf0f42b53dbd38ea4b6ac7445e0c5287242411edf5ece437ac741c15a77810e.tar.zst",
       "sha256": "8bf0f42b53dbd38ea4b6ac7445e0c5287242411edf5ece437ac741c15a77810e",
       "compressed_bytes": 37864,
@@ -1411,6 +1530,7 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS 4]/BBKKBKK.ssc",
+      "harness_version": "0.1.0",
       "archive": "40f6ccbdcb2b4ccc34c9ccdcf21d8851e59b452b98d3e3a59029a5ea299d5b58.tar.zst",
       "sha256": "40f6ccbdcb2b4ccc34c9ccdcf21d8851e59b452b98d3e3a59029a5ea299d5b58",
       "compressed_bytes": 38136,
@@ -1423,6 +1543,7 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS5 SM5]/BBKKBKK.ssc",
+      "harness_version": "0.1.0",
       "archive": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6.tar.zst",
       "sha256": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6",
       "compressed_bytes": 38347,
@@ -1435,6 +1556,7 @@
     {
       "title": "Beauty in Chaos",
       "source_simfile": "Beauty in chaos/Beauty in Chaos.sm",
+      "harness_version": "0.1.0",
       "archive": "e594f419a582855055b0cb56ad620667903254d7debbdbe1c9273542ef261959.tar.zst",
       "sha256": "e594f419a582855055b0cb56ad620667903254d7debbdbe1c9273542ef261959",
       "compressed_bytes": 124498,
@@ -1447,6 +1569,7 @@
     {
       "title": "Beauty in Chaos",
       "source_simfile": "Beauty in chaos/Beauty in Chaos.ssc",
+      "harness_version": "0.1.0",
       "archive": "0dcb18429c6874f7e8fb3927a9be4d6e5eb0d51ca2d89b88a5847ca9678f62f9.tar.zst",
       "sha256": "0dcb18429c6874f7e8fb3927a9be4d6e5eb0d51ca2d89b88a5847ca9678f62f9",
       "compressed_bytes": 123608,
@@ -1459,6 +1582,7 @@
     {
       "title": "Biggie Boom Boom",
       "source_simfile": "Biggie Boom Boom/biggie.sm",
+      "harness_version": "0.1.0",
       "archive": "a49770d0585cdcbba217a3be2cc7ce52adf0c186fc3a666887f89df11645bcb5.tar.zst",
       "sha256": "a49770d0585cdcbba217a3be2cc7ce52adf0c186fc3a666887f89df11645bcb5",
       "compressed_bytes": 66265,
@@ -1471,6 +1595,7 @@
     {
       "title": "Biggie Boom Boom",
       "source_simfile": "Biggie Boom Boom/biggie.ssc",
+      "harness_version": "0.1.0",
       "archive": "d5e0c0363c607f269bf0f7f51649537defcab2c230b7436f07d5c0e6861298a2.tar.zst",
       "sha256": "d5e0c0363c607f269bf0f7f51649537defcab2c230b7436f07d5c0e6861298a2",
       "compressed_bytes": 65872,
@@ -1483,6 +1608,7 @@
     {
       "title": "Black Out",
       "source_simfile": "Black Out [Gpop]/Black Out.ssc",
+      "harness_version": "0.1.0",
       "archive": "3a06e61d6bb500cb3d136381c1fe9ac63214b5b1ed035ba23000e3d5b0a1423f.tar.zst",
       "sha256": "3a06e61d6bb500cb3d136381c1fe9ac63214b5b1ed035ba23000e3d5b0a1423f",
       "compressed_bytes": 71221,
@@ -1495,6 +1621,7 @@
     {
       "title": "Blacksphere",
       "source_simfile": "Blacksphere/music.ssc",
+      "harness_version": "0.1.0",
       "archive": "ff63ea99da9a8ecf68671e3805934bfbac83ff446af63bdc0a624dc0c50d74a3.tar.zst",
       "sha256": "ff63ea99da9a8ecf68671e3805934bfbac83ff446af63bdc0a624dc0c50d74a3",
       "compressed_bytes": 72082,
@@ -1507,6 +1634,7 @@
     {
       "title": "Bodies",
       "source_simfile": "Bodies/Bodies.ssc",
+      "harness_version": "0.1.0",
       "archive": "dac8eb77f58072086aa74c6b4cbf39cdc81e92230180c1c92ea429c78d2bd992.tar.zst",
       "sha256": "dac8eb77f58072086aa74c6b4cbf39cdc81e92230180c1c92ea429c78d2bd992",
       "compressed_bytes": 115394,
@@ -1519,6 +1647,7 @@
     {
       "title": "Boys",
       "source_simfile": "Boys/Boys.ssc",
+      "harness_version": "0.1.0",
       "archive": "4ccefad1fea0e52e8fd2f25b842dc3d297cab5d574704ceb307f56bcc27c0149.tar.zst",
       "sha256": "4ccefad1fea0e52e8fd2f25b842dc3d297cab5d574704ceb307f56bcc27c0149",
       "compressed_bytes": 42308,
@@ -1531,6 +1660,7 @@
     {
       "title": "Brain Implosion Energy Drink (Null)",
       "source_simfile": "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ssc",
+      "harness_version": "0.1.0",
       "archive": "1839cd0ea609440b738da54e895e57c17cb8fec51036a80348826f0980387e28.tar.zst",
       "sha256": "1839cd0ea609440b738da54e895e57c17cb8fec51036a80348826f0980387e28",
       "compressed_bytes": 2171751,
@@ -1543,6 +1673,7 @@
     {
       "title": "Brain Power",
       "source_simfile": "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).ssc",
+      "harness_version": "0.1.0",
       "archive": "ae81c86ba98d58f56c507975948a9b6e5b872cce3cf83a3d85e4713e7828275b.tar.zst",
       "sha256": "ae81c86ba98d58f56c507975948a9b6e5b872cce3cf83a3d85e4713e7828275b",
       "compressed_bytes": 71943,
@@ -1555,6 +1686,7 @@
     {
       "title": "Brain Power",
       "source_simfile": "Brain Power - [Cardboard Box]/Brain Power.sm",
+      "harness_version": "0.1.0",
       "archive": "1a038d81530a6ab56b2e29fe7f8a86d8a2f2716560e2627741c7ee94ee56e879.tar.zst",
       "sha256": "1a038d81530a6ab56b2e29fe7f8a86d8a2f2716560e2627741c7ee94ee56e879",
       "compressed_bytes": 90327,
@@ -1567,6 +1699,7 @@
     {
       "title": "Brain Power",
       "source_simfile": "Brain Power - [Cardboard Box]/Brain Power.ssc",
+      "harness_version": "0.1.0",
       "archive": "4231a42b567caf81af479d28deccaf57d73dfab7a8adabd678825a5a33634ff6.tar.zst",
       "sha256": "4231a42b567caf81af479d28deccaf57d73dfab7a8adabd678825a5a33634ff6",
       "compressed_bytes": 90689,
@@ -1579,6 +1712,7 @@
     {
       "title": "放送",
       "source_simfile": "broadcast/broadcast.ssc",
+      "harness_version": "0.1.0",
       "archive": "033bb8462d4a3067fff24b23cecdd22dca67688e1ee303ab992662a4fbd471c1.tar.zst",
       "sha256": "033bb8462d4a3067fff24b23cecdd22dca67688e1ee303ab992662a4fbd471c1",
       "compressed_bytes": 87111,
@@ -1591,6 +1725,7 @@
     {
       "title": "BroGamer",
       "source_simfile": "BroGamer/BroGamer.ssc",
+      "harness_version": "0.1.0",
       "archive": "ca3e5874567f651d8e6393262de8b973d10442f582414a976d613c9578adf198.tar.zst",
       "sha256": "ca3e5874567f651d8e6393262de8b973d10442f582414a976d613c9578adf198",
       "compressed_bytes": 253628,
@@ -1603,6 +1738,7 @@
     {
       "title": "Bunny House",
       "source_simfile": "bunny-house/steps.sm",
+      "harness_version": "0.1.0",
       "archive": "8d8651b4607c3822772db07807805590641dec1bc9c0cd9e25f69b4f81ac02b4.tar.zst",
       "sha256": "8d8651b4607c3822772db07807805590641dec1bc9c0cd9e25f69b4f81ac02b4",
       "compressed_bytes": 1048235,
@@ -1615,6 +1751,7 @@
     {
       "title": "Butterfly",
       "source_simfile": "Butterfly by DDR/buttchew.ssc",
+      "harness_version": "0.1.0",
       "archive": "a9b42b71686c8e3a66566da256fb6ee9f02c0807fa3bd256df2a75a2a336d39e.tar.zst",
       "sha256": "a9b42b71686c8e3a66566da256fb6ee9f02c0807fa3bd256df2a75a2a336d39e",
       "compressed_bytes": 6388290,
@@ -1627,6 +1764,7 @@
     {
       "title": "Bzrp Music Sessions, Vol. 53",
       "source_simfile": "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "78430bb1fe88f8eebc105c43f68eea71a0d904c7609fd1d14ed055d07e1622f4.tar.zst",
       "sha256": "78430bb1fe88f8eebc105c43f68eea71a0d904c7609fd1d14ed055d07e1622f4",
       "compressed_bytes": 110740,
@@ -1639,6 +1777,7 @@
     {
       "title": "Bzrp Music Sessions, Vol. 53",
       "source_simfile": "Bzrp Music Sessions, Volume 53/bzrp53-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "98cb7e933629c59c47cde4eefcace05d3e4f3c5e4e8cef9f0ba955a06e677b83.tar.zst",
       "sha256": "98cb7e933629c59c47cde4eefcace05d3e4f3c5e4e8cef9f0ba955a06e677b83",
       "compressed_bytes": 111718,
@@ -1651,6 +1790,7 @@
     {
       "title": "c'est business",
       "source_simfile": "c'est business/c'est business.ssc",
+      "harness_version": "0.1.0",
       "archive": "0ca0f94aa7d4212e7818d6fc1a1e5315aa62d05087cd2f1a624c0159572086c8.tar.zst",
       "sha256": "0ca0f94aa7d4212e7818d6fc1a1e5315aa62d05087cd2f1a624c0159572086c8",
       "compressed_bytes": 12747,
@@ -1663,6 +1803,7 @@
     {
       "title": "Cardstone",
       "source_simfile": "cards/sm.sm",
+      "harness_version": "0.1.0",
       "archive": "408c6833719b22916e1d118a866dbd16b1f726df0070ac146a9fc93a8213bb90.tar.zst",
       "sha256": "408c6833719b22916e1d118a866dbd16b1f726df0070ac146a9fc93a8213bb90",
       "compressed_bytes": 64531,
@@ -1675,6 +1816,7 @@
     {
       "title": "Cardstone",
       "source_simfile": "cards/sm.ssc",
+      "harness_version": "0.1.0",
       "archive": "7cb34027f07f41943413eefe8c6fb1ccd14bb3508c48ea1d8d7d74863193d3f4.tar.zst",
       "sha256": "7cb34027f07f41943413eefe8c6fb1ccd14bb3508c48ea1d8d7d74863193d3f4",
       "compressed_bytes": 64687,
@@ -1687,6 +1829,7 @@
     {
       "title": "Cat Hacks",
       "source_simfile": "Cat Hack/Cat Hacks.sm",
+      "harness_version": "0.1.0",
       "archive": "62caf7f45ecc8e88b16f0e8aff2859000c93b33c8c0ac32e0087f9874027509f.tar.zst",
       "sha256": "62caf7f45ecc8e88b16f0e8aff2859000c93b33c8c0ac32e0087f9874027509f",
       "compressed_bytes": 50420,
@@ -1699,6 +1842,7 @@
     {
       "title": "Cat Hacks",
       "source_simfile": "Cat Hack/Cat Hacks.ssc",
+      "harness_version": "0.1.0",
       "archive": "39381492de80e9fde9b112bf301817468a8b948f20a9c2371fe65b44b4ecdd43.tar.zst",
       "sha256": "39381492de80e9fde9b112bf301817468a8b948f20a9c2371fe65b44b4ecdd43",
       "compressed_bytes": 51261,
@@ -1711,6 +1855,7 @@
     {
       "title": "Chewingood!!!",
       "source_simfile": "Chewingood!!!/Chewingood!!!.ssc",
+      "harness_version": "0.1.0",
       "archive": "9dc763aeb6eb14d4c50a9869af9e04250af9027b3a997ecaa7b20687cd677e19.tar.zst",
       "sha256": "9dc763aeb6eb14d4c50a9869af9e04250af9027b3a997ecaa7b20687cd677e19",
       "compressed_bytes": 122199,
@@ -1723,6 +1868,7 @@
     {
       "title": "Chipsqueak",
       "source_simfile": "Chipsqueak/chipsqueak.sm",
+      "harness_version": "0.1.0",
       "archive": "f9b5adb23899043e8dbcdbb2906dd76189fde1b410229e7175e74d0884d122b6.tar.zst",
       "sha256": "f9b5adb23899043e8dbcdbb2906dd76189fde1b410229e7175e74d0884d122b6",
       "compressed_bytes": 965733,
@@ -1735,6 +1881,7 @@
     {
       "title": "Chipsqueak",
       "source_simfile": "Chipsqueak/chipsqueak.ssc",
+      "harness_version": "0.1.0",
       "archive": "766b229adef82bfcb45c7503e244510d31f5ea6b4df5f84af335398f574fa037.tar.zst",
       "sha256": "766b229adef82bfcb45c7503e244510d31f5ea6b4df5f84af335398f574fa037",
       "compressed_bytes": 943482,
@@ -1747,6 +1894,7 @@
     {
       "title": "Choices",
       "source_simfile": "Choices - [Aoreo]/Choices.ssc",
+      "harness_version": "0.1.0",
       "archive": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738.tar.zst",
       "sha256": "22c36d615ead7ced46f0634d6b55fcaa1be7fbdd8c72aeb136185643e6999738",
       "compressed_bytes": 30304,
@@ -1759,6 +1907,7 @@
     {
       "title": "遅刻魔",
       "source_simfile": "chronic latecomer/chronic latecomer.ssc",
+      "harness_version": "0.1.0",
       "archive": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce.tar.zst",
       "sha256": "48f79d02f239cb0e183a7dbe47877bbf10bbbcf0178354896b35d428ec7b96ce",
       "compressed_bytes": 82679,
@@ -1771,6 +1920,7 @@
     {
       "title": "Episode 15",
       "source_simfile": "Circles/Circles.sm",
+      "harness_version": "0.1.0",
       "archive": "9a02dc0e8edc064173c8d8011348bb34b722cb7f63ff85db8453b318493686b6.tar.zst",
       "sha256": "9a02dc0e8edc064173c8d8011348bb34b722cb7f63ff85db8453b318493686b6",
       "compressed_bytes": 992533,
@@ -1783,6 +1933,7 @@
     {
       "title": "Episode 15",
       "source_simfile": "Circles/Circles.ssc",
+      "harness_version": "0.1.0",
       "archive": "21f955a0c00d8175ba1ab2948455ed7bc60846fcfd26f5aeb27bcdafa53fe880.tar.zst",
       "sha256": "21f955a0c00d8175ba1ab2948455ed7bc60846fcfd26f5aeb27bcdafa53fe880",
       "compressed_bytes": 989643,
@@ -1795,6 +1946,7 @@
     {
       "title": "Cloud99",
       "source_simfile": "Cloud99 (As Above Mix)/Song.ssc",
+      "harness_version": "0.1.0",
       "archive": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a.tar.zst",
       "sha256": "a1c144e3e344655e5b72c60889e209e5803c5d8be3dbc61183084c928295b35a",
       "compressed_bytes": 25381936,
@@ -1807,6 +1959,7 @@
     {
       "title": "Cold",
       "source_simfile": "Cold/Cold.ssc",
+      "harness_version": "0.1.0",
       "archive": "186c365bb0dec8d5457769327b6935067bb34717083b668114eb370d9c0b4fc1.tar.zst",
       "sha256": "186c365bb0dec8d5457769327b6935067bb34717083b668114eb370d9c0b4fc1",
       "compressed_bytes": 3214539,
@@ -1819,6 +1972,7 @@
     {
       "title": "copter",
       "source_simfile": "copter/copter.sm",
+      "harness_version": "0.1.0",
       "archive": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668.tar.zst",
       "sha256": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668",
       "compressed_bytes": 71713,
@@ -1831,6 +1985,7 @@
     {
       "title": "copter",
       "source_simfile": "copter/copter.ssc",
+      "harness_version": "0.1.0",
       "archive": "a37fc45b363b62925514d65a5e2e7029298d4e24f393c882468b58220d1b98d2.tar.zst",
       "sha256": "a37fc45b363b62925514d65a5e2e7029298d4e24f393c882468b58220d1b98d2",
       "compressed_bytes": 71735,
@@ -1843,6 +1998,7 @@
     {
       "title": "Crab Nicholson Extreme Sleepover",
       "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+      "harness_version": "0.1.0",
       "archive": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021.tar.zst",
       "sha256": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021",
       "compressed_bytes": 852974,
@@ -1855,6 +2011,7 @@
     {
       "title": "クレイジークレイジー",
       "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "harness_version": "0.1.0",
       "archive": "56fee7dfc761783575357ef80a043317ad0bf45b971a38e884f32e257ff25210.tar.zst",
       "sha256": "56fee7dfc761783575357ef80a043317ad0bf45b971a38e884f32e257ff25210",
       "compressed_bytes": 1459598,
@@ -1867,6 +2024,7 @@
     {
       "title": "crew",
       "source_simfile": "crew -All Hands on the Deck-/crew.ssc",
+      "harness_version": "0.1.0",
       "archive": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa.tar.zst",
       "sha256": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa",
       "compressed_bytes": 31996,
@@ -1879,6 +2037,7 @@
     {
       "title": "Botanic Panic",
       "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "harness_version": "0.1.0",
       "archive": "2c35a614d4d02167e14c74984f911f573b2c07d2dea7dddae4f9cb69d422ea7d.tar.zst",
       "sha256": "2c35a614d4d02167e14c74984f911f573b2c07d2dea7dddae4f9cb69d422ea7d",
       "compressed_bytes": 5537763,
@@ -1891,6 +2050,7 @@
     {
       "title": "Cursed 2",
       "source_simfile": "Cursed 2/Cursed 2.sm",
+      "harness_version": "0.1.0",
       "archive": "c9c57b78550f4127a937adfb111d8c6cbf32eac1260895428afd18e3ae21be4d.tar.zst",
       "sha256": "c9c57b78550f4127a937adfb111d8c6cbf32eac1260895428afd18e3ae21be4d",
       "compressed_bytes": 292085,
@@ -1903,6 +2063,7 @@
     {
       "title": "Cursed 2",
       "source_simfile": "Cursed 2/Cursed 2.ssc",
+      "harness_version": "0.1.0",
       "archive": "a093d07ae1b2c57fc110365e653e0410aa14182b60b4c15772704896f4a73b51.tar.zst",
       "sha256": "a093d07ae1b2c57fc110365e653e0410aa14182b60b4c15772704896f4a73b51",
       "compressed_bytes": 292146,
@@ -1915,6 +2076,7 @@
     {
       "title": "Cursed Metamorph",
       "source_simfile": "Cursed Metamorph - [Zaia]/Cursed Metamorph.ssc",
+      "harness_version": "0.1.0",
       "archive": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7.tar.zst",
       "sha256": "043e08fdc8eccbc7afd5c8e4595cad0d3e3b8e3523fa61c9b4353821ca4b47b7",
       "compressed_bytes": 3563581,
@@ -1927,6 +2089,7 @@
     {
       "title": "Cyberpunk 2077",
       "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "harness_version": "0.1.0",
       "archive": "1da1984b3b8fa6c85257b5cade2db84ac94626d202ba6e6d5ad9792a4fb76ca2.tar.zst",
       "sha256": "1da1984b3b8fa6c85257b5cade2db84ac94626d202ba6e6d5ad9792a4fb76ca2",
       "compressed_bytes": 287942,
@@ -1939,6 +2102,7 @@
     {
       "title": "Dance Robot",
       "source_simfile": "Dance Robot/dancerobot-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109.tar.zst",
       "sha256": "c26acfd17bcd2e7c502fb1d08995893c411cc8e2e0e20780b424c17c32205109",
       "compressed_bytes": 85212,
@@ -1951,6 +2115,7 @@
     {
       "title": "Dance Robot",
       "source_simfile": "Dance Robot/dancerobot-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e.tar.zst",
       "sha256": "1822a0b03f7477c39834e3ba0ae850cd25e0de3339c3a58baed178f086d0897e",
       "compressed_bytes": 86344,
@@ -1963,6 +2128,7 @@
     {
       "title": "Data Loss",
       "source_simfile": "Data Loss/Data_Loss.ssc",
+      "harness_version": "0.1.0",
       "archive": "910e5c075e0b65e2b74c418adf25bdf392d4f70de2e6b3a9d234b0129def64c3.tar.zst",
       "sha256": "910e5c075e0b65e2b74c418adf25bdf392d4f70de2e6b3a9d234b0129def64c3",
       "compressed_bytes": 71518,
@@ -1975,6 +2141,7 @@
     {
       "title": "Datamania",
       "source_simfile": "Datamania (tpz Overheat Remix)/Datamania (tpz Overheat Remix).ssc",
+      "harness_version": "0.1.0",
       "archive": "0e8fcd8061d0b024af6b30aa841ef3e805447cf97ae6f74e61f151ac346ac969.tar.zst",
       "sha256": "0e8fcd8061d0b024af6b30aa841ef3e805447cf97ae6f74e61f151ac346ac969",
       "compressed_bytes": 168429,
@@ -1987,6 +2154,7 @@
     {
       "title": "Datura [paroxysm]",
       "source_simfile": "Datura -paroxysm-/Datura -paroxysm-.ssc",
+      "harness_version": "0.1.0",
       "archive": "a0d4c1066772c2db9c2c4e5ce4209985203425e790fbcedceeb6588d95f42f35.tar.zst",
       "sha256": "a0d4c1066772c2db9c2c4e5ce4209985203425e790fbcedceeb6588d95f42f35",
       "compressed_bytes": 97307,
@@ -1999,6 +2167,7 @@
     {
       "title": "DAYWALKER!",
       "source_simfile": "Daywalker/Daywalker.ssc",
+      "harness_version": "0.1.0",
       "archive": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201.tar.zst",
       "sha256": "a931c25ab28801b721043e60535bc006a2d2f3219d6ae3150918152604145201",
       "compressed_bytes": 71272,
@@ -2011,6 +2180,7 @@
     {
       "title": "Deceive Your Insight",
       "source_simfile": "Deceive Your Insight [TaroNuke]/insight.ssc",
+      "harness_version": "0.1.0",
       "archive": "ec587fb16ade4af56212232791da289a0a1a0ce2f52f7a22a1a7cc297ecbb423.tar.zst",
       "sha256": "ec587fb16ade4af56212232791da289a0a1a0ce2f52f7a22a1a7cc297ecbb423",
       "compressed_bytes": 5036627,
@@ -2023,6 +2193,7 @@
     {
       "title": "Delayed Friend Request",
       "source_simfile": "Delayed Friend Request/Delayed Friend Request.sm",
+      "harness_version": "0.1.0",
       "archive": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697.tar.zst",
       "sha256": "4a92b1159599cb32d73925349f96f78a2ea077a5e753b026fa42af8aba779697",
       "compressed_bytes": 56747,
@@ -2035,6 +2206,7 @@
     {
       "title": "Delayed Friend Request",
       "source_simfile": "Delayed Friend Request/Delayed Friend Request.ssc",
+      "harness_version": "0.1.0",
       "archive": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111.tar.zst",
       "sha256": "57495262cbe58308a72a2dab4a32587e8b6122614ac52758952f35d8f9c6e111",
       "compressed_bytes": 57097,
@@ -2047,6 +2219,7 @@
     {
       "title": "Delightful Day",
       "source_simfile": "Delightful Day/Delightful Day.sm",
+      "harness_version": "0.1.0",
       "archive": "31d3bce20ac8662f6bef4916e191a3ae14eb8d3b2f9fe2020da4f874709a0299.tar.zst",
       "sha256": "31d3bce20ac8662f6bef4916e191a3ae14eb8d3b2f9fe2020da4f874709a0299",
       "compressed_bytes": 11326,
@@ -2059,6 +2232,7 @@
     {
       "title": "Delightful Day",
       "source_simfile": "Delightful Day/Delightful Day.ssc",
+      "harness_version": "0.1.0",
       "archive": "fb5cc6560c8aed0250e2ac6a1167d3994362a8f91b30c636dac4e502a8ea4174.tar.zst",
       "sha256": "fb5cc6560c8aed0250e2ac6a1167d3994362a8f91b30c636dac4e502a8ea4174",
       "compressed_bytes": 11594,
@@ -2071,6 +2245,7 @@
     {
       "title": "Dig Dug Theme",
       "source_simfile": "Dig Dug Theme/Dig Dug Theme.ssc",
+      "harness_version": "0.1.0",
       "archive": "4a4e4cded6338b3b1de9d84b6620f7af1de3f49d75d8943481ce53a578a0170c.tar.zst",
       "sha256": "4a4e4cded6338b3b1de9d84b6620f7af1de3f49d75d8943481ce53a578a0170c",
       "compressed_bytes": 81900,
@@ -2083,6 +2258,7 @@
     {
       "title": "You Reposted in the Wrong Dimmadome",
       "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "harness_version": "0.1.0",
       "archive": "78564c9fc07f54a159cd15ca60bbe4bff2f0ced3c2971e3ec41dc4dfbfd6665a.tar.zst",
       "sha256": "78564c9fc07f54a159cd15ca60bbe4bff2f0ced3c2971e3ec41dc4dfbfd6665a",
       "compressed_bytes": 589105,
@@ -2095,6 +2271,7 @@
     {
       "title": "Distraction",
       "source_simfile": "Distraction/sm.sm",
+      "harness_version": "0.1.0",
       "archive": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83.tar.zst",
       "sha256": "7f0919619c7e55ef325d6851297fe03fd7465468b9f5de828ab83702ca857f83",
       "compressed_bytes": 250706,
@@ -2107,6 +2284,7 @@
     {
       "title": "Do the mario",
       "source_simfile": "Do the Mario/DoTheMario.ssc",
+      "harness_version": "0.1.0",
       "archive": "8d83d5f88b577713e61cf88223deed22b3146bcb073f2e34baa1499cc87a27b6.tar.zst",
       "sha256": "8d83d5f88b577713e61cf88223deed22b3146bcb073f2e34baa1499cc87a27b6",
       "compressed_bytes": 27401,
@@ -2119,6 +2297,7 @@
     {
       "title": "45|HALF|[MASTER] Tacos",
       "source_simfile": "Doubles-45-HALF-[MASTER] Tacos/Tacos.ssc",
+      "harness_version": "0.1.0",
       "archive": "75a3c312cad4f9207d66c3aa97b0f187e0aab91a4f58e0cbc505801be646df6f.tar.zst",
       "sha256": "75a3c312cad4f9207d66c3aa97b0f187e0aab91a4f58e0cbc505801be646df6f",
       "compressed_bytes": 42063,
@@ -2131,6 +2310,7 @@
     {
       "title": "DREAMING-ING!!",
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "harness_version": "0.1.0",
       "archive": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740.tar.zst",
       "sha256": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740",
       "compressed_bytes": 572508,
@@ -2143,6 +2323,7 @@
     {
       "title": "夢咲きAfter school",
       "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+      "harness_version": "0.1.0",
       "archive": "b3daab83450b74e25c3d7d58a499296f426d4c3b5bbaa230e7c464d01799a433.tar.zst",
       "sha256": "b3daab83450b74e25c3d7d58a499296f426d4c3b5bbaa230e7c464d01799a433",
       "compressed_bytes": 512765,
@@ -2155,6 +2336,7 @@
     {
       "title": "e",
       "source_simfile": "E2/E.sm",
+      "harness_version": "0.1.0",
       "archive": "7df9c9273aca0859f6f5764ed321dbec99b7f46a1ce02f2b78b2fb828cb089b1.tar.zst",
       "sha256": "7df9c9273aca0859f6f5764ed321dbec99b7f46a1ce02f2b78b2fb828cb089b1",
       "compressed_bytes": 879179,
@@ -2167,6 +2349,7 @@
     {
       "title": "e",
       "source_simfile": "E2/E.ssc",
+      "harness_version": "0.1.0",
       "archive": "ffc97cddcd51efe7fe64c27d9e0eeaf1eeb184c6eae69de9dfef5b5612737660.tar.zst",
       "sha256": "ffc97cddcd51efe7fe64c27d9e0eeaf1eeb184c6eae69de9dfef5b5612737660",
       "compressed_bytes": 862563,
@@ -2179,6 +2362,7 @@
     {
       "title": "edamame",
       "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.sm",
+      "harness_version": "0.1.0",
       "archive": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d.tar.zst",
       "sha256": "9073628b2d1a9448d1df8d493d812feb8746f17cdb0dbef7ff60deb0c1d3054d",
       "compressed_bytes": 242023,
@@ -2191,6 +2375,7 @@
     {
       "title": "edamame",
       "source_simfile": "edamame (except bbno$ produced it under C&A)/edamame.ssc",
+      "harness_version": "0.1.0",
       "archive": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc.tar.zst",
       "sha256": "8f6b71661630442b5fca4d4cb58bc46af366742397733ae79454851da9c819fc",
       "compressed_bytes": 242734,
@@ -2203,6 +2388,7 @@
     {
       "title": "Electrified",
       "source_simfile": "Electrified/Electrified cut.ssc",
+      "harness_version": "0.1.0",
       "archive": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612.tar.zst",
       "sha256": "1e3502c5a8a99a03b8fd571510c6105c4afaae8d5d79318ddeea155a2b735612",
       "compressed_bytes": 1001838,
@@ -2215,6 +2401,7 @@
     {
       "title": "​#feelyourtouch e.d.e.n",
       "source_simfile": "feelyourtouch e.d.e.n/feelyourtouch eden.ssc",
+      "harness_version": "0.1.0",
       "archive": "1fc4cfc27eb767f668f752ff9c327a3ccc9f9aeac16ebac527581527c67690fa.tar.zst",
       "sha256": "1fc4cfc27eb767f668f752ff9c327a3ccc9f9aeac16ebac527581527c67690fa",
       "compressed_bytes": 864135,
@@ -2227,6 +2414,7 @@
     {
       "title": "Fiji",
       "source_simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+      "harness_version": "0.1.0",
       "archive": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8.tar.zst",
       "sha256": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8",
       "compressed_bytes": 62960,
@@ -2239,6 +2427,7 @@
     {
       "title": "Final Flash Flight",
       "source_simfile": "Final Flash Flight/Final Flash Flight.sm",
+      "harness_version": "0.1.0",
       "archive": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc.tar.zst",
       "sha256": "ead4c346d2785b108a55db2e37aba9b33b1a6b58e6fd5eb24c7ad9edb1301cdc",
       "compressed_bytes": 65364,
@@ -2251,6 +2440,7 @@
     {
       "title": "Final Flash Flight",
       "source_simfile": "Final Flash Flight/Final Flash Flight.ssc",
+      "harness_version": "0.1.0",
       "archive": "60ccda267c5de9f63cabc110277dcd54f2c592301445d5362c92895a7c093fb4.tar.zst",
       "sha256": "60ccda267c5de9f63cabc110277dcd54f2c592301445d5362c92895a7c093fb4",
       "compressed_bytes": 65472,
@@ -2263,6 +2453,7 @@
     {
       "title": "finite",
       "source_simfile": "finite/sta - Finite.sm",
+      "harness_version": "0.1.0",
       "archive": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c.tar.zst",
       "sha256": "74d925f27ea00f41fb89c41b4854bb370d427364e42df5ac7855732fa638877c",
       "compressed_bytes": 17165,
@@ -2275,6 +2466,7 @@
     {
       "title": "✿ᵒᶠ🜍(flores sulphuris)",
       "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "harness_version": "0.1.0",
       "archive": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e.tar.zst",
       "sha256": "47e951bb8e319e2cb93133f3abf44dc9f72e072b2cce5be79efeff5c6335ca5e",
       "compressed_bytes": 95863,
@@ -2287,6 +2479,7 @@
     {
       "title": "Episode 20",
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "harness_version": "0.1.0",
       "archive": "077fa277e7bb296728f6b1412cf131846aac6b7a081509029a234fc90e6b2645.tar.zst",
       "sha256": "077fa277e7bb296728f6b1412cf131846aac6b7a081509029a234fc90e6b2645",
       "compressed_bytes": 10835546,
@@ -2299,6 +2492,7 @@
     {
       "title": "flowers",
       "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+      "harness_version": "0.1.0",
       "archive": "1e3f1e28b29d56eca62ce7c2fd0fb5efbf5960616c2975e0e7137a7b0d177abf.tar.zst",
       "sha256": "1e3f1e28b29d56eca62ce7c2fd0fb5efbf5960616c2975e0e7137a7b0d177abf",
       "compressed_bytes": 808352,
@@ -2311,6 +2505,7 @@
     {
       "title": "flowers",
       "source_simfile": "flowers/flowers.ssc",
+      "harness_version": "0.1.0",
       "archive": "0eb36d8ab81dbfa78a4b0d89aca7ba566f1cce93bc63d0c4836c8199c3d9bf4f.tar.zst",
       "sha256": "0eb36d8ab81dbfa78a4b0d89aca7ba566f1cce93bc63d0c4836c8199c3d9bf4f",
       "compressed_bytes": 808597,
@@ -2323,6 +2518,7 @@
     {
       "title": "Flying Castle",
       "source_simfile": "Flying Castle/flying castle.sm",
+      "harness_version": "0.1.0",
       "archive": "8da165a20c2cc09293ed4939ba6b102f59de9be92582bcd6deb1b995fb3b23dd.tar.zst",
       "sha256": "8da165a20c2cc09293ed4939ba6b102f59de9be92582bcd6deb1b995fb3b23dd",
       "compressed_bytes": 120074,
@@ -2335,6 +2531,7 @@
     {
       "title": "Flying Castle",
       "source_simfile": "Flying Castle/flying castle.ssc",
+      "harness_version": "0.1.0",
       "archive": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160.tar.zst",
       "sha256": "0f44812a968442a37374935441406301a6c11cc4026abb557dba654005e39160",
       "compressed_bytes": 120288,
@@ -2347,6 +2544,7 @@
     {
       "title": "Fof Guys",
       "source_simfile": "fof_guys/fof.ssc",
+      "harness_version": "0.1.0",
       "archive": "fec59a2d8c1d08ac1580b4d8ea632933208cb30a64fd2971396ab5b9f1b1c35f.tar.zst",
       "sha256": "fec59a2d8c1d08ac1580b4d8ea632933208cb30a64fd2971396ab5b9f1b1c35f",
       "compressed_bytes": 260704,
@@ -2359,6 +2557,7 @@
     {
       "title": "Fortuna Redux",
       "source_simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "harness_version": "0.1.0",
       "archive": "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589.tar.zst",
       "sha256": "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589",
       "compressed_bytes": 39662,
@@ -2371,6 +2570,7 @@
     {
       "title": "Episode 20",
       "source_simfile": "Freaky Deaky/Freaky Deaky.sm",
+      "harness_version": "0.1.0",
       "archive": "7e3813615af4d430a90c971faa4fd76b0e5905dd7cd49b350c07918ce434b9f5.tar.zst",
       "sha256": "7e3813615af4d430a90c971faa4fd76b0e5905dd7cd49b350c07918ce434b9f5",
       "compressed_bytes": 68611,
@@ -2383,6 +2583,7 @@
     {
       "title": "Episode 14",
       "source_simfile": "Freaky Deaky/Freaky Deaky.ssc",
+      "harness_version": "0.1.0",
       "archive": "466bea20b3ff26443e8589d23769d2f9feacb6644f9de541c90f372cc5c3e4f5.tar.zst",
       "sha256": "466bea20b3ff26443e8589d23769d2f9feacb6644f9de541c90f372cc5c3e4f5",
       "compressed_bytes": 68732,
@@ -2395,6 +2596,7 @@
     {
       "title": "freg.",
       "source_simfile": "freg/freg.sm",
+      "harness_version": "0.1.0",
       "archive": "4fa980e2db74d35f2935d60fa9163d0cceec209fa34b04988388b2f2a04018c4.tar.zst",
       "sha256": "4fa980e2db74d35f2935d60fa9163d0cceec209fa34b04988388b2f2a04018c4",
       "compressed_bytes": 9883,
@@ -2407,6 +2609,7 @@
     {
       "title": "FTW",
       "source_simfile": "FTW/FTW.sm",
+      "harness_version": "0.1.0",
       "archive": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282.tar.zst",
       "sha256": "e60fd23f932e586de8a0d5ae931147bdf53d96faabede1a361be436891df3282",
       "compressed_bytes": 81956,
@@ -2419,6 +2622,7 @@
     {
       "title": "FTW",
       "source_simfile": "FTW/FTW.ssc",
+      "harness_version": "0.1.0",
       "archive": "7e9f88108e394dda40b5d1757f80d64bdfcd71dc51de6b3c1c26b4f6d3089787.tar.zst",
       "sha256": "7e9f88108e394dda40b5d1757f80d64bdfcd71dc51de6b3c1c26b4f6d3089787",
       "compressed_bytes": 82152,
@@ -2431,6 +2635,7 @@
     {
       "title": "Furst",
       "source_simfile": "Furst/furst-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254.tar.zst",
       "sha256": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254",
       "compressed_bytes": 102162,
@@ -2443,6 +2648,7 @@
     {
       "title": "Furst",
       "source_simfile": "Furst/furst-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "5c7ebc9c1deeee55853e959958ae430a8ef0ba6319b283cbbe75bc6552cee8f4.tar.zst",
       "sha256": "5c7ebc9c1deeee55853e959958ae430a8ef0ba6319b283cbbe75bc6552cee8f4",
       "compressed_bytes": 102892,
@@ -2455,6 +2661,7 @@
     {
       "title": "Gallium Phosphide",
       "source_simfile": "Gallium Phosphide/Gallium Phosphide.ssc",
+      "harness_version": "0.1.0",
       "archive": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d.tar.zst",
       "sha256": "be5897befda4aaed94e3ac674d78d5af72c6b14a847a2a8585ee59b8f2caaf3d",
       "compressed_bytes": 210307,
@@ -2467,6 +2674,7 @@
     {
       "title": "Gaming in 2018",
       "source_simfile": "Gaming in 2018/Gaming in 2018.ssc",
+      "harness_version": "0.1.0",
       "archive": "309dd8a10fb6a49d4af02916938bc5a12e37360f8e29d1e92aff0b61fe00306a.tar.zst",
       "sha256": "309dd8a10fb6a49d4af02916938bc5a12e37360f8e29d1e92aff0b61fe00306a",
       "compressed_bytes": 18553,
@@ -2479,6 +2687,7 @@
     {
       "title": "玩具狂奏曲 -終焉-",
       "source_simfile": "Gangu Kyousou Kyoku -Shuuen-/chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda.tar.zst",
       "sha256": "65ee621469498274894ad61d84289e8f19a715925f9d26155b2e4b7c42b01bda",
       "compressed_bytes": 1815250,
@@ -2491,6 +2700,7 @@
     {
       "title": "Gemini in Clockland",
       "source_simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+      "harness_version": "0.1.0",
       "archive": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c.tar.zst",
       "sha256": "a86f1eeb66ff952810ed8e5588e56ff4ad5769469bc83a2b8a3d4ee2f6c11f3c",
       "compressed_bytes": 1024791,
@@ -2503,6 +2713,7 @@
     {
       "title": "Genshin Mega Quiz",
       "source_simfile": "Genshin Quiz/Megaquiz.ssc",
+      "harness_version": "0.1.0",
       "archive": "dc0418aaac4cbea25c5b24b7d65b99a625d44d5a5ff322afd444c079827f92de.tar.zst",
       "sha256": "dc0418aaac4cbea25c5b24b7d65b99a625d44d5a5ff322afd444c079827f92de",
       "compressed_bytes": 190553,
@@ -2515,6 +2726,7 @@
     {
       "title": "Get Into It",
       "source_simfile": "Get Into It/GetIntoIt.sm",
+      "harness_version": "0.1.0",
       "archive": "9163226a31da0586f252f1c418bbdfd663159cfb2aa3d4b5cd7a8e216afbb3dc.tar.zst",
       "sha256": "9163226a31da0586f252f1c418bbdfd663159cfb2aa3d4b5cd7a8e216afbb3dc",
       "compressed_bytes": 7374051,
@@ -2527,6 +2739,7 @@
     {
       "title": "Get Into It (Yuh)",
       "source_simfile": "Get Into It/GetIntoIt.ssc",
+      "harness_version": "0.1.0",
       "archive": "11a30849742f03b9b1288dbd7353ec347aa33897557952d0a069ea270d386994.tar.zst",
       "sha256": "11a30849742f03b9b1288dbd7353ec347aa33897557952d0a069ea270d386994",
       "compressed_bytes": 7403818,
@@ -2539,6 +2752,7 @@
     {
       "title": "IT'S A GHOST!!!!! AAAAAaAAAaAAaAaAAaAaAAAA",
       "source_simfile": "ghost [Telperion]/ghost.ssc",
+      "harness_version": "0.1.0",
       "archive": "80b5192b76a55669ed09cc499613e08113f95713c3965edaa2d9b758a417a96a.tar.zst",
       "sha256": "80b5192b76a55669ed09cc499613e08113f95713c3965edaa2d9b758a417a96a",
       "compressed_bytes": 182175,
@@ -2551,6 +2765,7 @@
     {
       "title": "Girls MIA",
       "source_simfile": "Girls MIA/girlsmia-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "4a10e51819601a4617d8758c2d1e747e520a3e4e3a5efa19f7641a54959d294a.tar.zst",
       "sha256": "4a10e51819601a4617d8758c2d1e747e520a3e4e3a5efa19f7641a54959d294a",
       "compressed_bytes": 71567,
@@ -2563,6 +2778,7 @@
     {
       "title": "Girls MIA",
       "source_simfile": "Girls MIA/girlsmia-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187.tar.zst",
       "sha256": "72cae5f9ff7ba3a6ba02ab1d0df5c5a5457cd0b173e35c81dfd757fdf48e5187",
       "compressed_bytes": 72350,
@@ -2575,6 +2791,7 @@
     {
       "title": "Godspeed",
       "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "harness_version": "0.1.0",
       "archive": "d8967f658b584814be6dd33ef998afb58c2893ef48f5ba5d10d3b720a604771b.tar.zst",
       "sha256": "d8967f658b584814be6dd33ef998afb58c2893ef48f5ba5d10d3b720a604771b",
       "compressed_bytes": 1315726,
@@ -2587,6 +2804,7 @@
     {
       "title": "行つてしまつた",
       "source_simfile": "gone_KidFresino/song.ssc",
+      "harness_version": "0.1.0",
       "archive": "d6dcba2555850935818756d42ccc9f1e6f3cb17b2a00b68f951f60382d6ab244.tar.zst",
       "sha256": "d6dcba2555850935818756d42ccc9f1e6f3cb17b2a00b68f951f60382d6ab244",
       "compressed_bytes": 42873,
@@ -2599,6 +2817,7 @@
     {
       "title": "Goodbye",
       "source_simfile": "Goodbye/Goodbye.ssc",
+      "harness_version": "0.1.0",
       "archive": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68.tar.zst",
       "sha256": "69a548e9269eb21e05e9067df1f43feda89deb4ac109319585a723d515d78b68",
       "compressed_bytes": 27833762,
@@ -2611,6 +2830,7 @@
     {
       "title": "Gossipo Perpetuo",
       "source_simfile": "Gossipo Perpetuo [chairodactyl] - Cameron Wiggers/gossiperpet.ssc",
+      "harness_version": "0.1.0",
       "archive": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff.tar.zst",
       "sha256": "72329fcad3446af03c53b691dc6f78b0c787d5b375e09a121efe73cf7b3d90ff",
       "compressed_bytes": 95535,
@@ -2623,6 +2843,7 @@
     {
       "title": "GREAT GREAT",
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+      "harness_version": "0.1.0",
       "archive": "ebdf899d701a29a8ac56dde990179d19e2d1219a40dfbfa29d87b4673845d86d.tar.zst",
       "sha256": "ebdf899d701a29a8ac56dde990179d19e2d1219a40dfbfa29d87b4673845d86d",
       "compressed_bytes": 57908,
@@ -2635,6 +2856,7 @@
     {
       "title": "Hallways",
       "source_simfile": "Hallways/hallways.ssc",
+      "harness_version": "0.1.0",
       "archive": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5.tar.zst",
       "sha256": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5",
       "compressed_bytes": 92784,
@@ -2647,6 +2869,7 @@
     {
       "title": "幸せになれる隠しコマンドがあるらしい",
       "source_simfile": "Happiness/Happiness.ssc",
+      "harness_version": "0.1.0",
       "archive": "8e48a72f9a686fd35d01d3e2497686d50a8ad30332660add585dbc758097c631.tar.zst",
       "sha256": "8e48a72f9a686fd35d01d3e2497686d50a8ad30332660add585dbc758097c631",
       "compressed_bytes": 5746921,
@@ -2659,6 +2882,7 @@
     {
       "title": "Episode 20",
       "source_simfile": "Happy Now Remastered/Happy Now.sm",
+      "harness_version": "0.1.0",
       "archive": "1247a360a459ff78cde41474fdbd6636f386b3e5628984373aaf206aa2a9b78f.tar.zst",
       "sha256": "1247a360a459ff78cde41474fdbd6636f386b3e5628984373aaf206aa2a9b78f",
       "compressed_bytes": 77496,
@@ -2671,6 +2895,7 @@
     {
       "title": "Episode 00",
       "source_simfile": "Happy Now Remastered/Happy Now.ssc",
+      "harness_version": "0.1.0",
       "archive": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842.tar.zst",
       "sha256": "eef35c934b33bd6b7c85f27d08b0a06499baaea8bcb5eb6678fc209a2a937842",
       "compressed_bytes": 78066,
@@ -2683,6 +2908,7 @@
     {
       "title": "Happy Now",
       "source_simfile": "Happy Now/Happy Now.sm",
+      "harness_version": "0.1.0",
       "archive": "a9b4ff850bc8ab768828aa730351155c5f828c889f49463c79ccff92e2e75f81.tar.zst",
       "sha256": "a9b4ff850bc8ab768828aa730351155c5f828c889f49463c79ccff92e2e75f81",
       "compressed_bytes": 79544,
@@ -2695,6 +2921,7 @@
     {
       "title": "Happy Now",
       "source_simfile": "Happy Now/Happy Now.ssc",
+      "harness_version": "0.1.0",
       "archive": "abd842dd94c03a23a302ebb3357f6318c068c940aedd16d5760a9179b4b298c2.tar.zst",
       "sha256": "abd842dd94c03a23a302ebb3357f6318c068c940aedd16d5760a9179b4b298c2",
       "compressed_bytes": 79581,
@@ -2707,6 +2934,7 @@
     {
       "title": "Haxo",
       "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "harness_version": "0.1.0",
       "archive": "8a276535e1cbc6189402d1d8aed8ce0ba89df4d729e41f12f3c9d779cdab1d8c.tar.zst",
       "sha256": "8a276535e1cbc6189402d1d8aed8ce0ba89df4d729e41f12f3c9d779cdab1d8c",
       "compressed_bytes": 168174,
@@ -2719,6 +2947,7 @@
     {
       "title": "Hello Gordon (Dr. Coomer's Bumpin' Mix)",
       "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "harness_version": "0.1.0",
       "archive": "db1a39927d2cc432166301e715ada3d22a1484d17d44b51e65a7fb6f05f04e97.tar.zst",
       "sha256": "db1a39927d2cc432166301e715ada3d22a1484d17d44b51e65a7fb6f05f04e97",
       "compressed_bytes": 741299,
@@ -2731,6 +2960,7 @@
     {
       "title": "Hispanic Panic",
       "source_simfile": "Hispanic Panic/sm.sm",
+      "harness_version": "0.1.0",
       "archive": "7f1e790435f600bc5404f45c093b36882217251cd5d5cd82894b6a4b0a2e3f1a.tar.zst",
       "sha256": "7f1e790435f600bc5404f45c093b36882217251cd5d5cd82894b6a4b0a2e3f1a",
       "compressed_bytes": 144708,
@@ -2743,6 +2973,7 @@
     {
       "title": "HOPE",
       "source_simfile": "HOPE/HOPE.ssc",
+      "harness_version": "0.1.0",
       "archive": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d.tar.zst",
       "sha256": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d",
       "compressed_bytes": 4504552,
@@ -2755,6 +2986,7 @@
     {
       "title": "I",
       "source_simfile": "I (Ai)/I (Ai).ssc",
+      "harness_version": "0.1.0",
       "archive": "d8ed6352c3cf9322eb5274885f749038c4ec25dfa7f0b2a78565abcbb9d1bd72.tar.zst",
       "sha256": "d8ed6352c3cf9322eb5274885f749038c4ec25dfa7f0b2a78565abcbb9d1bd72",
       "compressed_bytes": 344593,
@@ -2767,6 +2999,7 @@
     {
       "title": "I Like To Move It",
       "source_simfile": "I Like To Move It/I Like To Move It.ssc",
+      "harness_version": "0.1.0",
       "archive": "44174d5e059b6686f602ffd0a14a56ce064bb7795b3653b9283b415977f7242d.tar.zst",
       "sha256": "44174d5e059b6686f602ffd0a14a56ce064bb7795b3653b9283b415977f7242d",
       "compressed_bytes": 29559,
@@ -2779,6 +3012,7 @@
     {
       "title": "I Really Like You",
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "harness_version": "0.1.0",
       "archive": "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44.tar.zst",
       "sha256": "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44",
       "compressed_bytes": 51409,
@@ -2791,6 +3025,7 @@
     {
       "title": "I Really Like You",
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+      "harness_version": "0.1.0",
       "archive": "b35cdcda0ed56bc51c358952145af08210f2263187beb2b8591f3721e63924c1.tar.zst",
       "sha256": "b35cdcda0ed56bc51c358952145af08210f2263187beb2b8591f3721e63924c1",
       "compressed_bytes": 54402,
@@ -2803,6 +3038,7 @@
     {
       "title": "TETRIS",
       "source_simfile": "I'm sorry/sm.sm",
+      "harness_version": "0.1.0",
       "archive": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4.tar.zst",
       "sha256": "1e6888ef38ca9b6c0ed597b22dda35367464ce0ae4fcee7c69d35ec7e5f074d4",
       "compressed_bytes": 154069,
@@ -2815,6 +3051,7 @@
     {
       "title": "TETRIS",
       "source_simfile": "I'm sorry/sm.ssc",
+      "harness_version": "0.1.0",
       "archive": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1.tar.zst",
       "sha256": "9b642f9ed9543351cdd85763dd781f029d15a4b81ff48492f5b97e252dfb49a1",
       "compressed_bytes": 154103,
@@ -2827,6 +3064,7 @@
     {
       "title": "Ibuprofen & Weed (LEFTS Edit)",
       "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "harness_version": "0.1.0",
       "archive": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204.tar.zst",
       "sha256": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204",
       "compressed_bytes": 335598,
@@ -2839,6 +3077,7 @@
     {
       "title": "ICON KILLER",
       "source_simfile": "ICON KILLER - [Zaia + StarrySergal + dimo + Brother Mojo]/ICON KILLER.ssc",
+      "harness_version": "0.1.0",
       "archive": "f179752171159d4d19163f3a076307f06448ca5b5eaf40ffa3fcf94e515ae6d0.tar.zst",
       "sha256": "f179752171159d4d19163f3a076307f06448ca5b5eaf40ffa3fcf94e515ae6d0",
       "compressed_bytes": 68204,
@@ -2851,6 +3090,7 @@
     {
       "title": "If You Crump Stand Up",
       "source_simfile": "If You Crump Stand Up/crump.sm",
+      "harness_version": "0.1.0",
       "archive": "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081.tar.zst",
       "sha256": "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081",
       "compressed_bytes": 45912,
@@ -2863,6 +3103,7 @@
     {
       "title": "イガク",
       "source_simfile": "Igaku/Igaku.sm",
+      "harness_version": "0.1.0",
       "archive": "9e43102ba43ae63247587005a24a064559f4f5b78d243522aa3dc160436c3617.tar.zst",
       "sha256": "9e43102ba43ae63247587005a24a064559f4f5b78d243522aa3dc160436c3617",
       "compressed_bytes": 1268921,
@@ -2875,6 +3116,7 @@
     {
       "title": "イガク",
       "source_simfile": "Igaku/Igaku.ssc",
+      "harness_version": "0.1.0",
       "archive": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
       "sha256": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f",
       "compressed_bytes": 1242462,
@@ -2887,6 +3129,7 @@
     {
       "title": "iLLness LiLin",
       "source_simfile": "iLLness LiLin/iLLness LiLin.ssc",
+      "harness_version": "0.1.0",
       "archive": "dbb1cb47d9f52b9ae437615e1410a49feed6ad122612538cde4c3283d01682ed.tar.zst",
       "sha256": "dbb1cb47d9f52b9ae437615e1410a49feed6ad122612538cde4c3283d01682ed",
       "compressed_bytes": 700260,
@@ -2899,6 +3142,7 @@
     {
       "title": "Impulse",
       "source_simfile": "Impulse/impulse.sm",
+      "harness_version": "0.1.0",
       "archive": "39768cac5a58e3432b0f4b2bf8af2ec4ab4a2fdc5187b67b5e01555afa609dda.tar.zst",
       "sha256": "39768cac5a58e3432b0f4b2bf8af2ec4ab4a2fdc5187b67b5e01555afa609dda",
       "compressed_bytes": 2254738,
@@ -2911,6 +3155,7 @@
     {
       "title": "Impulse",
       "source_simfile": "Impulse/impulse.ssc",
+      "harness_version": "0.1.0",
       "archive": "22541f730ac0966bb8b67fa95b6d62ccbfae5e756ab2e8afbdb375118dcf2ad1.tar.zst",
       "sha256": "22541f730ac0966bb8b67fa95b6d62ccbfae5e756ab2e8afbdb375118dcf2ad1",
       "compressed_bytes": 2254755,
@@ -2923,6 +3168,7 @@
     {
       "title": "In the Hall of the Mountain King",
       "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "harness_version": "0.1.0",
       "archive": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829.tar.zst",
       "sha256": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829",
       "compressed_bytes": 705541,
@@ -2935,6 +3181,7 @@
     {
       "title": "INAZUMA",
       "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
+      "harness_version": "0.1.0",
       "archive": "3ccb5707122f1a284c4c2caa010dd0cea897588e3919c265ef7d473f68754f91.tar.zst",
       "sha256": "3ccb5707122f1a284c4c2caa010dd0cea897588e3919c265ef7d473f68754f91",
       "compressed_bytes": 813469,
@@ -2947,6 +3194,7 @@
     {
       "title": "Into The Light",
       "source_simfile": "Into The Light2/Into The Light.sm",
+      "harness_version": "0.1.0",
       "archive": "3ebe1dc8e4ebc48b5a1f1034b98bd472f4886a19aaf189d279257e5f796a07cd.tar.zst",
       "sha256": "3ebe1dc8e4ebc48b5a1f1034b98bd472f4886a19aaf189d279257e5f796a07cd",
       "compressed_bytes": 47840,
@@ -2959,6 +3207,7 @@
     {
       "title": "Into The Light",
       "source_simfile": "Into The Light2/Into The Light.ssc",
+      "harness_version": "0.1.0",
       "archive": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140.tar.zst",
       "sha256": "d875fddb0ac5e980f7ab0799fe67b208640e84e619eb19ce1bdf92f44a15c140",
       "compressed_bytes": 48093,
@@ -2971,6 +3220,7 @@
     {
       "title": "Intro Outro",
       "source_simfile": "Intro Outro/intro.ssc",
+      "harness_version": "0.1.0",
       "archive": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e.tar.zst",
       "sha256": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e",
       "compressed_bytes": 3918013,
@@ -2983,6 +3233,7 @@
     {
       "title": "Invert",
       "source_simfile": "Invert/invert.sm",
+      "harness_version": "0.1.0",
       "archive": "3e85150285f218ef64a0d76f96afbcae0be388f5131ff05aff18d49b900af17f.tar.zst",
       "sha256": "3e85150285f218ef64a0d76f96afbcae0be388f5131ff05aff18d49b900af17f",
       "compressed_bytes": 140586,
@@ -2995,6 +3246,7 @@
     {
       "title": "Invert",
       "source_simfile": "Invert/invert.ssc",
+      "harness_version": "0.1.0",
       "archive": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090.tar.zst",
       "sha256": "e9f34494835cb78fdcff987b2e3840aab8831fbc79ec91188673aa26c8337090",
       "compressed_bytes": 140715,
@@ -3007,6 +3259,7 @@
     {
       "title": "It's Showtime!",
       "source_simfile": "It's Showtime/mettaton.ssc",
+      "harness_version": "0.1.0",
       "archive": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812.tar.zst",
       "sha256": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812",
       "compressed_bytes": 16861763,
@@ -3019,6 +3272,7 @@
     {
       "title": "bloodrush itg",
       "source_simfile": "itg bloodrush 2005/itg bloodrush 2005.sm",
+      "harness_version": "0.1.0",
       "archive": "f53569be3f6ea8aea1ebfe38c2f3f3a71a2f0a05410aa381cbba97a8462dafa6.tar.zst",
       "sha256": "f53569be3f6ea8aea1ebfe38c2f3f3a71a2f0a05410aa381cbba97a8462dafa6",
       "compressed_bytes": 188936,
@@ -3031,6 +3285,7 @@
     {
       "title": "Jack The Reaper",
       "source_simfile": "Jack The Reaper/Jack The Reaper.sm",
+      "harness_version": "0.1.0",
       "archive": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a.tar.zst",
       "sha256": "77a743ef27050428b3cbd0dee06de3c7d96ce7ec7ec41a1224e98af43fa2dd9a",
       "compressed_bytes": 62847,
@@ -3043,6 +3298,7 @@
     {
       "title": "Jack The Reaper",
       "source_simfile": "Jack The Reaper/Jack The Reaper.ssc",
+      "harness_version": "0.1.0",
       "archive": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651.tar.zst",
       "sha256": "7916834fcaf47f572b6ddbeb04578dcd9c70e4a1b5fb68640e146f654ba9a651",
       "compressed_bytes": 63240,
@@ -3055,6 +3311,7 @@
     {
       "title": "Jeans",
       "source_simfile": "jeans/abj.sm",
+      "harness_version": "0.1.0",
       "archive": "dc58def6b83a6c67053f973b9f8d0d99c4564f7bf42f583816b9e42bf0f1db54.tar.zst",
       "sha256": "dc58def6b83a6c67053f973b9f8d0d99c4564f7bf42f583816b9e42bf0f1db54",
       "compressed_bytes": 5765005,
@@ -3067,6 +3324,7 @@
     {
       "title": "Jerk",
       "source_simfile": "Jerk/Jerk.ssc",
+      "harness_version": "0.1.0",
       "archive": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363.tar.zst",
       "sha256": "4f3bbf96067625b9beda7233d1b106dd2af165c5be6940db1711fa6fd3845363",
       "compressed_bytes": 59541,
@@ -3079,6 +3337,7 @@
     {
       "title": "[08] Jesus He Knows Me (Medium)",
       "source_simfile": "Jesus He Knows me/jesusheknowsme.ssc",
+      "harness_version": "0.1.0",
       "archive": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b.tar.zst",
       "sha256": "fbe09097e3af4f4ccb773d4ea28201210433ae0d1b34d1610cd8df558dd9719b",
       "compressed_bytes": 73605,
@@ -3091,6 +3350,7 @@
     {
       "title": "Write Final Round",
       "source_simfile": "Jokes/Write Final Round.ssc",
+      "harness_version": "0.1.0",
       "archive": "0a234825bf7bba4434680e7614cea08a93527f39195d212be4f9b83a3bd29ebe.tar.zst",
       "sha256": "0a234825bf7bba4434680e7614cea08a93527f39195d212be4f9b83a3bd29ebe",
       "compressed_bytes": 244406,
@@ -3103,6 +3363,7 @@
     {
       "title": "Jumper",
       "source_simfile": "Jumper/Jumper.sm",
+      "harness_version": "0.1.0",
       "archive": "dc08f968f85c9013c9b7f04831519cc15300a89a7c4296469234deaf136737fb.tar.zst",
       "sha256": "dc08f968f85c9013c9b7f04831519cc15300a89a7c4296469234deaf136737fb",
       "compressed_bytes": 61555,
@@ -3115,6 +3376,7 @@
     {
       "title": "Jumper",
       "source_simfile": "Jumper/Jumper.ssc",
+      "harness_version": "0.1.0",
       "archive": "89457c8c96f08765c804afa5e95cb9f8480c152aee272891bc43a9298859ef8c.tar.zst",
       "sha256": "89457c8c96f08765c804afa5e95cb9f8480c152aee272891bc43a9298859ef8c",
       "compressed_bytes": 61503,
@@ -3127,6 +3389,7 @@
     {
       "title": "Episode 07",
       "source_simfile": "Just a Friend To  You/Just a Friend To  You.sm",
+      "harness_version": "0.1.0",
       "archive": "4244a1b7edad4e2e05fb56226e210acb321d4ad39e58cc9a088b2587c0c92edd.tar.zst",
       "sha256": "4244a1b7edad4e2e05fb56226e210acb321d4ad39e58cc9a088b2587c0c92edd",
       "compressed_bytes": 5142020,
@@ -3139,6 +3402,7 @@
     {
       "title": "Episode 07",
       "source_simfile": "Just a Friend To  You/Just a Friend To  You.ssc",
+      "harness_version": "0.1.0",
       "archive": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9.tar.zst",
       "sha256": "62a7aa6b55a58855174df91c8ead9f4ea60762f6a9bb0c26418b65e0fe0e76c9",
       "compressed_bytes": 5143246,
@@ -3151,6 +3415,7 @@
     {
       "title": "K-Pop Foxture",
       "source_simfile": "K-Pop Foxture/K-Pop Foxture.ssc",
+      "harness_version": "0.1.0",
       "archive": "2eecbbfe99728c2b59f485b9461d1b481b549b3c69b82978dbeebe17ab654bbf.tar.zst",
       "sha256": "2eecbbfe99728c2b59f485b9461d1b481b549b3c69b82978dbeebe17ab654bbf",
       "compressed_bytes": 1963582,
@@ -3163,6 +3428,7 @@
     {
       "title": "KABOOOOOM!!!!",
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
+      "harness_version": "0.1.0",
       "archive": "1c196f79f604bf30ec7fdfd1cb92634a16b4326170b6b7131fc2bc2d452d9068.tar.zst",
       "sha256": "1c196f79f604bf30ec7fdfd1cb92634a16b4326170b6b7131fc2bc2d452d9068",
       "compressed_bytes": 33350200,
@@ -3175,6 +3441,7 @@
     {
       "title": "KABOOOOOM!!!!",
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "harness_version": "0.1.0",
       "archive": "8a0010cf67e56632b4203cef97c15801ee42266b798462c409eefe16f9ee7f9c.tar.zst",
       "sha256": "8a0010cf67e56632b4203cef97c15801ee42266b798462c409eefe16f9ee7f9c",
       "compressed_bytes": 33381214,
@@ -3187,6 +3454,7 @@
     {
       "title": "Karachi",
       "source_simfile": "Karachi/Jorts - Karachi.ssc",
+      "harness_version": "0.1.0",
       "archive": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1.tar.zst",
       "sha256": "478872d42a1163d1ac2fcd2005ede99579910d3be84cdf7a2703e55469e6b4e1",
       "compressed_bytes": 948831,
@@ -3199,6 +3467,7 @@
     {
       "title": "Kita Saitama 2000",
       "source_simfile": "Kita Saitama 2000/Kita Saitama 2000.ssc",
+      "harness_version": "0.1.0",
       "archive": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b.tar.zst",
       "sha256": "e30f7a23efb6897e17bd55a014026f58303d23bc566f29708bf4b6c9b0c35a2b",
       "compressed_bytes": 518652,
@@ -3211,6 +3480,7 @@
     {
       "title": "傷跡",
       "source_simfile": "Kizuato - [Zaia]/Kizuato.ssc",
+      "harness_version": "0.1.0",
       "archive": "ea3f7e1732e823e04539481c00f7192f490aa86484c9df4d59cd41c794a86462.tar.zst",
       "sha256": "ea3f7e1732e823e04539481c00f7192f490aa86484c9df4d59cd41c794a86462",
       "compressed_bytes": 77847,
@@ -3223,6 +3493,7 @@
     {
       "title": "Koi",
       "source_simfile": "Koi [UPS2016]/koi.sm",
+      "harness_version": "0.1.0",
       "archive": "6458de2168208bd687e73f0271ea7bb8d2ecad9aade655e14fd54b9d4ddc3c5e.tar.zst",
       "sha256": "6458de2168208bd687e73f0271ea7bb8d2ecad9aade655e14fd54b9d4ddc3c5e",
       "compressed_bytes": 3641834,
@@ -3235,6 +3506,7 @@
     {
       "title": "Koi",
       "source_simfile": "Koi [UPS2016]/koi.ssc",
+      "harness_version": "0.1.0",
       "archive": "a6d6cdfb7b7256f722f5671ce623642e239fb27e59f5be8c9dd4b74483078a67.tar.zst",
       "sha256": "a6d6cdfb7b7256f722f5671ce623642e239fb27e59f5be8c9dd4b74483078a67",
       "compressed_bytes": 3641641,
@@ -3247,6 +3519,7 @@
     {
       "title": "Kuru Kuru kururin [MODS]",
       "source_simfile": "Kuru Kuru kururin/Kuru Kuru kururin.ssc",
+      "harness_version": "0.1.0",
       "archive": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50.tar.zst",
       "sha256": "375aaace358488d083a56a5661d444943e0e4ccc879ccfe0a2f9c5c98e941c50",
       "compressed_bytes": 709806,
@@ -3259,6 +3532,7 @@
     {
       "title": "Lake of Lost Nostalgia",
       "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "harness_version": "0.1.0",
       "archive": "9edfbab90dc66587a7af65dd794025d5a2e4bef3153195c0e8058fb0e6283c29.tar.zst",
       "sha256": "9edfbab90dc66587a7af65dd794025d5a2e4bef3153195c0e8058fb0e6283c29",
       "compressed_bytes": 36568,
@@ -3271,6 +3545,7 @@
     {
       "title": "LALA",
       "source_simfile": "LALA/lala.ssc",
+      "harness_version": "0.1.0",
       "archive": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16.tar.zst",
       "sha256": "4905f15918585093a8a51c74f1ba76222cdfe84140aeff9118de0035859d4e16",
       "compressed_bytes": 189023,
@@ -3283,6 +3558,7 @@
     {
       "title": "Episode 06",
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.sm",
+      "harness_version": "0.1.0",
       "archive": "14c34714d1b0b526fb0497c3ddcaf89167a175c594ac363fb8912b6fa4f006c0.tar.zst",
       "sha256": "14c34714d1b0b526fb0497c3ddcaf89167a175c594ac363fb8912b6fa4f006c0",
       "compressed_bytes": 593720,
@@ -3295,6 +3571,7 @@
     {
       "title": "Episode 06",
       "source_simfile": "LeaveTheDoorOpen [Cringle Desolation]/DoorOpen.ssc",
+      "harness_version": "0.1.0",
       "archive": "c08a0f94e79823e47fffd34e5885d447a0f15dfe0c0eb6d273aa41f9a6249a7d.tar.zst",
       "sha256": "c08a0f94e79823e47fffd34e5885d447a0f15dfe0c0eb6d273aa41f9a6249a7d",
       "compressed_bytes": 593942,
@@ -3307,6 +3584,7 @@
     {
       "title": "Episode 06",
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.sm",
+      "harness_version": "0.1.0",
       "archive": "37ae26ff1c99ce324bdd19b484cb82a1bcb8891aa87d2533e80da59d7587c32a.tar.zst",
       "sha256": "37ae26ff1c99ce324bdd19b484cb82a1bcb8891aa87d2533e80da59d7587c32a",
       "compressed_bytes": 593275,
@@ -3319,6 +3597,7 @@
     {
       "title": "Leave The Door Open",
       "source_simfile": "LeaveTheDoorOpen [R.I.G.H.T.S]/DoorOpen.ssc",
+      "harness_version": "0.1.0",
       "archive": "fd893cd6fcfcbb4a99b7d2ba04415bb35f2c264b1c4b84f54920c684b0fe6bb0.tar.zst",
       "sha256": "fd893cd6fcfcbb4a99b7d2ba04415bb35f2c264b1c4b84f54920c684b0fe6bb0",
       "compressed_bytes": 594152,
@@ -3331,6 +3610,7 @@
     {
       "title": "Lesson by DJ",
       "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "harness_version": "0.1.0",
       "archive": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835.tar.zst",
       "sha256": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835",
       "compressed_bytes": 1163564,
@@ -3343,6 +3623,7 @@
     {
       "title": "Levels",
       "source_simfile": "Levels/levels-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159.tar.zst",
       "sha256": "b8cd477152be171a7a651d5446eb25273e2047400b319669c495fa90e4700159",
       "compressed_bytes": 67356,
@@ -3355,6 +3636,7 @@
     {
       "title": "Life Cheating Game",
       "source_simfile": "Life Cheating Game/lifecheatinggame.ssc",
+      "harness_version": "0.1.0",
       "archive": "bcf3e7f0e00b0eac4974127394505aac8facfd8402cd6b3f4b917d738de458ea.tar.zst",
       "sha256": "bcf3e7f0e00b0eac4974127394505aac8facfd8402cd6b3f4b917d738de458ea",
       "compressed_bytes": 75572,
@@ -3367,6 +3649,7 @@
     {
       "title": "Limitless",
       "source_simfile": "Limitless/Limitless.sm",
+      "harness_version": "0.1.0",
       "archive": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933.tar.zst",
       "sha256": "f74464df085496fce867837826f3af0c9181ea9d449575d48e38a44cbbc26933",
       "compressed_bytes": 65097,
@@ -3379,6 +3662,7 @@
     {
       "title": "Limitless",
       "source_simfile": "Limitless/Limitless.ssc",
+      "harness_version": "0.1.0",
       "archive": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151.tar.zst",
       "sha256": "31d664d8fad0c6e1aab62c93dda0a28a64e1e5a9b59369edb2544b4dc490b151",
       "compressed_bytes": 65569,
@@ -3391,6 +3675,7 @@
     {
       "title": "リップシンク",
       "source_simfile": "Lip-Sync [Gpop]/Lip-Sync.ssc",
+      "harness_version": "0.1.0",
       "archive": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91.tar.zst",
       "sha256": "e44e772a15d2867ef60411a39bafd13d07c907d43090ced20d1e1a837b648f91",
       "compressed_bytes": 103569,
@@ -3403,6 +3688,7 @@
     {
       "title": "Episode 21",
       "source_simfile": "Lonely/Lonely.sm",
+      "harness_version": "0.1.0",
       "archive": "8c7122bf839dbe1a2788c27c873a83631ab155e7223e36f79b18eba0f9985a6a.tar.zst",
       "sha256": "8c7122bf839dbe1a2788c27c873a83631ab155e7223e36f79b18eba0f9985a6a",
       "compressed_bytes": 123157,
@@ -3415,6 +3701,7 @@
     {
       "title": "Episode 05",
       "source_simfile": "Lonely/Lonely.ssc",
+      "harness_version": "0.1.0",
       "archive": "8c2c0cd30f1a403443c2200f746ff714442c1bd2f99408092e4ac36766aeb757.tar.zst",
       "sha256": "8c2c0cd30f1a403443c2200f746ff714442c1bd2f99408092e4ac36766aeb757",
       "compressed_bytes": 123179,
@@ -3427,6 +3714,7 @@
     {
       "title": "Longinus",
       "source_simfile": "Longinus - [Zaia]/Longinus.sm",
+      "harness_version": "0.1.0",
       "archive": "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12.tar.zst",
       "sha256": "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12",
       "compressed_bytes": 66322,
@@ -3439,6 +3727,7 @@
     {
       "title": "LOOP",
       "source_simfile": "Loop/loop.ssc",
+      "harness_version": "0.1.0",
       "archive": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a.tar.zst",
       "sha256": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a",
       "compressed_bytes": 796270,
@@ -3451,6 +3740,7 @@
     {
       "title": "LORELEI",
       "source_simfile": "LORELEI/LORELEI.ssc",
+      "harness_version": "0.1.0",
       "archive": "8a651ca7788d9cb9b9ef6ffa8a9377bcaff6ff7dcca479a42ec07f608a9b6157.tar.zst",
       "sha256": "8a651ca7788d9cb9b9ef6ffa8a9377bcaff6ff7dcca479a42ec07f608a9b6157",
       "compressed_bytes": 413487,
@@ -3463,6 +3753,7 @@
     {
       "title": "Lower Times",
       "source_simfile": "Lower Times/Lower Times.ssc",
+      "harness_version": "0.1.0",
       "archive": "f1ec8b1e685fa966dfa18aacdb6f65a98097258a4091d1c6c40f3d14d976eac3.tar.zst",
       "sha256": "f1ec8b1e685fa966dfa18aacdb6f65a98097258a4091d1c6c40f3d14d976eac3",
       "compressed_bytes": 318264,
@@ -3475,6 +3766,7 @@
     {
       "title": "ロウワー",
       "source_simfile": "Lower/Lower.ssc",
+      "harness_version": "0.1.0",
       "archive": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337.tar.zst",
       "sha256": "b519752a2a57dd6ae6d278842a52a573b0f0325a6486fff479b0b2cb442b2337",
       "compressed_bytes": 63852,
@@ -3487,6 +3779,7 @@
     {
       "title": "Loyal Divide",
       "source_simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+      "harness_version": "0.1.0",
       "archive": "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27.tar.zst",
       "sha256": "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27",
       "compressed_bytes": 31647,
@@ -3499,6 +3792,7 @@
     {
       "title": "Macarena",
       "source_simfile": "Macarena/Macarena.ssc",
+      "harness_version": "0.1.0",
       "archive": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317.tar.zst",
       "sha256": "40772b13724c906ebf7b42e305577a4bb4572fd6273bfd4a5de7cde2389da317",
       "compressed_bytes": 99666,
@@ -3511,6 +3805,7 @@
     {
       "title": "Magic Torus",
       "source_simfile": "Magic Torus/torus3.sm",
+      "harness_version": "0.1.0",
       "archive": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9.tar.zst",
       "sha256": "a0091cd989760f56f50b9412f107b00ab325da8960c68e15884bda864abef8c9",
       "compressed_bytes": 94634,
@@ -3523,6 +3818,7 @@
     {
       "title": "Hustle Beach",
       "source_simfile": "Mamono/sm.sm",
+      "harness_version": "0.1.0",
       "archive": "df4accd2ff5134859d62200eb950be7bfb59619d0774c645658e11a632778fe3.tar.zst",
       "sha256": "df4accd2ff5134859d62200eb950be7bfb59619d0774c645658e11a632778fe3",
       "compressed_bytes": 150115,
@@ -3535,6 +3831,7 @@
     {
       "title": "マーシャル・マキシマイザー",
       "source_simfile": "Marshall Maximizer/marshall maximizer.ssc",
+      "harness_version": "0.1.0",
       "archive": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec.tar.zst",
       "sha256": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec",
       "compressed_bytes": 74596,
@@ -3547,6 +3844,7 @@
     {
       "title": "Episode 11",
       "source_simfile": "Marvins Room/MarvinsRoom.sm",
+      "harness_version": "0.1.0",
       "archive": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb.tar.zst",
       "sha256": "cf3c7bd09a2e46afdecb553941c5ab87f2953b4f81faccf97b5cb00f6e7626cb",
       "compressed_bytes": 67036,
@@ -3559,6 +3857,7 @@
     {
       "title": "Episode 11",
       "source_simfile": "Marvins Room/MarvinsRoom.ssc",
+      "harness_version": "0.1.0",
       "archive": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1.tar.zst",
       "sha256": "911e8c02c3e02f713b94d4ff04b04647eaa69bf34f359a3a9d48a158b3295ed1",
       "compressed_bytes": 67886,
@@ -3571,6 +3870,7 @@
     {
       "title": "回レ！雪月花",
       "source_simfile": "Maware! Setsugetsuka (ric3show3r bootleg)/maware ric3show3r.ssc",
+      "harness_version": "0.1.0",
       "archive": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3.tar.zst",
       "sha256": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3",
       "compressed_bytes": 72805,
@@ -3583,6 +3883,7 @@
     {
       "title": "MAWARU",
       "source_simfile": "mawaru1/mawaru.sm",
+      "harness_version": "0.1.0",
       "archive": "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f.tar.zst",
       "sha256": "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f",
       "compressed_bytes": 49141,
@@ -3595,6 +3896,7 @@
     {
       "title": "MAWARU 2",
       "source_simfile": "mawaru2/mawaru2.sm",
+      "harness_version": "0.1.0",
       "archive": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb.tar.zst",
       "sha256": "a45dc34b15cbef9fafc9bcc9da7359e74b48b87fb74c8225cbdbec14ff3b28bb",
       "compressed_bytes": 290929,
@@ -3607,6 +3909,7 @@
     {
       "title": "MAWARU 3 ~SURViVOR~",
       "source_simfile": "mawaru3/mawaru3.sm",
+      "harness_version": "0.1.0",
       "archive": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc.tar.zst",
       "sha256": "f0e8b664a15fdf5efd25a588dbd3b75bbc0e8bb6dc09d24c3e9f84639adccfdc",
       "compressed_bytes": 462596,
@@ -3619,6 +3922,7 @@
     {
       "title": "MAWARU 4",
       "source_simfile": "mawaru4/mawaru4.sm",
+      "harness_version": "0.1.0",
       "archive": "7916c7ae791bfec2bcab760266913cd60e306151ac8fa1071ff3b1bbe9b1ddd4.tar.zst",
       "sha256": "7916c7ae791bfec2bcab760266913cd60e306151ac8fa1071ff3b1bbe9b1ddd4",
       "compressed_bytes": 2088261,
@@ -3631,6 +3935,7 @@
     {
       "title": "MAWARU 4",
       "source_simfile": "mawaru4/mawaru4.ssc",
+      "harness_version": "0.1.0",
       "archive": "203f10e0eaf8d5fb5de746f3915cb8ed233dd3d7b9edd1a3b2318ccced0ab30f.tar.zst",
       "sha256": "203f10e0eaf8d5fb5de746f3915cb8ed233dd3d7b9edd1a3b2318ccced0ab30f",
       "compressed_bytes": 2088471,
@@ -3643,6 +3948,7 @@
     {
       "title": "MAWARU FINALE",
       "source_simfile": "mawaru5/mawaru5.sm",
+      "harness_version": "0.1.0",
       "archive": "61530158cf5c08c3c723f68ca9a31611c7ed556baedcde3c363f476d5cedfbac.tar.zst",
       "sha256": "61530158cf5c08c3c723f68ca9a31611c7ed556baedcde3c363f476d5cedfbac",
       "compressed_bytes": 3258756,
@@ -3655,6 +3961,7 @@
     {
       "title": "MAWARU RIDES AGAIN",
       "source_simfile": "mawaru6/mawaru6.sm",
+      "harness_version": "0.1.0",
       "archive": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c.tar.zst",
       "sha256": "91656989a3f606655a16d576d510c9e010bfb7c61dc8d48880fa9314b0ae1f3c",
       "compressed_bytes": 6641789,
@@ -3667,6 +3974,7 @@
     {
       "title": "MAWARUCHI SURVIVER",
       "source_simfile": "mawaru7/mawaru7.sm",
+      "harness_version": "0.1.0",
       "archive": "dd009566e5b52b87169e2b641303dd1b60d8596e8115e0f81342f21d3e28c18c.tar.zst",
       "sha256": "dd009566e5b52b87169e2b641303dd1b60d8596e8115e0f81342f21d3e28c18c",
       "compressed_bytes": 16970414,
@@ -3679,6 +3987,7 @@
     {
       "title": "MAWARU! SETSUGETSUKA!",
       "source_simfile": "mawaru8/mawaru8.sm",
+      "harness_version": "0.1.0",
       "archive": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8.tar.zst",
       "sha256": "563f40565c419e299a0e956ba002854bd02cb498a809dfaa0130244f3b4026f8",
       "compressed_bytes": 8407611,
@@ -3691,6 +4000,7 @@
     {
       "title": "MAX 300",
       "source_simfile": "MAX 300 (BlaZe MIX) - [Aoreo]/wargame.ssc",
+      "harness_version": "0.1.0",
       "archive": "ebf9644db80ec47e8dc40ac42c6eeba9b27d9de80da4380be783c15a97a3a0f4.tar.zst",
       "sha256": "ebf9644db80ec47e8dc40ac42c6eeba9b27d9de80da4380be783c15a97a3a0f4",
       "compressed_bytes": 42927,
@@ -3703,6 +4013,7 @@
     {
       "title": "MAX 300",
       "source_simfile": "Max 300/MAX 300.ssc",
+      "harness_version": "0.1.0",
       "archive": "d5e8a4b97b16946b81bca92d5b2d34a072488cb42f1f0b1faf1c6d472f3b1bb9.tar.zst",
       "sha256": "d5e8a4b97b16946b81bca92d5b2d34a072488cb42f1f0b1faf1c6d472f3b1bb9",
       "compressed_bytes": 28296,
@@ -3715,6 +4026,7 @@
     {
       "title": "media offline",
       "source_simfile": "media offline/media offline.sm",
+      "harness_version": "0.1.0",
       "archive": "37ab9e3214210590a2a79a272fb17189ea159945b97c5ac531357c0157362a9d.tar.zst",
       "sha256": "37ab9e3214210590a2a79a272fb17189ea159945b97c5ac531357c0157362a9d",
       "compressed_bytes": 74682,
@@ -3727,6 +4039,7 @@
     {
       "title": "media offline",
       "source_simfile": "media offline/media offline.ssc",
+      "harness_version": "0.1.0",
       "archive": "56cdb3466337d06071f38a4fcf1935e95096a63fa175fca57f675daddbbef19e.tar.zst",
       "sha256": "56cdb3466337d06071f38a4fcf1935e95096a63fa175fca57f675daddbbef19e",
       "compressed_bytes": 74833,
@@ -3739,6 +4052,7 @@
     {
       "title": "MEGALOVANIA",
       "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "harness_version": "0.1.0",
       "archive": "0312287f76b167c790515f620dea5a7d93a78a0ced2e25385889d515a6079a3b.tar.zst",
       "sha256": "0312287f76b167c790515f620dea5a7d93a78a0ced2e25385889d515a6079a3b",
       "compressed_bytes": 571650,
@@ -3753,6 +4067,7 @@
     {
       "title": "MEGALOVANIA",
       "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "harness_version": "0.1.0",
       "archive": "26582b759a98952cda73fe4c3d8542c182eaae3d47be8fdfdf051ddf6f179100.tar.zst",
       "sha256": "26582b759a98952cda73fe4c3d8542c182eaae3d47be8fdfdf051ddf6f179100",
       "compressed_bytes": 62819,
@@ -3765,6 +4080,7 @@
     {
       "title": "Midnight Madness",
       "source_simfile": "Midnight Madness/midnight.sm",
+      "harness_version": "0.1.0",
       "archive": "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4.tar.zst",
       "sha256": "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4",
       "compressed_bytes": 12224,
@@ -3777,6 +4093,7 @@
     {
       "title": "minefield surfing",
       "source_simfile": "minefield surfing_1/minefield.ssc",
+      "harness_version": "0.1.0",
       "archive": "98e0c365aa985ead8fd12d3618f18cb3b4b573ec209cf456058dfbd967bb5dba.tar.zst",
       "sha256": "98e0c365aa985ead8fd12d3618f18cb3b4b573ec209cf456058dfbd967bb5dba",
       "compressed_bytes": 47167,
@@ -3789,6 +4106,7 @@
     {
       "title": "MISSION SPUTNIK",
       "source_simfile": "MISSION SPUTNIK/sputnik.ssc",
+      "harness_version": "0.1.0",
       "archive": "b13247db1ef7475bbb3960e1be844c4e63852b8e72e76f26563cd59333fef2ee.tar.zst",
       "sha256": "b13247db1ef7475bbb3960e1be844c4e63852b8e72e76f26563cd59333fef2ee",
       "compressed_bytes": 45083,
@@ -3801,6 +4119,7 @@
     {
       "title": "MODULO",
       "source_simfile": "MODULO/modulo.ssc",
+      "harness_version": "0.1.0",
       "archive": "126d933b07f244a14a538d6055f6165031879300e45f69014c28b1008cd8e3ba.tar.zst",
       "sha256": "126d933b07f244a14a538d6055f6165031879300e45f69014c28b1008cd8e3ba",
       "compressed_bytes": 130870,
@@ -3813,6 +4132,7 @@
     {
       "title": "Episode 03",
       "source_simfile": "Molly/Molly.sm",
+      "harness_version": "0.1.0",
       "archive": "42d3b9c006a212d4b204e23a19d6d037318a12063b038c925ddfaaece53b3d5c.tar.zst",
       "sha256": "42d3b9c006a212d4b204e23a19d6d037318a12063b038c925ddfaaece53b3d5c",
       "compressed_bytes": 110947,
@@ -3825,6 +4145,7 @@
     {
       "title": "Episode 03",
       "source_simfile": "Molly/Molly.ssc",
+      "harness_version": "0.1.0",
       "archive": "3dbf83a63e6ea2179469b390845918aa18398e3878bc6cead041d29833e1c5d0.tar.zst",
       "sha256": "3dbf83a63e6ea2179469b390845918aa18398e3878bc6cead041d29833e1c5d0",
       "compressed_bytes": 111513,
@@ -3837,6 +4158,7 @@
     {
       "title": "Episode 13",
       "source_simfile": "My Exes Bestfriend/ExBestFriend.sm",
+      "harness_version": "0.1.0",
       "archive": "f644b073b29d02167b03544bf2e482e2f4440eb0d7f9b70bbd71aefc13f2aee2.tar.zst",
       "sha256": "f644b073b29d02167b03544bf2e482e2f4440eb0d7f9b70bbd71aefc13f2aee2",
       "compressed_bytes": 83472,
@@ -3849,6 +4171,7 @@
     {
       "title": "Episode 13",
       "source_simfile": "My Exes Bestfriend/ExBestFriend.ssc",
+      "harness_version": "0.1.0",
       "archive": "a094118f8d72f8bf3c00fb02ce6bacc758dec5ba9d08868065c815354935c7e1.tar.zst",
       "sha256": "a094118f8d72f8bf3c00fb02ce6bacc758dec5ba9d08868065c815354935c7e1",
       "compressed_bytes": 83756,
@@ -3861,6 +4184,7 @@
     {
       "title": "My Penny",
       "source_simfile": "My Penny/My Penny.ssc",
+      "harness_version": "0.1.0",
       "archive": "1c492a47ba819c03089bbbe4ca4735c401337687c672e026fef8b8ae01d7d4c1.tar.zst",
       "sha256": "1c492a47ba819c03089bbbe4ca4735c401337687c672e026fef8b8ae01d7d4c1",
       "compressed_bytes": 12118,
@@ -3873,6 +4197,7 @@
     {
       "title": "Myths You Forgot",
       "source_simfile": "Myths You Forgot/Myths You Forgot.ssc",
+      "harness_version": "0.1.0",
       "archive": "eb9ec0cc567a02617f99dad8503fc22278f3c0d03cad9d935e5bd7156a31add8.tar.zst",
       "sha256": "eb9ec0cc567a02617f99dad8503fc22278f3c0d03cad9d935e5bd7156a31add8",
       "compressed_bytes": 61414,
@@ -3885,6 +4210,7 @@
     {
       "title": "NEGATOR",
       "source_simfile": "negator/NEGATOR.sm",
+      "harness_version": "0.1.0",
       "archive": "954185d36cf7fb2fef1f029b1ea5a110c8940354d79e8c13f98847a4d9017ae6.tar.zst",
       "sha256": "954185d36cf7fb2fef1f029b1ea5a110c8940354d79e8c13f98847a4d9017ae6",
       "compressed_bytes": 254667,
@@ -3897,6 +4223,7 @@
     {
       "title": "[11] Neon Nights",
       "source_simfile": "Neon Nights - [Zaia]/Neon Nights.ssc",
+      "harness_version": "0.1.0",
       "archive": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627.tar.zst",
       "sha256": "84ce4de19d14b3150d0361b805c7940bb0edfe78946d7ecdde6cedba3649f627",
       "compressed_bytes": 37632,
@@ -3909,6 +4236,7 @@
     {
       "title": "new earth",
       "source_simfile": "new earth/new earth.ssc",
+      "harness_version": "0.1.0",
       "archive": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157.tar.zst",
       "sha256": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157",
       "compressed_bytes": 1657347,
@@ -3921,6 +4249,7 @@
     {
       "title": "Episode 18",
       "source_simfile": "No Role Modelz/No Role Modelz.sm",
+      "harness_version": "0.1.0",
       "archive": "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
       "sha256": "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3",
       "compressed_bytes": 49983,
@@ -3933,6 +4262,7 @@
     {
       "title": "Episode 18",
       "source_simfile": "No Role Modelz/No Role Modelz.ssc",
+      "harness_version": "0.1.0",
       "archive": "a05f9d82be073f19a4f499bd9c7db339e8a97617c82c8c75fc1e16bafc2e4df2.tar.zst",
       "sha256": "a05f9d82be073f19a4f499bd9c7db339e8a97617c82c8c75fc1e16bafc2e4df2",
       "compressed_bytes": 631912,
@@ -3945,6 +4275,7 @@
     {
       "title": "No Tears Left To Cry",
       "source_simfile": "No Tears Left To Cry - [JNero]/No-Tears.sm",
+      "harness_version": "0.1.0",
       "archive": "8bf80887839b679011af6805c5fdb5d46b677ff33a38f4403dad5cc97d280001.tar.zst",
       "sha256": "8bf80887839b679011af6805c5fdb5d46b677ff33a38f4403dad5cc97d280001",
       "compressed_bytes": 71563,
@@ -3957,6 +4288,7 @@
     {
       "title": "no touchy !!1!",
       "source_simfile": "no touchy/no touchy.ssc",
+      "harness_version": "0.1.0",
       "archive": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135.tar.zst",
       "sha256": "16633161a06e7d75e11cd1465c7d5147457e30cc9429138024ebebb7b6cca135",
       "compressed_bytes": 59761,
@@ -3969,6 +4301,7 @@
     {
       "title": "No.13",
       "source_simfile": "No.13/no13.ssc",
+      "harness_version": "0.1.0",
       "archive": "a7611b125e7ff5921df9a2b227abb498dc9a688376251f3c77072782952ed899.tar.zst",
       "sha256": "a7611b125e7ff5921df9a2b227abb498dc9a688376251f3c77072782952ed899",
       "compressed_bytes": 71137,
@@ -3981,6 +4314,7 @@
     {
       "title": "Number 9",
       "source_simfile": "Number 9/1556 - Number 9.sm",
+      "harness_version": "0.1.0",
       "archive": "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
       "sha256": "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c",
       "compressed_bytes": 72642,
@@ -3993,6 +4327,7 @@
     {
       "title": "ヌムジカac.10",
       "source_simfile": "Numujika ac.10/Numujika ac.10.sm",
+      "harness_version": "0.1.0",
       "archive": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601.tar.zst",
       "sha256": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601",
       "compressed_bytes": 2624918,
@@ -4005,6 +4340,7 @@
     {
       "title": "OIIA OIIA",
       "source_simfile": "OIIA OIIA - [Zaia]/OIIA OIIA.ssc",
+      "harness_version": "0.1.0",
       "archive": "904abe86b43d76e483f8d17a9f02a2b9ecb39162e6bffe6d54b77e755d5f1cc1.tar.zst",
       "sha256": "904abe86b43d76e483f8d17a9f02a2b9ecb39162e6bffe6d54b77e755d5f1cc1",
       "compressed_bytes": 69447,
@@ -4017,6 +4353,7 @@
     {
       "title": "Oil Ocean Zone Act 2",
       "source_simfile": "Oil Ocean Act 2/steps.sm",
+      "harness_version": "0.1.0",
       "archive": "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
       "sha256": "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a",
       "compressed_bytes": 85765,
@@ -4029,6 +4366,7 @@
     {
       "title": "OK",
       "source_simfile": "OK/OK.ssc",
+      "harness_version": "0.1.0",
       "archive": "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703.tar.zst",
       "sha256": "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703",
       "compressed_bytes": 33317,
@@ -4041,6 +4379,7 @@
     {
       "title": "Oshama Scramble!",
       "source_simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+      "harness_version": "0.1.0",
       "archive": "1048d7c8760b6944303f6c3b938563dadcf614e3d7a6e1fd979bf83bba01584b.tar.zst",
       "sha256": "1048d7c8760b6944303f6c3b938563dadcf614e3d7a6e1fd979bf83bba01584b",
       "compressed_bytes": 2432826,
@@ -4053,6 +4392,7 @@
     {
       "title": "Other Guy",
       "source_simfile": "Other Guy/Other Guy.ssc",
+      "harness_version": "0.1.0",
       "archive": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc.tar.zst",
       "sha256": "0ace4e766f0d9c0122f9babe3d47efa50177d732df8b04957efca64b7e37bdfc",
       "compressed_bytes": 47081,
@@ -4065,6 +4405,7 @@
     {
       "title": "Over the Top",
       "source_simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+      "harness_version": "0.1.0",
       "archive": "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
       "sha256": "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28",
       "compressed_bytes": 72208,
@@ -4077,6 +4418,7 @@
     {
       "title": "Paint the Town Red",
       "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+      "harness_version": "0.1.0",
       "archive": "a38a1138ca11d0face83a5f5eca6869efcfc165accc945116a9178a003eb1df3.tar.zst",
       "sha256": "a38a1138ca11d0face83a5f5eca6869efcfc165accc945116a9178a003eb1df3",
       "compressed_bytes": 26053881,
@@ -4089,6 +4431,7 @@
     {
       "title": "Paint the Town Red",
       "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+      "harness_version": "0.1.0",
       "archive": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4.tar.zst",
       "sha256": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4",
       "compressed_bytes": 26114576,
@@ -4101,6 +4444,7 @@
     {
       "title": "Episode 17",
       "source_simfile": "Pale/Pale.sm",
+      "harness_version": "0.1.0",
       "archive": "8cd0bdbc2e1666dfddd3ddc80f09f7c8d464946b5438d1ae7643b909d80da50f.tar.zst",
       "sha256": "8cd0bdbc2e1666dfddd3ddc80f09f7c8d464946b5438d1ae7643b909d80da50f",
       "compressed_bytes": 27286,
@@ -4113,6 +4457,7 @@
     {
       "title": "Episode 17",
       "source_simfile": "Pale/Pale.ssc",
+      "harness_version": "0.1.0",
       "archive": "a1cc4e84aa2f2b64dabd5fec32a816f5dfa0c39ea96787f8fb494a3e2b69cab5.tar.zst",
       "sha256": "a1cc4e84aa2f2b64dabd5fec32a816f5dfa0c39ea96787f8fb494a3e2b69cab5",
       "compressed_bytes": 27286,
@@ -4125,6 +4470,7 @@
     {
       "title": "Panopticon",
       "source_simfile": "panopticon/panopticon.ssc",
+      "harness_version": "0.1.0",
       "archive": "1a89e58ef1e5b99eef7f394b80b71bcfaa0b7c90bf69682e0b48834491671bac.tar.zst",
       "sha256": "1a89e58ef1e5b99eef7f394b80b71bcfaa0b7c90bf69682e0b48834491671bac",
       "compressed_bytes": 74657,
@@ -4137,6 +4483,7 @@
     {
       "title": "Episode 09",
       "source_simfile": "Paradise [Cringle Desolation]/Paradise.sm",
+      "harness_version": "0.1.0",
       "archive": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe.tar.zst",
       "sha256": "138ded288189846dd3d58db9dfa37d7422fb59299faf972cdfe238dda5dda2fe",
       "compressed_bytes": 1972815,
@@ -4149,6 +4496,7 @@
     {
       "title": "Episode 09",
       "source_simfile": "Paradise [Cringle Desolation]/Paradise.ssc",
+      "harness_version": "0.1.0",
       "archive": "7441c912bfee6d0731a8f2b0ee138241b0a6b414b7d19dffdd85ddf2c7dc097c.tar.zst",
       "sha256": "7441c912bfee6d0731a8f2b0ee138241b0a6b414b7d19dffdd85ddf2c7dc097c",
       "compressed_bytes": 8889943,
@@ -4161,6 +4509,7 @@
     {
       "title": "Paradise",
       "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.sm",
+      "harness_version": "0.1.0",
       "archive": "46c34dfa62b3c63245cc072f7846b0cc946b2d199f6376e1f31a433ae146bb99.tar.zst",
       "sha256": "46c34dfa62b3c63245cc072f7846b0cc946b2d199f6376e1f31a433ae146bb99",
       "compressed_bytes": 1972650,
@@ -4173,6 +4522,7 @@
     {
       "title": "Paradise",
       "source_simfile": "Paradise [R.I.G.H.T.S 2]/Paradise.ssc",
+      "harness_version": "0.1.0",
       "archive": "69782c63aa11278e9a3da5c860936dee4f2459a99c678c154ba7c09b6f37ac22.tar.zst",
       "sha256": "69782c63aa11278e9a3da5c860936dee4f2459a99c678c154ba7c09b6f37ac22",
       "compressed_bytes": 8792335,
@@ -4185,6 +4535,7 @@
     {
       "title": "Episode 09",
       "source_simfile": "Paradise/Paradise.sm",
+      "harness_version": "0.1.0",
       "archive": "23c86a31465111cd8d16560ef36b3158389b7963624f47e46486dfebc6525244.tar.zst",
       "sha256": "23c86a31465111cd8d16560ef36b3158389b7963624f47e46486dfebc6525244",
       "compressed_bytes": 1747059,
@@ -4197,6 +4548,7 @@
     {
       "title": "Episode 09",
       "source_simfile": "Paradise/Paradise.ssc",
+      "harness_version": "0.1.0",
       "archive": "1fe521a5025be442ab69c547ea42a0beef1e3a13c72bc6447f22186117e24fd4.tar.zst",
       "sha256": "1fe521a5025be442ab69c547ea42a0beef1e3a13c72bc6447f22186117e24fd4",
       "compressed_bytes": 1992288,
@@ -4209,6 +4561,7 @@
     {
       "title": "PARTY",
       "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "harness_version": "0.1.0",
       "archive": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44.tar.zst",
       "sha256": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44",
       "compressed_bytes": 34708,
@@ -4221,6 +4574,7 @@
     {
       "title": "paw, paw!",
       "source_simfile": "paw, paw!/paw paw.ssc",
+      "harness_version": "0.1.0",
       "archive": "77eacfb29a6ee00d92c4cdef2b6893a7d6e8110a5cc2739a55a18fe2fc9ae2f2.tar.zst",
       "sha256": "77eacfb29a6ee00d92c4cdef2b6893a7d6e8110a5cc2739a55a18fe2fc9ae2f2",
       "compressed_bytes": 155306,
@@ -4233,6 +4587,7 @@
     {
       "title": "Picture in My Mind",
       "source_simfile": "Picture in My Mind [nikko X WINK RMX]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
+      "harness_version": "0.1.0",
       "archive": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0.tar.zst",
       "sha256": "4dd90ebb6b4de1bc11b44d2206f8fc3ebe7e46dc74b91984803e3791998b92b0",
       "compressed_bytes": 75582,
@@ -4245,6 +4600,7 @@
     {
       "title": "Pizza Boy",
       "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+      "harness_version": "0.1.0",
       "archive": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4.tar.zst",
       "sha256": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4",
       "compressed_bytes": 731376,
@@ -4257,6 +4613,7 @@
     {
       "title": "Planet Calling",
       "source_simfile": "Planet Calling/Planet Calling.ssc",
+      "harness_version": "0.1.0",
       "archive": "1f946d0f87a1110695ec6b3d25dc9ffd322ef21f4f83b84f7f5dc179f5a9513d.tar.zst",
       "sha256": "1f946d0f87a1110695ec6b3d25dc9ffd322ef21f4f83b84f7f5dc179f5a9513d",
       "compressed_bytes": 676447,
@@ -4269,6 +4626,7 @@
     {
       "title": "ぽ",
       "source_simfile": "PO (wrashi Bootleg) [Gpop]/PO (wrashi Bootleg).ssc",
+      "harness_version": "0.1.0",
       "archive": "b83277594f0366e1747e914ead11aeb4ad6295625183aa8eece8ac5e1dd2b770.tar.zst",
       "sha256": "b83277594f0366e1747e914ead11aeb4ad6295625183aa8eece8ac5e1dd2b770",
       "compressed_bytes": 758125,
@@ -4281,6 +4639,7 @@
     {
       "title": "POP MY SHIT",
       "source_simfile": "POP MY SHIT (FOXSKY REMIX)/pop my shit.ssc",
+      "harness_version": "0.1.0",
       "archive": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16.tar.zst",
       "sha256": "0ce97793c0850623e94eb3815bdfe378f446643ff0ec060141efedb643a12d16",
       "compressed_bytes": 83874,
@@ -4293,6 +4652,7 @@
     {
       "title": "Pop",
       "source_simfile": "Pop/Pop.ssc",
+      "harness_version": "0.1.0",
       "archive": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd.tar.zst",
       "sha256": "25ee2408eb43f41e8e7377de1fa9c88695965704de94184c48a711a9d085d6fd",
       "compressed_bytes": 230281,
@@ -4305,6 +4665,7 @@
     {
       "title": "Downfall",
       "source_simfile": "Popek feat. Titans Fall Harder - Downfall/Downfall.ssc",
+      "harness_version": "0.1.0",
       "archive": "aea3ad5d5ed71889b690a118d9f393d4118f38adf030b378511657fd86da0982.tar.zst",
       "sha256": "aea3ad5d5ed71889b690a118d9f393d4118f38adf030b378511657fd86da0982",
       "compressed_bytes": 339489,
@@ -4317,6 +4678,7 @@
     {
       "title": "Potion",
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+      "harness_version": "0.1.0",
       "archive": "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
       "sha256": "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde",
       "compressed_bytes": 34178,
@@ -4329,6 +4691,7 @@
     {
       "title": "Potion",
       "source_simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).ssc",
+      "harness_version": "0.1.0",
       "archive": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f.tar.zst",
       "sha256": "1f88d5ee979dcc03da989bc8795de8e308fcd17749e9abfe801f4a973784fc6f",
       "compressed_bytes": 103027,
@@ -4341,6 +4704,7 @@
     {
       "title": "Quarantine",
       "source_simfile": "Quarantine/Quarantine.sm",
+      "harness_version": "0.1.0",
       "archive": "ebcd2074206de79bfa97cfbf8808348e9f4a3062c68b159ab3721a868e027257.tar.zst",
       "sha256": "ebcd2074206de79bfa97cfbf8808348e9f4a3062c68b159ab3721a868e027257",
       "compressed_bytes": 1168602,
@@ -4353,6 +4717,7 @@
     {
       "title": "Quarantine",
       "source_simfile": "Quarantine/Quarantine.ssc",
+      "harness_version": "0.1.0",
       "archive": "b85e490024c5f44f05ddb83760623ec5b912f18535dc0445f022b248c9555d14.tar.zst",
       "sha256": "b85e490024c5f44f05ddb83760623ec5b912f18535dc0445f022b248c9555d14",
       "compressed_bytes": 1170640,
@@ -4365,6 +4730,7 @@
     {
       "title": "Rainbow Road",
       "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "harness_version": "0.1.0",
       "archive": "5f2c75c1c78ab4d15f7db1dddaa751dc9728036f30fcae04a6a70246c521c6df.tar.zst",
       "sha256": "5f2c75c1c78ab4d15f7db1dddaa751dc9728036f30fcae04a6a70246c521c6df",
       "compressed_bytes": 2514600,
@@ -4377,6 +4743,7 @@
     {
       "title": "Rapture",
       "source_simfile": "Rapture/Rapture cut-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "a87bf7a4c94d98225592ba15938593cb194fc907656032ffe5bc203da1c23b90.tar.zst",
       "sha256": "a87bf7a4c94d98225592ba15938593cb194fc907656032ffe5bc203da1c23b90",
       "compressed_bytes": 62543,
@@ -4389,6 +4756,7 @@
     {
       "title": "Raving With Fire",
       "source_simfile": "Raving With Fire/Raving With Fire.sm",
+      "harness_version": "0.1.0",
       "archive": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5.tar.zst",
       "sha256": "ebd39c7daf61be2905cb5159d78a4c7a9037e1386eedf1c7c082e3f58bb88cb5",
       "compressed_bytes": 1763738,
@@ -4401,6 +4769,7 @@
     {
       "title": "Raving With Fire",
       "source_simfile": "Raving With Fire/Raving With Fire.ssc",
+      "harness_version": "0.1.0",
       "archive": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a.tar.zst",
       "sha256": "c860130738bcd0b8fbfcdfdad03e54757c81887d947401dbf2767d982afd215a",
       "compressed_bytes": 1755863,
@@ -4413,6 +4782,7 @@
     {
       "title": "Rayc Fire 2",
       "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.sm",
+      "harness_version": "0.1.0",
       "archive": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4.tar.zst",
       "sha256": "29f0dca15e2b9d47fbb45eef635299713b07b301de8043a2c03acae11b4772c4",
       "compressed_bytes": 2346983,
@@ -4425,6 +4795,7 @@
     {
       "title": "Rayc Fire 2",
       "source_simfile": "Rayc Fire 2 (SM5)/Rayc Fire 2.ssc",
+      "harness_version": "0.1.0",
       "archive": "2f226db770c854c6281d12db7794a809b7851e7eb0978ac4425314b1dc3a29e5.tar.zst",
       "sha256": "2f226db770c854c6281d12db7794a809b7851e7eb0978ac4425314b1dc3a29e5",
       "compressed_bytes": 2353342,
@@ -4437,6 +4808,7 @@
     {
       "title": "Reach The Light Switch, Without Asking you",
       "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "harness_version": "0.1.0",
       "archive": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3.tar.zst",
       "sha256": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3",
       "compressed_bytes": 153422,
@@ -4449,6 +4821,7 @@
     {
       "title": "REASON for RED",
       "source_simfile": "REASON for RED/reasonforgay.sm",
+      "harness_version": "0.1.0",
       "archive": "2e5beaaef46c98cc1c826d52ee49753505753a823a630586c6168509a7d50d81.tar.zst",
       "sha256": "2e5beaaef46c98cc1c826d52ee49753505753a823a630586c6168509a7d50d81",
       "compressed_bytes": 486970,
@@ -4461,6 +4834,7 @@
     {
       "title": "REASON for RED",
       "source_simfile": "REASON for RED/reasonforgay.ssc",
+      "harness_version": "0.1.0",
       "archive": "1e6aba284389988b5402aa3ec718613f88cc8343c33718b65095ce55c56c9f52.tar.zst",
       "sha256": "1e6aba284389988b5402aa3ec718613f88cc8343c33718b65095ce55c56c9f52",
       "compressed_bytes": 681810,
@@ -4473,6 +4847,7 @@
     {
       "title": "Redesign your logo",
       "source_simfile": "redesign your logo/Redesign your logo.ssc",
+      "harness_version": "0.1.0",
       "archive": "b4309dd1424e0e8733439f7a1f1769d781d1f4d44b677712da2ec5beed72f0e2.tar.zst",
       "sha256": "b4309dd1424e0e8733439f7a1f1769d781d1f4d44b677712da2ec5beed72f0e2",
       "compressed_bytes": 1497418,
@@ -4485,6 +4860,7 @@
     {
       "title": "Remind the Souls",
       "source_simfile": "Remind The Souls/remindthesouls-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf.tar.zst",
       "sha256": "4cea92b3b66446f85e8afcc2eee607b44021d719fa42115ffe070157a5d13ddf",
       "compressed_bytes": 72379,
@@ -4497,6 +4873,7 @@
     {
       "title": "Remind the Souls",
       "source_simfile": "Remind The Souls/remindthesouls-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "5b6dd2c7346c5fe204cd3334a4b26a6570561158a1727cadc75f3ea8087db73d.tar.zst",
       "sha256": "5b6dd2c7346c5fe204cd3334a4b26a6570561158a1727cadc75f3ea8087db73d",
       "compressed_bytes": 73399,
@@ -4509,6 +4886,7 @@
     {
       "title": "Retrospective",
       "source_simfile": "Retrospective/Retrospective.ssc",
+      "harness_version": "0.1.0",
       "archive": "bd9d4d8cde193f9127448117fc02f4f17930ace7fdff9fdfbc36bc65de8de56b.tar.zst",
       "sha256": "bd9d4d8cde193f9127448117fc02f4f17930ace7fdff9fdfbc36bc65de8de56b",
       "compressed_bytes": 1577976,
@@ -4521,6 +4899,7 @@
     {
       "title": "Riddle",
       "source_simfile": "Riddle/Riddle.ssc",
+      "harness_version": "0.1.0",
       "archive": "ec6585b656c257900d6681251dab8a34659cb18d5ab5e8332b2aba51a11f4554.tar.zst",
       "sha256": "ec6585b656c257900d6681251dab8a34659cb18d5ab5e8332b2aba51a11f4554",
       "compressed_bytes": 80020,
@@ -4533,6 +4912,7 @@
     {
       "title": "The Rite of Spring",
       "source_simfile": "rite of spring/rite.ssc",
+      "harness_version": "0.1.0",
       "archive": "78f644521bf3cf8ad55174c3c5bbd617407b7dee870a9288cd7e7db5238a932a.tar.zst",
       "sha256": "78f644521bf3cf8ad55174c3c5bbd617407b7dee870a9288cd7e7db5238a932a",
       "compressed_bytes": 569699,
@@ -4545,6 +4925,7 @@
     {
       "title": "Episode 02",
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.sm",
+      "harness_version": "0.1.0",
       "archive": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad.tar.zst",
       "sha256": "42e8849bb73924b078a22aea38051d4d2a4daade43e9c0b1a895b61e5c4fb8ad",
       "compressed_bytes": 68548,
@@ -4557,6 +4938,7 @@
     {
       "title": "Episode 02",
       "source_simfile": "Ruin Our Friendship/RuinOurFriendship.ssc",
+      "harness_version": "0.1.0",
       "archive": "14d5a7c57f232005e0ee587007640d17b6963348fbdaa4a1f4e7f87187f625cd.tar.zst",
       "sha256": "14d5a7c57f232005e0ee587007640d17b6963348fbdaa4a1f4e7f87187f625cd",
       "compressed_bytes": 69048,
@@ -4569,6 +4951,7 @@
     {
       "title": "Perfectly Normal Saitama 2000 From UKSRT1",
       "source_simfile": "saitama2000/Saitama2000.sm",
+      "harness_version": "0.1.0",
       "archive": "3b197018a82aff5a619526cac3c023b7272da38eaa55e6c432012b3671a05e39.tar.zst",
       "sha256": "3b197018a82aff5a619526cac3c023b7272da38eaa55e6c432012b3671a05e39",
       "compressed_bytes": 509621,
@@ -4581,6 +4964,7 @@
     {
       "title": "Perfectly Normal Saitama 2000 From UKSRT1",
       "source_simfile": "saitama2000/Saitama2000.ssc",
+      "harness_version": "0.1.0",
       "archive": "da2bd41518716d9f7be7180ee81f3e0c1b0692427209881d92edf5b4d0db1f34.tar.zst",
       "sha256": "da2bd41518716d9f7be7180ee81f3e0c1b0692427209881d92edf5b4d0db1f34",
       "compressed_bytes": 509456,
@@ -4593,6 +4977,7 @@
     {
       "title": "Episode 02",
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.sm",
+      "harness_version": "0.1.0",
       "archive": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773.tar.zst",
       "sha256": "3cb5b82071c5bc856f05ff2fe71a68c6e49038a633edcf3d69f74b77467fa773",
       "compressed_bytes": 4603376,
@@ -4605,6 +4990,7 @@
     {
       "title": "Episode 01",
       "source_simfile": "Save Your Tears [Cringle Desolation]/SaveYourTears.ssc",
+      "harness_version": "0.1.0",
       "archive": "fb2c6cd3981a5356eb3deb3efddc14ea7ed0464beaf6fdc93b05613207efb8c0.tar.zst",
       "sha256": "fb2c6cd3981a5356eb3deb3efddc14ea7ed0464beaf6fdc93b05613207efb8c0",
       "compressed_bytes": 4604651,
@@ -4617,6 +5003,7 @@
     {
       "title": "Save Your Tears",
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.sm",
+      "harness_version": "0.1.0",
       "archive": "3b8ed87a2b0f138bd6e27055ecaace396a575b07ba51146cdc61879176c95521.tar.zst",
       "sha256": "3b8ed87a2b0f138bd6e27055ecaace396a575b07ba51146cdc61879176c95521",
       "compressed_bytes": 4603370,
@@ -4629,6 +5016,7 @@
     {
       "title": "Save Your Tears",
       "source_simfile": "Save Your Tears [R.I.G.H.T.S 2]/SaveYourTears.ssc",
+      "harness_version": "0.1.0",
       "archive": "905f4d5096a547453771c44f961de105265650bb38663f963f2ec0bd68afbfda.tar.zst",
       "sha256": "905f4d5096a547453771c44f961de105265650bb38663f963f2ec0bd68afbfda",
       "compressed_bytes": 4604601,
@@ -4641,6 +5029,7 @@
     {
       "title": "Episode 02",
       "source_simfile": "Save Your Tears/SaveYourTears.sm",
+      "harness_version": "0.1.0",
       "archive": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7.tar.zst",
       "sha256": "da43bc6839eacb8fdf37a73c5ca138984f20d79a7b44b615b9dd3fc8aa9927b7",
       "compressed_bytes": 4526188,
@@ -4653,6 +5042,7 @@
     {
       "title": "Episode 01 (expects 2 players)",
       "source_simfile": "Save Your Tears/SaveYourTears.ssc",
+      "harness_version": "0.1.0",
       "archive": "88aab2806ae8ab0192cc7c7e3435c52f18bbe926357e8b985921772966af14b8.tar.zst",
       "sha256": "88aab2806ae8ab0192cc7c7e3435c52f18bbe926357e8b985921772966af14b8",
       "compressed_bytes": 4526322,
@@ -4665,6 +5055,7 @@
     {
       "title": "Scorpion King",
       "source_simfile": "Scorpion King [TaroNuke]/scorpion.sm",
+      "harness_version": "0.1.0",
       "archive": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f.tar.zst",
       "sha256": "ebf7660009ffda8eb929f2f264dc0bef27564378798af207edae9c5a24b4f03f",
       "compressed_bytes": 2015234,
@@ -4677,6 +5068,7 @@
     {
       "title": "See Tinh",
       "source_simfile": "See Tinh/See Tinh.sm",
+      "harness_version": "0.1.0",
       "archive": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3.tar.zst",
       "sha256": "395def068b6e9f1192bdc55380b6f10891e898e5a2efd27e0a234db981e131a3",
       "compressed_bytes": 565660,
@@ -4689,6 +5081,7 @@
     {
       "title": "See Tinh 「Cukak Remix」",
       "source_simfile": "See Tinh/See Tinh.ssc",
+      "harness_version": "0.1.0",
       "archive": "77176aa9c15fab64849e08157302aab7ff3cccb0956e31261b058bbd5eac3e73.tar.zst",
       "sha256": "77176aa9c15fab64849e08157302aab7ff3cccb0956e31261b058bbd5eac3e73",
       "compressed_bytes": 565629,
@@ -4701,6 +5094,7 @@
     {
       "title": "自撮ーる",
       "source_simfile": "Selfie - [JNero]/Selfie.ssc",
+      "harness_version": "0.1.0",
       "archive": "a6ff684844f24363390393b8107b2b8ea06089966c8e1c5e00c4188920cbadd4.tar.zst",
       "sha256": "a6ff684844f24363390393b8107b2b8ea06089966c8e1c5e00c4188920cbadd4",
       "compressed_bytes": 100748,
@@ -4713,6 +5107,7 @@
     {
       "title": "September",
       "source_simfile": "September/september.ssc",
+      "harness_version": "0.1.0",
       "archive": "8466c72b430467bf1dfceb0b73068fa766ac4a763de3009da2492120e8a72580.tar.zst",
       "sha256": "8466c72b430467bf1dfceb0b73068fa766ac4a763de3009da2492120e8a72580",
       "compressed_bytes": 95717,
@@ -4725,6 +5120,7 @@
     {
       "title": "Shakunetsu pt. II",
       "source_simfile": "Shakunetsu2 [TaroNuke]/shakunetsu2.sm",
+      "harness_version": "0.1.0",
       "archive": "34598587c55a3b9452d7ac65dbfd4228cbd7c77a1b8ab83ef5ba32e78bf410fd.tar.zst",
       "sha256": "34598587c55a3b9452d7ac65dbfd4228cbd7c77a1b8ab83ef5ba32e78bf410fd",
       "compressed_bytes": 1119227,
@@ -4737,6 +5133,7 @@
     {
       "title": "Sharkmode",
       "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "harness_version": "0.1.0",
       "archive": "9ad52da3f9a4dd9baf9fc1b01fa9d4e8bc93d91fd7887f4b371dfbe5a69d72cf.tar.zst",
       "sha256": "9ad52da3f9a4dd9baf9fc1b01fa9d4e8bc93d91fd7887f4b371dfbe5a69d72cf",
       "compressed_bytes": 2704096,
@@ -4749,6 +5146,7 @@
     {
       "title": "",
       "source_simfile": "SharpNel/HashtagNel.ssc",
+      "harness_version": "0.1.0",
       "archive": "5faf9046be843398d8ad2023fc326e3848c82b81807ada2e7bee9bff12bf2bf5.tar.zst",
       "sha256": "5faf9046be843398d8ad2023fc326e3848c82b81807ada2e7bee9bff12bf2bf5",
       "compressed_bytes": 363878,
@@ -4761,6 +5159,7 @@
     {
       "title": "Shine!",
       "source_simfile": "Shine!/Shine!.ssc",
+      "harness_version": "0.1.0",
       "archive": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c.tar.zst",
       "sha256": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c",
       "compressed_bytes": 25722,
@@ -4773,6 +5172,7 @@
     {
       "title": "Episode 10",
       "source_simfile": "Shivers/Shivers.sm",
+      "harness_version": "0.1.0",
       "archive": "ced79efc913753445d798d01b0aeab14ebec6dbb19c3d4879c2c6c93dace34ae.tar.zst",
       "sha256": "ced79efc913753445d798d01b0aeab14ebec6dbb19c3d4879c2c6c93dace34ae",
       "compressed_bytes": 2519783,
@@ -4785,6 +5185,7 @@
     {
       "title": "Episode 10",
       "source_simfile": "Shivers/Shivers.ssc",
+      "harness_version": "0.1.0",
       "archive": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2.tar.zst",
       "sha256": "356225cf1dcc404e12ec3dcc893c9d5095efc379ab9d44a93b7e773d423ac7d2",
       "compressed_bytes": 2546686,
@@ -4797,6 +5198,7 @@
     {
       "title": "* Erm, could it be a Spatiotemporal ShockWAVE Syndrome...?",
       "source_simfile": "ShockWAVE Syndrome  [-YOSEFU-]/ShockWAVE Syndrome.ssc",
+      "harness_version": "0.1.0",
       "archive": "42fc00a2ef99d242340d8443f9d74329efafda77c917c1758236a301ae79e278.tar.zst",
       "sha256": "42fc00a2ef99d242340d8443f9d74329efafda77c917c1758236a301ae79e278",
       "compressed_bytes": 70939,
@@ -4809,6 +5211,7 @@
     {
       "title": "Shooting Love",
       "source_simfile": "Shooting Love/Shooting Love.ssc",
+      "harness_version": "0.1.0",
       "archive": "8dc1c58dc778b3718b89efbb7b022f53ebfe2ed9d0e95ffff5e243cfba0c6ffc.tar.zst",
       "sha256": "8dc1c58dc778b3718b89efbb7b022f53ebfe2ed9d0e95ffff5e243cfba0c6ffc",
       "compressed_bytes": 772929,
@@ -4821,6 +5224,7 @@
     {
       "title": "粛聖!! ロリ神レクイエム☆",
       "source_simfile": "Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
+      "harness_version": "0.1.0",
       "archive": "4ba543256995b864147dce3e20a8b4290ad7ba8dee482782227cd7580374b4d1.tar.zst",
       "sha256": "4ba543256995b864147dce3e20a8b4290ad7ba8dee482782227cd7580374b4d1",
       "compressed_bytes": 107734,
@@ -4833,6 +5237,7 @@
     {
       "title": "Slamurai",
       "source_simfile": "Slamurai/Slamurai.ssc",
+      "harness_version": "0.1.0",
       "archive": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a.tar.zst",
       "sha256": "0ea8829ba0181ac193576415941d4493c23c5e373c85e387c1f5d710ae862c4a",
       "compressed_bytes": 38122,
@@ -4845,6 +5250,7 @@
     {
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "source_simfile": "Someone Special - hubert/Someone Special.sm",
+      "harness_version": "0.1.0",
       "archive": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03.tar.zst",
       "sha256": "fdd109c28e14b9084b7f980a6ba38a5c77f420ca993d7f8b9b701776667b6e03",
       "compressed_bytes": 797953,
@@ -4857,6 +5263,7 @@
     {
       "title": "Ｓｏｍｅｏｎｅ Ｓｐｅｃｉａｌ",
       "source_simfile": "Someone Special - hubert/Someone Special.ssc",
+      "harness_version": "0.1.0",
       "archive": "c41e7b12a9fa27155d4244917c25db042a1e3d84b1a7a9449b71f7986b2182a8.tar.zst",
       "sha256": "c41e7b12a9fa27155d4244917c25db042a1e3d84b1a7a9449b71f7986b2182a8",
       "compressed_bytes": 846922,
@@ -4869,6 +5276,7 @@
     {
       "title": "空間創造理論",
       "source_simfile": "Space Creation Theory/space creation theory.ssc",
+      "harness_version": "0.1.0",
       "archive": "2ed0e171ebd07a23ebff9e5bbd1a65aeb987545389bd44a213cb08320d149258.tar.zst",
       "sha256": "2ed0e171ebd07a23ebff9e5bbd1a65aeb987545389bd44a213cb08320d149258",
       "compressed_bytes": 1103429,
@@ -4881,6 +5289,7 @@
     {
       "title": "Spectrum",
       "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "harness_version": "0.1.0",
       "archive": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5.tar.zst",
       "sha256": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5",
       "compressed_bytes": 1069864,
@@ -4893,6 +5302,7 @@
     {
       "title": "Spectrum Sequence",
       "source_simfile": "Spectrum Sequence/spectrumsequence.ssc",
+      "harness_version": "0.1.0",
       "archive": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d.tar.zst",
       "sha256": "eb5ec789e6f5cb86e47dd64d1c5b184245357e239f0f203254f5c3847c87a45d",
       "compressed_bytes": 102429,
@@ -4905,6 +5315,7 @@
     {
       "title": "SPLAK IT DOWN",
       "source_simfile": "SPLAK IT DOWN - [Zaia +ruunix2]/SPLAK IT DOWN.ssc",
+      "harness_version": "0.1.0",
       "archive": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be.tar.zst",
       "sha256": "edf407ed75008ed2da8a1fc40922a146973aa26f79fbde739c2ec56612f367be",
       "compressed_bytes": 136810,
@@ -4917,6 +5328,7 @@
     {
       "title": "spooky",
       "source_simfile": "spooky (SM 12)/spooky (Tech-Stam cut).ssc",
+      "harness_version": "0.1.0",
       "archive": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9.tar.zst",
       "sha256": "32635dde8bf66fd65db720cb954ed59f804ffc79ef6a9f0b2af933b873e9e2e9",
       "compressed_bytes": 41330,
@@ -4929,6 +5341,7 @@
     {
       "title": "spooky",
       "source_simfile": "spooky (SX 14)/spooky (Tech-Stam cut).ssc",
+      "harness_version": "0.1.0",
       "archive": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0.tar.zst",
       "sha256": "25f515a5eac4b6c349f3cf992859f5d6842c03abf32f2f71bd62ca84008b68a0",
       "compressed_bytes": 49765,
@@ -4941,6 +5354,7 @@
     {
       "title": "Spooky",
       "source_simfile": "Spooky/1.09 - Spooky.sm",
+      "harness_version": "0.1.0",
       "archive": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6.tar.zst",
       "sha256": "6f6e31e07826d04ea9b91f35c489264cd1407dde2d93c35b9902f40163fd5ea6",
       "compressed_bytes": 150428,
@@ -4953,6 +5367,7 @@
     {
       "title": "Spooky",
       "source_simfile": "Spooky/1.09 - Spooky.ssc",
+      "harness_version": "0.1.0",
       "archive": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059.tar.zst",
       "sha256": "7e31fff6c5c0b273464ebff4b5aa06729f06ebf9c6f43a015738daf872609059",
       "compressed_bytes": 150520,
@@ -4965,6 +5380,7 @@
     {
       "title": "STAGE 0.ac11",
       "source_simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+      "harness_version": "0.1.0",
       "archive": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437.tar.zst",
       "sha256": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437",
       "compressed_bytes": 2801896,
@@ -4977,6 +5393,7 @@
     {
       "title": "Stay Alive",
       "source_simfile": "Stay Alive/Stay Alive.ssc",
+      "harness_version": "0.1.0",
       "archive": "988731d0d8989b4ed9d13fa487132cc259dd4ad2ffedb247f815955b2228144f.tar.zst",
       "sha256": "988731d0d8989b4ed9d13fa487132cc259dd4ad2ffedb247f815955b2228144f",
       "compressed_bytes": 61681,
@@ -4989,6 +5406,7 @@
     {
       "title": "Stella Glow",
       "source_simfile": "Stella Glow/Stella Glow.ssc",
+      "harness_version": "0.1.0",
       "archive": "75c5ddbce3060d5e4f31bc12e6e2a7995808ec22192344d4c323abbebdcee9a2.tar.zst",
       "sha256": "75c5ddbce3060d5e4f31bc12e6e2a7995808ec22192344d4c323abbebdcee9a2",
       "compressed_bytes": 4821196,
@@ -5001,6 +5419,7 @@
     {
       "title": "Step Your Game Up",
       "source_simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+      "harness_version": "0.1.0",
       "archive": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217.tar.zst",
       "sha256": "22387511d228b48e2eef93341c05345792b730497e88f5e68fb90885648ec217",
       "compressed_bytes": 3197428,
@@ -5013,6 +5432,7 @@
     {
       "title": "Stepping Music",
       "source_simfile": "Stepping Music/simfile.ssc",
+      "harness_version": "0.1.0",
       "archive": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a.tar.zst",
       "sha256": "bd3590158d0ac0d81ca614d6f89f05847f11fbedd8905ac513abea999652425a",
       "compressed_bytes": 42333,
@@ -5025,6 +5445,7 @@
     {
       "title": "STEVE VERY HARD",
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "harness_version": "0.1.0",
       "archive": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0.tar.zst",
       "sha256": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0",
       "compressed_bytes": 139331,
@@ -5037,6 +5458,7 @@
     {
       "title": "STEVE VERY HARD",
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "harness_version": "0.1.0",
       "archive": "0763cb254f5e99045b4e68d802ca6ce5d75b4b90e160630cdfd0a3fb3b8e7068.tar.zst",
       "sha256": "0763cb254f5e99045b4e68d802ca6ce5d75b4b90e160630cdfd0a3fb3b8e7068",
       "compressed_bytes": 139597,
@@ -5049,6 +5471,7 @@
     {
       "title": "Stuck In The Abyss",
       "source_simfile": "Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
+      "harness_version": "0.1.0",
       "archive": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6.tar.zst",
       "sha256": "9f31bc1fdeeb9194792f50da868ed2ccef27521bb51bb7b372061f2608568ff6",
       "compressed_bytes": 1175421,
@@ -5061,6 +5484,7 @@
     {
       "title": "Subway Surfers Main Theme",
       "source_simfile": "Subway Surfers/subwaysurfers.ssc",
+      "harness_version": "0.1.0",
       "archive": "fd5b7925d948b2e1935453daf0e9c5680b9806ff27f683f77b1f8b8692cd3612.tar.zst",
       "sha256": "fd5b7925d948b2e1935453daf0e9c5680b9806ff27f683f77b1f8b8692cd3612",
       "compressed_bytes": 20828,
@@ -5073,6 +5497,7 @@
     {
       "title": "Tacos",
       "source_simfile": "Tacos/Tacos.ssc",
+      "harness_version": "0.1.0",
       "archive": "10a753e82c3d3b40641c307da4c03f0d36317fd8bcbbd156d65a61af11d2804b.tar.zst",
       "sha256": "10a753e82c3d3b40641c307da4c03f0d36317fd8bcbbd156d65a61af11d2804b",
       "compressed_bytes": 41674,
@@ -5085,6 +5510,7 @@
     {
       "title": "Talk About",
       "source_simfile": "Talk About/talkabout.sm",
+      "harness_version": "0.1.0",
       "archive": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd.tar.zst",
       "sha256": "780974ec4621b1223f8af891d098be559b60904c7d03fede92d2138c76e8a1fd",
       "compressed_bytes": 69510,
@@ -5097,6 +5523,7 @@
     {
       "title": "Talk About",
       "source_simfile": "Talk About/talkabout.ssc",
+      "harness_version": "0.1.0",
       "archive": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0.tar.zst",
       "sha256": "d3283b2ccd70d187f4f70cafad9f25a7999c67e1a72521656d3beec914f73cb0",
       "compressed_bytes": 70256,
@@ -5109,6 +5536,7 @@
     {
       "title": "玉藻前",
       "source_simfile": "Tamamo no Mae/Tamamo no Mae.ssc",
+      "harness_version": "0.1.0",
       "archive": "4a9de7cb051bcab2b5da182fa371621239e65568c156b372f66d2b046e5903b7.tar.zst",
       "sha256": "4a9de7cb051bcab2b5da182fa371621239e65568c156b372f66d2b046e5903b7",
       "compressed_bytes": 77524,
@@ -5121,6 +5549,7 @@
     {
       "title": "大輪の魂 feat. AO、司芭扶",
       "source_simfile": "tamashi/tamashi.sm",
+      "harness_version": "0.1.0",
       "archive": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e.tar.zst",
       "sha256": "1414b286088f609e5e172ae1da2e503ee7428b3941a8092d0bc9b8fcef7bba0e",
       "compressed_bytes": 1296146,
@@ -5133,6 +5562,7 @@
     {
       "title": "Tear Jerker",
       "source_simfile": "Tear Jerker/tearjerker.sm",
+      "harness_version": "0.1.0",
       "archive": "77f0b1a1dc7ffdc2fd5f75fc06fe92f4241305b70dde7af789b71ef96fd2a08f.tar.zst",
       "sha256": "77f0b1a1dc7ffdc2fd5f75fc06fe92f4241305b70dde7af789b71ef96fd2a08f",
       "compressed_bytes": 63639,
@@ -5145,6 +5575,7 @@
     {
       "title": "Tear Jerker",
       "source_simfile": "Tear Jerker/tearjerker.ssc",
+      "harness_version": "0.1.0",
       "archive": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8.tar.zst",
       "sha256": "10dde04d2feaa32ee04264ce88f9ac63eb01ff2ecb0969acfd05227229005af8",
       "compressed_bytes": 63957,
@@ -5157,6 +5588,7 @@
     {
       "title": "The Boys Are Back in Town (to kill you)",
       "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "harness_version": "0.1.0",
       "archive": "532ec728623e8d26b0fbe9870baae63a0956af54c1a6631d671d7bb5f8f76c98.tar.zst",
       "sha256": "532ec728623e8d26b0fbe9870baae63a0956af54c1a6631d671d7bb5f8f76c98",
       "compressed_bytes": 357100,
@@ -5169,6 +5601,7 @@
     {
       "title": "The Entity",
       "source_simfile": "The Entity/The Entity.sm",
+      "harness_version": "0.1.0",
       "archive": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed.tar.zst",
       "sha256": "a5219f3e355965a385ee0acb93b4a9c556f3235df10907c1f36b1cb5026d13ed",
       "compressed_bytes": 815798,
@@ -5181,6 +5614,7 @@
     {
       "title": "The Entity",
       "source_simfile": "The Entity/The Entity.ssc",
+      "harness_version": "0.1.0",
       "archive": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc.tar.zst",
       "sha256": "2903b6b8ced3d1703649aa31554a6d63ee9e378b18638d9599b9a7d2705653dc",
       "compressed_bytes": 816050,
@@ -5193,6 +5627,7 @@
     {
       "title": "The Fresh Prince Of Bel Air",
       "source_simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+      "harness_version": "0.1.0",
       "archive": "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2.tar.zst",
       "sha256": "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2",
       "compressed_bytes": 31081,
@@ -5205,6 +5640,7 @@
     {
       "title": "The Great Divide",
       "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.sm",
+      "harness_version": "0.1.0",
       "archive": "04ec281a4c93dacfe84756dab5a3df423f1ab623017f8f51aa99d66bce57b95c.tar.zst",
       "sha256": "04ec281a4c93dacfe84756dab5a3df423f1ab623017f8f51aa99d66bce57b95c",
       "compressed_bytes": 448664,
@@ -5217,6 +5653,7 @@
     {
       "title": "The Great Divide",
       "source_simfile": "The Great Divide - [Axis, PCBoyGames]/The_Great_Divide_Seven_Lions_Remix_-_Velvetine_141_BPM.ssc",
+      "harness_version": "0.1.0",
       "archive": "2e2d6d045606f42dba6a5cd24a8f137b9856b85702eea7503d0d338f49ae3125.tar.zst",
       "sha256": "2e2d6d045606f42dba6a5cd24a8f137b9856b85702eea7503d0d338f49ae3125",
       "compressed_bytes": 450258,
@@ -5229,6 +5666,7 @@
     {
       "title": "The Scale",
       "source_simfile": "The Scale/The Scale.ssc",
+      "harness_version": "0.1.0",
       "archive": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887.tar.zst",
       "sha256": "35a72751e27dab1f63e9a07b154a2431cec0811e16be3e3cd94d4085e759a887",
       "compressed_bytes": 158922,
@@ -5241,6 +5679,7 @@
     {
       "title": "The Video Boaboaboaboaboaboaboab",
       "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+      "harness_version": "0.1.0",
       "archive": "89e15e6decb405ab0d2bdf05f0e87d143ae6cdcfb9dc9493e7a0fd5e813de36e.tar.zst",
       "sha256": "89e15e6decb405ab0d2bdf05f0e87d143ae6cdcfb9dc9493e7a0fd5e813de36e",
       "compressed_bytes": 113872,
@@ -5253,6 +5692,7 @@
     {
       "title": "THE WORLD REVOLVING",
       "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+      "harness_version": "0.1.0",
       "archive": "c01e4da92ef912cc2feeac8813527b508e6604a380517da0e820e29db5124910.tar.zst",
       "sha256": "c01e4da92ef912cc2feeac8813527b508e6604a380517da0e820e29db5124910",
       "compressed_bytes": 1985700,
@@ -5265,6 +5705,7 @@
     {
       "title": "THE WORLD REVOLVING",
       "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.ssc",
+      "harness_version": "0.1.0",
       "archive": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746.tar.zst",
       "sha256": "f1eb13e3e7fa2807483fdec7378a3862ff04222586129c30b62936d2ce2b4746",
       "compressed_bytes": 1986207,
@@ -5277,6 +5718,7 @@
     {
       "title": "Episode 12",
       "source_simfile": "Think About You/Think About You.sm",
+      "harness_version": "0.1.0",
       "archive": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b.tar.zst",
       "sha256": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b",
       "compressed_bytes": 26526,
@@ -5289,6 +5731,7 @@
     {
       "title": "Episode 12",
       "source_simfile": "Think About You/Think About You.ssc",
+      "harness_version": "0.1.0",
       "archive": "a9a8b95a86398a5759891ba0ed098e569f019bc22d2d1a8510f7b2fc1ebdb376.tar.zst",
       "sha256": "a9a8b95a86398a5759891ba0ed098e569f019bc22d2d1a8510f7b2fc1ebdb376",
       "compressed_bytes": 26724,
@@ -5301,6 +5744,7 @@
     {
       "title": "今年も「雪降り、メリクリ」目指して顽张ります！！",
       "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+      "harness_version": "0.1.0",
       "archive": "17d9dd0bce10fd4b992f93127eec828efa4fd7ae8ab25d0f2c687cb2be728e0d.tar.zst",
       "sha256": "17d9dd0bce10fd4b992f93127eec828efa4fd7ae8ab25d0f2c687cb2be728e0d",
       "compressed_bytes": 119891,
@@ -5313,6 +5757,7 @@
     {
       "title": "Toho Mathematics",
       "source_simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+      "harness_version": "0.1.0",
       "archive": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8.tar.zst",
       "sha256": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8",
       "compressed_bytes": 365074,
@@ -5325,6 +5770,7 @@
     {
       "title": "時を刻む唄",
       "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
+      "harness_version": "0.1.0",
       "archive": "c86e848232f0272bb5589cca64a27546b0031a28d4744c1e5ffc52f02115d456.tar.zst",
       "sha256": "c86e848232f0272bb5589cca64a27546b0031a28d4744c1e5ffc52f02115d456",
       "compressed_bytes": 98321,
@@ -5337,6 +5783,7 @@
     {
       "title": "Tower Power Pokey Battle",
       "source_simfile": "Tower Power Pokey  Battle/Tower Power Pokey Battle.ssc",
+      "harness_version": "0.1.0",
       "archive": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082.tar.zst",
       "sha256": "61f5f4a0ff7fde7e802dda787495150e1537c7195c8a095aff519f8d459e4082",
       "compressed_bytes": 79339,
@@ -5349,6 +5796,7 @@
     {
       "title": "Trancing Pulse",
       "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
+      "harness_version": "0.1.0",
       "archive": "ca3f6e2b63b902e1d2828636e8b31c164d2fc89602dccf93101c6194373a3898.tar.zst",
       "sha256": "ca3f6e2b63b902e1d2828636e8b31c164d2fc89602dccf93101c6194373a3898",
       "compressed_bytes": 380239,
@@ -5361,6 +5809,7 @@
     {
       "title": "Trinity Field",
       "source_simfile": "Trinity Field/Trinity Field.ssc",
+      "harness_version": "0.1.0",
       "archive": "f93d59b626603cf2728bf43cfaa8b8365ef0f83efa088e968a409fe0380d9357.tar.zst",
       "sha256": "f93d59b626603cf2728bf43cfaa8b8365ef0f83efa088e968a409fe0380d9357",
       "compressed_bytes": 540421,
@@ -5373,6 +5822,7 @@
     {
       "title": "TRIP MACHINE -Resuscitation MIX-",
       "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+      "harness_version": "0.1.0",
       "archive": "41ca641ece28c407d4c8dc386cf90e7fcc0f6f625b89c175864063199d6d9164.tar.zst",
       "sha256": "41ca641ece28c407d4c8dc386cf90e7fcc0f6f625b89c175864063199d6d9164",
       "compressed_bytes": 79570,
@@ -5385,6 +5835,7 @@
     {
       "title": "∀",
       "source_simfile": "Turn A - [Freya]/turn_a.ssc",
+      "harness_version": "0.1.0",
       "archive": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3.tar.zst",
       "sha256": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3",
       "compressed_bytes": 83058,
@@ -5397,6 +5848,7 @@
     {
       "title": "U-0",
       "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+      "harness_version": "0.1.0",
       "archive": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239.tar.zst",
       "sha256": "264bd06f6c2e74ccb0062f038af1df64db2078aae62bd65955d2bf6d31b12239",
       "compressed_bytes": 644788,
@@ -5409,6 +5861,7 @@
     {
       "title": "U.N. Owen Was Who?",
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.sm",
+      "harness_version": "0.1.0",
       "archive": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522.tar.zst",
       "sha256": "22f4b7e93b07b2db7ae57fa01aaca5fa248e9d488e66039d6bbdceedb6751522",
       "compressed_bytes": 176823,
@@ -5421,6 +5874,7 @@
     {
       "title": "U.N. Owen Was Who?",
       "source_simfile": "U.N. Owen Was Who [Hyperhero2]/unowenwaswho.ssc",
+      "harness_version": "0.1.0",
       "archive": "9aacd48f51ab522240c344c4f774c79af43480cc6f7ef68df0c7fdd65b6b8fd7.tar.zst",
       "sha256": "9aacd48f51ab522240c344c4f774c79af43480cc6f7ef68df0c7fdd65b6b8fd7",
       "compressed_bytes": 177037,
@@ -5433,6 +5887,7 @@
     {
       "title": "Ultimate taste",
       "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+      "harness_version": "0.1.0",
       "archive": "187636c8511cebb1d704300ba06120739f35d3000d379117b5dba2a2069e7ec8.tar.zst",
       "sha256": "187636c8511cebb1d704300ba06120739f35d3000d379117b5dba2a2069e7ec8",
       "compressed_bytes": 381296,
@@ -5445,6 +5900,7 @@
     {
       "title": "Ultra B+K",
       "source_simfile": "Ultra B+K/ultrabk.ssc",
+      "harness_version": "0.1.0",
       "archive": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da.tar.zst",
       "sha256": "ecb71826a557b950afab9efb4ba6e0e5b4c538a416e449d9527579dc54d344da",
       "compressed_bytes": 38492,
@@ -5457,6 +5913,7 @@
     {
       "title": "Ultra B.B.K.K.B.K.K",
       "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+      "harness_version": "0.1.0",
       "archive": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014.tar.zst",
       "sha256": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014",
       "compressed_bytes": 43601,
@@ -5469,6 +5926,7 @@
     {
       "title": "Ultra B.B.K.K.B.K.K",
       "source_simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+      "harness_version": "0.1.0",
       "archive": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91.tar.zst",
       "sha256": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91",
       "compressed_bytes": 44397,
@@ -5481,6 +5939,7 @@
     {
       "title": "Up Up Up Up",
       "source_simfile": "Up Up Up Up/Up Up Up Up.sm",
+      "harness_version": "0.1.0",
       "archive": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f.tar.zst",
       "sha256": "7acf4619b2f2bd7f6b37c031437a2dfdd22ad71e69db5c37d2598cf29be4968f",
       "compressed_bytes": 85531,
@@ -5493,6 +5952,7 @@
     {
       "title": "Vanishing Point",
       "source_simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+      "harness_version": "0.1.0",
       "archive": "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
       "sha256": "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49",
       "compressed_bytes": 63250,
@@ -5505,6 +5965,7 @@
     {
       "title": "Vector Field",
       "source_simfile": "Vector Field/Vector Field.ssc",
+      "harness_version": "0.1.0",
       "archive": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b.tar.zst",
       "sha256": "8152f73a818a4931c802e7d4f4d192e6671e28c69481838c1c964fb29452636b",
       "compressed_bytes": 15973,
@@ -5517,6 +5978,7 @@
     {
       "title": "Turii -Panta Rhei-",
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "harness_version": "0.1.0",
       "archive": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30.tar.zst",
       "sha256": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30",
       "compressed_bytes": 1723280,
@@ -5529,6 +5991,7 @@
     {
       "title": "Void Virus",
       "source_simfile": "Void Virus/Void_Virus.ssc",
+      "harness_version": "0.1.0",
       "archive": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2.tar.zst",
       "sha256": "27d1085d9a79ed144ebfb645489e1acf7ea33ccadec51930644bd7a380f4b2b2",
       "compressed_bytes": 85636,
@@ -5541,6 +6004,7 @@
     {
       "title": "VTuber死なない",
       "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "harness_version": "0.1.0",
       "archive": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1.tar.zst",
       "sha256": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1",
       "compressed_bytes": 37019,
@@ -5553,6 +6017,7 @@
     {
       "title": "WAH-LEVEN (DDRIllini Remix)",
       "source_simfile": "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+      "harness_version": "0.1.0",
       "archive": "51f50b97cd8baa7cf1b7dd4d8ecdb2ae342df5b112e50eb45a8804878f3f1db5.tar.zst",
       "sha256": "51f50b97cd8baa7cf1b7dd4d8ecdb2ae342df5b112e50eb45a8804878f3f1db5",
       "compressed_bytes": 1986522,
@@ -5565,6 +6030,7 @@
     {
       "title": "Wah-Propaganwah",
       "source_simfile": "wah-propaganwah (habstrakt remix) (ddrillini remix)/Propaganda (Habstrakt Remix).ssc",
+      "harness_version": "0.1.0",
       "archive": "5bd8af7128a7bf99749e22e881f4c86a5245513811b2faf270358e1fc5e4715e.tar.zst",
       "sha256": "5bd8af7128a7bf99749e22e881f4c86a5245513811b2faf270358e1fc5e4715e",
       "compressed_bytes": 76475,
@@ -5577,6 +6043,7 @@
     {
       "title": "Waiting",
       "source_simfile": "Waiting/Waiting.ssc",
+      "harness_version": "0.1.0",
       "archive": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f.tar.zst",
       "sha256": "c8e4b447aad3f46015398ddabcc06fdbfc62394538411d854f6b324fb32dd29f",
       "compressed_bytes": 20852,
@@ -5589,6 +6056,7 @@
     {
       "title": "Wake Up",
       "source_simfile": "Wake Up/Wake Up.ssc",
+      "harness_version": "0.1.0",
       "archive": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5.tar.zst",
       "sha256": "087058a7d38b6c7c88131e1204e74e93ab8ab4a1b32f1551bd06e15620de7ad5",
       "compressed_bytes": 469559,
@@ -5601,6 +6069,7 @@
     {
       "title": "Watching",
       "source_simfile": "Watching/watching-fakemines.sm",
+      "harness_version": "0.1.0",
       "archive": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741.tar.zst",
       "sha256": "d3bf325b6bbc9fc71c6ef35a53d1d52219fd2c32962da8be72c5a7d50c1da741",
       "compressed_bytes": 113582,
@@ -5613,6 +6082,7 @@
     {
       "title": "Watching",
       "source_simfile": "Watching/watching-fakemines.ssc",
+      "harness_version": "0.1.0",
       "archive": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14.tar.zst",
       "sha256": "2aab120a00988eb6f587fd0b033fba7d59df7edfb20d476a465df2de6c0fcc14",
       "compressed_bytes": 114384,
@@ -5625,6 +6095,7 @@
     {
       "title": "Watermelon",
       "source_simfile": "Watermelon/Watermelon.ssc",
+      "harness_version": "0.1.0",
       "archive": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af.tar.zst",
       "sha256": "7ce3c1cbcbf4dfead26e5463a1058e5312909c977aa284463e986a9a570455af",
       "compressed_bytes": 6753125,
@@ -5637,6 +6108,7 @@
     {
       "title": "We're Finally Landing",
       "source_simfile": "We're Finally Landing/landing.ssc",
+      "harness_version": "0.1.0",
       "archive": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34.tar.zst",
       "sha256": "797bb0d03a4d30b771310852cdd4dc8e2a8b79094496b3b9213a02ca16145a34",
       "compressed_bytes": 488549,
@@ -5649,6 +6121,7 @@
     {
       "title": "What a Wonderful World",
       "source_simfile": "What A Wonderful World/WAWW.sm",
+      "harness_version": "0.1.0",
       "archive": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85.tar.zst",
       "sha256": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85",
       "compressed_bytes": 3399129,
@@ -5661,6 +6134,7 @@
     {
       "title": "What If The Whole World Turned Their Swag On",
       "source_simfile": "What If The Whole World Turned Their Swag On/What If The Whole World Turned Their Swag On.ssc",
+      "harness_version": "0.1.0",
       "archive": "b661badef962c63aae3272b9fb87e3a5e147247d6b11f38541d468005387cfd2.tar.zst",
       "sha256": "b661badef962c63aae3272b9fb87e3a5e147247d6b11f38541d468005387cfd2",
       "compressed_bytes": 156860,
@@ -5673,6 +6147,7 @@
     {
       "title": "Who the Hell Is Edgar?",
       "source_simfile": "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc",
+      "harness_version": "0.1.0",
       "archive": "b22f74de2e8fbe69396870627e62559db93553c4dab1372bfad3ee0c5832765c.tar.zst",
       "sha256": "b22f74de2e8fbe69396870627e62559db93553c4dab1372bfad3ee0c5832765c",
       "compressed_bytes": 1498952,
@@ -5685,6 +6160,7 @@
     {
       "title": "Wndrwll",
       "source_simfile": "wndrwll/wndrwll.ssc",
+      "harness_version": "0.1.0",
       "archive": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2.tar.zst",
       "sha256": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2",
       "compressed_bytes": 104561,
@@ -5697,6 +6173,7 @@
     {
       "title": "[10] Wobbpotato",
       "source_simfile": "Wobbpotato [Blue Shift Phase 1]/wobbpotato.ssc",
+      "harness_version": "0.1.0",
       "archive": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd.tar.zst",
       "sha256": "36dba1040aa04ac6edc04d62e8839394103411a24f572e3e166101abb5d1e5fd",
       "compressed_bytes": 36892,
@@ -5709,6 +6186,7 @@
     {
       "title": "Wobbpotato",
       "source_simfile": "Wobbpotato [Egg Carton 3]/wobbpotato.ssc",
+      "harness_version": "0.1.0",
       "archive": "f4249fbbe615707be08caf70a3937635a22a24800cf7c29e7968fa62cc7f7b9d.tar.zst",
       "sha256": "f4249fbbe615707be08caf70a3937635a22a24800cf7c29e7968fa62cc7f7b9d",
       "compressed_bytes": 38119,
@@ -5721,6 +6199,7 @@
     {
       "title": "Wop",
       "source_simfile": "WOP/WOP.ssc",
+      "harness_version": "0.1.0",
       "archive": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8.tar.zst",
       "sha256": "bdc1f910efc602d0759169348edcb0927c4b7d6f916ac60a0dc273f6212dc3f8",
       "compressed_bytes": 8873271,
@@ -5733,6 +6212,7 @@
     {
       "title": "You are Goomba Play ITG",
       "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.sm",
+      "harness_version": "0.1.0",
       "archive": "966162336e990bbdb3fab673bfea8e02192993e8b5791b62f8c3d65738ebc45c.tar.zst",
       "sha256": "966162336e990bbdb3fab673bfea8e02192993e8b5791b62f8c3d65738ebc45c",
       "compressed_bytes": 30741,
@@ -5745,6 +6225,7 @@
     {
       "title": "You are Goomba Play ITG",
       "source_simfile": "You are Goomba Play ITG/You are Gooma Play ITG.ssc",
+      "harness_version": "0.1.0",
       "archive": "44bd4c5f7b30e0fcd578e04ac0d98ea09516062f11ff19a405d721ae2a01daec.tar.zst",
       "sha256": "44bd4c5f7b30e0fcd578e04ac0d98ea09516062f11ff19a405d721ae2a01daec",
       "compressed_bytes": 31040,
@@ -5757,6 +6238,7 @@
     {
       "title": "Episode 19",
       "source_simfile": "Young Dumb And Broke/YDB.sm",
+      "harness_version": "0.1.0",
       "archive": "d5a047decffc532d9ed092aa51ae20f7a7809c0abebe405190618b9cf03f6428.tar.zst",
       "sha256": "d5a047decffc532d9ed092aa51ae20f7a7809c0abebe405190618b9cf03f6428",
       "compressed_bytes": 318597,
@@ -5769,6 +6251,7 @@
     {
       "title": "Episode 19",
       "source_simfile": "Young Dumb And Broke/YDB.ssc",
+      "harness_version": "0.1.0",
       "archive": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40.tar.zst",
       "sha256": "8022849c5f08e058cf3f8d79201fe4b86bec82b04f3ffa51ce7ed7bf5e83ba40",
       "compressed_bytes": 319946,
@@ -5781,6 +6264,7 @@
     {
       "title": "Zoku Shimedore 2000",
       "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+      "harness_version": "0.1.0",
       "archive": "a57ea926770a30c77b59c6149fc05d9550e6731965170b18f2e561aae931ed8f.tar.zst",
       "sha256": "a57ea926770a30c77b59c6149fc05d9550e6731965170b18f2e561aae931ed8f",
       "compressed_bytes": 2047177,
@@ -5793,6 +6277,7 @@
     {
       "title": "Ztar Trek",
       "source_simfile": "Ztar Trek/steps.sm",
+      "harness_version": "0.1.0",
       "archive": "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
       "sha256": "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c",
       "compressed_bytes": 19636,

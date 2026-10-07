@@ -775,6 +775,14 @@
       "harness_version": "0.1.2",
       "reason": "Replace obsolete quarter-beat scheduler with native 60 Hz actor timing",
       "update_frames": 8707
+    },
+    {
+      "pass_number": 3,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "c05dc759b9709606a61148a0ea1b6e59a69eb17bc706e2105f02ab5283d2424d.tar.zst",
+      "archive": "e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908.tar.zst",
+      "harness_version": "0.1.3",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

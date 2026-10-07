@@ -17,6 +17,7 @@ an interactive ITGmania process. Local ITGmania sources are the reference.
 |---|---|---|---|---|
 | 1 | `fc4f528d0fe0b68e691c222b2b2d58d8deb0f10d938f6eac3f57533cb06bb7ff.tar.zst` / `(R10) Warp Zone/warp zone.ssc` | 10 player-transform frames | 212,220/212,220 | `0.5.1823` |
 | 2 | `b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst` / `(R5) Let Me Hear That/let me hear that.sm` | 382 modifier checks in obsolete capture; AFT output omitted by composition adapter | 205,075/205,075 | `0.5.1824` |
+| 3 | `e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908.tar.zst` / `(R6) Waltz Capriccio/waltz_capriccio.ssc` | Missing hinted overlay asset prevented compilation | 260,292/260,292 | `0.5.1825` |
 
 ## Pass 1: preserve sampled transform time
 
@@ -90,3 +91,38 @@ Final validation logs are kept in
 Final verification log SHA-256: `bc0de2ce3f89720c666ecd5dda3310786b9a8192d450e8cbe0f69bddcfc9a0f2`.
 Warp Zone also passes all 212,220 checks on this version. The song-Lua
 unit suite passes all 465 tests.
+
+## Pass 3: preserve hinted assets and harness provenance
+
+The old archive `c05dc759b9709606a61148a0ea1b6e59a69eb17bc706e2105f02ab5283d2424d.tar.zst`
+omitted `lua/overlay2 3x4.png`, although the unmodified source calls
+`LoadActor("overlay2")`. ITGmania `src/ActorUtil.cpp::ResolvePath` appends `*`
+after an exact miss. DeadSync already implements this lookup; the harness
+archive collector required an exact stem and dropped the hinted filename.
+The collector now uses the native prefix rule and refuses ambiguous matches.
+Its regression test verifies the dependency list, hinted file, exact path,
+and ambiguity behavior.
+
+The replacement capture includes that asset, zero runtime errors and dropped
+events, and 8,462 update frames across 141.01 seconds. The original capture
+stopped at 107.81 seconds and contained no recorded update frames. The native
+timing capture therefore restores coverage as well as the missing dependency.
+All 260,292 comparisons pass, including 67,306 modifier and 186,165 player
+transform checks. Source bytes, member hashes, and the full endpoint were
+verified before publishing. The obsolete archive is preserved in Git history
+and local diagnostic storage; its selectors resolve to the replacement.
+
+Harness `0.1.3`, commit `c494528`, also writes `harness_version` into each
+archive index entry from the generating semantic manifest. All existing
+483 primary entries were backfilled from their own archive manifests:
+482 initially reported `0.1.0`, and Let Me Hear That reported `0.1.2`.
+Waltz Capriccio's replacement reports `0.1.3`. Retained archives expose their
+own manifest version. The runner prints and validates the provenance without
+altering existing archive payloads solely for this metadata addition.
+
+The harness suite passes 160 tests with five ignored tests. Targeted archive
+and CLI checks also verify provenance after adding the index field. DeadSync
+version is `0.5.1825`; the complete fixture log is
+`target/song-lua-archive-passes/pass-03-verify.log`.
+
+Verification log SHA-256: `ab8c4dca4770e9a2001fd29389c069f0a870c909426c97c4d2073762df510a3f`.

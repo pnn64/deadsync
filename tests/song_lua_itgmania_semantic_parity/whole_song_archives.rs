@@ -20,6 +20,7 @@ struct ArchiveIndex {
 struct ArchiveEntry {
     title: String,
     source_simfile: String,
+    harness_version: String,
     archive: String,
     sha256: String,
     compressed_bytes: u64,
@@ -34,6 +35,7 @@ struct ArchiveManifest {
     archive_schema_version: u32,
     fixture_schema_version: u32,
     oracle_schema_version: u32,
+    harness_version: String,
     itgmania: ArchiveItgmania,
     chart: ArchiveChart,
     runtime: ArchiveRuntime,
@@ -217,6 +219,7 @@ fn archive_index() -> ArchiveIndex {
         extra.push(ArchiveEntry {
             title: manifest.chart.title,
             source_simfile: manifest.chart.source_path,
+            harness_version: manifest.harness_version,
             sha256: name.trim_end_matches(".tar.zst").into(),
             compressed_bytes: file.metadata().unwrap().len(),
             archive: name,
@@ -282,6 +285,10 @@ fn extract_archive(entry: &ArchiveEntry) -> ExtractedArchive {
 }
 
 fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
+    assert_eq!(
+        entry.harness_version, archive.manifest.harness_version,
+        "fixture index must preserve the capture's harness version"
+    );
     let manifest = &archive.manifest;
     assert_eq!(manifest.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert!(manifest.fixture_schema_version > 0);
@@ -603,12 +610,13 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     let mut failed_checks = 0;
     for (position, entry) in selected.iter().enumerate() {
         eprintln!(
-            "\n[{}/{}] {} ({})\n{}",
+            "\n[{}/{}] {} ({})\n{}\n  harness version: {}",
             position + 1,
             selected.len(),
             entry.title,
             entry.source_simfile,
-            entry.archive
+            entry.archive,
+            entry.harness_version
         );
         let reporter = progress::Reporter::start();
         let progress = &reporter.progress;
@@ -700,6 +708,7 @@ fn full_song_selector_rejects_missing_and_ambiguous_matches_and_preserves_aliase
     let entry = |hash: &str, title: &str| ArchiveEntry {
         title: title.into(),
         source_simfile: format!("{title}/chart.ssc"),
+        harness_version: "0.1.0".into(),
         archive: format!("{hash}.tar.zst"),
         sha256: hash.into(),
         compressed_bytes: 1,
