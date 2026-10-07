@@ -3472,7 +3472,17 @@ pub fn compile_update_functions<Kind>(
         let (frame_start, frame_end, frame_unit) = if origin.is_some() {
             (mod_start, mod_end, SongLuaTimeUnit::Second)
         } else {
-            (seg_start, seg_end, SongLuaTimeUnit::Beat)
+            // Actor::UpdateTweening uses seconds regardless of split chart
+            // timing. A rounded beat/time round trip can move a captured pose
+            // past its own frame and interpolate towards the following pose.
+            (
+                sample_seconds[index],
+                sample_seconds
+                    .get(index + 1)
+                    .copied()
+                    .unwrap_or_else(|| sample_seconds[index].next_up()),
+                SongLuaTimeUnit::BeatClock,
+            )
         };
         if frame_end <= frame_start {
             continue;
