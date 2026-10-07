@@ -413,3 +413,22 @@ verified. No comparison tolerance changed.
 
 Verification log SHA-256:
 `3422aa64da3dab38d31904963e15bdfad855cb6084db273e9590e9d2648c6276`.
+
+## Pass 12: refresh BroGamer with native song timing
+
+The original BroGamer capture failed ten comparisons: confusion offset,
+tiny, and player rotation at tween boundaries. Its continuous double clock
+bypassed ITGmania's float `TimingData` song position. The native timing
+correction from pass 8 applies here; `SongPosition::UpdateSongPosition`
+and Simply Love consume the engine position without replacing its clock.
+
+Harness `0.1.5` recaptured the complete song through beat 440 at
+127.53623199462892 seconds, with zero errors or dropped events. Original
+simfile bytes, member hashes, and lossless level-22 recompression were
+verified. The replacement
+`fb753c9cf62a0d6daf502468ec752d5a22809b14a5c0f835e2af3dfd699bedfe.tar.zst`
+passes all 198,090 comparisons on DeadSync `0.5.1834`. Playback code and
+comparison tolerances did not change in this pass.
+
+Verification log SHA-256:
+`826e78dc5ecca7a2aa7e74a9cafc56142f588ffe6f73ffafcfbcf7555bb42d35`.

@@ -189,13 +189,15 @@
     {
       "title": "275|MODS|[lv.05] BroGamer",
       "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7dacf9294c7d4164b2cd7ea87ffa855cad33479aff1573b484c266b6b92c6849.tar.zst",
-      "sha256": "7dacf9294c7d4164b2cd7ea87ffa855cad33479aff1573b484c266b6b92c6849",
-      "compressed_bytes": 313231,
-      "uncompressed_sha256": "032f2697ce2101f6e8569dc98d9c3f0d663cd0589613fe68fdc4a41fb65273f5",
+      "harness_version": "0.1.5",
+      "archive": "fb753c9cf62a0d6daf502468ec752d5a22809b14a5c0f835e2af3dfd699bedfe.tar.zst",
+      "sha256": "fb753c9cf62a0d6daf502468ec752d5a22809b14a5c0f835e2af3dfd699bedfe",
+      "compressed_bytes": 320371,
+      "uncompressed_sha256": "f570a4c75fa3ab48ca17a6d2696bbc0538fb2384f37c170953eac4eff05b415c",
       "compression_level": 22,
       "aliases": [
+        "91981f44f6e85d1870fb4fba9448f8d5255bf2bf668a39da21155b8c719b0e96.tar.zst",
+        "7dacf9294c7d4164b2cd7ea87ffa855cad33479aff1573b484c266b6b92c6849.tar.zst",
         "b2cbac99ea41a7bae6635c3e61ddc3760c1549a160ef90311108ffc3fd888d7b.tar.zst"
       ]
     },

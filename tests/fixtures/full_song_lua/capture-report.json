@@ -871,6 +871,14 @@
       "archive": "73da04c58a35f1e4a8246b4e9d7e9deddb2e4f3a29e2fc38b83fa4f63dd9c48f.tar.zst",
       "harness_version": "0.1.5",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "7dacf9294c7d4164b2cd7ea87ffa855cad33479aff1573b484c266b6b92c6849.tar.zst",
+      "archive": "fb753c9cf62a0d6daf502468ec752d5a22809b14a5c0f835e2af3dfd699bedfe.tar.zst",
+      "harness_version": "0.1.5",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }
