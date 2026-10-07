@@ -240,20 +240,16 @@ fn timing_segment_capacity(tag: &str) -> usize {
         .saturating_add(2)
 }
 
+#[inline]
 fn dedup_last_by_row<T>(segments: &mut Vec<T>, beat: impl Fn(&T) -> f32) {
-    let mut write = 0usize;
-    for read in 0..segments.len() {
-        if write != 0
-            && beat_to_note_row(beat(&segments[write - 1]))
-                == beat_to_note_row(beat(&segments[read]))
-        {
-            segments.swap(write - 1, read);
+    segments.dedup_by(|current, previous| {
+        if beat_to_note_row(beat(previous)) == beat_to_note_row(beat(current)) {
+            std::mem::swap(current, previous);
+            true
         } else {
-            segments.swap(write, read);
-            write += 1;
+            false
         }
-    }
-    segments.truncate(write);
+    });
 }
 
 #[must_use]
@@ -396,6 +392,31 @@ mod tests {
     };
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
     use rssp::timing as rssp_timing;
+
+    #[test]
+    fn row_dedup_keeps_the_last_sorted_segment_including_equal_beats() {
+        let ticks = parse_tickcounts(Some("2=8,1.001=6,1=4,2.001=12,1.001=16"));
+        assert_eq!(
+            ticks.iter().map(|s| (s.beat, s.ticks)).collect::<Vec<_>>(),
+            [(0.0, 4), (1.001, 16), (2.001, 12)]
+        );
+        let combos = parse_combos(Some("2=2=3,1.001=6=7,1=4=5,2.001=12=13,1.001=16=17"));
+        assert_eq!(
+            combos
+                .iter()
+                .map(|s| (s.beat, s.combo, s.miss_combo))
+                .collect::<Vec<_>>(),
+            [(0.0, 1, 1), (1.001, 16, 17), (2.001, 12, 13)]
+        );
+        for tag in ["0=8,0=16,0=24", "0=24", "-0=8,0=24"] {
+            let ticks = parse_tickcounts(Some(tag));
+            assert_eq!(ticks.len(), 1);
+            assert_eq!(
+                (ticks[0].beat.to_bits(), ticks[0].ticks),
+                (0.0f32.to_bits(), 24)
+            );
+        }
+    }
 
     #[test]
     fn parse_time_signatures_filters_sorts_and_adds_default() {

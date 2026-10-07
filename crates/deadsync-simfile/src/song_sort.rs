@@ -316,9 +316,9 @@ fn grouped_genre_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
 
 #[must_use]
 pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
-    // Compact indices keep the temporary to eight bytes per song. Preserve the
-    // original path for inputs whose positions cannot be represented by u32.
-    if songs.len() > u32::MAX as usize {
+    // Tiny inputs need no cached keys. Compact indices keep larger temporaries
+    // to eight bytes per song; unrepresentable positions use the original path.
+    if songs.len() <= 1 || songs.len() > u32::MAX as usize {
         return bpm_grouped_songs_uncached(songs);
     }
     let mut order: Vec<_> = songs
@@ -345,7 +345,16 @@ pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     }
     let runs =
         || order.chunk_by(|left, right| bpm_bucket_range(left.0) == bpm_bucket_range(right.0));
-    let mut groups = Vec::with_capacity(runs().count());
+    let group_count = runs().count();
+    if group_count == 1 {
+        let (lo, hi) = bpm_bucket_range(order[0].0);
+        songs.shrink_to_fit();
+        return vec![GroupedSongs {
+            group: SongSortGroup::Bpm { lo, hi },
+            songs,
+        }];
+    }
+    let mut groups = Vec::with_capacity(group_count);
     let mut songs = songs.into_iter();
     for run in runs() {
         let (lo, hi) = bpm_bucket_range(run[0].0);
@@ -540,6 +549,36 @@ fn alpha_grouped_songs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bpm_single_group_preserves_order_ties_and_trims_spare_capacity() {
+        let mut songs = Vec::with_capacity(64);
+        for title in ["Zulu", "Alpha", "Alpha"] {
+            let mut song = test_song();
+            song.title = title.into();
+            song.display_bpm = "128".into();
+            songs.push(Arc::new(song));
+        }
+        let expected = [
+            Arc::clone(&songs[1]),
+            Arc::clone(&songs[2]),
+            Arc::clone(&songs[0]),
+        ];
+        let groups = bpm_grouped_songs(songs);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].group, SongSortGroup::Bpm { lo: 120, hi: 129 });
+        assert_eq!(groups[0].songs.capacity(), 3);
+        for (actual, expected) in groups[0].songs.iter().zip(&expected) {
+            assert!(Arc::ptr_eq(actual, expected));
+        }
+        let song = Arc::new(test_song());
+        let mut single = Vec::with_capacity(64);
+        single.push(Arc::clone(&song));
+        let groups = bpm_grouped_songs(single);
+        assert_eq!(groups[0].songs.capacity(), 1);
+        assert!(Arc::ptr_eq(&groups[0].songs[0], &song));
+        assert!(bpm_grouped_songs(Vec::with_capacity(64)).is_empty());
+    }
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use std::path::PathBuf;
 

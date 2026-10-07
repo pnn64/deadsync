@@ -2388,6 +2388,9 @@ fn count_hist_bins<'a>(
 }
 
 fn smooth_hist_counts(counts: &HistCounts<'_>, worst_window_bin: i32) -> Vec<(i32, f32)> {
+    if counts.max_count == 0 {
+        return zero_hist_samples(worst_window_bin);
+    }
     // Select a lookup once, outside the smoothing loop. Resolve Cow once too,
     // so dense samples retain direct slice access without ownership branches.
     let dense = counts.dense.as_ref();
@@ -2420,6 +2423,16 @@ fn smooth_hist_counts(counts: &HistCounts<'_>, worst_window_bin: i32) -> Vec<(i3
             0
         }
     })
+}
+
+#[cold]
+#[inline(never)]
+fn zero_hist_samples(worst_window_bin: i32) -> Vec<(i32, f32)> {
+    let mut smoothed = Vec::with_capacity((worst_window_bin * 2 + 1).max(1) as usize);
+    if worst_window_bin >= 0 {
+        smoothed.extend((-worst_window_bin..=worst_window_bin).map(|bin| (bin, 0.0)));
+    }
+    smoothed
 }
 
 fn smooth_hist_samples(
@@ -3280,6 +3293,46 @@ mod tests {
             ((expected_window / HIST_BIN_MS).round() as usize * 2) + 1
         );
         assert!(hist.smoothed.iter().all(|(_, value)| value.abs() < 0.0001));
+    }
+
+    #[test]
+    fn zero_histograms_preserve_bins_metadata_and_positive_zero_curve() {
+        let mut mine = test_note(1, 0, JudgeGrade::Fantastic, 10.0);
+        mine.note_type = NoteType::Mine;
+        let mut fake = test_note(2, 0, JudgeGrade::Fantastic, 20.0);
+        fake.is_fake = true;
+        let ignored = [test_note(0, 0, JudgeGrade::Miss, 170.0), mine, fake];
+        let hist = build_histogram_ms(&ignored);
+        assert!(hist.bins.is_empty());
+        assert_eq!(hist.max_count, 0);
+        for (index, &(bin, value)) in hist.smoothed.iter().enumerate() {
+            assert_eq!(bin, index as i32 - hist.smoothed.len() as i32 / 2);
+            assert_eq!(value.to_bits(), 0.0f32.to_bits());
+        }
+        for extent in [10, 3000] {
+            let source = HistogramMs {
+                bins: vec![(-extent, 0), (extent, 0)],
+                worst_observed_ms: 80.0,
+                worst_window_ms: 90.0,
+                ..HistogramMs::default()
+            };
+            let merged = merge_histograms_ms(&[source]);
+            assert_eq!(merged.max_count, 0);
+            assert_eq!(merged.worst_observed_ms, 80.0);
+            assert_eq!(merged.worst_window_ms, 90.0);
+            if extent == 10 {
+                assert!(merged.bins.is_empty());
+            } else {
+                assert_eq!(merged.bins, [(-extent, 0), (extent, 0)]);
+            }
+            assert_eq!(merged.smoothed.len(), 181);
+            assert!(
+                merged
+                    .smoothed
+                    .iter()
+                    .all(|&(_, value)| value.to_bits() == 0.0f32.to_bits())
+            );
+        }
     }
 
     #[test]
