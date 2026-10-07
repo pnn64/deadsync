@@ -1,0 +1,773 @@
+{
+  "corpus_simfiles": 501,
+  "previously_indexed": 56,
+  "requested_missing": 445,
+  "added_complete_archives": 356,
+  "indexed_complete_archives": 412,
+  "remaining_simfiles": 89,
+  "remaining_categories": {
+    "capture_timeout": 4,
+    "trace_limit": 1,
+    "native_or_harness_error": 59,
+    "missing_song_lua": 6,
+    "no_lua_references": 18,
+    "file_writes_required": 1
+  },
+  "context": {
+    "random_seed": 1,
+    "beat_step": 0.25,
+    "update_hz": 60,
+    "full_duration": true,
+    "max_events": 500000,
+    "deadsync_fixture_tests_run": false,
+    "event_limit_overrides": [
+      {
+        "max_events": 3000000,
+        "simfiles": [
+          "Happiness/Happiness.ssc"
+        ]
+      },
+      {
+        "max_events": 5000000,
+        "simfiles": [
+          "Raving With Fire/Raving With Fire.sm",
+          "Raving With Fire/Raving With Fire.ssc",
+          "Shivers/Shivers.sm",
+          "Shivers/Shivers.ssc",
+          "Someone Special - hubert/Someone Special.sm",
+          "Someone Special - hubert/Someone Special.ssc"
+        ]
+      },
+      {
+        "max_events": 1000000,
+        "simfiles": [
+          "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc"
+        ]
+      },
+      {
+        "max_events": 3000000,
+        "simfiles": [
+          "Paint the Town Red/PaintTheTownRed.ssc",
+          "Paint the Town Red/PaintTheTownRed.sm",
+          "tamashi/tamashi.sm",
+          "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+          "assgore/goatdad.ssc"
+        ]
+      }
+    ]
+  },
+  "remaining": [
+    {
+      "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 900 seconds",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-timeout/67053c6979c0becb"
+    },
+    {
+      "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 900 seconds",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-timeout/85aa930d114b2262"
+    },
+    {
+      "simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+      "status": "partial",
+      "category": "trace_limit",
+      "reason": "613 dropped events; incomplete trace at the capture limits",
+      "dropped_events": 613,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/82dbf1390bb50291"
+    },
+    {
+      "simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Among Us In Real Life - Single/Official Among Us In Real Life Official Lua - Rebecca Zamolo Shorts/./modsHQ.lua:310: attempt to concatenate global 'opApproach' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/b34d885934f9816a"
+    },
+    {
+      "simfile": "Ascendanz/Ascendanz.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Ascendanz/lua/default.lua: No such file or directory",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/11205e6997187207"
+    },
+    {
+      "simfile": "Bad Trails/Maybe it was fated.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Bad Trails/lua/game.lua:2646: attempt to index local 'actor' (a nil value); corpus:/Bad Trails/lua/game.lua:2646: attempt to index local 'actor' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/5cbc2bfa91cfbe0b"
+    },
+    {
+      "simfile": "Bad Trails/Maybe it was fated.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Bad Trails/lua/game.lua:2646: attempt to index local 'actor' (a nil value); corpus:/Bad Trails/lua/game.lua:2646: attempt to index local 'actor' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/6ea6105f433bbd84"
+    },
+    {
+      "simfile": "Bank Account/Bank Account.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/8e2cc50f6bd76919"
+    },
+    {
+      "simfile": "Boys/Boys.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Boys/mods.lua:299: attempt to compare number with table",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/40c7a991f83115c4"
+    },
+    {
+      "simfile": "Butterfly by DDR/buttchew.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Butterfly by DDR/lua/./modsHQ.lua:305: attempt to concatenate global 'opApproach' (a nil value)",
+      "dropped_events": 75,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/eb7d5a89defeeb31"
+    },
+    {
+      "simfile": "Collaboration with Paul J Kim/Something.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Collaboration with Paul J Kim/Nothing/default.lua:6: attempt to index global 'SREENMAN' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/5c63f1e940a14e50"
+    },
+    {
+      "simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Crab Nicholson Extreme Sleepover/fish_gaming_wednesday.lua:1: attempt to call global 'Weekday' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/9e59effe9cf00022"
+    },
+    {
+      "simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Cursed Metamorph - [Zaia]/saved/lua/default.lua: No such file or directory",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/cf1c3df5d6e9f28b"
+    },
+    {
+      "simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/DREAMING-ING!!/lua/default.lua:418: attempt to call method 'GetPlayerName' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/7666d9897cac1286"
+    },
+    {
+      "simfile": "Dongo Bongo/dongobongo2.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Dongo Bongo/despair/default.lua:198: attempt to index global 'SREENMAN' (a nil value); corpus:/Dongo Bongo/despair/default.lua:897: attempt to call method 'PlayMusicPart' (a nil value)",
+      "dropped_events": 22,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/2c9db316dfcd9ab2"
+    },
+    {
+      "simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Dreams Bloom After School/lua/_frame.lua:3: assertion failed!",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/798ceb1db0a936b4"
+    },
+    {
+      "simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Fiji (Lange Remix)/Cloak/Water Pulse.lua:23: attempt to index global 'SongUtil' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/3939de0493c8ea15"
+    },
+    {
+      "simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/3bd84fe8e4f26966"
+    },
+    {
+      "simfile": "Genshin Quiz/Megaquiz.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Genshin Quiz/lua/default.lua:15: attempt to call global 'DayOfYear' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/880341a8f13b03d2"
+    },
+    {
+      "simfile": "Get Into It/GetIntoIt.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Get Into It/lua/default.lua:371: attempt to index a number value; corpus:/Get Into It/lua/default.lua:382: attempt to index a number value; corpus:/Get Into It/lua/default.lua:393: attempt to index a number value; corpus:/Get Into It/lua/default.lua:404: attempt to index a number value; corpus:/Get Into It/lua/default.lua:415: attempt to index a number value",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/bbd73a8be292d1aa"
+    },
+    {
+      "simfile": "Get Into It/GetIntoIt.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Get Into It/lua/default.lua:371: attempt to index a number value; corpus:/Get Into It/lua/default.lua:382: attempt to index a number value; corpus:/Get Into It/lua/default.lua:393: attempt to index a number value; corpus:/Get Into It/lua/default.lua:404: attempt to index a number value; corpus:/Get Into It/lua/default.lua:415: attempt to index a number value",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/5e922ad5ae24e720"
+    },
+    {
+      "simfile": "Hallways/hallways.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Hallways/background.lua:3: attempt to call method 'GetLastSecond' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/0932e452fa2d3075"
+    },
+    {
+      "simfile": "Happy Now/Happy Now.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Happy Now/lua/default.lua:208: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/e42e22ef486a712f"
+    },
+    {
+      "simfile": "Happy Now/Happy Now.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Happy Now/lua/default.lua:208: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/648cae001699309d"
+    },
+    {
+      "simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/18ce02683c733e00"
+    },
+    {
+      "simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "could not derive actor semantics: invalid semantic trace `events`: invalid type: map, expected a sequence",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/03e64ec58cd0c3d9"
+    },
+    {
+      "simfile": "If You Crump Stand Up/crump.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/a760ce2ddf9433d4"
+    },
+    {
+      "simfile": "Intro Outro/intro.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Intro Outro/bg/default.lua:5: attempt to index global 'ThemePrefs' (a nil value); corpus:/Intro Outro/bg/default.lua:26: attempt to index global 'ThemePrefs' (a nil value); corpus:/Intro Outro/bg/default.lua:64: attempt to index global 'ThemePrefs' (a nil value); corpus:/Intro Outro/lua/default.lua:764: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/1c15b9c1c0e78784"
+    },
+    {
+      "simfile": "It's Showtime/mettaton.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/It's Showtime/cooking_with_a_killer_robot/default.lua:255: attempt to call method 'GetOneSteps' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-v3/789f5179ede5b073"
+    },
+    {
+      "simfile": "Koi [UPS2016]/koi.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:241: attempt to call global 'rec_print_table' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/0baadb00ca5b32fc"
+    },
+    {
+      "simfile": "Koi [UPS2016]/koi.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:167: bad argument #2 to 'format' (string expected, got function); corpus:/Koi [UPS2016]/lua/koi.lua:241: attempt to call global 'rec_print_table' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/4090b2e03f844a05"
+    },
+    {
+      "simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania oracle failed: ITGmania loaded no charts",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/c5080f1c121d14e5"
+    },
+    {
+      "simfile": "Longinus - [Zaia]/Longinus.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/c470f90cddf5720c"
+    },
+    {
+      "simfile": "Loop/loop.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Loop/multitap/default.lua:645: 'for' limit must be a number",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/f38a2b418ee7b043"
+    },
+    {
+      "simfile": "Lots of Spices - [tari]/spices.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Lots of Spices - [tari]/template/default.lua: No such file or directory",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/8bbbbd0a227889ec"
+    },
+    {
+      "simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/12e625ce625e261a"
+    },
+    {
+      "simfile": "MISSION SPUTNIK/sputnik.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/MISSION SPUTNIK/lua/default.lua:9: attempt to call method 'GetOneSteps' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/2f042faf38f4b9f9"
+    },
+    {
+      "simfile": "Marshall Maximizer/marshall maximizer.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Marshall Maximizer/lua/default.lua:17: attempt to index a number value",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/a2bae3060fde69c0"
+    },
+    {
+      "simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "status": "partial",
+      "category": "file_writes_required",
+      "reason": "song requires RageFile writes; capture filesystem is read-only; corpus:/Megalovania SM5 - [TaroNuke]/lua/default.lua:512: attempt to call method 'PutLine' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/retry-io/c3e0c410f04c30dd"
+    },
+    {
+      "simfile": "Metronogik/Song.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "could not derive actor semantics: invalid semantic trace `events`: invalid type: map, expected a sequence",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/bd062750cefe5be7"
+    },
+    {
+      "simfile": "Midnight Madness/midnight.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/78332255bc11a219"
+    },
+    {
+      "simfile": "No Role Modelz/No Role Modelz.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/bd08439da170a94d"
+    },
+    {
+      "simfile": "Number 9/1556 - Number 9.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/78f10d924a8b9bd9"
+    },
+    {
+      "simfile": "Numujika ac.10/Numujika ac.10.sm",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Numujika ac.10/lua/default.lua:1: attempt to call method 'MusicLengthSeconds' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/109c519c4b0077dc"
+    },
+    {
+      "simfile": "OK/OK.ssc",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/9bb480a1fda3b13d"
+    },
+    {
+      "simfile": "Oil Ocean Act 2/steps.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/9ceaae2441fe1203"
+    },
+    {
+      "simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "AssertionError: ",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/62f7a478097081e5"
+    },
+    {
+      "simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/f996111c68150ced"
+    },
+    {
+      "simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/PARTY [pArTy eDiTioN]/mods.lua:129: attempt to compare number with table",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/396facf8212c1662"
+    },
+    {
+      "simfile": "PizzaBoy/PizzaBoy.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/PizzaBoy/plinko.lua:492: attempt to index local 'sound' (a number value); corpus:/PizzaBoy/plinko.lua:492: attempt to index local 'sound' (a number value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/66b88be3e6504487"
+    },
+    {
+      "simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Pokemon Gym Battle Remix/jokes/default.lua:18: attempt to perform arithmetic on global 'counter' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/8f40f6c480324919"
+    },
+    {
+      "simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/5996cb1bf517a580"
+    },
+    {
+      "simfile": "REASON for RED/reasonforgay.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/REASON for RED/red/default.lua:49: attempt to call method 'GetOneSteps' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/2612809528eb9628"
+    },
+    {
+      "simfile": "REASON for RED/reasonforgay.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/REASON for RED/red/default.lua:49: attempt to call method 'GetOneSteps' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/99a3372a962d49de"
+    },
+    {
+      "simfile": "Rayc Fire 2/Rayc Fire 2.sm",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/5a998294ae8b6156"
+    },
+    {
+      "simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/53da0d7a82127af7"
+    },
+    {
+      "simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/STAGE 0.ac11/lua/default.lua:1: attempt to call method 'MusicLengthSeconds' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/325fe5cb2095040a"
+    },
+    {
+      "simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/STEVE VERY HARD/code/update.lua:11: attempt to perform arithmetic on field 'rz' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/5e95d2cb0de9eac9"
+    },
+    {
+      "simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/STEVE VERY HARD/code/update.lua:11: attempt to perform arithmetic on field 'rz' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/dd5f1a41c7a4ae81"
+    },
+    {
+      "simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Sequential Dreambox - [Zaia]/lua/FastEnd.lua:47: '<eof>' expected near 'local'",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/c893672a26e2b70c"
+    },
+    {
+      "simfile": "Shine!/Shine!.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Shine!/lua/default.lua:7: attempt to call method 'GetSongGroupNames' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/c4d41aebaead65d8"
+    },
+    {
+      "simfile": "Space Creation Theory/space creation theory.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Space Creation Theory/multitap/default.lua:645: 'for' limit must be a number",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/93d4cdfb2970d034"
+    },
+    {
+      "simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Spectrum (Odyssey's Prism Mix) [Telperion]/spectrum/./hudreducer.lua:66: attempt to call method 'lower' (a nil value); corpus:/Spectrum (Odyssey's Prism Mix) [Telperion]/spectrum/./modsHQ.lua:211: attempt to concatenate global 'opApproach' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/74d97529575b9032"
+    },
+    {
+      "simfile": "Think About You/Think About You.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Think About You/lua/default.lua:185: attempt to call method 'SetCurrentStyle' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/6314a40c7ea2b3ce"
+    },
+    {
+      "simfile": "Think About You/Think About You.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Think About You/lua/default.lua:185: attempt to call method 'SetCurrentStyle' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/0527941a00855f6e"
+    },
+    {
+      "simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "could not derive actor semantics: invalid semantic trace `events`: invalid type: map, expected a sequence",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/8f56d6a110ddd170"
+    },
+    {
+      "simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Toho Mathematics (LADIES CHECK THIS OUT)/nerd/default.lua:362: attempt to call method 'GetOneSteps' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/b64f6f3ca7868afe"
+    },
+    {
+      "simfile": "Trinity Field/Trinity Field.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Trinity Field/background/default.lua:17: attempt to call method 'GetPlayerName' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/bea2ae5a98663f53"
+    },
+    {
+      "simfile": "Turn A - [Freya]/turn_a.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "could not derive actor semantics: invalid semantic trace `events`: invalid type: map, expected a sequence",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/becedc74eda050de"
+    },
+    {
+      "simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Ultra B.B.K.K.B.K.K/lua/default.lua:106: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/8e96ced0ed049452"
+    },
+    {
+      "simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/Ultra B.B.K.K.B.K.K/lua/default.lua:106: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/4d47cb45c917c401"
+    },
+    {
+      "simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/ce08596ced8c1a82"
+    },
+    {
+      "simfile": "Velvet LEFTS 1/chart.ssc",
+      "status": "error",
+      "category": "native_or_harness_error",
+      "reason": "ITGmania Lua host failed: corpus:/Velvet LEFTS 1/template/main.lua:1009: attempt to call global 'DayOfYear' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/8f4d4741245868cf"
+    },
+    {
+      "simfile": "What A Wonderful World/WAWW.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/What A Wonderful World/lua/default.lua:110: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 112,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/7fa17005f2a1fbae"
+    },
+    {
+      "simfile": "Ztar Trek/steps.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/5be5d671acef02e8"
+    },
+    {
+      "simfile": "[12] Ascendanz/Ascendanz.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/[12] Ascendanz/lua/default.lua: No such file or directory",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/9e5cb2c801c247a3"
+    },
+    {
+      "simfile": "assgore/goatdad.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/9a17ba96ce6150bd"
+    },
+    {
+      "simfile": "copter/copter.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/copter/copter/default.lua:20: attempt to call method 'ApplyStageModifiers' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/c78adffccf3e4654"
+    },
+    {
+      "simfile": "copter/copter.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/copter/copter/default.lua:20: attempt to call method 'ApplyStageModifiers' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/104b5f9491922f7e"
+    },
+    {
+      "simfile": "crew -All Hands on the Deck-/crew.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/crew -All Hands on the Deck-/lua/default.lua:98: attempt to call method 'GetChartName' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/bf0cfd32a9223792"
+    },
+    {
+      "simfile": "ghost [Telperion]/ghost.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/ghost [Telperion]/spooky/default.lua:57: attempt to call method 'GetOneSteps' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/5dc99ec275466e11"
+    },
+    {
+      "simfile": "james/james.sm",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/james/james/default.lua:258: attempt to index a number value",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/beb47e811c5aafd3"
+    },
+    {
+      "simfile": "james/james.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/james/james/default.lua:258: attempt to index a number value",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/ee72a53d84d7fc88"
+    },
+    {
+      "simfile": "mawaru1/mawaru.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/206471d331202435"
+    },
+    {
+      "simfile": "mawaru9/mawaru9.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 900 seconds",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/02d24424431a0192"
+    },
+    {
+      "simfile": "mr sandman/mr sandman.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 900 seconds",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/9a7dc9dd696c05ad"
+    },
+    {
+      "simfile": "new earth/new earth.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/new earth/lua/default.lua:132: attempt to call global 'HSVA' (a nil value); corpus:/new earth/lua/default.lua:132: attempt to call global 'HSVA' (a nil value); corpus:/new earth/lua/default.lua:209: attempt to call method 'GetPlayerName' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/df3e735bcf803da2"
+    },
+    {
+      "simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+      "status": "error",
+      "category": "no_lua_references",
+      "reason": "simfile has no referenced song Lua entries",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/38602f3b4c159b26"
+    },
+    {
+      "simfile": "wndrwll/wndrwll.ssc",
+      "status": "partial",
+      "category": "native_or_harness_error",
+      "reason": "corpus:/wndrwll/lua/default.lua:735: attempt to index global 'wndrP1clone1' (a nil value)",
+      "dropped_events": 0,
+      "diagnostics": ".tmp/song-lua-corpus-e6xqnf42/runs/27290d9cf304ea4c"
+    }
+  ]
+}
