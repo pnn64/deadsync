@@ -608,21 +608,31 @@ fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[
 }
 
 fn bpm_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BpmPoint]>, f32, TimingNs) {
-    let (first_beat, first_bpm) = bpms[0];
-    let first_time = if first_beat > 0.0 && first_bpm > 0.0 {
-        (first_beat - 0.0).mul_add(60.0 / first_bpm, 0.0)
+    let bpms = if bpms.is_empty() {
+        &[(0.0, 60.0)]
     } else {
-        0.0
+        bpms
     };
-    let beat0_offset_ns = timing_ns_add_seconds(song_offset_ns, first_time);
     let mut max_bpm = 0.0;
-    let points = exact_arc(bpms.len(), |index| {
+    let mut points = exact_arc(bpms.len(), |index| {
         let (beat, bpm) = bpms[index];
         if bpm.is_finite() && bpm > max_bpm {
             max_bpm = bpm;
         }
         BpmPoint { beat, bpm }
     });
+    if !bpms.windows(2).all(|pair| pair[0].0 <= pair[1].0) {
+        Arc::get_mut(&mut points)
+            .expect("new BPM table must be uniquely owned")
+            .sort_by(|a, b| a.beat.partial_cmp(&b.beat).unwrap_or(Ordering::Less));
+    }
+    let first = points[0];
+    let first_time = if first.beat > 0.0 && first.bpm > 0.0 {
+        (first.beat - 0.0).mul_add(60.0 / first.bpm, 0.0)
+    } else {
+        0.0
+    };
+    let beat0_offset_ns = timing_ns_add_seconds(song_offset_ns, first_time);
     (points, max_bpm, beat0_offset_ns)
 }
 
@@ -660,16 +670,6 @@ impl TimingData {
         segments: &TimingSegments,
         row_to_beat: &[f32],
     ) -> Self {
-        let parsed_bpms: Cow<'_, [(f32, f32)]> = if segments.bpms.is_empty() {
-            Cow::Borrowed(&[(0.0, 60.0)])
-        } else if segments.bpms.windows(2).all(|pair| pair[0].0 <= pair[1].0) {
-            Cow::Borrowed(&segments.bpms)
-        } else {
-            let mut sorted = segments.bpms.clone();
-            sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less));
-            Cow::Owned(sorted)
-        };
-
         let stops = sorted_timing_table(&segments.stops, |segment| segment.beat);
         let delays = sorted_timing_table(&segments.delays, |segment| segment.beat);
         let warps = sorted_timing_table(&segments.warps, |segment| segment.beat);
@@ -681,7 +681,7 @@ impl TimingData {
         let song_offset_ns = timing_ns_from_seconds(song_offset_sec);
         let global_offset_ns = timing_ns_from_seconds(global_offset_sec);
 
-        let (bpms, max_bpm, beat0_offset_ns) = bpm_points(&parsed_bpms, song_offset_ns);
+        let (bpms, max_bpm, beat0_offset_ns) = bpm_points(&segments.bpms, song_offset_ns);
 
         // sorted_timing_table orders non-NaN beats. Row rounding and the
         // saturating float-to-int cast are monotonic, including infinities.
@@ -717,7 +717,7 @@ impl TimingData {
         // Only the first BPM's canonical time anchors conversions. Later
         // event timestamps are never read by the timing state machine.
         timing_with_stops.beat0_offset_ns =
-            timing_with_stops.get_time_for_beat_internal_ns(parsed_bpms[0].0);
+            timing_with_stops.get_time_for_beat_internal_ns(timing_with_stops.bpms[0].beat);
 
         timing_with_stops.rebuild_speed_runtime();
 
@@ -2631,6 +2631,78 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsorted_bpms_preserve_stable_ties_offsets_and_source_data() {
+        for ordered in [
+            vec![(0.0, 60.0), (4.0, 180.0), (4.0, 240.0), (8.0, 120.0)],
+            vec![(-4.0, 150.0), (-0.0, 60.0), (0.0, 120.0), (4.0, 100.0)],
+            vec![(2.0, 180.0), (2.0, 90.0), (8.0, 150.0)],
+            vec![
+                (0.0, f32::NAN),
+                (4.0, f32::INFINITY),
+                (4.0, 0.0),
+                (8.0, -120.0),
+            ],
+        ] {
+            let canonical = TimingSegments {
+                bpms: ordered.clone(),
+                ..TimingSegments::default()
+            };
+            let mut unsorted = canonical.clone();
+            unsorted.bpms.rotate_right(1);
+            let original = unsorted.bpms.clone();
+            let mut actual = TimingData::from_segments(0.125, -0.25, &unsorted, &[]);
+            let mut expected = TimingData::from_segments(0.125, -0.25, &canonical, &[]);
+            assert_eq!(
+                actual
+                    .bpms
+                    .iter()
+                    .map(|p| (p.beat.to_bits(), p.bpm.to_bits()))
+                    .collect::<Vec<_>>(),
+                ordered
+                    .iter()
+                    .map(|&(beat, bpm)| (beat.to_bits(), bpm.to_bits()))
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(actual.max_bpm.to_bits(), expected.max_bpm.to_bits());
+            for shift in [0.0, 0.375] {
+                actual.shift_song_offset_seconds(shift);
+                expected.shift_song_offset_seconds(shift);
+                for beat in [-8.0, -0.0, 0.0, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0] {
+                    assert_eq!(
+                        actual.get_time_for_beat_ns(beat),
+                        expected.get_time_for_beat_ns(beat)
+                    );
+                    assert_eq!(
+                        actual.get_time_for_beat_exact(beat).to_bits(),
+                        expected.get_time_for_beat_exact(beat).to_bits()
+                    );
+                    assert_eq!(
+                        actual.get_bpm_for_beat(beat).to_bits(),
+                        expected.get_bpm_for_beat(beat).to_bits()
+                    );
+                }
+                for time in [-2.0, 0.0, 0.5, 2.0, 4.0, 10.0] {
+                    assert_eq!(
+                        actual.get_beat_for_time(time).to_bits(),
+                        expected.get_beat_for_time(time).to_bits()
+                    );
+                }
+            }
+            assert_eq!(
+                unsorted
+                    .bpms
+                    .iter()
+                    .map(|&(beat, bpm)| (beat.to_bits(), bpm.to_bits()))
+                    .collect::<Vec<_>>(),
+                original
+                    .iter()
+                    .map(|&(beat, bpm)| (beat.to_bits(), bpm.to_bits()))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
 
     #[test]
     fn timing_tables_preserve_empty_and_stable_ordering() {

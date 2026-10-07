@@ -24,22 +24,25 @@ pub struct PlaylistSongLookup {
 
 #[must_use]
 pub fn normalize_song_path(song_path: &str) -> String {
-    normalize_song_path_with(song_path, false)
-}
-
-fn normalize_song_path_ascii_lowercase(song_path: &str) -> String {
-    let mut normalized = String::with_capacity(song_path.trim().len());
-    normalize_song_path_ascii_lowercase_into(song_path, &mut normalized);
-    normalized
-}
-
-fn normalize_song_path_with(song_path: &str, ascii_lowercase: bool) -> String {
     let song_path = song_path.trim();
     let mut normalized = String::with_capacity(song_path.len());
     append_normalized_song_path(song_path, &mut normalized);
-    if ascii_lowercase {
-        normalized.make_ascii_lowercase();
+    normalized
+}
+
+fn normalize_song_path_ascii_lowercase(mut song_path: String) -> String {
+    if song_path.trim().len() == song_path.len()
+        && !song_path.starts_with('/')
+        && !song_path.ends_with('/')
+        && !song_path.contains('\\')
+        && !song_path.contains("//")
+    {
+        song_path.make_ascii_lowercase();
+        song_path.shrink_to_fit();
+        return song_path;
     }
+    let mut normalized = String::with_capacity(song_path.trim().len());
+    normalize_song_path_ascii_lowercase_into(&song_path, &mut normalized);
     normalized
 }
 
@@ -100,7 +103,7 @@ pub fn build_playlist_song_lookup(
     let mut song_key = String::new();
 
     for source in sources {
-        if let Some(path) = source.lobby_path.as_deref() {
+        if let Some(path) = source.lobby_path {
             if lookup.by_path.capacity() == 0 {
                 lookup.by_path.reserve(path_capacity);
             }
@@ -337,6 +340,44 @@ mod tests {
                 PlaylistEntry::Header { .. } => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn owned_lobby_paths_preserve_normalization_capacity_and_first_match() {
+        for raw in [
+            "PACK/Song",
+            " /PACK\\Song// ",
+            "\u{2003}PACK/Song\u{2003}",
+            "MÜsic/曲",
+            "///",
+            "",
+            "Pack/ Song /",
+        ] {
+            let first = song("Folder", "First", "First");
+            let second = song("Folder", "Second", "Second");
+            let mut path = String::with_capacity(raw.len() * 4 + 8);
+            path.push_str(raw);
+            let lookup = build_playlist_song_lookup([
+                PlaylistSongSource {
+                    group_name: None,
+                    song: Arc::clone(&first),
+                    lobby_path: Some(path),
+                },
+                PlaylistSongSource {
+                    group_name: None,
+                    song: second,
+                    lobby_path: Some(raw.to_owned()),
+                },
+            ]);
+            let normalized = normalize_song_path(raw).to_ascii_lowercase();
+            let (key, actual) = lookup.by_path.get_key_value(&normalized).unwrap();
+            assert!(Arc::ptr_eq(actual, &first));
+            assert_eq!(key.capacity(), raw.trim().len());
+            if !normalized.is_empty() {
+                let entries = playlist_entries_from_text(raw, "Paths", &lookup);
+                assert_eq!(song_titles(&entries), ["First"]);
+            }
+        }
     }
 
     #[test]
