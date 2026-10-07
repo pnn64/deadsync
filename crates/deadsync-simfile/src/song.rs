@@ -170,7 +170,8 @@ pub fn parse_song_file_in(
     )?;
     // RSSP rounds its report offset to milliseconds. Runtime song timing
     // uses the authored float, as NotesLoaderSM::SMSetOffset does.
-    let parsed = rssp::parse::extract_sections(input, extension).map_err(|error| error.to_string())?;
+    let parsed =
+        rssp::parse::extract_sections(input, extension).map_err(|error| error.to_string())?;
     summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
     let simfile_dir = path
         .parent()
@@ -309,11 +310,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         min_bpm: summary.min_bpm,
         max_bpm: summary.max_bpm,
         normalized_bpms: summary.normalized_bpms,
-        song_timing: (has_lua
-            && (!summary.global_timing_segments.stops.is_empty()
-                || !summary.global_timing_segments.delays.is_empty()
-                || !summary.global_timing_segments.warps.is_empty()))
-        .then(|| {
+        song_timing: has_lua.then(|| {
             CachedTimingSegments::from_rssp_owned(
                 summary.global_timing_segments,
                 Vec::new(),
@@ -895,6 +892,33 @@ mod tests {
 
         assert_eq!(song.charts.len(), 1);
         assert_eq!(song.charts[0].difficulty, "Hard");
+    }
+
+    #[test]
+    fn simple_lua_song_keeps_native_clock() {
+        let root = test_dir("simple-lua-native-clock");
+        let simfile = root.join("song.sm");
+        fs::write(root.join("default.lua"), "return Def.Actor{}").expect("Lua layer");
+        fs::write(
+            &simfile,
+            b"#TITLE:Native clock;\n#OFFSET:-2.296;\n#BPMS:0=140;\n\
+            #FGCHANGES:0=default.lua;\n#NOTES:dance-single::Challenge:1:0,0,0,0,0:\n\
+            1000\n0100\n0010\n0001\n;",
+        )
+        .expect("simple simfile");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let data = parse_song_file(&simfile, &options, |_| 2.0).expect("song data");
+        let song = build_song_meta(data, 0.0);
+        let timing = song
+            .song_timing
+            .expect("all Lua songs retain native timing");
+        let origin = timing.get_time_for_beat_exact(0.0);
+        // Native float cancellation leaves frame 6435 below beat 250.25.
+        assert_eq!(
+            timing.get_song_position(origin + 6435.0 / 60.0).beat,
+            250.249_98
+        );
+        assert!(timing.get_song_position(origin + 6436.0 / 60.0).beat > 250.25);
     }
 
     #[test]

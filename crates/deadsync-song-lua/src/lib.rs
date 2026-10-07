@@ -21139,6 +21139,59 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn runtime_prefix_reader_owns_callbacks_and_messages() {
+        let song_dir = test_dir("runtime-prefix-ownership");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+prefix_globals = {
+    ease = {{0, 1, 0, 0, function(value) player:skewx(value) end, "len", "linear"}},
+    actions = {{0.11, "Fade"}},
+}
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            for _, ease in ipairs(prefix_globals.ease) do
+                if beat > ease[1] and beat < ease[2] then ease[5](ease[3]) end
+            end
+            local event = prefix_globals.actions[1]
+            if event and beat > event[1] then
+                MESSAGEMAN:Broadcast(event[2])
+                table.remove(prefix_globals.actions, 1)
+            end
+        end)
+    end,
+    Def.Quad{
+        OnCommand=function(self) self:diffusealpha(0) end,
+        FadeMessageCommand=function(self) self:linear(.5):diffusealpha(1) end,
+    },
+}
+"#,
+        )
+        .expect("write runtime prefix fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Prefix");
+        context.song_display_bpms = [60.0; 2];
+        context.music_length_seconds = 0.5;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile prefix reader");
+        let skew = compiled
+            .eases
+            .iter()
+            .filter(|ease| matches!(ease.target, SongLuaEaseTarget::PlayerSkewX))
+            .collect::<Vec<_>>();
+        assert!(skew.iter().all(|ease| ease.from == 0.0 && ease.to == 0.0));
+        let messages = compiled
+            .messages
+            .iter()
+            .filter(|event| event.message == "Fade")
+            .collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].beat > 0.11);
+    }
+
+    #[test]
     fn queued_pulse_survives_startup_tweens() {
         let song_dir = test_dir("queued-pulse-tweens");
         let entry = song_dir.join("default.lua");

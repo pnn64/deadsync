@@ -464,6 +464,8 @@ where
     });
     let mut overlay_trigger_counter = 0usize;
     let mut sound_events = startup_sounds;
+    let prefix_is_runtime =
+        update_tree_reads_global(&lua, &root, "prefix_globals").map_err(|err| err.to_string())?;
     let prefix_perframes = globals
         .get::<Option<Table>>("prefix_globals")
         .map_err(|err| err.to_string())?
@@ -483,9 +485,10 @@ where
     });
     compile_timer.push_stage("read_globals");
 
-    if let Some(prefix_globals) = globals
-        .get::<Option<Table>>("prefix_globals")
-        .map_err(|err| err.to_string())?
+    if !prefix_is_runtime
+        && let Some(prefix_globals) = globals
+            .get::<Option<Table>>("prefix_globals")
+            .map_err(|err| err.to_string())?
     {
         out.beat_mods.extend(read_mod_windows(
             prefix_globals
@@ -503,14 +506,7 @@ where
             &host.easing_names,
             &mut overlays,
         )?;
-        // A chart's recurring prefix reader can transform modifier strings
-        // before writing PlayerOptions. Its sampled writes are authoritative;
-        // raw table endpoints would bypass that reader and overwrite them.
-        let prefix_is_runtime = update_tree_reads_global(&lua, &root, "prefix_globals")
-            .map_err(|err| err.to_string())?;
-        out.eases.extend(eases.into_iter().filter(|ease| {
-            !prefix_is_runtime || !matches!(ease.target, crate::SongLuaEaseTarget::Mod(_))
-        }));
+        out.eases.extend(eases);
         out.overlay_eases.extend(overlay_eases);
         out.column_offsets.extend(column_offsets);
         merge_compile_info(&mut out.info, info);
@@ -657,7 +653,11 @@ where
     crate::perframe::apply_initial_updates(&mut overlays, &initial_updates);
     let (perframe_eases, perframe_overlay_eases, perframe_info) = compile_perframes(
         &lua,
-        prefix_perframes,
+        if prefix_is_runtime {
+            None
+        } else {
+            prefix_perframes
+        },
         if global_perframes_are_runtime {
             None
         } else {

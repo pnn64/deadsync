@@ -241,3 +241,56 @@ comparison results remain valid. Only this session's unpublished commits
 were rewritten to remove these blobs from pushable history; the published
 parent and each repair's version and message were preserved. Both local
 archives remain available for all comparisons in this workspace.
+
+## Pass 8: give runtime readers one schedule and use native song clocks
+
+The original Spooky archive `bc2abb30e2bafa458fec4c897ed1d1b38659b7a6566b747ca890d888b28bfd15.tar.zst`
+failed eight comparisons. Four player-transform samples exposed speculative
+prefix callback probes leaving a bogus value of one. Four alpha samples
+exposed a duplicate fade: an analytical message at beat 273.5 preceded the
+reader's actual dispatch at 273.50555. ITGmania's ActorFrame update order and
+message dispatch advance a later child once on the dispatch frame. DeadSync
+now lets the recurring prefix reader own its callbacks, perframes, modifiers,
+and actions. The replaced partial filtering and duplicate static schedule
+are removed. A regression verifies that callback probing does not invent
+player values and that a reader action produces only its actual message.
+All 467 song-Lua unit tests pass.
+
+The capture clock was independently audited against ITGmania
+`src/SongPosition.cpp::UpdateSongPosition` and
+`src/TimingData.cpp::GetBeatInternal`. Both use native float arithmetic even
+for BPM-only maps. The harness had bypassed native timing for those maps.
+Harness `0.1.5`, commit `0a7b4cf`, removes that bypass, reports
+`native-song-timing`, and passes 162 tests with five ignored, including a
+new no-pause float-clock regression. Synthetic actor inputs without a
+simfile keep their existing fallback. Simply Love reads the engine song
+position; it does not supply a replacement double-precision clock.
+
+Recapturing Spooky with that clock exposed two further player comparisons:
+frame 6435 is at native beat 250.24998474121094, below the 250.25 callback
+boundary. DeadSync had the same BPM-only bypass. Every Lua song now retains
+its global native timing, independently of chart timing. Song cache version
+28 invalidates omitted clocks; a simfile regression checks both sides of
+this exact boundary. All 198 simfile unit tests pass.
+
+The complete replacement `9930bef5335a264f7182e991bb690ca96dc6b5ed63a17e942166ce82c1d08d7f.tar.zst`
+passes all 157,678 comparisons on DeadSync `0.5.1830`. No comparison tolerance
+was changed. Four earlier captures in this batch also used the legacy
+clock and were source-preservingly recaptured with harness `0.1.5`:
+
+| Song | Current archive | Comparisons |
+|---|---|---:|
+| Warp Zone | `e57c20353ce651300e3e8edf2ac6c7a762a1a998315c4152fb8c56cc8e211b34.tar.zst` | 212,220 |
+| Let Me Hear That | `d3f9acbe26ef5ca7324dd648c807263ad082b3965a73da8f9fc40c395a1a8bd3.tar.zst` | 205,071 |
+| Waltz Capriccio | `5b699a3ba33f296be051db2b9f54e2b3c1ecd0326519fdf5caaa15332d2d6837.tar.zst` | 260,300 |
+| 10:35 | `150693f162462dd89173d5e3b8b49db858d7956a2665eff50cc740db24409aef.tar.zst` | 248,156 |
+
+Each complete capture passes, with original source and member hashes
+verified. Both Episode 16 archives and ChikuTaku already used native timing
+and remain on their recorded harness `0.1.4`. Old selectors resolve to
+replacements; superseded bytes remain in Git history and local diagnostics.
+Earlier pass logs document their historical references, while this table
+records the current native-clock fixtures. Legacy clocks in other, unverified
+archives remain a reason for future source-backed regeneration.
+
+Verification log SHA-256: `23e4e97c4c7886af55787769d8dff0b990e4d23bfcc72f62f1bcd76e97672b28`.
