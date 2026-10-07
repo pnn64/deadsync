@@ -1,5 +1,5 @@
 use super::*;
-use deadsync_song_lua::playback::actor_conformance::{WholeSongComposer, compose_overlay_states};
+use deadsync_song_lua::playback::actor_conformance::{compose_overlay_states, WholeSongComposer};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
@@ -23,6 +23,10 @@ struct ArchiveEntry {
     archive: String,
     sha256: String,
     compressed_bytes: u64,
+    #[serde(default)]
+    aliases: Vec<String>,
+    #[serde(skip)]
+    retained_version: bool,
 }
 
 #[derive(Deserialize)]
@@ -114,17 +118,115 @@ struct ExtractedArchive {
 }
 
 fn archive_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-archives")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/full_song_lua")
+}
+
+/// Resolve historical regression references into the single flat fixture store.
+/// Aliases retain the original native captures, including older oracle versions.
+pub(super) fn reference_path(path: &Path) -> PathBuf {
+    if path.is_file() {
+        return path.to_owned();
+    }
+    static REFERENCES: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
+    let references = REFERENCES.get_or_init(|| {
+        serde_json::from_slice(
+            &fs::read(archive_root().join("references.json"))
+                .expect("missing consolidated song Lua reference index"),
+        )
+        .expect("invalid consolidated song Lua reference index")
+    });
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // Normalize '..' lexically: historical manifests can reference a micro trace
+    // outside their former directory, and those directories no longer exist.
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        match component {
+            std::path::Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
+            std::path::Component::ParentDir => {
+                parts.pop();
+            }
+            std::path::Component::CurDir => {}
+            _ => return path.to_owned(),
+        }
+    }
+    references
+        .get(&parts.join("/"))
+        .map_or_else(|| path.to_owned(), |name| archive_root().join(name))
+}
+
+pub(super) fn reference_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
+    let path = reference_path(path);
+    let input = File::open(&path)
+        .unwrap_or_else(|error| panic!("missing reference {}: {error}", path.display()));
+    if path.extension().is_some_and(|extension| extension == "zst") {
+        let decoder = zstd::stream::read::Decoder::new(input).expect("decode reference");
+        serde_json::from_reader(std::io::BufReader::new(decoder)).expect("parse reference JSON")
+    } else {
+        serde_json::from_reader(std::io::BufReader::new(input)).expect("parse reference JSON")
+    }
 }
 
 fn archive_index() -> ArchiveIndex {
     let path = archive_root().join("index.json");
-    serde_json::from_slice(
-        &fs::read(&path).unwrap_or_else(|error| {
+    let mut index: ArchiveIndex =
+        serde_json::from_slice(&fs::read(&path).unwrap_or_else(|error| {
             panic!("missing song archive index {}: {error}", path.display())
-        }),
-    )
-    .unwrap_or_else(|error| panic!("invalid song archive index {}: {error}", path.display()))
+        }))
+        .unwrap_or_else(|error| panic!("invalid song archive index {}: {error}", path.display()));
+    // Retained native versions are runnable by filename as well as the current
+    // captures in the index. Discover them in the same flat fixture store.
+    let indexed = index
+        .archives
+        .iter()
+        .map(|entry| entry.archive.clone())
+        .collect::<HashSet<_>>();
+    let aliases: HashMap<String, String> = fs::read(archive_root().join("references.json"))
+        .map(|bytes| serde_json::from_slice(&bytes).expect("reference aliases"))
+        .unwrap_or_default();
+    let mut extra = Vec::new();
+    for file in fs::read_dir(archive_root()).expect("list song archives") {
+        let file = file.expect("archive directory entry");
+        let name = file.file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".tar.zst") || indexed.contains(&name) {
+            continue;
+        }
+        let decoder = zstd::stream::read::Decoder::new(
+            File::open(file.path()).expect("open retained archive"),
+        )
+        .expect("decode retained archive");
+        let mut archive = tar::Archive::new(decoder);
+        let mut members = archive.entries().expect("retained archive members");
+        let member = members
+            .next()
+            .expect("retained archive manifest")
+            .expect("read manifest member");
+        assert_eq!(member.path().unwrap(), Path::new("manifest.json"));
+        let manifest: ArchiveManifest =
+            serde_json::from_reader(member).expect("retained archive manifest JSON");
+        let mut historical = aliases
+            .iter()
+            .filter(|(_, target)| **target == name)
+            .filter_map(|(alias, _)| {
+                Path::new(alias)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            })
+            .collect::<Vec<_>>();
+        historical.sort();
+        extra.push(ArchiveEntry {
+            title: manifest.chart.title,
+            source_simfile: manifest.chart.source_path,
+            sha256: name.trim_end_matches(".tar.zst").into(),
+            compressed_bytes: file.metadata().unwrap().len(),
+            archive: name,
+            aliases: historical,
+            retained_version: true,
+        });
+    }
+    extra.sort_by(|a, b| a.archive.cmp(&b.archive));
+    index.archives.extend(extra);
+    index
 }
 
 fn selected_archives(index: &ArchiveIndex) -> Vec<&ArchiveEntry> {
@@ -195,9 +297,11 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
     assert!(manifest.runtime.display.logical_width > 0.0);
     assert!(manifest.runtime.display.logical_height > 0.0);
     assert!(!manifest.runtime.random_state.source.is_empty());
-    assert_eq!(
-        manifest.runtime.random_state.reproducible,
-        manifest.runtime.random_state.seed.is_some()
+    // A recorded seed alone does not guarantee deterministic native state.
+    // Preserve captures explicitly marked as non-reproducible.
+    assert!(
+        !manifest.runtime.random_state.reproducible || manifest.runtime.random_state.seed.is_some(),
+        "a reproducible capture must record its seed"
     );
     assert_eq!(
         manifest.lua_closure.strategy,
@@ -235,16 +339,20 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
         ));
     }
     for file in &manifest.files {
+        assert!(
+            Path::new(&file.path)
+                .components()
+                .all(|part| matches!(part, std::path::Component::Normal(_))),
+            "invalid archive member path"
+        );
         let path = archive.root.join(&file.path);
-        let bytes = fs::read(&path)
-            .unwrap_or_else(|error| panic!("missing archive member {}: {error}", path.display()));
-        assert_eq!(bytes.len(), file.bytes, "member size: {}", file.path);
         assert_eq!(
-            hash_bytes(&bytes),
-            file.sha256,
-            "member hash: {}",
+            fs::metadata(&path).expect("archive member exists").len(),
+            file.bytes as u64,
+            "member size: {}",
             file.path
         );
+        assert_eq!(hash_file(&path), file.sha256, "member hash: {}", file.path);
         assert!(matches!(
             file.role.as_str(),
             "simfile" | "semantic-render-trace" | "lua-dependency" | "required-asset"
@@ -254,28 +362,19 @@ fn validate_archive(entry: &ArchiveEntry, archive: &ExtractedArchive) {
     assert!(archive.root.join(&manifest.chart.trace).is_file());
 }
 
-fn compile_archive(
-    archive: &ExtractedArchive,
-) -> (
-    NativeTrace,
-    Vec<CompiledSongLua>,
-    usize,
-    SongLuaCompileContext,
-) {
-    let trace_path = archive.root.join(&archive.manifest.chart.trace);
-    let trace = read_trace_file(&trace_path);
-    let simfile = archive.root.join(&archive.manifest.chart.simfile);
-    let (compiled, primary_index, context) = compile_trace_song_at(&trace, &simfile);
-    (trace, compiled, primary_index, context)
-}
-
-fn compose_entire_song(
+fn compose_entire_song_with_progress(
     trace: &NativeTrace,
     compiled_layers: &[CompiledSongLua],
     context: &SongLuaCompileContext,
     update_hz: f32,
+    progress: Option<&progress::Progress>,
 ) {
+    use std::sync::atomic::Ordering;
     let frame_count = (trace.end_position.seconds.max(0.0) * update_hz).ceil() as usize + 1;
+    if let Some(progress) = progress {
+        progress.frames.store(frame_count, Ordering::Relaxed);
+        progress.frame.store(0, Ordering::Relaxed);
+    }
     let composers = compiled_layers
         .iter()
         .map(|compiled| WholeSongComposer::new(&compiled.overlays))
@@ -325,6 +424,9 @@ fn compose_entire_song(
                 );
             }
         }
+        if let Some(progress) = progress {
+            progress.frame.store(frame + 1, Ordering::Relaxed);
+        }
     }
     // Modifier-only songs can have no drawable overlays. Require draw output
     // only when the reference actually sampled a visible primitive.
@@ -354,10 +456,6 @@ pub(super) fn hash_file(path: &Path) -> String {
     encode_hash(hasher.finalize())
 }
 
-fn hash_bytes(bytes: &[u8]) -> String {
-    encode_hash(Sha256::digest(bytes))
-}
-
 fn encode_hash(hash: impl AsRef<[u8]>) -> String {
     let bytes = hash.as_ref();
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -373,11 +471,17 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
     let index = archive_index();
     assert_eq!(index.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert_eq!(index.hash, "sha256-compressed-archive");
-    assert_eq!(index.archives.len(), 46);
+    assert!(!index.archives.is_empty());
+    let mut names = HashSet::new();
     for entry in selected_archives(&index) {
+        assert!(names.insert(&entry.archive), "duplicate indexed archive");
         let archive = extract_archive(entry);
         validate_archive(entry, &archive);
-        if entry.source_simfile.contains("Who the Hell Is Edgar") {
+        if !entry.retained_version
+            && entry
+                .source_simfile
+                .starts_with("[09] Who the Hell Is Edgar")
+        {
             for font in [
                 "song/multitap/_komika axis 42px.ini",
                 "song/multitap/_komika axis 42px [numbers] 4x4 (doubleres).png",
@@ -391,23 +495,263 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
     }
 }
 
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+
+fn select_archive<'a>(
+    index: &'a ArchiveIndex,
+    selector: &str,
+) -> Result<&'a ArchiveEntry, Vec<&'a ArchiveEntry>> {
+    let filename = Path::new(selector)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(selector);
+    let exact = index
+        .archives
+        .iter()
+        .filter(|entry| {
+            entry.archive == filename
+                || entry.aliases.iter().any(|alias| alias == filename)
+                || entry.title.eq_ignore_ascii_case(selector)
+                || entry.source_simfile.eq_ignore_ascii_case(selector)
+        })
+        .collect::<Vec<_>>();
+    let matches = if exact.is_empty() {
+        index
+            .archives
+            .iter()
+            .filter(|entry| {
+                entry.sha256.starts_with(selector)
+                    || entry
+                        .aliases
+                        .iter()
+                        .any(|alias| alias.starts_with(selector))
+                    || entry
+                        .title
+                        .to_lowercase()
+                        .contains(&selector.to_lowercase())
+                    || entry
+                        .source_simfile
+                        .to_lowercase()
+                        .contains(&selector.to_lowercase())
+            })
+            .collect::<Vec<_>>()
+    } else {
+        exact
+    };
+    if matches.len() == 1 {
+        Ok(matches[0])
+    } else {
+        Err(matches)
+    }
+}
+
+pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
+    use std::process::ExitCode;
+    // Cargo forwards these global libtest options to custom harnesses too.
+    // This harness always shows output and explicitly selects expensive runs.
+    args.retain(|arg| {
+        !matches!(
+            arg.as_str(),
+            "--nocapture"
+                | "--show-output"
+                | "--ignored"
+                | "--include-ignored"
+                | "--exact"
+                | "--quiet"
+        )
+    });
+    if args.is_empty() || args == ["--help"] || args == ["-h"] {
+        println!("{USAGE}");
+        return ExitCode::SUCCESS;
+    }
+    let index = archive_index();
+    if args == ["--list"] {
+        for entry in &index.archives {
+            println!(
+                "{}  {}  ({})",
+                entry.archive, entry.title, entry.source_simfile
+            );
+        }
+        println!("{} full-song archives", index.archives.len());
+        return ExitCode::SUCCESS;
+    }
+    let selected = if args == ["--all"] {
+        index.archives.iter().collect::<Vec<_>>()
+    } else if args.len() == 1 && !args[0].starts_with('-') {
+        match select_archive(&index, &args[0]) {
+            Ok(entry) => vec![entry],
+            Err(matches) => {
+                eprintln!(
+                    "selector {:?} matched {} archives; choose one filename from --list",
+                    args[0],
+                    matches.len()
+                );
+                for entry in matches.iter().take(20) {
+                    eprintln!("  {}  {}", entry.archive, entry.source_simfile);
+                }
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        eprintln!("invalid arguments: {}\n\n{USAGE}", args.join(" "));
+        return ExitCode::FAILURE;
+    };
+    crate::paths::init();
+    let started = std::time::Instant::now();
+    let mut failed = 0;
+    let mut checks = 0;
+    let mut failed_checks = 0;
+    for (position, entry) in selected.iter().enumerate() {
+        eprintln!(
+            "\n[{}/{}] {} ({})\n{}",
+            position + 1,
+            selected.len(),
+            entry.title,
+            entry.source_simfile,
+            entry.archive
+        );
+        let reporter = progress::Reporter::start();
+        let progress = &reporter.progress;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            progress.stage("extracting archive and verifying SHA-256");
+            let archive = extract_archive(entry);
+            progress.stage("validating archive members");
+            validate_archive(entry, &archive);
+            progress.stage("reading native trace");
+            let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+            eprintln!(
+                "  native duration: {:.2}s, {} recorded update frames",
+                trace.end_position.seconds,
+                trace.update_frames.len()
+            );
+            progress.stage("compiling complete Lua runtime");
+            let (compiled, primary, context) =
+                compile_trace_song_at(&trace, &archive.root.join(&archive.manifest.chart.simfile));
+            progress.stage("composing every song frame");
+            compose_entire_song_with_progress(
+                &trace,
+                &compiled,
+                &context,
+                archive.manifest.runtime.update_hz,
+                Some(progress),
+            );
+            let mut parity = compare_semantics_with_progress(
+                &trace,
+                &compiled,
+                primary,
+                &context,
+                Some(std::sync::Arc::clone(progress)),
+            );
+            runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+            // Newer references contain sparse player transforms; older captures
+            // retain only visibility and cannot support these additional checks.
+            if trace
+                .player_render_tracks
+                .iter()
+                .all(|track| !track.transform_samples.is_empty())
+            {
+                runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+            }
+            assert_eq!(
+                progress.checks.load(Ordering::Relaxed),
+                parity.checks(),
+                "live comparison count must include every comparator"
+            );
+            assert_eq!(
+                progress.failed.load(Ordering::Relaxed),
+                parity.checks() - parity.passed(),
+                "live failure count must include every comparator"
+            );
+            eprintln!("\n{}", parity.summary(&entry.title));
+            if !parity.is_complete() {
+                eprintln!(
+                    "parity gaps ({} reported):\n- {}",
+                    parity.gaps.len(),
+                    parity.gaps.join("\n- ")
+                );
+            }
+            parity.is_complete()
+        }));
+        use std::sync::atomic::Ordering;
+        checks += progress.checks.load(Ordering::Relaxed);
+        failed_checks += progress.failed.load(Ordering::Relaxed);
+        let succeeded = matches!(outcome, Ok(true));
+        if !succeeded {
+            failed += 1;
+        }
+        drop(reporter);
+        eprintln!(
+            "fixture result: {}",
+            if succeeded { "ok" } else { "FAILED" }
+        );
+    }
+    eprintln!("\nresult: {}; {}/{} fixtures passed; {} comparisons passed, {} failed ({} total); elapsed {:.2}s",
+        if failed == 0 { "ok" } else { "FAILED" }, selected.len() - failed, selected.len(),
+        checks - failed_checks, failed_checks, checks, started.elapsed().as_secs_f64());
+    if failed == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+#[test]
+fn full_song_selector_rejects_missing_and_ambiguous_matches_and_preserves_aliases() {
+    let entry = |hash: &str, title: &str| ArchiveEntry {
+        title: title.into(),
+        source_simfile: format!("{title}/chart.ssc"),
+        archive: format!("{hash}.tar.zst"),
+        sha256: hash.into(),
+        compressed_bytes: 1,
+        aliases: vec![format!("old-{hash}.tar.zst")],
+        retained_version: false,
+    };
+    let index = ArchiveIndex {
+        archive_schema_version: 1,
+        hash: "sha256-compressed-archive".into(),
+        archives: vec![
+            entry("abc123", "Example"),
+            entry("abc456", "Example Double"),
+        ],
+    };
+    for selector in [
+        "abc123.tar.zst",
+        "old-abc123.tar.zst",
+        "abc123",
+        "example/chart.ssc",
+    ] {
+        assert!(select_archive(&index, selector).is_ok_and(|entry| entry.sha256 == "abc123"));
+    }
+    assert!(select_archive(&index, "abc").is_err_and(|matches| matches.len() == 2));
+    assert!(select_archive(&index, "nonexistent").is_err_and(|matches| matches.is_empty()));
+}
+
+#[test]
+fn consolidated_song_lua_references_resolve_and_are_compressed() {
+    let references: HashMap<String, String> = serde_json::from_slice(
+        &fs::read(archive_root().join("references.json")).expect("reference index"),
+    )
+    .unwrap();
+    assert!(!references.is_empty());
+    for (alias, filename) in references {
+        let original = Path::new(env!("CARGO_MANIFEST_DIR")).join(&alias);
+        let resolved = reference_path(&original);
+        assert_eq!(resolved, archive_root().join(&filename), "{alias}");
+        assert!(resolved.is_file(), "{filename}");
+        if !filename.ends_with(".manifest.json") {
+            assert!(filename.ends_with(".zst"));
+        }
+    }
+}
+
 #[test]
 #[ignore = "explicit full-corpus compile, composition, and exact semantic/render audit"]
 fn whole_song_archives_compile_compose_and_match_native_trace() {
-    crate::paths::init();
     let index = archive_index();
     for entry in selected_archives(&index) {
-        eprintln!("whole-song parity: {}", entry.source_simfile);
-        let archive = extract_archive(entry);
-        validate_archive(entry, &archive);
-        let (trace, compiled, primary_index, context) = compile_archive(&archive);
-        compose_entire_song(
-            &trace,
-            &compiled,
-            &context,
-            archive.manifest.runtime.update_hz,
+        assert_eq!(
+            run_cli(vec![entry.archive.clone()]),
+            std::process::ExitCode::SUCCESS
         );
-        compare_semantics(&trace, &compiled, primary_index, &context)
-            .assert_complete("whole-song archive");
     }
 }

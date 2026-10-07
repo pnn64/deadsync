@@ -1,24 +1,16 @@
 //! Per-song semantic parity against `itgmania-harness-rs` fixtures.
 //!
-//! Every song has its own ignored test that compiles the song with DeadSync,
-//! runs every semantic comparator plus the runtime modifier audit against its
-//! ITGmania fixture, and reports `passed/total ok` per comparator. Two sets
-//! exist: `corpora::allowed::` for the curated `allowed/` corpus and `corpora::lua_songs::` for
-//! selected songs of the `lua-songs/` corpus. Run one song or a whole set with:
+//! Historical per-song test names remain available for targeted regressions.
+//! Their native captures now resolve through the flat `full_song_lua` fixture
+//! store. Run a self-contained full-song archive with the dedicated harness:
 //!
 //! ```text
-//! cargo test --test song_lua_itgmania_semantic_parity corpora::allowed::flip69 -- --ignored
-//! cargo test --test song_lua_itgmania_semantic_parity corpora::lua_songs:: -- --ignored
+//! cargo test --test full_song_lua <archive.tar.zst>
+//! cargo test --test full_song_lua -- --list
 //! ```
 //!
-//! Regenerate a set's fixtures from `itgmania-harness-rs` after changing its
-//! songs or the oracle; the `lua-songs` set must be generated from a corpus
-//! holding only its songs:
-//!
-//! ```text
-//! cargo run -- song-lua-semantic-baseline ../allowed \
-//!   --out ../deadsync/tests/fixtures/itgmania-song-lua-allowed
-//! ```
+//! The legacy manifests retain provenance and source-corpus metadata; they do
+//! not create separate storage folders or affect full-song archive selection.
 
 use super::*;
 use std::io::Write as _;
@@ -205,11 +197,7 @@ fn corpus_root(corpus: &Corpus) -> PathBuf {
 
 fn read_manifest(corpus: &Corpus) -> SemanticManifest {
     let path = fixture_root(corpus).join(SEMANTIC_MANIFEST);
-    serde_json::from_slice(
-        &fs::read(&path)
-            .unwrap_or_else(|error| panic!("missing manifest {}: {error}", path.display())),
-    )
-    .unwrap_or_else(|error| panic!("invalid manifest {}: {error}", path.display()))
+    whole_song_archives::reference_json(&path)
 }
 
 fn collect_simfiles(directory: &Path, root: &Path, out: &mut Vec<String>) {
@@ -343,7 +331,7 @@ fn assert_corpus_coverage(corpus: &Corpus) {
         assert_eq!(entry.runtime_errors, 0, "runtime errors: {}", entry.simfile);
         assert_eq!(entry.dropped_events, 0, "dropped events: {}", entry.simfile);
         assert!(
-            fixture_root(corpus).join(&entry.fixture).is_file(),
+            whole_song_archives::reference_path(&fixture_root(corpus).join(&entry.fixture)).is_file(),
             "missing fixture {}",
             entry.fixture.display()
         );

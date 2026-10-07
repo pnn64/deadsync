@@ -35,7 +35,10 @@ const EPSILON: f32 = 0.002;
 const PROJECTED_BEAT_EPSILON: f32 = 0.005;
 
 #[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
-mod whole_song_archives;
+pub(crate) mod whole_song_archives;
+
+#[path = "support/song_lua_progress.rs"]
+mod progress;
 
 #[path = "song_lua_itgmania_semantic_parity/runtime_modifiers.rs"]
 mod runtime_modifiers;
@@ -339,6 +342,8 @@ struct Parity {
     sections: Vec<ParitySection>,
     gaps: Vec<String>,
     stage_started: Option<std::time::Instant>,
+    progress: Option<std::sync::Arc<progress::Progress>>,
+    silent_sections: bool,
 }
 
 struct ParitySection {
@@ -350,6 +355,13 @@ struct ParitySection {
 impl Parity {
     fn section(&mut self, name: &'static str) {
         self.log_stage();
+        if let Some(progress) = &self.progress && !self.silent_sections {
+            if let Some(section) = self.sections.last().filter(|section| section.checks > 0) {
+                eprintln!("  {}: {}", section.name,
+                    parity_status(section.checks - section.failed, section.checks));
+            }
+            progress.stage(format!("comparing {name}"));
+        }
         if std::env::var_os("DEADSYNC_SONG_LUA_TIMING_STDERR").is_some() {
             self.stage_started = Some(std::time::Instant::now());
         }
@@ -378,7 +390,8 @@ impl Parity {
     /// `reported`, so dense per-frame samples do not flood the gap list.
     fn check_once(&mut self, ok: bool, reported: &mut bool, gap: impl FnOnce() -> String) {
         self.tally(1, usize::from(!ok));
-        if !ok && !std::mem::replace(reported, true) {
+        if !ok && !std::mem::replace(reported, true)
+            && (self.progress.is_none() || self.gaps.len() < 50) {
             self.gaps.push(gap());
         }
     }
@@ -392,10 +405,21 @@ impl Parity {
             .expect("comparators open a parity section before checking");
         section.checks += checks;
         section.failed += failed;
+        if let Some(progress) = &self.progress {
+            use std::sync::atomic::Ordering;
+            progress.failed.fetch_add(failed, Ordering::Relaxed);
+            progress.checks.fetch_add(checks, Ordering::Relaxed);
+        }
     }
 
     fn checks(&self) -> usize {
         self.sections.iter().map(|section| section.checks).sum()
+    }
+
+    /// Nested comparators contribute to the same live totals while the parent
+    /// retains its stage label. Their section tallies are merged afterward.
+    fn nested(&self) -> Self {
+        Self { progress: self.progress.clone(), silent_sections: true, ..Self::default() }
     }
 
     fn passed(&self) -> usize {
@@ -423,17 +447,30 @@ impl Parity {
 
     fn assert_complete(&self, title: &str) {
         assert!(
-            self.gaps.is_empty(),
+            self.is_complete(),
             "{title} parity gaps ({}):\n- {}",
             self.gaps.len(),
             self.gaps.join("\n- ")
         );
+    }
+
+    fn is_complete(&self) -> bool {
+        self.gaps.is_empty() && self.passed() == self.checks()
     }
 }
 
 fn parity_status(passed: usize, checks: usize) -> String {
     let verdict = if passed == checks { "ok" } else { "FAILED" };
     format!("{passed}/{checks} {verdict}")
+}
+
+#[test]
+#[should_panic(expected = "parity gaps")]
+fn aggregated_failures_fail_even_without_gap_descriptions() {
+    let mut parity = Parity::default();
+    parity.section("aggregated checks");
+    parity.tally(3, 1);
+    parity.assert_complete("aggregated failure");
 }
 
 fn workspace_root() -> PathBuf {
@@ -454,6 +491,8 @@ fn read_trace() -> NativeTrace {
 }
 
 fn read_trace_file(path: &Path) -> NativeTrace {
+    let resolved = whole_song_archives::reference_path(path);
+    let path = resolved.as_path();
     if path.extension().is_some_and(|extension| extension == "zst") {
         let input = fs::File::open(path).unwrap_or_else(|error| {
             panic!("failed to open native trace {}: {error}", path.display())
@@ -5044,6 +5083,22 @@ fn projected_colors_keep_nonfinite_kind() {
     }
 }
 
+#[test]
+fn live_progress_includes_nested_native_color_comparisons() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/late-colors.json.zst"));
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace, &root.join("tests/fixtures/song-lua/late-colors.sm"));
+    let reporter = progress::Reporter::start();
+    let parity = compare_semantics_with_progress(&trace, &compiled, primary, &context,
+        Some(std::sync::Arc::clone(&reporter.progress)));
+    assert!(parity.sections.iter().any(|section| section.name == "draw colors" && section.checks > 0));
+    assert_eq!(reporter.progress.checks.load(std::sync::atomic::Ordering::Relaxed), parity.checks());
+    assert_eq!(reporter.progress.failed.load(std::sync::atomic::Ordering::Relaxed), parity.checks() - parity.passed());
+    parity.assert_complete("live native color progress");
+}
+
 fn compare_projected_geometry(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -5056,11 +5111,11 @@ fn compare_projected_geometry(
     let mut screen_states = HashMap::new();
     parity.section("projected geometry");
     let drawable_map = projected_drawable_map(trace, compiled);
-    let mut colors = Parity::default();
+    let mut colors = parity.nested();
     colors.section("draw colors");
-    let mut crops = Parity::default();
+    let mut crops = parity.nested();
     crops.section("draw crops");
-    let mut shadows = Parity::default();
+    let mut shadows = parity.nested();
     shadows.section("draw shadows");
     let mut state_cache = HashMap::<(usize, u32, u32), Vec<SongLuaOverlayState>>::new();
     for track in &trace.projected_vertex_tracks {
@@ -5486,7 +5541,17 @@ fn compare_semantics(
     primary_index: usize,
     context: &SongLuaCompileContext,
 ) -> Parity {
-    let mut parity = Parity::default();
+    compare_semantics_with_progress(trace, compiled, primary_index, context, None)
+}
+
+fn compare_semantics_with_progress(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    primary_index: usize,
+    context: &SongLuaCompileContext,
+    progress: Option<std::sync::Arc<progress::Progress>>,
+) -> Parity {
+    let mut parity = Parity { progress, ..Parity::default() };
     compare_compile_info(compiled, &mut parity);
     compare_layers(trace, compiled, &mut parity);
     compare_final_render_states(trace, compiled, context, &mut parity);
@@ -5534,9 +5599,9 @@ fn compare_manual_meshes(
         })
         .collect::<Vec<_>>();
     let mut reported = HashSet::new();
-    let mut poses = Parity::default();
+    let mut poses = parity.nested();
     poses.section("manual mesh poses");
-    let mut colors = Parity::default();
+    let mut colors = parity.nested();
     colors.section("manual mesh colors");
     let mut pose_reported = HashSet::new();
     let mut color_reported = HashSet::new();
@@ -7279,11 +7344,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
     crate::paths::init();
     let fixture_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua");
-    let manifest: SemanticManifest = serde_json::from_slice(
-        &fs::read(fixture_root.join(SEMANTIC_MANIFEST))
-            .expect("missing semantic song Lua fixture manifest"),
-    )
-    .expect("invalid semantic song Lua fixture manifest");
+    let manifest: SemanticManifest = whole_song_archives::reference_json(&fixture_root.join(SEMANTIC_MANIFEST));
 
     assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
     assert!(!manifest.itgmania.launches_executable);
@@ -7305,11 +7366,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
             entry.fixture
         );
         let fixture_path = fixture_root.join(&entry.fixture);
-        let fixture: Value =
-            serde_json::from_slice(&fs::read(&fixture_path).unwrap_or_else(|error| {
-                panic!("missing fixture {}: {error}", fixture_path.display())
-            }))
-            .unwrap_or_else(|error| panic!("invalid fixture {}: {error}", fixture_path.display()));
+        let fixture: Value = whole_song_archives::reference_json(&fixture_path);
         assert_eq!(fixture["capabilities"]["render_state_calls"], true);
         assert_eq!(
             fixture["capabilities"]["source_derived_transform_model"],

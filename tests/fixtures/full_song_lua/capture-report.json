@@ -1,0 +1,769 @@
+{
+  "corpus_simfiles": 501,
+  "previously_indexed": 56,
+  "requested_missing": 445,
+  "added_complete_archives": 427,
+  "indexed_complete_archives": 483,
+  "remaining_simfiles": 18,
+  "remaining_categories": {
+    "capture_timeout": 6,
+    "missing_song_lua": 6,
+    "source_error": 5,
+    "unsupported_theme_context": 1
+  },
+  "context": {
+    "random_seed": 1,
+    "beat_step": 0.25,
+    "update_hz": 60,
+    "full_duration": true,
+    "max_events": 500000,
+    "deadsync_fixture_tests_run": false,
+    "event_limit_overrides": [
+      {
+        "max_events": 3000000,
+        "simfiles": [
+          "Happiness/Happiness.ssc"
+        ]
+      },
+      {
+        "max_events": 5000000,
+        "simfiles": [
+          "Raving With Fire/Raving With Fire.sm",
+          "Raving With Fire/Raving With Fire.ssc",
+          "Shivers/Shivers.sm",
+          "Shivers/Shivers.ssc",
+          "Someone Special - hubert/Someone Special.sm",
+          "Someone Special - hubert/Someone Special.ssc"
+        ]
+      },
+      {
+        "max_events": 1000000,
+        "simfiles": [
+          "Who The Hell Is Edgar/Who the Hell Is Edgar.ssc"
+        ]
+      },
+      {
+        "max_events": 3000000,
+        "simfiles": [
+          "Paint the Town Red/PaintTheTownRed.ssc",
+          "Paint the Town Red/PaintTheTownRed.sm",
+          "tamashi/tamashi.sm",
+          "wah-leven [telperion (ddrillini remix)]/eleven.ssc",
+          "assgore/goatdad.ssc"
+        ]
+      }
+    ]
+  },
+  "remaining": [
+    {
+      "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 600 seconds",
+      "diagnostics": "target/song-lua-repair/phase4/67053c6979c0becb"
+    },
+    {
+      "simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 600 seconds",
+      "diagnostics": "target/song-lua-repair/phase4/85aa930d114b2262"
+    },
+    {
+      "simfile": "[12] Ascendanz/Ascendanz.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/[12] Ascendanz/lua/default.lua: No such file or directory",
+      "diagnostics": "target/song-lua-repair/known/9e5cb2c801c247a3"
+    },
+    {
+      "simfile": "Ascendanz/Ascendanz.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Ascendanz/lua/default.lua: No such file or directory",
+      "diagnostics": "target/song-lua-repair/known/11205e6997187207"
+    },
+    {
+      "simfile": "Collaboration with Paul J Kim/Something.sm",
+      "status": "partial",
+      "category": "source_error",
+      "reason": "corpus:/Collaboration with Paul J Kim/Nothing/default.lua:6: attempt to index global 'SREENMAN' (a nil value)",
+      "diagnostics": "target/song-lua-repair/phase2/5c63f1e940a14e50",
+      "dropped_events": 0,
+      "end_position": {
+        "beat": 339,
+        "seconds": 131.35581970214844
+      },
+      "target_beat": 339.0
+    },
+    {
+      "simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Cursed Metamorph - [Zaia]/saved/lua/default.lua: No such file or directory",
+      "diagnostics": "target/song-lua-repair/known/cf1c3df5d6e9f28b"
+    },
+    {
+      "simfile": "Dongo Bongo/dongobongo2.ssc",
+      "status": "partial",
+      "category": "source_error",
+      "reason": "corpus:/Dongo Bongo/despair/default.lua:198: attempt to index global 'SREENMAN' (a nil value)",
+      "diagnostics": "target/song-lua-repair/phase2/2c9db316dfcd9ab2",
+      "dropped_events": 0,
+      "end_position": {
+        "beat": 398.5,
+        "seconds": 200.97715276551943
+      },
+      "target_beat": 398.5
+    },
+    {
+      "simfile": "james/james.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 600 seconds",
+      "diagnostics": "target/song-lua-repair/phase4/beb47e811c5aafd3"
+    },
+    {
+      "simfile": "james/james.ssc",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 600 seconds",
+      "diagnostics": "target/song-lua-repair/phase4/ee72a53d84d7fc88"
+    },
+    {
+      "simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "status": "error",
+      "category": "source_error",
+      "reason": "ITGmania oracle failed: ITGmania loaded no charts; source #NOTES header lacks its colon",
+      "diagnostics": "target/song-lua-repair/known/c5080f1c121d14e5"
+    },
+    {
+      "simfile": "Lots of Spices - [tari]/spices.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Lots of Spices - [tari]/template/default.lua: No such file or directory",
+      "diagnostics": "target/song-lua-repair/known/8bbbbd0a227889ec"
+    },
+    {
+      "simfile": "mawaru9/mawaru9.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 900 seconds",
+      "diagnostics": "target/song-lua-repair/final/02d24424431a0192"
+    },
+    {
+      "simfile": "Metronogik/Song.ssc",
+      "status": "partial",
+      "category": "unsupported_theme_context",
+      "reason": "corpus:/Metronogik/code/update.lua:439: bad argument #1 to 'ipairs' (table expected, got nil); full Simply Love HUD text actors are not instantiated by this host",
+      "diagnostics": "target/song-lua-repair/phase2/bd062750cefe5be7",
+      "dropped_events": 0,
+      "end_position": {
+        "beat": 2702,
+        "seconds": 146.14315795898438
+      },
+      "target_beat": 2702.0
+    },
+    {
+      "simfile": "mr sandman/mr sandman.sm",
+      "status": "timeout",
+      "category": "capture_timeout",
+      "reason": "native capture exceeded 900 seconds",
+      "diagnostics": "target/song-lua-repair/final/9a7dc9dd696c05ad"
+    },
+    {
+      "simfile": "Pokemon Gym Battle Remix/pokes.ssc",
+      "status": "error",
+      "category": "source_error",
+      "reason": "ITGmania Lua host failed: corpus:/Pokemon Gym Battle Remix/jokes/default.lua:18: attempt to perform arithmetic on global 'counter' (a nil value)",
+      "diagnostics": "target/song-lua-repair/known/8f40f6c480324919"
+    },
+    {
+      "simfile": "Rayc Fire 2/Rayc Fire 2.sm",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+      "diagnostics": "target/song-lua-repair/known/5a998294ae8b6156"
+    },
+    {
+      "simfile": "Rayc Fire 2/Rayc Fire 2.ssc",
+      "status": "error",
+      "category": "missing_song_lua",
+      "reason": "ITGmania Lua host failed: cannot open corpus:/Rayc Fire 2/lua/LUA.lua: No such file or directory",
+      "diagnostics": "target/song-lua-repair/known/53da0d7a82127af7"
+    },
+    {
+      "simfile": "Sequential Dreambox - [Zaia]/Sequential Dreambox.ssc",
+      "status": "error",
+      "category": "source_error",
+      "reason": "ITGmania Lua host failed: corpus:/Sequential Dreambox - [Zaia]/lua/FastEnd.lua:47: '<eof>' expected near 'local'",
+      "diagnostics": "target/song-lua-repair/known/c893672a26e2b70c"
+    }
+  ],
+  "harness_repair": {
+    "date": "2026-10-07",
+    "harness_repository": "../itgmania-harness",
+    "diagnostics_root": "../itgmania-harness",
+    "previously_indexed": 412,
+    "requested_missing": 89,
+    "recovered_complete_archives": 71,
+    "empty_lua_captures": 18,
+    "compression_level": 22,
+    "source_revisions": {
+      "itgmania": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "simply_love": "dd06138b15492f4136796dfe4b6708ced0f7b9eb",
+      "ogg": "e1774cd77f471443541596e09078e78fdc342e4f",
+      "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+    },
+    "capture_context": {
+      "random_seed": 1,
+      "beat_step": 0.25,
+      "update_hz": 60,
+      "full_duration": true,
+      "default_max_events": 1500000,
+      "difficulty_overrides": {
+        "Loop/loop.ssc": [
+          "--difficulty",
+          "Edit"
+        ],
+        "Space Creation Theory/space creation theory.ssc": [
+          "--difficulty",
+          "Edit"
+        ],
+        "Fiji (Lange Remix)/Fiji (Lange Remix).ssc": [
+          "--difficulty",
+          "Hard"
+        ]
+      },
+      "event_limit_overrides": {
+        "A Dramatic Irony/A Dramatic Irony.ssc": 3000000
+      },
+      "isolated_writable_captures": [
+        "Megalovania SM5 - [TaroNuke]/megalovania.sm"
+      ]
+    },
+    "context_limitations": {
+      "Loop/loop.ssc": "Edit capture; bundled multitap data covers Edit, not Challenge",
+      "Space Creation Theory/space creation theory.ssc": "Edit capture; bundled multitap data covers Edit, not Challenge",
+      "Fiji (Lange Remix)/Fiji (Lange Remix).ssc": "Hard capture; Challenge requires unsupported SongUtil.GetPlayableSteps theme context"
+    },
+    "captures": [
+      {
+        "simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+        "archive": "6dd2dc541fb78654743572555b3e3e8cd6f8b5a7c00f8b7cf54df0cd2733e91c.tar.zst",
+        "diagnostics": "target/song-lua-repair/heavy/82dbf1390bb50291",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+        "archive": "98dd5f567bc286f73bf7e83fdc63a3895dda4ce3e4f9ec3fa61de3ee92337c82.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/b34d885934f9816a",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Bad Trails/Maybe it was fated.sm",
+        "archive": "3002a9f06919773b53a229d53e85ef2b2017b14124e26bffd41ec72cc2dda05d.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/5cbc2bfa91cfbe0b",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Bad Trails/Maybe it was fated.ssc",
+        "archive": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/6ea6105f433bbd84",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Bank Account/Bank Account.sm",
+        "archive": "1006b3778955cbe93c9fb4a3e02ba449ccf1abd319932a09a5c1ead997d54fb8.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/8e2cc50f6bd76919",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Boys/Boys.ssc",
+        "archive": "4ccefad1fea0e52e8fd2f25b842dc3d297cab5d574704ceb307f56bcc27c0149.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/40c7a991f83115c4",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Butterfly by DDR/buttchew.ssc",
+        "archive": "a9b42b71686c8e3a66566da256fb6ee9f02c0807fa3bd256df2a75a2a336d39e.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/eb7d5a89defeeb31",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+        "archive": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/9e59effe9cf00022",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+        "archive": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/7666d9897cac1286",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+        "archive": "b3daab83450b74e25c3d7d58a499296f426d4c3b5bbaa230e7c464d01799a433.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/798ceb1db0a936b4",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Fiji (Lange Remix)/Fiji (Lange Remix).ssc",
+        "archive": "9b20d2ab75f6484949300e97d1152c5f747b6c561a8c718b419473704f1c73a8.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase5/3939de0493c8ea15",
+        "capture_options": [
+          "--difficulty",
+          "Hard"
+        ],
+        "executable_sha256": "4b12bd7cea6c6d22ccf5ce097c1ffc6cb8c7713564340885e55a639c616dd122"
+      },
+      {
+        "simfile": "Fortuna Redux - [Zaia]/Fortuna Redux.sm",
+        "archive": "00f801d04d5af95cc78259457fb913f4d4ae8fc24c558424579c4d4156796589.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/3bd84fe8e4f26966",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Genshin Quiz/Megaquiz.ssc",
+        "archive": "dc0418aaac4cbea25c5b24b7d65b99a625d44d5a5ff322afd444c079827f92de.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/880341a8f13b03d2",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Get Into It/GetIntoIt.sm",
+        "archive": "9163226a31da0586f252f1c418bbdfd663159cfb2aa3d4b5cd7a8e216afbb3dc.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/bbd73a8be292d1aa",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Get Into It/GetIntoIt.ssc",
+        "archive": "11a30849742f03b9b1288dbd7353ec347aa33897557952d0a069ea270d386994.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/5e922ad5ae24e720",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Hallways/hallways.ssc",
+        "archive": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/0932e452fa2d3075",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Happy Now/Happy Now.sm",
+        "archive": "a9b4ff850bc8ab768828aa730351155c5f828c889f49463c79ccff92e2e75f81.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/e42e22ef486a712f",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Happy Now/Happy Now.ssc",
+        "archive": "abd842dd94c03a23a302ebb3357f6318c068c940aedd16d5760a9179b4b298c2.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/648cae001699309d",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+        "archive": "22da7a45ec11a36deb43b32f3c28702909cb886efb435bcb4523b01a0fa89c44.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/18ce02683c733e00",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+        "archive": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/03e64ec58cd0c3d9",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "If You Crump Stand Up/crump.sm",
+        "archive": "bef8b396e7d5e5fbe0de756b2a0adcf6817b9c3c1d2a116f1352c5cb17da2081.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/a760ce2ddf9433d4",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Intro Outro/intro.ssc",
+        "archive": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/1c15b9c1c0e78784",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "It's Showtime/mettaton.ssc",
+        "archive": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/789f5179ede5b073",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Koi [UPS2016]/koi.sm",
+        "archive": "6458de2168208bd687e73f0271ea7bb8d2ecad9aade655e14fd54b9d4ddc3c5e.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/0baadb00ca5b32fc",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "Koi [UPS2016]/koi.ssc",
+        "archive": "a6d6cdfb7b7256f722f5671ce623642e239fb27e59f5be8c9dd4b74483078a67.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/4090b2e03f844a05",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "Longinus - [Zaia]/Longinus.sm",
+        "archive": "fc7d293d344b4bd1bf11b6866bcb4ccd32c142ef9c018c930bec7bcfbffaee12.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/c470f90cddf5720c",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Loop/loop.ssc",
+        "archive": "98f68595f44765ad11a6d097c8ec749ddd0dc8f8e830b33c69ec21b6942d959a.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase5/f38a2b418ee7b043",
+        "capture_options": [
+          "--difficulty",
+          "Edit"
+        ],
+        "executable_sha256": "4b12bd7cea6c6d22ccf5ce097c1ffc6cb8c7713564340885e55a639c616dd122"
+      },
+      {
+        "simfile": "Loyal Divide [TaroNuke]/Loyal Divide.sm",
+        "archive": "ae448843777721b40b43c27939757ad92a00e3bd2870878be6992b5781972e27.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/12e625ce625e261a",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "MISSION SPUTNIK/sputnik.ssc",
+        "archive": "b13247db1ef7475bbb3960e1be844c4e63852b8e72e76f26563cd59333fef2ee.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/2f042faf38f4b9f9",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Marshall Maximizer/marshall maximizer.ssc",
+        "archive": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/a2bae3060fde69c0",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+        "archive": "0312287f76b167c790515f620dea5a7d93a78a0ced2e25385889d515a6079a3b.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase4/c3e0c410f04c30dd",
+        "capture_options": [],
+        "executable_sha256": "b5a3c067763edaf4db1a5803bf6e2d43cc7ec6f2ebaf8f799e2d597c76f0807e"
+      },
+      {
+        "simfile": "Midnight Madness/midnight.sm",
+        "archive": "75928cbda69e03ed729d8bf8dd0f4e0717f6f75f0dc83dca2d41176b24505fa4.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/78332255bc11a219",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "No Role Modelz/No Role Modelz.sm",
+        "archive": "908c5a40377f19aaf519cf454a8969c0eb97e3ff533e07bdabf6f00d78cae9a3.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/bd08439da170a94d",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Number 9/1556 - Number 9.sm",
+        "archive": "e653242eb83bb7e27b2955d4cfd7dd216265195eb7318dc86ebbf27845d8116c.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/78f10d924a8b9bd9",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Numujika ac.10/Numujika ac.10.sm",
+        "archive": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/109c519c4b0077dc",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "OK/OK.ssc",
+        "archive": "dd774d4492d70cd3656f7674e478b10f491685fe0bec14c78c736c74b95de703.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/9bb480a1fda3b13d",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Oil Ocean Act 2/steps.sm",
+        "archive": "5771c08b68b2a9c55e3424909b6fb651c154ce51b93147b462d7b080d7a0517a.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/9ceaae2441fe1203",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Oshama Scramble! (Cranky Remix)/Oshama Scramble! (Cranky Remix).ssc",
+        "archive": "1048d7c8760b6944303f6c3b938563dadcf614e3d7a6e1fd979bf83bba01584b.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/62f7a478097081e5",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "Over the Top - [Zaia][FX]/Over the Top.sm",
+        "archive": "b4e2204b439052ee635dbac9f5f8feaa437dec497b95abed413288699754ff28.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/f996111c68150ced",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+        "archive": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/396facf8212c1662",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "PizzaBoy/PizzaBoy.ssc",
+        "archive": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/66b88be3e6504487",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Potion [Flood_]/Shisui Michiru - Potion (Cut Ver).sm",
+        "archive": "6e6649efb33325f47090029b8cadcc72cfe8c803250a2669bb2a1b01dbc58dde.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/5996cb1bf517a580",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "REASON for RED/reasonforgay.sm",
+        "archive": "2e5beaaef46c98cc1c826d52ee49753505753a823a630586c6168509a7d50d81.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/2612809528eb9628",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "REASON for RED/reasonforgay.ssc",
+        "archive": "1e6aba284389988b5402aa3ec718613f88cc8343c33718b65095ce55c56c9f52.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/99a3372a962d49de",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "STAGE 0.ac11/STAGE 0.ac11.sm",
+        "archive": "852cbbb1b4826effd45cf24173c9b134ad944dc3ecfb47f7c48b5f186a598437.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/325fe5cb2095040a",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+        "archive": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/5e95d2cb0de9eac9",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+        "archive": "0763cb254f5e99045b4e68d802ca6ce5d75b4b90e160630cdfd0a3fb3b8e7068.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/dd5f1a41c7a4ae81",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Shine!/Shine!.ssc",
+        "archive": "e097ac6283e583804b5653fc221e4039c83a9265762c4292bf08776ab941e44c.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/c4d41aebaead65d8",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Space Creation Theory/space creation theory.ssc",
+        "archive": "2ed0e171ebd07a23ebff9e5bbd1a65aeb987545389bd44a213cb08320d149258.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase5/93d4cdfb2970d034",
+        "capture_options": [
+          "--difficulty",
+          "Edit"
+        ],
+        "executable_sha256": "4b12bd7cea6c6d22ccf5ce097c1ffc6cb8c7713564340885e55a639c616dd122"
+      },
+      {
+        "simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+        "archive": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/74d97529575b9032",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Think About You/Think About You.sm",
+        "archive": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/6314a40c7ea2b3ce",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Think About You/Think About You.ssc",
+        "archive": "a9a8b95a86398a5759891ba0ed098e569f019bc22d2d1a8510f7b2fc1ebdb376.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/0527941a00855f6e",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+        "archive": "17d9dd0bce10fd4b992f93127eec828efa4fd7ae8ab25d0f2c687cb2be728e0d.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/8f56d6a110ddd170",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Toho Mathematics (LADIES CHECK THIS OUT)/thischartsucks.ssc",
+        "archive": "39bd9326b5af6b1516595b7227dc571abb107bc5e10287f32dbd902e275788d8.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/b64f6f3ca7868afe",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Trinity Field/Trinity Field.ssc",
+        "archive": "f93d59b626603cf2728bf43cfaa8b8365ef0f83efa088e968a409fe0380d9357.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/bea2ae5a98663f53",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Turn A - [Freya]/turn_a.ssc",
+        "archive": "88154659902f37929643b5caec609a2700d67c863450df439554e8d35a9effa3.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/becedc74eda050de",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.sm",
+        "archive": "79bae6c946ebb4ae1f51a79cffb992be5c0bac1687a567dd5511b60419109014.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/8e96ced0ed049452",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Ultra B.B.K.K.B.K.K/Ultra B.B.K.K.B.K.K.ssc",
+        "archive": "16ee975a29ffd54734737990cb30e29212e3875519d2ad294e5e47afe15a5c91.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/4d47cb45c917c401",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "Vanishing Point - [Zaia][FX]/Vanishing Point.sm",
+        "archive": "8a306469330fed616bdd8425afb67255af786261e5394eeb3324c9383e537c49.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/ce08596ced8c1a82",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Velvet LEFTS 1/chart.ssc",
+        "archive": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/8f4d4741245868cf",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "What A Wonderful World/WAWW.sm",
+        "archive": "8ff418d0678800ce2842370a2a5ee572a07454cbf086523567e52aa026169c85.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/7fa17005f2a1fbae",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "Ztar Trek/steps.sm",
+        "archive": "ce701a63b08c67e386931d9791ac1df4ed62324b7ed2ef206312464d0a69197c.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/5be5d671acef02e8",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "assgore/goatdad.sm",
+        "archive": "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/9a17ba96ce6150bd",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "copter/copter.sm",
+        "archive": "6b6c32875026ece877f493480440e61f6004b160b8c738b5251cdb9974896668.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/c78adffccf3e4654",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "copter/copter.ssc",
+        "archive": "a37fc45b363b62925514d65a5e2e7029298d4e24f393c882468b58220d1b98d2.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase3/104b5f9491922f7e",
+        "capture_options": [],
+        "executable_sha256": "cacd739d218ea94ecd5808cc13157339d391a70fe39719f7e731aab567db9f1c"
+      },
+      {
+        "simfile": "crew -All Hands on the Deck-/crew.ssc",
+        "archive": "d010be3d80f1e59b9f97a71b85264d0281752693da62f83ca4242caac39d18fa.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/bf0cfd32a9223792",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "ghost [Telperion]/ghost.ssc",
+        "archive": "80b5192b76a55669ed09cc499613e08113f95713c3965edaa2d9b758a417a96a.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/5dc99ec275466e11",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "mawaru1/mawaru.sm",
+        "archive": "bb65819654075bc13deff2695440578b8c313ae945aae2761c820c613720186f.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/206471d331202435",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "new earth/new earth.ssc",
+        "archive": "e1fc74644895f1995a6d30caebef17d5b1cedc773397874cbdd43a442579c157.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/df3e735bcf803da2",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      },
+      {
+        "simfile": "the fresh prince of bel air (razihel remix)/steps.sm",
+        "archive": "beced1eeddae0faff142300473cc662708aca848324a8bdb3a56f5b350e9bfd2.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase2/38602f3b4c159b26",
+        "capture_options": [],
+        "executable_sha256": "1de107efc54df73dc9bc44722faa24f3bb2bfbe9e89326efb545bb02e39ebc82"
+      },
+      {
+        "simfile": "wndrwll/wndrwll.ssc",
+        "archive": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2.tar.zst",
+        "diagnostics": "target/song-lua-repair/phase1/27290d9cf304ea4c",
+        "capture_options": [],
+        "executable_sha256": "8ff5e492128293c8663450a81609aa3df7ff71f5667c89533a14607470560c8b"
+      }
+    ],
+    "deadsync_fixture_tests_run": false,
+    "verification": [
+      "compressed archive SHA-256 and byte count",
+      "safe archive paths and every member SHA-256",
+      "original simfile bytes",
+      "zero runtime errors and dropped observations",
+      "full native endpoint in seconds",
+      "unchanged raw bytes after level-22 recompression",
+      "all pre-existing fixture files and 412 primary index entries preserved"
+    ]
+  }
+}

@@ -62,6 +62,7 @@ cargo run                       # fast dev build
 cargo run --profile local       # optimized, but faster to link than full release
 cargo build --release           # fully optimized (LTO) build for benchmarking/play
 ```
+
 Before the first run, grant **Input Monitoring** to your terminal (see the
 macOS run note under [Getting Started](#getting-started)) or the game won't
 receive keystrokes.
@@ -79,6 +80,19 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 ```bash
 pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
 ```
+
+## Full song Lua tests
+
+Run a full song Lua fixture with live progress and a final comparison tally:
+
+```powershell
+cargo test --test full_song_lua Accendio
+cargo test --test full_song_lua -- --list
+```
+
+Fixtures are consolidated under `tests/fixtures/full_song_lua` and compressed at
+zstd level 22. See its [fixture guide](tests/fixtures/full_song_lua/README.md) for
+selection, corpus runs, and reference maintenance.
 
 ## Getting Started
 

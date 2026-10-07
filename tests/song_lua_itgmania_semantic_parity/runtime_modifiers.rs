@@ -2538,9 +2538,9 @@ pub(super) fn compare_player_frames(
                 Some(
                     transform
                         .x
-                        .unwrap_or(context.screen_width * if player == 0 { 0.25 } else { 0.75 }),
+                        .unwrap_or(context.players[player].screen_x),
                 ),
-                Some(transform.y.unwrap_or(context.screen_height * 0.5)),
+                Some(transform.y.unwrap_or(context.players[player].screen_y)),
                 Some(transform.z),
                 Some(transform.rotation_x),
                 Some(transform.rotation_z),

@@ -78,6 +78,11 @@ version = "0.5.1822"
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
 
+[[test]]
+name = "full_song_lua"
+path = "tests/full_song_lua.rs"
+harness = false
+
 [dependencies]
 deadlib-audio = { path = "crates/deadlib-audio" }
 deadlib-platform = { path = "crates/deadlib-platform" }
@@ -145,6 +150,11 @@ panic = "abort"
 opt-level = 3
 
 [profile.dev.package.fdeflate]
+opt-level = 3
+
+# Full-song fixtures verify large native traces and every archive member.
+# Keep SHA-256 fast when running the default cargo test profile.
+[profile.dev.package.sha2]
 opt-level = 3
 
 # Modcharts replay their Lua update functions at 60 Hz during song loading.
