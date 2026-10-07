@@ -1155,12 +1155,13 @@ fn runtime_profile_stats_payload_for_side(side: PlayerSide) -> Option<(String, P
     let ActiveProfile::Local { id } = &session.active_profiles[player_side_index(side)] else {
         return None;
     };
-    let profile = runtime_lock_profiles()[player_side_index(side)].clone();
+    let profiles = runtime_lock_profiles();
+    let profile = &profiles[player_side_index(side)];
     Some((
         id.clone(),
         ProfileStats {
             current_combo: profile.current_combo,
-            known_pack_names: profile.known_pack_names,
+            known_pack_names: profile.known_pack_names.clone(),
         },
     ))
 }
@@ -1221,21 +1222,39 @@ pub fn runtime_sync_known_packs(
 
     let mut result = RuntimeKnownPackSyncResult::default();
     for profile_id in profile_ids {
-        let known = runtime_known_pack_names_for_local_profile(profile_id).unwrap_or_default();
-        if known.is_empty() && !scanned_pack_names.is_empty() {
-            if let Some(error) = runtime_mark_known_pack_names_for_local_profile(
+        let initialize = {
+            let session = runtime_lock_session();
+            let profiles = runtime_lock_profiles();
+            let known = session
+                .active_profiles
+                .iter()
+                .zip(profiles.iter())
+                .find_map(|(active, profile)| {
+                    (active_profile_local_id(active) == Some(profile_id.as_str()))
+                        .then_some(&profile.known_pack_names)
+                });
+            if known.is_none_or(HashSet::is_empty) && !scanned_pack_names.is_empty() {
+                true
+            } else {
+                result.unknown_pack_names.extend(
+                    scanned_pack_names
+                        .iter()
+                        .filter(|name| known.is_none_or(|known| !known.contains(name.as_str())))
+                        .cloned(),
+                );
+                false
+            }
+        };
+        if initialize
+            && let Some(error) = runtime_mark_known_pack_names_for_local_profile(
                 root,
                 profile_id,
                 scanned_pack_names.iter().map(String::as_str),
                 &mut duplicate,
-            ) {
-                result.write_errors.push(error);
-            }
-            continue;
+            )
+        {
+            result.write_errors.push(error);
         }
-        result
-            .unknown_pack_names
-            .extend(unknown_pack_names(&known, scanned_pack_names));
     }
     result
 }
@@ -6171,52 +6190,44 @@ pub fn migrate_noteskin_parts(options: &mut PlayerOptionsData) {
     let Some((base, query)) = raw.split_once('?') else {
         return;
     };
-    let base = base.to_string();
-    let choices: Vec<_> = query
-        .split('&')
-        .filter_map(|pair| pair.split_once('='))
-        .collect();
-    let part = |slot: &str| {
-        choices
-            .iter()
-            .find(|(key, _)| *key == slot)
-            .map(|(_, value)| NoteSkin::new(&format!("{base}?{slot}={value}")))
-    };
-    let arrows = part("arrows");
-    let receptors = part("receptors");
-    let hold_active = part("hold_active");
-    let hold_inactive = part("hold_inactive");
-    let roll_active = part("roll_active");
-    let roll_inactive = part("roll_inactive");
-    let tap_explosions = part("tap_explosions");
-    let hold_explosions = part("hold_explosions");
-    let lifts = part("lifts");
-    // The old size option changed the mine model, not just its scale. Retain that
-    // model in the migrated mine selection; new size controls scale any provider.
-    let mine_query: Vec<_> = choices
-        .iter()
-        .filter(|(key, _)| matches!(*key, "mines" | "mine_size"))
-        .map(|(key, value)| format!("{key}={value}"))
-        .collect();
-    let mines = (!mine_query.is_empty())
-        .then(|| NoteSkin::new(&format!("{base}?{}", mine_query.join("&"))));
-    for (target, legacy) in [
-        (&mut options.arrow_noteskin, arrows),
-        (&mut options.receptor_noteskin, receptors),
-        (&mut options.hold_active_noteskin, hold_active),
-        (&mut options.hold_inactive_noteskin, hold_inactive),
-        (&mut options.roll_active_noteskin, roll_active),
-        (&mut options.roll_inactive_noteskin, roll_inactive),
-        (&mut options.tap_explosion_noteskin, tap_explosions),
-        (&mut options.hold_explosion_noteskin, hold_explosions),
-        (&mut options.mine_noteskin, mines),
-        (&mut options.lift_noteskin, lifts),
-    ] {
+    let mut mine_query = String::new();
+    for (key, value) in query.split('&').filter_map(|pair| pair.split_once('=')) {
+        let target = match key {
+            "arrows" => &mut options.arrow_noteskin,
+            "receptors" => &mut options.receptor_noteskin,
+            "hold_active" => &mut options.hold_active_noteskin,
+            "hold_inactive" => &mut options.hold_inactive_noteskin,
+            "roll_active" => &mut options.roll_active_noteskin,
+            "roll_inactive" => &mut options.roll_inactive_noteskin,
+            "tap_explosions" => &mut options.tap_explosion_noteskin,
+            "hold_explosions" => &mut options.hold_explosion_noteskin,
+            "lifts" => &mut options.lift_noteskin,
+            // Legacy size changed the mine model. Preserve it with the provider,
+            // including the original query order and any repeated mine options.
+            "mines" | "mine_size" => {
+                if options.mine_noteskin.is_none() {
+                    if mine_query.is_empty() {
+                        mine_query.push_str(base);
+                        mine_query.push('?');
+                    } else {
+                        mine_query.push('&');
+                    }
+                    mine_query.push_str(key);
+                    mine_query.push('=');
+                    mine_query.push_str(value);
+                }
+                continue;
+            }
+            _ => continue,
+        };
         if target.is_none() {
-            *target = legacy;
+            *target = Some(NoteSkin::new(&format!("{base}?{key}={value}")));
         }
     }
-    options.noteskin = NoteSkin::new(&base);
+    if !mine_query.is_empty() {
+        options.mine_noteskin = Some(NoteSkin::new(&mine_query));
+    }
+    options.noteskin = NoteSkin::new(base);
 }
 
 #[inline(always)]
@@ -15303,5 +15314,208 @@ ApiKey = gs-key
         assert_eq!(profile.display_name, "Keep Me");
         assert_eq!(profile.current_combo, 42);
         assert!(!profile.set_current_player_options(options));
+    }
+}
+
+#[cfg(test)]
+mod performance_profile_regressions {
+    use super::*;
+
+    #[test]
+    fn stats_snapshots_and_known_pack_sync_preserve_profile_and_file_behavior() {
+        struct Restore {
+            session: SessionState,
+            profiles: [Profile; PLAYER_SLOTS],
+            cache: Option<RuntimeProfileDirCache>,
+            root: PathBuf,
+        }
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                *runtime_lock_session() = std::mem::take(&mut self.session);
+                *runtime_lock_profiles() = std::mem::replace(
+                    &mut self.profiles,
+                    std::array::from_fn(|_| Profile::default()),
+                );
+                *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = self.cache.take();
+                let _ = fs::remove_dir_all(&self.root);
+            }
+        }
+        let root =
+            std::env::temp_dir().join(format!("deadsync-profile-perf-{}", uuid::Uuid::new_v4()));
+        let restore = Restore {
+            session: std::mem::take(&mut *runtime_lock_session()),
+            profiles: std::mem::replace(
+                &mut *runtime_lock_profiles(),
+                std::array::from_fn(|_| Profile::default()),
+            ),
+            cache: RUNTIME_PROFILE_DIR_CACHE.lock().unwrap().take(),
+            root: root.clone(),
+        };
+        let ids = [
+            "00000000-0000-4000-8000-000000000001".to_string(),
+            "00000000-0000-4000-8000-000000000002".to_string(),
+        ];
+        runtime_lock_session().active_profiles =
+            std::array::from_fn(|i| ActiveProfile::Local { id: ids[i].clone() });
+        *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = Some(RuntimeProfileDirCache {
+            root: root.clone(),
+            map: HashMap::from([
+                (ids[0].clone(), root.join("one")),
+                (ids[1].clone(), root.join("two")),
+            ]),
+        });
+        {
+            let mut profiles = runtime_lock_profiles();
+            profiles[0].current_combo = u32::MAX;
+            profiles[0].known_pack_names = HashSet::from(["Alpha".into(), "beta".into()]);
+            profiles[0].favorites = HashSet::from(["unrelated-chart".into()]);
+            profiles[0].display_name = "Unchanged identity".into();
+            profiles[1].current_combo = 42;
+            profiles[1].known_pack_names = HashSet::from(["Beta".into()]);
+        }
+        let generation = runtime_profile_generation();
+        let (id, snapshot) = runtime_profile_stats_payload_for_side(PlayerSide::P1).unwrap();
+        assert_eq!(id, ids[0]);
+        assert_eq!(snapshot.current_combo, u32::MAX);
+        assert_eq!(
+            snapshot.known_pack_names,
+            HashSet::from(["Alpha".into(), "beta".into()])
+        );
+        let scanned = ["Alpha", "Beta", "Gamma", "Gamma", "beta"].map(str::to_owned);
+        let result = runtime_sync_known_packs(&root, &ids, &scanned, |_, _, _, _| {
+            panic!("no duplication required")
+        });
+        assert_eq!(result.unknown_pack_names, scanned.iter().cloned().collect());
+        assert!(result.write_errors.is_empty());
+        assert_eq!(runtime_profile_generation(), generation);
+        assert!(!root.exists());
+        assert_eq!(
+            runtime_lock_profiles()[0].favorites,
+            HashSet::from(["unrelated-chart".into()])
+        );
+        assert_eq!(
+            runtime_lock_profiles()[0].display_name,
+            "Unchanged identity"
+        );
+        assert!(
+            runtime_sync_known_packs(&root, &[], &scanned, |_, _, _, _| unreachable!())
+                .unknown_pack_names
+                .is_empty()
+        );
+        assert!(
+            runtime_sync_known_packs(&root, &ids, &[], |_, _, _, _| unreachable!())
+                .unknown_pack_names
+                .is_empty()
+        );
+        assert!(
+            runtime_sync_known_packs(
+                &root,
+                &["absent".into()],
+                &scanned,
+                |_, _, _, _| unreachable!()
+            )
+            .unknown_pack_names
+            .is_empty()
+        );
+        assert!(!root.exists());
+
+        runtime_lock_session().active_profiles[1] = ActiveProfile::Local { id: ids[0].clone() };
+        let first_side_only =
+            runtime_sync_known_packs(&root, &ids[..1], &scanned, |_, _, _, _| unreachable!());
+        assert_eq!(
+            first_side_only.unknown_pack_names,
+            HashSet::from(["Beta".into(), "Gamma".into()])
+        );
+        runtime_lock_session().active_profiles[1] = ActiveProfile::Guest;
+        assert!(runtime_profile_stats_payload_for_side(PlayerSide::P2).is_none());
+        runtime_lock_session().active_profiles[1] = ActiveProfile::Local { id: ids[1].clone() };
+        runtime_lock_profiles()[1].known_pack_names.clear();
+        let initialized =
+            runtime_sync_known_packs(&root, &ids[1..], &scanned, |_, _, _, _| unreachable!());
+        assert!(initialized.unknown_pack_names.is_empty());
+        assert!(initialized.write_errors.is_empty());
+        let saved = load_profile_stats_file(&profile_stats_path(&root.join("two")))
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.current_combo, 42);
+        assert_eq!(saved.known_pack_names, scanned.iter().cloned().collect());
+        assert_eq!(
+            runtime_lock_profiles()[1].known_pack_names,
+            saved.known_pack_names
+        );
+        runtime_lock_profiles()[0].known_pack_names.clear();
+        assert_eq!(
+            snapshot.known_pack_names,
+            HashSet::from(["Alpha".into(), "beta".into()])
+        );
+        fs::create_dir_all(&root).unwrap();
+        let blocked = root.join("blocked");
+        fs::write(&blocked, b"file instead of directory").unwrap();
+        RUNTIME_PROFILE_DIR_CACHE
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .map
+            .insert(ids[0].clone(), blocked);
+        let failed =
+            runtime_sync_known_packs(&root, &ids[..1], &scanned, |_, _, _, _| unreachable!());
+        assert!(failed.unknown_pack_names.is_empty());
+        assert_eq!(failed.write_errors.len(), 1);
+        assert_eq!(failed.write_errors[0].profile_id, ids[0]);
+        assert_eq!(
+            runtime_lock_profiles()[0].known_pack_names,
+            scanned.iter().cloned().collect()
+        );
+        drop(restore);
+    }
+
+    #[test]
+    fn legacy_noteskin_migration_preserves_first_choices_mine_order_and_overrides() {
+        let mut options = PlayerOptionsData {
+            noteskin: NoteSkin::new(
+                "CEL-WORKSHOP?arrows=first&bad&arrows=second&receptors=metal&hold_active=&hold_inactive=x&roll_active=y&roll_inactive=z&tap_explosions=t&hold_explosions=h&lifts=l&mine_size=large&mines=blue&mines=red&unknown=value=a",
+            ),
+            receptor_noteskin: Some(NoteSkin::none_choice()),
+            roll_active_noteskin: Some(NoteSkin::new("explicit")),
+            ..PlayerOptionsData::default()
+        };
+        let mut expected = options.clone();
+        expected.noteskin = NoteSkin::new("cel-workshop");
+        expected.arrow_noteskin = Some(NoteSkin::new("cel-workshop?arrows=first"));
+        expected.hold_active_noteskin = Some(NoteSkin::new("cel-workshop?hold_active="));
+        expected.hold_inactive_noteskin = Some(NoteSkin::new("cel-workshop?hold_inactive=x"));
+        expected.roll_inactive_noteskin = Some(NoteSkin::new("cel-workshop?roll_inactive=z"));
+        expected.tap_explosion_noteskin = Some(NoteSkin::new("cel-workshop?tap_explosions=t"));
+        expected.hold_explosion_noteskin = Some(NoteSkin::new("cel-workshop?hold_explosions=h"));
+        expected.lift_noteskin = Some(NoteSkin::new("cel-workshop?lifts=l"));
+        expected.mine_noteskin = Some(NoteSkin::new(
+            "cel-workshop?mine_size=large&mines=blue&mines=red",
+        ));
+        migrate_noteskin_parts(&mut options);
+        assert_eq!(options, expected);
+        migrate_noteskin_parts(&mut options);
+        assert_eq!(options, expected);
+        for raw in [
+            "cel",
+            "cel?",
+            "cel?invalid&unknown=x",
+            "?arrows=none&mine_size=small",
+        ] {
+            let mut options = PlayerOptionsData {
+                noteskin: NoteSkin::new(raw),
+                mine_noteskin: Some(NoteSkin::none_choice()),
+                ..PlayerOptionsData::default()
+            };
+            migrate_noteskin_parts(&mut options);
+            assert_eq!(
+                options.noteskin,
+                NoteSkin::new(raw.split_once('?').map_or(raw, |(base, _)| base))
+            );
+            assert_eq!(options.mine_noteskin, Some(NoteSkin::none_choice()));
+            if raw.starts_with('?') {
+                assert_eq!(options.arrow_noteskin, Some(NoteSkin::new("?arrows=none")));
+            }
+        }
     }
 }
