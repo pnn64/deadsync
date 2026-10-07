@@ -616,390 +616,382 @@ struct RuntimeSegment {
     ease: Ease,
     dur: f32,
     elapsed: f32,
-    // ops requested by the user (absolute/relative); compiled to prepared ops on first tick
-    build_ops: BuildOps,
     prepared: PreparedOps,
-    prepared_once: bool,
 }
 
 impl RuntimeSegment {
-    fn new(segment: Segment) -> Self {
+    fn new(segment: &Segment) -> Self {
         Self {
             ease: segment.ease,
             dur: segment.dur,
             elapsed: 0.0,
-            build_ops: segment.build_ops,
             prepared: SmallVec::new(),
-            prepared_once: false,
         }
     }
 
-    fn prepare_if_needed(&mut self, s: &TweenState) {
-        if self.prepared_once {
-            return;
-        }
-        self.prepared.clear();
-
-        for op in &self.build_ops {
-            match *op {
-                BuildOp::X(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.x + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::X { from: s.x, to },
-                    });
-                }
-                BuildOp::Y(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.y + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::Y { from: s.y, to },
-                    });
-                }
-                BuildOp::Z(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.z + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::Z { from: s.z, to },
-                    });
-                }
-                BuildOp::XY(tx, ty) => {
-                    let to_x = match tx {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.x + dv,
-                    };
-                    let to_y = match ty {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.y + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::XY {
-                            from: [s.x, s.y],
-                            to: [to_x, to_y],
-                        },
-                    });
-                }
-                BuildOp::Size(tw, th) => {
-                    let to_w = match tw {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.w + dv,
-                    };
-                    let to_h = match th {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.h + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::WH {
-                            from: [s.w, s.h],
-                            to: [to_w, to_h],
-                        },
-                    });
-                }
-                BuildOp::ZoomBoth(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.scale[0] + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleBoth { from: s.scale, to },
-                    });
-                }
-                BuildOp::ZoomXY(tx, ty) => {
-                    let to_x = match tx {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.scale[0] + dv,
-                    };
-                    let to_y = match ty {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.scale[1] + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleXY {
-                            from: s.scale,
-                            to: [to_x, to_y],
-                        },
-                    });
-                }
-                BuildOp::ZoomX(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.scale[0] + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleX {
-                            from: s.scale[0],
-                            to,
-                        },
-                    });
-                }
-                BuildOp::ZoomY(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.scale[1] + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleY {
-                            from: s.scale[1],
-                            to,
-                        },
-                    });
-                }
-                BuildOp::ZoomTo(w, h) => {
-                    let to_x = if s.w == 0.0 { 0.0 } else { w / s.w };
-                    let to_y = if s.h == 0.0 { 0.0 } else { h / s.h };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleXY {
-                            from: s.scale,
-                            to: [to_x, to_y],
-                        },
-                    });
-                }
-                BuildOp::Tint(tr, tg, tb, ta) => {
-                    let to0 = match tr {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.tint[0] + dv,
-                    };
-                    let to1 = match tg {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.tint[1] + dv,
-                    };
-                    let to2 = match tb {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.tint[2] + dv,
-                    };
-                    let to3 = match ta {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.tint[3] + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::Tint {
-                            from: s.tint,
-                            to: [to0, to1, to2, to3],
-                        },
-                    });
-                }
-                BuildOp::TintRgb(r, g, b) => {
-                    let kind = if identity_interpolation_is_exact(s.tint[3]) {
-                        PreparedKind::TintRgb {
-                            from: s.tint,
-                            to: [r, g, b],
-                        }
-                    } else {
-                        PreparedKind::Tint {
-                            from: s.tint,
-                            to: [r, g, b, s.tint[3] + 0.0],
-                        }
-                    };
-                    self.prepared.push(OpPrepared { kind });
-                }
-                BuildOp::TintAlpha(a) => {
-                    let kind = if s.tint[..3]
-                        .iter()
-                        .copied()
-                        .all(identity_interpolation_is_exact)
-                    {
-                        PreparedKind::TintAlpha {
-                            from: s.tint,
-                            to: a,
-                        }
-                    } else {
-                        PreparedKind::Tint {
-                            from: s.tint,
-                            to: [s.tint[0] + 0.0, s.tint[1] + 0.0, s.tint[2] + 0.0, a],
-                        }
-                    };
-                    self.prepared.push(OpPrepared { kind });
-                }
-                BuildOp::Glow(gr, gg, gb, ga) => {
-                    let to0 = match gr {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.glow[0] + dv,
-                    };
-                    let to1 = match gg {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.glow[1] + dv,
-                    };
-                    let to2 = match gb {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.glow[2] + dv,
-                    };
-                    let to3 = match ga {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.glow[3] + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::Glow {
-                            from: s.glow,
-                            to: [to0, to1, to2, to3],
-                        },
-                    });
-                }
-                BuildOp::GlowRgb(r, g, b) => {
-                    let kind = if identity_interpolation_is_exact(s.glow[3]) {
-                        PreparedKind::GlowRgb {
-                            from: s.glow,
-                            to: [r, g, b],
-                        }
-                    } else {
-                        PreparedKind::Glow {
-                            from: s.glow,
-                            to: [r, g, b, s.glow[3] + 0.0],
-                        }
-                    };
-                    self.prepared.push(OpPrepared { kind });
-                }
-                BuildOp::Visible(v) => {
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::Visible(v),
-                    });
-                }
-                BuildOp::FlipX(v) => {
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::FlipX(v),
-                    });
-                }
-                BuildOp::FlipY(v) => {
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::FlipY(v),
-                    });
-                }
-                BuildOp::RotX(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.rot_x + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::RotX { from: s.rot_x, to },
-                    });
-                }
-                BuildOp::RotY(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.rot_y + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::RotY { from: s.rot_y, to },
-                    });
-                }
-                BuildOp::RotZ(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.rot_z + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::RotZ { from: s.rot_z, to },
-                    });
-                }
-                BuildOp::SkewX(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.skew_x + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::SkewX { from: s.skew_x, to },
-                    });
-                }
-                BuildOp::SkewY(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.skew_y + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::SkewY { from: s.skew_y, to },
-                    });
-                }
-                BuildOp::CropL(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.crop_l + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::CropL { from: s.crop_l, to },
-                    });
-                }
-                BuildOp::CropR(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.crop_r + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::CropR { from: s.crop_r, to },
-                    });
-                }
-                BuildOp::CropT(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.crop_t + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::CropT { from: s.crop_t, to },
-                    });
-                }
-                BuildOp::CropB(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.crop_b + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::CropB { from: s.crop_b, to },
-                    });
-                }
-                BuildOp::FadeL(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.fade_l + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::FadeL { from: s.fade_l, to },
-                    });
-                }
-                BuildOp::FadeR(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.fade_r + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::FadeR { from: s.fade_r, to },
-                    });
-                }
-                BuildOp::FadeT(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.fade_t + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::FadeT { from: s.fade_t, to },
-                    });
-                }
-                BuildOp::FadeB(t) => {
-                    let to = match t {
-                        Target::Abs(v) => v,
-                        Target::Rel(dv) => s.fade_b + dv,
-                    };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::FadeB { from: s.fade_b, to },
-                    });
+    fn prepare(&mut self, build_ops: BuildOps, s: &TweenState) {
+        let prepare = |op: &BuildOp| match *op {
+            BuildOp::X(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.x + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::X { from: s.x, to },
                 }
             }
+            BuildOp::Y(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.y + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::Y { from: s.y, to },
+                }
+            }
+            BuildOp::Z(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.z + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::Z { from: s.z, to },
+                }
+            }
+            BuildOp::XY(tx, ty) => {
+                let to_x = match tx {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.x + dv,
+                };
+                let to_y = match ty {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.y + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::XY {
+                        from: [s.x, s.y],
+                        to: [to_x, to_y],
+                    },
+                }
+            }
+            BuildOp::Size(tw, th) => {
+                let to_w = match tw {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.w + dv,
+                };
+                let to_h = match th {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.h + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::WH {
+                        from: [s.w, s.h],
+                        to: [to_w, to_h],
+                    },
+                }
+            }
+            BuildOp::ZoomBoth(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.scale[0] + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::ScaleBoth { from: s.scale, to },
+                }
+            }
+            BuildOp::ZoomXY(tx, ty) => {
+                let to_x = match tx {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.scale[0] + dv,
+                };
+                let to_y = match ty {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.scale[1] + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::ScaleXY {
+                        from: s.scale,
+                        to: [to_x, to_y],
+                    },
+                }
+            }
+            BuildOp::ZoomX(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.scale[0] + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::ScaleX {
+                        from: s.scale[0],
+                        to,
+                    },
+                }
+            }
+            BuildOp::ZoomY(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.scale[1] + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::ScaleY {
+                        from: s.scale[1],
+                        to,
+                    },
+                }
+            }
+            BuildOp::ZoomTo(w, h) => {
+                let to_x = if s.w == 0.0 { 0.0 } else { w / s.w };
+                let to_y = if s.h == 0.0 { 0.0 } else { h / s.h };
+                OpPrepared {
+                    kind: PreparedKind::ScaleXY {
+                        from: s.scale,
+                        to: [to_x, to_y],
+                    },
+                }
+            }
+            BuildOp::Tint(tr, tg, tb, ta) => {
+                let to0 = match tr {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.tint[0] + dv,
+                };
+                let to1 = match tg {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.tint[1] + dv,
+                };
+                let to2 = match tb {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.tint[2] + dv,
+                };
+                let to3 = match ta {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.tint[3] + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::Tint {
+                        from: s.tint,
+                        to: [to0, to1, to2, to3],
+                    },
+                }
+            }
+            BuildOp::TintRgb(r, g, b) => {
+                let kind = if identity_interpolation_is_exact(s.tint[3]) {
+                    PreparedKind::TintRgb {
+                        from: s.tint,
+                        to: [r, g, b],
+                    }
+                } else {
+                    PreparedKind::Tint {
+                        from: s.tint,
+                        to: [r, g, b, s.tint[3] + 0.0],
+                    }
+                };
+                OpPrepared { kind }
+            }
+            BuildOp::TintAlpha(a) => {
+                let kind = if s.tint[..3]
+                    .iter()
+                    .copied()
+                    .all(identity_interpolation_is_exact)
+                {
+                    PreparedKind::TintAlpha {
+                        from: s.tint,
+                        to: a,
+                    }
+                } else {
+                    PreparedKind::Tint {
+                        from: s.tint,
+                        to: [s.tint[0] + 0.0, s.tint[1] + 0.0, s.tint[2] + 0.0, a],
+                    }
+                };
+                OpPrepared { kind }
+            }
+            BuildOp::Glow(gr, gg, gb, ga) => {
+                let to0 = match gr {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.glow[0] + dv,
+                };
+                let to1 = match gg {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.glow[1] + dv,
+                };
+                let to2 = match gb {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.glow[2] + dv,
+                };
+                let to3 = match ga {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.glow[3] + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::Glow {
+                        from: s.glow,
+                        to: [to0, to1, to2, to3],
+                    },
+                }
+            }
+            BuildOp::GlowRgb(r, g, b) => {
+                let kind = if identity_interpolation_is_exact(s.glow[3]) {
+                    PreparedKind::GlowRgb {
+                        from: s.glow,
+                        to: [r, g, b],
+                    }
+                } else {
+                    PreparedKind::Glow {
+                        from: s.glow,
+                        to: [r, g, b, s.glow[3] + 0.0],
+                    }
+                };
+                OpPrepared { kind }
+            }
+            BuildOp::Visible(v) => OpPrepared {
+                kind: PreparedKind::Visible(v),
+            },
+            BuildOp::FlipX(v) => OpPrepared {
+                kind: PreparedKind::FlipX(v),
+            },
+            BuildOp::FlipY(v) => OpPrepared {
+                kind: PreparedKind::FlipY(v),
+            },
+            BuildOp::RotX(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.rot_x + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::RotX { from: s.rot_x, to },
+                }
+            }
+            BuildOp::RotY(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.rot_y + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::RotY { from: s.rot_y, to },
+                }
+            }
+            BuildOp::RotZ(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.rot_z + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::RotZ { from: s.rot_z, to },
+                }
+            }
+            BuildOp::SkewX(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.skew_x + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::SkewX { from: s.skew_x, to },
+                }
+            }
+            BuildOp::SkewY(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.skew_y + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::SkewY { from: s.skew_y, to },
+                }
+            }
+            BuildOp::CropL(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.crop_l + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::CropL { from: s.crop_l, to },
+                }
+            }
+            BuildOp::CropR(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.crop_r + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::CropR { from: s.crop_r, to },
+                }
+            }
+            BuildOp::CropT(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.crop_t + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::CropT { from: s.crop_t, to },
+                }
+            }
+            BuildOp::CropB(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.crop_b + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::CropB { from: s.crop_b, to },
+                }
+            }
+            BuildOp::FadeL(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.fade_l + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::FadeL { from: s.fade_l, to },
+                }
+            }
+            BuildOp::FadeR(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.fade_r + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::FadeR { from: s.fade_r, to },
+                }
+            }
+            BuildOp::FadeT(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.fade_t + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::FadeT { from: s.fade_t, to },
+                }
+            }
+            BuildOp::FadeB(t) => {
+                let to = match t {
+                    Target::Abs(v) => v,
+                    Target::Rel(dv) => s.fade_b + dv,
+                };
+                OpPrepared {
+                    kind: PreparedKind::FadeB { from: s.fade_b, to },
+                }
+            }
+        };
+        if build_ops.len() > self.prepared.inline_size() {
+            // Source and prepared operations have the same layout; Vec's
+            // consuming map reuses the source allocation without copying it.
+            self.prepared = PreparedOps::from_vec(
+                build_ops
+                    .into_vec()
+                    .into_iter()
+                    .map(|op| prepare(&op))
+                    .collect(),
+            );
+        } else {
+            for op in &build_ops {
+                self.prepared.push(prepare(op));
+            }
         }
-
-        self.prepared_once = true;
     }
 
     fn update(&mut self, s: &mut TweenState, dt: f32) -> bool {
         // returns true if finished
         if self.dur == 0.0 {
-            self.prepare_if_needed(s);
             return true;
         }
-
-        self.prepare_if_needed(s);
 
         self.elapsed = (self.elapsed + dt).min(self.dur);
 
@@ -1347,12 +1339,6 @@ pub fn sleep(dur: f32) -> Step {
 #[derive(Clone, Debug)]
 pub struct Step(Segment);
 
-impl From<Step> for RuntimeSegment {
-    fn from(step: Step) -> Self {
-        Self::new(step.0)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct TweenSeq {
     state: TweenState,
@@ -1404,11 +1390,14 @@ impl TweenSeq {
         while dt > 0.0 {
             // pull a step if needed
             if self.current.is_none() {
-                self.current = self.queue.pop_front().map(RuntimeSegment::from);
-                if self.current.is_none() {
-                    // nothing to do
+                let Some(step) = self.queue.pop_front() else {
                     break;
-                }
+                };
+                self.current = Some(RuntimeSegment::new(&step.0));
+                self.current
+                    .as_mut()
+                    .unwrap()
+                    .prepare(step.0.build_ops, &self.state);
             }
 
             // drive current step
@@ -1459,9 +1448,7 @@ impl TweenSeq {
 
         let mut state = self.state;
         let mut queue = Vec::with_capacity(self.queue.len() + usize::from(self.current.is_some()));
-        if let Some(current) = &self.current {
-            let mut segment = current.clone();
-            segment.prepare_if_needed(&state);
+        if let Some(segment) = &self.current {
             for op in &segment.prepared {
                 op.apply_final(&mut state);
             }
@@ -1474,8 +1461,8 @@ impl TweenSeq {
             });
         }
         for step in &self.queue {
-            let mut segment = RuntimeSegment::new(step.0.clone());
-            segment.prepare_if_needed(&state);
+            let mut segment = RuntimeSegment::new(&step.0);
+            segment.prepare(step.0.build_ops.clone(), &state);
             for op in &segment.prepared {
                 op.apply_final(&mut state);
             }

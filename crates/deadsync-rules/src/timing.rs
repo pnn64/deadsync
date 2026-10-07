@@ -698,7 +698,11 @@ impl TimingData {
         ];
         let scroll_prefix_sorted = scrolls.windows(2).all(|pair| pair[0].beat <= pair[1].beat);
         let mut timing_with_stops = Self {
-            row_to_beat: Arc::from(row_to_beat),
+            row_to_beat: if row_to_beat.is_empty() {
+                Arc::default()
+            } else {
+                Arc::from(row_to_beat)
+            },
             beat_to_time,
             stops,
             delays,
@@ -2663,6 +2667,9 @@ mod tests {
         assert!(timing.speeds.is_empty());
         assert!(timing.scrolls.is_empty());
         assert!(timing.fakes.is_empty());
+        assert_eq!(timing.get_beat_for_row(0), None);
+        assert_eq!(timing.get_beat_for_row(usize::MAX), None);
+        assert_eq!(timing.get_row_for_beat(4.0), None);
         assert_eq!(timing.get_time_for_beat(4.0), 4.0);
         assert_eq!(timing.get_displayed_beat(4.0), 4.0);
         assert_eq!(timing.get_speed_multiplier_ns(4.0, 4_000_000_000), 1.0);

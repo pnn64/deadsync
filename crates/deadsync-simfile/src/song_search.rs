@@ -340,13 +340,21 @@ pub fn build_song_search_candidates<'a>(
                 current_pack_shared = None;
             }
             SongSearchCatalogEntry::Song(song) => {
-                if !song
-                    .charts
-                    .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
-                {
+                // Retain the cheap presence check for short lists and queries
+                // that will never rescan charts for a difficulty match.
+                let first_chart = if song.charts.len() > 16 && filter.difficulty.is_some() {
+                    song.charts
+                        .iter()
+                        .position(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
+                } else {
+                    song.charts
+                        .iter()
+                        .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
+                        .then_some(0)
+                };
+                let Some(first_chart) = first_chart else {
                     continue;
-                }
+                };
 
                 let pack_name = current_pack_name.unwrap_or_default();
                 if let Some(pack_term) = filter.pack_term()
@@ -363,7 +371,7 @@ pub fn build_song_search_candidates<'a>(
                 }
 
                 if let Some(diff) = filter.difficulty
-                    && !song.charts.iter().any(|c| {
+                    && !song.charts[first_chart..].iter().any(|c| {
                         c.chart_type.eq_ignore_ascii_case(chart_type)
                             && !c.difficulty.eq_ignore_ascii_case("edit")
                             && c.meter == u32::from(diff)
@@ -558,6 +566,69 @@ mod tests {
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].pack_name.as_ref(), "Warmups");
         assert_eq!(candidates[0].song.title, "Alpha");
+    }
+
+    #[test]
+    fn difficulty_search_retains_first_match_and_skips_other_types_and_edits() {
+        let mut song = (*test_song("Alpha", "Mix")).clone();
+        let mut other_type = test_chart("dance-double");
+        other_type.meter = 12;
+        let mut edit = test_chart("dance-single");
+        edit.difficulty = "eDiT".into();
+        edit.meter = 12;
+        let mut first = test_chart("DANCE-SINGLE");
+        first.meter = 11;
+        let mut last = test_chart("dance-single");
+        last.meter = 13;
+        song.charts = vec![other_type, edit, first, last];
+        let song = Arc::new(song);
+        let entries = [
+            SongSearchCatalogEntry::PackHeader("Pack"),
+            SongSearchCatalogEntry::Song(&song),
+        ];
+        for (query, count) in [
+            ("[11]", 1),
+            ("[12]", 0),
+            ("[13]", 1),
+            ("pack/alpha [11]", 1),
+            ("other/alpha [11]", 0),
+            ("pack/missing [13]", 0),
+            ("alpha mix [13][128]", 1),
+        ] {
+            assert_eq!(
+                build_song_search_candidates(entries.clone(), query, "dance-single").len(),
+                count,
+                "{query}"
+            );
+        }
+        let mut first_match = (*song).clone();
+        first_match.charts[1].difficulty = "Hard".into();
+        let first_match = Arc::new(first_match);
+        assert_eq!(
+            build_song_search_candidates(
+                [SongSearchCatalogEntry::Song(&first_match)],
+                "[12]",
+                "dance-single"
+            )
+            .len(),
+            1
+        );
+        let mut large = (*song).clone();
+        large
+            .charts
+            .splice(0..0, std::iter::repeat_n(test_chart("pump-single"), 32));
+        let large = Arc::new(large);
+        for (query, count) in [("[11]", 1), ("[12]", 0), ("[13]", 1)] {
+            assert_eq!(
+                build_song_search_candidates(
+                    [SongSearchCatalogEntry::Song(&large)],
+                    query,
+                    "dance-single"
+                )
+                .len(),
+                count
+            );
+        }
     }
 
     #[test]
