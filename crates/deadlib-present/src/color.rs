@@ -110,26 +110,27 @@ impl Color {
     #[must_use]
     pub fn from_hex(raw: &str) -> Option<Self> {
         let hex = raw.trim().trim_start_matches('#');
-        if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return None;
-        }
-        let byte = |idx: usize| u8::from_str_radix(&hex[idx..idx + 2], 16).ok();
-        let chan = |idx: usize| Some(f32::from(byte(idx)?) / 255.0);
-        match hex.len() {
-            6 => Some(Self {
-                a: 1.0,
-                r: chan(0)?,
-                g: chan(2)?,
-                b: chan(4)?,
-            }),
-            8 => Some(Self {
-                a: chan(0)?,
-                r: chan(2)?,
-                g: chan(4)?,
-                b: chan(6)?,
-            }),
-            _ => None,
-        }
+        let digit = |byte: u8| {
+            let number = byte.wrapping_sub(b'0');
+            if number < 10 {
+                return Some(number);
+            }
+            let letter = (byte | 0x20).wrapping_sub(b'a');
+            if letter < 6 { Some(letter + 10) } else { None }
+        };
+        let bytes = hex.as_bytes();
+        let byte = |idx: usize| Some((digit(bytes[idx])? << 4) | digit(bytes[idx + 1])?);
+        let (a, r, g, b) = match bytes.len() {
+            6 => (255, byte(0)?, byte(2)?, byte(4)?),
+            8 => (byte(0)?, byte(2)?, byte(4)?, byte(6)?),
+            _ => return None,
+        };
+        Some(Self {
+            a: f32::from(a) / 255.0,
+            r: f32::from(r) / 255.0,
+            g: f32::from(g) / 255.0,
+            b: f32::from(b) / 255.0,
+        })
     }
 
     /// Format as `#RRGGBB` when opaque, otherwise `#AARRGGBB`.
@@ -138,11 +139,20 @@ impl Color {
         let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         let (r, g, b) = (channel(self.r), channel(self.g), channel(self.b));
         let a = channel(self.a);
-        if a == 255 {
-            format!("#{r:02X}{g:02X}{b:02X}")
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        let channels = [a, r, g, b];
+        let channels = if a == 255 {
+            &channels[1..]
         } else {
-            format!("#{a:02X}{r:02X}{g:02X}{b:02X}")
+            &channels[..]
+        };
+        let mut out = String::with_capacity(1 + channels.len() * 2);
+        out.push('#');
+        for &channel in channels {
+            out.push(char::from(HEX[usize::from(channel >> 4)]));
+            out.push(char::from(HEX[usize::from(channel & 15)]));
         }
+        out
     }
 }
 

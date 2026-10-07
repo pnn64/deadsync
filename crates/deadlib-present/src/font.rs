@@ -614,9 +614,15 @@ fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> [Option<Gl
         return std::array::from_fn(|_| None);
     };
     let default_glyph = start_font.default_glyph.clone();
+    let fallback = start_font
+        .fallback_font_name
+        .and_then(|name| fonts.get(name));
     std::array::from_fn(|code| {
         let c = code as u8 as char;
-        let mut current = Some(start_font);
+        if let Some(glyph) = start_font.glyph_map.get(&c) {
+            return Some(glyph.clone());
+        }
+        let mut current = fallback;
         while let Some(font) = current {
             if let Some(glyph) = font.glyph_map.get(&c) {
                 return Some(glyph.clone());
