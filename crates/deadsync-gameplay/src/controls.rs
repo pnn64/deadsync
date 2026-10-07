@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GameplayTimingTickMode {
     #[default]
     Off,
@@ -223,12 +223,68 @@ pub fn offset_delta_target_seconds(old_offset: f32, delta: f32) -> Option<f32> {
 
 #[inline(always)]
 fn mutate_timing_arc(timing: &mut Arc<TimingData>, mut apply: impl FnMut(&mut TimingData)) {
+    #[inline(never)]
+    fn mutate_shared(timing: &mut Arc<TimingData>, apply: &mut impl FnMut(&mut TimingData)) {
+        apply(Arc::make_mut(timing));
+    }
+
     if let Some(inner) = Arc::get_mut(timing) {
         apply(inner);
         return;
     }
-    let mut cloned = (**timing).clone();
-    apply(&mut cloned);
-    *timing = Arc::new(cloned);
+    mutate_shared(timing, &mut apply);
 }
 
+#[cfg(test)]
+mod timing_arc_tests {
+    use super::*;
+
+    #[test]
+    fn timing_arc_updates_preserve_weak_refs_shared_snapshots_and_callback_count() {
+        for ownership in 0..4 {
+            let segments = TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds: vec![deadsync_rules::timing::SpeedSegment {
+                    beat: 0.0,
+                    ratio: 0.5,
+                    delay: 2.0,
+                    unit: deadsync_rules::timing::SpeedUnit::Seconds,
+                }],
+                ..Default::default()
+            };
+            let mut timing = Arc::new(TimingData::from_segments(0.0, 0.0, &segments, &[0.0, 4.0]));
+            let original_ptr = Arc::as_ptr(&timing);
+            let shared = (ownership >= 2).then(|| Arc::clone(&timing));
+            let weak = (ownership == 1 || ownership == 3).then(|| Arc::downgrade(&timing));
+            let mut expected = (*timing).clone();
+            expected.set_global_offset_seconds(0.125);
+            let mut calls = 0;
+            mutate_timing_arc(&mut timing, |value| {
+                calls += 1;
+                value.set_global_offset_seconds(0.125);
+            });
+            assert_eq!(calls, 1);
+            assert_eq!(Arc::strong_count(&timing), 1);
+            assert_eq!(Arc::weak_count(&timing), 0);
+            assert_eq!(original_ptr == Arc::as_ptr(&timing), ownership == 0);
+            if let Some(shared) = &shared {
+                assert_eq!(shared.get_time_for_beat(0.0), 0.0);
+                assert!(!Arc::ptr_eq(shared, &timing));
+            }
+            if let Some(weak) = weak {
+                assert_eq!(weak.upgrade().is_some(), ownership == 3);
+            }
+            for beat in [-4.0, 0.0, 1.0, 4.0, f32::INFINITY, f32::NAN] {
+                assert_eq!(
+                    timing.get_time_for_beat_ns(beat),
+                    expected.get_time_for_beat_ns(beat)
+                );
+                assert_eq!(
+                    timing.get_speed_multiplier(beat, 0.5).to_bits(),
+                    expected.get_speed_multiplier(beat, 0.5).to_bits()
+                );
+                assert_eq!(timing.get_beat_for_row(1), Some(4.0));
+            }
+        }
+    }
+}

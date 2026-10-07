@@ -368,7 +368,7 @@ pub fn build_song_search_candidates<'a>(
     let entries = entries.into_iter();
     let (entry_count, upper) = entries.size_hint();
     let entry_count = upper.unwrap_or(entry_count);
-    let mut out = Vec::with_capacity(entry_count);
+    let mut out = Vec::new();
     let mut current_pack_name: Option<&str> = None;
     let mut current_pack_shared: Option<Arc<str>> = None;
 
@@ -437,6 +437,9 @@ pub fn build_song_search_candidates<'a>(
                     }
                 }
 
+                if out.is_empty() {
+                    out.reserve_exact(entry_count);
+                }
                 let pack_name =
                     Arc::clone(current_pack_shared.get_or_insert_with(|| Arc::from(pack_name)));
                 out.push(SongSearchCandidate {
@@ -457,6 +460,124 @@ pub fn build_song_search_candidates<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn title_search_preserves_partial_and_whitespace_transliteration_fallbacks() {
+        for (left, right, needle, matches) in [
+            ("A", "B", "a b", true),
+            ("A", "B", "a  b", false),
+            ("", "B", " b", true),
+            ("A", "", "a ", false),
+            ("A", " ", "a ", false),
+            ("A", "B", " b", true),
+            ("A", "B", "a ", true),
+            ("A", "B", "ab", false),
+            ("AB", "CD", "b c", true),
+            ("A", "B", "a b extra", false),
+            ("α", "β", "α β", true),
+        ] {
+            assert_eq!(
+                joined_contains_ignore_ascii_case(left, right, needle),
+                matches
+            );
+        }
+        for (title, subtitle, translit_title, translit_subtitle, query, matches) in [
+            ("Original", "Mix", "", "", "original mix", true),
+            (
+                "Original",
+                "Mix",
+                "\u{2003}",
+                "\u{a0}",
+                "original mix",
+                true,
+            ),
+            ("Original", "Mix", "\u{2003}", "\u{a0}", "missing", false),
+            ("Original", "Mix", "Alternate", "", "alternate mix", true),
+            ("Original", "Mix", "", "Edition", "original edition", true),
+            ("Original", "Mix", "Original", "Mix", "missing", false),
+            (
+                "Original",
+                "Mix",
+                "Alternate",
+                "Edition",
+                "original mix",
+                true,
+            ),
+            (
+                "Original",
+                "Mix",
+                "Alternate",
+                "Edition",
+                "alternate edition",
+                true,
+            ),
+            (
+                "Original",
+                "Mix",
+                "Alternate",
+                "Edition",
+                "original edition",
+                false,
+            ),
+            ("\u{c4}BC", "Mix", "", "", "\u{e4}bc", false),
+        ] {
+            let mut song = (*test_song_with_bpm(title, "128", 128.0, 128.0)).clone();
+            song.subtitle = subtitle.into();
+            song.translit_title = translit_title.into();
+            song.translit_subtitle = translit_subtitle.into();
+            let song = Arc::new(song);
+            let candidates = build_song_search_candidates(
+                [SongSearchCatalogEntry::Song(&song)],
+                query,
+                "dance-single",
+            );
+            assert_eq!(
+                candidates.len(),
+                usize::from(matches),
+                "{query}, {translit_title:?}, {translit_subtitle:?}"
+            );
+            if matches {
+                assert!(Arc::ptr_eq(&candidates[0].song, &song));
+            }
+        }
+        let songs: Vec<_> = [
+            (
+                "Wide",
+                "10000:20000",
+                10000.0,
+                20000.0,
+                u32::MAX,
+                "Challenge",
+            ),
+            ("Hidden", "???", 120.0, 180.0, 1, "Edit"),
+            ("Low", "1", 1.0, 1.0, 2, "Beginner"),
+        ]
+        .into_iter()
+        .map(|(title, bpm, lo, hi, meter, difficulty)| {
+            let mut song = (*test_song_with_bpm(title, bpm, lo, hi)).clone();
+            song.charts[0].meter = meter;
+            song.charts[0].difficulty = difficulty.into();
+            Arc::new(song)
+        })
+        .collect();
+        let candidates = build_song_search_candidates(
+            songs.iter().map(SongSearchCatalogEntry::Song),
+            "",
+            "dance-single",
+        );
+        assert_eq!(candidates.len(), songs.len());
+        for candidate in candidates {
+            assert_eq!(
+                candidate.bpm.as_ref(),
+                candidate.song.formatted_chart_display_bpm(None)
+            );
+            assert_eq!(
+                candidate.difficulties.as_ref(),
+                song_search_difficulties_text(&candidate.song, "dance-single")
+            );
+        }
+    }
+
     use std::{path::PathBuf, sync::Arc};
 
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};

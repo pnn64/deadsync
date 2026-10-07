@@ -486,6 +486,7 @@ fn add_ex_row(counts: &mut ExScoreCounts, judgment: &Judgment) {
     }
 }
 
+#[inline(always)]
 fn compute_ex_score_counts(
     notes: &[Note],
     note_times_ns: &[i64],
@@ -693,6 +694,7 @@ fn ex_score_data(counts: ExScoreCounts, totals: ExScoreTotals) -> ExScoreData {
 }
 
 /// Reconstructs EX and Hard EX together in one allocation-free note scan.
+#[inline(always)]
 #[must_use]
 pub fn calculate_ex_score_percents_from_notes(
     notes: &[Note],
@@ -701,6 +703,9 @@ pub fn calculate_ex_score_percents_from_notes(
     totals: ExScoreTotals,
     fail_time_ns: Option<i64>,
 ) -> (f64, f64) {
+    if notes.is_empty() {
+        return (0.0, 0.0);
+    }
     let data = ex_score_data(
         compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns),
         totals,
@@ -732,19 +737,18 @@ pub fn calculate_ex_score_from_notes(
     fail_time_ns: Option<i64>,
     _mines_disabled: bool,
 ) -> f64 {
-    calculate_ex_score_percents_from_notes(
-        notes,
-        note_times_ns,
-        hold_end_times_ns,
+    if notes.is_empty() {
+        return 0.0;
+    }
+    ex_score_percent(&ex_score_data(
+        compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns),
         ExScoreTotals {
             total_steps,
             holds_total,
             rolls_total,
             mines_total,
         },
-        fail_time_ns,
-    )
-    .0
+    ))
 }
 
 #[must_use]
@@ -759,23 +763,107 @@ pub fn calculate_hard_ex_score_from_notes(
     fail_time_ns: Option<i64>,
     _mines_disabled: bool,
 ) -> f64 {
-    calculate_ex_score_percents_from_notes(
-        notes,
-        note_times_ns,
-        hold_end_times_ns,
+    if notes.is_empty() {
+        return 0.0;
+    }
+    hard_ex_score_percent(&ex_score_data(
+        compute_ex_score_counts(notes, note_times_ns, hold_end_times_ns, fail_time_ns),
         ExScoreTotals {
             total_steps,
             holds_total,
             rolls_total,
             mines_total,
         },
-        fail_time_ns,
-    )
-    .1
+    ))
 }
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn individual_ex_scores_preserve_paired_scores_with_failures_and_hold_results() {
+        for total_steps in [0, 1, u32::MAX] {
+            let totals = ExScoreTotals {
+                total_steps,
+                holds_total: u32::MAX,
+                rolls_total: u32::MAX,
+                mines_total: u32::MAX,
+            };
+            let scores = calculate_ex_score_percents_from_notes(
+                &[],
+                &[i64::MAX],
+                &[i64::MIN],
+                totals,
+                Some(-1),
+            );
+            assert_eq!(
+                (scores.0.to_bits(), scores.1.to_bits()),
+                (0.0_f64.to_bits(), 0.0_f64.to_bits())
+            );
+        }
+        let mut notes = vec![
+            make_tap(0, JudgeGrade::Fantastic, 8.0),
+            make_tap(0, JudgeGrade::Great, -60.0),
+            make_hold(1, true),
+            make_roll(2, false),
+            make_mine(3),
+            make_tap(4, JudgeGrade::Miss, 0.0),
+        ];
+        notes[2].result = Some(make_tap(1, JudgeGrade::Excellent, 30.0).result.unwrap());
+        for fake in [false, true] {
+            notes[4].is_fake = fake;
+            for times in [&[][..], &[0, 0, 1, 2, 3, 4][..]] {
+                for tails in [&[][..], &[0, 0, i64::MIN, 3, 0, 0][..]] {
+                    for fail in [None, Some(-1), Some(1), Some(3), Some(i64::MAX)] {
+                        for total_steps in [0, 5, u32::MAX] {
+                            let totals = ExScoreTotals {
+                                total_steps,
+                                holds_total: 1,
+                                rolls_total: 1,
+                                mines_total: 1,
+                            };
+                            let paired = calculate_ex_score_percents_from_notes(
+                                &notes, times, tails, totals, fail,
+                            );
+                            for disabled in [false, true] {
+                                assert_eq!(
+                                    calculate_ex_score_from_notes(
+                                        &notes,
+                                        times,
+                                        tails,
+                                        total_steps,
+                                        1,
+                                        1,
+                                        1,
+                                        fail,
+                                        disabled
+                                    )
+                                    .to_bits(),
+                                    paired.0.to_bits()
+                                );
+                                assert_eq!(
+                                    calculate_hard_ex_score_from_notes(
+                                        &notes,
+                                        times,
+                                        tails,
+                                        total_steps,
+                                        1,
+                                        1,
+                                        1,
+                                        fail,
+                                        disabled
+                                    )
+                                    .to_bits(),
+                                    paired.1.to_bits()
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     use super::*;
 
     use crate::note::{HoldData, HoldResult, MineResult, Note};
