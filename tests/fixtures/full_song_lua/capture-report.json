@@ -863,6 +863,14 @@
       "archive": "a03a6bec25440238c8d3fa0206e4ab165058e50a4640f252fadbd57d30e5f48d.tar.zst",
       "harness_version": "0.1.5",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8.tar.zst",
+      "archive": "73da04c58a35f1e4a8246b4e9d7e9deddb2e4f3a29e2fc38b83fa4f63dd9c48f.tar.zst",
+      "harness_version": "0.1.5",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

@@ -102,7 +102,6 @@ pub(crate) fn apply_layer_startup(
             .push(crate::SongLuaOverlayMessageCommand {
                 frame_advance: 0.0,
                 message: "__songlua_screen_startup".to_string(),
-                aux: None,
                 blocks: startup.blocks.clone(),
             });
         changed = true;
@@ -148,7 +147,6 @@ pub(crate) fn apply_startup_tweens<Kind>(
             .push(crate::SongLuaOverlayMessageCommand {
                 frame_advance: 0.0,
                 message: "__songlua_actor_startup".to_string(),
-                aux: None,
                 blocks: startup.blocks.clone(),
             });
         changed = true;
@@ -203,7 +201,6 @@ fn startup_command(
     Some(crate::SongLuaOverlayMessageCommand {
         frame_advance: 0.0,
         message: "__songlua_queued_startup".to_string(),
-        aux: None,
         blocks,
     })
 }
@@ -1552,6 +1549,7 @@ fn overlay_state_update_value(
         };
     }
     match target {
+        Target::Aux => value!(F32, aux),
         Target::X => value!(F32, x),
         Target::Y => value!(F32, y),
         Target::Z => value!(F32, z),
@@ -1688,6 +1686,7 @@ fn set_overlay_state_update_value(
             }
         };
     }
+    set_value!(Aux, F32, aux);
     set_value!(X, F32, x);
     set_value!(Y, F32, y);
     set_value!(Z, F32, z);
@@ -3379,7 +3378,6 @@ pub fn compile_update_functions<Kind>(
                 crate::SongLuaOverlayMessageCommand {
                     frame_advance: 0.0,
                     message: message.clone(),
-                    aux: None,
                     blocks: vec![crate::SongLuaOverlayCommandBlock {
                         progress: None,
                         queued: false,
@@ -3664,12 +3662,6 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                 else {
                     continue;
                 };
-                if let Some(aux) = overlay.actor.message_commands[command_index].aux {
-                    overlay
-                        .table
-                        .set("__songlua_aux", aux)
-                        .map_err(|err| err.to_string())?;
-                }
                 let base = match states.get(overlay_index) {
                     Some(state) => *state,
                     None => actor_overlay_initial_state(&overlay.table)?,

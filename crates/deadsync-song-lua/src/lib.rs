@@ -2612,6 +2612,7 @@ pub fn format_rolling_number(format: &str, number: f32) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SongLuaOverlayState {
+    pub aux: f32,
     pub x: f32,
     pub y: f32,
     pub z: f32,
@@ -2711,6 +2712,7 @@ pub struct SongLuaOverlayState {
 impl Default for SongLuaOverlayState {
     fn default() -> Self {
         Self {
+            aux: 0.0,
             x: 0.0,
             y: 0.0,
             z: 0.0,
@@ -2862,6 +2864,7 @@ pub fn overlay_state_z_scale(state: SongLuaOverlayState) -> f32 {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct SongLuaOverlayStateDelta {
+    pub aux: Option<f32>,
     pub x: Option<f32>,
     pub y: Option<f32>,
     pub z: Option<f32>,
@@ -2952,6 +2955,7 @@ impl SongLuaOverlayStateDelta {
     pub const fn has_update_target(&self, target: SongLuaOverlayUpdateTarget) -> bool {
         use SongLuaOverlayUpdateTarget as Target;
         match target {
+            Target::Aux => self.aux.is_some(),
             Target::X => self.x.is_some(),
             Target::Y => self.y.is_some(),
             Target::Z => self.z.is_some(),
@@ -3275,6 +3279,9 @@ pub const fn apply_overlay_delta(
     state: &mut SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
 ) {
+    if let Some(value) = delta.aux {
+        state.aux = value;
+    }
     let x = match delta.x {
         Some(x) => x,
         None => state.x,
@@ -3544,6 +3551,9 @@ pub fn overlay_state_lerp(
     delta: &SongLuaOverlayStateDelta,
     t: f32,
 ) {
+    if let Some(to) = delta.aux {
+        from.aux = actor_lerp(from.aux, to, t);
+    }
     let x = delta.x.map_or(from.x, |to| actor_lerp(from.x, to, t));
     let y = delta.y.map_or(from.y, |to| actor_lerp(from.y, to, t));
     if delta.stretch_rect.is_some() {
@@ -3908,7 +3918,8 @@ pub fn overlay_state_lerp(
 }
 
 const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
-    delta.x.is_none()
+    delta.aux.is_none()
+        && delta.x.is_none()
         && delta.y.is_none()
         && delta.z.is_none()
         && delta.z_bias.is_none()
@@ -3994,6 +4005,9 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
 }
 
 const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLuaOverlayStateDelta) {
+    if from.aux.is_some() {
+        into.aux = from.aux;
+    }
     if from.x.is_some() {
         into.x = from.x;
     }
@@ -4289,6 +4303,7 @@ pub fn overlay_delta_intersection(
             }
         };
     }
+    copy_pair!(aux);
     copy_pair!(x);
     copy_pair!(y);
     copy_pair!(z);
@@ -4438,7 +4453,6 @@ pub struct SongLuaOverlayMessageCommand {
     pub frame_advance: f32,
     pub message: String,
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
-    pub aux: Option<f32>,
 }
 
 pub fn message_command_lists_have_listener<'a>(
@@ -4678,6 +4692,7 @@ pub struct SongLuaOverlayEase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SongLuaOverlayUpdateTarget {
+    Aux,
     X,
     Y,
     Z,
@@ -11278,8 +11293,8 @@ return Def.ActorFrame{
                 .iter()
                 .find(|command| command.message == "UnsentAux")
                 .unwrap();
-            assert_eq!(command.aux, Some(expected));
-            assert!(command.blocks.is_empty());
+            assert_eq!(command.blocks.len(), 1);
+            assert_eq!(command.blocks[0].delta.aux, Some(expected));
         }
         let late = compiled
             .stateful_message_captures
@@ -20513,6 +20528,70 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn tween_aux_remains_current_for_update_readers() {
+        let song_dir = test_dir("tween-aux-reader");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local driver, target
+mod_actions = {{1, function() driver:linear(1):aux(1) end, true}}
+return Def.ActorFrame{
+    InitCommand=function(self)
+        self:SetUpdateFunction(function() target:x(driver:getaux()) end)
+    end,
+    Def.Actor{
+        Name="Driver",
+        InitCommand=function(self) driver = self; self:aux(0) end,
+    },
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target = self end,
+    },
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Tween Aux Reader");
+        context.song_display_bpms = [60.0; 2];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(
+            compiled
+                .info
+                .unsupported_function_action_captures
+                .is_empty()
+        );
+        let target = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Target"))
+            .unwrap();
+        let track = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == target && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .expect("aux getter reaches the update reader");
+        for (time, expected) in [(0.5, 0.0), (1.0, 0.0), (1.5, 0.5), (2.5, 1.0)] {
+            let sample = track
+                .samples
+                .iter()
+                .min_by(|a, b| (a.time - time).abs().total_cmp(&(b.time - time).abs()))
+                .unwrap();
+            let SongLuaOverlayUpdateValue::F32(actual) = sample.value else {
+                panic!("float x")
+            };
+            // Native queued work advances on the next 60 Hz update frame.
+            assert!(
+                (actual - expected).abs() <= 1.0 / 60.0 + 0.0001,
+                "time {time}: expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
     fn compile_song_lua_replays_function_action_aux_before_updates() {
         let song_dir = test_dir("overlay-function-aux");
         let entry = song_dir.join("default.lua");
@@ -20563,7 +20642,8 @@ return Def.ActorFrame{
             stone
                 .message_commands
                 .iter()
-                .any(|command| command.aux == Some(3.0))
+                .flat_map(|command| &command.blocks)
+                .any(|block| block.delta.aux == Some(3.0))
         );
         assert!(compiled.overlay_updates.iter().any(|track| {
             track.overlay_index == stone_index
@@ -24091,13 +24171,11 @@ end
             frame_advance: 0.0,
             message: "Alpha".to_string(),
             blocks: Vec::new(),
-            aux: None,
         }];
         let second = vec![SongLuaOverlayMessageCommand {
             frame_advance: 0.0,
             message: "Beta".to_string(),
             blocks: Vec::new(),
-            aux: None,
         }];
 
         assert!(message_command_lists_have_listener(
@@ -24116,7 +24194,6 @@ end
             frame_advance: 0.0,
             message: SONG_LUA_STARTUP_MESSAGE.to_string(),
             blocks: Vec::new(),
-            aux: None,
         }];
         let mut messages = Vec::new();
 

@@ -174,13 +174,15 @@
     {
       "title": "274|MODS|[lv.04] 最強STRONGER",
       "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
-      "harness_version": "0.1.0",
-      "archive": "c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8.tar.zst",
-      "sha256": "c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8",
-      "compressed_bytes": 7809129,
-      "uncompressed_sha256": "97d0d919ef0d5bb23f00b9ea185ffa6022ad57ea6b89892f8cbe2ceb7573663d",
+      "harness_version": "0.1.5",
+      "archive": "73da04c58a35f1e4a8246b4e9d7e9deddb2e4f3a29e2fc38b83fa4f63dd9c48f.tar.zst",
+      "sha256": "73da04c58a35f1e4a8246b4e9d7e9deddb2e4f3a29e2fc38b83fa4f63dd9c48f",
+      "compressed_bytes": 7816980,
+      "uncompressed_sha256": "5d7c6f8b45cd49c29ed498f6cfdb337fe007d006101fbb858d1da1bd5ee973ca",
       "compression_level": 22,
       "aliases": [
+        "fdd58e7911d2395d8bf375b29452dc8a3f7868a08e3f35530ce7c2a0b43310e1.tar.zst",
+        "c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8.tar.zst",
         "9ea84e2b79248dfd43a28ab2d82eae7647f57e180755cc88cb9523a8acaab945.tar.zst"
       ]
     },

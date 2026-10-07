@@ -942,6 +942,7 @@ fn capture_judgment_texture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
     use SongLuaOverlayUpdateTarget as Target;
     Some(match key {
+        "aux" => Target::Aux,
         "x" => Target::X,
         "y" => Target::Y,
         "z" => Target::Z,
@@ -3890,7 +3891,6 @@ pub fn capture_actor_message_commands(
                 frame_advance: 0.0,
                 message,
                 blocks,
-                aux: None,
             });
         }
     }
@@ -3904,7 +3904,6 @@ pub fn capture_actor_message_commands(
             frame_advance: 0.0,
             message: SONG_LUA_STARTUP_MESSAGE.to_string(),
             blocks: startup_sound_blocks,
-            aux: None,
         });
     }
     Ok(out)
@@ -4174,6 +4173,7 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
         }
     }
     let current_pos_key = match key {
+        "aux" => Some("__songlua_aux"),
         "x" => Some("__songlua_current_x"),
         "y" => Some("__songlua_current_y"),
         "z" => Some("__songlua_current_z"),
@@ -4208,7 +4208,9 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
             }
         } else {
             actor.set(current_key, value)?;
-            if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+            if key != "aux"
+                && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+            {
                 if let Some(&index) = capture.actor_indices.get(&(actor.to_pointer() as usize)) {
                     if let Some(position) = &mut capture.prior_positions[index] {
                         position[match key {
@@ -4249,6 +4251,7 @@ pub fn capture_block_set_bool(
 
 fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
     let state_key = match key {
+        "aux" => "__songlua_state_aux",
         "x" => "__songlua_state_x",
         "y" => "__songlua_state_y",
         "z" => "__songlua_state_z",
@@ -7030,8 +7033,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 if let Some(value) = value.and_then(read_f32) {
-                    prepare_capture_scope_actor(lua, &actor)?;
-                    actor.set("__songlua_aux", value)?;
+                    capture_block_set_f32(lua, &actor, "aux", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -14133,8 +14135,6 @@ pub fn capture_overlay_compile_actor_function_eases<Kind>(
 pub struct SongLuaFunctionActionCapture {
     pub overlay_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
     pub tracked_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
-    pub overlay_aux: Vec<(usize, f32)>,
-    pub tracked_aux: Vec<(usize, f32)>,
     pub broadcasts: Vec<(String, bool)>,
     pub sound_paths: Vec<PathBuf>,
     pub side_effects: i64,
@@ -14324,56 +14324,6 @@ fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -
     Ok(())
 }
 
-struct ActorAuxSnapshots<'a> {
-    snapshots: &'a [(Table, Vec<(String, Value)>)],
-    indices: Option<rustc_hash::FxHashMap<usize, usize>>,
-}
-
-impl<'a> ActorAuxSnapshots<'a> {
-    fn new(snapshots: &'a [(Table, Vec<(String, Value)>)], queries: usize) -> Self {
-        // Small captures and sparse queries keep the allocation-free scan.
-        let indices = (snapshots.len() >= 32 && queries >= 32).then(|| {
-            let mut indices = rustc_hash::FxHashMap::with_capacity_and_hasher(
-                snapshots.len(),
-                Default::default(),
-            );
-            for (index, (actor, _)) in snapshots.iter().enumerate() {
-                // The original scan uses the first snapshot for duplicate actors.
-                indices.entry(actor.to_pointer() as usize).or_insert(index);
-            }
-            indices
-        });
-        Self { snapshots, indices }
-    }
-
-    fn state_for(&self, pointer: usize) -> Option<&[(String, Value)]> {
-        if let Some(indices) = &self.indices {
-            indices
-                .get(&pointer)
-                .map(|&index| self.snapshots[index].1.as_slice())
-        } else {
-            self.snapshots
-                .iter()
-                .find(|(actor, _)| actor.to_pointer() as usize == pointer)
-                .map(|(_, state)| state.as_slice())
-        }
-    }
-}
-
-fn captured_actor_aux_change(actor: &Table, snapshots: &ActorAuxSnapshots<'_>) -> Option<f32> {
-    let current = actor
-        .get::<Option<f32>>("__songlua_aux")
-        .ok()
-        .flatten()
-        .unwrap_or(0.0);
-    let previous = snapshots
-        .state_for(actor.to_pointer() as usize)
-        .and_then(|state| state.iter().find(|(key, _)| key == "__songlua_aux"))
-        .and_then(|(_, value)| read_f32(value.clone()))
-        .unwrap_or(0.0);
-    (current != previous).then_some(current)
-}
-
 pub fn capture_function_action_blocks(
     lua: &Lua,
     overlays: &[(usize, Table)],
@@ -14436,24 +14386,6 @@ fn capture_function_action_blocks_inner(
         .map(|(index, actor)| (*index, actor.clone()))
         .collect();
     let tracked_indices = tracked_indices_for_actor_pointers(tracked_actors, &actor_ptrs);
-    let aux_snapshots = ActorAuxSnapshots::new(
-        &state_snapshot,
-        overlay_tables.len() + tracked_indices.len(),
-    );
-    let overlay_aux = overlay_tables
-        .iter()
-        .filter_map(|(index, actor)| {
-            captured_actor_aux_change(actor, &aux_snapshots).map(|aux| (*index, aux))
-        })
-        .collect();
-    let tracked_aux = tracked_indices
-        .iter()
-        .filter_map(|&index| {
-            tracked_actors.get(index).and_then(|tracked| {
-                captured_actor_aux_change(&tracked.table, &aux_snapshots).map(|aux| (index, aux))
-            })
-        })
-        .collect();
     let overlay_blocks = collect_indexed_actor_capture_blocks(&overlay_tables);
     let tracked_blocks =
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
@@ -14489,8 +14421,6 @@ fn capture_function_action_blocks_inner(
     Ok(SongLuaFunctionActionCapture {
         overlay_blocks,
         tracked_blocks,
-        overlay_aux,
-        tracked_aux,
         broadcasts,
         sound_paths,
         side_effects,
@@ -14499,65 +14429,21 @@ fn capture_function_action_blocks_inner(
 
 fn actor_capture_effects(
     capture_blocks: &[(usize, Vec<SongLuaOverlayCommandBlock>)],
-    capture_aux: &[(usize, f32)],
     source_index: usize,
-) -> Vec<(usize, Vec<SongLuaOverlayCommandBlock>, Option<f32>)> {
-    // Captures normally arrive in strictly increasing actor order. Merge those
-    // lists directly, cloning each retained block list once. Keep the general
-    // path for unordered inputs and last-write-wins duplicate actor entries.
-    if capture_aux.windows(2).all(|pair| pair[0].0 < pair[1].0)
-        && capture_blocks.windows(2).all(|pair| pair[0].0 < pair[1].0)
-    {
-        let mut aux = capture_aux
-            .iter()
-            .filter(|(index, _)| *index != source_index)
-            .peekable();
-        let mut blocks = capture_blocks
-            .iter()
-            .filter(|(index, _)| *index != source_index)
-            .peekable();
-        if aux.peek().is_none() && blocks.peek().is_none() {
-            return Vec::new();
-        }
-        let mut effects = Vec::with_capacity(capture_aux.len() + capture_blocks.len());
-        loop {
-            match (aux.peek(), blocks.peek()) {
-                (Some((aux_index, _)), Some((block_index, _))) if aux_index == block_index => {
-                    let &(index, value) = aux.next().unwrap();
-                    let (_, commands) = blocks.next().unwrap();
-                    effects.push((index, commands.clone(), Some(value)));
-                }
-                (Some((aux_index, _)), Some((block_index, _))) if aux_index > block_index => {
-                    let (index, commands) = blocks.next().unwrap();
-                    effects.push((*index, commands.clone(), None));
-                }
-                (Some(_), _) => {
-                    let &(index, value) = aux.next().unwrap();
-                    effects.push((index, Vec::new(), Some(value)));
-                }
-                (None, Some(_)) => {
-                    let (index, commands) = blocks.next().unwrap();
-                    effects.push((*index, commands.clone(), None));
-                }
-                (None, None) => break,
-            }
-        }
-        return effects;
-    }
-    let mut effects = capture_aux
+) -> Vec<(usize, Vec<SongLuaOverlayCommandBlock>)> {
+    let blocks = capture_blocks
         .iter()
-        .filter(|(index, _)| *index != source_index)
-        .map(|(index, aux)| (*index, (Vec::new(), Some(*aux))))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    for (index, blocks) in capture_blocks {
-        if *index != source_index {
-            effects.entry(*index).or_default().0 = blocks.clone();
-        }
+        .filter(|(index, _)| *index != source_index);
+    if capture_blocks.windows(2).all(|pair| pair[0].0 < pair[1].0) {
+        blocks.cloned().collect()
+    } else {
+        // Preserve last-write-wins for duplicate actor indices.
+        blocks
+            .cloned()
+            .collect::<std::collections::BTreeMap<_, _>>()
+            .into_iter()
+            .collect()
     }
-    effects
-        .into_iter()
-        .map(|(index, (blocks, aux))| (index, blocks, aux))
-        .collect()
 }
 
 fn message_capture_runner(
@@ -14671,9 +14557,7 @@ pub(crate) fn capture_deferred_messages<Kind>(
             .command
             .strip_suffix("MessageCommand")
             .expect("message suffix");
-        for (index, blocks, aux) in
-            actor_capture_effects(&first.overlay_blocks, &first.overlay_aux, usize::MAX)
-        {
+        for (index, blocks) in actor_capture_effects(&first.overlay_blocks, usize::MAX) {
             overlays[index]
                 .actor
                 .message_commands
@@ -14681,12 +14565,9 @@ pub(crate) fn capture_deferred_messages<Kind>(
                     frame_advance: 0.0,
                     message: message.to_owned(),
                     blocks,
-                    aux,
                 });
         }
-        for (index, blocks, aux) in
-            actor_capture_effects(&first.tracked_blocks, &first.tracked_aux, usize::MAX)
-        {
+        for (index, blocks) in actor_capture_effects(&first.tracked_blocks, usize::MAX) {
             tracked_actors[index]
                 .actor
                 .message_commands
@@ -14694,7 +14575,6 @@ pub(crate) fn capture_deferred_messages<Kind>(
                     frame_advance: 0.0,
                     message: message.to_owned(),
                     blocks,
-                    aux,
                 });
         }
         sounds.extend(
@@ -14771,9 +14651,8 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
                 continue;
             }
         };
-        let first = actor_capture_effects(&first.overlay_blocks, &first.overlay_aux, source_index);
-        let second =
-            actor_capture_effects(&second.overlay_blocks, &second.overlay_aux, source_index);
+        let first = actor_capture_effects(&first.overlay_blocks, source_index);
+        let second = actor_capture_effects(&second.overlay_blocks, source_index);
         if first.is_empty() {
             continue;
         }
@@ -14791,14 +14670,13 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
             on_dynamic(detail);
             continue;
         }
-        additions.extend(first.into_iter().map(|(target, blocks, aux)| {
+        additions.extend(first.into_iter().map(|(target, blocks)| {
             (
                 target,
                 SongLuaOverlayMessageCommand {
                     frame_advance: 0.0,
                     message: message.clone(),
                     blocks,
-                    aux,
                 },
             )
         }));
@@ -14877,10 +14755,8 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         }
     }
 
-    let has_direct_effects = !capture.overlay_blocks.is_empty()
-        || !capture.tracked_blocks.is_empty()
-        || !capture.overlay_aux.is_empty()
-        || !capture.tracked_aux.is_empty();
+    let has_direct_effects =
+        !capture.overlay_blocks.is_empty() || !capture.tracked_blocks.is_empty();
     if handled_broadcast && !has_direct_effects {
         return Ok(true);
     }
@@ -14890,15 +14766,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
 
     let message = format!("__songlua_overlay_fn_action_{counter}");
     *counter += 1;
-    let mut overlay_commands = capture
-        .overlay_aux
-        .into_iter()
-        .map(|(index, aux)| (index, (Vec::new(), Some(aux))))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    for (index, blocks) in capture.overlay_blocks {
-        overlay_commands.entry(index).or_default().0 = blocks;
-    }
-    for (overlay_index, (blocks, aux)) in overlay_commands {
+    for (overlay_index, blocks) in capture.overlay_blocks {
         overlays[overlay_index]
             .actor
             .message_commands
@@ -14906,18 +14774,9 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
                 frame_advance: 0.0,
                 message: message.clone(),
                 blocks,
-                aux,
             });
     }
-    let mut tracked_commands = capture
-        .tracked_aux
-        .into_iter()
-        .map(|(index, aux)| (index, (Vec::new(), Some(aux))))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    for (index, blocks) in capture.tracked_blocks {
-        tracked_commands.entry(index).or_default().0 = blocks;
-    }
-    for (tracked_index, (blocks, aux)) in tracked_commands {
+    for (tracked_index, blocks) in capture.tracked_blocks {
         tracked_actors[tracked_index]
             .actor
             .message_commands
@@ -14925,7 +14784,6 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
                 frame_advance: 0.0,
                 message: message.clone(),
                 blocks,
-                aux,
             });
     }
     messages.push(SongLuaMessageEvent {
@@ -15297,6 +15155,9 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                 .get::<Option<f32>>("opt2")
                 .map_err(|err| err.to_string())?,
             delta: SongLuaOverlayStateDelta {
+                aux: block
+                    .get::<Option<f32>>("aux")
+                    .map_err(|err| err.to_string())?,
                 x: block
                     .get::<Option<f32>>("x")
                     .map_err(|err| err.to_string())?,
@@ -15580,6 +15441,10 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
 
 pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
     let mut state = SongLuaOverlayState::default();
+    state.aux = actor
+        .get::<Option<f32>>("__songlua_state_aux")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(0.0);
     state.sprite_texture = actor
         .raw_get::<Option<bool>>("__songlua_state_sprite_texture")
         .map_err(|err| err.to_string())?
@@ -16134,6 +15999,8 @@ pub fn set_actor_overlay_getter_state(
         };
     }
     set!("__songlua_visible", state.visible);
+    set!("__songlua_state_aux", state.aux);
+    set!("__songlua_aux", state.aux);
     set!("__songlua_state_sprite_texture", state.sprite_texture);
     set!("__songlua_state_aft_preserve", state.aft_preserve);
     set!("__songlua_state_aft_created", state.aft_created);
@@ -16236,6 +16103,7 @@ pub fn set_actor_overlay_update_getter_value(
     }
 
     let key = match target {
+        Target::Aux => "aux",
         Target::X => "x",
         Target::Y => "y",
         Target::Z => "z",
@@ -16268,6 +16136,7 @@ pub fn set_actor_overlay_update_getter_value(
     match value {
         UpdateValue::F32(value) if !key.is_empty() => {
             let current_key = match target {
+                Target::Aux => Some("__songlua_aux"),
                 Target::X => Some("__songlua_current_x"),
                 Target::Y => Some("__songlua_current_y"),
                 Target::Z => Some("__songlua_current_z"),

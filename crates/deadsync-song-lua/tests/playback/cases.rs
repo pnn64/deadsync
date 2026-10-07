@@ -1324,7 +1324,6 @@ fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
         message_commands: vec![SongLuaOverlayMessageCommand {
             frame_advance: 0.0,
             message: "__songlua_tap_1_3_W1".into(),
-            aux: None,
             blocks: vec![SongLuaOverlayCommandBlock {
                 progress: None,
                 queued: false,
@@ -1388,7 +1387,6 @@ fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
         message_commands: vec![SongLuaOverlayMessageCommand {
             frame_advance: 0.0,
             message: "__songlua_tap_2_1_W1".into(),
-            aux: None,
             blocks: [(0.0, 1.0), (0.5, 0.0)]
                 .into_iter()
                 .map(|(duration, alpha)| SongLuaOverlayCommandBlock {
@@ -1745,7 +1743,6 @@ fn test_message_command(delta: SongLuaOverlayStateDelta) -> SongLuaOverlayMessag
     SongLuaOverlayMessageCommand {
         frame_advance: 0.0,
         message: String::new(),
-        aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
             progress: None,
             queued: false,
@@ -2080,7 +2077,6 @@ fn song_lua_cached_tween_applies_terminal_flags_and_rewinds() {
     let commands = [SongLuaOverlayMessageCommand {
         frame_advance: 0.0,
         message: "show".to_owned(),
-        aux: None,
         blocks: vec![SongLuaOverlayCommandBlock {
             progress: None,
             queued: false,
@@ -2536,7 +2532,6 @@ fn song_lua_message_block_cursor_matches_replay_across_block_rewinds() {
     let command = SongLuaOverlayMessageCommand {
         frame_advance: 0.0,
         message: "LongCommand".to_string(),
-        aux: None,
         blocks: (0..128)
             .map(|index| SongLuaOverlayCommandBlock {
                 progress: None,
@@ -2597,7 +2592,6 @@ fn song_lua_wrappers_preserve_owner_draw_order() {
         .push(deadsync_song_lua::SongLuaOverlayMessageCommand {
             frame_advance: 0.0,
             message: "Reorder".into(),
-            aux: None,
             blocks: vec![deadsync_song_lua::SongLuaOverlayCommandBlock {
                 progress: None,
                 queued: false,
@@ -4570,14 +4564,19 @@ fn song_lua_projection_matches_step_your_game_up_fixture() {
     deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
         854.0, 480.0,
     ));
-    let fixture_path = workspace_root().join(
-            "tests/fixtures/itgmania-song-lua/Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json",
-        );
-    let fixture: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(&fixture_path)
-            .unwrap_or_else(|error| panic!("could not read {}: {error}", fixture_path.display())),
+    let fixtures = workspace_root().join("tests/fixtures/full_song_lua");
+    let references: serde_json::Value = serde_json::from_reader(
+        std::fs::File::open(fixtures.join("references.json")).expect("reference index"),
     )
-    .unwrap_or_else(|error| panic!("invalid {}: {error}", fixture_path.display()));
+    .expect("parse reference index");
+    let alias = "tests/fixtures/itgmania-song-lua/Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json";
+    let fixture_path = fixtures.join(references[alias].as_str().expect("projection trace alias"));
+    let reader = zstd::stream::read::Decoder::new(
+        std::fs::File::open(&fixture_path).expect("open compressed projection trace"),
+    )
+    .expect("decode projection trace");
+    let fixture: serde_json::Value = serde_json::from_reader(reader)
+        .unwrap_or_else(|error| panic!("invalid {}: {error}", fixture_path.display()));
     let track = fixture["projected_vertex_tracks"]
         .as_array()
         .and_then(|tracks| {

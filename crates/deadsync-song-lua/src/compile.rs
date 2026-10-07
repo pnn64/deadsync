@@ -941,7 +941,6 @@ where
             message_commands: vec![SongLuaOverlayMessageCommand {
                 frame_advance: 0.0,
                 message,
-                aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
                     progress: None,
                     queued: false,
@@ -976,7 +975,6 @@ where
             message_commands: vec![SongLuaOverlayMessageCommand {
                 frame_advance: 0.0,
                 message,
-                aux: None,
                 blocks: vec![SongLuaOverlayCommandBlock {
                     progress: None,
                     queued: false,

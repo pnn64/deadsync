@@ -6321,6 +6321,7 @@ pub fn apply_overlay_update(
         crate::move_overlay(state, x, y);
         return;
     }
+    set_value!(Aux, F32, aux);
     set_value!(Z, F32, z);
     set_value!(ZBias, F32, z_bias);
     set_value!(DrawOrder, I32, draw_order);

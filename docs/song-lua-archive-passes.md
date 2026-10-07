@@ -367,3 +367,49 @@ The consolidated reference-resolution test and the selected Crystal Access archi
 An unfiltered archive-integrity check still stops on its existing nonempty Lua-closure assertion. The corpus includes recovered charts without Lua, documented in the capture audit. This separate validation gap and the 18 uncaptured charts remain outside the ten repaired archives; this batch does not establish parity for the entire corpus.
 
 The final outgoing-history audit finds no Git blobs at or above 100,000,000 bytes. Both 129.9 MB Episode 16 archives remain present with matching content hashes, ignored, and untracked. The upstream is an ancestor of this branch, so these commits support an ordinary push. No push was performed by this repair.
+
+## Full corpus sweep (restarted 2026-10-07)
+
+The next goal restarts at the first archive and continues beyond ten repairs.
+All 492 stored archive variants, including local-only movies, are in scope.
+Completion requires a full final sweep, source-backed reference clocks and
+dependencies, and verification of the uncaptured source charts. Missing or
+invalid inputs remain outstanding until native behavior can be established. Passing comparisons against a legacy double-clock capture do not
+establish correct native timing; those references also need regeneration.
+The earlier empty-Lua validation limitation remains pending in this sweep.
+
+## Pass 11: tween auxiliary state in Stronger
+
+The original Stronger archive
+`c537253c06b17440ec88674bc99aced4c251d1dc08beacac7cf5e864087b46a8.tar.zst`
+failed 74 comparisons. Recapturing with harness `0.1.5` removes 66 player
+transform differences caused by the legacy clock, leaving eight projected
+geometry failures. At beat 445.306 the black-hole Sprite collapses to a point
+in DeadSync while ITGmania still draws its accelerated fade-out in scale.
+
+ITGmania `Actor.h::SetAux` writes `DestTweenState().aux`; `GetAux` reads
+`m_current.aux`. `Actor.cpp::TweenState::MakeWeightedAverage` interpolates
+that float alongside position. The source's BlackHoleLeave command queues
+an accelerated aux transition on another Actor, and its update callback
+reads that current value to set the Sprite zoom. DeadSync had treated aux
+as an immediate scalar outside its tween state.
+
+Aux now uses the existing captured delta, tween queue, getter, update,
+and playback paths. The replaced per-message scalar, auxiliary snapshot
+index, and separate capture merging are deleted. A regression reads an
+intermediate value during a queued aux tween. All 468 song-Lua unit tests
+and 182 playback tests pass (three existing playback tests ignored). The
+17 profile-gameplay song-Lua tests also pass. The playback projection test
+also resolves its previously moved Step Your Game
+Up trace through the compressed fixture index; the reference bytes and
+comparison remain unchanged. Simply Love does not override Actor aux.
+
+The complete native replacement
+`73da04c58a35f1e4a8246b4e9d7e9deddb2e4f3a29e2fc38b83fa4f63dd9c48f.tar.zst`
+passes all 208,584 comparisons on DeadSync `0.5.1833`. The 8,448 frames reach
+beat 481 at 140.78048706054688 seconds, with no runtime errors or dropped
+events. Original source and member hashes and lossless recompression were
+verified. No comparison tolerance changed.
+
+Verification log SHA-256:
+`3422aa64da3dab38d31904963e15bdfad855cb6084db273e9590e9d2648c6276`.
