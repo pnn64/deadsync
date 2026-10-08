@@ -1,6 +1,6 @@
 {
   "pass_number": 60,
-  "status": "native BitmapText API repair verified; complete archive comparison pending",
+  "status": "native BitmapText API repair and two complete archive controls verified; full corpus unfinished",
   "deadsync_version": "0.5.1863",
   "cache_version": 54,
   "harness_version": "0.1.23",
@@ -351,5 +351,50 @@
     "Five stock fallback BitmapText helper bodies follow the checked-out 02 Actor.lua; full Simply Love text helpers, including Unicode wrapping, remain pending.",
     "Public method tables and own overrides in the harness use lazy semantic adapters and still require a separate raw-table audit.",
     "Other actor subclasses and full-corpus parity remain unfinished. Scope remains 501 simfiles and 492 indexed archive variants."
+  ],
+  "deadsync_source_commit": "a93778308",
+  "deadsync_archive_verifier": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass60-bitmap-full-song-v1.exe",
+    "sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804",
+    "version": "0.5.1863",
+    "command": [
+      "cargo",
+      "rustc",
+      "-p",
+      "deadsync",
+      "--test",
+      "full_song_lua",
+      "--features",
+      "deadsync-theme-simply-love/test-support",
+      "--message-format=json"
+    ],
+    "tested_source_sha256": {
+      "Cargo.toml": "0ad4c2fd88e28386d608c908acff22558c42458d595b8146ce21037754d86d9a",
+      "Cargo.lock": "f1dee66fbe751100b130a6ac8f958bc8305c5906578413b0abc92a7ad259db7b",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "f9cda87743d0d9dc8cad5a7037e1438e76e2c9c574da7bc708e714eec842fc4f",
+      "crates/deadsync-song-lua/src/lua_util.rs": "0767718275dac3849f94f7e4cd440f88e3c55a6bafb7d942d134c27699742c9b",
+      "crates/deadsync-song-lua/src/lib.rs": "c2d3e35c021a71c860bb3bd6c46795309217634ae03ea127626069089bbdd854",
+      "crates/deadsync-simfile/src/cache.rs": "a70f960145dc05b6c2902474dcac1c0d6db9c076c0bb5c4942f85a6ab725b969"
+    }
+  },
+  "deadsync_final_archive_results": [
+    {
+      "archive": "731b70e429065ffd298ff1aea692b77fee2b2a642790f415f92e4e843f1e163f.tar.zst",
+      "version": "0.5.1863",
+      "exit_code": 0,
+      "seconds": 1.4705042839050293,
+      "result": "result: ok; 1/1 fixtures passed; 2671 comparisons passed, 0 failed (2671 total); elapsed 0.13s",
+      "log_sha256": "037c27c4392eb5dff9f9420dac97b4f1ec25463ec7206b666561c5c599c25ff7",
+      "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+    },
+    {
+      "archive": "12cb428fa847c410d857f56fb66311a92dbd584717d62aa9bf56d3194c94862b.tar.zst",
+      "version": "0.5.1863",
+      "exit_code": 0,
+      "seconds": 0.20997190475463867,
+      "result": "result: ok; 1/1 fixtures passed; 2671 comparisons passed, 0 failed (2671 total); elapsed 0.12s",
+      "log_sha256": "78d394b75e32276e5b357bb3e57561d23259149bb9b2be83664bec978d8d068f",
+      "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+    }
   ]
 }

@@ -2127,7 +2127,9 @@ not a native or fallback method. Full Simply Love wrapping remains pending.
 
 Two complete two-second archives contain no runtime errors or dropped events.
 Both fail on .1862 at the expected class assertions. Their .1863 archive
-comparisons are pending while the immutable verifier builds. The harness
-public raw-table inventory and method-shadowing audit is also pending.
+comparisons now pass all 5,342 checks using the pinned .1863 executable.
+The source repair is committed as a93778308. The harness public raw-table
+inventory and method-shadowing audit is pending and has an independent
+compiled-native control that fails on the semantic adapter.
 Full corpus parity remains unfinished, with 501 simfiles and 492 indexed
 archive variants. The prior eight-archive prefix is historical on .22/.1862.
