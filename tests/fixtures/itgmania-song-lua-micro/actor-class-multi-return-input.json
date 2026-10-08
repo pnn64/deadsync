@@ -1,0 +1,3 @@
+{
+  "aft_creation": "frozen:rotationx(1):rotationy(2):rotationz(3)\nlocal x,y,z=frozen:getrotation()\nassert(x==1 and y==2 and z==3)\nfrozen:effectmagnitude(2,3,4)\nlocal a,b,c=frozen:geteffectmagnitude()\nassert(a==2 and b==3 and c==4)\n"
+}
