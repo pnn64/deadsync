@@ -2360,3 +2360,5 @@ Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 compa
 Archive 18: 280-MODS-[MASTER] Sharkmode/Sharkmode.ssc passes all 304425 comparisons. The verified prefix is now 18/492 archives; full-corpus parity remains unfinished.
 
 Archive 19: 303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc passes all 2274690 comparisons. The verified prefix is now 19/492 archives; full-corpus parity remains unfinished.
+
+Archive 20: 303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc passes all 2274713 comparisons. The verified prefix is now 20/492 archives; full-corpus parity remains unfinished.
