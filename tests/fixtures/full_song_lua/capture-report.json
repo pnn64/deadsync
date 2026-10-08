@@ -1519,6 +1519,14 @@
       "archive": "6ec3396c15b7b4798cd4e224491b3ffa49fb18601dabd29ecd1687ae4d0e8271.tar.zst",
       "harness_version": "0.1.21",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 57,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "superseded_archive": "c4a9a0115d700c4c0dfc427a54e238631dd1ad5a12765f5c52512eee45d0e98f.tar.zst",
+      "archive": "d87d62df91e1eae783f08165262f2aaace96c79d636af40841fa9bfbc4b1bb4a.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -2512,6 +2520,31 @@
       "capture_endpoint": {
         "beat": 290,
         "seconds": 102.42857360839844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 57,
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "d87d62df91e1eae783f08165262f2aaace96c79d636af40841fa9bfbc4b1bb4a.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "d87d62df91e1eae783f08165262f2aaace96c79d636af40841fa9bfbc4b1bb4a.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 20.077154636383057,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 19.95s",
+        "log_sha256": "566068de151bebdaba0b82954b1b14249ca09895892eb32efdc2d90e6e7c2acb",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      },
+      "capture_log_sha256": "57b0f5db70ffe5d107b0a9def7d86f0a99ac1c3dce69bebebfcc0e55b39324fd",
+      "capture_endpoint": {
+        "beat": 348,
+        "seconds": 134.70968627929688
       },
       "runtime_errors": 0,
       "dropped_events": 0
