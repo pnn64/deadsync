@@ -1,0 +1,213 @@
+{
+  "pass_number": 65,
+  "status": "native Sprite binding and runtime asset retention verified; full corpus unfinished",
+  "harness": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass65-sprite-v1.exe",
+    "sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+    "version": "0.1.26",
+    "semantic_host_sha256": "25d283cf4b26fe1af67f59a502f8a6329ff0c70c818e18e78aeec0e14283bf6b",
+    "source_pending_commit": false,
+    "command": [
+      "cargo",
+      "build",
+      "--bin",
+      "itgmania-harness-rs",
+      "--message-format=json"
+    ],
+    "source_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e"
+  },
+  "harness_tests": {
+    "exit_code": 0,
+    "seconds": 153.7245123386383,
+    "summary": [
+      "test result: ok. 146 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 153.54s"
+    ],
+    "executable_sha256": "bf1e028cb275d274e9dff7226a20c10c85db0d99801bf2b1fcc42656c18ecce0",
+    "log_sha256": "9df105323f209010c986ec4ffa5733cd298607bae0c3ddd43610d8cffdd2ac3a"
+  },
+  "deadsync_version": "0.5.1865",
+  "song_cache_version": 56,
+  "deadsync_checks": [
+    {
+      "job": "song-lua-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 81.99151229858398,
+      "summaries": [
+        "test result: ok. 489 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 36.56s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 37.07s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "21277eee6619aaee2c1c149f6e3201c9e2c2161c645a120f87d45b158283ba53"
+    },
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 14.25877046585083,
+      "summaries": [],
+      "log_sha256": "31bc577be08c3c70a3aa556cdd14d1886abced18cd956d629f4df792b2dd1bf0"
+    },
+    {
+      "job": "clock-cache",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 21.55180811882019,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 202 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "dd73f00f613f45f3c74003025b4283ffd935d5f7479ede7d99199a9ac65182b8"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.8835394382476807,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 202 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "ba64ab1c1657a727daf8658d6fc68158251696724f64a52d144985d984b44aaf"
+    }
+  ],
+  "native_result": {
+    "allocations": [],
+    "diagnostics": [],
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "script_errors": []
+  },
+  "fixtures": {
+    "sprite-load-input.json": {
+      "sha256": "d6bc2d7c41096b24f247bd3aaaa6c79ea1b577c2ddce4b9e8c0b215fec539271",
+      "bytes": 1031
+    },
+    "sprite-load-native.json": {
+      "sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "bytes": 291
+    },
+    "sprite-load.lua": {
+      "sha256": "9a76f81d869fc9f04702eeef3d27ad8816094d9f463011429131c8968d380cc1",
+      "bytes": 1042
+    },
+    "sprite-load.png": {
+      "sha256": "c21704e2430ff2c421a08438f7b2d412796fb2061312f1b9080f352eea663a15",
+      "bytes": 143
+    }
+  },
+  "native_sources": {
+    "src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "src/LuaManager.h": "e20b23acfb112e6b68506d1f7bb158cf01d6bc1655392c5d44ef7dd41542b2c7",
+    "src/LuaBinding.h": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+    "Themes/_fallback/Scripts/02 Sprite.lua": "e7de67ee7ff1b289dba7d1fb7d480eb5aa1fe6ec4da85dc7022d6973d10fe823"
+  },
+  "workspace_sources": {
+    "src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "src/LuaManager.h": "e20b23acfb112e6b68506d1f7bb158cf01d6bc1655392c5d44ef7dd41542b2c7",
+    "src/LuaBinding.h": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+    "Themes/_fallback/Scripts/02 Sprite.lua": "e7de67ee7ff1b289dba7d1fb7d480eb5aa1fe6ec4da85dc7022d6973d10fe823"
+  },
+  "harness_before": {
+    "harness_commit": "52385feff69a2aab9193a1a3740fa5dcf47e4408",
+    "cli_sha256": "9a4ad7bbeffd5bc708b770fcf8c703acff3fe9256750077b6d4df56fd61da47b",
+    "semantic_command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass64-runtime-actors-v1.exe",
+      "song-lua-semantic-baseline",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-before\\corpus",
+      "--simfile",
+      "probe/probe.sm",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-before\\traces",
+      "--beat-step",
+      "0.25",
+      "--max-events",
+      "1500000",
+      "--random-seed",
+      "1"
+    ],
+    "semantic_entry": {
+      "simfile": "probe/probe.sm",
+      "fixture": "probe/probe.sm.semantic.json",
+      "title": "Native BitmapText class lookup",
+      "lua_entries": 1,
+      "status": "partial",
+      "runtime_errors": 1
+    },
+    "runtime_errors": [
+      {
+        "actor": "def-0001",
+        "beat": 0,
+        "command": "OnCommand",
+        "definition_id": "def-0001",
+        "line": 2,
+        "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass65-sprite-load-before/corpus/probe/default.lua:6: LoadBackground returns the top argument, not self",
+        "name": "OnCommand",
+        "operation": "command.error",
+        "seconds": 0,
+        "source": "song:/default.lua"
+      }
+    ],
+    "lua_sha256": "9a76f81d869fc9f04702eeef3d27ad8816094d9f463011429131c8968d380cc1",
+    "capture_log_sha256": "7ab9b95d508c31c0a7409a06455c97009a5956b4a1639de72d5b95159ebabc56",
+    "published": false,
+    "native_control_test": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-native-v3.exe",
+      "sha256": "4cfb0cb285f0684f7340af8ce064b51e15832d949a6dfc9f4f9aaabbde69809a",
+      "results": [
+        {
+          "test": "actor_conformance::tests::sprite_load_uses_native",
+          "exit_code": 0,
+          "seconds": 0.32496023178100586,
+          "result": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.02s"
+          ],
+          "log_sha256": "d128f59f01c3f9dd7c4d9adf3e0a69b4617b34513836c71f0da256995b12f30b"
+        }
+      ]
+    }
+  },
+  "assertions": "Runtime probes retain the assertion body from the compiled native Sprite control unchanged.",
+  "archive_coverage": "archive_runtime_sprite verifies that an image loaded by the native fallback helper is archived with its original bytes, SHA-256 and dimensions even when unloaded before the first projected frame.",
+  "limitations": [
+    "The native texture-manager fixture checks Lua return values, validation and texture metadata; pixel rendering and background/banner texture policy are not covered.",
+    "Quad and other Sprite subclasses, native texture GetPath, font layout and full theme context still require independent audits.",
+    "No full-corpus parity claim: 501 simfiles and 492 archive variants remain the scope."
+  ],
+  "sharkmode_diagnosis": "The .25 archive omitted sharkmode-bg.png because the harness did not handle LoadBackground. DeadSync already recognizes the filename; no filename-search fix was justified. Fresh .26 capture and exact comparisons are pending."
+}

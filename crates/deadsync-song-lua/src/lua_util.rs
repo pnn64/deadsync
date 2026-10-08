@@ -6585,20 +6585,32 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
                         if let Some(metric) = method_arg(&args, 0).cloned().and_then(read_string) {
                             set_rolling_numbers_metric(&actor, &metric)?;
                         }
-                        return Ok(actor.clone());
+                        return Ok(Value::Table(actor.clone()));
                     }
                     if method_name == "Load" && actor_type_is(&actor, "GraphDisplay")? {
                         if let Some(metric) = method_arg(&args, 0).cloned().and_then(read_string) {
                             actor.set("__songlua_graph_display_metric", metric)?;
                         }
-                        return Ok(actor.clone());
+                        return Ok(Value::Table(actor.clone()));
                     }
                     if method_name == "Load" && actor_type_is(&actor, "Sound")? {
                         set_actor_sound_file_from_value(&actor, method_arg(&args, 0), true)?;
-                        return Ok(actor.clone());
+                        return Ok(Value::Table(actor.clone()));
                     }
-                    load_actor_texture(lua, &actor, method_arg(&args, 0), false)?;
-                    Ok(actor.clone())
+                    if method_name == "Load" {
+                        load_actor_texture(lua, &actor, method_arg(&args, 0), false)?;
+                        return Ok(Value::Table(actor.clone()));
+                    }
+                    let value = method_arg(&args, 0).cloned().unwrap_or(Value::Nil);
+                    let Some(path) = lua.coerce_string(value)? else {
+                        return Err(mlua::Error::runtime(format!(
+                            "{method_name}: string expected"
+                        )));
+                    };
+                    load_actor_texture(lua, &actor, Some(&Value::String(path)), false)?;
+                    // LunaSprite returns 1 without pushing self, so the
+                    // existing last argument is the result, including nil.
+                    Ok(args.back().cloned().unwrap_or(Value::Nil))
                 }
             })?,
         )?;

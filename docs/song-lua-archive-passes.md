@@ -2229,3 +2229,32 @@ executable pins are in runtime-actors-provenance.json.
 
 The previous 17-archive prefix is historical until refreshed on .25/.1864.
 The full scope remains 501 simfiles and 492 archive variants; parity is unfinished.
+
+## Pass 65: match native Sprite loading and retain runtime assets
+
+Compiled ITGmania Sprite userdata confirms that LoadBackground and LoadBanner
+require a string-compatible path, install the image and reset source dimensions.
+Both bindings return the last stack argument, including a trailing nil, because
+LunaSprite returns 1 without pushing self. The native fallback background helper
+ignores that result and returns the actor itself. The runtime controls retain
+the compiled native assertion body unchanged in both implementations.
+
+Harness 5ebb034 handles those native methods and records runtime texture
+requests. Its archive test loads the background through the actual fallback
+helper, unloads it before any projected frame, and still verifies the original
+PNG bytes, dimensions and SHA-256 in the complete archive. The obsolete
+background helper branch is removed. All 146 harness tests pass; two existing
+tests remain ignored.
+
+DeadSync .1865 matches the native return values and argument validation.
+All 674 song-Lua tests pass, along with the production build check and both
+cache checks. Cache version 56 invalidates captures that could continue invalid
+method chains. Native inputs, output, image and verification provenance are in
+sprite-load-provenance.json. The native texture fixture verifies Lua contracts
+and metadata; it does not establish pixel rendering or texture policy parity.
+
+The Sharkmode archive omitted sharkmode-bg.png because the harness did not
+handle LoadBackground. DeadSync already recognizes that filename. A fresh
+.26 capture and exact comparisons remain necessary before publication; no
+comparator has been relaxed. The historical 17-archive prefix requires refresh
+on .26/.1865. The full 501-simfile and 492-archive scope remains unfinished.
