@@ -1292,3 +1292,70 @@ return Def.ActorFrame{
         }
     }
 }
+
+#[test]
+fn multitap_strict_taps() {
+    crate::paths::init();
+    let song = tempfile::tempdir().expect("song directory");
+    let entry = song.path().join("default.lua");
+    // The original factory keeps the first tap dark and unsquashed until
+    // beat > tap, and remains visible at the last tap (321STARS beats 52/56).
+    fs::write(&entry, r##"
+multitaps = {Challenge = {{lane=1, taps={56,57,58}}}}
+local frame, arrow
+return Def.ActorFrame{
+    Def.ActorFrame{
+        Name="MultitapFrameP1",
+        Def.ActorFrame{
+            Name="MultitapP1_1",
+            InitCommand=function(self) frame=self; self:visible(false) end,
+            Def.Quad{Name="MultitapArrowP1_1", InitCommand=function(self) arrow=self end},
+            Def.BitmapText{Name="MultitapTextP1_1", Text=""},
+        },
+    },
+    Def.ActorFrame{
+        Name="Update",
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat=GAMESTATE:GetSongBeat()
+                frame:visible(beat<=58 and 56-beat<8)
+                local hits=0
+                for _,tap in ipairs(multitaps.Challenge[1].taps) do
+                    if beat>tap then hits=hits+1 end
+                end
+                arrow:diffuse(lerp_color(hits/2, color("#666666"), color("#ffffff")))
+                frame:zoomy(beat<=56 and 1 or 1.215)
+            end)
+        end,
+    },
+}
+"##).expect("write strict multitap script");
+    let mut context = SongLuaCompileContext::new(song.path(), "strict multitap taps");
+    context.players[1].enabled = false;
+    context.players[0].difficulty = SongLuaDifficulty::Challenge;
+    context.music_length_seconds = 18.2;
+    context.song_timing_bpms = vec![(0.0, 192.0)];
+    context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+        0.01, 0.0, &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 192.0)], ..Default::default()
+        }, &[],
+    ));
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile strict multitaps").remove(0);
+    let named = |name: &str| compiled.overlays.iter()
+        .position(|actor| actor.name.as_deref()==Some(name)).expect(name);
+    let frame = named("MultitapP1_1");
+    let arrow = named("MultitapArrowP1_1");
+    for (seconds, diffuse, zoom_y, visible) in [
+        (17.5, 0.4, 1.0, true),
+        (17.5 + 1.0/60.0, 0.7, 1.215, true),
+        (1087.0 / 60.0, 1.0, 1.215, true),
+        (18.133333, 1.3, 1.215, false),
+    ] {
+        let beat = song_beat_at_elapsed_seconds(seconds, &context);
+        let local = compiled_local_states_at(&compiled, &context, beat, seconds);
+        assert!((local[arrow].diffuse[0]-diffuse).abs()<0.0001, "at {seconds}: {:?}",local[arrow].diffuse);
+        assert!((local[frame].zoom_y-zoom_y).abs()<0.0001, "at {seconds}: {}",local[frame].zoom_y);
+        assert_eq!(local[frame].visible, visible, "at {seconds}");
+    }
+}

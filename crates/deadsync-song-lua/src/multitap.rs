@@ -434,6 +434,17 @@ where
     if multitaps.is_empty() {
         return Ok(None);
     }
+    // The analytic curves encode `beat > tap` with tap.next_up(). A float
+    // seconds conversion can collapse that edge onto the tap itself. Replay
+    // the authored Lua in that case, preserving its native frame predicates.
+    if context.song_timing.as_ref().is_some_and(|timing| {
+        multitaps.iter().flat_map(|desc| &desc.taps).any(|&tap| {
+            timing.get_time_for_beat_exact(tap.next_up())
+                <= timing.get_time_for_beat_exact(tap)
+        })
+    }) {
+        return Ok(None);
+    }
     let overlay_indices = named_overlay_indices_by_name(overlays.len(), |index| {
         overlays[index].actor.name.as_deref()
     });

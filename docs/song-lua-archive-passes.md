@@ -1747,3 +1747,32 @@ verified under this contract; older prefix counts remain historical. The full
 Detailed native source, fixture and executable hashes are committed in
 music-effect-clock-provenance.json; local gate and publication receipts are
 recorded in pass48-music-effect-comparison.json.
+
+## Pass 49: retain strict native multitap boundaries
+
+A complete harness 0.1.18 recapture of 321STARS retained eight differences
+at beats 52 and 56. Both clocks report those exact beats. The original
+multitap/Default.lua keeps a multitap visible at its final tap and advances
+its bounce/color only for beat > tap. DeadSync's analytic multitap path
+encoded those edges with tap.next_up(), which can round back to the same
+float seconds when converted for playback.
+
+DeadSync 0.5.1858 checks whether those strict edges survive conversion before
+replacing the authored callback with analytic curves. When they collapse,
+the existing chronological compiler replays the original Lua and bakes its
+native frame writes. Gameplay continues to consume compiled tracks. Cache
+version 49 invalidates the obsolete analytic windows. No comparison or
+observation was removed or relaxed.
+
+The same complete archive now passes all 372,891 comparisons, including all
+77,904 multitap writes. A strict-boundary regression covers the exact first
+tap and adjacent native frames; existing multitap, public music getter and
+music effect clock controls pass. All 668 core song-Lua tests, the production
+check and both cache checks pass. The clean archive replaces the obsolete
+fixture, with its aliases retained and original bytes saved under target.
+Hashes and before/after evidence are in multitap-boundary-provenance.json.
+
+Three complete archives are verified under the current native clock contract.
+The full 501-simfile / 492-archive audit remains unfinished. The next pass
+recaptures Warp Zone and Let Me Hear That from the start of the corpus;
+earlier prefix counts remain historical until independently revalidated.

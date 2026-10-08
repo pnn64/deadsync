@@ -1215,6 +1215,14 @@
       "archive": "ca4c89f21bd0ea6b82da1058372b7f79672d2eb6b4b3e1c468748193f890e6ff.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 49,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "superseded_archive": "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8.tar.zst",
+      "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

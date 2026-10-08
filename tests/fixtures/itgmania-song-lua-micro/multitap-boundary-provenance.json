@@ -1,0 +1,242 @@
+{
+  "pass": 49,
+  "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+  "harness_version": "0.1.18",
+  "reference": {
+    "title": "321STARS",
+    "source_simfile": "321STARS/321STARS.ssc",
+    "harness_version": "0.1.18",
+    "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+    "sha256": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a",
+    "compressed_bytes": 687255,
+    "uncompressed_sha256": "b55ab851bee76281cd6c59333ea2ccc93c2139b50dc2f0373b7134d504e57b5b",
+    "compression_level": 12,
+    "aliases": []
+  },
+  "capture": {
+    "trace_sha256": "e585e65e614434d182d59424f2d81a36faa582fdf68446456dd5d8010753993b",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "update_frames": 4794,
+    "end_position": {
+      "beat": 256.125,
+      "seconds": 79.88282012939453
+    },
+    "native_boundary_frames": [
+      [
+        52,
+        16.25
+      ],
+      [
+        56,
+        17.5
+      ]
+    ]
+  },
+  "native_sources": {
+    "SongPosition.cpp": "d1b5b42d441c830c96029118d7736217134c66fb2087931e056a69814852ee78",
+    "TimingData.cpp": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+  },
+  "chart_sources": {
+    "multitap/Default.lua": "98bc769d417aeda0a9f51dc5ae7d1018a14f36092054d8a8f10e4b64f0b4bc32",
+    "multitap/multitap_data.lua": "abfc2ff2b54b3db875a00afa6538c825bbd2ba244d35d7aeef144a2aca9820a8",
+    "321STARS.ssc": "28beaf91a86481c043e5eb717658cfa61736f5fa723dd9e5f8ae2649775c3d2c"
+  },
+  "reason": "The native Lua factory uses strict beat > tap and remains visible at the final tap. Analytic tap.next_up edges can collapse to the same float seconds. Replay the original Lua instead when its strict tap edges cannot be represented by analytic seconds windows. All observations and tolerances remain unchanged.",
+  "dead_sync_version": "0.5.1858",
+  "song_cache_version": 49,
+  "before": {
+    "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+    "version": "0.5.1857",
+    "exit_code": 1,
+    "seconds": 50.28158736228943,
+    "result": "result: FAILED; 0/1 fixtures passed; 372883 comparisons passed, 8 failed (372891 total); elapsed 50.17s",
+    "log_sha256": "e2d06962d7772200c9ecd42b872c1cbfe72b7b6758c2074fcaa49d257535a1b8",
+    "executable_sha256": "e59d4537530331daa316de2775df4487c75c0a87289078cacc236090cab8147b"
+  },
+  "after": {
+    "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+    "version": "0.5.1858",
+    "exit_code": 0,
+    "seconds": 79.5000729560852,
+    "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 77.98s",
+    "log_sha256": "4b056c5ddade9d1b07a97897c5853f6ea444ab41d9de17b6dcfb96c57f50f0cd",
+    "executable_sha256": "c2b8d52501996e761d1424031d0e8b060176a84ac9ef48f9678ac01e0503b206"
+  },
+  "native_controls": {
+    "executable": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass49-multitap-final-v2.exe",
+    "executable_sha256": "6c762440547d4b13c2dcd6a4b016b5ae60abdd1c5e8fcd03fac843494199d4ab",
+    "results": [
+      {
+        "test": "multitap::multitap_replay_keeps_strict_taps",
+        "exit_code": 0,
+        "seconds": 1.7810921669006348,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.32s"
+        ],
+        "log_sha256": "19ac54e0e391e3322ca6bee428b6f9eae670ec451a80e93b8709f8783135557a"
+      },
+      {
+        "test": "multitap::multitap_boundaries_and_noteskin_commands_match",
+        "exit_code": 0,
+        "seconds": 0.5989468097686768,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.55s"
+        ],
+        "log_sha256": "74fac0a99c793744717b0da45bf4b3af0776e6c974497552dac77b0a672203f2"
+      },
+      {
+        "test": "multitap::multitap_layer_writes",
+        "exit_code": 0,
+        "seconds": 0.9709362983703613,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.92s"
+        ],
+        "log_sha256": "b7ce863db6bf055a97b35f162c241fe3d405b6d39c559f1669c31c003cf2536b"
+      },
+      {
+        "test": "public_music_seconds_matches_native",
+        "exit_code": 0,
+        "seconds": 2.201441764831543,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.17s"
+        ],
+        "log_sha256": "2831145668611c3a57fadba2c58d6e46b342d2c4f191abd6b42a6c02cb68f552"
+      },
+      {
+        "test": "music_effect_clock_matches_native",
+        "exit_code": 0,
+        "seconds": 2.3018240928649902,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.25s"
+        ],
+        "log_sha256": "46a7a85004842e1739db22a72fc6709b210a52964a64943274f69b464ceec629"
+      }
+    ]
+  },
+  "core_gates": [
+    {
+      "job": "song-lua-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support"
+      ],
+      "exit_code": 0,
+      "seconds": 116.62812232971191,
+      "summaries": [
+        "test result: ok. 483 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.32s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 9.61s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "da2818887bc00452ac15973832ab1642a70595ddf8a20fda067a123af204b678"
+    },
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 10.541512727737427,
+      "summaries": [],
+      "log_sha256": "c66d7c40d5870267fe28f494b620b596b7453c206f3d0141734f1705bb335515"
+    },
+    {
+      "job": "cache-clock",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 22.600984573364258,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "c11eaca97a418553191f71df53691fcbc902a234642de6419281c0420ebd7275"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.703298807144165,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "3ca53d4c8ba09a22de28d1b8b63d138c5b5f982d05ce321a2316b8abd2212dee"
+    }
+  ],
+  "publication": {
+    "old": {
+      "title": "321STARS",
+      "source_simfile": "321STARS/321STARS.ssc",
+      "harness_version": "0.1.0",
+      "archive": "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8.tar.zst",
+      "sha256": "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8",
+      "compressed_bytes": 470270,
+      "uncompressed_sha256": "c0ad62afefd6a2890677a1b88bdbfbd7d6b90955f0d33c06af1f33e923b697e2",
+      "compression_level": 22,
+      "aliases": [
+        "1e21887539e377f2b89ad77dd20adcbc22abb4ed3062dfc0f311948198f99942.tar.zst"
+      ]
+    },
+    "new": {
+      "title": "321STARS",
+      "source_simfile": "321STARS/321STARS.ssc",
+      "harness_version": "0.1.18",
+      "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+      "sha256": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a",
+      "compressed_bytes": 687255,
+      "uncompressed_sha256": "b55ab851bee76281cd6c59333ea2ccc93c2139b50dc2f0373b7134d504e57b5b",
+      "compression_level": 12,
+      "aliases": [
+        "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8.tar.zst",
+        "1e21887539e377f2b89ad77dd20adcbc22abb4ed3062dfc0f311948198f99942.tar.zst"
+      ]
+    },
+    "index": 24
+  },
+  "scope": {
+    "simfiles": 501,
+    "archive_variants": 492,
+    "current_verified_archives": 3,
+    "verified_prefix": 0,
+    "complete": false
+  },
+  "final_boundary_regression": {
+    "executable": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass49-multitap-final-v3.exe",
+    "executable_sha256": "416e328e2f64a0b2ee63152d4e992768ec17ce035955986b283772cd8bb354d3",
+    "results": [
+      {
+        "test": "multitap::multitap_strict_taps",
+        "exit_code": 0,
+        "seconds": 2.5995371341705322,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.32s"
+        ],
+        "log_sha256": "7f6855e7620c153dff53eaa3756915b0139d10016af3905400a21491a3019546"
+      }
+    ]
+  }
+}
