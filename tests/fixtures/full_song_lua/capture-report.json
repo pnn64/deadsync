@@ -2391,6 +2391,14 @@
       "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "superseded_archive": "c0a1741ca9d19cd8b8baf1292402b010423732e0eebad4d371fadb8d6430e85a.tar.zst",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6462,6 +6470,33 @@
         "beat": 324,
         "music_seconds": 126.23377227783205,
         "seconds": 126.23377227783205
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 86.85642170906067,
+        "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 86.68s",
+        "log_sha256": "b68eef81516cea7beacdedc5abf19dc47fe03f23e45bea4f141367e7d702737b",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "eaf6a6b1b167fa4c4e78b1dc3233b533a221359af763dd2f4c727f3ecaa18497",
+      "capture_endpoint": {
+        "beat": 357,
+        "music_seconds": 138.1935577392578,
+        "seconds": 138.1935577392578
       },
       "runtime_errors": 0,
       "dropped_events": 0
