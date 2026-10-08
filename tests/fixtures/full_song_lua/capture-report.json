@@ -1263,6 +1263,14 @@
       "archive": "6415d8ad988f31c1c1d74bfd04379cc646fa1794de3125291cd7228fd9db60ea.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "1035/1035.sm",
+      "superseded_archive": "150693f162462dd89173d5e3b8b49db858d7956a2665eff50cc740db24409aef.tar.zst",
+      "archive": "425520c750b43e4d7f74af0928e81d58f86bf32c6a40142eace2126f2c4afc62.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1349,6 +1357,24 @@
         "seconds": 7.580486536026001,
         "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 7.44s",
         "log_sha256": "6d0341a4ca24812549a0b7acad762f84058c3defe42cf02f079624b3bb43f44e",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "425520c750b43e4d7f74af0928e81d58f86bf32c6a40142eace2126f2c4afc62.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "425520c750b43e4d7f74af0928e81d58f86bf32c6a40142eace2126f2c4afc62.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 4.701507568359375,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 4.58s",
+        "log_sha256": "22c770601e892300c35f8d494cedc5d9fcdd13fee0a46e00d82c4ee133fa1555",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }

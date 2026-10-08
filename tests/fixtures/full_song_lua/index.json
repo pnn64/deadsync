@@ -101,13 +101,14 @@
     {
       "title": "10:35",
       "source_simfile": "1035/1035.sm",
-      "harness_version": "0.1.5",
-      "archive": "150693f162462dd89173d5e3b8b49db858d7956a2665eff50cc740db24409aef.tar.zst",
-      "sha256": "150693f162462dd89173d5e3b8b49db858d7956a2665eff50cc740db24409aef",
-      "compressed_bytes": 56187,
-      "uncompressed_sha256": "b5e0ccd1e3585265b821c81ab5ae051360d85620a6a025a4f05c28028cb3112e",
-      "compression_level": 22,
+      "harness_version": "0.1.18",
+      "archive": "425520c750b43e4d7f74af0928e81d58f86bf32c6a40142eace2126f2c4afc62.tar.zst",
+      "sha256": "425520c750b43e4d7f74af0928e81d58f86bf32c6a40142eace2126f2c4afc62",
+      "compressed_bytes": 74177,
+      "uncompressed_sha256": "c23fc206b92b3ff603ab80306559f8ac036d466ea37f0488336c664d0c43ead6",
+      "compression_level": 12,
       "aliases": [
+        "150693f162462dd89173d5e3b8b49db858d7956a2665eff50cc740db24409aef.tar.zst",
         "473c8629b4d9604f055a333170aa731cb41a4afe68c71ca964407be9a245c52c.tar.zst",
         "86d614310d0cfd0f681d6c7c2c52032448765c1d4ce31f95a2e0ed079c19742c.tar.zst",
         "a0837c2abec2f00c763770d57f2a0cc87577cb4d209cee5fb1ac88628547ad97.tar.zst"
