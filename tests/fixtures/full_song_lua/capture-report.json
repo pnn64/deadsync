@@ -4644,6 +4644,25 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "d7b24f07056040eccdcdc9a601ba9ba8989121a591cd5d1fe047a34af99ad51a.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "d7b24f07056040eccdcdc9a601ba9ba8989121a591cd5d1fe047a34af99ad51a.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 12.003743648529053,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.89s",
+        "log_sha256": "eea90e4e60d839a2edd6c2c90b75d622d149e22f2b42e6fe78293604906e505d",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
     }
   ]
 }
