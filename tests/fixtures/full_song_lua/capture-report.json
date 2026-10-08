@@ -4587,6 +4587,25 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "67cc9c55d569fd38c830ee4454f643871fadd5075286dca4bd164cb22d473ac8.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "67cc9c55d569fd38c830ee4454f643871fadd5075286dca4bd164cb22d473ac8.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 9.009241580963135,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.89s",
+        "log_sha256": "e4b78de4743a9922cc9e0ddcc349c3b8a4a148f4edc4c14f565a6cae666e69a4",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
     }
   ]
 }
