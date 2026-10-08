@@ -2055,6 +2055,14 @@
       "archive": "54fbf164497bab4d1e56666876c05b2a8f0bf03529130ded37d481684549ad1d.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "d7b24f07056040eccdcdc9a601ba9ba8989121a591cd5d1fe047a34af99ad51a.tar.zst",
+      "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4978,6 +4986,32 @@
       "capture_endpoint": {
         "beat": 333.25,
         "seconds": 166.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 11.98954701423645,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.86s",
+        "log_sha256": "4e3dcc152338978842100d0965c0739267dc9ece88ffa926775187033d1dd461",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "f620e5c65f249448128683a3613d9177ad870d6cb2a678d95f93a26d20fd0b1c",
+      "capture_endpoint": {
+        "beat": 338,
+        "seconds": 130
       },
       "runtime_errors": 0,
       "dropped_events": 0

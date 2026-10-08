@@ -2451,3 +2451,5 @@ Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verif
 Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
 
 Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
