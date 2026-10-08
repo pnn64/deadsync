@@ -4549,6 +4549,25 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 21.664710998535156,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 21.55s",
+        "log_sha256": "32220e18be4f90b981caede74f59012ffd5dac144c1745c0777e473fa6f63276",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
     }
   ]
 }
