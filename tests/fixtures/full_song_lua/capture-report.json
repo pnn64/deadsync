@@ -2290,6 +2290,24 @@
         "log_sha256": "c71f8d4b3fa3a44b1d5e1aa1aa75bffe4f498e974064cdd4edc8add9ecd37510",
         "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
       }
+    },
+    {
+      "pass_number": 57,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "89d55828e1772bced77f29a811a657786b05f8cb8c45578bb23849d890252a4d.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "89d55828e1772bced77f29a811a657786b05f8cb8c45578bb23849d890252a4d.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 9.39262342453003,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.30s",
+        "log_sha256": "575f20ffdf0aa6bc92017218e2802ca1dcbc3881f3941c7563a8e3f70a590da0",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      }
     }
   ]
 }
