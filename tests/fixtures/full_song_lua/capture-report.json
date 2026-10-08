@@ -2231,6 +2231,14 @@
       "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
       "harness_version": "0.1.30",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "40ae7d06fb4edacdfc931e4fd7f605d83ad529d41e126de88487d97403311dc1.tar.zst",
+      "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5726,6 +5734,32 @@
       "capture_endpoint": {
         "beat": 384,
         "seconds": 144
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 63.06522059440613,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 62.83s",
+        "log_sha256": "0e1416249784e623b9b7f50871e783dbfa14b20504ba3e76b17e69c1336a1b8c",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "2503ac59d3866861b8b3cf5de20634cb72d176e71d53f1e721c71ec810ae0cb3",
+      "capture_endpoint": {
+        "beat": 481,
+        "seconds": 140.78048706054688
       },
       "runtime_errors": 0,
       "dropped_events": 0
