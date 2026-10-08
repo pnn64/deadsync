@@ -1983,6 +1983,14 @@
       "archive": "a84ff944882c91f701e6b0ea4064c25949f0eee87705e843ea5b209b89eaa83a.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "superseded_archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+      "archive": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4432,6 +4440,31 @@
       "capture_endpoint": {
         "beat": 910.75,
         "seconds": 273.2250061035156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 87.26611709594727,
+        "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 87.12s",
+        "log_sha256": "84ad7b7d5cd26c4280eb630359dddc91ede97067249f17e5e8bec3d5955416a6",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "0fa3796e8d677bcde0903e16fc0a91f692e70b68e9dff9c0c6a4a2edf6e2f915",
+      "capture_endpoint": {
+        "beat": 256.125,
+        "seconds": 79.88282012939453
       },
       "runtime_errors": 0,
       "dropped_events": 0
