@@ -2542,3 +2542,5 @@ Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons
 Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
 
 Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
