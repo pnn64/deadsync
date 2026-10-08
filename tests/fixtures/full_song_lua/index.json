@@ -285,13 +285,14 @@
     {
       "title": "279|MODS|[lv.09] Karachi",
       "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
-      "harness_version": "0.1.8",
-      "archive": "0044b7fb565b42508bfa6b3df15a1c7759386e378f1bb579ccfdd955678ba9ad.tar.zst",
-      "sha256": "0044b7fb565b42508bfa6b3df15a1c7759386e378f1bb579ccfdd955678ba9ad",
-      "compressed_bytes": 1100994,
-      "uncompressed_sha256": "a5a121df2539c463a478dd18453cc2bb5271be15f862a283797bb5d7dcab9361",
-      "compression_level": 22,
+      "harness_version": "0.1.18",
+      "archive": "5a8c292fcc68881fb9df784a3b89d18f5f1b54dd8fb7fe317a192a077155cae4.tar.zst",
+      "sha256": "5a8c292fcc68881fb9df784a3b89d18f5f1b54dd8fb7fe317a192a077155cae4",
+      "compressed_bytes": 1170253,
+      "uncompressed_sha256": "1635b503c2eda7f15a063c62a0ed398024f264d663fc080777aed53d84f00b84",
+      "compression_level": 12,
       "aliases": [
+        "0044b7fb565b42508bfa6b3df15a1c7759386e378f1bb579ccfdd955678ba9ad.tar.zst",
         "ecfa52a18de0b184cfd754d17fdee4114afb497eaff07b570ed9f372392266e1.tar.zst",
         "5c21fcf0142b8e17cb4e295191b19731dc629257b7ddbff6a6cca4c9289e7032.tar.zst",
         "d44392c4e856ba565f5f4f787d94d272a4f3125e183230fd982eec30997b3c7f.tar.zst"

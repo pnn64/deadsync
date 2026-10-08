@@ -1351,6 +1351,14 @@
       "archive": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "0044b7fb565b42508bfa6b3df15a1c7759386e378f1bb579ccfdd955678ba9ad.tar.zst",
+      "archive": "5a8c292fcc68881fb9df784a3b89d18f5f1b54dd8fb7fe317a192a077155cae4.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1635,6 +1643,24 @@
         "seconds": 49.119179248809814,
         "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 49.00s",
         "log_sha256": "c595f91cd3fc484a5ca7523dc8acd12aad6e9fe443bc266cc6477fb220b65bcf",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "5a8c292fcc68881fb9df784a3b89d18f5f1b54dd8fb7fe317a192a077155cae4.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "5a8c292fcc68881fb9df784a3b89d18f5f1b54dd8fb7fe317a192a077155cae4.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 80.72109961509705,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 80.53s",
+        "log_sha256": "0ba8dad26083eccf15a930d3b4264491b5c56730f990a475f565399d350af566",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
