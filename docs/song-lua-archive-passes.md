@@ -1562,7 +1562,14 @@ All 15 native controls and all 667 core song-Lua tests pass; three existing
 core tests remain ignored. The production build without test support and both
 cache checks pass.
 
-The identical complete harness-0.1.16 KABOOOOOM archive and the first 18
-previously passing archives are being checked with the new executable.
-Their receipts remain under target/song-lua-archive-passes; full-corpus
-verification remains unfinished.
+The identical complete harness-0.1.16 KABOOOOOM archive now passes all
+2,274,713 comparisons (previously 11 failures). Its complete 35,928,363-byte
+capture, with zero native errors or drops, replaces the obsolete indexed
+archive. The superseded bytes remain under target; aliases and fixture
+references follow the validated replacement. No observation, tolerance or
+comparison was removed.
+
+The first 18 previously passing archives are being rechecked with the new
+executable. Hashes, production gates, count control and same-archive results
+are linked in pass42-wrapper-fade-comparison.json under
+target/song-lua-archive-passes. Full-corpus verification remains unfinished.

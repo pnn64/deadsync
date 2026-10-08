@@ -1143,6 +1143,14 @@
       "archive": "7014cbf42845f417b626f9a1507dba786e059658df8d5ea7c1d42a87f9e43d0a.tar.zst",
       "harness_version": "0.1.13",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 42,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "superseded_archive": "50592d66df8ccd3b06d810115692dac1e6f470eb57bd889833d85f0debc31d90.tar.zst",
+      "archive": "2db5ec86b65bcd1f79db9ef7aa1cae25625d6cc6d1118aac24ad20d023ef083f.tar.zst",
+      "harness_version": "0.1.16",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }
