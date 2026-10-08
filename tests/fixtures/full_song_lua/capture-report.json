@@ -1583,6 +1583,14 @@
       "archive": "e16368cdb933ad1eb4ef71f253e28989ff3ea2ee86690027bfa9c0606007f38f.tar.zst",
       "harness_version": "0.1.22",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 59,
+      "source_simfile": "1035/1035.sm",
+      "superseded_archive": "47e53ea68e4c36b64e7fc9ac4c4262c810795dd929e9b3f392501b61da6bfa11.tar.zst",
+      "archive": "38f7378ae321cf5e160f16b2debc433e79e5ab440923b50ae46c14563e9876f2.tar.zst",
+      "harness_version": "0.1.22",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -2776,6 +2784,31 @@
       "capture_endpoint": {
         "beat": 360.75,
         "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 59,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "38f7378ae321cf5e160f16b2debc433e79e5ab440923b50ae46c14563e9876f2.tar.zst",
+      "harness_version": "0.1.22",
+      "harness_commit": "7abb249b183a6ef884ee3bc280273383edce9ba6",
+      "native_executable_sha256": "5b431d3dd63f6e0707515adcaf06817f712f21e6023f7ac816d9d007460d265a",
+      "verification": {
+        "archive": "38f7378ae321cf5e160f16b2debc433e79e5ab440923b50ae46c14563e9876f2.tar.zst",
+        "version": "0.5.1862",
+        "exit_code": 0,
+        "seconds": 7.791687250137329,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.68s",
+        "log_sha256": "106cd6f7e975f7d4568a2b7baed95360d849a4bd97630877af91f20488a5cdf3",
+        "executable_sha256": "4972c43ffc6c2a0d003556fd462bc2ce2a5386b55bf321a2b293fbc0ef25b390"
+      },
+      "capture_log_sha256": "43397e7312872c8a549f8a5cb2a76550d488442f5d6ca4b2eddbcd8d755b4924",
+      "capture_endpoint": {
+        "beat": 333.25,
+        "seconds": 166.625
       },
       "runtime_errors": 0,
       "dropped_events": 0
