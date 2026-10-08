@@ -2239,6 +2239,14 @@
       "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
       "harness_version": "0.1.30",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "superseded_archive": "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
+      "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5763,6 +5771,55 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 1.8797852993011475,
+        "result": "result: ok; 1/1 fixtures passed; 116603 comparisons passed, 0 failed (116603 total); elapsed 0.15s",
+        "log_sha256": "abed2463b16230627b5c5804b91ca63ff66b39fbfd94f44347f920ef447d523b",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "endpoint_guard_tests": {
+        "executable_sha256": "02e95b612aa5249a0011b9687b79f2766e134dcfc19fc4bb2d220cbfb1ca6468",
+        "tests": [
+          {
+            "test": "native_song_endpoint_rejects_incomplete_replays",
+            "exit_code": 0,
+            "log_sha256": "6e95353884a00577a5e2b27b0d129b40d3d1e27e9323ef9c0849c9cdd5dccba9"
+          },
+          {
+            "test": "archive_reference_rejects_obsolete_replays",
+            "exit_code": 0,
+            "log_sha256": "c7482b48a518219c3b2b21032b354e792844e8ad11d4e63757641fe09d6b482f"
+          },
+          {
+            "test": "empty_song_layers_match_native_archive",
+            "exit_code": 0,
+            "log_sha256": "aea929971d7d25382435dca7ac30a8bdae178826a9cb5dba075e8f173c312947"
+          },
+          {
+            "test": "consolidated_song_lua_references_resolve_and_are_compressed",
+            "exit_code": 0,
+            "log_sha256": "0a5dc26a24dae66459898e3f90c2fd7401edf4637765fd6dbf8521376b0a794b"
+          }
+        ]
+      },
+      "scope": {
+        "original_simfiles": 501,
+        "canonical_archives": 483,
+        "historical_variants": 9,
+        "unindexed_simfiles": 18
+      },
+      "reason": "Validate the raw native Song::GetLastSecond endpoint and native final music timestamp, independent of the trace self-declared duration."
     }
   ]
 }

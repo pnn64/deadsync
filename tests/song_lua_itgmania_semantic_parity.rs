@@ -72,6 +72,8 @@ struct NativeTrace {
     #[serde(default)]
     trace_until_seconds: Option<f64>,
     #[serde(default)]
+    native_song_end: Option<NativeSongEnd>,
+    #[serde(default)]
     arrow_timing: String,
     #[serde(default)]
     random_seed: Option<u32>,
@@ -338,6 +340,14 @@ struct NativePosition {
     #[serde(default)]
     beat: Option<f32>,
     seconds: f32,
+    #[serde(default)]
+    music_seconds: Option<f32>,
+}
+
+#[derive(Deserialize)]
+struct NativeSongEnd {
+    seconds: f32,
+    music_seconds: f32,
 }
 
 #[derive(Deserialize)]

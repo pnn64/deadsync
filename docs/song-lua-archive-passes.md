@@ -2499,3 +2499,12 @@ Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. Th
 Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
 
 Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 72: require the raw native song endpoint
+
+ITGmania retains the raw Song::GetLastSecond value for its end timing. The harness beat/time roundtrip could stop below LASTSECONDHINT, and its selected chart could end before another chart in the song. Five compiled native controls cover fractional hints, both offset signs, a non-dyadic offset and a later chart. Four controls miss the native end callback on harness .30; all five reach it on .31.
+
+DeadSync .1869 requires native endpoint metadata, the final native music timestamp and the last update frame to cover that endpoint. A native positive control and six mutations verify rejection of missing, short or nonfinite endpoints. The old clean Igaku capture, which passed 514,954 comparisons, is now rejected because that agreement did not prove complete coverage. Its .31 recapture reaches the original raw hint with zero runtime errors and no dropped events; full parity verification remains pending.
+
+The corrected Bank Account archive passes all 116,603 comparisons. Its previous bytes and aliases are preserved. Scope remains 501 original simfiles, 483 canonical archives, nine historical variants and 18 unindexed sources. The old pass 71 stopped at 12 archives when the necessary harness source change activated its guard. The full corpus must still be revalidated under the corrected endpoint contract.

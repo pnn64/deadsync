@@ -7,7 +7,7 @@
   "tests/fixtures/itgmania-song-archives/03ef9cc9463cddaea32617872d3080d6ce39922d8eb1f4daea3f74d7393f59df.tar.zst": "f7a4e675dc606d108be0983b49f66f0051e7b309f941740924d5251c2e238601.tar.zst",
   "tests/fixtures/itgmania-song-archives/0453922cd48384732dccc26d3f9d600775bc5af356437e243355e41fcee04fac.tar.zst": "d4489b565e4307f1426cea08dcbe180cc2af95b6f8eb3b2145623c3a02f54563.tar.zst",
   "tests/fixtures/itgmania-song-archives/0472ec86a1e764c3f7bfc901de1a70764d29a5d326af7defd0314deb1f3497fb.tar.zst": "5ace89aa08a222d02b905c67ea465a175c627d46f988e9a7b4527cb11fd252ec.tar.zst",
-  "tests/fixtures/itgmania-song-archives/05b1f3435d3a8892b8172bf6b2c7dd7c28f2782d8cadd36e8cd6b17d96b2643f.tar.zst": "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
+  "tests/fixtures/itgmania-song-archives/05b1f3435d3a8892b8172bf6b2c7dd7c28f2782d8cadd36e8cd6b17d96b2643f.tar.zst": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
   "tests/fixtures/itgmania-song-archives/0614bd4fc5bb142317e944345c652111054c7ecc9cd96d07e34da31f663a7652.tar.zst": "6f079cd61544f4ae39e7cb4cb2a51cf065f340b0ad973ffdb9568031110f82a3.tar.zst",
   "tests/fixtures/itgmania-song-archives/06173257978408c0243052f0ed43304c074ab4304da42111b16c6479b7acabbd.tar.zst": "1e3f1e28b29d56eca62ce7c2fd0fb5efbf5960616c2975e0e7137a7b0d177abf.tar.zst",
   "tests/fixtures/itgmania-song-archives/06de3fa8f9c4052b1d66b192856d9149e92777a7bf967a010b7c2b4fcc3f42e8.tar.zst": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
@@ -648,5 +648,7 @@
   "tests/fixtures/itgmania-song-lua/finite/sta - Finite.sm.semantic.json": "83c43fd66157e2b5991e9e62407be170405a63f22868134f684160185324e45a.json.zst",
   "tests/fixtures/itgmania-song-lua/fof_guys/fof.ssc.semantic.json": "0f7a4e5f7ebd12f22bba4dee4b251af15158038dd855b7f0d63af6bb00b758fb.json.zst",
   "tests/fixtures/itgmania-song-lua/kaboooooom!/KABOOOOOM!!!!.sm.semantic.json": "c849661dec2cf14a8f878df6ab7c4e9b8f8a40e91b88dae4c2dc8ce9d52bb6c2.json.zst",
-  "tests/fixtures/itgmania-song-lua/kaboooooom!/KABOOOOOM!!!!.ssc.semantic.json": "44705eb85215db09c1bb18d609776867d7f22bf65fab044d8f3a31e12bc73e28.json.zst"
+  "tests/fixtures/itgmania-song-lua/kaboooooom!/KABOOOOOM!!!!.ssc.semantic.json": "44705eb85215db09c1bb18d609776867d7f22bf65fab044d8f3a31e12bc73e28.json.zst",
+  "tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst": "fbebbc09945f68f58571fc70c99aa5c86686634f68a6b410fc5be8238c25d4b5.json.zst",
+  "tests/fixtures/itgmania-song-lua-micro/native-song-end.provenance.json.zst": "373913a5b9b4bfb0c2d534a3d0f11a8fb65c7d2487ec7554ec2d019ac530b266.json.zst"
 }

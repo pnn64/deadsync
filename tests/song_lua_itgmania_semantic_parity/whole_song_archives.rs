@@ -428,6 +428,7 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         trace.dropped_events, 0,
         "dropped native events invalidate the reference"
     );
+    validate_native_endpoint(trace);
     assert!(
         trace
             .actor_definitions
@@ -583,6 +584,49 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         }),
         "lossy native render alpha; recapture with harness 0.1.8 or later",
     );
+}
+
+fn validate_native_endpoint(trace: &NativeTrace) {
+    let endpoint = trace
+        .native_song_end
+        .as_ref()
+        .expect("missing native Song::GetLastSecond endpoint; recapture this archive");
+    let music_seconds = trace
+        .end_position
+        .music_seconds
+        .expect("missing final native music timestamp; recapture this archive");
+    assert!(
+        endpoint.seconds.is_finite() && endpoint.music_seconds.is_finite()
+            && music_seconds.is_finite(),
+        "native endpoint must be finite"
+    );
+    assert!(
+        trace.end_position.seconds >= endpoint.seconds && music_seconds >= endpoint.music_seconds
+            && trace.update_frames.last().is_some_and(|frame| frame.1 >= f64::from(endpoint.seconds)),
+        "native replay must reach the raw Song::GetLastSecond endpoint"
+    );
+}
+
+#[test]
+fn native_song_endpoint_rejects_incomplete_replays() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst");
+    let control = read_trace_file(&path);
+    validate_native_endpoint(&control);
+    for mutation in ["missing endpoint", "missing music", "short clock", "short frame", "short music", "nonfinite endpoint"] {
+        let mut trace = read_trace_file(&path);
+        let endpoint = trace.native_song_end.as_ref().expect("native endpoint");
+        match mutation {
+            "missing endpoint" => trace.native_song_end = None,
+            "missing music" => trace.end_position.music_seconds = None,
+            "short clock" => trace.end_position.seconds = endpoint.seconds - 0.125,
+            "short frame" => trace.update_frames.last_mut().expect("last frame").1 = f64::from(endpoint.seconds) - 0.125,
+            "short music" => trace.end_position.music_seconds = Some(endpoint.music_seconds - 0.125),
+            "nonfinite endpoint" => trace.native_song_end.as_mut().expect("native endpoint").music_seconds = f32::NAN,
+            _ => unreachable!("listed replay mutation"),
+        }
+        assert!(std::panic::catch_unwind(|| validate_native_endpoint(&trace)).is_err(), "{mutation}");
+    }
 }
 
 fn compose_entire_song_with_progress(
