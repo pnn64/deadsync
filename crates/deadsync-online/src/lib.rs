@@ -5,6 +5,7 @@ pub mod downloads;
 pub mod groovestats;
 pub mod itgdb;
 pub mod lobbies;
+pub mod pack_archive;
 pub mod pack_page;
 pub mod player_leaderboards;
 pub mod popular_packs;
@@ -14,6 +15,8 @@ pub mod score_import;
 pub mod smo_describe;
 pub mod smo_details;
 pub mod smo_search;
+pub mod smo_songs;
+pub mod song_preview;
 pub mod srpg_shop;
 pub mod stepmaniaonline;
 
