@@ -15,6 +15,7 @@ use deadsync_online::popular_packs::PopularPhase;
 use deadsync_online::smo_details::DetailsPhase;
 use deadsync_online::stepmaniaonline::{CatalogPhase, InstallPhase, PackInfo};
 
+use super::chart_window;
 use super::detail;
 use super::layout as lo;
 use super::spinner;
@@ -110,7 +111,9 @@ pub fn push_actors(
     // The detail page fills the screen, and everything else stands down.
     if state.zone == Zone::Detail {
         detail::push_page(actors, state);
+        chart_window::push_window(actors, state, w);
         push_footer(actors, state, w);
+        chart_window::push_song_menu(actors, state, w, h);
         return;
     }
 
@@ -178,8 +181,25 @@ fn push_reload_dialog(
         [0.05, 0.05, 0.07, 1.0],
         Z_MODAL_PANEL,
     );
+    // The original's words for what changed: it said "New Packs Installed"
+    // over a single song, because it only ever knew that something had.
+    let packs = state
+        .installed_dirs
+        .iter()
+        .filter(|dir| {
+            dir.file_name()
+                .and_then(|name| name.to_str())
+                .is_none_or(|name| name != deadsync_online::smo_songs::SINGLES_GROUP)
+        })
+        .count();
+    let songs = super::preview::songs_added(state);
+    let title = if packs == 0 && songs > 0 {
+        "NEW SONGS INSTALLED"
+    } else {
+        "NEW CONTENT INSTALLED"
+    };
     actors.push(act!(text:
-        font("wendy"): settext("NEW CONTENT INSTALLED".to_owned()):
+        font("wendy"): settext(title.to_owned()):
         align(0.5, 0.5): xy(cx, cy - 50.0): zoom(0.5): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_MODAL_TEXT)
     ));
@@ -207,15 +227,36 @@ fn push_reload_dialog(
         return;
     }
 
-    let packs = state.installed_dirs.len();
-    let noun = if packs == 1 { "pack" } else { "packs" };
+    let mut bits: Vec<String> = Vec::with_capacity(2);
+    if packs > 0 {
+        bits.push(format!(
+            "{packs} {}",
+            if packs == 1 { "pack" } else { "packs" }
+        ));
+    }
+    if songs > 0 {
+        bits.push(format!(
+            "{songs} {}",
+            if songs == 1 { "song" } else { "songs" }
+        ));
+    }
+    let what = if packs == 0 && songs > 0 {
+        "song"
+    } else {
+        "content"
+    };
+    let added = if bits.is_empty() {
+        "Library changed.".to_owned()
+    } else {
+        format!("{} added.", bits.join(" and "))
+    };
     actors.push(act!(text:
-        font("miso"): settext(format!("{packs} {noun} added.")):
+        font("miso"): settext(added):
         align(0.5, 0.5): xy(cx, cy - 26.0): zoom(0.6): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z_MODAL_TEXT)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Reload songs now so the new content shows up?".to_owned()):
+        font("miso"): settext(format!("Reload songs now so the new {what} shows up?")):
         align(0.5, 0.5): xy(cx, cy - 8.0): zoom(0.5): horizalign(center):
         maxwidth(panel_w - 40.0):
         diffuse(0.85, 0.85, 0.85, 1.0): z(Z_MODAL_TEXT)
@@ -2084,7 +2125,31 @@ fn footer_hint(state: &State) -> String {
         "BACK back"
     };
     let body = match state.zone {
-        Zone::Detail => "UP/DOWN songs   LEFT/RIGHT page   START download",
+        Zone::Detail if state.song_menu.is_some() => "LEFT/RIGHT choose   START go",
+        Zone::Detail if super::preview::chart_showing(state) => {
+            "UP/DOWN difficulty   SELECT/START stop the preview"
+        }
+        Zone::Detail if super::preview::busy(state) => {
+            "UP/DOWN songs   SELECT/START stop the preview"
+        }
+        Zone::Detail if state.detail_on_button => {
+            "START download this pack   DOWN back to the songs"
+        }
+        // No song to act on: START is the pack's download, and SELECT asks
+        // for a page that never came, in the original's DetailLost words.
+        Zone::Detail if state.page.page.is_none() && state.page.phase == PagePhase::Error => {
+            "SELECT try again   START download"
+        }
+        Zone::Detail
+            if state
+                .page
+                .page
+                .as_ref()
+                .is_none_or(|page| page.songs.is_empty()) =>
+        {
+            "START download"
+        }
+        Zone::Detail => "UP/DOWN songs   LEFT/RIGHT page   SELECT preview   START song options",
         Zone::Tabs if tab(state) == Tab::Search => "LEFT/RIGHT views   START type a search",
         Zone::Tabs => "LEFT/RIGHT views   DOWN open   SELECT reload",
         Zone::Years => "LEFT/RIGHT year   DOWN packs   UP views   SELECT reload",
@@ -2173,5 +2238,39 @@ mod tests {
         assert_ne!(low, mid);
         assert_ne!(mid, high);
         assert!(low[1] > high[1], "green at the bottom, red at the top");
+    }
+
+    /// The detail page's hint says what its keys do now: the song keys, the
+    /// button's, or -- with no song list -- the pack's download and a retry.
+    #[test]
+    fn the_detail_hint_follows_what_start_would_do() {
+        use deadsync_online::pack_page::{PackPage, PageSnapshot, SongRow};
+        let mut state = super::super::state::init();
+        state.zone = Zone::Detail;
+        state.page = std::sync::Arc::new(PageSnapshot {
+            phase: PagePhase::Error,
+            pack_id: 7,
+            page: None,
+            message: Some("timed out".to_owned()),
+            revision: 1,
+        });
+        assert!(footer_hint(&state).starts_with("SELECT try again   START download"));
+
+        state.page = std::sync::Arc::new(PageSnapshot {
+            phase: PagePhase::Ready,
+            pack_id: 7,
+            page: Some(std::sync::Arc::new(PackPage {
+                songs: vec![SongRow {
+                    title: "Song A".to_owned(),
+                    ..SongRow::default()
+                }],
+                ..PackPage::default()
+            })),
+            message: None,
+            revision: 2,
+        });
+        assert!(footer_hint(&state).contains("START song options"));
+        state.detail_on_button = true;
+        assert!(footer_hint(&state).starts_with("START download this pack"));
     }
 }

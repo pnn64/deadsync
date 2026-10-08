@@ -17,6 +17,7 @@
 
 use crate::color;
 use deadsync_chart::song::SyncPref;
+use deadsync_notefield::ModelMeshCache;
 use deadsync_online::beginner::{BeginnerPhase, BeginnerSnapshot};
 use deadsync_online::itgdb::{ItgdbSnapshot, normalize_name};
 use deadsync_online::pack_page::PageSnapshot;
@@ -24,7 +25,9 @@ use deadsync_online::popular_packs::{PopularPhase, PopularSnapshot};
 use deadsync_online::smo_describe::{DescribeSnapshot, View, ViewPhase};
 use deadsync_online::smo_details::{DetailsPhase, DetailsSnapshot, PackDetails};
 use deadsync_online::smo_search::{SearchPhase, SearchSnapshot};
+use deadsync_online::smo_songs::{PreviewSnapshot, SongInstallsSnapshot};
 use deadsync_online::stepmaniaonline::{InstallPhase, PackInfo, Snapshot, search_catalog};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -582,6 +585,41 @@ pub struct State {
     /// Pack folders installed since the library was last rescanned. Kept
     /// across visits: "Not yet" leaves them for the next way out.
     pub(super) installed_dirs: Vec<PathBuf>,
+    /// The chart preview up, or fading out.
+    pub(super) preview: Option<super::preview::Preview>,
+    /// "Listen or Download?", while it is asked.
+    pub(super) song_menu: Option<super::preview::SongMenu>,
+    /// The chart preview's and the single songs' latest answers.
+    pub(super) song_preview: Arc<PreviewSnapshot>,
+    pub(super) song_installs: Arc<SongInstallsSnapshot>,
+    /// Seconds into the playing audio file, from the music clock. Only fed
+    /// while a preview is playing.
+    pub(super) music_time: Option<f32>,
+    /// The reader's own noteskin, once it is loaded and its textures are up.
+    pub(super) preview_skin: Option<Arc<deadsync_assets::noteskin::Noteskin>>,
+    /// That skin's model geometry, built once on the loader's thread and
+    /// shared by every note the window draws. Borrowed mutably while drawing,
+    /// which only has the state to read.
+    pub(super) preview_model_cache: RefCell<ModelMeshCache>,
+    /// Why the last preview or song request did not happen, for the song
+    /// list's header, as the original shows it.
+    pub(super) preview_message: Option<String>,
+    /// The single song last asked for, by pack and title: its progress and
+    /// how it ended stay in its pack's header whatever row the cursor is on,
+    /// where the original holds a window up for it. Replaced by the next
+    /// request, and dropped by the next preview.
+    pub(super) watched_song: Option<(u64, String, String)>,
+    /// Single songs a finished rescan has loaded, by pack and title, so the
+    /// reload question counts only the ones still owed. Their install records
+    /// outlive the rescan; at most `smo_songs`'s 64 of them.
+    pub(super) reloaded_songs: Vec<(u64, String, String)>,
+    /// The detail page's cursor is on the pack's download button rather than
+    /// on the song list: the original's `detailZone == "download"`, reached by
+    /// UP from the first song.
+    pub(super) detail_on_button: bool,
+    /// Work for the shell: song requests and the music they start and stop.
+    pub(super) pending_songs: Vec<super::preview::SongRequest>,
+    pub(super) pending_audio: Vec<deadsync_theme::AudioRequest>,
     pub(super) pending_reload_dirs: Vec<PathBuf>,
 }
 
@@ -647,6 +685,19 @@ pub fn init() -> State {
         pending_turn: None,
         reload_prompt: None,
         installed_dirs: Vec::new(),
+        preview: None,
+        song_menu: None,
+        song_preview: Arc::new(PreviewSnapshot::default()),
+        song_installs: Arc::new(SongInstallsSnapshot::default()),
+        music_time: None,
+        preview_skin: None,
+        preview_model_cache: RefCell::new(ModelMeshCache::default()),
+        preview_message: None,
+        watched_song: None,
+        reloaded_songs: Vec::new(),
+        detail_on_button: false,
+        pending_songs: Vec::new(),
+        pending_audio: Vec::new(),
         pending_reload_dirs: Vec::new(),
     }
 }
@@ -672,8 +723,14 @@ pub fn on_enter(state: &mut State) {
     state.caret_elapsed = 0.0;
     state.reload_prompt = None;
     state.pending_turn = None;
+    state.preview = None;
+    state.song_menu = None;
+    state.preview_message = None;
+    state.watched_song = None;
+    state.music_time = None;
     state.song_window = 0;
     state.song_pick = 0;
+    state.detail_on_button = false;
     // A confirm that was left open is not still being asked.
     state.removing = None;
     state.remove_result = None;
@@ -698,6 +755,7 @@ pub fn update(state: &mut State, delta_time: f32) {
     state.caret_elapsed += delta_time;
     state.query_idle += delta_time;
     super::input::repeat_nav_hold(state, delta_time);
+    super::preview::update(state, delta_time);
 
     // Reset the dwell whenever the cursor lands on a different pack, so the
     // timer measures rest rather than elapsed time on the screen.
@@ -725,6 +783,9 @@ pub struct Services {
     pub popular: Arc<PopularSnapshot>,
     pub beginner: Arc<BeginnerSnapshot>,
     pub describe: Arc<DescribeSnapshot>,
+    /// The chart preview's answer and the single songs on their way in.
+    pub song_preview: Arc<PreviewSnapshot>,
+    pub song_installs: Arc<SongInstallsSnapshot>,
     /// Artwork that is not coming, so a row can stop waiting for it.
     pub banner_failed: Arc<HashSet<u64>>,
     /// Whether `MachinePackIniOffsets` is on. Off by default, and while it is
@@ -743,6 +804,8 @@ impl Default for Services {
             popular: Arc::new(PopularSnapshot::default()),
             beginner: Arc::new(BeginnerSnapshot::default()),
             describe: Arc::new(DescribeSnapshot::default()),
+            song_preview: Arc::new(PreviewSnapshot::default()),
+            song_installs: Arc::new(SongInstallsSnapshot::default()),
             banner_failed: Arc::new(HashSet::new()),
             pack_ini_offsets_on: false,
         }
@@ -765,9 +828,14 @@ pub fn sync_stepmaniaonline(
         popular,
         beginner,
         describe,
+        song_preview,
+        song_installs,
         banner_failed,
         pack_ini_offsets_on,
     } = services;
+    state.song_preview = song_preview;
+    state.song_installs = song_installs;
+    super::preview::sync(state);
     state.banner_failed = banner_failed;
     state.pack_ini_offsets_on = pack_ini_offsets_on;
     // A view landing changes which packs a list holds. A lookup landing only
@@ -797,6 +865,7 @@ pub fn sync_stepmaniaonline(
     if page.pack_id != state.page.pack_id {
         state.song_window = 0;
         state.song_pick = 0;
+        state.detail_on_button = false;
     }
     state.page = page;
 
@@ -845,6 +914,54 @@ pub fn sync_stepmaniaonline(
     }
 }
 
+/// Whether a chart preview is up. The shell feeds the music clock and loads
+/// the reader's noteskin only while it is.
+pub fn preview_active(state: &State) -> bool {
+    state.preview.is_some()
+}
+
+/// Seconds into the playing audio file, from the music clock.
+pub fn set_music_time(state: &mut State, seconds: Option<f32>) {
+    state.music_time = seconds;
+}
+
+/// The reader's noteskin, once loaded with its textures resident, and the
+/// model geometry built for it off the game thread -- handed over once, with
+/// the first frame the skin is. A skin that arrives without one gets an empty
+/// cache, which builds each model the first time it is drawn and keeps it.
+pub fn set_preview_skin(
+    state: &mut State,
+    skin: Option<Arc<deadsync_assets::noteskin::Noteskin>>,
+    models: Option<super::chart_window::PreviewSkinModels>,
+) {
+    let changed = match (&state.preview_skin, &skin) {
+        (Some(old), Some(new)) => !Arc::ptr_eq(old, new),
+        (None, None) => false,
+        _ => true,
+    };
+    if let Some(models) = models {
+        *state.preview_model_cache.get_mut() = models.into_cache();
+    } else if changed {
+        *state.preview_model_cache.get_mut() = ModelMeshCache::default();
+    }
+    state.preview_skin = skin;
+}
+
+/// Previews and single songs the page asked for since the last frame.
+pub fn take_song_requests(state: &mut State) -> Vec<super::preview::SongRequest> {
+    std::mem::take(&mut state.pending_songs)
+}
+
+/// Music the preview started or stopped since the last frame.
+pub fn take_audio_requests(state: &mut State) -> Vec<deadsync_theme::AudioRequest> {
+    std::mem::take(&mut state.pending_audio)
+}
+
+/// A song request `smo_songs` refused, in its own words.
+pub fn song_request_refused(state: &mut State, reason: String) {
+    state.preview_message = Some(reason);
+}
+
 /// Song directories the shell should rescan, taken rather than borrowed so the
 /// caller cannot process the same install twice. Only ever filled when the
 /// reader says "Reload songs" on the way out.
@@ -884,6 +1001,26 @@ pub fn sync_reload_events(
     if finished {
         state.reload_prompt = None;
         state.installed_dirs.clear();
+        // Every single song in so far is loaded now. Remembered by name, not
+        // counted: `smo_songs` drops old records past 64, and a count
+        // would then hide a song that is new. Rebuilt rather than added to,
+        // so a song whose record has gone is forgotten here too.
+        let installs = Arc::clone(&state.song_installs.installs);
+        state.reloaded_songs.clear();
+        state.reloaded_songs.extend(
+            installs
+                .iter()
+                .filter(|install| {
+                    install.phase == deadsync_online::smo_songs::SongInstallPhase::Installed
+                })
+                .map(|install| {
+                    (
+                        install.pack_id,
+                        install.title.clone(),
+                        install.artist.clone(),
+                    )
+                }),
+        );
     }
     finished
 }
@@ -3547,5 +3684,62 @@ mod tests {
             state.installed_dirs.is_empty(),
             "rescanned, so nothing owed"
         );
+    }
+
+    /// Single songs a finished rescan loaded are not asked about again: their
+    /// install records outlive it, so they are remembered as loaded.
+    #[test]
+    fn a_rescan_settles_the_single_songs_it_loaded() {
+        use crate::views::SimplyLoveContentReloadEvent as Event;
+        use deadsync_online::smo_songs::{SongInstall, SongInstallPhase, SongInstallsSnapshot};
+        let song = |title: &str, phase| SongInstall {
+            pack_id: 7,
+            title: title.to_owned(),
+            artist: String::new(),
+            group: deadsync_online::smo_songs::SINGLES_GROUP.to_owned(),
+            phase,
+            downloaded_bytes: 0,
+            total_bytes: None,
+            message: None,
+        };
+        let mut state = init();
+        state.song_installs = Arc::new(SongInstallsSnapshot {
+            installs: Arc::from(vec![
+                song("Song A", SongInstallPhase::Installed),
+                song("Song B", SongInstallPhase::Error),
+            ]),
+            revision: 1,
+        });
+        assert_eq!(super::super::preview::songs_added(&state), 1);
+        state.reload_prompt = Some(ReloadPrompt {
+            reloading: true,
+            started: true,
+            ..ReloadPrompt::default()
+        });
+        assert!(sync_reload_events(
+            &mut state,
+            [Event::Finished {
+                song_packs: Vec::new()
+            }]
+        ));
+        assert_eq!(
+            state.reloaded_songs,
+            vec![(7, "Song A".to_owned(), String::new())]
+        );
+        assert_eq!(
+            super::super::preview::songs_added(&state),
+            0,
+            "nothing owed"
+        );
+
+        // A song added after that rescan is owed one of its own.
+        state.song_installs = Arc::new(SongInstallsSnapshot {
+            installs: Arc::from(vec![
+                song("Song A", SongInstallPhase::Installed),
+                song("Song B", SongInstallPhase::Installed),
+            ]),
+            revision: 2,
+        });
+        assert_eq!(super::super::preview::songs_added(&state), 1);
     }
 }

@@ -20,15 +20,20 @@ const SPINNER_FPS: f32 = 30.0;
 /// Inline size, for a spinner standing in for a row or a card.
 pub(super) const SMALL_PX: f32 = 20.0;
 
+/// Seconds on the process-wide clock every piece of waiting feedback here is
+/// animated by, so it all moves together.
+pub(super) fn seconds() -> f32 {
+    static SPIN_START: LazyLock<Instant> = LazyLock::new(Instant::now);
+    SPIN_START.elapsed().as_secs_f32()
+}
+
 /// A spinning sprite centred on the given point.
 ///
 /// The phase comes from a process-wide clock rather than from screen state, so
 /// every spinner on screen turns together -- several out of step reads as
 /// several unrelated problems.
 pub(super) fn frame() -> u32 {
-    static SPIN_START: LazyLock<Instant> = LazyLock::new(Instant::now);
-    let elapsed = SPIN_START.elapsed().as_secs_f32();
-    ((elapsed * SPINNER_FPS) as u32) % SPINNER_FRAMES
+    ((seconds() * SPINNER_FPS) as u32) % SPINNER_FRAMES
 }
 
 /// The wheel in Simply Love's active colour, which is what the original tints

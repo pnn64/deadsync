@@ -10,6 +10,8 @@
 //! come from the pack's own page on the site -- read once, on arrival here,
 //! and cached so backing out and returning is free.
 
+use std::borrow::Cow;
+
 use deadlib_present::actors::Actor;
 use deadsync_online::pack_page::{PackPage, PagePhase, SongRow};
 use deadsync_online::stepmaniaonline::{InstallPhase, PackInfo};
@@ -314,11 +316,46 @@ fn push_song_list(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo) {
 
     let header = match page {
         Some(page) if page.songs.is_empty() => "This pack lists no songs".to_owned(),
-        Some(page) => format!(
-            "Songs  {} of {}",
-            (state.song_pick + 1).min(page.songs.len()),
-            page.songs.len()
-        ),
+        Some(page) => {
+            // After the count, as the original's header carries it: what the
+            // last preview or song request came to, else what the sample is
+            // doing, else the single song last asked for from this pack --
+            // whichever row the cursor is on, where the original holds a
+            // window up for it -- else the picked song's own.
+            let install_line = |pack_id: u64, title: &str, artist: &str| {
+                super::preview::song_install(state, pack_id, title, artist)
+                    .and_then(|install| super::preview::song_install_line(state, install))
+                    .map(Cow::Owned)
+            };
+            let status = state
+                .preview_message
+                .as_deref()
+                .map(Cow::Borrowed)
+                .or_else(|| super::preview::sample_label(state))
+                .or_else(|| {
+                    state
+                        .watched_song
+                        .as_ref()
+                        .filter(|(pack_id, ..)| *pack_id == pack.id)
+                        .and_then(|(pack_id, title, artist)| install_line(*pack_id, title, artist))
+                })
+                .or_else(|| {
+                    page.songs.get(state.song_pick).and_then(|song| {
+                        let artist = super::preview::request_artist(&page.songs, song);
+                        install_line(pack.id, &song.title, artist)
+                    })
+                });
+            let mut header = format!(
+                "Songs  {} of {}",
+                (state.song_pick + 1).min(page.songs.len()),
+                page.songs.len()
+            );
+            if let Some(status) = status {
+                header.push_str("   -   ");
+                header.push_str(&status);
+            }
+            header
+        }
         None => match state.page.phase {
             PagePhase::Error => "Could not load this pack's song list".to_owned(),
             _ => format!("Loading song list{}", spinner::ellipsis()),
@@ -392,9 +429,11 @@ fn push_song_row(
     let picked = index == state.song_pick;
 
     // Stripes are keyed to screen position, not to song index, so they do not
-    // crawl as the list scrolls.
+    // crawl as the list scrolls. The picked song dims while the cursor is on
+    // the download button, so only one thing looks focused.
     let plate = if picked {
-        [accent[0], accent[1], accent[2], 0.30]
+        let lit = if state.detail_on_button { 0.13 } else { 0.30 };
+        [accent[0], accent[1], accent[2], lit]
     } else if slot.is_multiple_of(2) {
         [0.0, 0.0, 0.0, 0.52]
     } else {
@@ -457,6 +496,34 @@ fn push_song_row(
         ));
     }
 
+    // The row whose sample is playing says so, with a few bars keyed to the
+    // song's beat -- the original's row equalizer, smaller -- and the row
+    // whose sample is on its way, with how much has arrived, in the same
+    // corner.
+    if let Some(preview) = state.preview.as_ref()
+        && preview.row == index
+        && !preview.closing
+    {
+        let bottom = y + lo::SONG_ROW_H - 6.0;
+        if preview.playing {
+            let beat = super::preview::beat(state).unwrap_or(0.0);
+            for bar in 0..ROW_EQ_BARS {
+                let phase = beat * std::f32::consts::TAU + bar as f32 * 1.3;
+                let height = 3.0 + 9.0 * (0.5 + 0.5 * phase.sin());
+                actors.push(act!(quad:
+                    align(0.0, 1.0):
+                    xy(x + w - ROW_MARK_RIGHT - ROW_EQ_W + bar as f32 * 4.0, bottom):
+                    zoomto(3.0, height):
+                    diffuse(accent[0], accent[1], accent[2], 0.9): z(Z_BADGE)
+                ));
+            }
+        } else {
+            let progress =
+                super::preview::snapshot_for(state, preview).and_then(|snapshot| snapshot.progress);
+            push_sample_bar(actors, x + w - ROW_MARK_RIGHT, bottom, progress, accent);
+        }
+    }
+
     if !song.meters.is_empty() {
         // The whole string is tinted by its single hardest number, which is
         // the one thing a reader scanning a pack actually wants.
@@ -467,6 +534,46 @@ fn push_song_row(
             diffuse(rgba[0], rgba[1], rgba[2], 1.0): z(Z_BADGE)
         ));
     }
+}
+
+/// The row equalizer's bars, and where the row's sample marks end.
+const ROW_EQ_BARS: usize = 6;
+const ROW_EQ_W: f32 = ROW_EQ_BARS as f32 * 4.0 - 1.0;
+const ROW_MARK_RIGHT: f32 = 127.0;
+/// The loading bar, the original's `PROG_W` by 5.
+const SAMPLE_BAR_W: f32 = 118.0;
+const SAMPLE_BAR_H: f32 = 5.0;
+
+/// How much of a sample has arrived, ending at `right` on the row's `bottom`:
+/// a fill once the size is known, and before then a block that travels rather
+/// than a bar that would be inventing a number, as the original's does.
+fn push_sample_bar(
+    actors: &mut Vec<Actor>,
+    right: f32,
+    bottom: f32,
+    progress: Option<f32>,
+    accent: [f32; 4],
+) {
+    let track_x = right - SAMPLE_BAR_W;
+    actors.push(act!(quad:
+        align(0.0, 1.0): xy(track_x, bottom): zoomto(SAMPLE_BAR_W, SAMPLE_BAR_H):
+        diffuse(1.0, 1.0, 1.0, 0.16): z(Z_BADGE)
+    ));
+    let (fill_x, fill_w) = match progress {
+        Some(fraction) => (track_x, (SAMPLE_BAR_W * fraction.clamp(0.0, 1.0)).max(1.0)),
+        None => {
+            let block = SAMPLE_BAR_W * 0.3;
+            let mut at = (spinner::seconds() * 0.7) % 2.0;
+            if at > 1.0 {
+                at = 2.0 - at;
+            }
+            (track_x + at * (SAMPLE_BAR_W - block), block)
+        }
+    };
+    actors.push(act!(quad:
+        align(0.0, 1.0): xy(fill_x, bottom): zoomto(fill_w, SAMPLE_BAR_H):
+        diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_BADGE + 1)
+    ));
 }
 
 fn push_song_skeleton(actors: &mut Vec<Actor>, x: f32, w: f32, slot: usize, accent: [f32; 4]) {
@@ -495,40 +602,48 @@ fn push_song_skeleton(actors: &mut Vec<Actor>, x: f32, w: f32, slot: usize, acce
     ));
 }
 
-/// The button that shares the song header's line, and says what pressing START
-/// will actually do.
+/// The button that shares the song header's line, and says what the pack's
+/// download would do. It acts only while it has the cursor -- UP from the
+/// first song -- and is lit only then, as the original's is: START on a song
+/// opens that song's menu, so a button lit all the time would claim START.
 fn push_download_button(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, x: f32, w: f32) {
     let accent = accent(state);
     let button_x = x + w - lo::DL_BTN_W;
     let top = lo::DL_BTN_Y - lo::DL_BTN_H * 0.5;
 
     let (label, armed) = download_label(state, pack);
-    let plate = if armed {
-        [accent[0], accent[1], accent[2], 0.9]
-    } else {
-        [1.0, 1.0, 1.0, 0.08]
+    let focused = state.detail_on_button;
+    let plate = match (focused, armed) {
+        (true, true) => [accent[0], accent[1], accent[2], 0.85],
+        (true, false) => [accent[0], accent[1], accent[2], 0.45],
+        (false, true) => [1.0, 1.0, 1.0, 0.14],
+        (false, false) => [1.0, 1.0, 1.0, 0.07],
     };
-    let ink = if armed {
-        [0.08, 0.08, 0.08, 1.0]
-    } else {
-        [0.8, 0.8, 0.8, 1.0]
+    let (icon, ink) = match (focused, armed) {
+        (true, _) => ([0.08, 0.08, 0.08, 1.0], [0.08, 0.08, 0.08, 1.0]),
+        (false, true) => ([1.0, 1.0, 1.0, 0.85], [1.0, 1.0, 1.0, 0.9]),
+        (false, false) => ([1.0, 1.0, 1.0, 0.4], [1.0, 1.0, 1.0, 0.45]),
     };
 
     actors.push(act!(quad:
         align(0.0, 0.0): xy(button_x, top): zoomto(lo::DL_BTN_W, lo::DL_BTN_H):
         diffuse(plate[0], plate[1], plate[2], plate[3]): z(Z_PANEL)
     ));
-    actors.push(act!(quad:
-        align(0.0, 0.0): xy(button_x, top): zoomto(lo::DL_BTN_W, 1.0):
-        diffuse(1.0, 1.0, 1.0, 0.22): z(Z_ROW_BG)
-    ));
-    actors.push(act!(quad:
-        align(0.0, 0.0): xy(button_x, top + lo::DL_BTN_H - 1.0): zoomto(lo::DL_BTN_W, 1.0):
-        diffuse(1.0, 1.0, 1.0, 0.22): z(Z_ROW_BG)
-    ));
+    // A lit edge, so it reads as a control rather than a coloured strip --
+    // until it has the cursor, when the plate says so on its own.
+    if !focused {
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(button_x, top): zoomto(lo::DL_BTN_W, 1.0):
+            diffuse(1.0, 1.0, 1.0, 0.22): z(Z_ROW_BG)
+        ));
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(button_x, top + lo::DL_BTN_H - 1.0): zoomto(lo::DL_BTN_W, 1.0):
+            diffuse(1.0, 1.0, 1.0, 0.22): z(Z_ROW_BG)
+        ));
+    }
     actors.push(act!(sprite("content_browser/download.png"):
         align(0.5, 0.5): xy(button_x + 16.0, lo::DL_BTN_Y): setsize(13.0, 13.0):
-        diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_TEXT)
+        diffuse(icon[0], icon[1], icon[2], icon[3]): z(Z_TEXT)
     ));
     actors.push(act!(text:
         font("miso"): settext(label):
@@ -538,8 +653,8 @@ fn push_download_button(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo,
     ));
 }
 
-/// What the button says, and whether pressing START would start anything.
-fn download_label(state: &State, pack: &PackInfo) -> (String, bool) {
+/// What the button says, and whether START on it would start anything.
+pub(super) fn download_label(state: &State, pack: &PackInfo) -> (String, bool) {
     if let Some(install) = install_for(state, pack) {
         return match install.phase {
             InstallPhase::Queued => ("QUEUED".to_owned(), false),
@@ -650,5 +765,143 @@ mod tests {
         let (label, armed) = download_label(&state, &pack());
         assert_eq!(label, "IN YOUR LIBRARY");
         assert!(!armed);
+    }
+
+    /// The button drops its edge lines and takes the accent only while the
+    /// cursor is on it, so the page shows one focus at a time.
+    #[test]
+    fn the_download_button_lights_only_with_the_cursor_on_it() {
+        let mut state = with_pack();
+        let drawn = |state: &State| {
+            let mut actors = Vec::new();
+            push_download_button(&mut actors, state, &pack(), 300.0, 500.0);
+            actors.len()
+        };
+        let resting = drawn(&state);
+        state.detail_on_button = true;
+        assert_eq!(drawn(&state), resting - 2, "no edge lines while focused");
+    }
+
+    /// The single song last asked for keeps its line in the header wherever
+    /// the cursor goes, as the original's window stays up for it; what a
+    /// preview came to says its piece first.
+    #[test]
+    fn the_header_follows_the_song_asked_for() {
+        use deadsync_online::pack_page::PageSnapshot;
+        use deadsync_online::smo_songs::{SongInstall, SongInstallPhase, SongInstallsSnapshot};
+        let mut state = with_pack();
+        state.page = Arc::new(PageSnapshot {
+            phase: PagePhase::Ready,
+            pack_id: 7,
+            page: Some(Arc::new(PackPage {
+                songs: ["Song A", "Song B"]
+                    .iter()
+                    .map(|title| SongRow {
+                        title: (*title).to_owned(),
+                        ..SongRow::default()
+                    })
+                    .collect(),
+                ..PackPage::default()
+            })),
+            message: None,
+            revision: 1,
+        });
+        state.song_installs = Arc::new(SongInstallsSnapshot {
+            installs: Arc::from(vec![SongInstall {
+                pack_id: 7,
+                title: "Song B".to_owned(),
+                artist: String::new(),
+                group: deadsync_online::smo_songs::SINGLES_GROUP.to_owned(),
+                phase: SongInstallPhase::Error,
+                downloaded_bytes: 0,
+                total_bytes: None,
+                message: Some("HTTP 404".to_owned()),
+            }]),
+            revision: 1,
+        });
+        state.watched_song = Some((7, "Song B".to_owned(), String::new()));
+        let header = |state: &State| {
+            let mut actors = Vec::new();
+            push_song_list(&mut actors, state, &pack());
+            actors
+                .iter()
+                .find_map(|actor| match actor {
+                    Actor::Text { content, .. } if content.as_str().starts_with("Songs  ") => {
+                        Some(content.as_str().to_owned())
+                    }
+                    _ => None,
+                })
+                .expect("a header")
+        };
+        assert_eq!(
+            header(&state),
+            "Songs  1 of 2   -   could not get Song B: HTTP 404",
+            "the cursor is on Song A"
+        );
+        state.preview_message = Some("no sample for this song".to_owned());
+        assert_eq!(
+            header(&state),
+            "Songs  1 of 2   -   no sample for this song"
+        );
+    }
+
+    /// The row a sample is coming in for carries the original's loading bar,
+    /// and once the sample plays, the equalizer in its place.
+    #[test]
+    fn the_sampled_row_shows_loading_then_playing() {
+        use deadsync_online::pack_page::PageSnapshot;
+        use deadsync_online::smo_songs::{PreviewPhase, PreviewSnapshot};
+        let mut state = with_pack();
+        state.page = Arc::new(PageSnapshot {
+            phase: PagePhase::Ready,
+            pack_id: 7,
+            page: Some(Arc::new(PackPage {
+                songs: vec![SongRow {
+                    title: "Song A".to_owned(),
+                    ..SongRow::default()
+                }],
+                ..PackPage::default()
+            })),
+            message: None,
+            revision: 1,
+        });
+        super::super::preview::start(&mut state, 7, "Song A".to_owned(), String::new(), 0, None);
+        state.pending_songs.clear();
+        state.song_preview = Arc::new(PreviewSnapshot {
+            phase: PreviewPhase::Loading,
+            pack_id: 7,
+            title: "Song A".to_owned(),
+            progress: Some(0.5),
+            ..PreviewSnapshot::default()
+        });
+        let widths = |state: &State| {
+            let mut actors = Vec::new();
+            push_song_list(&mut actors, state, &pack());
+            actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    // A quad's size is its zoom, as StepMania's zoomto is.
+                    Actor::Sprite { scale, z, .. } if *z >= Z_BADGE && scale[1] <= SAMPLE_BAR_H => {
+                        Some(scale[0])
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<f32>>()
+        };
+        assert_eq!(
+            widths(&state),
+            vec![SAMPLE_BAR_W, SAMPLE_BAR_W * 0.5],
+            "the track, half filled"
+        );
+
+        let mut ready = (*state.song_preview).clone();
+        ready.phase = PreviewPhase::Ready;
+        ready.audio_path = Some(std::path::PathBuf::from("cache/preview.ogg"));
+        state.song_preview = Arc::new(ready);
+        super::super::preview::sync(&mut state);
+        assert!(
+            widths(&state).iter().all(|w| (*w - 3.0).abs() < 1e-6),
+            "the equalizer's bars instead"
+        );
     }
 }

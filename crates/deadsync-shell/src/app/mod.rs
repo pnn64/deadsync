@@ -4,6 +4,7 @@ use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 mod arrowcloud_result_dialog;
 mod audio_requests;
+mod browser_skin;
 mod commands;
 mod config_requests;
 mod evaluation_views;
@@ -1590,6 +1591,8 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     option_previews: option_previews::Service,
+    /// The reader's noteskin for the Content Browser's chart preview.
+    browser_skin: browser_skin::Service,
     dynamic_media: DynamicMedia,
     /// Lazily started after the opt-in feature first receives data. The single
     /// bounded worker decodes off the frame thread and fixed texture keys bound
@@ -2136,12 +2139,76 @@ impl App {
                 popular,
                 beginner,
                 describe,
+                song_preview: deadsync_online::smo_songs::runtime_preview_snapshot(),
+                song_installs: deadsync_online::smo_songs::runtime_song_installs(),
                 banner_failed: deadsync_online::banners::failed_ids(),
                 pack_ini_offsets_on: self.frame_config.machine_pack_ini_offsets,
             },
             ready_dirs,
             installed,
         );
+
+        // The chart preview: the previews and songs the page asked for, the
+        // music they start and stop, the clock it is timed by, and the
+        // reader's skin.
+        let state = &mut self.state.screens.content_browser_state;
+        for request in content_browser::take_song_requests(state) {
+            match request {
+                content_browser::SongRequest::Preview {
+                    pack_id,
+                    title,
+                    artist,
+                } => {
+                    deadsync_online::smo_songs::runtime_preview_start(
+                        pack_id,
+                        &title,
+                        &artist,
+                        &self.dirs.cache_dir,
+                    );
+                }
+                content_browser::SongRequest::StopPreview => {
+                    deadsync_online::smo_songs::runtime_preview_stop();
+                }
+                content_browser::SongRequest::GetSong {
+                    pack_id,
+                    title,
+                    artist,
+                    itg_sync,
+                } => {
+                    if let Err(reason) = deadsync_online::smo_songs::runtime_queue_song(
+                        pack_id,
+                        &title,
+                        &artist,
+                        itg_sync,
+                        &self.dirs.songs_dir(),
+                        &self.dirs.cache_dir,
+                    ) {
+                        content_browser::song_request_refused(state, reason);
+                    }
+                }
+            }
+        }
+        for request in content_browser::take_audio_requests(state) {
+            self.theme_effect_scratch
+                .push(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                    request,
+                )));
+        }
+        // Seconds into the playing file, as Select Music reads it. Only while
+        // a preview is up: nothing else on this screen is timed by music.
+        let music_time = (content_browser::preview_active(state) && self.audio.is_available())
+            .then(|| (self.music_clock.snapshot().music_nanos as f64 * 1e-9) as f32);
+        content_browser::set_music_time(state, music_time);
+        if let Some(backend) = self.backend.as_mut() {
+            let skin = self.browser_skin.update(&mut self.asset_manager, backend);
+            // The geometry goes over once, with the first frame the skin does.
+            let models = skin.as_ref().and_then(|_| self.browser_skin.take_models());
+            content_browser::set_preview_skin(
+                &mut self.state.screens.content_browser_state,
+                skin,
+                models,
+            );
+        }
         // The reader chose "Reload songs" on the way out. Handed over only
         // once the reload service is free: it refuses a second job, and a
         // refused job would leave the dialog waiting on a rescan never run.
@@ -4876,6 +4943,7 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             option_previews: option_previews::Service::default(),
+            browser_skin: browser_skin::Service::default(),
             dynamic_media: DynamicMedia::new(),
             arrowcloud_result_dialog: None,
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
@@ -8686,6 +8754,10 @@ impl App {
     }
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
+        // A preview's audio stops with the screen; its download stops here.
+        if prev == CurrentScreen::ContentBrowser && target != CurrentScreen::ContentBrowser {
+            deadsync_online::smo_songs::runtime_preview_stop();
+        }
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
             self.sync_screen_color_index(idx);
@@ -8705,6 +8777,10 @@ impl App {
             self.reset_options_state_for_entry(prev);
         } else if target == CurrentScreen::ContentBrowser {
             content_browser::on_enter(&mut self.state.screens.content_browser_state);
+            // Ready by the first preview: a Lua skin can take a moment to
+            // compile, and the window should not open on bare squares.
+            self.browser_skin
+                .want(browser_skin::preview_noteskin_name());
             self.state.screens.content_browser_state.active_color_index =
                 self.state.screens.menu_state.active_color_index;
         } else if target == CurrentScreen::Credits {

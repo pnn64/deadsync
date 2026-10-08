@@ -1,7 +1,7 @@
 use super::*;
 use crate::fonts::machine_font_key;
+use crate::screens::components::shared::noteskin_draw;
 use deadlib_present::actors::TextContent;
-use deadsync_noteskin::{NoteskinSlot, ReceptorIdleGlow};
 use deadsync_theme::FontRole;
 
 pub(super) fn top_bar_actor(
@@ -1427,64 +1427,14 @@ pub(super) const fn preview_arrows(num_cols: usize) -> &'static [(usize, f32, f3
     }
 }
 
-// Keep layer selection, animation, and model/sprite composition together so the
-// noteskin row, component rows, and picker use the same note presentation.
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-fn draw_noteskin_note(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    ns: &Noteskin,
-    part: NoteAnimPart,
-    note_idx: usize,
-    quant_idx: f32,
-    center: [f32; 2],
-    target_height: f32,
-    alpha: f32,
-    z: i16,
-) {
-    let elapsed = state.preview_time;
-    let beat = state.preview_beat;
-    let phase = ns.part_uv_phase(part, elapsed, beat, 0.0);
-    let spacing = ns.note_display_metrics.part_texture_translate[part as usize].note_color_spacing;
-    let translation = [spacing[0] * quant_idx, spacing[1] * quant_idx];
-    let slots = preview_note_slots(ns, part, note_idx);
-    let Some(primary) = slots.first() else { return };
-    let note_scale = target_height / primary.logical_size()[1].max(1.0);
-    for (layer_idx, slot) in slots.iter().enumerate() {
-        let frame = slot.frame_index_from_phase(phase);
-        let uv_elapsed = if slot.uv_uses_phase() { phase } else { elapsed };
-        let uv = slot.uv_for_note_at(frame, uv_elapsed, translation);
-        let logical = slot.logical_size();
-        draw_preview_slot(
-            actors,
-            slot,
-            deadsync_noteskin::ModelDrawState {
-                texture_seconds: if slot.actor_frame_child {
-                    elapsed
-                } else {
-                    phase * slot.model_animation_length
-                },
-                ..preview_slot_draw(slot, elapsed, beat)
-            },
-            center,
-            [logical[0] * note_scale, logical[1] * note_scale],
-            uv,
-            -slot.def.rotation_deg as f32,
-            [1.0, 1.0, 1.0, alpha],
-            BlendMode::Alpha,
-            z + layer_idx as i16,
-        );
-    }
-}
-
 fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, center_x: f32) {
     let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+    let state = rc.fc.state;
     for &(col, quant_idx, x_mult) in preview_arrows(ns.column_xs.len()) {
         let x = x_mult.mul_add(target_height, center_x);
         let note_idx = col * NUM_QUANTIZATIONS + quant_idx as usize;
-        draw_noteskin_note(
+        noteskin_draw::draw_noteskin_note(
             actors,
-            rc.fc.state,
             ns,
             NoteAnimPart::Tap,
             note_idx,
@@ -1493,6 +1443,8 @@ fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, ce
             target_height,
             rc.a,
             Z_ROW_PREVIEW,
+            state.preview_time,
+            state.preview_beat,
         );
     }
 }
@@ -1514,7 +1466,17 @@ pub(super) fn draw_live_preview(
     let first = actors.len();
     // Leave room for tap-explosion zoom commands inside the fixed icon bounds.
     let target = if part == 6 { size * 0.9 } else { size };
-    draw_skin_part(actors, state, skin, part, center, target, alpha, z);
+    noteskin_draw::draw_skin_part(
+        actors,
+        skin,
+        part,
+        center,
+        target,
+        alpha,
+        z,
+        state.preview_time,
+        state.preview_beat,
+    );
     fit_preview(&mut actors[first..], center, [size, size], part != 8);
     true
 }
@@ -1603,433 +1565,20 @@ fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2], recenter
     }
 }
 
-fn draw_mine_preview(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    mine_ns: &Noteskin,
-    mine_center: [f32; 2],
-    target_height: f32,
-    alpha: f32,
-    z: i16,
-) {
-    let mine_col = usize::from(mine_ns.mine_layers.len() > 1);
-    let Some(layers) = mine_ns.mine_layers.get(mine_col) else {
-        return;
-    };
-    let phase = mine_ns.tap_mine_uv_phase(state.preview_time, state.preview_beat, 0.0);
-    let translation = mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
-    let mine_start = actors.len();
-    let mut first_mesh = true;
-    for slot in layers.iter() {
-        let draw = slot.model_draw_at(state.preview_time, state.preview_beat);
-        let frame = if slot.actor_frame_child {
-            slot.frame_index(state.preview_time, state.preview_beat)
-        } else {
-            slot.frame_index_from_phase(phase)
-        };
-        let uv_time = if slot.uv_uses_phase() {
-            phase
-        } else {
-            state.preview_time
-        };
-        let uv = slot.uv_for_note_at(frame, uv_time, translation);
-        let logical = slot.logical_size();
-        let scale = target_height / logical[1].max(1.0);
-        let layer_start = actors.len();
-        draw_preview_slot(
-            actors,
-            slot,
-            deadsync_noteskin::ModelDrawState {
-                texture_seconds: if slot.actor_frame_child {
-                    draw.texture_seconds
-                } else {
-                    phase * slot.model_animation_length
-                },
-                ..draw
-            },
-            mine_center,
-            [logical[0] * scale, target_height],
-            uv,
-            -slot.def.rotation_deg as f32,
-            [1.0, 1.0, 1.0, alpha],
-            BlendMode::Alpha,
-            z,
-        );
-        if slot.model_cull_back()
-            && let Some(model) = slot.model.as_ref()
-        {
-            for actor in &mut actors[layer_start..] {
-                if let Actor::TexturedMesh {
-                    local_transform,
-                    depth_test,
-                    clear_depth,
-                    tint,
-                    glow,
-                    ..
-                } = actor
-                {
-                    if tint[3] <= 0.0 && glow[3] <= 0.0001 {
-                        continue;
-                    }
-                    deadsync_notefield::noteskin_model_depth(model, local_transform);
-                    // ITG's menu camera spans +/-1000 model units; ours spans
-                    // +/-1. Normalize only Z, preserving perspective and XY.
-                    *local_transform =
-                        glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, 0.001)) * *local_transform;
-                    *depth_test = true;
-                    *clear_depth = first_mesh;
-                    first_mesh = false;
-                }
-            }
-        }
-    }
-    if let Some(clear) = actors[mine_start..]
-        .iter_mut()
-        .rev()
-        .find_map(|actor| match actor {
-            Actor::TexturedMesh {
-                depth_test: true,
-                tint,
-                glow,
-                clear_depth_after,
-                ..
-            } if tint[3] > 0.0 || glow[3] > 0.0001 => Some(clear_depth_after),
-            _ => None,
-        })
-    {
-        *clear = true;
-    }
-}
-
-#[inline(always)]
-fn slot_preview_zoom_x(slot: &SpriteSlot, zoom: f32) -> f32 {
-    if slot.def.mirror_h { -zoom } else { zoom }
-}
-
-#[inline(always)]
-fn slot_preview_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
-    if slot.def.mirror_v { -zoom } else { zoom }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_skin_part(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    skin: &Noteskin,
-    part: usize,
-    center: [f32; 2],
-    size: f32,
-    alpha: f32,
-    z: i16,
-) {
-    match part {
-        0 | 10 => draw_noteskin_note(
-            actors,
-            state,
-            skin,
-            if part == 10 {
-                NoteAnimPart::Lift
-            } else {
-                NoteAnimPart::Tap
-            },
-            Quantization::Q4th as usize,
-            0.0,
-            center,
-            size,
-            alpha,
-            z,
-        ),
-        1 => draw_receptor_note(actors, state, skin, 0, center, size, alpha, z),
-        6 => draw_tap_explosion_preview(actors, state, skin, center, size, alpha, z),
-        8 => draw_mine_preview(actors, state, skin, center, size, alpha, z),
-        _ => {
-            let (slot, anim) = match part {
-                2 => (skin.hold.body_active.as_ref(), Some(NoteAnimPart::HoldBody)),
-                3 => (
-                    skin.hold.body_inactive.as_ref(),
-                    Some(NoteAnimPart::HoldBody),
-                ),
-                4 => (skin.roll.body_active.as_ref(), Some(NoteAnimPart::RollBody)),
-                5 => (
-                    skin.roll.body_inactive.as_ref(),
-                    Some(NoteAnimPart::RollBody),
-                ),
-                7 => (skin.hold.explosion.as_ref(), None),
-                _ => return,
-            };
-            let Some(slot) = slot else { return };
-            let elapsed = state.preview_time;
-            let beat = state.preview_beat;
-            let phase = anim.map(|part| skin.part_uv_phase(part, elapsed, beat, 0.0));
-            let frame = phase.map_or_else(
-                || slot.frame_index(elapsed, beat),
-                |phase| slot.frame_index_from_phase(phase),
-            );
-            let uv_time = if slot.uv_uses_phase() {
-                phase.unwrap_or(elapsed)
-            } else {
-                elapsed
-            };
-            let uv = slot.uv_for_frame_at(frame, uv_time);
-            let logical = slot.logical_size();
-            let scale = size / logical[1].max(1.0);
-            draw_preview_slot(
-                actors,
-                slot,
-                deadsync_noteskin::ModelDrawState {
-                    texture_seconds: if slot.actor_frame_child {
-                        elapsed
-                    } else {
-                        phase.map_or(elapsed, |phase| phase * slot.model_animation_length)
-                    },
-                    ..preview_slot_draw(slot, elapsed, beat)
-                },
-                center,
-                [logical[0] * scale, logical[1] * scale],
-                uv,
-                -slot.def.rotation_deg as f32,
-                [1.0, 1.0, 1.0, alpha],
-                BlendMode::Alpha,
-                z,
-            );
-        }
-    }
-}
-
-fn preview_slot_draw(
-    slot: &SpriteSlot,
-    elapsed: f32,
-    beat: f32,
-) -> deadsync_noteskin::ModelDrawState {
-    let mut draw = slot.model_draw_at(elapsed, beat);
-    if let Some(glow) = slot.model_glow_with_draw(draw, elapsed, beat, 1.0) {
-        draw.glow = glow;
-    }
-    draw
-}
-
-// Model and sprite transforms share one path, including diffuse/glow effects.
-// Explosion commands supply their sampled draw state instead of the idle state.
-#[allow(clippy::too_many_arguments)]
-fn draw_preview_slot(
-    actors: &mut Vec<Actor>,
-    slot: &SpriteSlot,
-    draw: deadsync_noteskin::ModelDrawState,
-    center: [f32; 2],
-    size: [f32; 2],
-    uv: [f32; 4],
-    rotation: f32,
-    color: [f32; 4],
-    blend: BlendMode,
-    z: i16,
-) {
-    if !draw.visible {
-        return;
-    }
-    let blend = if draw.blend_add {
-        BlendMode::Add
-    } else {
-        blend
-    };
-    let mut actor = if let Some(actor) =
-        noteskin_model_actor_from_draw(slot, draw, center, size, uv, rotation, color, blend, z)
-    {
-        actor
-    } else {
-        let logical = slot.logical_size();
-        let ox = draw.pos[0] * size[0] / logical[0].max(1.0);
-        let oy = draw.pos[1] * size[1] / logical[1].max(1.0);
-        let (sin, cos) = rotation.to_radians().sin_cos();
-        let pos = [
-            center[0] + ox * cos - oy * sin,
-            center[1] + ox * sin + oy * cos,
-        ];
-        let size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
-        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
-            return;
-        }
-        let tint = std::array::from_fn::<_, 4, _>(|i| color[i] * draw.tint[i]);
-        let mut actor = act!(sprite(slot.texture_key_shared()):
-            align(0.5, 0.5): xy(pos[0], pos[1]): setsize(size[0], size[1]):
-            zoomx(slot_preview_zoom_x(slot, draw.zoom[0].signum())):
-            zoomy(slot_preview_zoom_y(slot, draw.zoom[1].signum())):
-            rotationz(draw.rot[2] + rotation):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(tint[0], tint[1], tint[2], tint[3]): z(z)
-        );
-        if let Actor::Sprite {
-            blend: actor_blend, ..
-        } = &mut actor
-        {
-            *actor_blend = blend;
-        }
-        actor
-    };
-    match &mut actor {
-        Actor::Sprite { glow, .. } | Actor::TexturedMesh { glow, .. } => {
-            *glow = [
-                draw.glow[0],
-                draw.glow[1],
-                draw.glow[2],
-                draw.glow[3] * color[3],
-            ];
-        }
-        _ => {}
-    }
-    actors.push(actor);
-}
-
 fn draw_receptor_preview(actors: &mut Vec<Actor>, rc: &RowCtx, skin: &Noteskin, center_x: f32) {
     let size = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+    let state = rc.fc.state;
     for &(col, _, x_mult) in preview_arrows(skin.column_xs.len()) {
-        draw_receptor_note(
+        noteskin_draw::draw_receptor_note(
             actors,
-            rc.fc.state,
             skin,
             col,
             [x_mult.mul_add(size, center_x), rc.current_row_y],
             size,
             rc.a,
             Z_RECEPTOR_PREVIEW,
-        );
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_receptor_note(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    skin: &Noteskin,
-    col: usize,
-    center: [f32; 2],
-    size: f32,
-    alpha: f32,
-    z: i16,
-) {
-    let elapsed = state.preview_time;
-    let beat = state.preview_beat;
-    let pulse = skin.receptor_pulse.color_for_beat(beat);
-    let idle = skin.receptor_idle_glow.alpha(beat, false);
-    let layers = [
-        (
-            0,
-            skin.receptor_off.get(col),
-            [pulse[0], pulse[1], pulse[2], pulse[3] * alpha],
-        ),
-        (
-            1,
-            skin.receptor_idle_glow_layers
-                .get(col)
-                .and_then(Option::as_ref)
-                .or_else(|| skin.receptor_glow.get(col).and_then(Option::as_ref)),
-            [1.0, 1.0, 1.0, idle * alpha],
-        ),
-    ]
-    .into_iter()
-    .chain(
-        skin.receptor_overlays
-            .get(col)
-            .into_iter()
-            .flat_map(|layers| layers.iter())
-            .enumerate()
-            .map(|(index, layer)| (index as i16 + 2, Some(&layer.slot), [1.0, 1.0, 1.0, alpha])),
-    );
-    for (index, slot, color) in layers {
-        let Some(slot) = slot else { continue };
-        if color[3] <= f32::EPSILON {
-            continue;
-        }
-        let frame = slot.frame_index(elapsed, beat);
-        let uv = slot.uv_for_frame_at(frame, elapsed);
-        let logical = slot.logical_size();
-        let scale = size / logical[1].max(1.0);
-        let draw = preview_slot_draw(slot, elapsed, beat);
-        draw_preview_slot(
-            actors,
-            slot,
-            draw,
-            center,
-            [logical[0] * scale, logical[1] * scale],
-            uv,
-            -slot.def.rotation_deg as f32,
-            color,
-            if draw.blend_add
-                || (index == 1 && skin.receptor_idle_glow != ReceptorIdleGlow::ActorEffect)
-            {
-                BlendMode::Add
-            } else {
-                BlendMode::Alpha
-            },
-            z + index,
-        );
-    }
-}
-
-fn draw_tap_explosion_preview(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    skin: &Noteskin,
-    center: [f32; 2],
-    size: f32,
-    alpha: f32,
-    z: i16,
-) {
-    let Some(explosion) = skin
-        .tap_explosions
-        .get("W1")
-        .or_else(|| skin.tap_explosions.values().next())
-    else {
-        return;
-    };
-    let time = state.preview_time * TAP_EXPLOSION_PREVIEW_SPEED;
-    let beat = state.preview_beat * TAP_EXPLOSION_PREVIEW_SPEED;
-    let duration = explosion.duration();
-    let elapsed = if duration > f32::EPSILON {
-        time.rem_euclid(duration)
-    } else {
-        0.0
-    };
-    let scale = size / explosion.slot.logical_size()[1].max(1.0);
-    let seed = if duration > f32::EPSILON {
-        (time / duration).floor() as u64
-    } else {
-        0
-    };
-    for (index, layer) in explosion.layers.iter().enumerate() {
-        let visual = layer.animation.state_at_seeded(
-            elapsed,
-            elapsed,
-            seed.wrapping_add((index as u64).wrapping_mul(0xd1b54a32d192ed03)),
-        );
-        let slot = &layer.slot;
-        let frame_beat = if slot.source.is_beat_based() {
-            elapsed
-        } else {
-            beat
-        };
-        let frame = slot.frame_index(elapsed, frame_beat);
-        let uv = slot.uv_for_frame_at(frame, if slot.uv_uses_phase() { elapsed } else { time });
-        let logical = slot.logical_size();
-        let draw = deadsync_noteskin::ModelDrawState {
-            zoom: [visual.zoom, visual.zoom, 1.0],
-            rot: [0.0, 0.0, visual.rotation_z],
-            tint: visual.diffuse,
-            glow: visual.glow,
-            visible: visual.visible,
-            blend_add: layer.animation.blend_add,
-            ..Default::default()
-        };
-        draw_preview_slot(
-            actors,
-            slot,
-            draw,
-            center,
-            [logical[0] * scale, logical[1] * scale],
-            uv,
-            -slot.def.rotation_deg as f32,
-            [1.0, 1.0, 1.0, alpha],
-            BlendMode::Alpha,
-            z + index as i16,
+            state.preview_time,
+            state.preview_beat,
         );
     }
 }
@@ -2085,7 +1634,7 @@ mod tests {
             let mut draw = slot.model_draw;
             draw.rot[2] = rotation;
             let mut actors = Vec::new();
-            super::draw_preview_slot(
+            super::noteskin_draw::draw_preview_slot(
                 &mut actors,
                 &slot,
                 draw,

@@ -17,6 +17,7 @@ use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadsync_input::{InputEvent, VirtualAction};
 
 use super::layout as lo;
+use super::preview;
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::screens::Screen;
 use crate::screens::content_browser::state::{
@@ -328,7 +329,10 @@ fn leave(state: &mut State) -> Outcome {
     // Not while a download is still landing: a reload now would race its
     // unzip and miss the pack. It carries on in the background, and the next
     // way out asks again.
-    if !state.installed_dirs.is_empty() && !downloads_active(state) {
+    if !state.installed_dirs.is_empty()
+        && !downloads_active(state)
+        && !preview::song_installs_active(state)
+    {
         state.reload_prompt = Some(ReloadPrompt::default());
         return Outcome::Closed;
     }
@@ -434,6 +438,7 @@ fn press_featured(state: &mut State, action: VirtualAction) -> Outcome {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             if state.featured.get(state.featured_index).is_some() {
                 state.featured_from = true;
+                state.detail_on_button = false;
                 state.zone = Zone::Detail;
                 Outcome::Opened
             } else {
@@ -571,6 +576,7 @@ fn press_doubles_rows(state: &mut State, action: VirtualAction) -> Outcome {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             if focused_pack(state).is_some() {
                 state.featured_from = false;
+                state.detail_on_button = false;
                 state.zone = Zone::Detail;
                 Outcome::Opened
             } else {
@@ -649,6 +655,7 @@ fn press_list(state: &mut State, action: VirtualAction) -> Outcome {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             if focused_pack(state).is_some() {
                 state.featured_from = false;
+                state.detail_on_button = false;
                 state.zone = Zone::Detail;
                 Outcome::Opened
             } else {
@@ -723,14 +730,52 @@ fn page(state: &mut State, direction: isize) -> Outcome {
 // --- the detail page ----------------------------------------------------------
 
 fn press_detail(state: &mut State, action: VirtualAction) -> Outcome {
+    // "Listen or Download?" answers the keys while it is up.
+    if state.song_menu.is_some() {
+        return press_song_menu(state, action);
+    }
     if let Some(delta) = nav_delta(action) {
+        // While a chart is showing, UP/DOWN step its difficulty, as the
+        // original's do -- not the song list under it, nor the button.
+        if preview::chart_showing(state) {
+            return if preview::step_chart(state, delta) {
+                Outcome::Moved
+            } else {
+                Outcome::Invalid
+            };
+        }
+        // The download button sits above the song list, so UP off the first
+        // song reaches it and DOWN comes back: one press from the top of the
+        // page for a reader who came to install the pack, as the original's.
+        if state.detail_on_button {
+            if delta < 0 {
+                return Outcome::Invalid;
+            }
+            state.detail_on_button = false;
+            return Outcome::Moved;
+        }
+        if delta < 0 && state.song_pick == 0 {
+            state.detail_on_button = true;
+            return Outcome::Moved;
+        }
         return move_song(state, delta);
     }
     if let Some(delta) = tab_delta(action) {
+        if state.detail_on_button {
+            return Outcome::Invalid;
+        }
         return move_song(state, delta * lo::SONG_ROWS as isize);
     }
     match action {
         VirtualAction::p1_back | VirtualAction::p2_back => {
+            // A preview goes quietly with the page it was playing on, and so
+            // does what the last one came to -- the original's Snd.Stop(true)
+            // clears its message -- rather than turning up on the next pack.
+            if preview::busy(state) {
+                preview::stop(state);
+            }
+            state.preview_message = None;
+            state.detail_on_button = false;
             // Back to wherever it was opened from.
             state.zone = if state.featured_from {
                 Zone::Featured
@@ -744,12 +789,180 @@ fn press_detail(state: &mut State, action: VirtualAction) -> Outcome {
             state.featured_from = false;
             Outcome::Closed
         }
-        // The one place a download starts, and only ever on an explicit press.
-        VirtualAction::p1_start | VirtualAction::p2_start => match focused_pack(state) {
-            Some(pack) => Outcome::Download(pack.id),
-            None => Outcome::Invalid,
-        },
-        VirtualAction::p1_select | VirtualAction::p2_select => Outcome::Refresh,
+        // START on a song asks what to do with it, and on the button is the
+        // pack's download; while a preview is busy it only stops it. With no
+        // song list to point at, it is the pack's download, as it always was.
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            if preview::busy(state) {
+                preview::stop(state);
+                return Outcome::Closed;
+            }
+            if state.detail_on_button {
+                // The button says one thing, so it does that one thing -- and
+                // nothing while it says the pack is here or on its way.
+                return match focused_pack(state) {
+                    Some(pack) if super::detail::download_label(state, pack).1 => {
+                        Outcome::Download(pack.id)
+                    }
+                    _ => Outcome::Invalid,
+                };
+            }
+            if picked_song(state).is_some() {
+                let chart = known_charts(state).and_then(|charts| preview::default_chart(&charts));
+                state.song_menu = Some(preview::SongMenu { choice: 0, chart });
+                return Outcome::Opened;
+            }
+            pack_download(state)
+        }
+        // SELECT previews the song under the cursor, or stops the one
+        // playing. A page that never loaded is asked for again instead.
+        VirtualAction::p1_select | VirtualAction::p2_select => {
+            if preview::busy(state) {
+                preview::stop(state);
+                return Outcome::Closed;
+            }
+            if state.page.page.is_none() {
+                return Outcome::Refresh;
+            }
+            if state.detail_on_button {
+                return Outcome::Invalid;
+            }
+            if start_preview(state, None) {
+                Outcome::Opened
+            } else {
+                Outcome::Invalid
+            }
+        }
+        _ => Outcome::None,
+    }
+}
+
+/// The song the cursor is on, on the open pack's page.
+fn picked_song(state: &State) -> Option<&deadsync_online::pack_page::SongRow> {
+    state
+        .page
+        .page
+        .as_ref()
+        .and_then(|page| page.songs.get(state.song_pick))
+}
+
+/// The picked song's title, and the artist a request for it carries.
+fn picked_names(state: &State) -> Option<(&str, &str)> {
+    let page = state.page.page.as_ref()?;
+    let song = page.songs.get(state.song_pick)?;
+    Some((
+        song.title.as_str(),
+        preview::request_artist(&page.songs, song),
+    ))
+}
+
+/// The charts an earlier preview of the picked song turned up.
+fn known_charts(
+    state: &State,
+) -> Option<std::sync::Arc<[deadsync_online::smo_songs::PreviewChart]>> {
+    let pack_id = focused_pack(state)?.id;
+    let (title, artist) = picked_names(state)?;
+    deadsync_online::smo_songs::runtime_known_charts(pack_id, title, artist)
+}
+
+/// The pack's download, as its button would start it -- and nothing while the
+/// button says the pack is here or on its way.
+fn pack_download(state: &State) -> Outcome {
+    match focused_pack(state) {
+        Some(pack) if super::detail::download_label(state, pack).1 => Outcome::Download(pack.id),
+        _ => Outcome::Invalid,
+    }
+}
+
+/// Preview the picked song, on a difficulty chosen ahead of time if any.
+fn start_preview(state: &mut State, want: Option<preview::Want>) -> bool {
+    let Some(pack_id) = focused_pack(state).map(|pack| pack.id) else {
+        return false;
+    };
+    let Some((title, artist)) = picked_names(state)
+        .filter(|(title, _)| !title.is_empty())
+        .map(|(title, artist)| (title.to_owned(), artist.to_owned()))
+    else {
+        return false;
+    };
+    let row = state.song_pick;
+    preview::start(state, pack_id, title, artist, row, want);
+    true
+}
+
+/// "Listen or Download?": LEFT/RIGHT choose, UP/DOWN pick the preview's
+/// difficulty once it is known, START goes, BACK closes.
+fn press_song_menu(state: &mut State, action: VirtualAction) -> Outcome {
+    let known = known_charts(state);
+    let Some(menu) = state.song_menu.as_mut() else {
+        return Outcome::None;
+    };
+    if let Some(delta) = tab_delta(action) {
+        menu.choice = (menu.choice as isize + delta).rem_euclid(3) as usize;
+        return Outcome::Moved;
+    }
+    if let Some(delta) = nav_delta(action) {
+        // Wrapping, and only on the preview choice: the original's popup.
+        let Some(charts) = known.filter(|charts| menu.choice == 0 && charts.len() > 1) else {
+            return Outcome::Invalid;
+        };
+        let here = menu.chart.unwrap_or(0) as isize;
+        menu.chart = Some((here + delta).rem_euclid(charts.len() as isize) as usize);
+        return Outcome::Moved;
+    }
+    match action {
+        VirtualAction::p1_start | VirtualAction::p2_start => {
+            let menu = *menu;
+            state.song_menu = None;
+            match menu.choice {
+                0 => {
+                    let want = known.as_deref().and_then(|charts| {
+                        menu.chart
+                            .and_then(|index| preview::Want::at(charts, index))
+                    });
+                    if start_preview(state, want) {
+                        Outcome::Opened
+                    } else {
+                        Outcome::Invalid
+                    }
+                }
+                1 => {
+                    let Some(pack) = focused_pack(state) else {
+                        return Outcome::Invalid;
+                    };
+                    let pack_id = pack.id;
+                    let itg_sync = super::chart_window::itg_sync(state, pack);
+                    let Some((title, artist)) = picked_names(state)
+                        .map(|(title, artist)| (title.to_owned(), artist.to_owned()))
+                    else {
+                        return Outcome::Invalid;
+                    };
+                    // Refused here as `smo_songs` would refuse it, so it
+                    // sounds like the original's refusal rather than like a
+                    // request that went out.
+                    if let Some(reason) = preview::song_refusal(state, pack_id, &title, &artist) {
+                        state.preview_message = Some(reason.to_owned());
+                        return Outcome::Invalid;
+                    }
+                    state.preview_message = None;
+                    state.watched_song = Some((pack_id, title.clone(), artist.clone()));
+                    state.pending_songs.push(preview::SongRequest::GetSong {
+                        pack_id,
+                        title,
+                        artist,
+                        itg_sync,
+                    });
+                    Outcome::Confirm
+                }
+                // The menu says "already in your library" for a pack that is,
+                // and then this does nothing, as the button does.
+                _ => pack_download(state),
+            }
+        }
+        VirtualAction::p1_back | VirtualAction::p2_back => {
+            state.song_menu = None;
+            Outcome::Closed
+        }
         _ => Outcome::None,
     }
 }
@@ -938,6 +1151,289 @@ mod tests {
     use super::*;
     use crate::screens::content_browser::state;
     use crate::screens::content_browser::state::FEATURED_VISIBLE;
+    use deadsync_online::pack_page::{PackPage, PagePhase, PageSnapshot, SongRow};
+    use deadsync_online::stepmaniaonline::{CatalogPhase, PackInfo, Snapshot};
+    use preview::SongRequest;
+
+    /// A pack's page open on its song list.
+    fn detail_page(titles: &[&str]) -> State {
+        let mut state = state::init();
+        state.snapshot = std::sync::Arc::new(Snapshot {
+            phase: CatalogPhase::Ready,
+            catalog: std::sync::Arc::from(vec![PackInfo::new(
+                7,
+                "Some Pack".to_owned(),
+                titles.len() as u32,
+                1,
+                None,
+                None,
+                None,
+                None,
+            )]),
+            revision: 1,
+            message: None,
+            installs: Vec::new(),
+        });
+        state.results = vec![0];
+        state.zone = Zone::Detail;
+        state.page = std::sync::Arc::new(PageSnapshot {
+            phase: PagePhase::Ready,
+            pack_id: 7,
+            page: Some(std::sync::Arc::new(PackPage {
+                songs: titles
+                    .iter()
+                    .map(|title| SongRow {
+                        title: (*title).to_owned(),
+                        artist: format!("{title} Artist"),
+                        ..SongRow::default()
+                    })
+                    .collect(),
+                ..PackPage::default()
+            })),
+            message: None,
+            revision: 1,
+        });
+        state
+    }
+
+    /// SELECT previews the song under the cursor; SELECT again stops it.
+    #[test]
+    fn select_previews_a_song_and_stops_it() {
+        let mut state = detail_page(&["Song A", "Song B"]);
+        state.song_pick = 1;
+        assert_eq!(press(&mut state, SELECT), Outcome::Opened);
+        assert_eq!(
+            state.pending_songs,
+            vec![SongRequest::Preview {
+                pack_id: 7,
+                title: "Song B".to_owned(),
+                // a title the page lists once goes without its artist
+                artist: String::new(),
+            }]
+        );
+        assert!(preview::busy(&state));
+
+        assert_eq!(press(&mut state, SELECT), Outcome::Closed);
+        assert_eq!(state.pending_songs.last(), Some(&SongRequest::StopPreview));
+        assert!(!preview::busy(&state), "fading out");
+
+        // BACK stops a preview and leaves the page with it.
+        let mut leaving = detail_page(&["Song A"]);
+        assert_eq!(press(&mut leaving, SELECT), Outcome::Opened);
+        assert_eq!(press(&mut leaving, BACK), Outcome::Closed);
+        assert_eq!(leaving.zone, Zone::List);
+        assert!(!preview::busy(&leaving));
+    }
+
+    /// START asks what to do with the song: preview it, get just it, or get
+    /// the whole pack.
+    #[test]
+    fn start_on_a_song_asks_listen_or_download() {
+        let mut state = detail_page(&["Song A"]);
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert!(state.song_menu.is_some());
+        assert_eq!(
+            press(&mut state, DOWN),
+            Outcome::Invalid,
+            "no charts known yet"
+        );
+
+        assert_eq!(press(&mut state, RIGHT), Outcome::Moved);
+        assert_eq!(press(&mut state, START), Outcome::Confirm, "get this song");
+        assert!(state.song_menu.is_none());
+        assert_eq!(
+            state.pending_songs,
+            vec![SongRequest::GetSong {
+                pack_id: 7,
+                title: "Song A".to_owned(),
+                artist: String::new(),
+                // the site says nothing about this pack's sync, so ITG
+                itg_sync: true,
+            }]
+        );
+
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert_eq!(press(&mut state, LEFT), Outcome::Moved, "wraps to the pack");
+        assert_eq!(press(&mut state, START), Outcome::Download(7));
+
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert_eq!(press(&mut state, BACK), Outcome::Closed);
+        assert!(state.song_menu.is_none());
+        assert_eq!(state.zone, Zone::Detail, "the menu closes, the page stays");
+
+        // A pack already in the library is not downloaded again from the
+        // menu, any more than from its button.
+        state.installed = vec![state::InstalledPack {
+            name: "Some Pack".to_owned(),
+            lower: "some pack".to_owned(),
+            songs: 1,
+            sync: SyncPref::Default,
+            banner: None,
+        }];
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert_eq!(press(&mut state, LEFT), Outcome::Moved);
+        assert_eq!(press(&mut state, START), Outcome::Invalid);
+    }
+
+    /// A title the page lists twice is asked for with its artist, so the
+    /// pack's simfiles can tell the two apart.
+    #[test]
+    fn a_repeated_title_is_asked_for_with_its_artist() {
+        let mut state = detail_page(&["Intro", "Intro", "Outro"]);
+        let mut songs = state.page.page.as_ref().expect("page").songs.clone();
+        songs[1].artist = "Someone Else".to_owned();
+        state.page = std::sync::Arc::new(PageSnapshot {
+            phase: PagePhase::Ready,
+            pack_id: 7,
+            page: Some(std::sync::Arc::new(PackPage {
+                songs,
+                ..PackPage::default()
+            })),
+            message: None,
+            revision: 2,
+        });
+        state.song_pick = 1;
+        assert_eq!(press(&mut state, SELECT), Outcome::Opened);
+        assert_eq!(
+            state.pending_songs,
+            vec![SongRequest::Preview {
+                pack_id: 7,
+                title: "Intro".to_owned(),
+                artist: "Someone Else".to_owned(),
+            }]
+        );
+    }
+
+    /// UP off the first song is the pack's download button, as the original's
+    /// is: START there downloads the pack, DOWN comes back to the songs, and
+    /// the song-list keys do nothing while it has the cursor.
+    #[test]
+    fn up_from_the_first_song_reaches_the_download_button() {
+        let mut state = detail_page(&["Song A", "Song B"]);
+        state.song_pick = 1;
+        assert_eq!(press(&mut state, UP), Outcome::Moved);
+        assert!(!state.detail_on_button, "a song above first");
+        assert_eq!(press(&mut state, UP), Outcome::Moved);
+        assert!(state.detail_on_button);
+        assert_eq!(press(&mut state, UP), Outcome::Invalid, "nothing above it");
+        assert_eq!(press(&mut state, LEFT), Outcome::Invalid);
+        assert_eq!(press(&mut state, SELECT), Outcome::Invalid);
+        assert!(state.pending_songs.is_empty(), "no preview from the button");
+        assert_eq!(press(&mut state, START), Outcome::Download(7));
+        assert!(state.song_menu.is_none(), "the button does one thing");
+
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        assert!(!state.detail_on_button);
+        assert_eq!(state.song_pick, 0, "back on the first song");
+        assert_eq!(press(&mut state, START), Outcome::Opened, "the song menu");
+
+        // A pack already here is not downloaded again from it.
+        let mut installed = detail_page(&["Song A"]);
+        installed.installed = vec![state::InstalledPack {
+            name: "Some Pack".to_owned(),
+            lower: "some pack".to_owned(),
+            songs: 1,
+            sync: deadsync_chart::song::SyncPref::Default,
+            banner: None,
+        }];
+        assert_eq!(press(&mut installed, UP), Outcome::Moved);
+        assert_eq!(press(&mut installed, START), Outcome::Invalid);
+
+        // Leaving the page puts the cursor back on the songs for the next one.
+        assert_eq!(press(&mut installed, BACK), Outcome::Closed);
+        assert!(!installed.detail_on_button);
+    }
+
+    /// What the last preview came to goes with the page, as the original's
+    /// Snd.Stop(true) takes its message -- not on to the next pack opened.
+    #[test]
+    fn back_takes_the_last_previews_message_with_it() {
+        let mut state = detail_page(&["Song A"]);
+        state.preview_message = Some("no sample for this song".to_owned());
+        assert_eq!(press(&mut state, BACK), Outcome::Closed);
+        assert_eq!(state.preview_message, None);
+    }
+
+    /// While the sample is still on its way the window shows no chart yet,
+    /// so UP/DOWN move the song highlight, as the original's do.
+    #[test]
+    fn up_and_down_move_the_songs_while_a_sample_loads() {
+        let mut state = detail_page(&["Song A", "Song B"]);
+        assert_eq!(press(&mut state, SELECT), Outcome::Opened);
+        state.pending_songs.clear();
+        state.song_preview = std::sync::Arc::new(deadsync_online::smo_songs::PreviewSnapshot {
+            phase: deadsync_online::smo_songs::PreviewPhase::Loading,
+            pack_id: 7,
+            title: "Song A".to_owned(),
+            charts: std::sync::Arc::from(vec![
+                deadsync_online::smo_songs::PreviewChart {
+                    doubles: false,
+                    difficulty: "Easy".to_owned(),
+                    meter: 3,
+                    lanes: 4,
+                    notes: std::sync::Arc::from(Vec::new()),
+                },
+                deadsync_online::smo_songs::PreviewChart {
+                    doubles: false,
+                    difficulty: "Hard".to_owned(),
+                    meter: 9,
+                    lanes: 4,
+                    notes: std::sync::Arc::from(Vec::new()),
+                },
+            ]),
+            ..Default::default()
+        });
+        preview::sync(&mut state);
+        assert!(preview::busy(&state));
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        assert_eq!(state.song_pick, 1, "the highlight moved");
+        assert_eq!(
+            state.preview.as_ref().map(|p| p.title.as_str()),
+            Some("Song A"),
+            "and the sample is still the one asked for"
+        );
+    }
+
+    /// A song already asked for this session is refused before the request
+    /// goes out, with the invalid sound and the reason in the header; a
+    /// request that goes out is watched whichever row the cursor moves to.
+    #[test]
+    fn a_song_already_on_its_way_is_refused_as_the_original_refuses_it() {
+        use deadsync_online::smo_songs::{SongInstall, SongInstallPhase, SongInstallsSnapshot};
+        let mut state = detail_page(&["Song A", "Song B"]);
+        state.song_installs = std::sync::Arc::new(SongInstallsSnapshot {
+            installs: std::sync::Arc::from(vec![SongInstall {
+                pack_id: 7,
+                title: "Song A".to_owned(),
+                artist: String::new(),
+                group: deadsync_online::smo_songs::SINGLES_GROUP.to_owned(),
+                phase: SongInstallPhase::Downloading,
+                downloaded_bytes: 0,
+                total_bytes: None,
+                message: None,
+            }]),
+            revision: 1,
+        });
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert_eq!(press(&mut state, RIGHT), Outcome::Moved);
+        assert_eq!(press(&mut state, START), Outcome::Invalid);
+        assert!(state.pending_songs.is_empty(), "nothing went out");
+        assert_eq!(
+            state.preview_message.as_deref(),
+            Some("that song is already on its way")
+        );
+        assert_eq!(state.watched_song, None);
+
+        state.song_pick = 1;
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert_eq!(press(&mut state, RIGHT), Outcome::Moved);
+        assert_eq!(press(&mut state, START), Outcome::Confirm);
+        assert_eq!(
+            state.watched_song,
+            Some((7, "Song B".to_owned(), String::new()))
+        );
+        assert_eq!(state.preview_message, None);
+    }
 
     /// Enter on a search result is START, so it opens the pack; before the
     /// reader is on the results it puts them there.
