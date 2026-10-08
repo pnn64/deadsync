@@ -2263,6 +2263,14 @@
       "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5887,6 +5895,33 @@
         "beat": 266,
         "music_seconds": 145.0819091796875,
         "seconds": 145.09091186523438
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 38.81034016609192,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.68s",
+        "log_sha256": "821b00abb96b93556633c7a9652756d0097070b3b38b9d57cd64e071c288b796",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "ddd990edd08c8e55cb50119dd73a75de3e271960724faa8df6661b7aa2f44a0d",
+      "capture_endpoint": {
+        "beat": 230,
+        "music_seconds": 141.94180297851562,
+        "seconds": 141.01080322265625
       },
       "runtime_errors": 0,
       "dropped_events": 0
