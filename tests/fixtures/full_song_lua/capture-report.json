@@ -2007,6 +2007,14 @@
       "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+      "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4777,6 +4785,32 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 70,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 14.737183570861816,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.62s",
+        "log_sha256": "83995b0ea9fea237b16435f2b699ad78bd40733cacc046ef698faac071531920",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d74fc6a554f72ae32cdf83b18332d6a816e45a5ec1056b5bec84f564f729e51b",
+      "capture_endpoint": {
+        "beat": 334,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     }
   ]
 }
