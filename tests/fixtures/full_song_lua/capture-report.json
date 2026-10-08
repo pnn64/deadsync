@@ -1919,6 +1919,14 @@
       "archive": "ac4854fd3d8e73710127a23aed1996eff0acc3b662919588a492c9a010086aa5.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "82214fdeee18c870008940e85138bcc9e53f0febe80a5f4444ba80e607326960.tar.zst",
+      "archive": "673b436ebabdb5cc4c385e0e480d7bec61d8179f3915e2ce5eed9c273cfe935c.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4168,6 +4176,31 @@
       "capture_endpoint": {
         "beat": 265,
         "seconds": 127.20000457763672
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "673b436ebabdb5cc4c385e0e480d7bec61d8179f3915e2ce5eed9c273cfe935c.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "673b436ebabdb5cc4c385e0e480d7bec61d8179f3915e2ce5eed9c273cfe935c.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 83.35238409042358,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 83.20s",
+        "log_sha256": "8c148a6979f1804e4b88a4404d280c97c15eb6a8b60ff8374314fa5d4672452a",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "0ce62ebddd8a12e6244f79a5235308ea4089ad465b865ae0a13a91419ccdb253",
+      "capture_endpoint": {
+        "beat": 324,
+        "seconds": 126.23377227783205
       },
       "runtime_errors": 0,
       "dropped_events": 0
