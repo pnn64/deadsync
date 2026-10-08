@@ -409,7 +409,12 @@ impl Cache {
             let Some(entry) = state.entries.get_mut(&path) else {
                 continue;
             };
-            if (quantized_delta(entry.result.bias_ms) - delta_seconds).abs() > 0.000_1 {
+            // Its fix is already in the file, so any further change means the
+            // measurement no longer describes it -- even a change of the same
+            // size, which would otherwise hide a fix applied twice.
+            if entry.result.applied
+                || (quantized_delta(entry.result.bias_ms) - delta_seconds).abs() > 0.000_1
+            {
                 state.entries.remove(&path);
                 clear_plot(&mut state, &path);
                 mark_changed(&mut state);
@@ -942,6 +947,32 @@ mod tests {
             prepared
                 .cached_analysis()
                 .is_some_and(|cached| cached.applied)
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// Once a measured fix is in the file, any further change -- even one of
+    /// the same size -- means the measurement no longer describes it, rather
+    /// than a fix applied twice being taken for the fix applied once.
+    #[test]
+    fn a_change_on_top_of_an_applied_fix_forgets_the_measurement() {
+        let root = temp_dir("applied-twice");
+        fs::create_dir_all(&root).expect("create temp dir");
+        let simfile = root.join("song.ssc");
+        let music = root.join("song.ogg");
+        fs::write(&simfile, b"#OFFSET:0.000;").expect("write simfile");
+        fs::write(&music, b"audio").expect("write music");
+        let cache = Cache::load(root.join("cache.json"));
+        complete(&cache, &simfile, &music);
+
+        fs::write(&simfile, b"#OFFSET:0.003;").expect("apply offset");
+        cache.refresh_applied([(simfile.as_path(), 0.003)]);
+        fs::write(&simfile, b"#OFFSET:0.006;").expect("apply it again");
+        cache.refresh_applied([(simfile.as_path(), 0.003)]);
+        assert!(
+            !cache
+                .prepare(&simfile, &music, 2, options(), false)
+                .is_cached()
         );
         let _ = fs::remove_dir_all(root);
     }
