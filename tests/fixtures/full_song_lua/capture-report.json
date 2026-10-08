@@ -2015,6 +2015,14 @@
       "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
+      "archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4808,6 +4816,32 @@
       "capture_endpoint": {
         "beat": 334,
         "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 21.644288063049316,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 21.51s",
+        "log_sha256": "be439997bdbf66333e92f1a406265d3af9d8ba8e7d66feb6dfe5dcadbfd347c1",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "400e855f7e26f7206e9fd658b3db53a36e3a44fda7d3eec5fcf8bb103a1e6b6d",
+      "capture_endpoint": {
+        "beat": 266,
+        "seconds": 145.09091186523438
       },
       "runtime_errors": 0,
       "dropped_events": 0
