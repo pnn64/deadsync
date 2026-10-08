@@ -234,6 +234,9 @@ where
         install_actor_methods,
     )
     .map_err(|err| err.to_string())?;
+    #[cfg(feature = "test-support")]
+    crate::lua_util::install_message_order(&lua, &context.message_actor_order)
+        .map_err(|err| err.to_string())?;
     compile_timer.push_stage("host");
     let screen_layer_states =
         crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
@@ -245,6 +248,9 @@ where
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
         if let Value::Table(actor) = &root {
+            #[cfg(feature = "test-support")]
+            actor.raw_set("__songlua_message_path", (index + 1).to_string())
+                .map_err(|err| err.to_string())?;
             let screen = lua
                 .globals()
                 .get::<Table>("__songlua_top_screen")

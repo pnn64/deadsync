@@ -2809,6 +2809,111 @@ pub fn song_lua_actor_registry(lua: &Lua) -> mlua::Result<Table> {
     Ok(registry)
 }
 
+#[cfg(feature = "test-support")]
+struct SongLuaMessageOrder(FxHashMap<String, usize>);
+
+#[cfg(feature = "test-support")]
+pub(crate) fn install_message_order(lua: &Lua, ranks: &[(String, usize)]) -> mlua::Result<()> {
+    if ranks.is_empty() { return Ok(()); }
+    let mut order = FxHashMap::default();
+    let mut identities = rustc_hash::FxHashSet::default();
+    for (path, rank) in ranks {
+        if *rank == 0 || order.insert(path.clone(), *rank).is_some() || !identities.insert(*rank) {
+            return Err(mlua::Error::external("invalid captured subscriber identities"));
+        }
+    }
+    lua.set_app_data(SongLuaMessageOrder(order));
+    Ok(())
+}
+
+#[cfg(feature = "test-support")]
+fn message_actor_path(actor: &Table) -> mlua::Result<String> {
+    let mut current = actor.clone();
+    let mut parts = Vec::new();
+    let mut seen = rustc_hash::FxHashSet::default();
+    loop {
+        if !seen.insert(current.to_pointer() as usize) {
+            return Err(mlua::Error::external("cycle in subscriber ownership"));
+        }
+        if let Some(path) = current.raw_get::<Option<String>>("__songlua_message_path")? {
+            parts.push(path);
+            break;
+        }
+        if current.raw_get::<Option<String>>("__songlua_actor_type")?.as_deref() == Some("TopScreen") {
+            parts.push("ScreenGameplay".into());
+            break;
+        }
+        let Some(parent) = current.raw_get::<Option<Table>>("__songlua_parent")? else {
+            return Err(mlua::Error::external("subscriber has no captured actor path"));
+        };
+        let mut component = None;
+        if let Some(wrappers) = parent.raw_get::<Option<Table>>("__songlua_wrappers")? {
+            for (index, wrapper) in wrappers.sequence_values::<Table>().enumerate() {
+                if wrapper?.to_pointer() == current.to_pointer() {
+                    component = Some(format!("WrapperState{}", index + 1));
+                    break;
+                }
+            }
+        }
+        if component.is_none() {
+            for (index, child) in parent.sequence_values::<Value>().enumerate() {
+                if let Value::Table(child) = child? && child.to_pointer() == current.to_pointer() {
+                    component = Some((index + 1).to_string());
+                    break;
+                }
+            }
+        }
+        let name = component.or(current.raw_get::<Option<String>>("Name")?);
+        let Some(name) = name.filter(|name| !name.is_empty()) else {
+            return Err(mlua::Error::external("subscriber has no captured child identity"));
+        };
+        parts.push(name);
+        current = parent;
+    }
+    parts.reverse();
+    Ok(parts.join("/"))
+}
+
+fn message_actor_identity(lua: &Lua, actor: &Table) -> mlua::Result<usize> {
+    #[cfg(feature = "test-support")]
+    if let Some(order) = lua.app_data_ref::<SongLuaMessageOrder>() {
+        let path = message_actor_path(actor)?;
+        return order.0.get(&path).copied().ok_or_else(|| {
+            mlua::Error::external(format!("missing captured subscriber identity for {path}"))
+        });
+    }
+    let _ = lua;
+    Ok(actor.to_pointer() as usize)
+}
+
+#[cfg(test)]
+#[test]
+fn broadcast_identity_order() {
+    let lua = Lua::new();
+    lua.load(r#"
+        seen = {}
+        local function receive(self) seen[#seen + 1] = self end
+        a = { GoMessageCommand = receive }
+        b = { GoMessageCommand = receive }
+        __songlua_actor_registry = { a, b }
+    "#).exec().expect("live subscribers");
+    let a = lua.globals().get::<Table>("a").expect("subscriber a");
+    let b = lua.globals().get::<Table>("b").expect("subscriber b");
+    let expected = if a.to_pointer() < b.to_pointer() { [a.clone(), b.clone()] } else { [b.clone(), a.clone()] };
+    for reversed in [false, true] {
+        lua.globals().set("seen", lua.create_table().expect("observations")).expect("reset observations");
+        let registry = lua.create_sequence_from(if reversed { [b.clone(), a.clone()] } else { [a.clone(), b.clone()] })
+            .expect("registry permutation");
+        lua.globals().set("__songlua_actor_registry", registry).expect("install registry");
+        broadcast_song_lua_message(&lua, "Go", None).expect("deliver by identity");
+        let seen = lua.globals().get::<Table>("seen").expect("observed recipients");
+        assert_eq!(seen.raw_len(), 2);
+        for (index, actor) in expected.iter().enumerate() {
+            assert_eq!(seen.raw_get::<Table>(index + 1).expect("recipient").to_pointer(), actor.to_pointer());
+        }
+    }
+}
+
 pub fn register_song_lua_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let registry = song_lua_actor_registry(lua)?;
     let actor_ptr = actor.to_pointer() as usize;
@@ -2982,16 +3087,22 @@ pub fn broadcast_song_lua_message(
         });
     let result = || {
         let registry = song_lua_actor_registry(lua)?;
-        let mut actors = smallvec::SmallVec::<[Table; 32]>::with_capacity(registry.raw_len());
+        let mut actors = smallvec::SmallVec::<[(usize, Table); 32]>::with_capacity(registry.raw_len());
         for value in registry.sequence_values::<Value>() {
             let Value::Table(actor) = value? else {
                 continue;
             };
-            actors.push(actor);
+            if !matches!(actor.get::<Value>(command.as_str())?, Value::Function(_)) {
+                continue;
+            }
+            actors.push((message_actor_identity(lua, &actor)?, actor));
         }
+        // MessageManager.cpp stores subscribers in an identity-ordered set.
+        // Tree construction and definition-table order do not define delivery.
+        actors.sort_unstable_by_key(|(identity, _)| *identity);
         let params = normalize_broadcast_params(lua, message, params)?;
         // Drain in place so consuming the snapshot does not move its inline buffer.
-        actors.drain(..).try_for_each(|actor| {
+        actors.drain(..).try_for_each(|(_, actor)| {
             run_actor_named_command_with_drain_and_params(
                 lua,
                 &actor,
@@ -9977,11 +10088,16 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     // Native QueueCommand appends a tween; Init does not advance its queue.
     // Leave queued work until all actors have received OnCommand.
     run_actor_named_command_with_drain(lua, actor, "InitCommand", false)?;
-    for child in actor.sequence_values::<Value>() {
+    for (index, child) in actor.sequence_values::<Value>().enumerate() {
         let Value::Table(child) = child? else {
             continue;
         };
         child.set("__songlua_parent", actor.clone())?;
+        #[cfg(feature = "test-support")]
+        if let Some(path) = actor.raw_get::<Option<String>>("__songlua_message_path")? {
+            child.raw_set("__songlua_message_path", format!("{path}/{}", index + 1))?;
+        }
+        let _ = index;
         run_actor_init_commands_for_table(lua, &child)?;
     }
     run_song_meter_stream_init_command(lua, actor)?;

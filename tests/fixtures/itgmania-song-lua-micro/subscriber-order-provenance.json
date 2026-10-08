@@ -1,0 +1,16 @@
+{
+  "harness_version": "0.1.15",
+  "native_executable_sha256": "b248e507f7d3aaabb45f7c22cab21d1626630cbd6d8c4229519b3338e5b51435",
+  "source_sha256": "2066a5b49225a380dffa8eadf6a64853237ddba4c49fb713a1391983cb230ea1",
+  "native_trace_sha256": "43ab02814c0aac98778c6bc6f6f6f1352d753aebd4373df689ae9620017e7a6b",
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "update_frames": 241,
+  "end_position": {
+    "beat": 4,
+    "seconds": 4
+  },
+  "message_dispatch": "native-subscriber-pointer-order",
+  "wrapper_effects": "native-draw-stack",
+  "native_message_source_sha256": "d7b8f7873062039d81d7d5b3b052f785c182deea731d4c4ed5d473499689c311"
+}

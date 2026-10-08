@@ -1362,6 +1362,11 @@ pub struct SongLuaCompileContext {
     /// Initial ITGmania PRNG seed; fixed per compilation for repeatable playback.
     /// Scripts may reseed it through math.randomseed or MersenneTwister.Seed.
     pub random_seed: u32,
+    /// Captured subscriber identity ranks for deterministic native replay.
+    /// Paths start with a one-based session entry and child indices, or an
+    /// external screen path. These inputs contain no handler results.
+    #[cfg(feature = "test-support")]
+    pub message_actor_order: Vec<(String, usize)>,
     pub music_length_seconds: f32,
     pub style_name: String,
     pub global_offset_seconds: f32,
@@ -1390,6 +1395,8 @@ impl SongLuaCompileContext {
             player_timing: std::array::from_fn(|_| None),
             song_music_rate: 1.0,
             random_seed: 1,
+            #[cfg(feature = "test-support")]
+            message_actor_order: Vec::new(),
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
             global_offset_seconds: 0.0,
@@ -11591,8 +11598,9 @@ return Def.ActorFrame{
         );
     }
 
+    #[cfg(feature = "test-support")]
     #[test]
-    fn broadcast_load_order_and_probes_preserve_local_state() {
+    fn broadcast_identity_and_probes_preserve_local_state() {
         let song_dir = test_dir("broadcast-locals");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -11602,7 +11610,7 @@ local account = {nested={value=1}}
 account.self = account
 local original = account
 local count = 0
-local checked = false
+local checked, selected = false, false
 local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
 return Def.ActorFrame{
     SpawnMessageCommand=function(self)
@@ -11616,7 +11624,7 @@ return Def.ActorFrame{
         self:SetUpdateFunction(function(self)
             if not checked then
                 assert(count == 1 and account == original and account.self == account)
-                assert(account.nested.value == 2 and math.abs(options:Mini() - 0.025) < 0.00001)
+                assert(account.nested.value == 2 and math.abs(options:Mini() - (selected and 0.025 or 0)) < 0.00001)
                 checked = true
             end
         end)
@@ -11625,6 +11633,7 @@ return Def.ActorFrame{
         InitCommand=function(self) self:visible(false) end,
         SpawnMessageCommand=function(self)
             if account.nested.value == 2 then
+                selected = true
                 self:visible(true):x(count * 42)
                 options:Mini(options:Mini() + 0.025)
             end
@@ -11634,11 +11643,18 @@ return Def.ActorFrame{
 "#,
         )
         .expect("write broadcast fixture");
-        let mut context = SongLuaCompileContext::new(&song_dir, "Broadcast Locals");
-        context.music_length_seconds = 1.0;
-        let compiled = test_compile_song_lua(&entry, &context).expect("compile broadcast fixture");
-        assert!(compiled.overlays[0].initial_state.visible);
-        assert_eq!(compiled.overlays[0].initial_state.x, 42.0);
+        // Both pointer orders are valid; tree load order does not decide delivery.
+        for parent_first in [true, false] {
+            let mut context = SongLuaCompileContext::new(&song_dir, "Broadcast Locals");
+            context.music_length_seconds = 1.0;
+            context.message_actor_order = vec![
+                ("1".into(), if parent_first { 1 } else { 2 }),
+                ("1/1".into(), if parent_first { 2 } else { 1 }),
+            ];
+            let compiled = test_compile_song_lua(&entry, &context).expect("compile broadcast fixture");
+            assert_eq!(compiled.overlays[0].initial_state.visible, parent_first);
+            assert_eq!(compiled.overlays[0].initial_state.x, if parent_first { 42.0 } else { 0.0 });
+        }
     }
 
     #[test]

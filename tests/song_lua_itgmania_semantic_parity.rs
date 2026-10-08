@@ -647,6 +647,53 @@ fn parse_song(path: &Path) -> deadsync_chart::SongData {
     .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
 }
 
+// Subscriber pointer ranks are allocation inputs, like the PRNG seed. Resolve
+// their runtime tree paths without reading any handler outputs or draw samples.
+fn native_message_order(trace: &NativeTrace) -> Vec<(String, usize)> {
+    if trace.message_dispatch.as_deref() != Some("native-subscriber-pointer-order") {
+        return Vec::new();
+    }
+    let definitions = trace.actor_definitions.iter()
+        .map(|definition| (definition.id.as_str(), definition)).collect::<HashMap<_, _>>();
+    let actor_definitions = trace.actor_definitions.iter().flat_map(|definition| {
+        definition.runtime_actors.iter().map(move |actor| (actor.as_str(), definition.id.as_str()))
+    }).collect::<HashMap<_, _>>();
+    let mut children = HashMap::<(&str, &str), std::collections::VecDeque<&NativeActor>>::new();
+    for actor in &trace.runtime_actors {
+        let definition = actor_definitions[actor.id.as_str()];
+        children.entry((actor.parent_id.as_deref().unwrap_or(""), definition))
+            .or_default().push_back(actor);
+    }
+    let mut paths = HashMap::new();
+    for (layer, root) in trace.roots.iter().enumerate() {
+        let root_actor = children.get_mut(&("", root.as_str()))
+            .and_then(|actors| actors.pop_front()).expect("native root instance");
+        let mut pending = std::collections::VecDeque::from([
+            (root.as_str(), root_actor.id.as_str(), (layer + 1).to_string()),
+        ]);
+        while let Some((definition, actor, path)) = pending.pop_front() {
+            assert!(paths.insert(actor, path.clone()).is_none(), "unique runtime identity");
+            for child in &definitions[definition].children {
+                let instance = children.get_mut(&(actor, child.definition_id.as_str()))
+                    .and_then(|actors| actors.pop_front()).expect("native child instance");
+                pending.push_back((child.definition_id.as_str(), instance.id.as_str(),
+                    format!("{path}/{}", child.layer_index)));
+            }
+        }
+    }
+    let mut order = trace.runtime_actors.iter().filter_map(|actor| {
+        actor.message_order.map(|rank| (paths[actor.id.as_str()].clone(), rank))
+    }).collect::<Vec<_>>();
+    order.extend(trace.external_actors.iter().filter_map(|actor| {
+        let rank = actor.message_order?;
+        let path = actor.path.split_once('/').and_then(|(owner, suffix)| {
+            paths.get(owner).map(|prefix| format!("{prefix}/{suffix}"))
+        }).unwrap_or_else(|| actor.path.clone());
+        Some((path, rank))
+    }));
+    order
+}
+
 fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize, SongLuaCompileContext) {
     let simfile = locate_simfile(trace);
     compile_trace_song_at(trace, &simfile)
@@ -679,6 +726,7 @@ fn compile_trace_song_at(
         simfile.parent().unwrap_or_else(|| Path::new(".")),
         song.title.clone(),
     );
+    context.message_actor_order = native_message_order(trace);
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
     context.background_layer_count = song.background_lua_changes.len();
     if let Some(seed) = trace.random_seed {
@@ -6949,6 +6997,35 @@ fn vibrate_restart_native() {
             );
         }
     }
+}
+
+#[test]
+fn subscriber_order_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/subscriber-order.json"),
+    );
+    let (compiled, primary, mut context) = compile_trace_song_at(
+        &trace, &root.join("tests/fixtures/song-lua/subscriber-order.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Subscriber order"));
+    assert_eq!(parity.checks(), 599, "retain every captured observation");
+    parity.assert_complete("Subscriber order");
+    assert_eq!(context.message_actor_order.len(), 17);
+    // Reverse allocation ranks without changing Lua, native observations or
+    // random seed. Shared counters must expose the changed recipient order.
+    let largest = context.message_actor_order.iter().map(|(_, rank)| *rank).max()
+        .expect("native subscriber ranks");
+    for (_, rank) in &mut context.message_actor_order { *rank = largest + 1 - *rank; }
+    let altered = compile_song_lua_layers(
+        &[root.join("tests/fixtures/song-lua/subscriber-order.lua").as_path()],
+        primary, &context,
+    ).expect("compile alternate allocation order");
+    let changed = compare_semantics(&trace, &altered, primary, &context);
+    assert_eq!(changed.checks(), parity.checks(), "retain every native observation");
+    assert!(changed.passed() < changed.checks(), "subscriber ranks must affect replay");
 }
 
 #[test]

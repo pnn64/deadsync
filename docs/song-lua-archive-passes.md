@@ -1400,3 +1400,56 @@ narrows the investigation; it does not establish whole-song parity.
 The order proof, five-control receipt, unchanged comparison counts and
 queued-wag control are linked by pass38-vibration-report-verified.json.
 The full 501-simfile / 492-variant objective remains incomplete.
+
+## Pass 39: replay native subscriber identities
+
+MessageManager.cpp delivers broadcasts through its pointer-ordered subscriber
+set. DeadSync now orders live recipients by actor identity, independently of
+definition construction and registry order. A replay host with test-support
+can supply the recorded allocation ranks, keyed by session/child paths or
+external screen paths. Only ranks are imported: the Lua handlers still
+select actors, change state and consume the original random stream. The
+native adapter and ITGmania reference sources remain unchanged.
+
+The semantic driver resolves ranks from the original runtime tree, including
+repeated definition instances and external wrapper paths. Missing or duplicate
+identities reject replay. Cache version advances to 44; DeadSync advances
+to 0.5.1853. This preserves the native allocation context rather than forcing
+native recipients into DeadSync's previous registration order.
+
+An independent four-second native probe contains eight pairs of subscribers,
+a shared cursor and randomized zoom. It has 241 frames, seventeen runtime
+actors, no errors or dropped events, and reaches beat 4 at second 4. The
+immutable 0.5.1852 build fails nine of 5,902 full-archive comparisons; the
+new build passes all 5,902 on the exact same archive. The micro regression
+retains all 599 observations and fails when only subscriber ranks are
+reversed. Original capture and source bytes are preserved with provenance.
+
+The unchanged complete KABOOOOOM 0.1.15 archive is replayed with the recorded
+subscriber identities. Of 2,274,713 comparisons, 2,274,594 pass and 119 fail.
+This closes 52,507 mismatches from the preceding 0.5.1852 replay without
+removing checks. All 57,326 vibration checks now pass. The remaining failures
+are 110 projected-geometry, five draw-color and four message-command checks.
+The first bounds failures involve queued wag effects on PeepingCow/HORNN;
+the color/visibility failure involves the third big horn. These require
+separate source-backed repairs. The capture remains unpublished.
+
+The whole-song receipt is pass39-kaboom-native-message-order.json/log;
+log SHA-256 acead28472465ef6cdaf0c4a2df0913e7fd9a8bf79ee0ac2efc9fe9203ffd80a.
+The same-archive comparison proof is pass39-message-order-comparison.json.
+The current production build without test-support and both cache tests pass.
+The initial unit run exposed one load-order assumption; its replacement
+checks both valid identity orders and preserves the local-state/probe
+invariants. A separate live-subscriber regression verifies that permuting
+the registry does not change pointer-ordered delivery.
+
+All 666 song-Lua tests, both cache tests, the production check without
+test-support, and all twelve final focused native controls pass. The first
+eighteen archives again pass all 3,729,943 comparisons on the recorded
+0.5.1853 pins. An extraction disk-space failure at index thirteen succeeds
+on retry; the original zero-comparison failure receipt is preserved. The
+prefix proof links all hashes and receipts in pass39-verified-prefix.json.
+Only test coverage and an observation-count assertion changed after the
+whole-song pin was built. The obsolete nineteenth primary is rejected before
+comparison, and its complete 0.1.15 diagnostic remains unpublished with 119
+remaining checks. The full 501-simfile / 492-variant objective is incomplete.
