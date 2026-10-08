@@ -494,13 +494,14 @@
     {
       "title": "666",
       "source_simfile": "666/666.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fe07775fff235c63a1278f079b21eadd86dd1b4d135742fb03b9b33eaef626f2.tar.zst",
-      "sha256": "fe07775fff235c63a1278f079b21eadd86dd1b4d135742fb03b9b33eaef626f2",
-      "compressed_bytes": 377580,
-      "uncompressed_sha256": "04037451b25d8254eaef1f9478cd9afbd407bca83b4dff7af216e4058fbf62cf",
-      "compression_level": 22,
+      "harness_version": "0.1.28",
+      "archive": "1f117cff001e8fd6014deec3ef1ddd960b258b600fc323d36d6a7d9f1153be5d.tar.zst",
+      "sha256": "1f117cff001e8fd6014deec3ef1ddd960b258b600fc323d36d6a7d9f1153be5d",
+      "compressed_bytes": 747800,
+      "uncompressed_sha256": "274008f5df27053b181be1897d7445ac37794bca0eebd5e8c9659701b20c3ba1",
+      "compression_level": 12,
       "aliases": [
+        "fe07775fff235c63a1278f079b21eadd86dd1b4d135742fb03b9b33eaef626f2.tar.zst",
         "2a7f2f07941cdfa062f66888b605709da54a8d480eb7ab30286ad549f35a3658.tar.zst"
       ]
     },

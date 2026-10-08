@@ -2372,3 +2372,5 @@ Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK
 Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 24/492 archives; full-corpus parity remains unfinished.
 
 Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
+
+Archive 26: 666/666.ssc passes all 552285 comparisons. The verified prefix is now 26/492 archives; full-corpus parity remains unfinished.
