@@ -5721,6 +5721,7 @@ pub fn install_texture_proxy_methods(
     texture_height: f32,
     frame_count: u32,
 ) -> mlua::Result<()> {
+    let path = collapse_texture_name(&path);
     texture.set("__songlua_texture_path", path.clone())?;
     // SetTexture uses RageTexture's frame size, independently of the Sprite's
     // existing states. Capture it on this handle so a later Load on its owner

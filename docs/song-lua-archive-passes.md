@@ -1800,6 +1800,41 @@ Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verif
 
 Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
 
+## Pass 67: preserve native texture filenames
+
+A compiled native Sprite control confirms that RageTexture:GetPath returns the
+RageTextureID filename, with dot components collapsed by RageUtil::CollapsePath.
+The .26 harness replaced this value with a song:/ archive alias, causing the
+unchanged runtime assertion to fail. The .1865 DeadSync verifier separately
+fails the native dot-component assertion. The checked-out reference tree and
+compiled vendor sources agree on both contracts.
+
+Harness 68605b3 uses its compiled RageTextureID normalization helper for the
+getter. The unchanged native assertion body passes actual Sprite userdata and
+the headless runtime; all 146 harness tests pass with two existing skips.
+DeadSync .1866 reuses its existing native filename-collapse implementation
+when installing texture getters. Cache version 57 invalidates captures that
+could branch on the old filename. Sprite runtime tests now cover both loading
+and filename controls through the same test path.
+
+The .26/.1865 refresh completed and committed five archives with 1,027,953
+passing comparisons before its source guard stopped for this independently
+proven gap. Both 100 Bad Days archives are oversized and remain local with
+explicit ignore rules. The historical prefix must be refreshed on the corrected
+binaries. The full 501-simfile and 492-archive scope remains unfinished.
+
+The full archive reader additionally exposed absolute Sprite.Load references
+from the capture machine. Harness .28 records these image arguments as portable
+song:/ asset references while preserving the filenames used inside Lua.
+The native assertion body remains unchanged; only its fixture-path setup removes
+the Windows verbatim prefix introduced by canonicalized temporary directories.
+The complete two-second control now passes all 2,696 comparisons on .1866.
+The previous .1865 binary fails the same native dot-component assertion.
+All 674 song-Lua tests, the production build check and both cache checks pass.
+The earlier Sprite loading control also retains all 2,695 passing comparisons.
+Native source hashes, unchanged controls, complete archive and before/after
+receipts are in texture-path-provenance.json. The comparator remains unchanged.
+
 Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
 
 Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.

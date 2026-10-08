@@ -6451,39 +6451,41 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn sprite_load_matches_native() {
-        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/itgmania-song-lua-micro");
-        let input: serde_json::Value = serde_json::from_slice(
-            &fs::read(fixtures.join("sprite-load-input.json")).expect("native Sprite input"),
-        )
-        .expect("native Sprite JSON");
-        let body = input["lua_assertions"]
-            .as_str()
-            .expect("native Sprite assertions")
-            .split_once('\n')
-            .expect("fixture path boundary")
-            .1;
-        let script = fs::read_to_string(fixtures.join("sprite-load.lua"))
-            .expect("runtime Sprite assertions")
-            .replace("\r\n", "\n");
-        assert!(
-            script.contains(body),
-            "unchanged compiled native assertions"
-        );
-        let song_dir = test_dir("sprite-load");
-        fs::copy(
-            fixtures.join("sprite-load.png"),
-            song_dir.join("fit-rect.png"),
-        )
-        .expect("copy native Sprite image");
-        let entry = song_dir.join("default.lua");
-        fs::write(&entry, script).expect("write runtime Sprite control");
-        test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Native Sprite loading"),
-        )
-        .expect("native Sprite size, texture, validation and return behavior");
+    fn sprite_methods_match_native() {
+        for name in ["sprite-load", "texture-path"] {
+            let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/fixtures/itgmania-song-lua-micro");
+            let input: serde_json::Value = serde_json::from_slice(
+                &fs::read(fixtures.join(format!("{name}-input.json"))).expect("native Sprite input"),
+            )
+            .expect("native Sprite JSON");
+            let body = input["lua_assertions"]
+                .as_str()
+                .expect("native Sprite assertions")
+                .split_once('\n')
+                .expect("fixture path boundary")
+                .1;
+            let script = fs::read_to_string(fixtures.join(format!("{name}.lua")))
+                .expect("runtime Sprite assertions")
+                .replace("\r\n", "\n");
+            assert!(
+                script.contains(body),
+                "unchanged compiled native assertions"
+            );
+            let song_dir = test_dir(name);
+            fs::copy(
+                fixtures.join("sprite-load.png"),
+                song_dir.join("fit-rect.png"),
+            )
+            .expect("copy native Sprite image");
+            let entry = song_dir.join("default.lua");
+            fs::write(&entry, script).expect("write runtime Sprite control");
+            test_compile_song_lua(
+                &entry,
+                &SongLuaCompileContext::new(&song_dir, "Native Sprite loading"),
+            )
+            .expect("native Sprite size, texture, validation and return behavior");
+        }
     }
 
     #[test]

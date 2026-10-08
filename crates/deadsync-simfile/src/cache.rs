@@ -26,9 +26,9 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Recompile song Lua after correcting native Sprite load return values and
-// argument validation; older captures can continue invalid method chains.
-pub const SONG_CACHE_VERSION: u8 = 56;
+// Recompile song Lua after matching RageTextureID filename collapsing;
+// older captures can branch on an uncollapsed GetPath result.
+pub const SONG_CACHE_VERSION: u8 = 57;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
