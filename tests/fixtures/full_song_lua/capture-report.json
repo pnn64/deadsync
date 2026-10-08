@@ -2335,6 +2335,14 @@
       "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6220,6 +6228,33 @@
         "column_rotation_negative_control": "pass"
       },
       "source_provenance_blob": "3057750eccdafa5d8761489f3e467eda3a80e210a721f3c71d5de396ba518338.json.zst"
+    },
+    {
+      "pass_number": 72,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 15.893203258514404,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 14.41s",
+        "log_sha256": "77c9df4c9a1fb4db79fb31e983b481bc6689f82ccd41f293bf3f43c318ba90ab",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "70245ad1be826230dc9b22875155a68ec7a84276a2a36f99cb4cf205cb497375",
+      "capture_endpoint": {
+        "beat": 384,
+        "music_seconds": 144.58799743652344,
+        "seconds": 144
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     }
   ]
 }
