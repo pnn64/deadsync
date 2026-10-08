@@ -2127,6 +2127,14 @@
       "archive": "bdf17f0bf8d7dccf63d034c97af245f1f0df13ea19ef010456aa6ade80648fcd.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "superseded_archive": "ac4854fd3d8e73710127a23aed1996eff0acc3b662919588a492c9a010086aa5.tar.zst",
+      "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5284,6 +5292,32 @@
       "capture_endpoint": {
         "beat": 348,
         "seconds": 134.70968627929688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 44.51404809951782,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 44.36s",
+        "log_sha256": "9e65137f199e919b2ca2925c28ae05be2f83cfcf787cdbd4f64d8c0e36180247",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "70809940b1728bd64efe75f004463e73d8023946b9ddd858930dd4360bf68aac",
+      "capture_endpoint": {
+        "beat": 265,
+        "seconds": 127.20000457763672
       },
       "runtime_errors": 0,
       "dropped_events": 0
