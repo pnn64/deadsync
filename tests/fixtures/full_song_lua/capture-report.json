@@ -1463,6 +1463,14 @@
       "archive": "6a5626b20911001f16fa833b302e92095f535ba904c39862aa2d83a9c30ede52.tar.zst",
       "harness_version": "0.1.21",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 54,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "f056f50bdf2a701e11399ff322aeae47eff639c2398757fbff520ebf02fb29db.tar.zst",
+      "archive": "92adf6c921c74e181873d41094f1a86df6f4dbb813369488fc59da15d6cd6e81.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -2083,6 +2091,31 @@
       "capture_endpoint": {
         "beat": 338,
         "seconds": 130
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 54,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "92adf6c921c74e181873d41094f1a86df6f4dbb813369488fc59da15d6cd6e81.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "92adf6c921c74e181873d41094f1a86df6f4dbb813369488fc59da15d6cd6e81.tar.zst",
+        "version": "0.5.1860",
+        "exit_code": 0,
+        "seconds": 44.483195304870605,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 44.38s",
+        "log_sha256": "7ae0ca99b37af1191db326c9ff61ae41e585915edc5ae4901d46a4833f11546d",
+        "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
+      },
+      "capture_log_sha256": "7cf371cd623fdbc210a82fe0b424cc74fe9bffafa207b58f4c427ccec9238aca",
+      "capture_endpoint": {
+        "beat": 580,
+        "seconds": 221.77818298339844
       },
       "runtime_errors": 0,
       "dropped_events": 0
