@@ -2406,3 +2406,5 @@ Its reference must be checked against a fresh capture with current native
 song timing before changing the implementation. The full scope remains 501
 simfiles, including 18 unindexed sources, and 492 existing archive cases.
 Revalidation from the top with the corrected comparator remains unfinished.
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
