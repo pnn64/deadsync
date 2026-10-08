@@ -28,7 +28,7 @@ use crate::song::{
 
 // Recompile song Lua after matching RageTextureID filename collapsing;
 // older captures can branch on an uncollapsed GetPath result.
-pub const SONG_CACHE_VERSION: u8 = 57;
+pub const SONG_CACHE_VERSION: u8 = 58;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;

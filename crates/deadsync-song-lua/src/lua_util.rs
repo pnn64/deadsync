@@ -1800,7 +1800,7 @@ fn make_actor_ctor(
             table.set("__songlua_state_sprite_animate", true)?;
         }
         install_actor_methods(lua, &table)?;
-        install_actor_metatable(lua, &table)?;
+        install_actor_metatable(lua, &table, install_actor_methods)?;
         reset_actor_capture(lua, &table)?;
         if actor_type.eq_ignore_ascii_case("GraphDisplay") {
             let [width, height] = graph_display_body_size(human_player_count);
@@ -1849,7 +1849,7 @@ fn own_actor_children(
             .get::<Option<bool>>("__songlua_def_owned")?
             .unwrap_or(false)
         {
-            clone_actor_def(lua, &child, install_methods)?
+            clone_actor_def(lua, &child, install_methods, true)?
         } else {
             child
         };
@@ -1863,6 +1863,7 @@ fn clone_actor_def(
     lua: &Lua,
     source: &Table,
     install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+    own_children: bool,
 ) -> mlua::Result<Table> {
     let actor = lua.create_table()?;
     source.for_each::<Value, Value>(|key, value| {
@@ -1897,8 +1898,10 @@ fn clone_actor_def(
     // Installed methods close over their owning table; rebind them to the new
     // instance while sharing user command functions and their Lua upvalues.
     install_methods(lua, &actor)?;
-    install_actor_metatable(lua, &actor)?;
-    own_actor_children(lua, &actor, install_methods)?;
+    install_actor_metatable(lua, &actor, install_methods)?;
+    if own_children {
+        own_actor_children(lua, &actor, install_methods)?;
+    }
     Ok(actor)
 }
 
@@ -2941,7 +2944,7 @@ pub fn create_dummy_actor(
     init_actor_type(lua, &actor, actor_type)?;
     inherit_actor_dirs(lua, &actor)?;
     install_actor_methods(lua, &actor)?;
-    install_actor_metatable(lua, &actor)?;
+    install_actor_metatable(lua, &actor, install_actor_methods)?;
     reset_actor_capture(lua, &actor)?;
     register_song_lua_actor(lua, &actor)?;
     Ok(actor)
@@ -3836,26 +3839,30 @@ pub fn actor_debug_label(actor: &Table) -> String {
     }
 }
 
-pub fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+pub fn install_actor_metatable(
+    lua: &Lua,
+    actor: &Table,
+    install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+) -> mlua::Result<()> {
     crate::actor_classes::bind(lua, actor)?;
     let mt = lua.create_table()?;
     mt.set("__index", lua.create_function(crate::actor_classes::lookup)?)?;
     mt.set("__newindex", lua.create_function(crate::actor_classes::assign)?)?;
-    let actor_clone = actor.clone();
     mt.set(
         "__concat",
-        lua.create_function(move |lua, (_lhs, rhs): (Value, Value)| {
-            if let Value::Table(rhs) = rhs {
-                merge_actor_concat(lua, &actor_clone, &rhs)?;
-            }
-            Ok(actor_clone.clone())
+        lua.create_function(move |lua, (lhs, rhs): (Table, Table)| {
+            // ActorDef.MergeTables makes a fresh definition and keeps the
+            // original metatable. Bound methods must address that new table.
+            let actor = clone_actor_def(lua, &lhs, install_methods, false)?;
+            merge_actor_concat(lua, &actor, &rhs)?;
+            actor.set_metatable(lhs.metatable())?;
+            Ok(actor)
         })?,
     )?;
-    let actor_clone = actor.clone();
     mt.set(
         "__tostring",
-        lua.create_function(move |_, _self: Value| {
-            let kind = actor_clone
+        lua.create_function(|_, actor: Table| {
+            let kind = actor
                 .raw_get::<Option<String>>("__songlua_actor_type")?
                 .unwrap_or_else(|| "Actor".into());
             let kind = match kind.as_str() {
@@ -3866,9 +3873,9 @@ pub fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             };
             // Luna::tostring_T exposes only type and opaque object identity.
             #[cfg(target_os = "windows")]
-            let identity = format!("{:016X}", actor_clone.to_pointer() as usize);
+            let identity = format!("{:016X}", actor.to_pointer() as usize);
             #[cfg(not(target_os = "windows"))]
-            let identity = format!("{:p}", actor_clone.to_pointer());
+            let identity = format!("{:p}", actor.to_pointer());
             Ok(format!("{kind} ({identity})"))
         })?,
     )?;
@@ -3876,23 +3883,9 @@ pub fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
-fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
-    let next_index = actor.raw_len() + 1;
-    let mut append_index = next_index;
-    for value in rhs.sequence_values::<Value>() {
-        actor.raw_set(append_index, value?)?;
-        append_index += 1;
-    }
+fn merge_actor_concat(lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
     for pair in rhs.pairs::<Value, Value>() {
         let (key, value) = pair?;
-        let is_sequence_key = match key {
-            Value::Integer(index) => index >= 1,
-            Value::Number(index) => index.is_finite() && index >= 1.0 && index.fract() == 0.0,
-            _ => false,
-        };
-        if is_sequence_key {
-            continue;
-        }
         if matches!(
             &key,
             Value::String(text)
@@ -3904,6 +3897,17 @@ fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()
         ) {
             continue;
         }
+        let value = match (actor.raw_get::<Value>(key.clone())?, value) {
+            (Value::Function(first), Value::Function(second)) => {
+                // Keep this a Lua function: arbitrary user callbacks must not
+                // be classified as installed C methods by actor_classes.
+                let compose: Function = lua.load(
+                    "return function(first, second) return function(...) first(...); return second(...) end end",
+                ).eval()?;
+                Value::Function(compose.call::<Function>((first, second))?)
+            }
+            (_, value) => value,
+        };
         actor.set(key, value)?;
     }
     Ok(())

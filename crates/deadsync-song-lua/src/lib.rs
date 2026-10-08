@@ -7241,6 +7241,19 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_merges_actor_definitions() {
+        let song_dir = test_dir("native-definition-concat");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../tests/fixtures/definition-concat.lua"))
+            .expect("write definition control");
+        let compiled = test_compile_song_lua(
+            &entry, &SongLuaCompileContext::new(&song_dir, "Native Definition Concat"),
+        ).expect("compile native definition control");
+        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.overlays[0].initial_state.x, 42.0);
+    }
+
+    #[test]
     fn compile_song_lua_exposes_color_helpers() {
         let song_dir = test_dir("color-helpers");
         let entry = song_dir.join("default.lua");

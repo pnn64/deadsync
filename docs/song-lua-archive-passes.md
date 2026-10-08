@@ -2432,3 +2432,10 @@ Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 19
 Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
 
 Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 70: restore native actor definition concatenation
+
+Both adapters discarded the base command when Lua concatenated definitions. ArrowQuest therefore lost map InitCommands and finished both full native captures with 51 runtime errors. The unmodified native fallback ActorDef.lua, executed in the compiled native oracle, proves that MergeTables creates a fresh definition, overrides numeric keys, combines all function collisions in left-to-right order, forwards arguments and trailing nil values, returns the second function result, and stops on a first-function error. The checked-in control fails on both old adapters and passes after the repairs. DeadSync rebinds methods to the new table and replaces the old mutation and numeric append paths; compiled song cache version is now 58.
+
+Validation: 148 harness unit tests pass with two existing ignored; actor, chart and diff integrations pass. The unrelated outro integration input called ActorFrame-only SetUpdateFunction on Quad; the old .28 executable reproduces that failure. Its callback now lives on an ActorFrame and the unchanged endpoint checks pass. DeadSync passes 675 song-Lua tests with three existing GPU tests ignored. Pass 69 stopped at its source guard after 13 committed verified archives. Its prefix is historical after this production change. Original Mr. Sandman capture is ready in ignored staging and awaits full DeadSync verification; both ArrowQuest inputs require fresh full native captures. Scope remains 501 original simfiles and 492 archive variants until publication. Full-corpus parity remains unfinished.
