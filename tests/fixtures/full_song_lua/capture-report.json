@@ -1295,6 +1295,14 @@
       "archive": "f1f679a5b7316d1d143ebbe064f59aea1b66a0ab30f41c4ece1be49f6af124de.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "45be98118e8a0ab0db2cfb017f52de2475650620cda25a3639686f424f9e900c.tar.zst",
+      "archive": "80a082f87260bcc55830ec2250c7f83a76b04c76d3a27f59481e296d17737522.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1453,6 +1461,24 @@
         "seconds": 8.18457293510437,
         "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.05s",
         "log_sha256": "2f53980424fd23ee8ea4abcbbc094f5ddc2ef88822dd730b029bbebece6d8ac4",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "80a082f87260bcc55830ec2250c7f83a76b04c76d3a27f59481e296d17737522.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "80a082f87260bcc55830ec2250c7f83a76b04c76d3a27f59481e296d17737522.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 21.965048789978027,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 21.85s",
+        "log_sha256": "4f5906d35af6217a301cfa68550c5965eddfa7a9180e133c274f4dadcbaff4a3",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
