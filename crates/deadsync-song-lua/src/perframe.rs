@@ -2069,14 +2069,19 @@ fn capture_update_overlay_samples<Actor: std::borrow::Borrow<Table>>(
             .extend(scheduled_samples.extract_if(.., |sample| {
                 // A later zero-time state cannot pass its pending actor tween
                 // when cursor rounding puts that state's endpoint first.
-                if scratch.blocked_actors[sample.overlay_index] {
+                // Actor.h stores immediate fields outside TweenState. A queued
+                // effect runs at dispatch, independently of later pose tweens.
+                let tweened = crate::lua_util::TWEEN_POSE_TARGETS.contains(&sample.target);
+                if tweened && scratch.blocked_actors[sample.overlay_index] {
                     return false;
                 }
                 let complete = sample
                     .dispatch_seconds
                     .is_none_or(|dispatch| dispatch <= next_seconds + 1.0e-7)
                     && sample.end_seconds <= scheduled_overlay_clock(sample, next_seconds);
-                scratch.blocked_actors[sample.overlay_index] = !complete;
+                if tweened {
+                    scratch.blocked_actors[sample.overlay_index] = !complete;
+                }
                 complete
             }));
         // Actor queues are captured in enqueue order. Rounded cursor times

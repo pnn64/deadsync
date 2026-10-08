@@ -1494,3 +1494,40 @@ A separate callback-driven repeat-wag probe now reproduces the early-wag
 geometry failure (8,436 pass / one fail). Its queued-command counterpart
 passes all 8,436 checks. These focused diagnostics remain under target and
 provide the next playback investigation. The full corpus goal is unfinished.
+
+
+## Pass 41: complete queued effects independently of tween poses
+
+The separate callback-driven repeat-wag chart failed one geometry check,
+while the queued-command counterpart passed. Its old wag sample remained
+pending behind a later Y tween; after a new stopeffect it was restored at
+3.7666667 seconds, before the new queued Waggy command actually dispatched.
+ITGmania Actor.h stores effect fields outside TweenState. ActorFrame.cpp
+updates children before its callback; Actor.cpp dispatches queued commands
+from UpdateTweening. An effect written by an already reached command must
+complete independently of later pose tweens.
+
+Scheduled completion now blocks only the existing TWEEN_POSE_TARGETS shared
+with ActorTweenReplay. Immediate effects and other non-tweened fields keep
+their dispatch ordering without waiting behind pose/color samples. The
+existing zero-time pose ordering guard remains active. DeadSync is 0.5.1854;
+song-cache version 45 invalidates the earlier compiled tracks.
+
+The focused whole archive changes from 8,436 pass / one fail to all 8,437
+checks passing. The checked-in regression preserves 1,216 observations,
+including 722 drawable frame checks; replacing the second stop-effect sample
+with wag fails native geometry without dropping comparisons. All fourteen
+native controls, all 666 song-Lua tests, the production check without test
+support, and both cache checks pass. Three existing core tests remain ignored.
+
+The identical complete harness-0.1.16 KABOOOOOM archive now has 2,274,702 pass /
+11 fail out of the same 2,274,713 checks (previously 115 failures). All 104
+early-wag geometry failures are removed. The remaining six geometry and five
+color failures concern the late big-horn wrapper fade. The archive is still
+an unpublished target diagnostic; the temporary flat copy was removed.
+The receipts, hashes, production gates and same-archive comparison are linked
+in pass41-effect-queue-comparison.json under target/song-lua-archive-passes.
+
+A separate late-wrapper/fade probe reproduces alpha, visibility and draw-color
+failures (5,393 pass / three fail out of 5,396 checks). It remains under target
+for the next investigation. The full corpus goal remains unfinished.

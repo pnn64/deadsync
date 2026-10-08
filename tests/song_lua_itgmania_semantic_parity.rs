@@ -10622,3 +10622,30 @@ fn message_queue_backlog_matches_native() {
     assert_eq!(rejected.checks(), 2, "retain both message targets");
     assert_eq!(rejected.passed(), 1, "incorrect queue timing must be rejected");
 }
+
+#[test]
+fn callback_wag_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/callback-wag.json"),
+    );
+    let (mut compiled, primary, context) = compile_trace_song_at(
+        &trace, &root.join("tests/fixtures/song-lua/callback-wag/message-wag-repeat.sm"),
+    );
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Callback wag"));
+    assert_eq!(parity.checks(), 1216, "retain geometry and all 722 drawable frames");
+    parity.assert_complete("Callback wag");
+    let track = compiled[primary].overlay_updates.iter_mut()
+        .find(|track| track.target == SongLuaOverlayUpdateTarget::EffectMode)
+        .expect("runtime effect selector");
+    let sample = track.samples.iter_mut().find(|sample| (sample.time - 3.75).abs() <= EPSILON)
+        .expect("second callback stops the old wag");
+    sample.value = SongLuaOverlayUpdateValue::EffectMode(EffectMode::Wag);
+    let mut rejected = compare_semantics(&trace, &compiled, primary, &context);
+    compare_drawable_frames(&trace, &compiled, &context, &mut rejected);
+    assert_eq!(rejected.checks(), parity.checks(), "retain every observation");
+    assert!(rejected.passed() < rejected.checks(), "an unstopped wag must fail native geometry");
+}

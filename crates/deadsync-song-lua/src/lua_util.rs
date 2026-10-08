@@ -10655,7 +10655,7 @@ struct ActorTweenStep {
 
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 
-const TWEEN_POSE_TARGETS: [SongLuaOverlayUpdateTarget; 24] = {
+pub(crate) const TWEEN_POSE_TARGETS: [SongLuaOverlayUpdateTarget; 24] = {
     use SongLuaOverlayUpdateTarget as T;
     [
         T::Aux,
