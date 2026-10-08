@@ -1273,7 +1273,7 @@ The nineteenth obsolete KABOOOOOM primary is rejected before comparison;
 next-failure.json also links its current complete failing diagnostic. The
 501-simfile / 492-variant objective remains incomplete.
 
-## Next investigation: wrappers created after startup
+## Pass 36: wrappers created after startup
 
 An independent four-second native probe creates a bob wrapper from a queued
 self callback at t=1. It uses no broadcasts or random calls, so recipient
@@ -1284,11 +1284,78 @@ passes 5,586 and fails 24 of 5,610 comparisons on immutable 0.5.1851. Every
 failure is projected geometry. At beat 1.25 ITGmania's quad center is
 [410.39557, 244.15823], while DeadSync keeps [400, 240]. The suspected cause
 is the overlay capture list built before chronological callbacks create new
-wrappers; its source fix is pending. Native Actor.cpp is byte-identical in the
-workspace and linked tree. Actor::AddWrapperState, wrapper-before-owner
+wrappers. The runtime capture fix is described below. Native Actor.cpp is
+byte-identical in the workspace and linked tree. Actor::AddWrapperState, wrapper-before-owner
 Update, Draw's wrapper stack and the bob formula are recorded with hashes
 and anchors in pass36-late-wrapper-native-investigation.json. The probe is
 retained only under harness target/song-lua-repair/pass36-late-wrapper-probe;
 it is unindexed and absent from the flat corpus fixtures. An initial capture
 using the other noteskin tree was rejected before any comparisons, and is
 not treated as evidence of the behavior gap.
+
+
+DeadSync 0.5.1852 registers wrappers created by chronological callbacks in
+the capture arrays before their setters run. It extends the reusable state
+buffers, retains their effects and tweens, inserts the new wrapper outside
+the owner's earlier wrappers, and normalizes the final graph to parent-first
+order while preserving sibling draw order. The existing layer split remaps
+all overlay references consistently. New wrappers inherit layer ownership.
+Cache version advances to 43.
+
+The independent bob probe now passes all 5,610 full-archive comparisons;
+its micro regression checks all 307 semantic observations. No comparisons
+are removed. All 665 song-Lua tests and both cache tests pass. The focused
+native checks, including existing wrapper drawing controls, also pass.
+
+## Pass 37: audit native wrapper effects independently
+
+The initial 0.1.14 KABOOOOOM replay reported 189 vibration mismatches after
+runtime wrappers became visible to the comparator. This alone did not prove
+a production regression. Actor::Draw calls PreDraw/BeginDraw on each direct
+wrapper; Actor::PreDraw applies vibration at lines 606-612. The headless
+effect-chain recorder omitted those wrappers. A new regression first proves
+the real linked C++ drawing applies both wrapper vibrations, then fails
+because the old semantic trace records only the ordinary parent.
+
+Harness 0.1.15 includes direct wrapper effects in that leaf-to-root chain
+and reports wrapper_effects = native-draw-stack. All 168 harness tests pass
+(five existing tests remain ignored). Harness commit:
+90b606f58353bcd4ae1a3f86a0f1131dd50b4ead.
+Test-log SHA-256:
+e660c9e329700133deeacf77faff8d67477fa414d1a226bc67ec515bfe936751.
+The workspace and linked Actor.cpp hashes are identical; the source proof
+records the draw/update/vibration anchors. References remain unmodified.
+
+A complete four-second 0.1.15 probe creates vibration from a queued callback
+after startup, with 241 native update frames and no errors or dropped events.
+Archive c66b74116032f90638c1547a4bf3349da9a37ba4513d6cedd8c9ba172a86b881
+fails one of 5,357 checks on immutable 0.5.1851 and passes all 5,357 on
+0.5.1852. Its micro regression checks all 54 observations and verifies that
+removing the wrapper's vibration capture causes the audit to fail. Whole-song
+validation rejects obsolete wrapper-vibration traces, including calls inside
+recorded tween operations. Older captures with only bob wrappers remain
+usable. All eighteen focused native controls pass.
+
+The fresh complete 0.1.15 KABOOOOOM capture reaches beat 645.75 at
+199.4571533203125 seconds, without native errors or dropped events. All 26
+payload files plus manifest, original source bytes and lossless recompression
+are verified. Archive
+015de9f0dfb4d41dae9f90b9df7a0ebabedc8d10e01051de741c157d5c894346
+is 34,867,575 bytes and remains unpublished in
+target/song-lua-archive-passes/pass37-native-diagnostics.
+
+Both builds replay this exact archive: 0.5.1851 passes 2,216,403 and fails
+58,310 of 2,274,713 checks; 0.5.1852 passes 2,222,087 and fails 52,626.
+Projected vibration failures fall from 300 to 96. Geometry, color, message
+and vibration gaps remain; a lower count does not establish full parity.
+The chart's airhorn handlers share hornIndex, so native pointer-ordered
+delivery can select different actors and random draws. Recipient ordering
+and remaining queued effect timing require source-backed investigation.
+
+A new sweep from index zero again passes the first eighteen archives and all
+3,729,943 checks on immutable 0.5.1852, executable SHA-256
+1833dbf0f605475581db4c227505d7b87cf7686ed8853cef326d4de01ba849b8.
+pass37-verified-prefix.json verifies the current hashes and receipts. The
+nineteenth obsolete primary is rejected before comparison; next-failure.json
+links the complete failing 0.1.15 diagnostic separately. The full
+501-simfile / 492-variant parity objective remains incomplete.

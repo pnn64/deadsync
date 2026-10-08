@@ -1,0 +1,15 @@
+{
+  "native_executable_sha256": "b248e507f7d3aaabb45f7c22cab21d1626630cbd6d8c4229519b3338e5b51435",
+  "harness_version": "0.1.15",
+  "source_sha256": "e2946e0c889b217e166b11ed73ddd560af0739f0496aab3a25012678121bc2a7",
+  "native_trace_sha256": "4c1735aad66cc5abfe4e582a21a56463af500592a80d572452281536dcd9eaa0",
+  "wrapper_effects": "native-draw-stack",
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "update_frames": 241,
+  "end_position": {
+    "beat": 4,
+    "seconds": 4
+  },
+  "native_actor_source_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+}

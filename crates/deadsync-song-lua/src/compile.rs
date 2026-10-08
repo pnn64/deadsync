@@ -1145,6 +1145,78 @@ fn mark_actor_layer(actor: &Value, index: usize) -> mlua::Result<()> {
     Ok(())
 }
 
+// Preserve an actor's original sibling position when later wrappers surround it.
+// This load-time traversal emits parents first, as composition and camera scopes
+// require, and rejects cycles instead of leaving forward parents unresolved.
+fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
+    overlays: &[SongLuaOverlayActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+) -> Result<Vec<usize>, String> {
+    if overlays
+        .iter()
+        .enumerate()
+        .all(|(index, overlay)| overlay.parent_index.is_none_or(|parent| parent < index))
+    {
+        return Ok((0..overlays.len()).collect());
+    }
+    let count = overlays.len();
+    let mut children = vec![Vec::new(); count + 1];
+    for (index, overlay) in overlays.iter().enumerate() {
+        let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
+        let Some(list) = children.get_mut(parent) else {
+            return Err("Runtime wrapper has an invalid parent".into());
+        };
+        list.push(index);
+    }
+    let mut source = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| {
+            if matches!(overlay.kind, SongLuaOverlayKind::WrapperState) {
+                usize::MAX
+            } else {
+                index
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut chain = Vec::new();
+    for index in 0..count {
+        chain.clear();
+        let mut next = index;
+        while source[next] == usize::MAX {
+            if chain.len() >= count {
+                return Err("Cycle in runtime wrapper ownership".into());
+            }
+            chain.push(next);
+            let Some(&child) = children[next + 1].first() else {
+                source[next] = next;
+                break;
+            };
+            next = child;
+        }
+        for index in chain.drain(..) {
+            source[index] = source[next];
+        }
+    }
+    for list in &mut children {
+        list.sort_by_key(|&index| source[index]);
+    }
+    let mut order = Vec::with_capacity(count);
+    let mut pending = children[0].iter().rev().copied().collect::<Vec<_>>();
+    while let Some(index) = pending.pop() {
+        if order.len() >= count {
+            return Err("Cycle in runtime wrapper hierarchy".into());
+        }
+        order.push(index);
+        pending.extend(children[index + 1].iter().rev().copied());
+    }
+    if order.len() != count {
+        return Err("Runtime wrapper hierarchy has no reachable root".into());
+    }
+    Ok(order)
+}
+
 fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     mut compiled: DefaultCompiledSongLua<NoteskinSlot, ModelVertex>,
     overlay_layers: Vec<usize>,
@@ -1154,18 +1226,17 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     if overlay_layers.len() != compiled.overlays.len() {
         return Err("song lua overlay ownership did not match compiled overlays".to_string());
     }
+    let overlay_order = wrapper_overlay_order(&compiled.overlays)?;
     let mut local_counts = vec![0usize; entry_paths.len()];
-    let overlay_map = overlay_layers
-        .iter()
-        .map(|&layer| {
-            if layer >= local_counts.len() {
-                return Err(format!("song lua overlay has invalid layer index {layer}"));
-            }
-            let local = local_counts[layer];
-            local_counts[layer] += 1;
-            Ok((layer, local))
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    let mut overlay_map = vec![(0usize, 0usize); compiled.overlays.len()];
+    for &index in &overlay_order {
+        let layer = overlay_layers[index];
+        if layer >= local_counts.len() {
+            return Err(format!("song lua overlay has invalid layer index {layer}"));
+        }
+        overlay_map[index] = (layer, local_counts[layer]);
+        local_counts[layer] += 1;
+    }
     let mut outputs = entry_paths
         .iter()
         .map(|entry_path| DefaultCompiledSongLua {
@@ -1225,7 +1296,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         }
     }
 
-    for (global_index, mut overlay) in compiled.overlays.drain(..).enumerate() {
+    let mut overlays = compiled.overlays.drain(..).map(Some).collect::<Vec<_>>();
+    for global_index in overlay_order {
+        // The validated traversal visits each owned node exactly once.
+        let mut overlay = overlays[global_index].take().expect("unique overlay traversal");
         let (layer, _) = overlay_map[global_index];
         overlay.parent_index = overlay.parent_index.and_then(|parent| {
             overlay_map

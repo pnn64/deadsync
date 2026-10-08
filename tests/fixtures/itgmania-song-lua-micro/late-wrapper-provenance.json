@@ -1,0 +1,21 @@
+{
+  "native_executable_sha256": "0205a710ca237b1d620b1086a0f7b25ca3bf878c1832daf69b2f54f3d23f20cb",
+  "native_trace_sha256": "ae650c454f2091e8e97c8595d10f2a03c0998c10f9aec6c448d7f3631361445c",
+  "source_sha256": "ed6cb08984f467b5594dff309035d6c7b2041803ce4fd5425bf224e4c80fcbc1",
+  "noteskin_root": "C:\\GitHub\\deadsync\\assets\\noteskins",
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "update_frames": 241,
+  "end_position": {
+    "beat": 4,
+    "seconds": 4
+  },
+  "native_actor_source_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+  "native_and_linked_actor_sources_identical": true,
+  "source_anchors": {
+    "wrapper_creation": 972,
+    "wrapper_update_before_owner_callbacks": 875,
+    "wrapper_draw_stack": 422,
+    "bob_formula": 618
+  }
+}

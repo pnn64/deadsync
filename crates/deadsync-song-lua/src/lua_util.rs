@@ -188,6 +188,11 @@ impl<Kind> std::borrow::Borrow<Table> for SongLuaOverlayCompileActor<Kind> {
 
 struct SongLuaOverlayUpdateCapture {
     actor_indices: FxHashMap<usize, usize>,
+    // Load-time replay owns new wrappers and their initial poses. Their capture
+    // indices follow temporary player/layer slots until final remapping.
+    wrapper_start: Option<usize>,
+    wrappers: Vec<(usize, Table, SongLuaOverlayState)>,
+    wrapper_seen: usize,
     active_broadcast: Option<String>,
     // Scoped with active_broadcast so nested dispatch restores both together.
     active_broadcast_command: Option<mlua::LuaString>,
@@ -291,6 +296,9 @@ impl SongLuaOverlayUpdateCapture {
         let actor_count = actor_indices.values().max().map_or(0, |index| index + 1);
         Self {
             actor_indices,
+            wrapper_start: None,
+            wrappers: Vec::new(),
+            wrapper_seen: 0,
             active_broadcast: None,
             active_broadcast_command: None,
             active_broadcast_params: false,
@@ -529,6 +537,120 @@ pub(crate) fn begin_overlay_update_capture_from_indices(
     lua.set_app_data(SongLuaOverlayUpdateCapture::new(
         actor_indices.into_iter().collect(),
     ));
+}
+
+pub(crate) fn begin_wrapper_capture(lua: &Lua) {
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        capture.wrapper_start = Some(capture.values.len());
+    }
+}
+
+fn capture_new_wrapper(lua: &Lua, owner: &Table, wrapper: &Table) -> mlua::Result<()> {
+    let owner = owner.to_pointer() as usize;
+    if lua
+        .app_data_ref::<SongLuaOverlayUpdateCapture>()
+        .is_none_or(|capture| {
+            capture.wrapper_start.is_none() || !capture.actor_indices.contains_key(&owner)
+        })
+    {
+        return Ok(());
+    }
+    let initial = actor_overlay_initial_state(wrapper).map_err(mlua::Error::external)?;
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        let index = capture.values.len();
+        capture
+            .actor_indices
+            .insert(wrapper.to_pointer() as usize, index);
+        capture.touched_flags.push(false);
+        capture.values.push(Vec::new());
+        capture.final_values.push(Vec::new());
+        capture.scheduled.push(Vec::new());
+        capture.pending_tweens.push(Vec::new());
+        capture.tween_resets.push(false);
+        capture.prior_positions.push(None);
+        capture.wrappers.push((owner, wrapper.clone(), initial));
+    }
+    if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
+        replays.0.insert(
+            wrapper.to_pointer() as usize,
+            ActorTweenReplay {
+                current: initial,
+                queue: Default::default(),
+                progress: Vec::new(),
+                targets: 0,
+            },
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn append_wrapper_actors(
+    lua: &Lua,
+    actors: &mut Vec<Table>,
+    states: &mut [&mut Vec<SongLuaOverlayState>],
+) {
+    let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
+        return;
+    };
+    let Some(start) = capture.wrapper_start else {
+        return;
+    };
+    for (offset, (_, actor, initial)) in
+        capture.wrappers[capture.wrapper_seen..].iter().enumerate()
+    {
+        debug_assert_eq!(actors.len(), start + capture.wrapper_seen + offset);
+        actors.push(actor.clone());
+        for buffer in states.iter_mut() {
+            buffer.push(*initial);
+        }
+    }
+    capture.wrapper_seen = capture.wrappers.len();
+}
+
+pub(crate) fn finish_wrapper_capture(
+    lua: &Lua,
+    overlay_count: usize,
+) -> (usize, Vec<(usize, Table, SongLuaOverlayState)>) {
+    let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
+        return (usize::MAX, Vec::new());
+    };
+    let start = capture.wrapper_start.take().unwrap_or(usize::MAX);
+    let end = start.saturating_add(capture.wrappers.len());
+    let remap = |index: usize| {
+        if index < overlay_count {
+            Some(index)
+        } else if (start..end).contains(&index) {
+            Some(overlay_count + index - start)
+        } else {
+            None
+        }
+    };
+    capture.message_advances = std::mem::take(&mut capture.message_advances)
+        .into_iter()
+        .filter_map(|((index, message), advance)| Some(((remap(index)?, message), advance)))
+        .collect();
+    for targets in capture.stateful_messages.values_mut() {
+        *targets = std::mem::take(targets)
+            .into_iter()
+            .filter_map(|(index, fields)| Some((remap(index)?, fields)))
+            .collect();
+    }
+    for writes in capture.stateful_writes.values_mut() {
+        writes.retain_mut(|write| {
+            remap(write.overlay_index).is_some_and(|index| {
+                write.overlay_index = index;
+                true
+            })
+        });
+    }
+    #[cfg(feature = "test-support")]
+    {
+        capture.writes = std::mem::take(&mut capture.writes)
+            .into_iter()
+            .filter_map(|((index, target), samples)| Some(((remap(index)?, target), samples)))
+            .collect();
+    }
+    (start, std::mem::take(&mut capture.wrappers))
 }
 
 pub fn drain_overlay_update_capture(
@@ -2445,8 +2567,10 @@ pub fn actor_wrappers(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 }
 
 pub fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
-    if let Some(player_index) = from.get::<Option<i64>>("__songlua_player_index")? {
-        into.set("__songlua_player_index", player_index)?;
+    for key in ["__songlua_player_index", "__songlua_compile_layer"] {
+        if let Some(index) = from.get::<Option<i64>>(key)? {
+            into.set(key, index)?;
+        }
     }
     if let Some(child_name) = from.get::<Option<String>>("__songlua_player_child_name")? {
         into.set("__songlua_player_child_name", child_name)?;
@@ -9371,6 +9495,7 @@ pub fn install_actor_runtime_child_methods(
                 let wrappers = actor_wrappers(lua, &actor)?;
                 let next_index = wrappers.raw_len() + 1;
                 wrappers.raw_set(next_index, wrapper.clone())?;
+                capture_new_wrapper(lua, &actor, &wrapper)?;
                 invalidate_compile_update_plan(lua);
                 Ok(wrapper)
             }

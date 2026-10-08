@@ -58,6 +58,8 @@ struct NativeTrace {
     #[serde(default)]
     message_dispatch: Option<String>,
     #[serde(default)]
+    wrapper_effects: Option<String>,
+    #[serde(default)]
     message_dispatches: Vec<NativeMessageDispatch>,
     #[serde(default)]
     runtime_errors: Vec<Value>,
@@ -6942,6 +6944,77 @@ fn vibrate_restart_native() {
             );
         }
     }
+}
+
+#[test]
+fn late_wrapper_vibration_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/late-wrapper-vibrate.json"),
+    );
+    assert_eq!(trace.wrapper_effects.as_deref(), Some("native-draw-stack"));
+    assert_eq!(trace.projected_vertex_tracks[0].samples.len(), 2);
+    let (mut compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/late-wrapper-vibrate.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Late wrapper vibration"));
+    assert_eq!(parity.checks(), 54, "retain both native draw observations");
+    parity.assert_complete("Late wrapper vibration");
+    let wrapper = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| matches!(actor.kind, SongLuaOverlayKind::WrapperState))
+        .expect("wrapper created by the queued callback");
+    assert!(compiled[primary].overlay_updates.iter().any(|track| {
+        track.overlay_index == wrapper && track.target == SongLuaOverlayUpdateTarget::Vibrate
+    }));
+    // A missing runtime wrapper must fail the independent vibration audit.
+    compiled[primary].overlays[wrapper].initial_state.vibrate = false;
+    compiled[primary]
+        .overlay_updates
+        .retain(|track| track.target != SongLuaOverlayUpdateTarget::Vibrate);
+    let mut missing = Parity::default();
+    compare_projected_vibration_coverage(&trace, &compiled, &context, &mut missing);
+    assert_eq!(missing.checks(), 2);
+    assert!(
+        missing
+            .gaps
+            .iter()
+            .any(|gap| gap.contains("projected vibration differs"))
+    );
+}
+
+#[test]
+fn late_wrapper_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/late-wrapper.json"));
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/late-wrapper.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("Late wrapper"));
+    assert_eq!(parity.checks(), 307, "retain every captured observation");
+    parity.assert_complete("Late wrapper");
+    let actors = &compiled[primary].overlays;
+    assert!(
+        actors
+            .iter()
+            .enumerate()
+            .all(|(index, actor)| actor.parent_index.is_none_or(|parent| parent < index))
+    );
+    assert_eq!(
+        actors
+            .iter()
+            .filter(|actor| matches!(actor.kind, SongLuaOverlayKind::WrapperState))
+            .count(),
+        1
+    );
 }
 
 #[test]

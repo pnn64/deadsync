@@ -2932,13 +2932,64 @@ impl ColumnSplineCapture {
     }
 }
 
+fn append_wrapper_overlays<Slot, Vertex, Attribute>(
+    overlays: &mut Vec<
+        SongLuaOverlayCompileActor<crate::SongLuaOverlayKind<Slot, Vertex, Attribute>>,
+    >,
+    wrappers: Vec<(usize, Table, SongLuaOverlayState)>,
+) -> Result<(), String> {
+    let mut indices: FxHashMap<_, _> = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
+        .collect();
+    for (owner, table, initial_state) in wrappers {
+        let Some(&owner_index) = indices.get(&owner) else {
+            return Err("Runtime wrapper owner has no compiled overlay".into());
+        };
+        // New states are outside all earlier states owned by this actor.
+        // Stop at its normal parent, which can have wrappers of its own.
+        let mut inner = owner_index;
+        while let Some(parent) = overlays[inner].actor.parent_index {
+            if !matches!(
+                overlays[parent].actor.kind,
+                crate::SongLuaOverlayKind::WrapperState
+            ) || overlays[parent]
+                .table
+                .raw_get::<Option<Table>>("__songlua_parent")
+                .map_err(|err| err.to_string())?
+                .is_none_or(|actor| actor.to_pointer() as usize != owner)
+            {
+                break;
+            }
+            inner = parent;
+        }
+        let parent_index = overlays[inner].actor.parent_index;
+        let index = overlays.len();
+        overlays[inner].actor.parent_index = Some(index);
+        indices.insert(table.to_pointer() as usize, index);
+        overlays.push(SongLuaOverlayCompileActor {
+            actor: crate::SongLuaOverlayActor {
+                kind: crate::SongLuaOverlayKind::WrapperState,
+                name: None,
+                parent_index,
+                initial_state,
+                message_commands: Vec::new(),
+            },
+            table,
+            message_sounds: Vec::new(),
+        });
+    }
+    Ok(())
+}
+
 pub fn compile_update_functions<Slot, Vertex, Attribute>(
     lua: &Lua,
     root: &Value,
     context: &SongLuaCompileContext,
-    overlays: &mut [SongLuaOverlayCompileActor<
+    overlays: &mut Vec<SongLuaOverlayCompileActor<
         crate::SongLuaOverlayKind<Slot, Vertex, Attribute>,
-    >],
+    >>,
     tracked_actors: &mut [SongLuaTrackedActor],
     messages: &[SongLuaMessageEvent],
     startup_tweens: &crate::lua_util::SongLuaStartupStates,
@@ -3065,6 +3116,8 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
             .enumerate()
             .map(|(index, actor)| (actor.to_pointer() as usize, index)),
     );
+    crate::lua_util::begin_wrapper_capture(lua);
+    let wrapper_capture_start = capture_actors.len();
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaBoolWrites::default());
@@ -3073,6 +3126,8 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
     restore_started_message_states(lua, overlays, &replay_overlays, started)?;
+    crate::lua_util::append_wrapper_actors(lua, &mut capture_actors,
+        &mut [&mut baseline_overlays, &mut replay_overlays]);
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let mut mod_scratch = ModSnapshotScratch::default();
@@ -3168,8 +3223,8 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         reset_tracked_capture_tables(lua, tracked_actors)?;
         reset_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        // Overlay count is fixed for this compiler run. Reuse the three state
-        // buffers while keeping prior, message-replayed and updated states apart.
+        // Reuse state buffers; callbacks can extend them with new wrappers.
+        // Keep prior, message-replayed and updated states apart.
         replay_overlays.copy_from_slice(&current_overlays);
         let started =
             message_replay.advance(lua, context, overlays, &mut replay_overlays, next_beat)?;
@@ -3192,6 +3247,10 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         crate::lua_util::set_prior_positions(lua, &current_overlays);
         let actor_delta = f64::from(seconds as f32 - (seconds - delta_seconds) as f32);
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, actor_delta)?;
+        crate::lua_util::append_wrapper_actors(lua, &mut capture_actors, &mut [
+            &mut baseline_overlays, &mut current_overlays, &mut replay_overlays,
+            &mut update_overlays, &mut scheduled_states,
+        ]);
         for (index, samples) in &mut text_samples {
             let overlay = &overlays[*index];
             let text = overlay
@@ -3261,7 +3320,7 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         // Bake current render values, including linear queues whose destinations
         // can be edited by subsequent callbacks. Endpoint merges retain them.
         for sample in &scheduled_overlay_samples {
-            if sample.overlay_index >= overlay_count
+            if (sample.overlay_index >= overlay_count && sample.overlay_index < wrapper_capture_start)
                 || scheduled_overlay_clock(sample, seconds) > sample.end_seconds
             {
                 continue;
@@ -3286,7 +3345,7 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
                 overlay_tracks[index].overlay_index,
                 overlay_tracks[index].target,
             );
-            if actor_index >= overlay_count
+            if (actor_index >= overlay_count && actor_index < wrapper_capture_start)
                 || (target != SongLuaOverlayUpdateTarget::Zoom
                     && !PLAYER_TRANSFORM_TARGETS.contains(&target))
             {
@@ -3566,7 +3625,17 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         sort_overlay_update_samples(&mut track.samples);
     }
 
-    overlay_tracks.retain(|track| track.overlay_index < overlay_count);
+    let (wrapper_start, wrappers) = crate::lua_util::finish_wrapper_capture(lua, overlay_count);
+    debug_assert_eq!(wrapper_start, wrapper_capture_start);
+    append_wrapper_overlays(overlays, wrappers)?;
+    overlay_tracks.retain_mut(|track| {
+        if track.overlay_index < overlay_count { return true; }
+        if track.overlay_index >= wrapper_start {
+            track.overlay_index = overlay_count + track.overlay_index - wrapper_start;
+            return true;
+        }
+        false
+    });
     for (index, samples) in text_samples {
         if let crate::SongLuaOverlayKind::BitmapText {
             text_changes,
@@ -3582,10 +3651,10 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     for capture in &mut stateful_messages {
         capture
             .overlay_targets
-            .retain(|(index, _)| *index < overlay_count);
+            .retain(|(index, _)| *index < overlays.len());
         capture
             .writes
-            .retain(|write| write.overlay_index < overlay_count);
+            .retain(|write| write.overlay_index < overlays.len());
     }
     stateful_messages
         .retain(|capture| !capture.overlay_targets.is_empty() || !capture.writes.is_empty());

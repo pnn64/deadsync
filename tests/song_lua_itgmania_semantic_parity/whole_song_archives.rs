@@ -469,6 +469,25 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         .map(str::parse::<u32>)
         .collect::<Result<Vec<_>, _>>()
         .expect("numeric harness version");
+    let wrappers = trace.external_actors.iter().filter(|actor| {
+        actor.path.rsplit('/').next().and_then(|part| part.strip_prefix("WrapperState"))
+            .is_some_and(|index| index.parse::<usize>().is_ok())
+    }).map(|actor| actor.id.as_str()).collect::<HashSet<_>>();
+    let vibrates = |operation: &str| operation.rsplit('.').next()
+        .is_some_and(|name| name.eq_ignore_ascii_case("vibrate"));
+    let wrapper_vibration = trace.operation_tracks.iter().any(|track| {
+        wrappers.contains(track.actor.as_str()) && !track.samples.is_empty()
+            && vibrates(&track.operation)
+    }) || trace.tween_tracks.iter().any(|track| {
+        wrappers.contains(track.actor.as_str()) && track.segments.iter()
+            .flat_map(|segment| &segment.operations)
+            .any(|operation| vibrates(&operation.operation))
+    });
+    assert!(
+        !wrapper_vibration || (version.as_slice() >= [0, 1, 15].as_slice()
+            && trace.wrapper_effects.as_deref() == Some("native-draw-stack")),
+        "obsolete wrapper effect chain; recapture with harness 0.1.15 or later",
+    );
     let broadcasts =
         trace.timeline_tracks.iter().any(|track| {
             track.operation == "MessageManager.Broadcast" && !track.samples.is_empty()
@@ -931,6 +950,40 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
     trace.runtime_actors.last_mut().expect("subscriber probe").message_order = Some(1);
     validate_native_trace(&trace, &archive.manifest);
+    trace.external_actors.push(NativeExternalActor {
+        id: "wrapper-probe".into(), path: "probe/WrapperState1".into(),
+        class: "ActorFrame".into(), message_order: None,
+    });
+    trace.operation_tracks.push(NativeOperationTrack {
+        actor: "wrapper-probe".into(), operation: "ActorFrame.vibrate".into(),
+        samples: vec![(0, 0.0, 0.0, Vec::new())],
+    });
+    archive.manifest.harness_version = "0.1.14".into();
+    trace.harness_version = "0.1.14".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.15".into();
+    trace.harness_version = "0.1.15".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.wrapper_effects = Some("native-draw-stack".into());
+    validate_native_trace(&trace, &archive.manifest);
+    trace.wrapper_effects = None;
+    trace.operation_tracks.last_mut().expect("wrapper probe").operation = "ActorFrame.bob".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.operation_tracks.pop();
+    trace.tween_tracks.push(NativeTweenTrack {
+        actor: "wrapper-probe".into(), command: None, kind: "linear".into(), easing: None,
+        segments: vec![NativeTweenSegment {
+            enqueue_seq: 0, beat: 0.0, seconds: Some(0.0), duration: 1.0, implicit: false,
+            operations: vec![NativeTweenOperation {
+                seq: 0, operation: "ActorFrame.Vibrate".into(), args: Vec::new(),
+            }],
+        }],
+    });
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.wrapper_effects = Some("native-draw-stack".into());
+    validate_native_trace(&trace, &archive.manifest);
+    trace.tween_tracks.pop();
+    trace.external_actors.pop();
     trace.dropped_events = 1;
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
     trace.dropped_events = 0;
