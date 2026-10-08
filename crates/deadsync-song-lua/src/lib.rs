@@ -85,7 +85,7 @@ pub use lua_util::{
     SongLuaActionCaptureScope, SongLuaCapturedMessageCommands, SongLuaFunctionActionCapture,
     SongLuaNoteColumnHandlerSnapshot, SongLuaNoteFieldColumnSnapshot, SongLuaNoteskinTapActorModel,
     SongLuaOverlayCompileActor, TopScreenLuaTables, actor_active_commands, actor_aft_capture_name,
-    actor_base_size, actor_base_size_with_image, actor_child_at, actor_children,
+    actor_base_size, actor_base_size_with_image, actor_children,
     actor_command_queue, actor_crop_source_size, actor_current_capture_block, actor_debug_label,
     actor_decode_movie, actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow,
     actor_halign, actor_image_frame_size, actor_image_texture_size, actor_indices_for_pointers,
@@ -154,7 +154,7 @@ pub use lua_util::{
     push_unique_actor_child, read_actor_capture_blocks, read_actor_color_field,
     read_actor_model_layers, read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
     read_actor_semantic_state_table, read_bitmap_font, read_bitmap_text_attributes,
-    read_child_index, read_color_args, read_color_call, read_color_value,
+    read_color_args, read_color_call, read_color_value,
     read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
     read_model_paths, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
@@ -6461,6 +6461,8 @@ return Def.ActorFrame{
         assert(self:GetChild("") == nil)
         assert(self:GetNumChildren() == 4)
         assert(self.GetText == nil)
+        assert(self.UnknownMethod == nil)
+        assert(self.GetChildAt == nil and ActorFrame.GetChildAt == nil)
         assert(self:GetChild("Child").GetText == nil)
         local label = self:GetChild("Label")
         assert(type(label.GetText) == "function")
@@ -12297,7 +12299,7 @@ return Def.ActorFrame{}
             r#"
 assert(type(NoteField) == "table")
 assert(type(NoteField.get_column_actors) == "function")
-assert(type(NoteField.GetChildAt) == "function")
+assert(NoteField.GetChildAt == nil)
 assert(type(Player.SetLife) == "function")
 assert(type(Player.get_oitg_zoom_mode) == "function")
 assert(type(Player.set_oitg_zoom_mode) == "function")
@@ -16589,9 +16591,10 @@ local root = Def.ActorFrame{
         ActorFrame.playcommandonleaves(self, "Ping")
         ActorFrame.RunCommandsOnChildren(self, function(actor, params) actor:aux(actor:getaux() + params.direct) end, {direct=100})
         ActorFrame.runcommandsonleaves(self, function(actor) actor:aux(actor:getaux() + 1000) end)
-        local picked = ActorFrame.GetChildAt(self, 0)
-        local picked_method = self:GetChildAt(0)
-        local second = ActorFrame.GetChildAt(self, 1)
+        assert(ActorFrame.GetChildAt == nil and self.GetChildAt == nil)
+        local picked = ActorFrame.GetChild(self, "child")
+        local picked_method = self:GetChild("child")
+        local second = ActorFrame.GetChild(self, "remove")
         local named = ActorFrame.GetChild(self, "child")
         local children = ActorFrame.GetChildren(self)
         local count_before = ActorFrame.GetNumChildren(self)

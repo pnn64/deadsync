@@ -1874,3 +1874,36 @@ nine historical duplicate captures. The 25-archive prefix from pass 51 records
 harness 0.1.18 and DeadSync 0.5.1858; these focused checks do not revalidate the
 entire prefix on the new versions. ArrowQuest still needs a complete capture
 after its 900-second timeout; no truncated or diagnostic archive was published.
+
+
+## Pass 53: replace invented method probes with native inheritance
+
+A direct compiled ActorFrameTexture control verifies inherited native methods,
+unknown-method absence, GetChildAt absence, and callback ownership. Native
+Actor and Sprite have no SetUpdateFunction; ActorFrame registers it. A caller's
+Lua function added to ActorFrame is inherited by native ActorFrameTexture.
+The native source files match the local ITGmania reference tree byte for byte.
+
+Harness 0.1.21 now uses actual compiled prototypes for Actor, ActorFrame,
+ActorFrameTexture, ActorMultiVertex and Sprite; Quad has Sprite's Lua type.
+It deletes the invented GetChildAt and arbitrary ActorFrame method fallback,
+keeps declared fallback helper names, and uses native external player/field
+class labels. Source-invalid synthetic callbacks now belong to ActorFrames.
+All existing numeric samples, counts and tolerances remain. The full native
+suite passes 136 tests with two existing ignored tests.
+
+DeadSync 0.5.1860 deletes GetChildAt from class and instance adapters and deletes
+the unused numeric child-index helpers. Cache version 51 invalidates compiled
+tracks with the previous feature decision. The unchanged complete two-assertion
+probe fails in 0.5.1859 and passes all 2,669 comparisons in 0.5.1860. All 669 core
+tests, the production and cache checks, and the retained native public-music,
+effect-clock and strict-multitap controls pass. Warp Zone retains all 212,220
+comparisons and 321STARS all 372,891, with no differences.
+
+The tiny complete archive and independent native input/output are committed
+under the micro fixtures with method-probes-provenance.json. It is not a new
+corpus song. DeadSync's non-Frame callback registration, unlinked harness actor
+class registrations, and Simply Love screen context still need source-backed
+work. Full-corpus parity remains unfinished: 501 simfiles, 483 indexed source
+simfiles, 18 unindexed, and nine historical duplicate captures. The old
+25-archive prefix is not claimed as revalidated on these new versions.

@@ -1982,14 +1982,6 @@ pub fn current_song_lua_style_name(lua: &Lua) -> String {
         .unwrap_or_else(|| "single".to_string())
 }
 
-pub fn read_child_index(value: &Value) -> Option<usize> {
-    match value {
-        Value::Integer(value) if *value >= 0 => Some(*value as usize),
-        Value::Number(value) if value.is_finite() && *value >= 0.0 => Some(*value as usize),
-        _ => None,
-    }
-}
-
 // Inline storage intentionally avoids an allocation for small actor lists.
 #[allow(clippy::large_enum_variant)]
 enum ActorChildPointers {
@@ -2262,13 +2254,6 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
         Ok(())
     })?;
     Ok(out)
-}
-
-pub fn actor_child_at(lua: &Lua, actor: &Table, index: usize) -> mlua::Result<Value> {
-    Ok(actor_direct_children(lua, actor)?
-        .into_iter()
-        .nth(index)
-        .map_or(Value::Nil, Value::Table))
 }
 
 pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<bool> {
@@ -3939,7 +3924,6 @@ pub fn create_actorframe_class_table(lua: &Lua) -> mlua::Result<Table> {
         "SetFOV",
         "vanishpoint",
         "GetChild",
-        "GetChildAt",
         "GetChildren",
         "GetNumChildren",
         "SetDrawByZPosition",
@@ -9437,18 +9421,6 @@ pub fn install_actor_tap_note_methods(lua: &Lua, actor: &Table) -> mlua::Result<
 }
 
 pub fn install_actor_child_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
-    actor.set(
-        "GetChildAt",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let Some(index) = method_arg(&args, 0).and_then(read_child_index) else {
-                    return Ok(Value::Nil);
-                };
-                actor_child_at(lua, &actor, index)
-            }
-        })?,
-    )?;
     actor.set(
         "RunCommandsOnChildren",
         lua.create_function({
