@@ -2398,6 +2398,24 @@
         "log_sha256": "942cc1484c2a2d940fcd89241f0747f22a834dd0c94439623d9d551e881943d5",
         "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
       }
+    },
+    {
+      "pass_number": 57,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "cc4046ed05ebcaca98c81a81756e6006a42f18675f5de79afefd8085ef82e1c3.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "cc4046ed05ebcaca98c81a81756e6006a42f18675f5de79afefd8085ef82e1c3.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 14.445817708969116,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 14.35s",
+        "log_sha256": "f0c46eb082d26a6ca6f68c1ba678a63223a4bd7630de0724be28662813663441",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      }
     }
   ]
 }
