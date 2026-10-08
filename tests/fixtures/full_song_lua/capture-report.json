@@ -1335,6 +1335,14 @@
       "archive": "c1cb84524c54dec6dd74d0fca6f64f0fec20dbc4faf4da17de6213fb5fff874a.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "superseded_archive": "67ac57041393ba24be3d15d484c007bbc97eb741a7de7d1d713d947ab5d8d275.tar.zst",
+      "archive": "c4a9a0115d700c4c0dfc427a54e238631dd1ad5a12765f5c52512eee45d0e98f.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1583,6 +1591,24 @@
         "seconds": 21.6062273979187,
         "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 21.48s",
         "log_sha256": "5fdd5ee3fe056e7c22be847991507af1629a99e6447076c10324abd16b50a5ef",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "c4a9a0115d700c4c0dfc427a54e238631dd1ad5a12765f5c52512eee45d0e98f.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "c4a9a0115d700c4c0dfc427a54e238631dd1ad5a12765f5c52512eee45d0e98f.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 21.04258680343628,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 20.91s",
+        "log_sha256": "b78ae1266138887cfe373a9bee1bb52f653c13215b66b0e99449a7f7670959c8",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }

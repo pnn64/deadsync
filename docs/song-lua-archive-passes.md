@@ -1817,3 +1817,5 @@ Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc pa
 Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
 
 Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
