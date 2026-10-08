@@ -2366,3 +2366,5 @@ Archive 20: 303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc passes a
 Archive 21: 307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 21/492 archives; full-corpus parity remains unfinished.
 
 Archive 22: 307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 22/492 archives; full-corpus parity remains unfinished.
+
+Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 23/492 archives; full-corpus parity remains unfinished.

@@ -1967,6 +1967,14 @@
       "archive": "5a27e38d6c07fe367542da043edaddb5b69143ffd4833166a8f8d8e39a2ef902.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "superseded_archive": "b40903481944c3395db4c848c671e27a383d2cbea51c74b029b7dea9dbccf16a.tar.zst",
+      "archive": "1c0225a7d2fc61cdd507b7884bef6a80a9a1fc5fecf5c313e2c5c18fa0466857.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4366,6 +4374,31 @@
       "capture_endpoint": {
         "beat": 343.66668701171875,
         "seconds": 129.78482055664062
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "1c0225a7d2fc61cdd507b7884bef6a80a9a1fc5fecf5c313e2c5c18fa0466857.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "1c0225a7d2fc61cdd507b7884bef6a80a9a1fc5fecf5c313e2c5c18fa0466857.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 6.563588619232178,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 6.42s",
+        "log_sha256": "276d87b8b2c8bfe8b9065bd024f67c24edec83c0d459f8cd7d1f318f45ed4969",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "81f379f8f29680301dac8704e0901741c3267e80bc6d611dcc9d776f2b31f53d",
+      "capture_endpoint": {
+        "beat": 910.75,
+        "seconds": 273.2250061035156
       },
       "runtime_errors": 0,
       "dropped_events": 0
