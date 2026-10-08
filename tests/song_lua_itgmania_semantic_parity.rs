@@ -305,6 +305,8 @@ struct NativeTweenSegment {
     seconds: Option<f32>,
     duration: f32,
     #[serde(default)]
+    queue_start_seconds: Option<f32>,
+    #[serde(default)]
     implicit: bool,
     #[serde(default)]
     operations: Vec<NativeTweenOperation>,
@@ -354,6 +356,7 @@ struct NativeFixtureContext {
 #[derive(Default)]
 struct ExpectedBlock {
     start: f32,
+    queue_start: Option<f32>,
     duration: f32,
     easing: Option<&'static str>,
     alpha: Option<f32>,
@@ -2793,6 +2796,7 @@ fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> Exp
         _ => None,
     };
     let mut block = ExpectedBlock {
+        queue_start: segment.queue_start_seconds,
         duration: segment.duration,
         easing: if segment.implicit { None } else { easing },
         sleep: track.kind == "sleep",
@@ -2978,13 +2982,11 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
             .collect::<Vec<_>>();
         let mut start = 0.0;
         command.blocks.retain_mut(|(_, block)| {
-            if block.sleep {
-                start += block.duration;
-                return false;
-            }
-            block.start = start;
-            start += block.duration;
-            expected_block_has_effect(block)
+            // A message appends to Actor's existing queue; its first segment
+            // need not start at zero. Preserve captured own-queue offsets.
+            block.start = block.queue_start.unwrap_or(start);
+            start = block.start + block.duration;
+            !block.sleep && expected_block_has_effect(block)
         });
         command.blocks.extend(immediate);
     }
@@ -10589,4 +10591,34 @@ fn karachi_whole_native() {
         !rejected.gaps.is_empty(),
         "incorrect capture glow must fail full-frame checks"
     );
+}
+
+#[test]
+fn message_queue_backlog_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/message-wag-stop.json"),
+    );
+    let (mut compiled, primary, context) = compile_trace_song_at(
+        &trace, &root.join("tests/fixtures/song-lua/message-wag-stop.sm"),
+    );
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Message queue backlog"));
+    assert_eq!(parity.checks(), 792, "retain command, geometry and every frame check");
+    parity.assert_complete("Message queue backlog");
+    let capture = compiled[primary].stateful_message_captures.iter_mut()
+        .find(|capture| capture.message == "Stop").expect("stop-message writes");
+    let write = capture.writes.iter_mut().find(|write| {
+        write.target == SongLuaOverlayUpdateTarget::Y
+            && write.value == SongLuaOverlayUpdateValue::F32(-150.0)
+    }).expect("queued final Y setter");
+    assert!((write.delay_seconds - 2.51).abs() <= EPSILON);
+    // Removing the old queue's 0.76 seconds must still fail the command audit.
+    write.delay_seconds = 1.75;
+    let mut rejected = Parity::default();
+    compare_commands(&trace, &compiled, primary, &mut rejected);
+    assert_eq!(rejected.checks(), 2, "retain both message targets");
+    assert_eq!(rejected.passed(), 1, "incorrect queue timing must be rejected");
 }

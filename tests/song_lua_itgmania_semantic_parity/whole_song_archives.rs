@@ -973,7 +973,8 @@ fn archive_reference_rejects_obsolete_replays() {
     trace.tween_tracks.push(NativeTweenTrack {
         actor: "wrapper-probe".into(), command: None, kind: "linear".into(), easing: None,
         segments: vec![NativeTweenSegment {
-            enqueue_seq: 0, beat: 0.0, seconds: Some(0.0), duration: 1.0, implicit: false,
+            enqueue_seq: 0, beat: 0.0, seconds: Some(0.0), duration: 1.0,
+            queue_start_seconds: None, implicit: false,
             operations: vec![NativeTweenOperation {
                 seq: 0, operation: "ActorFrame.Vibrate".into(), args: Vec::new(),
             }],

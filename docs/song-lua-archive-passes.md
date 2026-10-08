@@ -1453,3 +1453,44 @@ Only test coverage and an observation-count assertion changed after the
 whole-song pin was built. The obsolete nineteenth primary is rejected before
 comparison, and its complete 0.1.15 diagnostic remains unpublished with 119
 remaining checks. The full 501-simfile / 492-variant objective is incomplete.
+
+
+## Pass 40: retain the queue preceding a message tween
+
+The command audit assumed every message starts a new tween chain at zero.
+ITGmania Actor::BeginTweening appends to the existing queue; StopEffect does
+not clear that queue. A separate two-message wag/stop probe reproduced the
+false audit failure while all 482 drawable frame checks passed. DeadSync's
+final Y write had the correct 2.51-second delay, but the audit expected 1.75.
+Production playback is unchanged in this pass (0.5.1853, cache version 44).
+
+Harness 0.1.16 records queue_start_seconds before each new segment, using the
+actor's own native float queue sum and hibernation rather than ActorFrame's
+child maximum. Sleep's implicit tail starts after the sleep. These are
+source-derived headless offsets, not native queue-memory snapshots. The
+independent message_queue_offsets_match_native test runs linked C++ Actor
+queues and verifies all three appended offsets and durations. The harness
+commit is bc1604f292658277dd449a33e48687dc959c1969; all 169 harness tests pass,
+with five existing tests ignored.
+
+DeadSync consumes these offsets without changing observation tolerances or
+removing comparisons. The new regression retains 792 command, geometry and
+frame checks. Its negative control removes the prior queue delay and still
+fails one of the two command targets. All twelve existing native controls
+also pass. The versioned micro trace and provenance are checked in; older
+traces retain their earlier audit behavior until recaptured.
+
+A fresh, complete KABOOOOOM capture from the unchanged source reaches beat
+645.75 / 199.4571533203125 seconds, with zero runtime errors or dropped events.
+The exact same archive is checked with the old and corrected comparators:
+2,274,594 pass / 119 fail before; 2,274,598 pass / 115 fail after, out of the
+same 2,274,713 checks. All 169 message-command checks now pass. The remaining
+110 geometry and five color checks still fail and are not waived. The full
+archive remains an unpublished target diagnostic; its temporary flat copy
+was removed. Receipts and executable/log hashes are linked in
+pass40-queue-offset-comparison.json under target/song-lua-archive-passes.
+
+A separate callback-driven repeat-wag probe now reproduces the early-wag
+geometry failure (8,436 pass / one fail). Its queued-command counterpart
+passes all 8,436 checks. These focused diagnostics remain under target and
+provide the next playback investigation. The full corpus goal is unfinished.
