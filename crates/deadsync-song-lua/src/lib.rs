@@ -6451,6 +6451,29 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn bitmap_methods_match_native() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let input: serde_json::Value = serde_json::from_slice(
+            &fs::read(fixtures.join("bitmap-methods-input.json")).expect("native bitmap input"),
+        ).expect("native bitmap JSON");
+        let body = input["lua_assertions"].as_str().expect("native bitmap assertions");
+        // Check the native inventory before the fallback theme adds Lua helpers.
+        let (inventory, assertions) = body.split_once("assert(type(BitmapText.GetX)")
+            .expect("native inventory boundary");
+        let lua = Lua::new();
+        crate::actor_classes::install_native(&lua).expect("native class tables");
+        lua.load(inventory).exec().expect("exact native BitmapText inventory");
+        let song_dir = test_dir("native-bitmap-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, format!(
+            "native_label=Def.BitmapText{{}}\nassert(type(BitmapText.GetX){assertions}\nreturn Def.ActorFrame{{native_label}}\n"
+        )).expect("unchanged native bitmap assertions");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native bitmap methods"))
+            .expect("native bitmap inventory, inheritance and boolean conversion");
+    }
+
+    #[test]
     fn proxy_methods_match_native() {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/itgmania-song-lua-micro");
@@ -7043,8 +7066,8 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_supports_bitmap_text_style_shims() {
-        let song_dir = test_dir("bitmap-text-style-shims");
+    fn native_bitmap_style() {
+        let song_dir = test_dir("native-bitmap-style");
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
@@ -7054,7 +7077,7 @@ return Def.ActorFrame{
         Font="Common Normal",
         Text="STYLE",
         OnCommand=function(self)
-            self:_wrapwidthpixels(88)
+            self:wrapwidthpixels(88)
                 :AddAttribute(0, { Length=1, Diffuse=Color.White })
                 :ClearAttributes()
                 :rainbowscroll(true)
@@ -7069,7 +7092,7 @@ return Def.ActorFrame{
 
         let compiled = test_compile_song_lua(
             &entry,
-            &SongLuaCompileContext::new(&song_dir, "BitmapText Style Shims"),
+            &SongLuaCompileContext::new(&song_dir, "Native BitmapText Style"),
         )
         .unwrap();
         assert_eq!(compiled.overlays.len(), 1);

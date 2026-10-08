@@ -9069,10 +9069,11 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             lua.create_function({
                 let actor = actor.clone();
                 move |lua, args: MultiValue| {
-                    let value = method_arg(&args, 0)
-                        .cloned()
-                        .and_then(read_boolish)
-                        .unwrap_or(true);
+                    // GETTER_SETTER_BOOL_METHOD uses lua_toboolean, including 0.
+                    let value = !matches!(
+                        method_arg(&args, 0),
+                        None | Some(Value::Nil | Value::Boolean(false))
+                    );
                     capture_block_set_bool(lua, &actor, "mult_attrs_with_diffuse", value)?;
                     Ok(actor.clone())
                 }
@@ -9174,10 +9175,6 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         })?,
     )?;
     actor.set("wrapwidthpixels", make_actor_wrap_width_method(lua, actor)?)?;
-    actor.set(
-        "_wrapwidthpixels",
-        make_actor_wrap_width_method(lua, actor)?,
-    )?;
     actor.set(
         "vertspacing",
         lua.create_function({

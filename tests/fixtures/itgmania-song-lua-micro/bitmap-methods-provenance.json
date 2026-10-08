@@ -1,0 +1,355 @@
+{
+  "pass_number": 60,
+  "status": "native BitmapText API repair verified; complete archive comparison pending",
+  "deadsync_version": "0.5.1863",
+  "cache_version": 54,
+  "harness_version": "0.1.23",
+  "harness_commit": "a9ee89467609ddedd9e055d8874c68f90c08f04e",
+  "native_control_commit": "f5768334924c53a2ef0c5c1efc0b56487b8e2cd8",
+  "native_source": {
+    "files": {
+      "src/BitmapText.cpp": "9db88dd98d82a88eea8b8544e2d12b7bb4d8d2fea52847c54f9f3e7655b1fc78",
+      "src/BitmapText.h": "5c48590551057f73b477d930c6abd9d8a1c9833b952864c08198c1fd4a92fc7e",
+      "src/FontManager.cpp": "ec349c7c1eed18f55eb9993ce169c87b380883561420b78dfa2b535c1b6a59f9",
+      "src/FontManager.h": "f004a60edef4ea7adca97dcbbc447ab90c7c9fcb31ae29bba90fba37fd08f022",
+      "src/LuaBinding.h": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+      "src/ThemeManager.cpp": "13edd778342c85c24a1ec85a7a85835af1aae1b726acbdfb73afadfaf6bff315",
+      "Themes/_fallback/Scripts/02 Actor.lua": "499e7ee20f5c14a6a67ce8da6840bf271829659fe4e03df1e18e5159e1de339a"
+    },
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "git_dirty": "false",
+    "contract": "LunaBitmapText has 19 own methods including two from ADD_GET_SET_METHODS and derives from Actor. GETTER_SETTER_BOOL_METHOD uses lua_toboolean: only nil/missing and false are false; numeric zero, strings and tables are true."
+  },
+  "native_assertion_input": {
+    "file": "bitmap-methods-input.json",
+    "sha256": "3abecf3dc407223405ae6a2fc8e430be50995f869155d8c429c4c3db97ff68e8"
+  },
+  "native_assertion_output": {
+    "file": "bitmap-methods-native.json",
+    "sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    }
+  },
+  "native_tests": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-native-v4.exe",
+    "sha256": "c004f98b8d62d38c4c0405e6b492213cb8d94c3c35b1b84ba2dc8566a5291903",
+    "results": [
+      {
+        "test": "actor_conformance::tests::bitmap_methods_use_native_userdata",
+        "exit_code": 0,
+        "seconds": 0.32639193534851074,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 140 filtered out; finished in 0.02s"
+        ],
+        "log_sha256": "c81e7e592d4d8d6b241fec7955e4dd3448628fdfb941508398d60976bad0e4f3"
+      },
+      {
+        "test": "actor_conformance::tests::proxy_methods_use_native_userdata",
+        "exit_code": 0,
+        "seconds": 0.042949676513671875,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 140 filtered out; finished in 0.01s"
+        ],
+        "log_sha256": "fc8868632b6db4dd4b06a7857051e400c92958b0bde2bee23b66264c45eac539"
+      },
+      {
+        "test": "actor_conformance::tests::aft_creation_uses_native_allocation_and_lua_methods",
+        "exit_code": 0,
+        "seconds": 0.04333305358886719,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 140 filtered out; finished in 0.01s"
+        ],
+        "log_sha256": "f9d7afb876cf8f6946aa3d05c4e9069a34d0d5b525bf5a4474556bd38ffb8f8e"
+      }
+    ]
+  },
+  "native_suite": {
+    "exit_code": 0,
+    "seconds": 151.27861046791077,
+    "summary": [
+      "test result: ok. 139 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 151.04s"
+    ],
+    "executable_sha256": "c004f98b8d62d38c4c0405e6b492213cb8d94c3c35b1b84ba2dc8566a5291903",
+    "log_sha256": "16bc1bb12ba3cdd2c6aa599324279e3d70c39fe3b5a3480be1ee5ae6a282d22b"
+  },
+  "harness_before": {
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass58-proxy-v1.exe",
+      "song-lua-semantic-baseline",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-class-before\\corpus",
+      "--simfile",
+      "probe/probe.sm",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-class-before\\traces",
+      "--beat-step",
+      "0.25",
+      "--max-events",
+      "1500000",
+      "--random-seed",
+      "1"
+    ],
+    "result": {
+      "simfile": "probe/probe.sm",
+      "fixture": "probe/probe.sm.semantic.json",
+      "title": "Native BitmapText class lookup",
+      "lua_entries": 1,
+      "status": "partial",
+      "runtime_errors": 1
+    },
+    "runtime_errors": [
+      {
+        "actor": "def-0001",
+        "beat": 0,
+        "command": "OnCommand",
+        "definition_id": "def-0001",
+        "line": 2,
+        "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass60-bitmap-class-before/corpus/probe/default.lua:4: BitmapText does not inherit ActorFrame.GetChild",
+        "name": "OnCommand",
+        "operation": "command.error",
+        "seconds": 0,
+        "source": "song:/default.lua"
+      }
+    ],
+    "lua_sha256": "165aa4989e94436c1391144e2be8585688a647ced84716bdc1b36fc42e1076c9",
+    "cli_sha256": "5b431d3dd63f6e0707515adcaf06817f712f21e6023f7ac816d9d007460d265a",
+    "purpose": "Source-backed BitmapText registration control; compiled native binding verification pending. No partial archive published."
+  },
+  "harness_after": [
+    {
+      "control": "class",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass60-bitmap-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-class-before\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-class-noteskin-after\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      "environment": {
+        "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:\\GitHub\\deadsync\\assets\\noteskins"
+      },
+      "entry": {
+        "simfile": "probe/probe.sm",
+        "fixture": "probe/probe.sm.semantic.json",
+        "title": "Native BitmapText class lookup",
+        "lua_entries": 1,
+        "status": "ok"
+      },
+      "end_position": {
+        "beat": 4,
+        "seconds": 2
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "lua_sha256": "165aa4989e94436c1391144e2be8585688a647ced84716bdc1b36fc42e1076c9",
+      "cli_sha256": "efe1529a751f44c48eb762362826a9e68fafa739e4f9e25657d964b28907ec2f",
+      "archive": {
+        "title": "Native BitmapText class lookup",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.23",
+        "archive": "731b70e429065ffd298ff1aea692b77fee2b2a642790f415f92e4e843f1e163f.tar.zst",
+        "sha256": "731b70e429065ffd298ff1aea692b77fee2b2a642790f415f92e4e843f1e163f",
+        "compressed_bytes": 11409
+      },
+      "capture_log_sha256": "1478114dd033a673cee35d36999d15bf23db4db7ef7538a3973a2bedb62b6c6c"
+    },
+    {
+      "control": "methods",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass60-bitmap-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-methods-noteskin-after\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass60-bitmap-methods-noteskin-after\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      "environment": {
+        "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:\\GitHub\\deadsync\\assets\\noteskins"
+      },
+      "entry": {
+        "simfile": "probe/probe.sm",
+        "fixture": "probe/probe.sm.semantic.json",
+        "title": "Native BitmapText class lookup",
+        "lua_entries": 1,
+        "status": "ok"
+      },
+      "end_position": {
+        "beat": 4,
+        "seconds": 2
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "lua_sha256": "3fc18480cf3c23c251561718357f7b8293e9c8a703496aa1b92ac29967b90cea",
+      "cli_sha256": "efe1529a751f44c48eb762362826a9e68fafa739e4f9e25657d964b28907ec2f",
+      "archive": {
+        "title": "Native BitmapText class lookup",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.23",
+        "archive": "12cb428fa847c410d857f56fb66311a92dbd584717d62aa9bf56d3194c94862b.tar.zst",
+        "sha256": "12cb428fa847c410d857f56fb66311a92dbd584717d62aa9bf56d3194c94862b",
+        "compressed_bytes": 11696
+      },
+      "capture_log_sha256": "90b70033ac0dcf3937f0fc67f6015c3563f7b149564a0818e148a77698a297eb"
+    }
+  ],
+  "harness_tests": {
+    "exit_code": 0,
+    "seconds": 141.55079793930054,
+    "summary": [
+      "test result: ok. 140 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 141.40s"
+    ],
+    "executable_sha256": "adc98768246b583d8de60d81336a5ff8db2e087edae6a71a340d47f139a71d94",
+    "log_sha256": "39d9a41ddefefb1d5cb3efe691c340ae8f9666123d7f05016145c0f71b06ee28"
+  },
+  "deadsync_before": {
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "test-support",
+      "bitmap_methods_match_native",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 109.68896746635437,
+    "summaries": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 486 filtered out; finished in 0.07s"
+    ],
+    "log_sha256": "41a0204c35b665c35a648f01731548f3da10f32980def426c4343d9dc1551a16"
+  },
+  "deadsync_tests": [
+    {
+      "job": "song-lua-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 170.97654151916504,
+      "summaries": [
+        "test result: ok. 487 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 28.91s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 23.64s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "f92634d0c611b3819fc4dcf1cd304ec95442180264457bb570501e039f47c6e1"
+    },
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 10.346191644668579,
+      "summaries": [],
+      "log_sha256": "0c61b9cb9477020c2659f2e22f944601151106da3e72575e387215600b7a99af"
+    },
+    {
+      "job": "clock-cache",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 17.974197387695312,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "5a78caf2e865c0cbf7351858e88834662fc3bcfffc11cd6061ebaaa70955a341"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.596290111541748,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "f38c4608469fcbb7a32b87f00e931cd260921f79daa5354f6472def4f44decec"
+    }
+  ],
+  "deadsync_old_archive_failures": [
+    {
+      "control": "class",
+      "archive": "731b70e429065ffd298ff1aea692b77fee2b2a642790f415f92e4e843f1e163f.tar.zst",
+      "version": "0.5.1862",
+      "exit_code": 1,
+      "seconds": 0.18604612350463867,
+      "result": "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.10s",
+      "log_sha256": "809e098fe705070abb1b3242f99cdd88538c74f0440a088fa30426f7d79d56c3",
+      "executable_sha256": "4972c43ffc6c2a0d003556fd462bc2ce2a5386b55bf321a2b293fbc0ef25b390"
+    },
+    {
+      "control": "methods",
+      "archive": "12cb428fa847c410d857f56fb66311a92dbd584717d62aa9bf56d3194c94862b.tar.zst",
+      "version": "0.5.1862",
+      "exit_code": 1,
+      "seconds": 0.17866063117980957,
+      "result": "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.10s",
+      "log_sha256": "614bab6b9bc2cc8b2314848de439ce4f5ed8ec08db24454cae0c3fc24e653e80",
+      "executable_sha256": "4972c43ffc6c2a0d003556fd462bc2ce2a5386b55bf321a2b293fbc0ef25b390"
+    }
+  ],
+  "synthetic_style_control": {
+    "change": "Use native wrapwidthpixels instead of the unregistered _wrapwidthpixels adapter, retaining every numeric expectation and all other style calls.",
+    "theme_reference": "C:/GitHub/rework/itgmania/Themes/Simply-Love-SM5/Scripts/SL-Helpers-Text.lua",
+    "theme_reference_sha256": "7f7be97f1673073e82aed4f13273f6ba2617b4a54d594a3aa1e9e2bdcc503221",
+    "reason": "Simply Love adds _wrapwidthpixels itself; it is not native or fallback registration. Its non-8-bit branch edits text based on GetWidth, so the old unconditional alias was not a faithful implementation."
+  },
+  "limits": [
+    "Native label has no loaded font: these checks do not prove glyph layout, font loading or complete text rendering.",
+    "Five stock fallback BitmapText helper bodies follow the checked-out 02 Actor.lua; full Simply Love text helpers, including Unicode wrapping, remain pending.",
+    "Public method tables and own overrides in the harness use lazy semantic adapters and still require a separate raw-table audit.",
+    "Other actor subclasses and full-corpus parity remain unfinished. Scope remains 501 simfiles and 492 indexed archive variants."
+  ]
+}

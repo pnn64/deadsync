@@ -2102,3 +2102,32 @@ Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is no
 Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
 
 Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 60: verify BitmapText against compiled ITGmania
+
+The unchanged native BitmapText.cpp and FontManager.cpp are now linked into
+the actor oracle. Native control f576833 verifies 19 own methods, Actor
+inheritance, absent Frame methods and unknown probes, empty text, live class
+and base overrides, and the macro boolean setter. Numeric zero, strings and
+tables are true; false, nil and missing values are false. The native label has
+no loaded font, so this does not establish text layout or rendering parity.
+
+Harness repair a9ee894 exposes the native class and corrects this setter.
+All 140 harness tests pass with two existing skips. DeadSync .1863 installs
+the same native inventory and strict lookup, preserves the five stock fallback
+helper bodies, and invalidates old compiled behavior with cache version 54.
+All 672 core tests pass with three existing GPU skips; production, clock-cache
+and old-cache rejection checks pass. Native assertions are unchanged.
+
+The style test now calls native wrapwidthpixels with its original numeric
+expectations. The obsolete unconditional _wrapwidthpixels alias is removed: the
+checked-out Simply Love helper has separate 8-bit and Unicode branches and is
+not a native or fallback method. Full Simply Love wrapping remains pending.
+
+Two complete two-second archives contain no runtime errors or dropped events.
+Both fail on .1862 at the expected class assertions. Their .1863 archive
+comparisons are pending while the immutable verifier builds. The harness
+public raw-table inventory and method-shadowing audit is also pending.
+Full corpus parity remains unfinished, with 501 simfiles and 492 indexed
+archive variants. The prior eight-archive prefix is historical on .22/.1862.
