@@ -2207,6 +2207,14 @@
       "archive": "93c16ea69f9fb27c62939c91b61ea24971d33b8a2fe52784926fa43ddba0261d.tar.zst",
       "harness_version": "0.1.30",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "superseded_archive": "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
+      "archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5624,6 +5632,32 @@
       "capture_endpoint": {
         "beat": 580,
         "seconds": 221.77818298339844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 8.736744165420532,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.60s",
+        "log_sha256": "491fa14185ba12b00d9675dc0e0f1799a1e0eac86f0e91c24c8153f3ff4b3442",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "313406836a2027e0df904534a708d6eec3ef5081fdf01c5dd8587ae01b820f04",
+      "capture_endpoint": {
+        "beat": 275.3541564941406,
+        "seconds": 118.00892639160156
       },
       "runtime_errors": 0,
       "dropped_events": 0
