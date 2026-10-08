@@ -42,14 +42,19 @@ pub fn create_song_runtime_table(
     Ok(table)
 }
 
-pub(crate) fn song_music_seconds(lua: &Lua, runtime: &Table) -> mlua::Result<Value> {
+pub(crate) fn song_music_time(lua: &Lua, seconds: f64, rate: f32) -> f32 {
     // Replay seconds are elapsed wall time. SongPosition exposes the native
     // float music timestamp, which includes the song origin and music rate.
-    let seconds = runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
-    let rate = runtime.get::<f32>(SONG_LUA_RUNTIME_RATE_KEY)?;
     let origin = lua.app_data_ref::<SongLuaClock>()
         .map_or(0.0, |clock| clock.0.get_time_for_beat_exact(0.0));
-    let seconds = (seconds * f64::from(rate)) as f32 + origin;
+    (seconds * f64::from(rate)) as f32 + origin
+}
+
+pub(crate) fn song_music_seconds(lua: &Lua, runtime: &Table) -> mlua::Result<Value> {
+    let seconds = song_music_time(lua,
+        runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+        runtime.get::<f32>(SONG_LUA_RUNTIME_RATE_KEY)?,
+    );
     // Lua 5.1 prints whole native floats without the Lua 5.4 ".0" suffix.
     // Preserve fractional values exactly, including times smaller than EPSILON.
     if seconds.fract() == 0.0 && seconds.abs() < 1e14 {

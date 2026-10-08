@@ -11890,15 +11890,15 @@ fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::R
         }
         (units, delta)
     } else {
-        let (beat, seconds) = compile_song_runtime_values(lua)?;
         let units = if actor
             .raw_get::<Option<String>>("__songlua_state_effect_clock")?
             .as_deref()
             == Some("beat")
         {
-            beat
+            compile_song_runtime_values(lua)?.0
         } else {
-            seconds
+            let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+            f32::from_lua(crate::runtime::song_music_seconds(lua, &runtime)?, lua)?
         };
         (units, units - previous)
     };
@@ -11972,27 +11972,10 @@ fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Resu
         return Ok(());
     };
     let rotation: Table = pose.get("rotation")?;
-    let clock = actor.raw_get::<Option<String>>("__songlua_state_effect_clock")?;
-    let clock = clock
-        .as_deref()
-        .and_then(parse_overlay_effect_clock)
-        .unwrap_or(EffectClock::Time);
-    let previous = pose.get::<Option<f32>>("clock")?.unwrap_or(0.0);
-    let (units, elapsed) = if clock == EffectClock::Beat {
-        let beat = compile_song_runtime_values(lua)?.0;
-        (beat, beat - previous)
-    } else {
-        let delta = delta_seconds as f32;
-        let period = actor
-            .raw_get::<Option<f32>>("__songlua_state_effect_period")?
-            .unwrap_or(1.0);
-        let mut units = previous + delta;
-        if units > period {
-            units -= period;
-        }
-        (units, delta)
-    };
-    pose.set("clock", units)?;
+    // Actor::UpdateInternal uses the same effect delta for every effect.
+    // Reuse the already advanced clock, including music origins and resets.
+    let clock = actor.raw_get::<Table>("__songlua_state_motion_clock")?;
+    let elapsed = clock.get::<f32>("delta")?;
     if actor
         .raw_get::<Option<String>>("__songlua_state_effect_mode")?
         .as_deref()
@@ -12572,6 +12555,20 @@ fn run_actor_update_functions_for_table_inner(
         }
     }
     let delta_seconds = f64::from(parent_delta_seconds as f32 * actor_update_rate(actor)? as f32);
+    // Initialize clocks during the existing zero-delta startup update, before
+    // its child getters and callback. Chronological replay must not add a second
+    // callback at time zero. Actor::UpdateTweening still needs positive delta.
+    let effect = actor.raw_get::<Option<String>>("__songlua_state_effect_mode")?;
+    let music_clock = actor.raw_get::<Option<String>>("__songlua_state_effect_clock")?
+        .as_deref() == Some("time")
+        && actor.raw_get::<Option<bool>>("__songlua_state_effect_timer")? == Some(false);
+    if delta_seconds == 0.0
+        && (music_clock || effect.as_deref().is_some_and(|mode| mode != "none")
+            || actor.raw_get::<Option<bool>>("__songlua_state_rainbow")?.unwrap_or(false))
+    {
+        advance_motion_clock(lua, actor, delta_seconds)?;
+        advance_spin_pose(lua, actor, delta_seconds)?;
+    }
     // ITGmania runs Actor::UpdateInternal (including queued UpdateCommands),
     // then child updates, then the ActorFrame update function.
     run_recurring_update(lua, actor, delta_seconds, run_recurring_commands)?;

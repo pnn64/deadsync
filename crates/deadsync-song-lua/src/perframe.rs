@@ -3190,6 +3190,9 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut scheduled_overlay_samples = Vec::new();
     let mut overlay_sample_scratch = OverlaySampleScratch::default();
     let mut current_overlays = replay_overlays.clone();
+    crate::lua_util::set_compile_frames(lua, replay.iter().copied())
+        .map_err(|err| err.to_string())?;
+    let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
     capture_update_overlay_samples(
         lua,
         context,
@@ -3208,14 +3211,26 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         &mut overlay_sample_scratch,
     )?;
     message_replay.stop(&overlay_sample_scratch.stopped_indices);
+    let music_seconds = crate::runtime::song_music_time(lua, start_seconds, song_music_rate(context));
+    let start_time = frame_time(start, start_seconds);
+    for (index, actor) in capture_actors.iter().enumerate() {
+        if let Some(clock) = crate::lua_util::effect_render_time(actor, [music_seconds, start])
+            .map_err(|err| err.to_string())?
+        {
+            let target = SongLuaOverlayUpdateTarget::EffectTime;
+            let value = SongLuaOverlayUpdateValue::Vec2(clock);
+            set_overlay_state_update_value(&mut replay_overlays[index], target, &value);
+            push_captured_overlay_value(&mut overlay_tracks, &mut overlay_track_indices,
+                index, target, start_time, &current_overlays[index], start_time, &value);
+            set_overlay_state_update_value(&mut current_overlays[index], target, &value);
+        }
+    }
 
     let mut beat = start;
     let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
     let mut scheduled_states = baseline_overlays.clone();
     let mut player_capture_masks = player_transform_masks(lua, &player_tables)?;
     let mut frame_count = 0;
-    crate::lua_util::set_compile_frames(lua, replay.iter().copied())
-        .map_err(|err| err.to_string())?;
     for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
         let next_beat = exact_beat as f32;
         frame_count += 1;
@@ -3370,9 +3385,12 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         }
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
+        // Playback consumes raw music time; record clock anchors in that same
+        // coordinate system even when the actor accumulates a local timer.
+        let music_seconds = crate::runtime::song_music_time(lua, seconds, song_music_rate(context));
         for (index, actor) in capture_actors.iter().enumerate() {
             if let Some(clock) =
-                crate::lua_util::effect_render_time(actor, [seconds as f32, next_beat])
+                crate::lua_util::effect_render_time(actor, [music_seconds, next_beat])
                     .map_err(|err| err.to_string())?
             {
                 // Keep a reference while it predicts the exact native float.

@@ -1199,6 +1199,22 @@
       "archive": "922787336703761b1ac040a14868a04ba4d842922fa6745d1eeaffa2c27eb0c5.tar.zst",
       "harness_version": "0.1.17",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 48,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "superseded_archive": "3a11347bbb603a5a02eca3de3ddbe5ff45624b040cadec32440c329bfda1736d.tar.zst",
+      "archive": "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 48,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "922787336703761b1ac040a14868a04ba4d842922fa6745d1eeaffa2c27eb0c5.tar.zst",
+      "archive": "ca4c89f21bd0ea6b82da1058372b7f79672d2eb6b4b3e1c468748193f890e6ff.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

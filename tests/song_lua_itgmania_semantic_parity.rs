@@ -58,6 +58,8 @@ struct NativeTrace {
     #[serde(default)]
     song_position: Option<String>,
     #[serde(default)]
+    music_effect_clock: Option<String>,
+    #[serde(default)]
     message_dispatch: Option<String>,
     #[serde(default)]
     wrapper_effects: Option<String>,
@@ -3857,11 +3859,14 @@ fn compiled_overlay_states_at(
     seconds: f32,
 ) -> Vec<SongLuaOverlayState> {
     let local = compiled_local_states_at(compiled, context, beat, seconds);
+    // Production composition consumes raw music time, independently of the
+    // elapsed timestamp used to select replay commands and native samples.
+    let clock = [overlay_update_time(context, SongLuaTimeUnit::Second, beat, seconds), beat];
     let mut states = compose_overlay_states(
         &compiled.overlays,
         &local,
         [compiled.screen_width, compiled.screen_height],
-        [seconds, beat],
+        clock,
     );
     let foreground = &compiled.song_foreground;
     let message_seconds = compiled
@@ -3890,7 +3895,7 @@ fn compiled_overlay_states_at(
                 *state,
                 compiled.screen_width,
                 compiled.screen_height,
-                [seconds, beat],
+                clock,
             );
         }
     }
@@ -5295,6 +5300,7 @@ fn compare_projected_geometry(
             let Some(seconds) = sample.get(1).and_then(|value| value_f32(Some(value))) else {
                 continue;
             };
+            let music_seconds = overlay_update_time(context, SongLuaTimeUnit::Second, beat, seconds);
             let Some(native_visible) = sample.get(2).and_then(Value::as_bool) else {
                 continue;
             };
@@ -5331,7 +5337,7 @@ fn compare_projected_geometry(
                                 let screen =
                                     deadsync_song_lua::playback::actor_conformance::transform_state(
                                         screen,
-                                        [seconds, beat],
+                                        [music_seconds, beat],
                                     );
                                 screen
                             });
@@ -5351,13 +5357,13 @@ fn compare_projected_geometry(
             // Compare the rendered rotation, rather than its stationary base.
             if state.effect_mode == EffectMode::Spin {
                 let effect = deadsync_song_lua::playback::actor_conformance::effect_sample(
-                    state, seconds, beat,
+                    state, music_seconds, beat,
                 );
                 [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = effect.rotation;
             }
             state = deadsync_song_lua::playback::actor_conformance::transform_state(
                 state,
-                [seconds, beat],
+                [music_seconds, beat],
             );
             let actual_diffuse = state.vertex_colors.map_or(state.diffuse, |corners| {
                 std::array::from_fn(|channel| state.diffuse[channel] * corners[0][channel])
@@ -10743,5 +10749,35 @@ fn public_music_seconds_matches_native() {
         compare_drawable_frames(&trace, &compiled, &context, &mut rejected);
         assert_eq!(rejected.checks(), parity.checks(), "retain every native observation");
         assert!(rejected.passed() < rejected.checks(), "incorrect public music seconds must fail");
+    }
+}
+
+#[test]
+fn music_effect_clock_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for label in ["music-effect-positive", "music-effect-negative"] {
+        let trace = read_trace_file(&root.join(format!("tests/fixtures/itgmania-song-lua-micro/{label}.json")));
+        assert_eq!(trace.music_effect_clock.as_deref(), Some("native-music-seconds"));
+        assert_eq!(trace.update_frames.len(), 181);
+        let (mut compiled, primary, context) = compile_trace_song_at(
+            &trace, &root.join(format!("tests/fixtures/song-lua/{label}.sm")),
+        );
+        let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+        compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+        eprintln!("{}", parity.summary(label));
+        assert_eq!(parity.checks(), 27168, "retain every getter, spin, and pulse observation");
+        parity.assert_complete(label);
+        let actor = compiled[primary].overlays.iter()
+            .position(|actor| actor.name.as_deref() == Some("Music")).expect("music clock quad");
+        let track = compiled[primary].overlay_updates.iter_mut()
+            .find(|track| track.overlay_index == actor && track.target == SongLuaOverlayUpdateTarget::X)
+            .expect("captured effect clock getter");
+        assert!(!track.samples.is_empty());
+        for sample in &mut track.samples { sample.value = SongLuaOverlayUpdateValue::F32(0.0); }
+        let mut rejected = compare_semantics(&trace, &compiled, primary, &context);
+        compare_drawable_frames(&trace, &compiled, &context, &mut rejected);
+        assert_eq!(rejected.checks(), parity.checks(), "retain every native observation");
+        assert!(rejected.passed() < rejected.checks(), "incorrect effect time must fail");
     }
 }

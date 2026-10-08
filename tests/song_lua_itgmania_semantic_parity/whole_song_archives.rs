@@ -416,6 +416,10 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         trace.song_position.as_deref(), Some("native-music-seconds"),
         "obsolete public music clock; recapture with native SongPosition getters",
     );
+    assert_eq!(
+        trace.music_effect_clock.as_deref(), Some("native-music-seconds"),
+        "obsolete music effect clock; recapture with native Actor music timestamps",
+    );
     assert!(
         trace.runtime_errors.is_empty(),
         "native runtime errors invalidate the reference"
@@ -854,6 +858,11 @@ fn archive_reference_rejects_obsolete_replays() {
     trace.song_position = Some("elapsed-seconds".into());
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
     trace.song_position = native_position;
+    let native_effect_clock = trace.music_effect_clock.take();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.music_effect_clock = Some("elapsed-seconds".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.music_effect_clock = native_effect_clock;
     validate_native_trace(&trace, &archive.manifest);
     trace.song_clock = Some("continuous-bpm".into());
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());

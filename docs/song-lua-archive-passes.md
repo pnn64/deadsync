@@ -1711,3 +1711,39 @@ write differences out of 372,891 comparisons: visibility at beat 52, and
 color/zoom at beat 56. Receipts are linked in pass47-public-music-comparison.json.
 Full-corpus parity remains unfinished. A separate source-backed audit of the
 music effect clock remains pending; this pass establishes the public getters.
+
+## Pass 48: verify music effect clocks against compiled Actor behavior
+
+ITGmania Actor.cpp advances music effect clocks from Actor::SetBGMTime;
+GameState.cpp supplies the visible/raw music timestamp independently of the
+nonnegative elapsed Actor::Update delta. The harness still used trace elapsed
+seconds for music effects after pass 47 fixed the public SongPosition getters.
+Two offset controls independently run the compiled Actor implementation with
+music origins 1.25 and -0.5. Each checks 1,629 exact effect-time, delta and spin
+rotation fields, plus 4,344 pulse vertex axes. Both previously failed at the
+first music-clock getter. They now pass, including timer controls. The negative
+case also exposed a harness helper that incorrectly passed a negative effect
+delta to Actor::Update; it now calls the compiled internal spin update instead.
+Harness 0.1.18 is committed as 9b7284ee6a1c83ab917c97ce837437b591b0bbb8.
+
+DeadSync 0.5.1857 uses native music timestamps for non-timer time clocks,
+shares the existing motion-clock delta with spin, and records effect-time
+anchors in the raw music coordinate used by production rendering. Selected
+effects and music clocks initialize during the existing zero-delta startup
+update, before child getters and parent callbacks. No additional callback is
+added; the native text and callback-count regressions remain unchanged.
+The geometry comparator also needed raw music time for composition and leaf
+effect rendering. Both offset traces retain all 27,168 observations per case,
+including every pulse, spin, color, crop, shadow and drawable-frame check.
+Incorrect getter tracks are rejected without removing observations.
+Song-cache version 48 invalidates previously compiled effect clock anchors.
+
+Full archives now require the native-music-seconds music_effect_clock marker.
+The guard independently rejects missing and elapsed-seconds effect clocks.
+Only the newly captured Bank Account and extra-chart Boys archives have been
+verified under this contract; older prefix counts remain historical. The full
+501-simfile / 492-archive audit remains unfinished, including the eight known
+321STARS multitap differences. No failing chart has been published as verified.
+Detailed native source, fixture and executable hashes are committed in
+music-effect-clock-provenance.json; local gate and publication receipts are
+recorded in pass48-music-effect-comparison.json.

@@ -1,0 +1,10 @@
+#TITLE:music-effect-negative;
+#OFFSET:0.5;
+#BPMS:0=120;
+#FGCHANGES:0=music-effect-clock.lua=1=0=0=1;
+#NOTES:dance-single:clock:Challenge:1:0,0,0,0,0:
+1000
+0000
+0000
+0000
+;
