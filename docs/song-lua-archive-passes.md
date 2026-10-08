@@ -2255,8 +2255,8 @@ and metadata; it does not establish pixel rendering or texture policy parity.
 
 The Sharkmode archive omitted sharkmode-bg.png because the harness did not
 handle LoadBackground. DeadSync already recognizes that filename. A fresh
-.26 capture and exact comparisons remain necessary before publication; no
-comparator has been relaxed. The historical 17-archive prefix requires refresh
+.26 capture was required before publication; no comparator has been relaxed.
+The historical 17-archive prefix requires refresh
 on .26/.1865. The full 501-simfile and 492-archive scope remains unfinished.
 
 The complete two-second Sprite control archive passes all 2,695 comparisons
@@ -2264,3 +2264,12 @@ on .1865, with no native runtime errors or dropped events. The previous .1864
 verifier fails the same unchanged control at LoadBackground's return-value
 assertion. The archive includes the original Lua, image and complete trace;
 sprite-load-provenance.json records both immutable binaries and results.
+
+Sharkmode's fresh .26 archive now passes all 304,425 comparisons on .1865,
+including 8,293 custom draw plans, 14,940 mesh bindings, 14,940 mesh poses and
+14,940 mesh color checks. It reaches beat 357 / 138.1935577392578 seconds with
+no native runtime errors or dropped events. The archive includes the original
+1,058,414-byte sharkmode-bg.png and unchanged song Lua. The corrected background
+restores drawable membership and resolves the cascading mesh mapping failures.
+The verified archive replaces the superseded canonical capture, preserving
+its aliases. The full corpus refresh from the top remains pending.

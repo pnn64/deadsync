@@ -1743,6 +1743,14 @@
       "archive": "82214fdeee18c870008940e85138bcc9e53f0febe80a5f4444ba80e607326960.tar.zst",
       "harness_version": "0.1.24",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 65,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "superseded_archive": "db60b3a89af8957a5e4fb1be2ec3157d09c436a564938536ec91b8ab064afa45.tar.zst",
+      "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+      "harness_version": "0.1.26",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3439,6 +3447,37 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 65,
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+      "harness_version": "0.1.26",
+      "harness_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e",
+      "native_executable_sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+      "verification": {
+        "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+        "version": "0.5.1865",
+        "exit_code": 0,
+        "seconds": 88.98847985267639,
+        "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 88.83s",
+        "log_sha256": "4e895a13cc813339e295d4e893e3245b32d2de7af3ee9b94892419d74dba8b62",
+        "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519"
+      },
+      "capture_endpoint": {
+        "beat": 357,
+        "seconds": 138.1935577392578
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "capture_log_sha256": "5f37605bb646c7023c977aa2528a5482340cf82429a848403e955e7c210dd42e",
+      "background_member": {
+        "path": "song/sharkmode-bg.png",
+        "role": "required-asset",
+        "bytes": 1058414,
+        "sha256": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2"
+      }
     }
   ]
 }

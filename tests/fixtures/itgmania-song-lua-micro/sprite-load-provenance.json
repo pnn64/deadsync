@@ -209,7 +209,7 @@
     "Quad and other Sprite subclasses, native texture GetPath, font layout and full theme context still require independent audits.",
     "No full-corpus parity claim: 501 simfiles and 492 archive variants remain the scope."
   ],
-  "sharkmode_diagnosis": "The .25 archive omitted sharkmode-bg.png because the harness did not handle LoadBackground. DeadSync already recognizes the filename; no filename-search fix was justified. Fresh .26 capture and exact comparisons are pending.",
+  "sharkmode_diagnosis": "The omitted background was a harness LoadBackground bug. Correct native Sprite loading and runtime dependency capture close the drawable, custom draw and mesh gaps. The fresh .26 archive passes all 304425 comparisons on .1865, without comparator changes.",
   "complete_control_archive": {
     "entry": {
       "title": "Native BitmapText class lookup",
@@ -315,5 +315,64 @@
     },
     "source_commit": "f488e7f984d0eea60a13f433e6b49e2efa9c1ce0",
     "source_pending_commit": false
+  },
+  "sharkmode_verified_archive": {
+    "native": {
+      "entry": {
+        "title": "280|MODS|[MASTER] Sharkmode",
+        "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+        "harness_version": "0.1.26",
+        "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+        "sha256": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249",
+        "compressed_bytes": 3145357,
+        "uncompressed_sha256": "cce4a871886efbed3851e44ce17b273847dd90b554df1c179540a6bb2661b929",
+        "compression_level": 12,
+        "aliases": []
+      },
+      "directory": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\parity-pass65-sharkmode-normalized",
+      "native": {
+        "simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+        "diagnostics": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\parity-pass65-sharkmode\\68eda87bf02562c3",
+        "status": "ready_archive",
+        "entry": {
+          "title": "280|MODS|[MASTER] Sharkmode",
+          "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+          "harness_version": "0.1.26",
+          "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+          "sha256": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249",
+          "compressed_bytes": 3145357
+        },
+        "members": 19,
+        "end_position": {
+          "beat": 357,
+          "seconds": 138.1935577392578
+        }
+      },
+      "background_member": {
+        "path": "song/sharkmode-bg.png",
+        "role": "required-asset",
+        "bytes": 1058414,
+        "sha256": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2"
+      },
+      "texture_requests": [
+        {
+          "actor": "def-0010",
+          "exists": true,
+          "method": "LoadBackground",
+          "path": "song:/sharkmode-bg.png"
+        }
+      ],
+      "trace_sha256": "eca82a956306d5273d1d1b963dc89a2b05a2ce13c4fe6da16ebcadd3f96a2362"
+    },
+    "verification": {
+      "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+      "version": "0.5.1865",
+      "exit_code": 0,
+      "seconds": 88.98847985267639,
+      "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 88.83s",
+      "log_sha256": "4e895a13cc813339e295d4e893e3245b32d2de7af3ee9b94892419d74dba8b62",
+      "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519"
+    },
+    "published": true
   }
 }
