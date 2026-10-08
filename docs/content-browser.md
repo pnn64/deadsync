@@ -90,9 +90,44 @@ not list as null-synced) has every `#OFFSET` moved by
 whatever the machine's Pack.ini settings. A song already in the group is
 refused before anything is downloaded.
 
-**The Installed tab** lists the library. START sets a pack's `SyncOffset` in its
-`Pack.ini`, which the engine applies only when *Machine Options > Pack.ini
-Offsets* is on. SELECT deletes a pack.
+**The Installed tab** lists the library. SELECT deletes a pack; START opens
+its sync (`sync_dialog.rs`), which offers:
+
+- **Measure with Null-or-Die.** The shell gathers the pack's songs and opens
+  the shared pack sync review on one chart per song, of the current play style.
+  The reader saves what they accept.
+- **Shift ITG to NULL.** Every simfile's offsets move by
+  `ITG_SYNC_OFFSET_SECONDS`. A pack already recorded as NULL is offered the
+  reverse instead, NULL to ITG, recorded as ITG.
+- **Record in Pack.ini only,** shown only while *Machine Options > Pack.ini
+  Offsets* is on, since the engine ignores `SyncOffset` otherwise.
+
+As the dialog opens, the shell checks the pack with the same function every
+change runs again before it writes (`content_reload::writable_pack`): one
+folder, inside a song root directly or in a series folder there, outside the
+program's own songs, and writable. A pack that fails is shown with the reason
+and cannot be changed.
+
+Rewrites go through the same save every pack sync uses, so each simfile keeps a
+`.old` copy and its cached song is reloaded in place. A simfile with no
+`#OFFSET` counts as zero and is given one. The pack's `Pack.ini` then
+records what it now is, and the live catalog takes the value at once, without a
+rescan. That record keeps the engine from adding its own ITG correction on top,
+and keeps the same shift from being made twice. `Pack.ini` is found and
+edited the way the scan reads it (any case, keys inside `[Group]`), written
+atomically and read back before anything is reported. A `Pack.ini` that is a
+link, or not UTF-8 text, is left exactly as it is and the change is refused.
+
+- A shift writes the record first, and restores it if no simfile could be
+  changed.
+- After a measure, the pack is recorded as NULL. If it was ITG -- by its own
+  `Pack.ini`, or by the machine's default while Pack.ini Offsets is on -- the
+  songs the review left alone (below its confidence, failed, or with no
+  chart of the play style) are moved from ITG to NULL as well, so every
+  song in it is what the record says.
+
+The shift holds the frame it runs in, so the dialog draws a working panel
+first and only then hands it to the shell (`take_pack_shift`).
 
 ---
 
