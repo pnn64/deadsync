@@ -1831,6 +1831,15 @@ const fn save_summary_needs_attention(summary: &sync_offset::SongOffsetSaveSumma
     summary.skipped_read_only > 0 || summary.failed_files > 0 || summary.cache_refresh_failures > 0
 }
 
+/// "1 song" or "N songs".
+fn songs_counted(count: usize) -> String {
+    if count == 1 {
+        "1 song".to_owned()
+    } else {
+        format!("{count} songs")
+    }
+}
+
 fn save_summary_text(summary: &sync_offset::SongOffsetSaveSummary) -> String {
     format!(
         "saved {} of {} change(s); {} read-only, {} write failure(s), {} cache refresh failure(s)",
@@ -2143,10 +2152,22 @@ impl App {
                 song_installs: deadsync_online::smo_songs::runtime_song_installs(),
                 banner_failed: deadsync_online::banners::failed_ids(),
                 pack_ini_offsets_on: self.frame_config.machine_pack_ini_offsets,
+                pack_sync_confidence: self.frame_config.null_or_die_confidence_percent,
+                pack_sync_menu_only: self.frame_config.only_dedicated_menu_buttons,
+                pack_sync_three_key: self.frame_config.three_key_navigation,
             },
             ready_dirs,
             installed,
         );
+
+        self.check_pack_for_sync();
+        // A shift the sync dialog has asked for, once its panel is on screen:
+        // the rewrite holds this frame.
+        if let Some(shift) =
+            content_browser::take_pack_shift(&mut self.state.screens.content_browser_state)
+        {
+            self.run_pack_shift(shift);
+        }
 
         // The chart preview: the previews and songs the page asked for, the
         // music they start and stop, the clock it is timed by, and the
@@ -2368,6 +2389,7 @@ impl App {
         let song_events = events.song;
         let select_pack_events = events.select_pack;
         let options_pack_events = events.options_pack;
+        let browser_pack_events = events.browser_pack;
         if !song_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,
@@ -2388,6 +2410,225 @@ impl App {
                 options_pack_events,
             );
         }
+        if !browser_pack_events.is_empty() {
+            content_browser::apply_sync_analysis_events(
+                &mut self.state.screens.content_browser_state,
+                browser_pack_events,
+            );
+        }
+    }
+
+    /// Whether the browser's sync dialog may change a pack: asked once as it
+    /// opens, with the same check every change makes again before writing.
+    fn check_pack_for_sync(&mut self) {
+        let state = &mut self.state.screens.content_browser_state;
+        let Some(group_name) = content_browser::wanted_pack_check(state) else {
+            return;
+        };
+        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let result = crate::content_reload::writable_pack(
+            &group_name,
+            &roots,
+            &self.dirs.extra_song_roots(),
+        )
+        .map(|_| ());
+        content_browser::set_pack_check(state, &group_name, result);
+    }
+
+    /// The Content Browser's shift: every simfile of a library pack moved by
+    /// the engine's ITG correction, through the same save every pack sync
+    /// uses. The pack's new sync is recorded first, so a shift whose record
+    /// cannot be written is never made, and the same shift is never offered
+    /// twice; if no simfile could be changed after all, the record is put
+    /// back.
+    fn run_pack_shift(&mut self, shift: content_browser::PackShift) {
+        let content_browser::PackShift {
+            group_name,
+            to_null,
+        } = shift;
+        let fail = |app: &mut Self, error: String| {
+            warn!("Could not shift the sync of '{group_name}': {error}");
+            content_browser::finish_pack_sync(
+                &mut app.state.screens.content_browser_state,
+                &group_name,
+                None,
+                Err(error),
+            );
+        };
+        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let pack = match crate::content_reload::writable_pack(
+            &group_name,
+            &roots,
+            &self.dirs.extra_song_roots(),
+        ) {
+            Ok(pack) => pack,
+            Err(error) => return fail(self, error),
+        };
+        let before = match crate::content_reload::write_pack_sync(&pack.dir, &group_name, !to_null)
+        {
+            Ok(before) => before,
+            Err(error) => return fail(self, error),
+        };
+
+        let delta = if to_null {
+            deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS
+        } else {
+            -deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS
+        };
+        let changes: Vec<sync_offset::SongOffsetSyncChange> = pack
+            .simfiles
+            .iter()
+            .map(|simfile_path| sync_offset::SongOffsetSyncChange {
+                simfile_path: simfile_path.clone(),
+                delta_seconds: delta,
+            })
+            .collect();
+        let summary = self.save_song_offset_changes(&changes);
+        let written = written_song_offset_changes(&summary);
+        if !written.is_empty() {
+            self.sync_analysis.refresh_applied(&written);
+        }
+        if summary.saved_files == 0 {
+            let mut error = format!(
+                "no simfile could be changed ({})",
+                save_summary_text(&summary)
+            );
+            if let Err(restore) = crate::content_reload::restore_pack_ini(before) {
+                error.push_str("; ");
+                error.push_str(&restore);
+            }
+            return fail(self, error);
+        }
+
+        let (from, to, recorded) = if to_null {
+            ("ITG", "NULL", deadsync_chart::SyncPref::Null)
+        } else {
+            ("NULL", "ITG", deadsync_chart::SyncPref::Itg)
+        };
+        deadsync_simfile::runtime_cache::set_pack_sync_pref(&group_name, recorded);
+        let mut note = format!(
+            "{group_name}: {} moved from {from} to {to}",
+            songs_counted(summary.saved_files)
+        );
+        if save_summary_needs_attention(&summary) {
+            note.push_str(&format!(" ({})", save_summary_text(&summary)));
+        }
+        info!("Pack sync shift: {note}");
+        content_browser::finish_pack_sync(
+            &mut self.state.screens.content_browser_state,
+            &group_name,
+            Some(recorded),
+            Ok(note),
+        );
+    }
+
+    /// After the Content Browser's Null-or-Die review saves, the pack is
+    /// recorded as NULL: its measured offsets are null now, and a `Pack.ini`
+    /// still saying ITG would move them 9 ms more whenever the engine reads
+    /// it.
+    ///
+    /// Songs the review did not settle -- below the confidence it asks for,
+    /// failed, or with no chart of the play style it measured -- keep the
+    /// offsets they had. In a pack taken to be ITG those are ITG offsets, so
+    /// they are moved to NULL the way a shift moves them, and the whole pack
+    /// then really is what it is recorded as.
+    fn record_measured_pack(&mut self, saved: &sync_offset::SongOffsetSaveSummary) {
+        let state = &self.state.screens.content_browser_state;
+        let Some(group_name) = content_browser::pack_sync_group(state).map(str::to_owned) else {
+            return;
+        };
+        let mut settled: std::collections::HashSet<std::path::PathBuf> =
+            content_browser::measured_settled_simfiles(state)
+                .into_iter()
+                .collect();
+        // Every simfile this save tried, written or not: one it could not write
+        // still carries the review's fix, waiting on a retry, and moving it
+        // now would have that retry apply its fix on top.
+        settled.extend(
+            saved
+                .outcomes
+                .iter()
+                .map(|outcome| outcome.simfile_path.clone()),
+        );
+        let measured = format!(
+            "{group_name}: {} synced by Null-or-Die",
+            songs_counted(saved.saved_files)
+        );
+        let finish = |app: &mut Self, sync: Option<deadsync_chart::SyncPref>, note: String| {
+            content_browser::finish_pack_sync(
+                &mut app.state.screens.content_browser_state,
+                &group_name,
+                sync,
+                Ok(note),
+            );
+        };
+
+        let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(&self.dirs.songs_dir());
+        let recorded = crate::content_reload::writable_pack(
+            &group_name,
+            &roots,
+            &self.dirs.extra_song_roots(),
+        )
+        .and_then(|pack| {
+            crate::content_reload::write_pack_sync(&pack.dir, &group_name, false).map(|_| pack)
+        });
+        let pack = match recorded {
+            Ok(pack) => pack,
+            Err(error) => {
+                warn!("Could not record '{group_name}' as NULL after its pack sync: {error}");
+                return finish(
+                    self,
+                    None,
+                    format!("{measured}, but the pack could not be recorded as NULL: {error}"),
+                );
+            }
+        };
+        deadsync_simfile::runtime_cache::set_pack_sync_pref(
+            &group_name,
+            deadsync_chart::SyncPref::Null,
+        );
+
+        // ITG by its own Pack.ini, or by the machine's default -- but the
+        // default only while the engine applies it at all.
+        let was_itg = pack.sync_pref == deadsync_chart::SyncPref::Itg
+            || (self.frame_config.machine_pack_ini_offsets
+                && deadsync_chart::song::resolve_sync_pref(
+                    pack.sync_pref,
+                    self.frame_config.machine_default_sync_offset.sync_pref(),
+                ) == deadsync_chart::SyncPref::Itg);
+        let leftovers: Vec<sync_offset::SongOffsetSyncChange> = if was_itg {
+            pack.simfiles
+                .iter()
+                .filter(|simfile_path| !settled.contains(*simfile_path))
+                .map(|simfile_path| sync_offset::SongOffsetSyncChange {
+                    simfile_path: simfile_path.clone(),
+                    delta_seconds: deadsync_chart::song::ITG_SYNC_OFFSET_SECONDS,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let mut note = measured;
+        if !leftovers.is_empty() {
+            let shifted = self.save_song_offset_changes(&leftovers);
+            let written = written_song_offset_changes(&shifted);
+            if !written.is_empty() {
+                self.sync_analysis.refresh_applied(&written);
+            }
+            if shifted.saved_files > 0 {
+                note.push_str(&format!(
+                    ", {} more moved from ITG to NULL",
+                    songs_counted(shifted.saved_files)
+                ));
+            }
+            let stuck = leftovers.len() - shifted.saved_files;
+            if stuck > 0 {
+                note.push_str(&format!(", {} could not be moved", songs_counted(stuck)));
+            }
+        }
+        note.push_str(", recorded as NULL");
+        info!("Pack sync measure: {note}");
+        finish(self, Some(deadsync_chart::SyncPref::Null), note);
     }
 
     #[inline(always)]
@@ -5518,6 +5759,9 @@ impl App {
                             Instant::now(),
                         );
                     }
+                    if owner == SimplyLoveSyncOwner::ContentBrowserPack && summary.saved_files > 0 {
+                        self.record_measured_pack(&summary);
+                    }
 
                     let mut events = vec![SimplyLoveSyncEvent::BatchSaveFinished { summary }];
                     match owner {
@@ -5532,6 +5776,12 @@ impl App {
                         SimplyLoveSyncOwner::OptionsPack => {
                             options::apply_sync_analysis_events(
                                 &mut self.state.screens.options_state,
+                                &mut events,
+                            );
+                        }
+                        SimplyLoveSyncOwner::ContentBrowserPack => {
+                            content_browser::apply_sync_analysis_events(
+                                &mut self.state.screens.content_browser_state,
                                 &mut events,
                             );
                         }
@@ -5662,33 +5912,33 @@ impl App {
                             );
                         }
                         SimplyLoveContentRequest::SetPackSync { group_name, itg } => {
-                            let songs_root = self.dirs.songs_dir();
-                            let roots =
-                                deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root);
+                            let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+                                &self.dirs.songs_dir(),
+                            );
                             let result = crate::content_reload::set_pack_sync(
                                 &group_name,
                                 itg,
                                 &roots,
                                 &self.dirs.extra_song_roots(),
                             );
-                            let told = match result {
-                                Ok(pack_dir) => {
-                                    // Pack.ini is read by the pack scan, so the
-                                    // value only becomes real once the pack has
-                                    // been read again.
-                                    self.content_reload.start_song_dirs(
-                                        songs_root,
-                                        vec![pack_dir],
-                                        self.audio.is_available(),
-                                    );
-                                    Ok(if itg {
-                                        "sync set to ITG (+9ms)".to_owned()
-                                    } else {
-                                        "sync set to NULL (0ms)".to_owned()
-                                    })
-                                }
-                                Err(error) => Err(error),
+                            let recorded = if itg {
+                                deadsync_chart::SyncPref::Itg
+                            } else {
+                                deadsync_chart::SyncPref::Null
                             };
+                            // The live catalog takes the value at once, so it
+                            // plays that way without rescanning the pack.
+                            let told = result.map(|_| {
+                                deadsync_simfile::runtime_cache::set_pack_sync_pref(
+                                    &group_name,
+                                    recorded,
+                                );
+                                if itg {
+                                    "recorded as ITG (+9ms) in its Pack.ini".to_owned()
+                                } else {
+                                    "recorded as NULL (0ms) in its Pack.ini".to_owned()
+                                }
+                            });
                             match &told {
                                 Ok(note) => debug!("Pack '{group_name}': {note}"),
                                 Err(error) => {
@@ -5697,8 +5947,56 @@ impl App {
                             }
                             content_browser::finish_pack_sync(
                                 &mut self.state.screens.content_browser_state,
+                                &group_name,
+                                told.is_ok().then_some(recorded),
                                 told,
                             );
+                        }
+                        SimplyLoveContentRequest::MeasurePackSync { group_name } => {
+                            // Proved again before any simfile is measured for
+                            // saving: a pack the review could save into but
+                            // not record would end up shifted twice.
+                            let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
+                                &self.dirs.songs_dir(),
+                            );
+                            if let Err(error) = crate::content_reload::writable_pack(
+                                &group_name,
+                                &roots,
+                                &self.dirs.extra_song_roots(),
+                            ) {
+                                content_browser::finish_pack_sync(
+                                    &mut self.state.screens.content_browser_state,
+                                    &group_name,
+                                    None,
+                                    Err(error),
+                                );
+                            } else {
+                                let songs: Vec<Arc<SongData>> = {
+                                    let cache = deadsync_simfile::runtime_cache::get_song_cache();
+                                    let wanted = group_name.to_lowercase();
+                                    cache
+                                        .iter()
+                                        .filter(|pack| pack.group_name.to_lowercase() == wanted)
+                                        .flat_map(|pack| pack.songs.iter().cloned())
+                                        .collect()
+                                };
+                                let view = options_pack_sync_view();
+                                let request = content_browser::begin_pack_measure(
+                                    &mut self.state.screens.content_browser_state,
+                                    &group_name,
+                                    &songs,
+                                    &view.target_chart_type,
+                                    view.preferred_difficulty_index,
+                                );
+                                if let Some(SimplyLoveSyncRequest::StartAnalysis {
+                                    owner,
+                                    targets,
+                                    emit_freq_delta,
+                                }) = request
+                                {
+                                    self.sync_analysis.start(owner, targets, emit_freq_delta);
+                                }
+                            }
                         }
                         SimplyLoveContentRequest::SkipReplayGain => {
                             deadsync_audio_replaygain::request_skip_blocking_analysis();
@@ -8754,9 +9052,12 @@ impl App {
     }
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
-        // A preview's audio stops with the screen; its download stops here.
+        // A preview's audio stops with the screen; its download stops here,
+        // and so does a pack sync measure that is still running.
         if prev == CurrentScreen::ContentBrowser && target != CurrentScreen::ContentBrowser {
             deadsync_online::smo_songs::runtime_preview_stop();
+            self.sync_analysis
+                .cancel(SimplyLoveSyncOwner::ContentBrowserPack);
         }
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;

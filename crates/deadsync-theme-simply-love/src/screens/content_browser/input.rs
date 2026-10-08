@@ -26,9 +26,9 @@ use crate::screens::content_browser::state::{
     clamp_doubles, doubles_column, doubles_cursor, doubles_showing, downloads_active,
     featured_goto, featured_page, featured_row_col, focused_pack, grid_landable, installed_at,
     installed_cell, installed_goto, installed_page, installed_showing, list_page, more_loading,
-    rebuild_results, row_count, search_field_showing, suggested_sync, total_pages, visible_rows,
-    years_showing,
+    rebuild_results, row_count, search_field_showing, total_pages, visible_rows, years_showing,
 };
+use crate::screens::content_browser::sync_dialog::{self, SyncAction, SyncStep};
 use deadsync_chart::song::SyncPref;
 
 /// What a keypress did, so the sound and the effect are chosen once rather
@@ -55,10 +55,25 @@ enum Outcome {
         group_name: String,
         itg: bool,
     },
+    /// Measure a library pack with Null-or-Die.
+    Measure(String),
     Leave,
 }
 
 pub fn handle_input(state: &mut State, event: &InputEvent) -> ThemeEffect {
+    // While the pack sync review is up it takes every event, releases too:
+    // its three-key navigation reads chords out of them.
+    if sync_dialog::overlay_visible(state) {
+        let mut effects = Vec::new();
+        let policy = sync_dialog::nav_policy(state);
+        crate::screens::pack_sync::handle_input(
+            &mut state.pack_sync_overlay,
+            event,
+            policy,
+            &mut effects,
+        );
+        return ThemeEffect::batch(effects);
+    }
     if !event.pressed {
         if let Some(delta) = nav_delta(event.action)
             && state.nav_hold.is_some_and(|hold| hold.delta == delta)
@@ -86,6 +101,12 @@ pub fn handle_input(state: &mut State, event: &InputEvent) -> ThemeEffect {
             "assets/sounds/start.ogg",
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
                 crate::SimplyLoveContentRequest::SetPackSync { group_name, itg },
+            )),
+        ),
+        Outcome::Measure(group_name) => crate::effects::sfx_then(
+            "assets/sounds/start.ogg",
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Content(
+                crate::SimplyLoveContentRequest::MeasurePackSync { group_name },
             )),
         ),
         Outcome::Delete(group_name) => crate::effects::sfx_then(
@@ -208,28 +229,8 @@ fn enter_body(state: &mut State) -> Outcome {
 fn press_installed(state: &mut State, action: VirtualAction) -> Outcome {
     // Same rule as the delete confirm: while a dialog is up it is the only
     // thing on screen, so it is the only thing the keys answer.
-    if state.syncing.is_some() {
-        if tab_delta(action).is_some() {
-            state.sync_choice = match state.sync_choice {
-                SyncPref::Itg => SyncPref::Null,
-                SyncPref::Default | SyncPref::Null => SyncPref::Itg,
-            };
-            return Outcome::Moved;
-        }
-        return match action {
-            VirtualAction::p1_start | VirtualAction::p2_start => {
-                let itg = state.sync_choice == SyncPref::Itg;
-                match state.syncing.take() {
-                    Some(group_name) => Outcome::SetSync { group_name, itg },
-                    None => Outcome::None,
-                }
-            }
-            VirtualAction::p1_back | VirtualAction::p2_back => {
-                state.syncing = None;
-                Outcome::Closed
-            }
-            _ => Outcome::None,
-        };
+    if state.sync_dialog.is_some() {
+        return press_sync_dialog(state, action);
     }
 
     // While a delete is being asked about, the grid answers that question and
@@ -289,14 +290,12 @@ fn press_installed(state: &mut State, action: VirtualAction) -> Outcome {
     }
 
     match action {
-        // START is the sync writer, as it is in the original -- the library is
-        // where you go to fix a pack you already have. The pack's catalogue
-        // page is reachable from any of the other tabs.
+        // START is the pack's sync -- the library is where you go to fix a
+        // pack you already have. The pack's catalogue page is reachable from
+        // any of the other tabs.
         VirtualAction::p1_start | VirtualAction::p2_start => match installed_at(state).cloned() {
             Some(entry) => {
-                state.sync_choice = suggested_sync(state, &entry);
-                state.syncing = Some(entry.name);
-                state.remove_result = None;
+                sync_dialog::open(state, &entry);
                 Outcome::Confirm
             }
             None => Outcome::Invalid,
@@ -320,6 +319,92 @@ fn press_installed(state: &mut State, action: VirtualAction) -> Outcome {
             }
         }
         _ => Outcome::None,
+    }
+}
+
+/// The sync dialog. UP/DOWN choose what to do, LEFT/RIGHT the value the
+/// Pack.ini row records, START goes -- a shift asks once more first -- and
+/// BACK closes it, or steps back out of the confirm. Nothing answers while a
+/// shift is under way.
+fn press_sync_dialog(state: &mut State, action: VirtualAction) -> Outcome {
+    let offered = sync_dialog::actions(state);
+    let Some(dialog) = state.sync_dialog.as_mut() else {
+        return Outcome::None;
+    };
+    let start = matches!(action, VirtualAction::p1_start | VirtualAction::p2_start);
+    let back = matches!(action, VirtualAction::p1_back | VirtualAction::p2_back);
+    match dialog.step {
+        SyncStep::Working { .. } => Outcome::None,
+        SyncStep::ConfirmShift => {
+            if start {
+                dialog.step = SyncStep::Working {
+                    frames: 0,
+                    sent: false,
+                };
+                Outcome::Opened
+            } else if back {
+                dialog.step = SyncStep::Choose;
+                Outcome::Closed
+            } else {
+                Outcome::None
+            }
+        }
+        SyncStep::Choose => {
+            if let Some(delta) = nav_delta(action) {
+                let here = offered
+                    .iter()
+                    .position(|offer| *offer == dialog.action)
+                    .unwrap_or_default() as isize;
+                return match usize::try_from(here + delta)
+                    .ok()
+                    .and_then(|index| offered.get(index))
+                {
+                    Some(&offer) => {
+                        dialog.action = offer;
+                        Outcome::Moved
+                    }
+                    None => Outcome::Invalid,
+                };
+            }
+            if tab_delta(action).is_some() {
+                if dialog.action != SyncAction::PackIni {
+                    return Outcome::Invalid;
+                }
+                dialog.record = if dialog.record == SyncPref::Itg {
+                    SyncPref::Null
+                } else {
+                    SyncPref::Itg
+                };
+                return Outcome::Moved;
+            }
+            if back {
+                state.sync_dialog = None;
+                return Outcome::Closed;
+            }
+            if !start {
+                return Outcome::None;
+            }
+            if !dialog.usable() {
+                return Outcome::Invalid;
+            }
+            match dialog.action {
+                SyncAction::Measure => {
+                    let group_name = dialog.group.clone();
+                    state.sync_dialog = None;
+                    Outcome::Measure(group_name)
+                }
+                SyncAction::Shift => {
+                    dialog.step = SyncStep::ConfirmShift;
+                    Outcome::Confirm
+                }
+                SyncAction::PackIni => {
+                    let group_name = dialog.group.clone();
+                    let itg = dialog.record == SyncPref::Itg;
+                    state.sync_dialog = None;
+                    Outcome::SetSync { group_name, itg }
+                }
+            }
+        }
     }
 }
 
@@ -1057,7 +1142,11 @@ pub fn handle_raw_key_event(
         // there is BACK, out to the results it was opened from -- not a key
         // that clears the search those results came from. The reload question
         // is answered the same way.
-        if state.zone == Zone::Detail || state.reload_prompt.is_some() {
+        if state.zone == Zone::Detail
+            || state.reload_prompt.is_some()
+            || state.sync_dialog.is_some()
+            || sync_dialog::overlay_visible(state)
+        {
             return false;
         }
         if search_field_showing(state) {
@@ -1125,7 +1214,8 @@ pub fn handle_raw_key_event(
     // Reading a pack is not searching for one.
     if state.zone == Zone::Detail
         || state.removing.is_some()
-        || state.syncing.is_some()
+        || state.sync_dialog.is_some()
+        || sync_dialog::overlay_visible(state)
         || state.reload_prompt.is_some()
     {
         return false;
@@ -1724,6 +1814,212 @@ mod tests {
             Outcome::Delete("Goners".to_owned())
         );
         assert!(state.removing.is_none(), "the question is answered once");
+    }
+
+    /// The Installed tab on a library of two packs, the cursor on the second.
+    fn library(sync: SyncPref) -> State {
+        let mut state = browsing(0);
+        state.tab_index = TABS.iter().position(|t| *t == Tab::Installed).unwrap();
+        state.installed = vec![
+            state::InstalledPack {
+                name: "Other".to_owned(),
+                lower: "other".to_owned(),
+                songs: 4,
+                sync: SyncPref::Default,
+                banner: None,
+            },
+            state::InstalledPack {
+                name: "Old Pack".to_owned(),
+                lower: "old pack".to_owned(),
+                songs: 20,
+                sync,
+                banner: None,
+            },
+        ];
+        state.zone = Zone::Installed;
+        state.installed_cursor = 1;
+        state
+    }
+
+    /// START on the cursor's pack, with the shell's check of its folder
+    /// answered -- usable, or not.
+    fn open_sync(state: &mut State, usable: bool) -> Outcome {
+        let outcome = press(state, START);
+        assert_eq!(
+            super::super::wanted_pack_check(state),
+            Some("Old Pack".to_owned())
+        );
+        assert_eq!(super::super::wanted_pack_check(state), None, "asked once");
+        // until it answers, nothing can be started
+        assert_eq!(press(state, START), Outcome::Invalid);
+        super::super::set_pack_check(
+            state,
+            "Old Pack",
+            if usable {
+                Ok(())
+            } else {
+                Err("'Old Pack' is in a read-only song folder".to_owned())
+            },
+        );
+        outcome
+    }
+
+    /// START on a pack opens its sync: on the shift for a pack that says it
+    /// is ITG, on measuring otherwise. Pack.ini is a choice only while the
+    /// engine reads it.
+    #[test]
+    fn a_packs_sync_opens_on_what_it_needs() {
+        let mut state = library(SyncPref::Itg);
+        assert_eq!(open_sync(&mut state, true), Outcome::Confirm);
+        let dialog = state.sync_dialog.clone().expect("open");
+        assert_eq!(dialog.group, "Old Pack");
+        assert_eq!(dialog.action, SyncAction::Shift);
+        assert!(dialog.shift_to_null());
+        assert_eq!(state.installed_cursor, 1, "the grid stays put");
+
+        // two choices while Pack.ini Offsets is off
+        assert_eq!(press(&mut state, UP), Outcome::Moved);
+        assert_eq!(
+            state.sync_dialog.as_ref().map(|d| d.action),
+            Some(SyncAction::Measure)
+        );
+        assert_eq!(press(&mut state, UP), Outcome::Invalid);
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        assert_eq!(press(&mut state, DOWN), Outcome::Invalid, "no Pack.ini row");
+        assert_eq!(
+            press(&mut state, LEFT),
+            Outcome::Invalid,
+            "nothing to toggle"
+        );
+        assert_eq!(press(&mut state, BACK), Outcome::Closed);
+        assert!(state.sync_dialog.is_none());
+
+        // a pack that declares nothing opens on measuring
+        let mut state = library(SyncPref::Default);
+        open_sync(&mut state, true);
+        assert_eq!(
+            state.sync_dialog.as_ref().map(|d| d.action),
+            Some(SyncAction::Measure)
+        );
+        // and measuring is handed to the shell by name
+        assert_eq!(
+            press(&mut state, START),
+            Outcome::Measure("Old Pack".to_owned())
+        );
+        assert!(state.sync_dialog.is_none());
+    }
+
+    /// The Pack.ini row records ITG or NULL, chosen with LEFT/RIGHT, and is
+    /// only there while the engine would act on it.
+    #[test]
+    fn pack_ini_is_offered_only_while_the_engine_reads_it() {
+        let mut state = library(SyncPref::Default);
+        state.pack_ini_offsets_on = true;
+        open_sync(&mut state, true);
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        let record = state.sync_dialog.as_ref().map(|d| d.record);
+        assert_eq!(press(&mut state, RIGHT), Outcome::Moved);
+        assert_ne!(state.sync_dialog.as_ref().map(|d| d.record), record);
+        let itg = state.sync_dialog.as_ref().map(|d| d.record) == Some(SyncPref::Itg);
+        assert_eq!(
+            press(&mut state, START),
+            Outcome::SetSync {
+                group_name: "Old Pack".to_owned(),
+                itg,
+            }
+        );
+    }
+
+    /// A shift asks once more, then waits for its panel to be drawn before it
+    /// is handed over -- once -- and stays up until the shell answers.
+    #[test]
+    fn a_shift_is_confirmed_shown_then_handed_over_once() {
+        let mut state = library(SyncPref::Itg);
+        open_sync(&mut state, true);
+        assert_eq!(press(&mut state, START), Outcome::Confirm);
+        assert_eq!(
+            state.sync_dialog.as_ref().map(|d| d.step),
+            Some(SyncStep::ConfirmShift)
+        );
+        // BACK steps back out of the confirm, not out of the dialog
+        assert_eq!(press(&mut state, BACK), Outcome::Closed);
+        assert_eq!(
+            state.sync_dialog.as_ref().map(|d| d.step),
+            Some(SyncStep::Choose)
+        );
+        press(&mut state, START);
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert!(
+            super::super::take_pack_shift(&mut state).is_none(),
+            "not drawn yet"
+        );
+        assert_eq!(
+            press(&mut state, BACK),
+            Outcome::None,
+            "nothing answers now"
+        );
+
+        state::update(&mut state, 0.016);
+        state::update(&mut state, 0.016);
+        assert_eq!(
+            super::super::take_pack_shift(&mut state),
+            Some(super::super::PackShift {
+                group_name: "Old Pack".to_owned(),
+                to_null: true,
+            })
+        );
+        assert!(super::super::take_pack_shift(&mut state).is_none(), "once");
+
+        super::super::finish_pack_sync(
+            &mut state,
+            "Old Pack",
+            Some(SyncPref::Null),
+            Ok("Old Pack: 20 songs moved from ITG to NULL".to_owned()),
+        );
+        assert!(state.sync_dialog.is_none());
+        assert_eq!(
+            state.installed[1].sync,
+            SyncPref::Null,
+            "the chip says so at once"
+        );
+        assert_eq!(state.installed[0].sync, SyncPref::Default);
+        assert_eq!(
+            state.remove_result.as_deref(),
+            Some("Old Pack: 20 songs moved from ITG to NULL")
+        );
+
+        // recorded NULL now, so the same shift is never offered again: it is
+        // the way back
+        open_sync(&mut state, true);
+        let dialog = state.sync_dialog.clone().expect("open");
+        assert!(!dialog.shift_to_null());
+    }
+
+    /// A pack in a read-only or built-in folder can be looked at, not changed.
+    #[test]
+    fn a_read_only_pack_cannot_be_changed() {
+        let mut state = library(SyncPref::Itg);
+        open_sync(&mut state, false);
+        assert_eq!(press(&mut state, START), Outcome::Invalid);
+        assert_eq!(press(&mut state, UP), Outcome::Moved, "still browsable");
+        assert_eq!(press(&mut state, START), Outcome::Invalid);
+        assert!(state.sync_dialog.is_some());
+    }
+
+    /// Measuring a pack with nothing of the play style in it says so instead
+    /// of opening an empty review.
+    #[test]
+    fn measuring_nothing_says_so() {
+        let mut state = library(SyncPref::Default);
+        let request =
+            super::super::begin_pack_measure(&mut state, "Old Pack", &[], "dance-single", 2);
+        assert!(request.is_none());
+        assert!(!sync_dialog::overlay_visible(&state));
+        assert_eq!(
+            state.remove_result.as_deref(),
+            Some("nothing in Old Pack to measure: no dance-single charts")
+        );
     }
 
     /// The grid says what happened, including when it only partly happened --

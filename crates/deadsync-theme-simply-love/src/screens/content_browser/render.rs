@@ -29,6 +29,7 @@ use super::state::{
     selected_pack, smo_sync_of, tab, total_pages, visible_rows, window_start, year_at,
     year_indexing, year_label, years_showing,
 };
+use super::sync_dialog::{self, PackCheck, SHIFT_MS, SyncAction, SyncDialog, SyncStep};
 use crate::act;
 use crate::screens::components::shared::{banner, transitions, visual_style_bg};
 use deadsync_chart::song::SyncPref;
@@ -46,6 +47,8 @@ pub(super) const Z_BADGE: i16 = 24;
 const Z_MODAL_SCRIM: i16 = 80;
 const Z_MODAL_PANEL: i16 = 84;
 const Z_MODAL_TEXT: i16 = 90;
+/// Just under the shared pack sync review, which draws at 1496 and up.
+const Z_PACK_SYNC_SCRIM: i16 = 1490;
 
 /// The original's greys, kept as named values because several are close and
 /// swapping two of them is invisible in a diff and obvious on screen.
@@ -144,10 +147,24 @@ pub fn push_actors(
     // is up and the only thing any key will answer.
     if let Some(name) = state.removing.as_deref() {
         push_remove_confirm(actors, state, name, w, h);
-    } else if let Some(name) = state.syncing.as_deref() {
-        push_sync_dialog(actors, state, name, w, h);
+    } else if let Some(dialog) = state.sync_dialog.as_ref() {
+        push_sync_dialog(actors, state, dialog, w, h);
     } else if let Some(prompt) = state.reload_prompt.as_ref() {
         push_reload_dialog(actors, state, prompt, w, h);
+    }
+
+    // DeadSync's pack sync review, over everything once a measure starts.
+    if sync_dialog::overlay_visible(state) {
+        actors.push(act!(quad:
+            align(0.0, 0.0): xy(0.0, 0.0): zoomto(w, h):
+            diffuse(0.0, 0.0, 0.0, 0.8): z(Z_PACK_SYNC_SCRIM)
+        ));
+        crate::screens::pack_sync::push_overlay(
+            actors,
+            &state.pack_sync_overlay,
+            state.active_color_index,
+            visual_policy.machine_font,
+        );
     }
 }
 
@@ -292,19 +309,29 @@ fn push_reload_dialog(
     ));
 }
 
-/// How a pack was synced, and what to record about it.
-///
-/// The catalogue is only half a source here, and the dialog says which half.
-/// stepmaniaonline.net's sync column can say a pack is null-synced; it has no
-/// value at all for ITG, so a pack authored the ITG way is indistinguishable
-/// there from one the site simply never checked. That is why this is a choice
-/// rather than a button that "fixes" the pack.
-fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, name: &str, w: f32, h: f32) {
+/// The sync dialog: what the pack says about itself, then DeadSync's ways of
+/// changing its sync, a confirm before every simfile is rewritten, and a panel
+/// that stays up while the rewrite runs.
+fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog, w: f32, h: f32) {
+    const ROW_H: f32 = 40.0;
+    const ROW_GAP: f32 = 6.0;
     let accent = accent(state);
     let cx = w * 0.5;
     let cy = h * 0.5;
     let panel_w = (w * 0.72).min(600.0);
-    let panel_h = 208.0;
+    let offered = sync_dialog::actions(state);
+    let to_null = dialog.shift_to_null();
+    let (from, to) = if to_null {
+        ("ITG", "NULL")
+    } else {
+        ("NULL", "ITG")
+    };
+    let way = if to_null { "later" } else { "earlier" };
+    let panel_h = match dialog.step {
+        SyncStep::Choose => 170.0 + offered.len() as f32 * (ROW_H + ROW_GAP),
+        SyncStep::ConfirmShift | SyncStep::Working { .. } => 190.0,
+    };
+    let top = cy - panel_h * 0.5;
 
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0): zoomto(w, h):
@@ -320,108 +347,207 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, name: &str, w: f32, 
         Z_MODAL_PANEL,
     );
 
+    let title = match dialog.step {
+        SyncStep::Choose => "SYNC THIS PACK".to_owned(),
+        SyncStep::ConfirmShift => format!("SHIFT {from} TO {to}?"),
+        SyncStep::Working { .. } => format!("SHIFTING {from} TO {to}"),
+    };
     actors.push(act!(text:
-        font("wendy"): settext("SET THIS PACK'S SYNC".to_owned()):
-        align(0.5, 0.5): xy(cx, cy - 82.0): zoom(0.46): horizalign(center):
+        font("wendy"): settext(title):
+        align(0.5, 0.5): xy(cx, top + 24.0): zoom(0.46): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_MODAL_TEXT)
     ));
     actors.push(act!(text:
-        font("miso"): settext(name.to_owned()):
-        align(0.5, 0.5): xy(cx, cy - 60.0): zoom(0.66): horizalign(center):
+        font("miso"): settext(dialog.group.clone()):
+        align(0.5, 0.5): xy(cx, top + 48.0): zoom(0.66): horizalign(center):
         maxwidth(panel_w - 40.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z_MODAL_TEXT)
     ));
 
-    // Two sources, both named.
-    //
-    // The grid's chip is what the pack itself declares; this dialog used to
-    // show only what the site says. A pack can perfectly well declare NULL
-    // while the site says nothing about it, and showing one fact without
-    // naming it next to a green chip saying the other reads as the screen
-    // contradicting itself.
-    let entry = state.installed.get(state.installed_cursor);
-    let declares = match entry.map(|entry| entry.sync) {
-        Some(SyncPref::Itg) => "this pack declares ITG",
-        Some(SyncPref::Null) => "this pack declares NULL",
-        _ => "this pack declares nothing",
+    let body_line = |actors: &mut Vec<Actor>, y: f32, text: String, rgba: [f32; 4]| {
+        actors.push(act!(text:
+            font("miso"): settext(text):
+            align(0.5, 0.5): xy(cx, y): zoom(0.46): horizalign(center):
+            maxwidth(panel_w - 40.0):
+            diffuse(rgba[0], rgba[1], rgba[2], rgba[3]): z(Z_MODAL_TEXT)
+        ));
     };
-    let smo = entry.map_or(SmoSync::Unknown, |entry| installed_smo_sync(state, entry));
-    actors.push(act!(text:
-        font("miso"): settext(format!("Now: {declares}.")):
-        align(0.5, 0.5): xy(cx, cy - 40.0): zoom(0.48): horizalign(center):
-        maxwidth(panel_w - 40.0):
-        diffuse(0.86, 0.86, 0.86, 1.0): z(Z_MODAL_TEXT)
-    ));
-    actors.push(act!(text:
-        font("miso"): settext(smo.label().to_owned()):
-        align(0.5, 0.5): xy(cx, cy - 24.0): zoom(0.44): horizalign(center):
-        maxwidth(panel_w - 40.0):
-        diffuse(0.66, 0.66, 0.66, 1.0): z(Z_MODAL_TEXT)
-    ));
+    let hint = |actors: &mut Vec<Actor>, text: &str| {
+        actors.push(act!(text:
+            font("miso"): settext(text.to_owned()):
+            align(0.5, 0.5): xy(cx, top + panel_h - 18.0): zoom(0.5): horizalign(center):
+            diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
+            z(Z_MODAL_TEXT)
+        ));
+    };
+    let songs = if dialog.songs == 1 {
+        "1 song".to_owned()
+    } else {
+        format!("{} songs", dialog.songs)
+    };
 
-    // The two choices, side by side.
-    const CHOICE_W: f32 = 210.0;
-    const CHOICE_H: f32 = 34.0;
-    for (index, (label, blurb, itg)) in [
-        ("NULL", "modern packs - play as authored", false),
-        ("ITG", "old packs - delay notes 9 ms", true),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let picked = (state.sync_choice == SyncPref::Itg) == itg;
-        let x = cx + (index as f32 - 0.5) * (CHOICE_W + 12.0);
-        let plate = if picked {
-            [accent[0], accent[1], accent[2], 0.9]
-        } else {
-            [1.0, 1.0, 1.0, 0.07]
+    match dialog.step {
+        SyncStep::Working { .. } => {
+            spinner::with_label(
+                actors,
+                cx - 70.0,
+                top + 92.0,
+                spinner::SMALL_PX,
+                "Moving offsets",
+                Z_MODAL_TEXT,
+                accent,
+            );
+            body_line(
+                actors,
+                top + 124.0,
+                format!("{songs}, {SHIFT_MS} ms {way} each"),
+                [0.75, 0.75, 0.75, 1.0],
+            );
+            return;
+        }
+        SyncStep::ConfirmShift => {
+            body_line(
+                actors,
+                top + 82.0,
+                format!("Every offset in {songs} moves {SHIFT_MS} ms {way}."),
+                [0.86, 0.86, 0.86, 1.0],
+            );
+            body_line(
+                actors,
+                top + 104.0,
+                format!(
+                    "Each simfile keeps a .old copy of itself, and the pack is recorded as {to}"
+                ),
+                [0.66, 0.66, 0.66, 1.0],
+            );
+            body_line(
+                actors,
+                top + 120.0,
+                "in its Pack.ini, so the same shift is never made twice.".to_owned(),
+                [0.66, 0.66, 0.66, 1.0],
+            );
+            hint(actors, "START shift    BACK go back");
+            return;
+        }
+        SyncStep::Choose => {}
+    }
+
+    // What the pack says about itself, and what the site says, both named:
+    // a pack can declare NULL while the site says nothing about it.
+    let declares = match dialog.declared {
+        SyncPref::Itg => "its Pack.ini says ITG",
+        SyncPref::Null => "its Pack.ini says NULL",
+        SyncPref::Default => "it has no sync in a Pack.ini",
+    };
+    let smo = state
+        .installed
+        .iter()
+        .find(|entry| entry.name == dialog.group)
+        .map_or(SmoSync::Unknown, |entry| installed_smo_sync(state, entry));
+    body_line(
+        actors,
+        top + 68.0,
+        format!("{songs}   -   {declares}   -   {}", smo.short()),
+        [0.7, 0.7, 0.7, 1.0],
+    );
+
+    let row_w = panel_w - 40.0;
+    let mut y = top + 88.0 + ROW_H * 0.5;
+    for &offer in offered {
+        let picked = offer == dialog.action;
+        let (label, blurb) = match offer {
+            SyncAction::Measure => (
+                "MEASURE WITH NULL-OR-DIE".to_owned(),
+                "measure every song against its music, review the offsets, then save".to_owned(),
+            ),
+            SyncAction::Shift => (
+                format!("SHIFT {from} TO {to}"),
+                if to_null {
+                    format!(
+                        "move every offset {SHIFT_MS} ms later, for a pack synced the old ITG way"
+                    )
+                } else {
+                    format!("move every offset {SHIFT_MS} ms earlier and record the pack as ITG")
+                },
+            ),
+            SyncAction::PackIni => (
+                format!(
+                    "RECORD IN PACK.INI ONLY:   {}",
+                    if dialog.record == SyncPref::Itg {
+                        "< ITG >"
+                    } else {
+                        "< NULL >"
+                    }
+                ),
+                "leave the simfiles alone; the engine applies it while Pack.ini Offsets is on"
+                    .to_owned(),
+            ),
         };
-        let ink = if picked {
+        let usable = dialog.usable();
+        let plate = match (picked, usable) {
+            (true, true) => [accent[0], accent[1], accent[2], 0.9],
+            (true, false) => [1.0, 1.0, 1.0, 0.16],
+            (false, _) => [1.0, 1.0, 1.0, 0.07],
+        };
+        let ink = if picked && usable {
             [0.08, 0.08, 0.08, 1.0]
+        } else if usable {
+            [0.78, 0.78, 0.78, 1.0]
         } else {
-            [0.75, 0.75, 0.75, 1.0]
+            [0.45, 0.45, 0.45, 1.0]
         };
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(x, cy + 6.0): zoomto(CHOICE_W, CHOICE_H):
+            align(0.5, 0.5): xy(cx, y): zoomto(row_w, ROW_H):
             diffuse(plate[0], plate[1], plate[2], plate[3]): z(Z_MODAL_PANEL + 2)
         ));
         actors.push(act!(text:
-            font("miso"): settext(label.to_owned()):
-            align(0.5, 0.5): xy(x, cy + 0.0): zoom(0.58): horizalign(center):
+            font("miso"): settext(label):
+            align(0.5, 0.5): xy(cx, y - 8.0): zoom(0.56): horizalign(center):
+            maxwidth(row_w - 20.0):
             diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_MODAL_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext(blurb.to_owned()):
-            align(0.5, 0.5): xy(x, cy + 15.0): zoom(0.4): horizalign(center):
-            diffuse(ink[0], ink[1], ink[2], if picked { 0.75 } else { 0.55 }): z(Z_MODAL_TEXT)
+            font("miso"): settext(blurb):
+            align(0.5, 0.5): xy(cx, y + 9.0): zoom(0.4): horizalign(center):
+            maxwidth(row_w - 20.0):
+            diffuse(ink[0], ink[1], ink[2], if picked { 0.8 } else { 0.6 }): z(Z_MODAL_TEXT)
         ));
+        y += ROW_H + ROW_GAP;
     }
 
-    // The setting that decides whether any of this does anything. Without
-    // this line the dialog can be used correctly and appear to have no effect.
-    let (note, note_rgba) = if state.pack_ini_offsets_on {
+    // What the choice leaves behind -- or why there is no choice at all.
+    let (note, rgba) = if let PackCheck::Refused(reason) = &dialog.check {
         (
-            "Saves SyncOffset to this pack's Pack.ini, and the engine applies it.",
+            format!("Its sync cannot be changed here: {reason}."),
+            [0.97, 0.78, 0.30, 1.0],
+        )
+    } else if !dialog.usable() {
+        (
+            "Checking the pack's folder...".to_owned(),
             [0.6, 0.6, 0.6, 1.0],
         )
     } else {
-        (
-            "Saves SyncOffset to this pack's Pack.ini -- but Machine Options > Pack.ini Offsets is OFF, so nothing will act on it yet.",
-            [0.97, 0.78, 0.30, 1.0],
-        )
+        let note = match dialog.action {
+            SyncAction::Measure => {
+                "Each saved simfile keeps a .old copy, and the pack is then recorded as NULL."
+                    .to_owned()
+            }
+            SyncAction::Shift => {
+                format!("Each simfile keeps a .old copy, and the pack is then recorded as {to}.")
+            }
+            SyncAction::PackIni => "Only the Pack.ini changes.".to_owned(),
+        };
+        (note, [0.6, 0.6, 0.6, 1.0])
     };
-    actors.push(act!(text:
-        font("miso"): settext(note.to_owned()):
-        align(0.5, 0.5): xy(cx, cy + 48.0): zoom(0.44): horizalign(center):
-        maxwidth(panel_w - 32.0):
-        diffuse(note_rgba[0], note_rgba[1], note_rgba[2], note_rgba[3]): z(Z_MODAL_TEXT)
-    ));
-    actors.push(act!(text:
-        font("miso"): settext("LEFT/RIGHT choose    START save    BACK cancel".to_owned()):
-        align(0.5, 0.5): xy(cx, cy + 76.0): zoom(0.5): horizalign(center):
-        diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
-        z(Z_MODAL_TEXT)
-    ));
+    body_line(actors, y - ROW_GAP + 12.0, note, rgba);
+    hint(
+        actors,
+        if dialog.action == SyncAction::PackIni {
+            "UP/DOWN choose    LEFT/RIGHT ITG or NULL    START save    BACK close"
+        } else {
+            "UP/DOWN choose    START go    BACK close"
+        },
+    );
 }
 
 /// The one thing here that cannot be undone, asked about plainly.
@@ -2272,5 +2398,79 @@ mod tests {
         assert!(footer_hint(&state).contains("START song options"));
         state.detail_on_button = true;
         assert!(footer_hint(&state).starts_with("START download this pack"));
+    }
+
+    /// Each step of the sync dialog says what it is about to do, or doing.
+    #[test]
+    fn the_sync_dialog_names_each_step() {
+        let mut state = super::super::state::init();
+        let mut dialog = SyncDialog {
+            group: "Old Pack".to_owned(),
+            songs: 20,
+            declared: SyncPref::Itg,
+            check: PackCheck::Usable,
+            action: SyncAction::Shift,
+            record: SyncPref::Itg,
+            step: SyncStep::Choose,
+        };
+        let texts = |state: &State, dialog: &SyncDialog| {
+            let mut actors = Vec::new();
+            push_sync_dialog(&mut actors, state, dialog, 854.0, 480.0);
+            actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Text { content, .. } => Some(content.as_str().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let choose = texts(&state, &dialog);
+        assert!(choose.iter().any(|text| text == "SYNC THIS PACK"));
+        assert!(choose.iter().any(|text| text == "MEASURE WITH NULL-OR-DIE"));
+        assert!(choose.iter().any(|text| text == "SHIFT ITG TO NULL"));
+        assert!(
+            !choose
+                .iter()
+                .any(|text| text.starts_with("RECORD IN PACK.INI"))
+        );
+        state.pack_ini_offsets_on = true;
+        assert!(
+            texts(&state, &dialog)
+                .iter()
+                .any(|text| text.starts_with("RECORD IN PACK.INI"))
+        );
+
+        dialog.step = SyncStep::ConfirmShift;
+        assert!(
+            texts(&state, &dialog)
+                .iter()
+                .any(|text| text == "SHIFT ITG TO NULL?")
+        );
+        dialog.step = SyncStep::Working {
+            frames: 0,
+            sent: false,
+        };
+        assert!(
+            texts(&state, &dialog)
+                .iter()
+                .any(|text| text == "SHIFTING ITG TO NULL")
+        );
+
+        // recorded NULL, the shift is the way back
+        dialog.declared = SyncPref::Null;
+        dialog.step = SyncStep::Choose;
+        assert!(
+            texts(&state, &dialog)
+                .iter()
+                .any(|text| text == "SHIFT NULL TO ITG")
+        );
+
+        // and a pack that cannot be changed says why
+        dialog.check = PackCheck::Refused("'Old Pack' is in a read-only song folder".to_owned());
+        assert!(
+            texts(&state, &dialog)
+                .iter()
+                .any(|text| text.contains("cannot be changed here"))
+        );
     }
 }

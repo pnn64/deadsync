@@ -165,14 +165,6 @@ impl SmoSync {
             Self::Unknown => "not listed by SMO",
         }
     }
-
-    pub(super) const fn label(self) -> &'static str {
-        match self {
-            Self::Null => "stepmaniaonline.net lists it as null-synced.",
-            Self::Mixed => "stepmaniaonline.net says its songs disagree with each other.",
-            Self::Unknown => "stepmaniaonline.net does not list a sync for it.",
-        }
-    }
 }
 
 /// What the catalogue says about a pack's sync, if it says anything.
@@ -570,9 +562,17 @@ pub struct State {
     pub(super) removing: Option<String>,
     /// What the last delete did, shown until the reader moves on.
     pub(super) remove_result: Option<String>,
-    /// The pack whose sync is being set, and the value the dialog is on.
-    pub(super) syncing: Option<String>,
-    pub(super) sync_choice: SyncPref,
+    /// The dialog for changing a library pack's sync, while it is up.
+    pub(super) sync_dialog: Option<super::sync_dialog::SyncDialog>,
+    /// DeadSync's pack sync review, when the dialog has started a measure.
+    pub(super) pack_sync_overlay: crate::screens::pack_sync::OverlayState,
+    /// The pack that review is about.
+    pub(super) pack_sync_group: Option<String>,
+    /// The review's settings, written by the shell: the confidence a measured
+    /// offset needs to be offered, and the menu buttons it answers to.
+    pub(super) pack_sync_confidence: u8,
+    pub(super) pack_sync_menu_only: bool,
+    pub(super) pack_sync_three_key: bool,
     /// Whether the engine will actually act on a `Pack.ini` right now. Written
     /// by the shell, because it is a machine setting rather than a fact about
     /// any pack -- and a dialog that does not say this is a dialog that looks
@@ -678,8 +678,12 @@ pub fn init() -> State {
         installed_cursor: 0,
         removing: None,
         remove_result: None,
-        syncing: None,
-        sync_choice: SyncPref::Null,
+        sync_dialog: None,
+        pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
+        pack_sync_group: None,
+        pack_sync_confidence: DEFAULT_PACK_SYNC_CONFIDENCE,
+        pack_sync_menu_only: false,
+        pack_sync_three_key: false,
         pack_ini_offsets_on: false,
         nav_hold: None,
         pending_turn: None,
@@ -734,7 +738,10 @@ pub fn on_enter(state: &mut State) {
     // A confirm that was left open is not still being asked.
     state.removing = None;
     state.remove_result = None;
-    state.syncing = None;
+    state.sync_dialog = None;
+    // A review left running was cancelled by the shell on the way out.
+    state.pack_sync_overlay = crate::screens::pack_sync::OverlayState::Hidden;
+    state.pack_sync_group = None;
     // The tab survives leaving and coming back, so the landing zone has to
     // follow it: two of the tabs do not have a single list to land in, and
     // dropping the cursor into one that is not drawn strands it.
@@ -750,6 +757,12 @@ pub fn on_enter(state: &mut State) {
 
 pub fn update(state: &mut State, delta_time: f32) {
     if delta_time <= 0.0 || !delta_time.is_finite() {
+        return;
+    }
+    super::sync_dialog::tick(state);
+    // While the pack sync review is up it is the screen: nothing behind it
+    // moves.
+    if super::sync_dialog::overlay_visible(state) {
         return;
     }
     state.caret_elapsed += delta_time;
@@ -791,6 +804,12 @@ pub struct Services {
     /// Whether `MachinePackIniOffsets` is on. Off by default, and while it is
     /// off a pack's `Pack.ini` sync value changes nothing at all.
     pub pack_ini_offsets_on: bool,
+    /// The pack sync review's settings: the confidence a measured offset
+    /// needs, and whether only the dedicated menu buttons -- and only three of
+    /// them -- navigate it.
+    pub pack_sync_confidence: u8,
+    pub pack_sync_menu_only: bool,
+    pub pack_sync_three_key: bool,
 }
 
 impl Default for Services {
@@ -808,9 +827,16 @@ impl Default for Services {
             song_installs: Arc::new(SongInstallsSnapshot::default()),
             banner_failed: Arc::new(HashSet::new()),
             pack_ini_offsets_on: false,
+            pack_sync_confidence: DEFAULT_PACK_SYNC_CONFIDENCE,
+            pack_sync_menu_only: false,
+            pack_sync_three_key: false,
         }
     }
 }
+
+/// The review's confidence until the shell says otherwise: the machine
+/// default for Null-or-Die.
+const DEFAULT_PACK_SYNC_CONFIDENCE: u8 = 80;
 
 /// The shell's per-frame handoff.
 pub fn sync_stepmaniaonline(
@@ -832,7 +858,13 @@ pub fn sync_stepmaniaonline(
         song_installs,
         banner_failed,
         pack_ini_offsets_on,
+        pack_sync_confidence,
+        pack_sync_menu_only,
+        pack_sync_three_key,
     } = services;
+    state.pack_sync_confidence = pack_sync_confidence;
+    state.pack_sync_menu_only = pack_sync_menu_only;
+    state.pack_sync_three_key = pack_sync_three_key;
     state.song_preview = song_preview;
     state.song_installs = song_installs;
     super::preview::sync(state);
@@ -1034,15 +1066,6 @@ pub(super) fn downloads_active(state: &State) -> bool {
             InstallPhase::Queued | InstallPhase::Downloading | InstallPhase::Extracting
         )
     })
-}
-
-/// The shell's answer to a sync write.
-pub fn finish_pack_sync(state: &mut State, result: Result<String, String>) {
-    state.syncing = None;
-    state.remove_result = Some(match result {
-        Ok(note) => note,
-        Err(error) => format!("could not set sync: {error}"),
-    });
 }
 
 /// The shell's answer to a delete request.
