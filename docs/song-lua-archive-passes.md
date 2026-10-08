@@ -2505,7 +2505,7 @@ Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc pa
 
 ITGmania retains the raw Song::GetLastSecond value for its end timing. The harness beat/time roundtrip could stop below LASTSECONDHINT, and its selected chart could end before another chart in the song. Five compiled native controls cover fractional hints, both offset signs, a non-dyadic offset and a later chart. Four controls miss the native end callback on harness .30; all five reach it on .31.
 
-DeadSync .1869 requires native endpoint metadata, the final native music timestamp and the last update frame to cover that endpoint. A native positive control and six mutations verify rejection of missing, short or nonfinite endpoints. The old clean Igaku capture, which passed 514,954 comparisons, is now rejected because that agreement did not prove complete coverage. Its .31 recapture reaches the original raw hint with zero runtime errors and no dropped events; full parity verification remains pending.
+DeadSync .1869 requires native endpoint metadata, the final native music timestamp and the last update frame to cover that endpoint. A native positive control and six mutations verify rejection of missing, short or nonfinite endpoints. The old clean Igaku capture, which passed 514,954 comparisons, is now rejected because that agreement did not prove complete coverage. Its .31 recapture reaches the original raw hint with zero runtime errors and no dropped events; all 514,954 full-archive comparisons pass.
 
 The corrected Bank Account archive passes all 116,603 comparisons. Its previous bytes and aliases are preserved. Scope remains 501 original simfiles, 483 canonical archives, nine historical variants and 18 unindexed sources. The old pass 71 stopped at 12 archives when the necessary harness source change activated its guard. The full corpus must still be revalidated under the corrected endpoint contract.
 
@@ -2528,3 +2528,7 @@ Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparison
 Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
 
 Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+## Igaku: recover the complete native reference
+
+The canonical archive and focused whole-song reference now use the same complete harness .31 capture of the unmodified original sources. The focused comparison retains all 358,379 native observations, increasing coverage from the old synthetic-clock reference's 331,752. It requires native song timing, the native public music clock, zero runtime errors, zero dropped events and the raw native endpoint. The missing-column-rotation negative control remains. Previous synthetic-clock micro captures retain explicit legacy aliases, and the previous canonical archive is retained locally with its aliases mapped to the corrected archive. The original 501-simfile scope and remaining work are unchanged.

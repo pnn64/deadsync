@@ -586,7 +586,7 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
     );
 }
 
-fn validate_native_endpoint(trace: &NativeTrace) {
+pub(super) fn validate_native_endpoint(trace: &NativeTrace) {
     let endpoint = trace
         .native_song_end
         .as_ref()

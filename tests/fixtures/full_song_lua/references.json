@@ -179,7 +179,7 @@
   "tests/fixtures/itgmania-song-archives/62ae32ff02458f998075a0f86f406f1f73f1523bbd200358c9e0256839534065.tar.zst": "8c7122bf839dbe1a2788c27c873a83631ab155e7223e36f79b18eba0f9985a6a.tar.zst",
   "tests/fixtures/itgmania-song-archives/63e2807eff0d0b636961542419dbd314a930ef9fd6883aa340f2b998c96961ce.tar.zst": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e.tar.zst",
   "tests/fixtures/itgmania-song-archives/6415b9b78e024a4eda84f82f7140cba66b8eb9e6d6786d5662810d6d2cc87fab.tar.zst": "fb5cc6560c8aed0250e2ac6a1167d3994362a8f91b30c636dac4e502a8ea4174.tar.zst",
-  "tests/fixtures/itgmania-song-archives/65f2bd41bf2925294b4acfdfae83f060ce0de3a067fcd4a3b508a747c4cad614.tar.zst": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
+  "tests/fixtures/itgmania-song-archives/65f2bd41bf2925294b4acfdfae83f060ce0de3a067fcd4a3b508a747c4cad614.tar.zst": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
   "tests/fixtures/itgmania-song-archives/66b937a07920535b66d51f437d5f57b75b38974e8866d022a2d1fc4adb28a687.tar.zst": "fa46a880b50e602e5dc83a722daa0a08540c0c37970db2c1f339d764778ed824.tar.zst",
   "tests/fixtures/itgmania-song-archives/6791a1f57a05a3d42c275f0d7653ed30ad067150bd90d3d5b76597c9c5c8a277.tar.zst": "6633c359f6185a61e511b33dd77bf7e063d309d3aed2ad4c31bd06cba373f254.tar.zst",
   "tests/fixtures/itgmania-song-archives/67bdf7433f19802517a5ebe2d0ac76d525a05e085e8159fc4dee8dbf61a91f61.tar.zst": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812.tar.zst",
@@ -510,8 +510,8 @@
   "tests/fixtures/itgmania-song-lua-micro/goodbye-whole-song.json.zst": "f1ad4f59f867cfab96ea43723c8ca0748288ebb89e2d06300bd1ecc24887cbab.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/i-ai-whole-song-provenance.json": "a12ce9ea3f2ceb8446456359e2869c5cbdfbe6a2718b51a1059b6dbf7ab7d11e.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/i-ai-whole-song.json.zst": "5675f99d47fee2b7f6bc3ed5816b1307996201ca08e48932ac6f8188348267f1.json.zst",
-  "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song-provenance.json": "5186d6c2c62af188b5bd2954c33c1d58080fe6bb304ec05a5e645942f5ad910f.json.zst",
-  "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.json.zst": "faff9c975146cfc2d7bb18528de3e9a55dc967d837c66c8d50562e593a62b5cd.json.zst",
+  "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song-provenance.json": "3057750eccdafa5d8761489f3e467eda3a80e210a721f3c71d5de396ba518338.json.zst",
+  "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.json.zst": "66e44516911eb091d1c5dc82fa0c554be438b41ae3cdc88d549acdc4685474b3.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/karachi-whole-song-provenance.json": "59ed4bfbd607ec3a0ed0fd4b522829f265a0c538cc420ec1b6eaa096d7fa347c.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/karachi-whole-song.json.zst": "5ed6e28354dbbb7a5fd64b4ab068641c2be95b039b336108ba5d57818d8e3697.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/mawaru5-draw-colors.json.zst": "af5e08235816f679575164b1ccc5e564c7d2c1370998e7bbb15abd7eec131ebd.json.zst",
@@ -650,5 +650,7 @@
   "tests/fixtures/itgmania-song-lua/kaboooooom!/KABOOOOOM!!!!.sm.semantic.json": "c849661dec2cf14a8f878df6ab7c4e9b8f8a40e91b88dae4c2dc8ce9d52bb6c2.json.zst",
   "tests/fixtures/itgmania-song-lua/kaboooooom!/KABOOOOOM!!!!.ssc.semantic.json": "44705eb85215db09c1bb18d609776867d7f22bf65fab044d8f3a31e12bc73e28.json.zst",
   "tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst": "fbebbc09945f68f58571fc70c99aa5c86686634f68a6b410fc5be8238c25d4b5.json.zst",
-  "tests/fixtures/itgmania-song-lua-micro/native-song-end.provenance.json.zst": "373913a5b9b4bfb0c2d534a3d0f11a8fb65c7d2487ec7554ec2d019ac530b266.json.zst"
+  "tests/fixtures/itgmania-song-lua-micro/native-song-end.provenance.json.zst": "373913a5b9b4bfb0c2d534a3d0f11a8fb65c7d2487ec7554ec2d019ac530b266.json.zst",
+  "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.legacy-synthetic-clock.json.zst": "faff9c975146cfc2d7bb18528de3e9a55dc967d837c66c8d50562e593a62b5cd.json.zst",
+  "tests/fixtures/itgmania-song-lua-micro/igaku-whole-song-provenance.legacy-synthetic-clock.json.zst": "5186d6c2c62af188b5bd2954c33c1d58080fe6bb304ec05a5e645942f5ad910f.json.zst"
 }

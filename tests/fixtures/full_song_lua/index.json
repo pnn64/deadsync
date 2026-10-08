@@ -3330,13 +3330,14 @@
     {
       "title": "イガク",
       "source_simfile": "Igaku/Igaku.ssc",
-      "harness_version": "0.1.0",
-      "archive": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
-      "sha256": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f",
-      "compressed_bytes": 1242462,
-      "uncompressed_sha256": "ee5aefc6cc85fda44b2d05d5cb0a9ecebd54de66ad6913820ad6a2d086fb8098",
-      "compression_level": 22,
+      "harness_version": "0.1.31",
+      "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+      "sha256": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a",
+      "compressed_bytes": 8565498,
+      "uncompressed_sha256": "8b90c6507e512266d76572b0883b8ecbb3ab72f58c8bedc2a1c9416525e2b047",
+      "compression_level": 12,
       "aliases": [
+        "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
         "65f2bd41bf2925294b4acfdfae83f060ce0de3a067fcd4a3b508a747c4cad614.tar.zst"
       ]
     },

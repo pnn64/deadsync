@@ -9917,6 +9917,11 @@ fn igaku_whole_song_matches_native() {
         &Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/itgmania-song-lua-micro/igaku-whole-song.json.zst"),
     );
+    assert_eq!(trace.song_clock.as_deref(), Some("native-song-timing"));
+    assert_eq!(trace.song_position.as_deref(), Some("native-music-seconds"));
+    assert!(trace.runtime_errors.is_empty());
+    assert_eq!(trace.dropped_events, 0);
+    whole_song_archives::validate_native_endpoint(&trace);
     let (compiled, primary, context) = compile_trace_song(&trace);
     let mut parity = compare_semantics(&trace, &compiled, primary, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
@@ -9924,7 +9929,7 @@ fn igaku_whole_song_matches_native() {
     parity.assert_complete("Igaku whole song");
     assert_eq!(
         parity.checks(),
-        331752,
+        358379,
         "retain every native observation in its owning layer"
     );
     let mut missing = compiled.clone();

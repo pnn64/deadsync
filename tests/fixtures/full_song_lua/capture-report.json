@@ -2327,6 +2327,14 @@
       "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 73,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "superseded_archive": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
+      "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6170,6 +6178,48 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 73,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 226.61088848114014,
+        "result": "result: ok; 1/1 fixtures passed; 514954 comparisons passed, 0 failed (514954 total); elapsed 226.45s",
+        "log_sha256": "3be305bb21a0e835911b554ab1505dd7507898b882f5fd1719ced9a944490904",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "capture_endpoint": {
+        "beat": 336.0255126953125,
+        "music_seconds": 118.59724426269533,
+        "seconds": 118.59724426269533
+      },
+      "native_song_end": {
+        "beat": 336.0255126953125,
+        "music_seconds": 118.59724426269533,
+        "seconds": 118.59724426269533
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "original_sources_unmodified": true,
+      "focused_regression": {
+        "comparisons_passed": 358379,
+        "executable_sha256": "30cdd32971746c1c53e6b1c5ac4a46fb0df7f9ad337ea81a26229ebfeec7b739",
+        "test": {
+          "test": "igaku_whole_song_matches_native",
+          "exit_code": 0,
+          "seconds": 233.24184539960697,
+          "log_sha256": "646c5f0a53025eaca89c7245a7e535edc893f85e304b8f85a14d278311dfa79a"
+        },
+        "column_rotation_negative_control": "pass"
+      },
+      "source_provenance_blob": "3057750eccdafa5d8761489f3e467eda3a80e210a721f3c71d5de396ba518338.json.zst"
     }
   ]
 }
