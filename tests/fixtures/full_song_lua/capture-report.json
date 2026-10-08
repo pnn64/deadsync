@@ -1879,6 +1879,14 @@
       "archive": "ae7e5b9117f551287f29a71b41a108629ff0a6928f102ecf974b47f2355fcfc4.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "adef893d385134888100348a3b7ce0eb5e825da87c76933ce6b311a775c25be7.tar.zst",
+      "archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4003,6 +4011,31 @@
       "capture_endpoint": {
         "beat": 384,
         "seconds": 144
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 64.08799076080322,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 63.26s",
+        "log_sha256": "4871c56d1898b1492ce50efd7c77363c59c9815c9a95bec363bac754b74611f1",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "36344cb84046d42309ac00d74785023dc0525fdb9d3b9fb0853c4fd238ec65f8",
+      "capture_endpoint": {
+        "beat": 481,
+        "seconds": 140.78048706054688
       },
       "runtime_errors": 0,
       "dropped_events": 0
