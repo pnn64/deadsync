@@ -2166,3 +2166,5 @@ The .22/.1862 eight-archive prefix is historical; the full 501-simfile and
 Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
 
 Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
