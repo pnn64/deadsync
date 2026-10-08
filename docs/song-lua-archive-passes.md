@@ -2428,3 +2428,5 @@ Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 compariso
 Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
 
 Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
