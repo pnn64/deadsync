@@ -2011,3 +2011,7 @@ This repair verifies class registration and lookup, not every native method
 body or fallback helper. Full corpus parity remains unfinished: 501 simfiles,
 483 indexed sources, 18 unindexed and nine historical extra captures. The prior
 11-archive prefix is historical on .21/.1860 until revalidated with .1861.
+
+## Pass 57: revalidate the corpus after native class inheritance
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.

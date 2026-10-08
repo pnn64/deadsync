@@ -2218,6 +2218,24 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 57,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "f3b577e31ff628b7af7b454699eb06586dcd45b329ba6a4d81e30fcce847b449.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "f3b577e31ff628b7af7b454699eb06586dcd45b329ba6a4d81e30fcce847b449.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 16.396711826324463,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.95s",
+        "log_sha256": "e121ee171daf1a8cae83aad4fe8d0826a324049a25418dce893f9b858b92d176",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      }
     }
   ]
 }
