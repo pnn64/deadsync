@@ -2160,3 +2160,7 @@ subclasses and full Simply Love context remain pending.
 The corpus must now be refreshed from the top on harness .24 / DeadSync .1863.
 The .22/.1862 eight-archive prefix is historical; the full 501-simfile and
 492-archive scope is unchanged. Full parity remains unfinished.
+
+## Pass 63: revalidate the corpus after native class inheritance
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
