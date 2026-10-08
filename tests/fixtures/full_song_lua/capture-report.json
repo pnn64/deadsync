@@ -2431,6 +2431,14 @@
       "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "superseded_archive": "1c0225a7d2fc61cdd507b7884bef6a80a9a1fc5fecf5c313e2c5c18fa0466857.tar.zst",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6637,6 +6645,33 @@
         "beat": 343.66668701171875,
         "music_seconds": 131.12582397460938,
         "seconds": 129.78482055664062
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 6.495831251144409,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 6.36s",
+        "log_sha256": "287e400f4687ef30b034a0f07285decd15afb40531441af294a361210c669e1e",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "036d10e79aede782a4d0afa9080d41328969c5a42e19ac0665010fec9d43a1a8",
+      "capture_endpoint": {
+        "beat": 910.75,
+        "music_seconds": 273.25701904296875,
+        "seconds": 273.2250061035156
       },
       "runtime_errors": 0,
       "dropped_events": 0
