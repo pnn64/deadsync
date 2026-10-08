@@ -1113,6 +1113,38 @@ struct NativeInstance<'a> {
     name: Option<&'a str>,
 }
 
+fn native_is_drawable(trace: &NativeTrace, definition: &NativeDefinition, actor: &str) -> bool {
+    if matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
+        return false;
+    }
+    if definition.class != "Sprite" {
+        return true;
+    }
+    // Sprite.cpp starts with a null texture and EarlyAbortDraw skips it. Keep
+    // every Sprite that declares, loads, or has sampled a texture; an empty
+    // Sprite still exists in the actor tree but has no drawable primitive.
+    let texture = definition.properties.get("Texture");
+    if texture.is_some_and(|value| !value.is_null() && value.as_str() != Some(""))
+        || trace.projected_vertex_tracks.iter().any(|track| {
+            track.actor == actor
+                || track.definition_id.as_deref() == Some(definition.id.as_str())
+        })
+    {
+        return true;
+    }
+    let loads_texture = |method: &str| {
+        let method = method.rsplit('.').next().unwrap_or(method);
+        method.starts_with("Load") || method == "SetTexture"
+    };
+    trace.operation_tracks.iter().any(|track| {
+        track.actor == actor && !track.samples.is_empty() && loads_texture(&track.operation)
+    }) || trace.tween_tracks.iter().any(|track| {
+        track.actor == actor && track.segments.iter().any(|segment| {
+            segment.operations.iter().any(|operation| loads_texture(&operation.operation))
+        })
+    })
+}
+
 fn collect_native_drawable_definitions<'a>(
     trace: &'a NativeTrace,
     parent: &'a NativeDefinition,
@@ -1123,7 +1155,7 @@ fn collect_native_drawable_definitions<'a>(
         .runtime_actors
         .first()
         .map_or(parent.id.as_str(), String::as_str);
-    if !matches!(parent.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
+    if native_is_drawable(trace, parent, actor) {
         out.push(NativeInstance {
             id: actor,
             class: &parent.class,
@@ -1177,7 +1209,7 @@ fn collect_native_instances<'a>(
                 .map_or(definition.id.as_str(), String::as_str)
         });
         let include = if drawables_only {
-            !matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound")
+            native_is_drawable(trace, definition, id)
         } else {
             definition.class != "Actor" || !definition.children.is_empty()
         };

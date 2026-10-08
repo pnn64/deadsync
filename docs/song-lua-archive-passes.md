@@ -1973,3 +1973,41 @@ under micro fixtures with actor-class-provenance.json. This is verified
 failure evidence; the DeadSync implementation repair is still pending.
 No production source or Lua song content is changed in this evidence commit,
 and the probe is not counted as a corpus song or passing parity fixture.
+
+## Pass 56: repair native public class inheritance
+
+DeadSync .1861 exposes the compiled 269-method inventory through public Actor,
+ActorFrame, Sprite, ActorFrameTexture and ActorMultiVertex class tables.
+Existing instances see caller-added Lua methods and live base/derived overrides.
+Frame callbacks remain unavailable on plain Actor and Sprite/Quad. Native
+Actor::AddWrapperState allocates ActorFrame, so wrappers retain those callbacks
+and all original hibernation timing assertions. Independent native controls
+verify wrapper ownership, invalid callback arguments and multiple return values.
+
+Banner is a distinct Sprite subclass using the 14 own method declarations in
+local Banner.cpp. Those declarations are source-backed; Banner is not linked
+into the compiled oracle. The obsolete standalone class forwarders and invented
+ActorFrame.fardistz and AMV getters are removed from public lookup. The AMV shape
+test uses GetDestDrawMode and verifies line width through a drawn three-pixel
+line, retaining the original quad vertex and color assertions.
+
+Synthetic callback owners are corrected to ActorFrame while drawable Quads,
+numeric expectations, playback golden samples and tolerances remain intact.
+Cache version 52 invalidates compiled tracks with the old method decisions.
+All 670 core tests pass with three existing GPU tests ignored. Production,
+clock-cache and old-cache rejection checks pass, as do the retained native
+public-music, effect-clock and strict-multitap controls. The unchanged complete
+class-inheritance archive passes all 2,694 comparisons after failing in
+.1860. Exact receipts are preserved in actor-class-repair-provenance.json.
+
+The unchanged archive also exposes a comparator mistake: a never-textured
+Sprite was counted as drawable despite native Sprite::EarlyAbortDraw and
+the trace's lack of Sprite geometry. Drawable membership now retains every
+Sprite with a declared texture, recorded load/SetTexture or projected track;
+the empty actor stays in the tree without inventing a primitive. All original
+2,670 checks remain, and the image texture alias control passes unchanged.
+
+This repair verifies class registration and lookup, not every native method
+body or fallback helper. Full corpus parity remains unfinished: 501 simfiles,
+483 indexed sources, 18 unindexed and nine historical extra captures. The prior
+11-archive prefix is historical on .21/.1860 until revalidated with .1861.

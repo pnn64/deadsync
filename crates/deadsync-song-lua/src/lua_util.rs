@@ -1603,7 +1603,7 @@ pub fn install_def_globals(
         ("Actor", "Actor"),
         ("ActorFrame", "ActorFrame"),
         ("Sprite", "Sprite"),
-        ("Banner", "Sprite"),
+        ("Banner", "Banner"),
         ("ActorMultiVertex", "ActorMultiVertex"),
         ("Sound", "Sound"),
         ("BitmapText", "BitmapText"),
@@ -1631,7 +1631,7 @@ pub fn install_def_globals(
         )?;
     }
     globals.set("Def", def)?;
-    globals.set("ActorFrame", create_actorframe_class_table(lua)?)?;
+    crate::actor_classes::install(lua)?;
     // Native Player/NoteField classes inherit ActorFrame. Their own method
     // inventories also keep SM5.2-only feature probes absent on ITGmania.
     for (name, methods) in [
@@ -1667,14 +1667,13 @@ pub fn install_def_globals(
     ] {
         let class = lua.create_table()?;
         for method in methods {
-            set_actor_class_forwarder(lua, &class, method)?;
+            crate::actor_classes::forward(lua, &class, method)?;
         }
         let parent = lua.create_table()?;
         parent.set("__index", globals.get::<Table>("ActorFrame")?)?;
         class.set_metatable(Some(parent))?;
         globals.set(name, class)?;
     }
-    globals.set("Sprite", create_sprite_class_table(lua)?)?;
     globals.set(
         "LoadFont",
         lua.create_function(move |lua, args: MultiValue| {
@@ -1794,7 +1793,7 @@ fn make_actor_ctor(
         }
         set_actor_decode_movie_for_texture(&table)?;
         movie_source_size(lua, &table)?;
-        if actor_type.eq_ignore_ascii_case("Sprite") {
+        if actor_type.eq_ignore_ascii_case("Sprite") || actor_type.eq_ignore_ascii_case("Banner") {
             // Actor::Actor starts with animation enabled in ITGmania.  Sprite
             // sheets rely on that default unless a command explicitly pauses
             // them.
@@ -1880,6 +1879,7 @@ fn clone_actor_def(
                     | "__songlua_init_commands_ran"
                     | "__songlua_startup_commands_ran"
                     | "__songlua_startup_command_started"
+                    | "__songlua_bound_methods"
             )
         }) {
             return Ok(());
@@ -3837,7 +3837,10 @@ pub fn actor_debug_label(actor: &Table) -> String {
 }
 
 pub fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    crate::actor_classes::bind(lua, actor)?;
     let mt = lua.create_table()?;
+    mt.set("__index", lua.create_function(crate::actor_classes::lookup)?)?;
+    mt.set("__newindex", lua.create_function(crate::actor_classes::assign)?)?;
     let actor_clone = actor.clone();
     mt.set(
         "__concat",
@@ -3855,109 +3858,6 @@ pub fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     )?;
     let _ = actor.set_metatable(Some(mt));
     Ok(())
-}
-
-pub fn create_sprite_class_table(lua: &Lua) -> mlua::Result<Table> {
-    let class = lua.create_table()?;
-    for method_name in [
-        "Load",
-        "LoadBanner",
-        "LoadBackground",
-        "LoadFromCached",
-        "LoadFromCachedBanner",
-        "LoadFromCachedBackground",
-        "LoadFromCachedJacket",
-        "LoadFromSong",
-        "LoadFromCourse",
-        "LoadFromSongBackground",
-        "LoadFromSongGroup",
-        "LoadFromSortOrder",
-        "LoadIconFromCharacter",
-        "LoadCardFromCharacter",
-        "LoadBannerFromUnlockEntry",
-        "LoadBackgroundFromUnlockEntry",
-        "SetScrolling",
-        "GetScrolling",
-        "GetPercentScrolling",
-        "GetState",
-        "SetStateProperties",
-        "GetAnimationLengthSeconds",
-        "SetSecondsIntoAnimation",
-        "SetEffectMode",
-        "position",
-    ] {
-        set_actor_class_forwarder(lua, &class, method_name)?;
-    }
-    Ok(class)
-}
-
-fn set_actor_class_forwarder(
-    lua: &Lua,
-    class: &Table,
-    method_name: &'static str,
-) -> mlua::Result<()> {
-    class.set(
-        method_name,
-        lua.create_function(move |_, args: MultiValue| {
-            let Some(Value::Table(actor)) = args.front() else {
-                return Ok(Value::Nil);
-            };
-            match actor.get::<Value>(method_name)? {
-                Value::Function(method) => method.call::<Value>(args),
-                _ => Ok(Value::Nil),
-            }
-        })?,
-    )
-}
-
-pub fn create_actorframe_class_table(lua: &Lua) -> mlua::Result<Table> {
-    let class = lua.create_table()?;
-    for method_name in [
-        "playcommandonchildren",
-        "playcommandonleaves",
-        "runcommandsonleaves",
-        "RunCommandsOnChildren",
-        "propagate",
-        "fov",
-        "SetUpdateRate",
-        "GetUpdateRate",
-        "SetFOV",
-        "vanishpoint",
-        "GetChild",
-        "GetChildren",
-        "GetNumChildren",
-        "SetDrawByZPosition",
-        "SetDrawFunction",
-        "GetDrawFunction",
-        "SetUpdateFunction",
-        "SortByDrawOrder",
-        "SetAmbientLightColor",
-        "SetDiffuseLightColor",
-        "SetSpecularLightColor",
-        "SetLightDirection",
-        "AddChildFromPath",
-        "RemoveChild",
-        "RemoveAllChildren",
-    ] {
-        set_actor_class_forwarder(lua, &class, method_name)?;
-    }
-    class.set(
-        "fardistz",
-        lua.create_function(|_, args: MultiValue| {
-            let Some(actor) = args.front().and_then(|value| match value {
-                Value::Table(table) => Some(table.clone()),
-                _ => None,
-            }) else {
-                return Ok(Value::Nil);
-            };
-            let Value::Function(method) = actor.get::<Value>("fardistz")? else {
-                return Ok(Value::Nil);
-            };
-            let _ = method.call::<Value>(args)?;
-            Ok(Value::Table(actor))
-        })?,
-    )?;
-    Ok(class)
 }
 
 fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
@@ -3983,7 +3883,8 @@ fn merge_actor_concat(_lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()
                 if text.to_str().ok().is_some_and(|name|
                     name == "__songlua_actor_type"
                         || name == "__songlua_script_dir"
-                        || name == "__songlua_song_dir")
+                        || name == "__songlua_song_dir"
+                        || name == crate::actor_classes::METHODS_KEY)
         ) {
             continue;
         }
@@ -7261,6 +7162,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                if !matches!(args.get(1), None | Some(Value::Nil | Value::Function(_))) {
+                    return Err(mlua::Error::RuntimeError("SetUpdateFunction requires a function or nil".into()));
+                }
                 // Discovery visits queued commands before their native update.
                 // Keep the currently installed callback active until the real
                 // queue dispatch installs its replacement.
@@ -7330,6 +7234,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
+                if !matches!(args.get(1), None | Some(Value::Nil | Value::Function(_))) {
+                    return Err(mlua::Error::RuntimeError("SetDrawFunction requires a function or nil".into()));
+                }
                 if let Some(Value::Function(function)) = args.get(1).cloned() {
                     lua.globals()
                         .raw_set(crate::draw_capture::DRAW_INSTALLED_KEY, true)?;
@@ -7730,10 +7637,17 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(Value::Table(state)) = method_arg(&args, 0).cloned() {
-                    actor.set(
-                        "__songlua_draw_state",
-                        clone_lua_value(lua, Value::Table(state.clone()))?,
-                    )?;
+                    let destination = match actor.get::<Option<Table>>("__songlua_draw_state")? {
+                        Some(destination) => destination,
+                        None => lua.create_table()?,
+                    };
+                    for key in ["Mode", "First", "Num"] {
+                        let value = state.get::<Value>(key)?;
+                        if !value.is_nil() {
+                            destination.set(key, value)?;
+                        }
+                    }
+                    actor.set("__songlua_draw_state", destination)?;
                     if let Some(mode) = state.get::<Option<String>>("Mode")? {
                         actor.set("__songlua_draw_state_mode", mode)?;
                     }
@@ -7743,18 +7657,11 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         })?,
     )?;
     actor.set(
-        "GetDrawState",
+        "GetDestDrawMode",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
-                if let Some(state) = actor.get::<Option<Table>>("__songlua_draw_state")? {
-                    return Ok(state);
-                }
-                let state = lua.create_table()?;
-                if let Some(mode) = actor.get::<Option<String>>("__songlua_draw_state_mode")? {
-                    state.set("Mode", mode)?;
-                }
-                Ok(state)
+            move |_, _args: MultiValue| {
+                Ok(actor.get::<Option<String>>("__songlua_draw_state_mode")?)
             }
         })?,
     )?;
@@ -7764,20 +7671,11 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
             let actor = actor.clone();
             move |_, args: MultiValue| {
                 if let Some(width) = method_arg(&args, 0).cloned().and_then(read_f32) {
-                    actor.set("__songlua_line_width", width.max(0.0))?;
+                    if width >= 0.0 {
+                        actor.set("__songlua_line_width", width)?;
+                    }
                 }
                 Ok(actor.clone())
-            }
-        })?,
-    )?;
-    actor.set(
-        "GetLineWidth",
-        lua.create_function({
-            let actor = actor.clone();
-            move |_, _args: MultiValue| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_line_width")?
-                    .unwrap_or(1.0))
             }
         })?,
     )?;
@@ -12634,7 +12532,8 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
 pub fn actor_type_is(actor: &Table, expected: &str) -> mlua::Result<bool> {
     Ok(actor
         .get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
-        .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case(expected)))
+        .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case(expected)
+            || (expected.eq_ignore_ascii_case("Sprite") && kind.as_str().eq_ignore_ascii_case("Banner"))))
 }
 
 pub fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
@@ -18104,7 +18003,7 @@ where
             overlay_index: usize::MAX,
         });
         SongLuaOverlayKind::ActorProxy { target }
-    } else if actor_type.eq_ignore_ascii_case("Sprite") {
+    } else if actor_type.eq_ignore_ascii_case("Sprite") || actor_type.eq_ignore_ascii_case("Banner") {
         if let Some(capture_name) = actor
             .get::<Option<String>>("__songlua_aft_capture_name")
             .map_err(|err| err.to_string())?

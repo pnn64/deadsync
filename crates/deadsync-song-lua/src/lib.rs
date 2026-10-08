@@ -10,6 +10,7 @@ use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::{EffectClock, EffectMode};
 
 mod actions;
+mod actor_classes;
 mod cmd;
 mod compat;
 mod compile;
@@ -111,13 +112,13 @@ pub use lua_util::{
     classify_function_ease_probe, collect_aft_capture_names, collect_indexed_actor_capture_blocks,
     collect_tracked_capture_blocks_for_indices, compile_note_column_pos_function_ease,
     compile_overlay_compile_actor_function_action, copy_dummy_actor_tags, create_actor_child_group,
-    create_actorframe_class_table, create_bool_array, create_color_constants_table,
+    create_bool_array, create_color_constants_table,
     create_debug_table, create_dummy_actor, create_life_meter_table, create_loader_function,
     create_media_actor, create_music_wheel_table, create_named_actor, create_named_child_actor,
     create_named_text_actor, create_note_column_actor, create_note_column_spline_handler,
     create_note_field_actor, create_option_row_table, create_owned_string_array,
     create_score_display_percent_actor, create_score_percent_text_actor, create_screen_timer_actor,
-    create_sprite_class_table, create_string_array, create_texture_proxy, create_theme_path_actor,
+    create_string_array, create_texture_proxy, create_theme_path_actor,
     create_top_screen_player_actor, create_top_screen_score_actor,
     create_top_screen_song_meter_display_actor, create_top_screen_table,
     create_top_screen_theme_actor, create_underlay_theme_actor, crop_actor_to,
@@ -6085,7 +6086,7 @@ mod_actions = {
 }
 
 return Def.ActorFrame{
-    Def.Actor{
+    Def.ActorFrame{
         Name="Worker",
         InitCommand=function(self)
             self:aux(2)
@@ -6114,7 +6115,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 1);
         assert!(matches!(
             compiled.overlays[0].kind,
-            SongLuaOverlayKind::Actor
+            SongLuaOverlayKind::ActorFrame
         ));
         assert_eq!(compiled.overlays[0].name.as_deref(), Some("Worker"));
         assert_eq!(compiled.overlays[0].message_commands.len(), 1);
@@ -6447,6 +6448,33 @@ return Def.ActorFrame{
             .unwrap();
         assert!(!hidden.initial_state.visible);
         assert!(shown.initial_state.visible);
+    }
+
+    #[test]
+    fn actor_classes_match_native() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let body = |name: &str| {
+            let value: serde_json::Value = serde_json::from_slice(
+                &fs::read(fixtures.join(name)).expect("native actor control input"),
+            ).expect("native actor control JSON");
+            value["aft_creation"].as_str().expect("native assertion body").to_owned()
+        };
+        // The exact raw native inventory is checked before fallback Lua helpers.
+        let lua = Lua::new();
+        crate::actor_classes::install_native(&lua).expect("native class tables");
+        lua.load(body("actor-class-inventory-input.json")).exec()
+            .expect("unchanged bidirectional native C method inventory");
+
+        let song_dir = test_dir("native-actor-classes");
+        let entry = song_dir.join("default.lua");
+        let script = format!("frozen=Def.ActorFrameTexture{{}}\n{}\n{}\n{}\n{}\n{}\nreturn Def.ActorFrame{{frozen}}\n",
+            body("actor-class-inheritance-input.json"), body("actor-class-override-input.json"),
+            body("actor-class-callback-input.json"), body("actor-class-multi-return-input.json"),
+            body("actor-class-wrapper-input.json"));
+        fs::write(&entry, script).expect("unchanged native class controls");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native actor classes"))
+            .expect("native inheritance and live method replacement");
     }
 
     #[test]
@@ -7828,10 +7856,12 @@ return Def.ActorFrame{
     InitCommand=function(self)
         self:playcommand("SetUpdateRate")
     end,
-    Def.Quad{
+    Def.Quad{Name="Panel"},
+    Def.ActorFrame{
         OnCommand=function(self)
-            self:SetUpdateFunction(function(actor, dt)
-                actor:x(dt * 60):y(actor:GetParent():GetUpdateRate())
+            local actor = self:GetParent():GetChild("Panel")
+            self:SetUpdateFunction(function(frame, dt)
+                actor:x(dt * 60):y(frame:GetParent():GetUpdateRate())
                 mod_actions = {{
                     1,
                     string.format("%.0f:%.0f", actor:GetX(), actor:GetY()),
@@ -7919,16 +7949,17 @@ return Def.ActorFrame{
 return Def.ActorFrame{
     Def.Quad{
         Name="Panel",
-        OnCommand=function(self)
-            self:SetUpdateFunction(function(actor)
-                actor:queuecommand("Pulse")
-            end)
-        end,
         PulseCommand=function(self)
             self:x(12)
             mod_actions = {
                 {1, "update-queued", true},
             }
+        end,
+    },
+    Def.ActorFrame{
+        OnCommand=function(self)
+            local panel = self:GetParent():GetChild("Panel")
+            self:SetUpdateFunction(function() panel:queuecommand("Pulse") end)
         end,
     },
 }
@@ -9788,10 +9819,11 @@ return Def.ActorFrame{
             &entry,
             r#"
 return Def.ActorFrame{
-    Def.Quad{
-        Name="Panel",
+    Def.Quad{Name="Panel"},
+    Def.ActorFrame{
         OnCommand=function(self)
-            self:SetUpdateFunction(function(actor)
+            local actor = self:GetParent():GetChild("Panel")
+            self:SetUpdateFunction(function()
                 actor:x(99)
                 mod_actions = {
                     {1, "should-not-run", true},
@@ -12140,7 +12172,7 @@ mod_actions = {
     end, true},
 }
 
-return Def.ActorFrame{
+return Def.Banner{
     OnCommand=function(self)
         self:LoadFromSong(GAMESTATE:GetCurrentSong())
         self:LoadFromCourse(course)
@@ -14519,7 +14551,7 @@ return Def.ActorFrame{
                 1,
                 string.format(
                     "%s:%s:%.0f:%.0f",
-                    tostring(Sprite.LoadFromCachedBanner ~= nil),
+                    tostring(Banner.LoadFromCachedBanner ~= nil and Sprite.LoadFromCachedBanner == nil),
                     tostring(texture:GetPath():match("cached%-banner%.png$") ~= nil),
                     self:GetWidth(),
                     self:GetHeight()
@@ -14615,17 +14647,17 @@ return Def.ActorFrame{
             self:LoadFromCachedBanner("rank-banner.png")
             mod_actions[#mod_actions + 1] = {
                 1,
-                string.format("%s:%s:%d:%d", self:GetName(), tostring(Sprite.LoadFromCachedBanner ~= nil), self:GetWidth(), self:GetHeight()),
+                string.format("%s:%s:%d:%d", self:GetName(), tostring(Banner.LoadFromCachedBanner ~= nil and Sprite.LoadFromCachedBanner == nil), self:GetWidth(), self:GetHeight()),
                 true,
             }
         end,
     },
     Def.Sprite{
         InitCommand=function(self)
-            Sprite.LoadFromCachedBackground(self, "background.png")
+            Sprite.LoadFromCached(self, "Background", "background.png")
             mod_actions[#mod_actions + 1] = {
                 1,
-                string.format("%s:%d:%d", tostring(Sprite.LoadFromCachedBackground ~= nil), self:GetWidth(), self:GetHeight()),
+                string.format("%s:%d:%d", tostring(Sprite.LoadFromCached ~= nil and Sprite.LoadFromCachedBackground == nil), self:GetWidth(), self:GetHeight()),
                 true,
             }
         end,
@@ -14681,7 +14713,8 @@ local function note(name, sprite)
             texture:GetPath():match(name == "background" and "background%.png$" or "banner%.png$") ~= nil,
             sprite:GetWidth(),
             sprite:GetHeight(),
-            tostring(Sprite.LoadFromSong ~= nil and Sprite.LoadFromCourse ~= nil and Sprite.LoadFromSongGroup ~= nil)
+            tostring(Banner.LoadFromSong ~= nil and Banner.LoadFromCourse ~= nil and Banner.LoadFromSongGroup ~= nil
+                and Sprite.LoadFromSong == nil and Sprite.LoadFromCourse == nil and Sprite.LoadFromSongGroup == nil)
         ),
         true,
     }
@@ -14807,7 +14840,7 @@ return Def.ActorFrame{
                     tostring(self:GetScrolling()),
                     self:GetPercentScrolling(),
                     tostring(texture:GetPath():match("__songlua_theme_path/G/Banner/Recent$") ~= nil),
-                    tostring(Sprite.LoadFromSortOrder ~= nil and Sprite.SetScrolling ~= nil and Sprite.GetScrolling ~= nil and Sprite.GetPercentScrolling ~= nil)
+                    tostring(Banner.LoadFromSortOrder ~= nil and Sprite.LoadFromSortOrder == nil and Banner.SetScrolling ~= nil and Sprite.SetScrolling == nil and Banner.GetScrolling ~= nil and Banner.GetPercentScrolling ~= nil and Sprite.GetScrolling == nil and Sprite.GetPercentScrolling == nil)
                 ),
                 true,
             }
@@ -15333,11 +15366,18 @@ return Def.ActorFrame{
                 :SetNumVertices(#verts)
                 :SetVertices(verts)
                 :SetLineWidth(3)
+            assert(self.GetDrawState == nil and self.GetLineWidth == nil)
             mod_actions = {{
                 1,
-                string.format("%s:%d:%d", self:GetDrawState().Mode, self:GetNumVertices(), self:GetLineWidth()),
+                string.format("%s:%d", self:GetDestDrawMode(), self:GetNumVertices()),
                 true,
             }}
+        end,
+    },
+    Def.ActorMultiVertex{
+        InitCommand=function(self)
+            self:SetVertices{{{0, 0, 0}}, {{0, 10, 0}}}
+                :SetDrawState{Mode="DrawMode_LineStrip"}:SetLineWidth(3)
         end,
     },
 }
@@ -15351,8 +15391,8 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "DrawMode_Quads:4:3");
-        assert_eq!(compiled.overlays.len(), 1);
+        assert_eq!(compiled.messages[0].message, "DrawMode_Quads:4");
+        assert_eq!(compiled.overlays.len(), 2);
         let SongLuaOverlayKind::ActorMultiVertex {
             vertices,
             texture_path,
@@ -15366,6 +15406,13 @@ return Def.ActorFrame{
         assert_eq!(vertices[0].pos, [0.0, 0.0]);
         assert_eq!(vertices[0].color, [1.0, 0.0, 0.0, 1.0]);
         assert_eq!(vertices[5].pos, [0.0, 0.0]);
+        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &compiled.overlays[1].kind else {
+            panic!("expected line strip overlay");
+        };
+        assert_eq!(vertices.len(), 6);
+        let left = vertices.iter().map(|vertex| vertex.pos[0]).fold(f32::INFINITY, f32::min);
+        let right = vertices.iter().map(|vertex| vertex.pos[0]).fold(f32::NEG_INFINITY, f32::max);
+        assert_eq!(right - left, 3.0, "native SetLineWidth controls drawn geometry");
     }
 
     #[test]
@@ -15837,7 +15884,8 @@ return Def.ActorFrame{
     },
     Def.Quad{
         OnCommand=function(self)
-            self:ScaleToClipped(10, 20)
+            assert(self.ScaleToClipped == nil)
+            self:scaletoclipped(10, 20)
         end,
     },
 }
@@ -16120,6 +16168,7 @@ return Def.ActorFrame{
             self:xy(10, 20):z(3):basezoom(2):basezoomx(3):basezoomy(4):basezoomz(5)
             self:diffuse(0.2, 0.4, 0.6, 0.8):glow(0.1, 0.2, 0.3, 0.4)
             self:halign(0):valign(1):effectmagnitude(8, 4, 2):effectclock("beat"):visible(false)
+            assert(self.GetAlpha == nil)
             local d = self:GetDiffuse()
             local g = self:GetGlow()
             local mx, my, mz = self:geteffectmagnitude()
@@ -16135,7 +16184,7 @@ return Def.ActorFrame{
                     self:GetBaseZoomZ(),
                     self:GetHAlign(),
                     self:GetVAlign(),
-                    self:GetAlpha() * 10,
+                    self:GetDiffuseAlpha() * 10,
                     d[1],
                     d[3],
                     g[1],
@@ -16604,7 +16653,7 @@ local root = Def.ActorFrame{
         mod_actions = {
             {1, string.format(
                 "%s:%s:%s:%s:%d:%d:%.0f:%.0f:%.0f:%.0f:%s:%s:%s",
-                tostring(ActorFrame.fardistz(self, 500) == self),
+                tostring(ActorFrame.fardistz == nil and self.fardistz == nil),
                 picked and picked:GetName() or "nil",
                 second and second:GetName() or "nil",
                 tostring(picked_method == child and named == child and children["child"] == child),
@@ -17424,7 +17473,8 @@ return Def.ActorFrame{
             local command = self:GetCommand("ExpandForDouble")
             local missing = self:GetCommand("MissingCommand")
             if command then command(self) end
-            self:rainbow():jitter(true):distort(0.5):undistort():hurrytweening(2)
+            assert(self.jitter == nil and self.distort == nil and self.undistort == nil)
+            self:rainbow():hurrytweening(2)
             mod_actions = {
                 {1, string.format("%s:%s:%.0f:%.0f", tostring(command ~= nil), tostring(missing == nil), self:getaux(), self:GetTweenTimeLeft()), true},
             }
@@ -21340,7 +21390,7 @@ return Def.ActorFrame{
             xero.ease {8, 1, ease.linear, 20, 'wagy'}
         end,
     },
-    Def.Quad{
+    Def.ActorFrame{
         InitCommand=function(self)
             self:SetUpdateFunction(update)
         end,
@@ -23373,7 +23423,7 @@ return Def.ActorFrame{
         Name="Target",
         InitCommand=function(self) target = self end,
     },
-    Def.Actor{
+    Def.ActorFrame{
         OnCommand=function(self)
             self:SetUpdateFunction(function()
                 local beat = GAMESTATE:GetSongBeat()
