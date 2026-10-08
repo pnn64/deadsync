@@ -1679,6 +1679,14 @@
       "archive": "3dc58d5f8c65f0e55d8c4c83e65d0786cd42ea2c6f31337da4aa57aa78d703cc.tar.zst",
       "harness_version": "0.1.24",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 63,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "29d2edbcecd4fffb563b341fd5257a127256df5e6246502a27c1798c6303a7b2.tar.zst",
+      "archive": "4b5cd2ee24f5f4d0fadabc7f64865e1097231ae1ce27366b5197eb61e3b76b26.tar.zst",
+      "harness_version": "0.1.24",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3172,6 +3180,31 @@
       "capture_endpoint": {
         "beat": 275.3541564941406,
         "seconds": 118.00892639160156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 63,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "4b5cd2ee24f5f4d0fadabc7f64865e1097231ae1ce27366b5197eb61e3b76b26.tar.zst",
+      "harness_version": "0.1.24",
+      "harness_commit": "6a127f4349612da54f32eb8db0d49b4bb64f330a",
+      "native_executable_sha256": "6f0e8ff5fd6e04085e9ed3054ef744f932989c2d4a46c191be85b92eb94ef935",
+      "verification": {
+        "archive": "4b5cd2ee24f5f4d0fadabc7f64865e1097231ae1ce27366b5197eb61e3b76b26.tar.zst",
+        "version": "0.5.1863",
+        "exit_code": 0,
+        "seconds": 21.710764169692993,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 21.58s",
+        "log_sha256": "75398368d9f9d3a6c6bda4d1641d975ec1febfafd28afdb443be396107066fa3",
+        "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+      },
+      "capture_log_sha256": "43573b2816d2bdaaca841d65aa0edd37e1e15171d521e7196936264598f237d5",
+      "capture_endpoint": {
+        "beat": 300.0000305175781,
+        "seconds": 140.625
       },
       "runtime_errors": 0,
       "dropped_events": 0
