@@ -1999,6 +1999,14 @@
       "archive": "1f117cff001e8fd6014deec3ef1ddd960b258b600fc323d36d6a7d9f1153be5d.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "superseded_archive": "8212e118c8866bc755091fd249497fdb853c6c2cdb99219a6776ad70563d3984.tar.zst",
+      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4501,6 +4509,27 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 69,
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 182.3934621810913,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 180.88s",
+        "log_sha256": "2eab5af8dc57cb5790dba5b3c0f2fd06fd2068249d89f9e5a0306854939acdd7",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reason": "Restore native music time in spline comparisons; every observation and tolerance is retained."
     }
   ]
 }

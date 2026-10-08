@@ -3599,6 +3599,37 @@ fn compiled_message_state_at(
     current
 }
 
+#[test]
+fn column_splines_match_native_clock_offsets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/spline-clock");
+    for (name, origin) in [("positive", -0.125), ("negative", 0.125)] {
+        let trace = read_trace_file(&root.join(format!("{name}-native.json.zst")));
+        let (compiled, _, context) =
+            compile_trace_song_at(&trace, &root.join(format!("{name}.sm")));
+        assert_eq!(trace.update_frames[0], (0.0, 0.0));
+        let clock = trace
+            .operation_tracks
+            .iter()
+            .find(|track| track.operation == "ActorFrame.x")
+            .expect("native music clock samples");
+        assert_eq!(value_f32(clock.samples[0].3.first()), Some(origin));
+        assert_eq!(
+            context
+                .song_timing
+                .as_ref()
+                .expect("song timing")
+                .get_time_for_beat_exact(0.0),
+            origin
+        );
+        let mut parity = Parity::default();
+        compare_column_splines(&trace, &compiled, &context, &mut parity);
+        assert!(parity.checks() >= 20, "native writes must be compared");
+        assert!(parity.is_complete(), "{name}: {}", parity.gaps.join("\n"));
+    }
+}
+
 fn compare_column_splines(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -3606,6 +3637,10 @@ fn compare_column_splines(
     parity: &mut Parity,
 ) {
     parity.section("column splines");
+    let origin = context
+        .song_timing
+        .as_ref()
+        .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
     let timing = deadsync_rules::timing::TimingData::from_segments(
         0.0,
         0.0,
@@ -3704,8 +3739,11 @@ fn compare_column_splines(
             {
                 continue;
             }
+            // Native trace time is relative to beat zero. Gameplay windows and
+            // spline tracks use raw music time, as native SongPosition does.
+            let music_seconds = seconds + origin;
             let (transforms, splines) =
-                deadsync_gameplay::song_lua_column_transforms(&windows, column + 1, seconds);
+                deadsync_gameplay::song_lua_column_transforms(&windows, column + 1, music_seconds);
             let mut actual = if rotation {
                 transforms[3]
                     .get(column)
@@ -3722,7 +3760,7 @@ fn compare_column_splines(
                 .iter()
                 .filter(|track| !rotation && track.column == column)
             {
-                if let Some(frame) = track.at_second(seconds) {
+                if let Some(frame) = track.at_second(music_seconds) {
                     if let Some(position) = &frame.position {
                         actual = position.coefficients[0][1][0];
                     }

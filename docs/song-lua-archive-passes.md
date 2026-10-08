@@ -2374,3 +2374,35 @@ Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - E
 Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
 
 Archive 26: 666/666.ssc passes all 552285 comparisons. The verified prefix is now 26/492 archives; full-corpus parity remains unfinished.
+
+## Pass 69: compare column splines on the native music clock
+
+The complete `7th Gear/7th Gear.ssc` capture failed 300 of 881665 checks.
+Its native trace timestamps are relative to beat zero, while the compiled
+column windows and spline tracks use raw music time. Native `TimingData` and
+`SongPosition` restore the simfile offset before timing lookup; the column
+comparison omitted that conversion. Restore the same origin before querying
+both types of track. Comparison counts and tolerances remain unchanged.
+
+Compiled ITGmania controls with offsets +0.125 and -0.125 seconds, and a BPM
+change from 120 to 150, verify the native music timestamp and spline writes.
+The positive control fails before the fix; both controls and the existing
+native spline curve and track tests pass afterwards. The unchanged complete
+7th Gear capture now passes all 881665 checks, including all 2304 spline
+checks, with no runtime errors or dropped events. Its obsolete archive is
+replaced; aliases and superseded bytes are retained. Production code, version
+0.5.1866, and song cache version 57 are unchanged in this pass.
+
+An optimized build of the unchanged harness 0.1.28 passes 146 tests, with two
+existing ignored tests. All 63 native actor controls match the debug build
+byte for byte. This build is being used to retry the six historical timeouts.
+The first ArrowQuest retry reached the original 2013-second endpoint with no
+dropped events, but reported Lua runtime errors and remains pending. No
+diagnostic archive is published as a complete fixture.
+
+The older Igaku whole-song audit retains all 331752 observations: all 680
+spline checks pass, while 16 confusion-offset modifier values still differ.
+Its reference must be checked against a fresh capture with current native
+song timing before changing the implementation. The full scope remains 501
+simfiles, including 18 unindexed sources, and 492 existing archive cases.
+Revalidation from the top with the corrected comparator remains unfinished.
