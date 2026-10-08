@@ -1775,6 +1775,14 @@
       "archive": "8a2f1ad1d7f6128fa92bce79eee0c3112aa65e9e54ab0db6ebb4c27f299f1534.tar.zst",
       "harness_version": "0.1.26",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 66,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "4abe9618f51450358243b936e11a1002961df7a43e9de511dd3878508d1d3827.tar.zst",
+      "archive": "7e1c4500eaed0697d5aef2626e901b7070d35398181433ea949cd365b0697dc3.tar.zst",
+      "harness_version": "0.1.26",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3574,6 +3582,31 @@
       "capture_endpoint": {
         "beat": 230,
         "seconds": 141.01080322265625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 66,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "7e1c4500eaed0697d5aef2626e901b7070d35398181433ea949cd365b0697dc3.tar.zst",
+      "harness_version": "0.1.26",
+      "harness_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e",
+      "native_executable_sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+      "verification": {
+        "archive": "7e1c4500eaed0697d5aef2626e901b7070d35398181433ea949cd365b0697dc3.tar.zst",
+        "version": "0.5.1865",
+        "exit_code": 0,
+        "seconds": 10.060257196426392,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.93s",
+        "log_sha256": "ac411495b875237edd5f341acd23a89bdfe42efee4bf7ff18bff4b8985e02852",
+        "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519"
+      },
+      "capture_log_sha256": "d344863c9cd72e91e33becf762fafd58ea13d069afaabc5e7cb24e6c451ebf0e",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
       },
       "runtime_errors": 0,
       "dropped_events": 0
