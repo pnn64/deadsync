@@ -2223,6 +2223,14 @@
       "archive": "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
       "harness_version": "0.1.30",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "44affd1ba537543f404ed4d136f687b050dff6a45dd5de6d643d7b87926c3ab2.tar.zst",
+      "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5692,6 +5700,32 @@
       "capture_endpoint": {
         "beat": 300.0000305175781,
         "seconds": 140.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 13.696532249450684,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 13.56s",
+        "log_sha256": "0cac5f282454617ed208d7a44a8a47ff63a2fa9003b789938f3512c9645bbe77",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "577fcdf1224a2688ec2365252392074f1776a0b2261179e19e35153777b3d3e4",
+      "capture_endpoint": {
+        "beat": 384,
+        "seconds": 144
       },
       "runtime_errors": 0,
       "dropped_events": 0
