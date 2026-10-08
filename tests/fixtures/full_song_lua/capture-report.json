@@ -2279,6 +2279,14 @@
       "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5953,6 +5961,33 @@
       },
       "native_capture_reused": false,
       "capture_log_sha256": "ba2e3f08ac0b5e3935c10a95e7c8cd0f86cec67cfe6a55e0135610bfa573568f",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "music_seconds": 131.9134063720703,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 9.11656403541565,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.98s",
+        "log_sha256": "3f781ecc18e96e51bc5c20be1519a8e0327b93bc55c88f523688c8749cb6f1a0",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "3300956acd4d7d503282bd5e2aa446e04bec5d3d3fd79a7af6c502688a292043",
       "capture_endpoint": {
         "beat": 360.75,
         "music_seconds": 131.9134063720703,
