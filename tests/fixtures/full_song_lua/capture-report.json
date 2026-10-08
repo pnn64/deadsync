@@ -2344,6 +2344,24 @@
         "log_sha256": "2237986a6956ecd46cf3d4f3e4332e40b9c37e68f464049b66c81512ca152fab",
         "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
       }
+    },
+    {
+      "pass_number": 57,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "92adf6c921c74e181873d41094f1a86df6f4dbb813369488fc59da15d6cd6e81.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "92adf6c921c74e181873d41094f1a86df6f4dbb813369488fc59da15d6cd6e81.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 50.395994901657104,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 50.30s",
+        "log_sha256": "b929209781b8720b3f8bccdc3eedc1e426fbd0798666ef557d5d6937721c7145",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      }
     }
   ]
 }
