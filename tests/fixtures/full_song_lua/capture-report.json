@@ -2167,6 +2167,14 @@
       "archive": "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
       "harness_version": "0.1.30",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "900f27995dc3d53a245db17c943f22efda0b8ab220cf54434638463678ac06bf.tar.zst",
+      "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5454,6 +5462,32 @@
       "capture_endpoint": {
         "beat": 230,
         "seconds": 141.01080322265625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 9.218748569488525,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.08s",
+        "log_sha256": "0bce836d9075c2c5a7a4e1fcf025440903cc68b1d583e18f17c4cee11d2665e8",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d61e1f2cfa42c64bff9a9e0ac275925d83d0726d36d8d47a86ffa7aeaaf9a4dc",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
       },
       "runtime_errors": 0,
       "dropped_events": 0
