@@ -1921,3 +1921,5 @@ The current-version verified prefix is one archive. The old 25-archive
 prefix remains historical. Full parity remains unfinished across 501
 simfiles, including 18 unindexed sources and nine historical duplicate
 captures. The next ordered source is Let Me Hear That.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
