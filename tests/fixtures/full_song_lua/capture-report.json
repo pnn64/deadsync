@@ -1319,6 +1319,14 @@
       "archive": "b74f7209ed7fe51e4c5fc9b63fdc0ac6e608f1e6d981c06da775559b4c47daf5.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "7014cbf42845f417b626f9a1507dba786e059658df8d5ea7c1d42a87f9e43d0a.tar.zst",
+      "archive": "5172d950802eb6a4aeebf8046a54794e4b4d068a27f08a4b3925aac40ac9732e.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1531,6 +1539,24 @@
         "seconds": 60.02280569076538,
         "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 59.82s",
         "log_sha256": "7c47df820f01e9b39f7670c5917208d41eaf9ef399ede28bf7307c98b39c2cdb",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "5172d950802eb6a4aeebf8046a54794e4b4d068a27f08a4b3925aac40ac9732e.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "5172d950802eb6a4aeebf8046a54794e4b4d068a27f08a4b3925aac40ac9732e.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 71.04042339324951,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 70.90s",
+        "log_sha256": "bd0f602853af89ca92604c827e827b9f1525504fb394e1ba0233bd40a041e6ef",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }

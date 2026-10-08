@@ -1813,3 +1813,5 @@ Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. Th
 Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
 
 Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
