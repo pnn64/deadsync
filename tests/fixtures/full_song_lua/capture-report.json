@@ -2295,6 +2295,14 @@
       "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "233a9dcd0700794704bf31555a460bbddd130caa12893307534224b14b0cee68.tar.zst",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6027,6 +6035,33 @@
         "beat": 333.25,
         "music_seconds": 166.88800048828125,
         "seconds": 166.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 11.965657711029053,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.66s",
+        "log_sha256": "f5477d2a3eaab0e8c4529a6f2c8e18eb32ddc0e0b91f4b549d42353f2a2a41b8",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "bb64d4e031a71b9e87b1c221c31b3b854a2ec9edf7f5b0427017e9312157fce8",
+      "capture_endpoint": {
+        "beat": 338,
+        "music_seconds": 128.86599731445312,
+        "seconds": 130
       },
       "runtime_errors": 0,
       "dropped_events": 0
