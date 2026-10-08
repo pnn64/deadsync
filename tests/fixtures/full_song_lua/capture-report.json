@@ -2079,6 +2079,14 @@
       "archive": "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+      "archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5080,6 +5088,32 @@
       "capture_endpoint": {
         "beat": 275.3541564941406,
         "seconds": 118.00892639160156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 20.82857871055603,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 20.69s",
+        "log_sha256": "2490681abced905316524faf7b8a58d35e7e46806bcf8c551c0a2fc210c7a5fe",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "28418ca3f032c66208ad74670acdfcc3c1db0dd9808ee6965defec65e21b2748",
+      "capture_endpoint": {
+        "beat": 300.0000305175781,
+        "seconds": 140.625
       },
       "runtime_errors": 0,
       "dropped_events": 0
