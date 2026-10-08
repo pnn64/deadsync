@@ -154,14 +154,25 @@ pub fn write_replaygain_cache_file(
 }
 
 pub fn encode_replaygain_cache(payload: &ReplayGainCacheFile) -> Result<Vec<u8>, String> {
-    let config = bincode::config::standard();
-    let body_len = bincode::encoded_size(payload, config).map_err(|e| format!("{e}"))?;
-    let mut out = vec![0; 12 + body_len];
-    out[..8].copy_from_slice(&CACHE_MAGIC.to_le_bytes());
-    out[8..12].copy_from_slice(&CACHE_VERSION.to_le_bytes());
-    let written =
-        bincode::encode_into_slice(payload, &mut out[12..], config).map_err(|e| format!("{e}"))?;
-    out.truncate(12 + written);
+    // Standard bincode uses at most nine bytes per u64. Each entry has three
+    // u64s and two f32s; reserve the maximum wire size without encoding twice.
+    let capacity = payload
+        .entries
+        .len()
+        .checked_mul(35)
+        .and_then(|bytes| bytes.checked_add(12 + 9))
+        .ok_or_else(|| "ReplayGain cache size overflow".to_string())?;
+    let mut out = Vec::with_capacity(capacity);
+    bincode::encode_into_vec(
+        (
+            CACHE_MAGIC.to_le_bytes(),
+            CACHE_VERSION.to_le_bytes(),
+            payload,
+        ),
+        &mut out,
+        bincode::config::standard(),
+    )
+    .map_err(|e| format!("{e}"))?;
     Ok(out)
 }
 
@@ -552,3 +563,7 @@ mod tests {
         assert_eq!(entry.true_peak_linear, 0.5);
     }
 }
+
+#[cfg(test)]
+#[path = "perf_cache_tests.rs"]
+mod perf_tests;

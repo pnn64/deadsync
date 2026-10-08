@@ -282,7 +282,7 @@ pub fn build_density_histogram_cache(
         return None;
     }
     Some(DensityHistCache {
-        cols: Arc::from(cols.into_boxed_slice()),
+        cols: Arc::from(cols),
         bottom_color,
         height,
         scaled_width,
@@ -536,7 +536,7 @@ pub fn update_density_hist_mesh(
     let mut verts = vec![MeshVertex::default(); len];
     let written = cache.fill_mesh_vertices(&mut verts, window);
     debug_assert_eq!(written, len);
-    *mesh = Some(Arc::from(verts.into_boxed_slice()));
+    *mesh = Some(Arc::from(verts));
 }
 
 /// # Panics
