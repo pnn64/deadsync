@@ -2247,6 +2247,14 @@
       "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "0df7a206f0cce79521f3f74bcfa5580dc0005676674622b373173a8955aa52fc.tar.zst",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5820,6 +5828,33 @@
         "unindexed_simfiles": 18
       },
       "reason": "Validate the raw native Song::GetLastSecond endpoint and native final music timestamp, independent of the trace self-declared duration."
+    },
+    {
+      "pass_number": 72,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 14.99903392791748,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.87s",
+        "log_sha256": "7cc5634ab361f2af90cc03bb6fb2d9dad4cf7e083eb40a657b81c71eaf08ddf8",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "89683f2d4afabffd1b4656fa600ed07c4c10a499f17e5b85a11ce794410a2fbc",
+      "capture_endpoint": {
+        "beat": 334,
+        "music_seconds": 157.0234832763672,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     }
   ]
 }

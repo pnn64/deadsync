@@ -2508,3 +2508,5 @@ ITGmania retains the raw Song::GetLastSecond value for its end timing. The harne
 DeadSync .1869 requires native endpoint metadata, the final native music timestamp and the last update frame to cover that endpoint. A native positive control and six mutations verify rejection of missing, short or nonfinite endpoints. The old clean Igaku capture, which passed 514,954 comparisons, is now rejected because that agreement did not prove complete coverage. Its .31 recapture reaches the original raw hint with zero runtime errors and no dropped events; full parity verification remains pending.
 
 The corrected Bank Account archive passes all 116,603 comparisons. Its previous bytes and aliases are preserved. Scope remains 501 original simfiles, 483 canonical archives, nine historical variants and 18 unindexed sources. The old pass 71 stopped at 12 archives when the necessary harness source change activated its guard. The full corpus must still be revalidated under the corrected endpoint contract.
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
