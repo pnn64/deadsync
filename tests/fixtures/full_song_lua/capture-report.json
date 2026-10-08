@@ -1383,6 +1383,14 @@
       "archive": "fff20dd9abb30d919056f85583f7481f46d3cf3f99fd05d5bbfe0f71eaab6a5f.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "96deaee746e4c016085fe15706dd7c9f321d07d11247e9746ed9c5822898d101.tar.zst",
+      "archive": "371147a9a47d10b77499939e25f4bcea53a2a6ec1033da284f956693cbc0a04e.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1757,6 +1765,24 @@
         "seconds": 22.383455276489258,
         "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 22.25s",
         "log_sha256": "4fb5018bd60a324d58508857ce948175879d1be28af8ac89816ccd8a18fa208e",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "371147a9a47d10b77499939e25f4bcea53a2a6ec1033da284f956693cbc0a04e.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "371147a9a47d10b77499939e25f4bcea53a2a6ec1033da284f956693cbc0a04e.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 22.552592754364014,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 22.44s",
+        "log_sha256": "3410481176a46338969c09bdc441bf8d9923e508977c8aa94937d8b272a48208",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
