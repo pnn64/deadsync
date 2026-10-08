@@ -7617,6 +7617,21 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_keeps_native_value_iterator() {
+        let song_dir = test_dir("native-value-iterator");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, include_str!("../tests/fixtures/value-iterator.lua"))
+            .expect("write value iterator control");
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Native Value Iterator"),
+        )
+        .expect("compile native value iterator");
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "iterator native");
+    }
+
+    #[test]
     fn compile_song_lua_diffusecolor_preserves_alpha() {
         let song_dir = test_dir("diffusecolor-alias");
         let entry = song_dir.join("default.lua");

@@ -404,13 +404,12 @@ pub fn install_stdlib_compat(
     )?;
     globals.set(
         "ivalues",
-        lua.create_function(|lua, table: Table| {
-            let mut index = 0_i64;
-            lua.create_function_mut(move |_, ()| {
-                index += 1;
-                table.raw_get::<Value>(index)
-            })
-        })?,
+        // Native 01 base.lua uses normal indexing, accepts input before the
+        // first lookup, and observes changes through the captured table.
+        lua.load(
+            "return function(t) local n = 0; return function() n = n + 1; return t[n] end end",
+        )
+        .eval::<mlua::Function>()?,
     )?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     // _fallback/Scripts/02 Utilities.lua: preserve actor and shared-name walks.
