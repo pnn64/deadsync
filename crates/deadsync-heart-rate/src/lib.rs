@@ -24,39 +24,18 @@ pub struct DiscoverySnapshot {
     pub error: Option<String>,
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+// Keep the backend selection in sync with the target dependencies in Cargo.toml.
+#[cfg_attr(
+    not(any(
+        all(target_os = "windows", not(target_vendor = "win7")),
+        target_os = "linux",
+        target_os = "macos"
+    )),
+    path = "unsupported.rs"
+)]
 mod platform;
 
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub use platform::{
     configure, discovery_generation, discovery_snapshot, player_readings,
     player_readings_generation,
 };
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-pub fn configure(_enabled: bool, _discover: bool, _device_ids: [Option<&str>; 2]) {}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-pub fn player_readings() -> [PlayerReading; 2] {
-    [PlayerReading::default(); 2]
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-pub const fn player_readings_generation() -> u64 {
-    0
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-pub const fn discovery_generation() -> u64 {
-    0
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
-pub fn discovery_snapshot() -> DiscoverySnapshot {
-    DiscoverySnapshot {
-        supported: false,
-        scanning: false,
-        devices: Vec::new(),
-        error: Some("Bluetooth heart-rate monitors are unsupported on this platform".to_owned()),
-    }
-}
