@@ -4625,6 +4625,25 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "668060dc50356929fb72578e07cef10c1681a7fd65c75ebb4ea28e093a7b65c5.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "668060dc50356929fb72578e07cef10c1681a7fd65c75ebb4ea28e093a7b65c5.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 7.6106178760528564,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.50s",
+        "log_sha256": "55ae0a9efd06c2e45ee5facdbf14f2af81ab0ecc8b7f70dd35d749d05b789b9f",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
     }
   ]
 }
