@@ -2399,6 +2399,14 @@
       "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "superseded_archive": "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6497,6 +6505,33 @@
         "beat": 357,
         "music_seconds": 138.1935577392578,
         "seconds": 138.1935577392578
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 284.4731466770172,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 284.29s",
+        "log_sha256": "59299cede6f2523f58fac19f6da4a22efaf098c43c5c134aa1810f5390075398",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "db0f4361bbd932a0fbc380c75473892ffad932239b27aaf3710b6457bded3020",
+      "capture_endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
       },
       "runtime_errors": 0,
       "dropped_events": 0
