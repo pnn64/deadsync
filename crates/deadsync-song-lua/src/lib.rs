@@ -5877,7 +5877,7 @@ return Def.ActorFrame{}
         assert!(
             windows
                 .iter()
-                .all(|window| window.from == 10.0 && window.to == 10.0)
+                .all(|window| window.from == 11.0 && window.to == 11.0)
         );
     }
 
@@ -19965,7 +19965,8 @@ return Def.ActorFrame{}
         assert_eq!(compiled.player_actors[0].message_commands.len(), 1);
         let block = &compiled.player_actors[0].message_commands[0].blocks[0];
         assert_eq!(block.delta.x, Some(4.0));
-        assert_eq!(block.delta.y, Some(100.0));
+        // Music time is unscaled by rate: beat 4 at 120 BPM is two music seconds.
+        assert_eq!(block.delta.y, Some(200.0));
         assert_eq!(block.delta.rot_z_deg, Some(4.0));
     }
 

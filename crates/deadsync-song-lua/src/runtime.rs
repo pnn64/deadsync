@@ -42,6 +42,23 @@ pub fn create_song_runtime_table(
     Ok(table)
 }
 
+pub(crate) fn song_music_seconds(lua: &Lua, runtime: &Table) -> mlua::Result<Value> {
+    // Replay seconds are elapsed wall time. SongPosition exposes the native
+    // float music timestamp, which includes the song origin and music rate.
+    let seconds = runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
+    let rate = runtime.get::<f32>(SONG_LUA_RUNTIME_RATE_KEY)?;
+    let origin = lua.app_data_ref::<SongLuaClock>()
+        .map_or(0.0, |clock| clock.0.get_time_for_beat_exact(0.0));
+    let seconds = (seconds * f64::from(rate)) as f32 + origin;
+    // Lua 5.1 prints whole native floats without the Lua 5.4 ".0" suffix.
+    // Preserve fractional values exactly, including times smaller than EPSILON.
+    if seconds.fract() == 0.0 && seconds.abs() < 1e14 {
+        song_lua_runtime_number(seconds)
+    } else {
+        Ok(Value::Number(f64::from(seconds)))
+    }
+}
+
 pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     for method in ["GetSongBeat", "GetSongBeatVisible"] {
@@ -58,9 +75,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _self: Option<Value>| {
-                    song_runtime.get::<Value>(SONG_LUA_RUNTIME_SECONDS_KEY)
-                }
+                move |lua, _self: Option<Value>| song_music_seconds(lua, &song_runtime)
             })?,
         )?;
     }
@@ -213,4 +228,37 @@ pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
             / music_rate.max(f32::EPSILON),
     )?;
     runtime.set(SONG_LUA_RUNTIME_BPS_KEY, song_bps)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn music_seconds_preserves_offset_and_rate() {
+        for (origin, rate) in [(0.0, 1.0), (1.25, 1.0), (-0.5, 1.0), (1.25, 2.0), (-0.5, 0.5)] {
+            let lua = Lua::new();
+            let mut context = SongLuaCompileContext::new(std::path::Path::new("."), "music clock");
+            context.song_music_rate = rate;
+            context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+                origin, 0.0,
+                &deadsync_rules::timing::TimingSegments {
+                    bpms: vec![(0.0, 60.0)], ..Default::default()
+                }, &[],
+            ));
+            let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
+            let position = create_song_position_table(&lua, &runtime).expect("song position");
+            assert_eq!(context.song_timing.as_ref().expect("native song timing").get_time_for_beat_exact(0.0), origin);
+            for elapsed in [0.0, 1e-9, 1.0 / 60.0, 0.5, 2.0] {
+                runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, elapsed).expect("trace timestamp");
+                for method in ["GetMusicSeconds", "GetMusicSecondsVisible"] {
+                    let getter = position.get::<mlua::Function>(method).expect("native getter");
+                    let actual = getter.call::<f32>(position.clone()).expect("music timestamp");
+                    assert_eq!(actual, (elapsed * f64::from(rate)) as f32 + origin,
+                        "{method}: origin={origin}, rate={rate}, elapsed={elapsed}");
+                }
+                assert_eq!(runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY).expect("wall clock"), elapsed);
+            }
+        }
+    }
 }

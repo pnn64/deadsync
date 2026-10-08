@@ -412,6 +412,10 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         "obsolete song clock {:?}; recapture this archive with native timing",
         trace.song_clock,
     );
+    assert_eq!(
+        trace.song_position.as_deref(), Some("native-music-seconds"),
+        "obsolete public music clock; recapture with native SongPosition getters",
+    );
     assert!(
         trace.runtime_errors.is_empty(),
         "native runtime errors invalidate the reference"
@@ -845,9 +849,21 @@ fn archive_reference_rejects_obsolete_replays() {
     let mut archive = extract_archive(entry);
     let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
     validate_native_trace(&trace, &archive.manifest);
+    let native_position = trace.song_position.take();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.song_position = Some("elapsed-seconds".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.song_position = native_position;
+    validate_native_trace(&trace, &archive.manifest);
     trace.song_clock = Some("continuous-bpm".into());
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
     trace.song_clock = Some("native-song-timing".into());
+    // This no-Lua chart has no dispatch observations. Omit its unused modern
+    // tag while independently probing capabilities of historical versions.
+    assert!(trace.message_dispatches.is_empty());
+    assert!(trace.runtime_actors.is_empty());
+    trace.message_dispatch = None;
+    trace.wrapper_effects = None;
     trace.operation_tracks.push(NativeOperationTrack {
         actor: "probe".into(),
         operation: "Actor.hibernate".into(),

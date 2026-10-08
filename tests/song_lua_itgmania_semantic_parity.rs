@@ -56,6 +56,8 @@ struct NativeTrace {
     #[serde(default)]
     song_clock: Option<String>,
     #[serde(default)]
+    song_position: Option<String>,
+    #[serde(default)]
     message_dispatch: Option<String>,
     #[serde(default)]
     wrapper_effects: Option<String>,
@@ -10711,5 +10713,35 @@ fn manual_draw_clock_matches_native() {
         compare_manual_plans(&trace, &compiled, &context, &mut rejected);
         assert_eq!(rejected.checks(), 241, "retain all native frame observations");
         assert!(rejected.passed() < rejected.checks(), "incorrect music timestamps must fail");
+    }
+}
+
+#[test]
+fn public_music_seconds_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for label in ["music-positive", "music-negative"] {
+        let trace = read_trace_file(&root.join(format!("tests/fixtures/itgmania-song-lua-micro/{label}.json")));
+        assert_eq!(trace.song_position.as_deref(), Some("native-music-seconds"));
+        assert_eq!(trace.update_frames.len(), 241);
+        let (mut compiled, primary, context) = compile_trace_song_at(
+            &trace, &root.join(format!("tests/fixtures/song-lua/{label}.sm")),
+        );
+        let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+        compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+        eprintln!("{}", parity.summary(label));
+        assert_eq!(parity.checks(), 5256, "retain every native getter and geometry observation");
+        parity.assert_complete(label);
+        let actor = compiled[primary].overlays.iter()
+            .position(|actor| actor.name.as_deref() == Some("Clock1")).expect("music getter quad");
+        let track = compiled[primary].overlay_updates.iter_mut()
+            .find(|track| track.overlay_index == actor && track.target == SongLuaOverlayUpdateTarget::X)
+            .expect("captured public music getter");
+        assert!(!track.samples.is_empty());
+        for sample in &mut track.samples { sample.value = SongLuaOverlayUpdateValue::F32(0.0); }
+        let mut rejected = compare_semantics(&trace, &compiled, primary, &context);
+        compare_drawable_frames(&trace, &compiled, &context, &mut rejected);
+        assert_eq!(rejected.checks(), parity.checks(), "retain every native observation");
+        assert!(rejected.passed() < rejected.checks(), "incorrect public music seconds must fail");
     }
 }

@@ -1556,7 +1556,7 @@ pub fn install_game_state_globals(
         "GetCurMusicSeconds",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |lua, _self: Option<Value>| crate::runtime::song_music_seconds(lua, &song_runtime)
         })?,
     )?;
     let song_position = create_song_position_table(lua, &song_runtime)?;

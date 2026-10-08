@@ -1665,3 +1665,49 @@ tolerance or observation changed. The ordered prefix now contains 24 archives
 and 9,365,473 comparisons; full-corpus parity and the public music-seconds
 getter audit remain unfinished. Receipts and hashes are linked in
 pass46-epidermis-main-comparison.json.
+
+
+## Pass 47: expose native public music seconds in both implementations
+
+SongPosition.cpp assigns the raw music timestamp to m_fMusicSeconds and its
+Lua binding returns that native float. GameState.GetCurMusicSeconds returns
+the same field. Simply Love's StepStatistics/Time.lua handles negative music
+time and divides it by rate itself. Both the harness and DeadSync instead
+exposed elapsed trace time, silently agreeing on the wrong API when offsets
+or music rate mattered.
+
+Harness 0.1.17 now compiles SongPosition.cpp and invokes its UpdateSongPosition
+and actual Lua getters. Its independent positive-offset assertion failed
+with public 0 versus native 1.25 before the fix. Both offset probes now pass
+on every frame. All 170 harness tests pass, with five existing tests ignored.
+The lighting preference uses the checked-out LightsManager default of 0.05.
+
+DeadSync 0.5.1856 restores the music origin, music rate and native float
+precision for public song/player position getters and GetCurMusicSeconds.
+The elapsed timer remains unchanged. Lua 5.1 whole-number formatting is
+preserved without rounding tiny fractional times away. Song-cache version 47
+invalidates previously compiled getter-dependent tracks. The replaced path
+returned elapsed seconds directly.
+
+Each of five getters drives a drawable quad; a sixth quad retains elapsed
+timer time. The positive control failed 170 of 5,256 checks before the fix.
+Both controls now pass all 10,512 observations. Zeroing only Clock1's retained
+X samples still fails, without removing observations. The two existing manual
+draw controls were recaptured from the native getter and pass all 494 checks.
+All 16 native controls, all 668 core song-Lua tests, the production build
+without test support and both cache checks pass; three existing core tests
+remain ignored. Source and capture hashes are pinned in the micro provenance.
+
+Full archives now require the native-music-seconds capture marker. A fresh
+Bank Account reference passes 116,603 checks, and a fresh Boys Are Back in Town
+reference passes 179,179. Both complete archives replace their obsolete
+fixtures, retaining aliases and preserving superseded bytes under target.
+The obsolete-reference guard regression also passes. Earlier prefix results
+are historical: those references require recapture and revalidation under
+the corrected contract, so this pass does not claim a new verified prefix.
+
+The complete fresh 321STARS capture remains unpublished with eight multitap
+write differences out of 372,891 comparisons: visibility at beat 52, and
+color/zoom at beat 56. Receipts are linked in pass47-public-music-comparison.json.
+Full-corpus parity remains unfinished. A separate source-backed audit of the
+music effect clock remains pending; this pass establishes the public getters.
