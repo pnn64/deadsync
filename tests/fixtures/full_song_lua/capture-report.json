@@ -2447,6 +2447,14 @@
       "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "superseded_archive": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6707,6 +6715,33 @@
         "beat": 910.75,
         "music_seconds": 273.25701904296875,
         "seconds": 273.2250061035156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 79.58538961410522,
+        "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 79.44s",
+        "log_sha256": "eef91eb7a7c289cd2d6904c508636b28bec5f11c978a65a55973bb6c8e5d0e20",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "025c562e91d41de4d38a513e58e283daebadc139cb518e40ed7df838d6f993a8",
+      "capture_endpoint": {
+        "beat": 256.125,
+        "music_seconds": 79.87281799316406,
+        "seconds": 79.88282012939453
       },
       "runtime_errors": 0,
       "dropped_events": 0

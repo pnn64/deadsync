@@ -532,13 +532,14 @@
     {
       "title": "321STARS",
       "source_simfile": "321STARS/321STARS.ssc",
-      "harness_version": "0.1.28",
-      "archive": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
-      "sha256": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46",
-      "compressed_bytes": 698643,
-      "uncompressed_sha256": "ab1742c482e9c09199a3f09f4910a715facd3bdcf0ca25bece8608d2bd14f5a3",
+      "harness_version": "0.1.31",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "sha256": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7",
+      "compressed_bytes": 699277,
+      "uncompressed_sha256": "02eb029da084fc62b59ec83244dc2105fdff16a50fe02e0df86d1c04749d95af",
       "compression_level": 12,
       "aliases": [
+        "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
         "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
         "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8.tar.zst",
         "1e21887539e377f2b89ad77dd20adcbc22abb4ed3062dfc0f311948198f99942.tar.zst"
