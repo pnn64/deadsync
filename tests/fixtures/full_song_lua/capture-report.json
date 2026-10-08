@@ -2135,6 +2135,14 @@
       "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "673b436ebabdb5cc4c385e0e480d7bec61d8179f3915e2ce5eed9c273cfe935c.tar.zst",
+      "archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5318,6 +5326,32 @@
       "capture_endpoint": {
         "beat": 265,
         "seconds": 127.20000457763672
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 77.51247668266296,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 77.37s",
+        "log_sha256": "e67914935726d5b306b811d86fbff6fb02eb8fda160b1ddb0eb3178b8923c2e8",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "393ed26bc13d53c06273520a91a920cc745c14d5ea34c0cec63810bf89b96c07",
+      "capture_endpoint": {
+        "beat": 324,
+        "seconds": 126.23377227783205
       },
       "runtime_errors": 0,
       "dropped_events": 0
