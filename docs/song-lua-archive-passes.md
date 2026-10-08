@@ -1569,7 +1569,25 @@ archive. The superseded bytes remain under target; aliases and fixture
 references follow the validated replacement. No observation, tolerance or
 comparison was removed.
 
-The first 18 previously passing archives are being rechecked with the new
-executable. Hashes, production gates, count control and same-archive results
-are linked in pass42-wrapper-fade-comparison.json under
+The first 18 previously passing archives also pass all 3,729,943 comparisons
+with the new executable. Together with KABOOOOOM this verifies 19 archives and
+6,004,656 comparisons. Hashes, production gates, count control and same-archive
+results are linked in pass42-wrapper-fade-comparison.json under
 target/song-lua-archive-passes. Full-corpus verification remains unfinished.
+
+
+## Pass 43: replace the second obsolete KABOOOOOM capture
+
+The next Tech Spectrum Super variant's indexed capture was rejected before
+comparisons because it lacked the required native wrapper draw evidence.
+An unchanged harness-0.1.16 executable captured its original source through
+beat 645.75 / 199.4571533203125 seconds, with 26 payload members and zero native
+errors or dropped events. The new complete archive passes all 2,274,713
+comparisons on the same DeadSync-0.5.1855 executable used in pass 42.
+
+The 35,928,262-byte archive replaces the obsolete fixture and preserves its
+aliases; the superseded bytes remain under target. No production code,
+tolerance or observation changed in this pass. Together with the 18 rechecked
+archives and the first KABOOOOOM variant, 20 ordered archives now pass all
+8,279,369 comparisons. Receipts, hashes and publication metadata are linked in
+pass43-kaboom-main-comparison.json. Full-corpus verification remains unfinished.
