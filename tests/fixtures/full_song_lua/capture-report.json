@@ -1423,6 +1423,14 @@
       "archive": "a9747e12127469d63fabb4c138c036d6a18ac034a65f4d4ec7b47fce37caead5.tar.zst",
       "harness_version": "0.1.21",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 54,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "e3fec6cd204b5c16d95abd73390f1a963cd1718ee04bab2717da65a05621d18e.tar.zst",
+      "archive": "8654de734aa889449769bbfd3a93bbfde4c72eb4a06820a86d96ae4e8a8bc29f.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1918,6 +1926,31 @@
       "capture_endpoint": {
         "beat": 266,
         "seconds": 145.09091186523438
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 54,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "8654de734aa889449769bbfd3a93bbfde4c72eb4a06820a86d96ae4e8a8bc29f.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "8654de734aa889449769bbfd3a93bbfde4c72eb4a06820a86d96ae4e8a8bc29f.tar.zst",
+        "version": "0.5.1860",
+        "exit_code": 0,
+        "seconds": 31.773818492889404,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 31.67s",
+        "log_sha256": "85219773c094d53a67a185d60a588322bb3f6722c9d508615f3c068b962b7cc6",
+        "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
+      },
+      "capture_log_sha256": "771bb213cacbe8eaf2210fdd7dcc013a9a219c379beca4d616cacf7b398cad01",
+      "capture_endpoint": {
+        "beat": 230,
+        "seconds": 141.01080322265625
       },
       "runtime_errors": 0,
       "dropped_events": 0
