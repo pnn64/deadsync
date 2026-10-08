@@ -1279,6 +1279,14 @@
       "archive": "c96fe11f5abbe33559039be6c47d651f06e552bbfaf3e3aff7a7c44f4ec434fd.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "4d492047030008443585021530eb446c0ef3e87a6eb74f24467777927dd342d1.tar.zst",
+      "archive": "f056f50bdf2a701e11399ff322aeae47eff639c2398757fbff520ebf02fb29db.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1401,6 +1409,24 @@
         "seconds": 10.130940198898315,
         "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 9.99s",
         "log_sha256": "f3172bfe2863dea0cbf5039f58f1dcc2e092115543469c7a307103f435e32a55",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "f056f50bdf2a701e11399ff322aeae47eff639c2398757fbff520ebf02fb29db.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "f056f50bdf2a701e11399ff322aeae47eff639c2398757fbff520ebf02fb29db.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 47.902892112731934,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 47.77s",
+        "log_sha256": "3a3c6c9357c8d15aa5452401fe52e8e4d9aece54b6e9f7c2b13446ffb25d9e77",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
