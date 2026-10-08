@@ -2196,3 +2196,36 @@ Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes al
 Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
 
 Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 64: correct native actor identity and BitmapText arguments
+
+Compiled ITGmania userdata independently rejects nonboolean arguments to
+rainbowscroll, jitter and uppercase. These bindings use BArg, unlike BIArg and
+lua_toboolean. Luna::tostring_T returns the native class and an opaque pointer;
+actor names and hierarchy paths do not appear in that string. Matching sources
+are checked in the local reference tree and the compiled vendor revision.
+
+The .24 harness leaked hierarchy paths into actor strings. Sharkmode's original
+grabactors.lua classified Sprites under PlayerP1 as Players and attempted an
+invalid GetNumChildren call. The unchanged runtime control also exposed the
+internal name field shadowing actor:name(...). Harness 52385fe
+fixes those semantics and passes 143 tests, with two existing skips.
+
+DeadSync .1863 fails both complete control archives at the native assertions.
+The replacement identity strings, native name setter and strict boolean
+bindings pass both controls on .1864: 5,346 exact comparisons. The full song-Lua
+suite, production check and cache checks pass. Cache version 55 invalidates
+captures that could omit failing startup commands. The old name-based string
+test is replaced by native class-and-pointer expectations.
+
+Sharkmode now captures unchanged through beat 357 / 138.1935577392578 seconds
+with no runtime errors or dropped events. DeadSync passes 240,340 comparisons
+but fails 18,318 checks in drawable membership, custom draws and mesh matching.
+Its newly captured archive remains unpublished while those gaps are diagnosed.
+The two complete control archives are hash-verified and pass all comparisons.
+Runtime controls, native source hashes, before/after failures and immutable
+executable pins are in runtime-actors-provenance.json.
+
+The previous 17-archive prefix is historical until refreshed on .25/.1864.
+The full scope remains 501 simfiles and 492 archive variants; parity is unfinished.
