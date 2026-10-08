@@ -4701,6 +4701,25 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 22.117802143096924,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 21.81s",
+        "log_sha256": "c0e81fee1a1649d063b11030099683f885a8c174fa23848ae2c963b94bd0cc2a",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
     }
   ]
 }
