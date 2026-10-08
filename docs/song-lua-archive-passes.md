@@ -1627,3 +1627,24 @@ hashes are linked in pass44-manual-clock-comparison.json. The ordered verified
 prefix contains 21 archives / 8,458,548 comparisons; the full corpus is not
 complete. A separate audit of public music-seconds getter semantics is also
 pending; this pass establishes the conversion for the captured clock contract.
+
+
+## Pass 45: replace the obsolete Epidermis timing capture
+
+The next indexed Venetian Snares - Epidermis archive was rejected before any
+comparisons because it used the obsolete continuous-BPM song clock. The
+authored foreground reads GetSongBeat to fade a quad between beats 126 and
+163.5. An unchanged harness-0.1.16 executable recaptured the original source
+using native TimingData through beat 910.75 / 273.2250061035156 seconds, with
+three payload members and zero native runtime errors or dropped events.
+
+The complete 100,673-byte replacement passes all 363,873 comparisons on the
+unchanged DeadSync-0.5.1855 executable. It replaces the obsolete published
+archive while retaining aliases and preserving its superseded bytes under
+target. No production code, tolerance or observation changed in this pass.
+
+The second Boys Are Back in Town variant also passes all 179,179 checks.
+Together with the prior verified prefix, 23 ordered archives now pass
+9,001,600 comparisons. Receipts and hashes are linked in
+pass45-epidermis-comparison.json under target/song-lua-archive-passes. The
+full corpus and separate public music-seconds getter audit remain unfinished.

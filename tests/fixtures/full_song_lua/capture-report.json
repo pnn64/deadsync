@@ -1167,6 +1167,14 @@
       "archive": "3f281787416a3edc35a8099bcc1d9cf5f1fe2c6672f1facdc1fa87999c19fca0.tar.zst",
       "harness_version": "0.1.16",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 45,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "superseded_archive": "acf53b348af9c3b12930cf8eb07f6a15728f729b19185f71e3da11622ec66f63.tar.zst",
+      "archive": "cdcaa5ab7a2602216acfdeb7be31df9b40b3f1ececfda3a0b62af8e4311cb95f.tar.zst",
+      "harness_version": "0.1.16",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }
