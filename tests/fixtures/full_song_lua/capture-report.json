@@ -3669,7 +3669,7 @@
       "dropped_events": 0
     },
     {
-      "pass_number": 66,
+      "pass_number": 68,
       "index": 0,
       "source_simfile": "(R10) Warp Zone/warp zone.ssc",
       "archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
@@ -3694,7 +3694,7 @@
       "dropped_events": 0
     },
     {
-      "pass_number": 66,
+      "pass_number": 68,
       "index": 1,
       "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
       "archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
@@ -3719,7 +3719,7 @@
       "dropped_events": 0
     },
     {
-      "pass_number": 66,
+      "pass_number": 68,
       "index": 2,
       "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
       "archive": "c81da0db1583b0dbd2496a7dca851d78a44c695e29ec236d13eb55373320b29d.tar.zst",
