@@ -5498,8 +5498,11 @@ fn compare_projected_vibration_coverage(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
     context: &SongLuaCompileContext,
-    parity: &mut Parity,
+    combined: &mut Parity,
 ) {
+    // Keep vibration diagnostics visible when geometry has filled its budget.
+    let mut vibration = combined.nested();
+    let parity = &mut vibration;
     parity.section("projected vibration");
     let drawable_map = projected_drawable_map(trace, compiled);
     for track in &trace.projected_vertex_tracks {
@@ -5596,6 +5599,8 @@ fn compare_projected_vibration_coverage(
             );
         }
     }
+    combined.sections.extend(vibration.sections);
+    combined.gaps.extend(vibration.gaps);
 }
 
 /// One check per capture category and layer: DeadSync must have compiled the
@@ -6976,9 +6981,17 @@ fn late_wrapper_vibration_matches_native() {
     compiled[primary]
         .overlay_updates
         .retain(|track| track.target != SongLuaOverlayUpdateTarget::Vibrate);
-    let mut missing = Parity::default();
+    let reporter = progress::Reporter::start();
+    let mut missing = Parity {
+        progress: Some(reporter.progress.clone()),
+        gaps: vec!["earlier geometry failure".into(); 50],
+        ..Parity::default()
+    };
     compare_projected_vibration_coverage(&trace, &compiled, &context, &mut missing);
     assert_eq!(missing.checks(), 2);
+    assert_eq!(missing.passed(), 1);
+    assert_eq!(reporter.progress.checks.load(std::sync::atomic::Ordering::Relaxed), 2);
+    assert_eq!(reporter.progress.failed.load(std::sync::atomic::Ordering::Relaxed), 1);
     assert!(
         missing
             .gaps

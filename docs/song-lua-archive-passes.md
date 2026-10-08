@@ -1359,3 +1359,44 @@ pass37-verified-prefix.json verifies the current hashes and receipts. The
 nineteenth obsolete primary is rejected before comparison; next-failure.json
 links the complete failing 0.1.15 diagnostic separately. The full
 501-simfile / 492-variant parity objective remains incomplete.
+
+## Pass 38: retain vibration diagnostics after geometry failures
+
+The whole-song reporter's fifty-detail budget was already consumed before
+vibration comparisons ran. Give this comparator its own nested report,
+merging both section tallies and failure descriptions afterward. The native
+micro regression removes the runtime vibration capture and fills the prior
+geometry budget; it fails before this reporting fix and passes afterward.
+Both comparisons and their shared progress counters remain intact. All five
+focused wrapper/vibration/reference controls pass.
+
+The exact 0.1.15 KABOOOOOM archive is replayed again with the new reporter.
+All 2,274,713 comparisons remain: 2,222,087 pass and 52,626 fail. Fifty
+vibration failure details are now visible; the section still fails 96 checks.
+The receipt and log are pass38-kaboom-vibration-report.json/log, log SHA-256
+c60b748ab8861a1bd7605b754c294d7190911d9886be9535ab0a85ec8f5cf5ef.
+No failing capture is published.
+
+Source-backed recipient-order analysis now proves a concrete difference.
+MessageManager.cpp:96 uses std::set<IMessageSubscriber*> and line 206
+iterates that pointer order. The linked and workspace files are identical.
+The chart's paired NextAirHorn handlers at lua/default.lua:268 and :285
+share hornIndex from line 261. Simulating those conditions with the captured
+native recipient order reproduces every selected wrapper and creation beat.
+Only one horn is selected on the first native broadcast. Registration-order
+delivery selects all twenty-two first-side horns on that broadcast; DeadSync
+currently iterates its registry at lua_util.rs:2984. The resulting actor and
+random-consumption differences require a message-delivery fix. No actor
+choice or expected output has been hardcoded into production.
+
+An independent four-second queued-wag probe uses the chart's accelerate,
+queuecommand, linear and wag sequence without broadcasts or random calls.
+The pinned 0.1.15 capture has 241 frames, no errors or dropped events, and
+passes all 5,610 archive comparisons on the current DeadSync pin. Archive
+6332c6210e0b8b705cc2044a50391170cd2c9a4dc60e972fac194c80c4a0e4f1
+is retained only in the harness target diagnostics. Its passing control
+narrows the investigation; it does not establish whole-song parity.
+
+The order proof, five-control receipt, unchanged comparison counts and
+queued-wag control are linked by pass38-vibration-report-verified.json.
+The full 501-simfile / 492-variant objective remains incomplete.
