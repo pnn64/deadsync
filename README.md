@@ -22,6 +22,24 @@ Before building, ensure you have the following installed on your system:
 -   **CMake**: Install from [cmake.org](https://cmake.org/download/).
 -   **Ninja**: Install from [ninja-build.org](https://ninja-build.org/).
 
+#### Windows 7 builds
+
+Use the Windows 7 target so unsupported Windows APIs are excluded:
+
+```powershell
+rustup toolchain install nightly --component rust-src
+cargo +nightly build -Z build-std=std,panic_abort --release --locked --target x86_64-win7-windows-msvc --bin deadsync
+scripts/check-win7-imports.ps1 -Path target/x86_64-win7-windows-msvc/release/deadsync.exe
+```
+
+For 32-bit builds, substitute `i686-win7-windows-msvc`. The import check uses
+`dumpbin` from the Visual Studio C++ tools and also runs before Windows 7 releases
+are packaged. It checks for WinRT startup dependencies; testing on Windows 7 is
+still needed to verify runtime compatibility.
+
+Bluetooth heart-rate monitors are unavailable in Windows 7 builds because their
+Windows backend requires Windows 10 or later.
+
 ### Linux build dependencies (Ubuntu/Debian)
 ```bash
 sudo apt update
