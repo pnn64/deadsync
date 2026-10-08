@@ -1375,6 +1375,14 @@
       "archive": "1383c72f18d789124eb40dcffca0243712bfe0d226274689e3696edf0f0cd071.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "superseded_archive": "783a1df481fbc910807af44466cc7405085dcdf1abe8caf85d2eb24def95f61a.tar.zst",
+      "archive": "fff20dd9abb30d919056f85583f7481f46d3cf3f99fd05d5bbfe0f71eaab6a5f.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1713,6 +1721,24 @@
         "seconds": 325.2125699520111,
         "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 324.86s",
         "log_sha256": "c33e64e97d28d10d64b58e0cdb4d36cca7faf07b46433d2f13a9cf95272c6e2b",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "fff20dd9abb30d919056f85583f7481f46d3cf3f99fd05d5bbfe0f71eaab6a5f.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "fff20dd9abb30d919056f85583f7481f46d3cf3f99fd05d5bbfe0f71eaab6a5f.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 271.7306294441223,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 271.56s",
+        "log_sha256": "a5fb0ff6ce25a50a62c2b2fa31d03c71b43b7ae325e0ca6cef14a9fd838a7599",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
