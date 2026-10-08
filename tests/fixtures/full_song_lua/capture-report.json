@@ -1303,6 +1303,14 @@
       "archive": "80a082f87260bcc55830ec2250c7f83a76b04c76d3a27f59481e296d17737522.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "4738c72fb84ef4ca46e9e90d6c13728b7912987570964d56e1f4d2a333bd6d9f.tar.zst",
+      "archive": "5cccdcad3576ff023d5c7d298940eb0ca93f4cc85f96116212f2f7de7ea85958.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1479,6 +1487,24 @@
         "seconds": 21.965048789978027,
         "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 21.85s",
         "log_sha256": "4f5906d35af6217a301cfa68550c5965eddfa7a9180e133c274f4dadcbaff4a3",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "5cccdcad3576ff023d5c7d298940eb0ca93f4cc85f96116212f2f7de7ea85958.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "5cccdcad3576ff023d5c7d298940eb0ca93f4cc85f96116212f2f7de7ea85958.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 13.274896621704102,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 13.15s",
+        "log_sha256": "6710d8019a5ec54da09afc0d7b744af6725d5f82c175c138b57e1ddf749c64f6",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
