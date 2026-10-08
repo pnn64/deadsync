@@ -1,22 +1,6 @@
 use super::*;
+use crate::screens::components::shared::noteskin_draw::preview_note_slots;
 use deadsync_profile as profile_data;
-
-pub(super) fn preview_note_slots(
-    skin: &Noteskin,
-    part: NoteAnimPart,
-    index: usize,
-) -> &[SpriteSlot] {
-    let layers = if part == NoteAnimPart::Lift {
-        skin.lift_note_layers.get(index)
-    } else {
-        None
-    };
-    layers
-        .or_else(|| skin.note_layers.get(index))
-        .map(AsRef::as_ref)
-        .or_else(|| skin.notes.get(index).map(std::slice::from_ref))
-        .unwrap_or_default()
-}
 
 pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();

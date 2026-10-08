@@ -1,7 +1,8 @@
-use crate::artwork::resolve_song_artwork_like_itg;
+use crate::artwork::{ResolvedSongArtwork, resolve_song_artwork_like_itg};
 use crate::cache::{
     CachedChartPayloadIndex, CachedParsedNote, CachedTimingSegments, SerializableChartData,
-    SerializableSongBackgroundChange, SerializableSongData, build_song_meta,
+    SerializableSongBackgroundChange, SerializableSongBackgroundLuaChange, SerializableSongData,
+    SerializableSongForegroundChange, SerializableSongForegroundLuaChange, build_song_meta,
     parse_chart_display_bpm, update_precise_song_bounds,
 };
 use crate::changes::{
@@ -121,12 +122,25 @@ fn cached_note_from_rssp(note: ParsedChartNote) -> CachedParsedNote {
 
 struct SongBuildInput<'a> {
     path: &'a Path,
-    simfile_dir: &'a Path,
+    /// The folder media tags are resolved against, or `None` for a simfile
+    /// that has no folder on this machine -- see `parse_song_bytes`.
+    media_dir: Option<&'a Path>,
     simfile_data: &'a [u8],
     song_music_path: Option<PathBuf>,
     music_length_seconds: f32,
     options: &'a ParseSongOptions,
     parsed_notes: &'a mut Vec<Vec<CachedParsedNote>>,
+}
+
+/// One simfile's bytes and where they claim to live.
+struct SimfileSource<'a> {
+    data: &'a [u8],
+    /// `sm` or `ssc`, which picks the dialect RSSP reads.
+    extension: &'a str,
+    /// Recorded as the song's `simfile_path`.
+    path: &'a Path,
+    /// Whether `path` names a real file whose folder holds the song's media.
+    on_disk: bool,
 }
 
 pub fn parse_song_file(
@@ -160,9 +174,76 @@ pub fn parse_song_file_in(
     file.read_to_end(input)
         .map_err(|e| format!("Could not read file: {e}"))?;
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    parse_song_source(
+        SimfileSource {
+            data: input,
+            extension,
+            path,
+            on_disk: true,
+        },
+        options,
+        analyzer,
+        analysis,
+        parsed_notes,
+        music_len,
+    )
+}
+
+/// Parses a simfile held in memory: one read out of a pack archive that was
+/// never unpacked, say.
+///
+/// Everything a simfile *says* comes back exactly as `parse_song_file` would
+/// give it -- title, sample window, every chart's notes and timing. What a
+/// song *finds in its folder* does not: music, artwork, background and
+/// foreground changes and Lua all come back empty, and `music_len` is asked
+/// about no file at all.
+///
+/// That is not only because there is no folder. Media tags are paths, and a
+/// path the simfile chose can leave any folder it is joined to: `Path::join`
+/// with an absolute tag, or a `\\host\share` one, *replaces* the base. Looked
+/// up, a downloaded simfile could make this machine stat its files or open an
+/// SMB connection to a stranger -- just by being previewed. So in-memory
+/// parsing never looks anything up, and `virtual_path` is a label recorded as
+/// the song's `simfile_path`, never a place.
+///
+/// `extension` is `sm` or `ssc`, ignoring case, and picks the dialect.
+pub fn parse_song_bytes(
+    data: &[u8],
+    extension: &str,
+    virtual_path: &Path,
+    options: &ParseSongOptions,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
+    let analyzer = SongAnalyzer::new(options);
+    let mut analysis = AnalysisScratch::default();
+    let mut parsed_notes = Vec::new();
+    parse_song_source(
+        SimfileSource {
+            data,
+            extension,
+            path: virtual_path,
+            on_disk: false,
+        },
+        options,
+        &analyzer,
+        &mut analysis,
+        &mut parsed_notes,
+        music_len,
+    )
+}
+
+/// The parse both entry points share once the bytes are in hand.
+fn parse_song_source(
+    source: SimfileSource<'_>,
+    options: &ParseSongOptions,
+    analyzer: &SongAnalyzer,
+    analysis: &mut AnalysisScratch,
+    parsed_notes: &mut Vec<Vec<CachedParsedNote>>,
+    music_len: impl FnOnce(Option<&Path>) -> f32,
+) -> Result<SerializableSongData, String> {
     let mut summary = analyze_prepared_in_with_notes(
-        input,
-        extension,
+        source.data,
+        source.extension,
         &analyzer.prepared,
         analysis,
         parsed_notes,
@@ -170,20 +251,27 @@ pub fn parse_song_file_in(
     )?;
     // RSSP rounds its report offset to milliseconds. Runtime song timing
     // uses the authored float, as NotesLoaderSM::SMSetOffset does.
-    let parsed =
-        rssp::parse::extract_sections(input, extension).map_err(|error| error.to_string())?;
+    let parsed = rssp::parse::extract_sections(source.data, source.extension)
+        .map_err(|error| error.to_string())?;
     summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
-    let simfile_dir = path
-        .parent()
-        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
-    let song_music_path = resolve_music_path(simfile_dir, &summary.music_path);
+    let media_dir = if source.on_disk {
+        Some(
+            source
+                .path
+                .parent()
+                .ok_or_else(|| "Could not determine simfile directory".to_string())?,
+        )
+    } else {
+        None
+    };
+    let song_music_path = media_dir.and_then(|dir| resolve_music_path(dir, &summary.music_path));
     let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
     Ok(build_song_data(
         summary,
         SongBuildInput {
-            path,
-            simfile_dir,
-            simfile_data: input,
+            path: source.path,
+            media_dir,
+            simfile_data: source.data,
             song_music_path,
             music_length_seconds,
             options,
@@ -226,10 +314,75 @@ pub fn parse_song_data_file_in(
     Ok(song)
 }
 
+/// What a song finds in its folder rather than in its simfile.
+///
+/// Kept together because it is all-or-nothing: a simfile parsed from disk
+/// resolves every piece of it, and one parsed from memory resolves none.
+#[derive(Default)]
+struct SongFolderMedia {
+    artwork: ResolvedSongArtwork,
+    background_changes: Vec<SerializableSongBackgroundChange>,
+    background_layer2_changes: Vec<SerializableSongBackgroundChange>,
+    foreground_changes: Vec<SerializableSongForegroundChange>,
+    background_lua_changes: Vec<SerializableSongBackgroundLuaChange>,
+    foreground_lua_changes: Vec<SerializableSongForegroundLuaChange>,
+    has_lua: bool,
+}
+
+impl SongFolderMedia {
+    fn resolve(
+        simfile_dir: &Path,
+        simfile_data: &[u8],
+        summary: &SimfileSummary,
+        options: &ParseSongOptions,
+    ) -> Self {
+        let artwork = resolve_song_artwork_like_itg(
+            simfile_dir,
+            simfile_data,
+            &summary.banner_path,
+            &summary.background_path,
+            &summary.cdtitle_path,
+            &summary.jacket_path,
+        );
+        let background_lua_changes =
+            extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
+        let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
+        let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
+        let background_changes = resolve_background_changes_from_roots(
+            simfile_dir,
+            simfile_data,
+            &options.song_movie_roots,
+            &options.random_movie_roots,
+        )
+        .iter()
+        .map(SerializableSongBackgroundChange::from)
+        .collect();
+        let background_layer2_changes = resolve_background_layer2_changes_from_roots(
+            simfile_dir,
+            simfile_data,
+            &options.song_movie_roots,
+            &options.random_movie_roots,
+            &options.bg_animation_roots,
+        )
+        .iter()
+        .map(SerializableSongBackgroundChange::from)
+        .collect();
+        Self {
+            artwork,
+            background_changes,
+            background_layer2_changes,
+            foreground_changes: foreground_changes.media,
+            background_lua_changes: background_lua_changes.changes,
+            foreground_lua_changes: foreground_changes.lua,
+            has_lua,
+        }
+    }
+}
+
 fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> SerializableSongData {
     let SongBuildInput {
         path,
-        simfile_dir,
+        media_dir,
         simfile_data,
         song_music_path,
         music_length_seconds,
@@ -238,41 +391,21 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
     } = input;
     let charts = build_charts(
         &mut summary,
-        simfile_dir,
+        media_dir,
         song_music_path.as_deref(),
         parsed_notes,
     );
-    let artwork = resolve_song_artwork_like_itg(
-        simfile_dir,
-        simfile_data,
-        &summary.banner_path,
-        &summary.background_path,
-        &summary.cdtitle_path,
-        &summary.jacket_path,
-    );
-    let background_lua_changes =
-        extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
-    let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
-    let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
-    let background_changes = resolve_background_changes_from_roots(
-        simfile_dir,
-        simfile_data,
-        &options.song_movie_roots,
-        &options.random_movie_roots,
-    )
-    .iter()
-    .map(SerializableSongBackgroundChange::from)
-    .collect();
-    let background_layer2_changes = resolve_background_layer2_changes_from_roots(
-        simfile_dir,
-        simfile_data,
-        &options.song_movie_roots,
-        &options.random_movie_roots,
-        &options.bg_animation_roots,
-    )
-    .iter()
-    .map(SerializableSongBackgroundChange::from)
-    .collect();
+    let SongFolderMedia {
+        artwork,
+        background_changes,
+        background_layer2_changes,
+        foreground_changes,
+        background_lua_changes,
+        foreground_lua_changes,
+        has_lua,
+    } = media_dir.map_or_else(SongFolderMedia::default, |dir| {
+        SongFolderMedia::resolve(dir, simfile_data, &summary, options)
+    });
 
     let last_second_hint = summary
         .last_second_hint
@@ -296,9 +429,9 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
             .map(|p| p.to_string_lossy().into_owned()),
         background_changes,
         background_layer2_changes,
-        foreground_changes: foreground_changes.media,
-        background_lua_changes: background_lua_changes.changes,
-        foreground_lua_changes: foreground_changes.lua,
+        foreground_changes,
+        background_lua_changes,
+        foreground_lua_changes,
         has_lua,
         cdtitle_path: artwork
             .cdtitle_path
@@ -330,7 +463,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
 
 fn build_charts(
     summary: &mut SimfileSummary,
-    simfile_dir: &Path,
+    media_dir: Option<&Path>,
     song_music_path: Option<&Path>,
     parsed_notes: &mut Vec<Vec<CachedParsedNote>>,
 ) -> Vec<SerializableChartData> {
@@ -387,7 +520,8 @@ fn build_charts(
             };
             let stamina_counts = build_stamina_counts(&chart);
             let meter = chart.rating_str.parse().unwrap_or(0);
-            let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
+            let music_path =
+                media_dir.and_then(|dir| chart_music_path(dir, song_music_path, &chart.music_path));
             let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
             let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
             let timing_segments = CachedTimingSegments::from_rssp_owned(
@@ -1037,6 +1171,106 @@ mod tests {
         assert_eq!(song.last_second_hint, 0.0);
         assert_eq!(song.precise_last_second(), 4.0);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn in_memory_parse_matches_the_file_parse() {
+        // A folder with nothing in it but the simfile, so the file parse finds
+        // no media either and the two must agree to the byte.
+        let root = test_dir("bytes-match");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (name, data) in [
+            (
+                "song.ssc",
+                b"#VERSION:0.83;\n#TITLE:Bytes;\n#ARTIST:Memory;\n#OFFSET:-0.250;\n\
+                  #SAMPLESTART:12.5;\n#SAMPLELENGTH:15;\n#BPMS:0.000=120.000,8.000=180.000;\n\
+                  #STOPS:4.000=0.500;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n\
+                  #DIFFICULTY:Challenge;\n#METER:12;\n#NOTES:\n\
+                  2000\n0100\n0010\n3000\n,\n1001\n0M10\n1000\n000L\n;\n\
+                  #NOTEDATA:;\n#STEPSTYPE:dance-double;\n#DIFFICULTY:Hard;\n#METER:9;\n\
+                  #WARPS:2.000=1.000;\n#NOTES:\n10000001\n01000010\n00100100\n00011000\n;"
+                    .as_slice(),
+            ),
+            (
+                "song.sm",
+                b"#TITLE:Bytes SM;\n#BPMS:0.000=90.000;\n#OFFSET:0.100;\n#NOTES:\n\
+                  dance-single:\n:\nHard:\n5:\n0,0,0,0,0:\n1000\n0100\n0010\n0001\n;"
+                    .as_slice(),
+            ),
+        ] {
+            let path = root.join(name);
+            fs::write(&path, data).unwrap();
+            let extension = name.rsplit('.').next().unwrap();
+            let from_file = parse_song_file(&path, &options, |_| 7.5).unwrap();
+            let from_bytes = parse_song_bytes(data, extension, &path, &options, |music| {
+                assert_eq!(music, None, "an in-memory parse names no music file");
+                7.5
+            })
+            .unwrap();
+            let from_file = bincode::encode_to_vec(from_file, bincode::config::standard()).unwrap();
+            let from_bytes =
+                bincode::encode_to_vec(from_bytes, bincode::config::standard()).unwrap();
+            assert_eq!(from_bytes, from_file, "{name}");
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn in_memory_parse_never_looks_on_disk() {
+        // The label points at a real folder that holds every file the simfile
+        // names, by relative and by absolute path. The file parse finds them;
+        // the in-memory parse must not even look.
+        let root = test_dir("bytes-no-disk");
+        let music = root.join("music.ogg");
+        let banner = root.join("banner.png");
+        let background = root.join("elsewhere.png");
+        fs::write(&music, b"stub").unwrap();
+        fs::write(&banner, b"stub").unwrap();
+        fs::write(&background, b"stub").unwrap();
+        let data = format!(
+            "#TITLE:Stay Put;\n#MUSIC:music.ogg;\n#BANNER:banner.png;\n#BACKGROUND:{};\n\
+             #BGCHANGES:0.000=banner.png=1.000=0=0=1;\n#FGCHANGES:0.000=banner.png=1.000=0=0=1;\n\
+             #BPMS:0.000=120.000;\n#NOTES:\ndance-single:\n:\nHard:\n5:\n0,0,0,0,0:\n1000\n;",
+            // A backslash is an escape in a simfile, so name it the portable way.
+            background.to_string_lossy().replace('\\', "/")
+        );
+        let simfile = root.join("song.sm");
+        fs::write(&simfile, &data).unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+
+        let from_file = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
+        assert_eq!(from_file.music_path.map(PathBuf::from), Some(music));
+        assert_eq!(from_file.banner_path.map(PathBuf::from), Some(banner));
+
+        let from_bytes = parse_song_bytes(data.as_bytes(), "SM", &simfile, &options, |music| {
+            assert_eq!(music, None);
+            0.0
+        })
+        .unwrap();
+        assert_eq!(from_bytes.simfile_path, simfile.to_string_lossy());
+        assert_eq!(from_bytes.title, "Stay Put");
+        assert_eq!(from_bytes.music_path, None);
+        assert_eq!(from_bytes.banner_path, None);
+        assert_eq!(from_bytes.background_path, None);
+        assert_eq!(from_bytes.cdtitle_path, None);
+        assert!(from_bytes.background_changes.is_empty());
+        assert!(from_bytes.background_layer2_changes.is_empty());
+        assert!(from_bytes.foreground_changes.is_empty());
+        assert!(!from_bytes.has_lua);
+        assert_eq!(from_bytes.charts.len(), 1);
+        assert_eq!(from_bytes.charts[0].music_path, None);
+        assert_eq!(from_bytes.charts[0].parsed_notes.len(), 1);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn in_memory_parse_reports_an_unknown_dialect() {
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let error = parse_song_bytes(b"#TITLE:x;", "dwi", Path::new(""), &options, |_| 0.0)
+            .err()
+            .unwrap();
+        assert!(error.contains(".sm or .ssc"), "{error}");
     }
 
     fn test_dir(name: &str) -> PathBuf {
