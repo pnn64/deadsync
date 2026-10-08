@@ -1837,6 +1837,24 @@
         "log_sha256": "1def685c3d1f2142e35f5ca75d2049154f67e829cf57a2e07205772f2b2738c0",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
+    },
+    {
+      "pass_number": 51,
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 67.09629821777344,
+        "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 66.98s",
+        "log_sha256": "fdc7675e827c6edc31e2a0872897651b1aed7d3e84dea0eb790bc88d0003eade",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
     }
   ]
 }
