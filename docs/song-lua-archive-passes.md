@@ -1791,3 +1791,7 @@ complete archives verified under the corrected native clock contract. The
 full 501-simfile / 492-archive audit remains unfinished. The next archive in
 order is Waltz Capriccio; the audit stops at the next actual capture or parity
 failure for source-backed investigation.
+
+## Pass 51: continue the current native clock corpus audit
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.

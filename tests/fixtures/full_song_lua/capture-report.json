@@ -1239,6 +1239,14 @@
       "archive": "1ba1acac55d9d5349446423a7335341d3ec8c79631ecff2efe731160e925772e.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "a649a5534ca4d8c61c0af03e817d4dae8b20b586c91d37c5d82b2edfa6813828.tar.zst",
+      "archive": "e3fec6cd204b5c16d95abd73390f1a963cd1718ee04bab2717da65a05621d18e.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1271,6 +1279,24 @@
         "seconds": 21.691304683685303,
         "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 20.00s",
         "log_sha256": "0543bb313565417da42d57dcb536fd3adeaf6acd3011ba74b4a3dd8d967b43ed",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "e3fec6cd204b5c16d95abd73390f1a963cd1718ee04bab2717da65a05621d18e.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "e3fec6cd204b5c16d95abd73390f1a963cd1718ee04bab2717da65a05621d18e.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 35.950294733047485,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 35.82s",
+        "log_sha256": "81457cf3a8b5d9a0752767a43dce6b5c32ea65210cff41997715eaf75d3c7618",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
