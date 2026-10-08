@@ -1271,6 +1271,14 @@
       "archive": "425520c750b43e4d7f74af0928e81d58f86bf32c6a40142eace2126f2c4afc62.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "db0f05f4ae045a58688bccfcdfcaba9bdf415081af2d8eb5d998a5a9fbbfe31f.tar.zst",
+      "archive": "c96fe11f5abbe33559039be6c47d651f06e552bbfaf3e3aff7a7c44f4ec434fd.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1375,6 +1383,24 @@
         "seconds": 4.701507568359375,
         "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 4.58s",
         "log_sha256": "22c770601e892300c35f8d494cedc5d9fcdd13fee0a46e00d82c4ee133fa1555",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "c96fe11f5abbe33559039be6c47d651f06e552bbfaf3e3aff7a7c44f4ec434fd.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "c96fe11f5abbe33559039be6c47d651f06e552bbfaf3e3aff7a7c44f4ec434fd.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 10.130940198898315,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 9.99s",
+        "log_sha256": "f3172bfe2863dea0cbf5039f58f1dcc2e092115543469c7a307103f435e32a55",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
