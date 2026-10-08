@@ -1951,6 +1951,14 @@
       "archive": "c1edd24b0ae42410e8bdf8c3ccd83103f46dbe00c8e6e2f69b3a8de772c5a2c9.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "ca4c89f21bd0ea6b82da1058372b7f79672d2eb6b4b3e1c468748193f890e6ff.tar.zst",
+      "archive": "fcdf1e86b6077e31c4f97adcf1b92c6fd7460d09ee83a380c59cc832464cbbc2.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4300,6 +4308,31 @@
       "capture_endpoint": {
         "beat": 645.75,
         "seconds": 199.4571533203125
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "fcdf1e86b6077e31c4f97adcf1b92c6fd7460d09ee83a380c59cc832464cbbc2.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "fcdf1e86b6077e31c4f97adcf1b92c6fd7460d09ee83a380c59cc832464cbbc2.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 30.024285554885864,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 29.87s",
+        "log_sha256": "ae4f9bc080a21fc1ee066dc6bf55566fd290ef58f0e481fc91fea1ed1a3bfbd2",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "0648f49a7a256577c95ef5c8c0ed69ae3ba84e67cba3d720210536e2da89e677",
+      "capture_endpoint": {
+        "beat": 343.66668701171875,
+        "seconds": 129.78482055664062
       },
       "runtime_errors": 0,
       "dropped_events": 0
