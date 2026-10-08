@@ -1343,6 +1343,14 @@
       "archive": "c4a9a0115d700c4c0dfc427a54e238631dd1ad5a12765f5c52512eee45d0e98f.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "superseded_archive": "04eb6389c65a08fc4711ea7e02466871c65681de0683aa26d1f4b81559bdd156.tar.zst",
+      "archive": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1609,6 +1617,24 @@
         "seconds": 21.04258680343628,
         "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 20.91s",
         "log_sha256": "b78ae1266138887cfe373a9bee1bb52f653c13215b66b0e99449a7f7670959c8",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 49.119179248809814,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 49.00s",
+        "log_sha256": "c595f91cd3fc484a5ca7523dc8acd12aad6e9fe443bc266cc6477fb220b65bcf",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }

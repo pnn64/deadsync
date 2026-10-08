@@ -269,13 +269,14 @@
     {
       "title": "278|MODS|[lv.08] And Drugs↑↑",
       "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
-      "harness_version": "0.1.8",
-      "archive": "04eb6389c65a08fc4711ea7e02466871c65681de0683aa26d1f4b81559bdd156.tar.zst",
-      "sha256": "04eb6389c65a08fc4711ea7e02466871c65681de0683aa26d1f4b81559bdd156",
-      "compressed_bytes": 208814,
-      "uncompressed_sha256": "933b7bd77c715560e240ca9a312bbc13843e3bc36d47912f94b3ae0f413e1162",
-      "compression_level": 22,
+      "harness_version": "0.1.18",
+      "archive": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9.tar.zst",
+      "sha256": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9",
+      "compressed_bytes": 255436,
+      "uncompressed_sha256": "459b442e3b8594d1a678e883e170019fd51214678eb42d45c80cc2eefd4be572",
+      "compression_level": 12,
       "aliases": [
+        "04eb6389c65a08fc4711ea7e02466871c65681de0683aa26d1f4b81559bdd156.tar.zst",
         "6050477bd2736007d998748689bf0cac887c2e19bb0565fb3022e83a459e4dbd.tar.zst",
         "30525568cc581a65c8b48ae00dc23056490d494e9d715c6fe38c17d8cb63e54d.tar.zst",
         "864492e69434c2de4a5651110179bfd47dc97fee7d93afa723f1da3098593320.tar.zst"
