@@ -301,13 +301,14 @@
     {
       "title": "280|MODS|[MASTER] Sharkmode",
       "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
-      "harness_version": "0.1.8",
-      "archive": "e657c3259372c4b2925fcdc49177e99fcd0ce6db2ec78b30d6532eabfa10d119.tar.zst",
-      "sha256": "e657c3259372c4b2925fcdc49177e99fcd0ce6db2ec78b30d6532eabfa10d119",
-      "compressed_bytes": 2697275,
-      "uncompressed_sha256": "ba05804ccd42efefc3429d0fa6254bcf90e50bcc752eada043ffad4f9091045c",
-      "compression_level": 22,
+      "harness_version": "0.1.18",
+      "archive": "db60b3a89af8957a5e4fb1be2ec3157d09c436a564938536ec91b8ab064afa45.tar.zst",
+      "sha256": "db60b3a89af8957a5e4fb1be2ec3157d09c436a564938536ec91b8ab064afa45",
+      "compressed_bytes": 3145388,
+      "uncompressed_sha256": "916b70c320f4def61651faf9535b5bc14a6d19bc965ebdab603b8d860c167ff4",
+      "compression_level": 12,
       "aliases": [
+        "e657c3259372c4b2925fcdc49177e99fcd0ce6db2ec78b30d6532eabfa10d119.tar.zst",
         "4b662265ea28526ff3f7bcd09ce1b8a28316d583d9849e2ef25b109da75fbbd7.tar.zst",
         "2f43fed7122972e6b7d272a1c239ea38058c5e845d49b58ffbe41c0158bcafa9.tar.zst",
         "32be2d612493e6e58b314257c775bb066e3b51384475a0cf095aaadeff070057.tar.zst"
