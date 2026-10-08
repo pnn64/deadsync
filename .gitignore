@@ -18,3 +18,6 @@ rust-performance.md
 # Complete movie archives over 100 MB stay local.
 /tests/fixtures/full_song_lua/257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst
 /tests/fixtures/full_song_lua/54d5c782bdbdf43c6fd23825be53039fd343ad7db5ca37464d24f1bd1e99bf4e.tar.zst
+/tests/fixtures/full_song_lua/c9313b93ccbadd0dadb10f3ad955141a7e9e84fb01e99d356ed4c4bed99de308.tar.zst
+/tests/fixtures/full_song_lua/2b913d2a02c46c97bfc48f342520741a8ca622e3567bb57810a07129f913963b.tar.zst
+/tests/fixtures/full_song_lua/b33a57b8e7aeb4c73488a54036ab93b7c9f1c043ac5ccfb1726b668a9a171079.tar.zst
