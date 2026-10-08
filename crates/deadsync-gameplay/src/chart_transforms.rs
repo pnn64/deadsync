@@ -419,8 +419,35 @@ pub fn count_held_tracks_at_row(
     col_offset: usize,
     cols: usize,
 ) -> usize {
-    (0..cols)
-        .filter(|local| is_hold_body_at_row(notes, row, col_offset + *local))
+    // Keep the unrestricted helper's behavior for callers outside the lane domain.
+    if cols == 0 {
+        return 0;
+    }
+    if cols > MAX_COLS || col_offset.checked_add(cols).is_none() {
+        return (0..cols)
+            .filter(|local| is_hold_body_at_row(notes, row, col_offset + *local))
+            .count();
+    }
+    let mut latest: [Option<&Note>; MAX_COLS] = [None; MAX_COLS];
+    for note in notes {
+        let Some(local) = local_player_col(note.column, col_offset, cols) else {
+            continue;
+        };
+        if note.row_index <= row
+            && latest[local].is_none_or(|previous| note.row_index >= previous.row_index)
+        {
+            latest[local] = Some(note);
+        }
+    }
+    latest[..cols]
+        .iter()
+        .filter(|note| {
+            note.is_some_and(|note| {
+                note.row_index < row
+                    && matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+                    && note.hold.as_ref().is_some_and(|hold| hold.end_row_index >= row)
+            })
+        })
         .count()
 }
 

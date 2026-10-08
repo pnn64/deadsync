@@ -1896,15 +1896,15 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             shadow_color: [0.0; 4],
             effect: EffectState::default(),
         },
-        FlatDraw::TexturedMesh(mesh) => {
-            let make_actor = |vertices| Actor::TexturedMesh {
-                environment: mesh.environment.clone(),
+        FlatDraw::TexturedMesh(mesh) => match mesh.vertices {
+            FlatMeshVertices::Shared(vertices) => Actor::TexturedMesh {
+                environment: mesh.environment,
                 align: [0.0, 0.0],
                 offset: mesh.offset,
                 world_z: mesh.world_z,
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 local_transform: mesh.local_transform,
-                texture: mesh.texture.clone(),
+                texture: mesh.texture,
                 tint: mesh.tint,
                 glow: mesh.glow,
                 vertices,
@@ -1919,34 +1919,31 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 visible: true,
                 blend: mesh.blend,
                 z: mesh.z,
-            };
-            match mesh.vertices {
-                FlatMeshVertices::Shared(vertices) => make_actor(vertices),
-                FlatMeshVertices::Reusable(vertices) => Actor::ReusableTexturedMesh {
-                    environment: mesh.environment.clone(),
-                    align: [0.0, 0.0],
-                    offset: mesh.offset,
-                    world_z: mesh.world_z,
-                    size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                    local_transform: mesh.local_transform,
-                    texture: mesh.texture,
-                    tint: mesh.tint,
-                    glow: mesh.glow,
-                    vertices,
-                    geom_cache_key: mesh.geom_cache_key,
-                    uv_scale: mesh.uv_scale,
-                    uv_offset: mesh.uv_offset,
-                    uv_tex_shift: mesh.uv_tex_shift,
-                    depth_test: mesh.depth_test,
-                    clear_depth: mesh.clear_depth,
-                    clear_depth_after: mesh.clear_depth_after,
-                    cull_back: false,
-                    visible: true,
-                    blend: mesh.blend,
-                    z: mesh.z,
-                },
-            }
-        }
+            },
+            FlatMeshVertices::Reusable(vertices) => Actor::ReusableTexturedMesh {
+                environment: mesh.environment,
+                align: [0.0, 0.0],
+                offset: mesh.offset,
+                world_z: mesh.world_z,
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                local_transform: mesh.local_transform,
+                texture: mesh.texture,
+                tint: mesh.tint,
+                glow: mesh.glow,
+                vertices,
+                geom_cache_key: mesh.geom_cache_key,
+                uv_scale: mesh.uv_scale,
+                uv_offset: mesh.uv_offset,
+                uv_tex_shift: mesh.uv_tex_shift,
+                depth_test: mesh.depth_test,
+                clear_depth: mesh.clear_depth,
+                clear_depth_after: mesh.clear_depth_after,
+                cull_back: false,
+                visible: true,
+                blend: mesh.blend,
+                z: mesh.z,
+            },
+        },
         FlatDraw::PreparedU32(text) => prepared_text_actor(
             text.align,
             text.offset,
@@ -2582,3 +2579,7 @@ mod dynamic_sudden_tests {
         assert!(dynamic_sudden_offset(params(&timing, ScrollSpeedSetting::CMod(600.0))).is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "mesh_capture_performance.rs"]
+mod capture_performance;
