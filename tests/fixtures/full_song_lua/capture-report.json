@@ -1935,6 +1935,14 @@
       "archive": "c0a1741ca9d19cd8b8baf1292402b010423732e0eebad4d371fadb8d6430e85a.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "superseded_archive": "1383c72f18d789124eb40dcffca0243712bfe0d226274689e3696edf0f0cd071.tar.zst",
+      "archive": "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4234,6 +4242,31 @@
       "capture_endpoint": {
         "beat": 357,
         "seconds": 138.1935577392578
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 291.5730531215668,
+        "result": "result: ok; 1/1 fixtures passed; 2274690 comparisons passed, 0 failed (2274690 total); elapsed 291.39s",
+        "log_sha256": "0b23d5aaf4a1add94497615244b5529525b75c0b10e70709e8dc3b8f7f1ab6a0",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "5474cd9f73f0829eec3f3f957c637b4a8f7341fd390cd8f2f2a6ac3d714d94e8",
+      "capture_endpoint": {
+        "beat": 645.75,
+        "seconds": 199.4571533203125
       },
       "runtime_errors": 0,
       "dropped_events": 0
