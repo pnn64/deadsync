@@ -2103,6 +2103,14 @@
       "archive": "40ae7d06fb4edacdfc931e4fd7f605d83ad529d41e126de88487d97403311dc1.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+      "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5182,6 +5190,32 @@
       "capture_endpoint": {
         "beat": 481,
         "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 63.41171407699585,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 63.27s",
+        "log_sha256": "bc009457f526b8396336c56250d5364506ff9b945009dcc7134b6e3e18a91964",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "7d7e16de3552459177b2718df7caef2da0aff04b26ea1490087ad1110e9ce415",
+      "capture_endpoint": {
+        "beat": 440,
+        "seconds": 127.53623199462892
       },
       "runtime_errors": 0,
       "dropped_events": 0
