@@ -1648,3 +1648,20 @@ Together with the prior verified prefix, 23 ordered archives now pass
 9,001,600 comparisons. Receipts and hashes are linked in
 pass45-epidermis-comparison.json under target/song-lua-archive-passes. The
 full corpus and separate public music-seconds getter audit remain unfinished.
+
+
+## Pass 46: replace the second obsolete Epidermis capture
+
+The Tech Spectrum Super variant also failed before comparisons because its
+archive retained the obsolete continuous-BPM clock. The unchanged native
+harness recaptured the original source through the same complete endpoint,
+beat 910.75 / 273.2250061035156 seconds, with three payload members and no
+native runtime errors or dropped events. All 363,873 comparisons pass on the
+same pinned DeadSync-0.5.1855 executable.
+
+The verified 100,620-byte archive replaces the obsolete published fixture,
+retaining aliases and preserving superseded bytes under target. No code,
+tolerance or observation changed. The ordered prefix now contains 24 archives
+and 9,365,473 comparisons; full-corpus parity and the public music-seconds
+getter audit remain unfinished. Receipts and hashes are linked in
+pass46-epidermis-main-comparison.json.
