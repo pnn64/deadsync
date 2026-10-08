@@ -2510,3 +2510,5 @@ DeadSync .1869 requires native endpoint metadata, the final native music timesta
 The corrected Bank Account archive passes all 116,603 comparisons. Its previous bytes and aliases are preserved. Scope remains 501 original simfiles, 483 canonical archives, nine historical variants and 18 unindexed sources. The old pass 71 stopped at 12 archives when the necessary harness source change activated its guard. The full corpus must still be revalidated under the corrected endpoint contract.
 
 Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.

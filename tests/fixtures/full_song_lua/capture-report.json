@@ -2255,6 +2255,14 @@
       "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "adf7cae38b6febc5504a3323f6f46b9ca87418a4409c123aa1b9b87dd4441f79.tar.zst",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5852,6 +5860,33 @@
         "beat": 334,
         "music_seconds": 157.0234832763672,
         "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 22.131611108779907,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 22.00s",
+        "log_sha256": "046b15ef3e4fec746c66b28c1d2a25212dcf1ec714053b031d5610e5eedfa2a7",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d7ef8aeb04ad8c7fffb4cb45db7e8e573558c30ca092ed3a53d6e44d7ebe322d",
+      "capture_endpoint": {
+        "beat": 266,
+        "music_seconds": 145.0819091796875,
+        "seconds": 145.09091186523438
       },
       "runtime_errors": 0,
       "dropped_events": 0
