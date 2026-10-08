@@ -1495,6 +1495,14 @@
       "archive": "cc4046ed05ebcaca98c81a81756e6006a42f18675f5de79afefd8085ef82e1c3.tar.zst",
       "harness_version": "0.1.21",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 57,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "b74f7209ed7fe51e4c5fc9b63fdc0ac6e608f1e6d981c06da775559b4c47daf5.tar.zst",
+      "archive": "fc7dbcc62daae5b0bf80726db8360a3a418cb2636964ca8fe2220104083754ff.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -2416,6 +2424,31 @@
         "log_sha256": "f0c46eb082d26a6ca6f68c1ba678a63223a4bd7630de0724be28662813663441",
         "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
       }
+    },
+    {
+      "pass_number": 57,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "fc7dbcc62daae5b0bf80726db8360a3a418cb2636964ca8fe2220104083754ff.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "fc7dbcc62daae5b0bf80726db8360a3a418cb2636964ca8fe2220104083754ff.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 62.29010200500488,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 62.08s",
+        "log_sha256": "e29d072948fc916750ef2bea11d27fe417b08c5ffc8a31e8183e01ddc6b2d59f",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      },
+      "capture_log_sha256": "0d214c728a41c29f780669cc07abddc770ea34a66405f84788f7ecf86464e6c7",
+      "capture_endpoint": {
+        "beat": 481,
+        "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     }
   ]
 }
