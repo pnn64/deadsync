@@ -1655,6 +1655,14 @@
       "archive": "f78755aed21248919a56017cd10e13546b48ca5e6e64be47e3a43ea36df97aee.tar.zst",
       "harness_version": "0.1.24",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 63,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "c0c92c9f73dd846ff917ebcde890a6b918c94ba3ede8e93de85a56edc261b5a6.tar.zst",
+      "archive": "55e2eca5aafa6f304c3d10ccf6963633cbf3879dce99f483268ca8100be33d1d.tar.zst",
+      "harness_version": "0.1.24",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3073,6 +3081,31 @@
       "capture_endpoint": {
         "beat": 333.25,
         "seconds": 166.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 63,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "55e2eca5aafa6f304c3d10ccf6963633cbf3879dce99f483268ca8100be33d1d.tar.zst",
+      "harness_version": "0.1.24",
+      "harness_commit": "6a127f4349612da54f32eb8db0d49b4bb64f330a",
+      "native_executable_sha256": "6f0e8ff5fd6e04085e9ed3054ef744f932989c2d4a46c191be85b92eb94ef935",
+      "verification": {
+        "archive": "55e2eca5aafa6f304c3d10ccf6963633cbf3879dce99f483268ca8100be33d1d.tar.zst",
+        "version": "0.5.1863",
+        "exit_code": 0,
+        "seconds": 11.268475770950317,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.14s",
+        "log_sha256": "ec7959dfcb2d2a7ff8f06a4e270f96e03e0a175652765682d9c4ebe648c029d1",
+        "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+      },
+      "capture_log_sha256": "04f9d0afdc41fcd5d49ac8503f7776ea3e15cdbda3008ed4b56f48d1e4d1c867",
+      "capture_endpoint": {
+        "beat": 338,
+        "seconds": 130
       },
       "runtime_errors": 0,
       "dropped_events": 0
