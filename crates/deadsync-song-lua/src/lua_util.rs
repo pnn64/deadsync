@@ -1607,6 +1607,7 @@ pub fn install_def_globals(
         ("ActorMultiVertex", "ActorMultiVertex"),
         ("Sound", "Sound"),
         ("BitmapText", "BitmapText"),
+        ("BPMDisplay", "BPMDisplay"),
         ("RollingNumbers", "RollingNumbers"),
         ("GraphDisplay", "GraphDisplay"),
         ("SongMeterDisplay", "SongMeterDisplay"),
@@ -2297,16 +2298,6 @@ pub fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<
     Ok(false)
 }
 
-pub fn top_screen_steps_text(parent: &Table, player_index: usize) -> mlua::Result<String> {
-    parent
-        .get::<Option<String>>(match player_index {
-            0 => "__songlua_steps_text_1",
-            1 => "__songlua_steps_text_2",
-            _ => "",
-        })?
-        .map_or_else(|| Ok(SongLuaDifficulty::Medium.sm_name().to_string()), Ok)
-}
-
 pub fn remove_actor_child(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
     let children = actor_children(lua, actor)?;
     children.set(name, Value::Nil)?;
@@ -2581,8 +2572,6 @@ pub fn copy_dummy_actor_tags(from: &Table, into: &Table) -> mlua::Result<()> {
     for key in [
         "__songlua_main_title",
         "__songlua_bpm_text",
-        "__songlua_steps_text_1",
-        "__songlua_steps_text_2",
         "__songlua_style_name",
     ] {
         if let Some(value) = from.get::<Option<String>>(key)? {
@@ -9253,13 +9242,16 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             }
         })?,
     )?;
-    actor.set(
-        "GetText",
-        lua.create_function({
-            let actor = actor.clone();
-            move |_, _args: MultiValue| lua_text_value(actor.get::<Value>("Text")?)
-        })?,
-    )?;
+    // LunaBitmapText owns GetText; its presence is observable in Lua.
+    if actor_is_bitmap_text(actor)? {
+        actor.set(
+            "GetText",
+            lua.create_function({
+                let actor = actor.clone();
+                move |_, _args: MultiValue| lua_text_value(actor.get::<Value>("Text")?)
+            })?,
+        )?;
+    }
     for name in ["targetnumber", "SetTargetNumber"] {
         actor.set(
             name,
@@ -12677,8 +12669,10 @@ pub fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
     Ok(actor
         .get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
         .is_some_and(|kind| {
-            kind.as_str().eq_ignore_ascii_case("BitmapText")
-                || kind.as_str().eq_ignore_ascii_case("RollingNumbers")
+            ["BitmapText", "RollingNumbers", "BPMDisplay", "HelpDisplay",
+                "ActiveAttackList", "ScoreDisplayAliveTime", "ScoreDisplayCalories",
+                "DeviceList", "InputList"]
+                .iter().any(|name| kind.as_str().eq_ignore_ascii_case(name))
         }))
 }
 
@@ -12867,14 +12861,9 @@ pub fn create_top_screen_theme_actor(
             create_dummy_actor,
         )?));
     }
-    if let Some(player_index) = top_screen_steps_display_index(name) {
-        return Ok(Some(create_named_text_actor(
-            lua,
-            "StepsDisplay",
-            name,
-            top_screen_steps_text(parent, player_index)?,
-            create_dummy_actor,
-        )?));
+    if top_screen_steps_display_index(name).is_some() {
+        // StepsDisplay derives from ActorFrame, not BitmapText.
+        return Ok(Some(create_named_actor(lua, "StepsDisplay", name, create_dummy_actor)?));
     }
     if top_screen_song_meter_display_index(name).is_some() {
         return Ok(Some(create_top_screen_song_meter_display_actor(
@@ -13296,8 +13285,6 @@ pub fn create_top_screen_table(
         "__songlua_bpm_text",
         display_bpms_text(context.song_display_bpms, song_music_rate(context)),
     )?;
-    top_screen.set("__songlua_steps_text_1", players[0].difficulty.sm_name())?;
-    top_screen.set("__songlua_steps_text_2", players[1].difficulty.sm_name())?;
     let top_screen_for_get_child = top_screen.clone();
     let life_meters = [
         create_life_meter_table(lua, "LifeP1", create_dummy_actor)?,

@@ -188,7 +188,7 @@ pub use lua_util::{
     song_lua_screen_center, song_lua_screen_size, stateful_message_captures, table_bool_field,
     table_f32_field, table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4,
     table_vec5, table_vertex_colors, text_attribute_matches, text_attribute_value,
-    texture_source_size, top_screen_steps_text, tracked_indices_for_actor_pointers,
+    texture_source_size, tracked_indices_for_actor_pointers,
     tracked_song_lua_actor, update_tree_reads_global,
 };
 pub use mod_windows::read_mod_windows;
@@ -6447,6 +6447,39 @@ return Def.ActorFrame{
             .unwrap();
         assert!(!hidden.initial_state.visible);
         assert!(shown.initial_state.visible);
+    }
+
+    #[test]
+    fn actor_lookup_matches_itg() {
+        let song_dir = test_dir("native-actor-lookup");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame{
+    OnCommand=function(self)
+        assert(self:GetNumChildren() == 4)
+        assert(self:GetChild("missing") == nil)
+        assert(self:GetChild("") == nil)
+        assert(self:GetNumChildren() == 4)
+        assert(self.GetText == nil)
+        assert(self:GetChild("Child").GetText == nil)
+        local label = self:GetChild("Label")
+        assert(type(label.GetText) == "function")
+        assert(label:GetText() == "Alpha")
+        assert(type(self:GetChild("BPM").GetText) == "function")
+        assert(type(self:GetChild("Devices").GetText) == "function")
+        mod_actions = {{1, "NativeLookupChecked", true}}
+    end,
+    Def.ActorFrame{Name="Child"},
+    Def.BitmapText{Name="Label", Font="Common Normal", Text="Alpha"},
+    Def.BPMDisplay{Name="BPM"},
+    Def.DeviceList{Name="Devices"}
+}
+"#).expect("write native actor lookup fixture");
+        let compiled = test_compile_song_lua(
+            &entry, &SongLuaCompileContext::new(&song_dir, "Native actor lookup"),
+        ).expect("native child and GetText lookup assertions");
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, "NativeLookupChecked");
     }
 
     #[test]
@@ -18585,7 +18618,7 @@ return Def.ActorFrame{
                     bpm:GetName(),
                     bpm:GetText(),
                     title:GetText(),
-                    steps:GetText(),
+                    tostring(steps.GetText == nil),
                     p1_score:GetName(),
                     p1_score:GetText(),
                     song_meter_title:GetText(),
@@ -18609,7 +18642,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "BPMDisplay:120 - 180:Theme Actor Shapes:Difficulty_Hard:P1Score:0.00%:Theme Actor Shapes:SongMeterDisplayP1:Stream:Overlay"
+            "BPMDisplay:120 - 180:Theme Actor Shapes:true:P1Score:0.00%:Theme Actor Shapes:SongMeterDisplayP1:Stream:Overlay"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
@@ -18706,7 +18739,7 @@ return Def.ActorFrame{
                     "%s:%s:%s:%s:%s:%s",
                     tostring(top:GetNumChildren() >= 12),
                     underlay_children.BPMDisplay:GetText(),
-                    children.StepsDisplayP1:GetText(),
+                    tostring(children.StepsDisplayP1.GetText == nil),
                     underlay_children.P1Score:GetName(),
                     underlay_children.SongMeter:GetChild("SongTitle"):GetText(),
                     tostring(children.PlayerP1 == top:GetChild("PlayerP1"))
@@ -18727,7 +18760,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "true:150:Difficulty_Challenge:P1Score:Enumeration:true"
+            "true:150:true:P1Score:Enumeration:true"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }

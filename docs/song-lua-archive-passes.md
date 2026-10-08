@@ -1839,3 +1839,38 @@ Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK
 Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 24/492 archives; full-corpus parity remains unfinished.
 
 Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 52: verify actor lookup against native Lua bindings
+
+A direct compiled ActorFrameTexture control calls ITGmania's real ActorFrame
+Lua methods. All eight assertions pass: missing named and unnamed children
+return nil without creating actors, and GetText and UnknownMethod are absent.
+The old harness 0.1.18 fails the unchanged missing-child and GetText assertions.
+Harness 0.1.20 fixes those two behaviors and preserves GetText on the nine
+BitmapText subclasses identified in ITGmania's declarations. Generic unknown
+method lookup and the external Simply Love screen context remain pending.
+
+DeadSync 0.5.1859 exposes GetText only for BitmapText and its native subclasses,
+adds the native BPMDisplay constructor, and corrects StepsDisplay's ActorFrame
+inheritance. Its fabricated difficulty text, helper and tags are deleted.
+Cache version 50 invalidates tracks compiled with the old feature probes.
+Two existing theme tests now assert StepsDisplay.GetText is absent, following
+StepsDisplay.cpp's Lua registration rather than the previous fabricated API.
+
+The complete unchanged two-assertion probe fails compilation in DeadSync
+0.5.1858 at the GetText assertion and passes all 2,669 comparisons in 0.5.1859.
+The earlier probe with a mismatched noteskin hash is not lookup evidence.
+All 669 core song-Lua tests, the production check, both cache checks and the
+retained public-music, effect-clock and strict-multitap controls pass.
+Warp Zone retains all 212,220 observations and 321STARS all 372,891, with no
+differences. No observations or tolerances were removed or relaxed.
+
+The synthetic archive, native control input/output, source hashes and complete
+before/after receipts are in actor-lookup-provenance.json under the micro
+fixtures. The probe is not counted as a corpus song. Full parity remains
+unfinished across 501 simfiles, including 18 without indexed archives and
+nine historical duplicate captures. The 25-archive prefix from pass 51 records
+harness 0.1.18 and DeadSync 0.5.1858; these focused checks do not revalidate the
+entire prefix on the new versions. ArrowQuest still needs a complete capture
+after its 900-second timeout; no truncated or diagnostic archive was published.
