@@ -2351,6 +2351,14 @@
       "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6287,6 +6295,33 @@
         "beat": 481,
         "music_seconds": 140.8264923095703,
         "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 71.53698563575745,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 71.40s",
+        "log_sha256": "4f0ca68905da12e8ecbda33c5384848d3147ffac89d8e77f5409dee95361352e",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "03759a60952e437414ad4a541a7da815a5f61db962b72ddfd4cb40fbfba44a0e",
+      "capture_endpoint": {
+        "beat": 440,
+        "music_seconds": 126.37823486328124,
+        "seconds": 127.53623199462892
       },
       "runtime_errors": 0,
       "dropped_events": 0
