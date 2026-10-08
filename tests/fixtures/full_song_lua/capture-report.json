@@ -1791,6 +1791,14 @@
       "archive": "4b76cf93237097bbe2c8ed3c29075bfdacdd3c408d42327fe1b72461995510fb.tar.zst",
       "harness_version": "0.1.26",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "8c6f3b8a701b258c4e33a3e9cded29eb85583fd63aa7719bc6eb0cac2f7ee881.tar.zst",
+      "archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3640,6 +3648,31 @@
       "capture_endpoint": {
         "beat": 360.75,
         "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 66,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 15.708775043487549,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 15.57s",
+        "log_sha256": "8c1c794ac80496177b3b1a240a644af086bbe0fc0774c799173ec8d25889e0df",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "c6d08b15287ffd609a406a1ac995ee6bee244f7466a3575b46bcb1a1ca682008",
+      "capture_endpoint": {
+        "beat": 334,
+        "seconds": 156.56248474121094
       },
       "runtime_errors": 0,
       "dropped_events": 0
