@@ -392,13 +392,14 @@
     {
       "title": "319|TECH SOUP|[lv.P.Clark] Epidermis",
       "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
-      "harness_version": "0.1.16",
-      "archive": "3ae4e1723e99603235279c2a05ce02c665b508869089b2c5e1604200f26f458b.tar.zst",
-      "sha256": "3ae4e1723e99603235279c2a05ce02c665b508869089b2c5e1604200f26f458b",
-      "compressed_bytes": 100620,
-      "uncompressed_sha256": "38c53c5a849c1a10dc7faa6b90cab1f82304045363ae627348f5a0b211b13399",
+      "harness_version": "0.1.18",
+      "archive": "a867a12d25c984a49c2dd29fa06d47f88afe01841ee9d410dbf1332800797336.tar.zst",
+      "sha256": "a867a12d25c984a49c2dd29fa06d47f88afe01841ee9d410dbf1332800797336",
+      "compressed_bytes": 100611,
+      "uncompressed_sha256": "aca051b95d8edede9e62eb313cd245a3313294cda5fb515eff3b67d1df2bfeb9",
       "compression_level": 12,
       "aliases": [
+        "3ae4e1723e99603235279c2a05ce02c665b508869089b2c5e1604200f26f458b.tar.zst",
         "cadff24c20d748d1be439876ef826cfb6db249d7b055546d4a91896ba85621f1.tar.zst",
         "7a9ccefe41fbb31a97dbee72826ec2a484ca0e50ae66a6cf3cacd54cdc207e36.tar.zst"
       ]

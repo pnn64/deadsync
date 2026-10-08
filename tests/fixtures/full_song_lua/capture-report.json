@@ -1399,6 +1399,14 @@
       "archive": "b40903481944c3395db4c848c671e27a383d2cbea51c74b029b7dea9dbccf16a.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "superseded_archive": "3ae4e1723e99603235279c2a05ce02c665b508869089b2c5e1604200f26f458b.tar.zst",
+      "archive": "a867a12d25c984a49c2dd29fa06d47f88afe01841ee9d410dbf1332800797336.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1809,6 +1817,24 @@
         "seconds": 4.098792552947998,
         "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 3.98s",
         "log_sha256": "131dd2f9aef84b27c437fcf015142a3d90ca80dd8cb6a75152f9eb5f3bf92a68",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "a867a12d25c984a49c2dd29fa06d47f88afe01841ee9d410dbf1332800797336.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "a867a12d25c984a49c2dd29fa06d47f88afe01841ee9d410dbf1332800797336.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 4.064413547515869,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 3.94s",
+        "log_sha256": "1def685c3d1f2142e35f5ca75d2049154f67e829cf57a2e07205772f2b2738c0",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
