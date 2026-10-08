@@ -2338,3 +2338,5 @@ Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is no
 Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
 
 Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
