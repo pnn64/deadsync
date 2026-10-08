@@ -6451,6 +6451,29 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn runtime_actor_contracts() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        for name in ["actor-string", "bitmap-bools"] {
+            let input: serde_json::Value = serde_json::from_slice(
+                &fs::read(fixtures.join(format!("{name}-input.json")))
+                    .expect("native runtime actor input"),
+            ).expect("native runtime actor JSON");
+            let body = input["lua_assertions"].as_str()
+                .expect("native runtime actor assertions");
+            let script = fs::read_to_string(fixtures.join(format!("{name}.lua")))
+                .expect("runtime actor assertions").replace("\r\n", "\n");
+            assert!(script.contains(body), "unchanged native assertions: {name}");
+            let song_dir = test_dir(name);
+            let entry = song_dir.join("default.lua");
+            fs::write(&entry, script).expect("write runtime actor control");
+            test_compile_song_lua(
+                &entry, &SongLuaCompileContext::new(&song_dir, "Native runtime actor contracts"),
+            ).expect("native actor identity and strict BitmapText boolean arguments");
+        }
+    }
+
+    #[test]
     fn bitmap_methods_match_native() {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/itgmania-song-lua-micro");
@@ -18859,7 +18882,7 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_labels_actors_for_tostring_scans() {
+    fn actor_string_scans() {
         let song_dir = test_dir("actor-tostring-scans");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -18873,6 +18896,8 @@ return Def.ActorFrame{
         local underlay = tostring(children.Underlay)
         local steps = tostring(children.StepsDisplayP1)
         local score = tostring(children.ScoreP1:GetChild("ScoreDisplayPercentage Percent"))
+        assert(not steps:find("StepsDisplayP1", 1, true))
+        assert(not player:find("PlayerP1", 1, true))
         mod_actions = {
             {
                 1,
@@ -18880,7 +18905,7 @@ return Def.ActorFrame{
                     "%s:%s:%s:%s",
                     tostring(player:find("Player") ~= nil),
                     tostring(underlay:find("ActorFrame") ~= nil),
-                    tostring(steps:find("StepsDisplayP1") ~= nil),
+                    tostring(steps:find("^StepsDisplay %(") ~= nil),
                     tostring(score:find("PercentageDisplay") ~= nil)
                 ),
                 true,

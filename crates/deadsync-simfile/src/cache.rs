@@ -26,9 +26,9 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Reparse change tags after native MSD comment removal; older caches can
-// omit a foreground Lua layer that follows a commented-out change.
-pub const SONG_CACHE_VERSION: u8 = 54;
+// Recompile song Lua after correcting native actor identity and strict
+// BitmapText boolean arguments; older captures can omit failing commands.
+pub const SONG_CACHE_VERSION: u8 = 55;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;

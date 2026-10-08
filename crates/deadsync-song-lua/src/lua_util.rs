@@ -3854,7 +3854,23 @@ pub fn install_actor_metatable(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let actor_clone = actor.clone();
     mt.set(
         "__tostring",
-        lua.create_function(move |_, _self: Value| Ok(actor_debug_label(&actor_clone)))?,
+        lua.create_function(move |_, _self: Value| {
+            let kind = actor_clone
+                .raw_get::<Option<String>>("__songlua_actor_type")?
+                .unwrap_or_else(|| "Actor".into());
+            let kind = match kind.as_str() {
+                "Quad" => "Sprite",
+                "WrapperState" => "ActorFrame",
+                "TopScreen" => "ScreenGameplay",
+                kind => kind,
+            };
+            // Luna::tostring_T exposes only type and opaque object identity.
+            #[cfg(target_os = "windows")]
+            let identity = format!("{:016X}", actor_clone.to_pointer() as usize);
+            #[cfg(not(target_os = "windows"))]
+            let identity = format!("{:p}", actor_clone.to_pointer());
+            Ok(format!("{kind} ({identity})"))
+        })?,
     )?;
     let _ = actor.set_metatable(Some(mt));
     Ok(())
@@ -8894,34 +8910,28 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             }
         })?,
     )?;
-    actor.set(
-        "rainbowscroll",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let enabled = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_boolish)
-                    .unwrap_or(true);
-                capture_block_set_bool(lua, &actor, "rainbow_scroll", enabled)?;
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
-    actor.set(
-        "jitter",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let enabled = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_boolish)
-                    .unwrap_or(true);
-                capture_block_set_bool(lua, &actor, "text_jitter", enabled)?;
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
+    for (name, key) in [
+        ("rainbowscroll", "rainbow_scroll"),
+        ("jitter", "text_jitter"),
+        ("uppercase", "uppercase"),
+    ] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |lua, args: MultiValue| {
+                    // These LunaBitmapText methods use BArg, not BIArg.
+                    let Some(Value::Boolean(enabled)) = method_arg(&args, 0) else {
+                        return Err(mlua::Error::RuntimeError(format!(
+                            "{name}: boolean expected"
+                        )));
+                    };
+                    capture_block_set_bool(lua, &actor, key, *enabled)?;
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
+    }
     actor.set(
         "distort",
         lua.create_function({
@@ -9228,20 +9238,6 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                     .and_then(read_boolish)
                     .unwrap_or(true);
                 capture_block_set_bool(lua, &actor, "max_dimension_uses_zoom", value)?;
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
-    actor.set(
-        "uppercase",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let value = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_boolish)
-                    .unwrap_or(true);
-                capture_block_set_bool(lua, &actor, "uppercase", value)?;
                 Ok(actor.clone())
             }
         })?,
@@ -9601,6 +9597,21 @@ pub fn install_actor_child_query_methods(lua: &Lua, actor: &Table) -> mlua::Resu
 }
 
 pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    actor.set(
+        "name",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, args: MultiValue| {
+                // LunaActor::name uses SArg and returns the same actor.
+                let value = method_arg(&args, 0).cloned().unwrap_or(Value::Nil);
+                let Some(name) = lua.coerce_string(value)? else {
+                    return Err(mlua::Error::runtime("name: string expected"));
+                };
+                actor.raw_set("Name", name)?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
     actor.set(
         "GetX",
         lua.create_function({
