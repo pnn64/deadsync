@@ -1287,6 +1287,14 @@
       "archive": "f056f50bdf2a701e11399ff322aeae47eff639c2398757fbff520ebf02fb29db.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "superseded_archive": "de6f91a3ec6861dbc1591ab3b8de1f3678f77fbf316648e92d7102f43ae91750.tar.zst",
+      "archive": "f1f679a5b7316d1d143ebbe064f59aea1b66a0ab30f41c4ece1be49f6af124de.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1427,6 +1435,24 @@
         "seconds": 47.902892112731934,
         "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 47.77s",
         "log_sha256": "3a3c6c9357c8d15aa5452401fe52e8e4d9aece54b6e9f7c2b13446ffb25d9e77",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "f1f679a5b7316d1d143ebbe064f59aea1b66a0ab30f41c4ece1be49f6af124de.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "f1f679a5b7316d1d143ebbe064f59aea1b66a0ab30f41c4ece1be49f6af124de.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 8.18457293510437,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.05s",
+        "log_sha256": "2f53980424fd23ee8ea4abcbbc094f5ddc2ef88822dd730b029bbebece6d8ac4",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
