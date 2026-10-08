@@ -727,6 +727,19 @@ pub fn install_screen_utility_globals(lua: &Lua) -> mlua::Result<()> {
                 self:zoom(width / self:GetWidth())
             end,
         }
+        -- _fallback/Scripts/02 Utilities.lua: use the current style type and
+        -- preference rather than the number of enabled players.
+        function Center1Player()
+            local styleType = GAMESTATE:GetCurrentStyle():GetStyleType()
+            if styleType == "StyleType_OnePlayerTwoSides"
+                or styleType == "StyleType_TwoPlayersSharedSides" then
+                return true
+            elseif PREFSMAN:GetPreference("Center1Player") then
+                return styleType == "StyleType_OnePlayerOneSide"
+            else
+                return false
+            end
+        end
     "#,
     )
     .set_name("background fit helpers")
@@ -844,12 +857,25 @@ pub fn install_message_manager_globals(
         lua.create_function(move |lua, args: MultiValue| {
             if let Some(message) = method_arg(&args, 0).cloned().and_then(read_string) {
                 let params = method_arg(&args, 1).cloned();
+                // LunaMessageManager::Broadcast rejects these before dispatch.
+                if let Some(value) = &params
+                    && !matches!(value, Value::Table(_) | Value::Nil)
+                {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "bad argument #2 to 'Broadcast' (table or nil expected, got {})",
+                        value.type_name()
+                    )));
+                }
                 note_song_lua_side_effect(lua)?;
-                record_song_lua_broadcast(lua, &message, params.is_some())?;
-                if !lua
-                    .globals()
-                    .raw_get::<Option<bool>>(SONG_LUA_SUPPRESS_BROADCAST_KEY)?
-                    .unwrap_or(false)
+                let has_params = matches!(params, Some(Value::Table(_)));
+                record_song_lua_broadcast(lua, &message, has_params)?;
+                // Parameterized listeners need their actual values while an
+                // action is baked; a named event cannot retain those values.
+                if has_params
+                    || !lua
+                        .globals()
+                        .raw_get::<Option<bool>>(SONG_LUA_SUPPRESS_BROADCAST_KEY)?
+                        .unwrap_or(false)
                 {
                     broadcast(lua, &message, params)?;
                 }
@@ -1911,4 +1937,38 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
     write!(remaining, "{:.2}%", value * 100.0).expect("f32 percentage fits in 64 bytes");
     let len = 64 - remaining.len();
     Ok(Value::String(lua.create_string(&buffer[..len])?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn broadcast_params_match_native() {
+        fn receive(lua: &Lua, _name: &str, params: Option<Value>) -> mlua::Result<()> {
+            let globals = lua.globals();
+            globals.set("received", globals.get::<usize>("received")? + 1)?;
+            globals.set("received_params", params.unwrap_or(Value::Nil))
+        }
+        let lua = Lua::new();
+        lua.globals().set("received", 0).expect("counter");
+        install_message_manager_globals(&lua, receive).expect("message manager");
+        lua.load(
+            r#"
+            for _, invalid in ipairs({1, true, "text", function() end}) do
+                assert(not pcall(function() MESSAGEMAN:Broadcast("Probe", invalid) end))
+            end
+            assert(received == 0, "invalid parameters must not dispatch")
+            local params = { value = 3 }
+            assert(MESSAGEMAN:Broadcast("Probe", params) == MESSAGEMAN)
+            assert(received == 1 and received_params == params)
+            assert(MESSAGEMAN:Broadcast("Probe", nil) == MESSAGEMAN)
+            assert(received == 2 and received_params == nil)
+            assert(MESSAGEMAN:Broadcast("Probe") == MESSAGEMAN)
+            assert(received == 3 and received_params == nil)
+        "#,
+        )
+        .exec()
+        .expect("native Broadcast parameter contract");
+    }
 }

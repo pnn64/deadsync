@@ -172,7 +172,7 @@ pub use lua_util::{
     restore_note_field_columns, rolling_numbers_text, run_actor_draw_functions,
     run_actor_draw_functions_for_table, run_actor_init_commands, run_actor_init_commands_for_table,
     run_actor_named_command, run_actor_named_command_with_drain,
-    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
+    run_actor_named_command_with_drain_and_params,
     run_actor_startup_commands_for_table, run_actor_update_functions,
     run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
     run_added_actor_child_commands, run_command_on_leaves,
@@ -226,7 +226,7 @@ pub use player_options::{
     default_player_option_value, is_player_option_method_name, normalize_player_option_key,
     normalize_player_option_value, parse_player_option_amount, parse_player_speed_option,
     player_option_default_string, player_option_uses_bool, song_lua_speedmod_value,
-    split_first_word, strip_player_option_prefix,
+    strip_player_option_prefix,
 };
 pub use runtime::{
     compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
@@ -854,7 +854,7 @@ pub fn theme_metric_value_for_human_players(
         return Ok(mlua::Value::String(lua.create_string(&value)?));
     }
     if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("DefaultNoteSkinName") {
-        return Ok(mlua::Value::String(lua.create_string("default")?));
+        return Ok(mlua::Value::String(lua.create_string(SONG_LUA_DEFAULT_NOTESKIN_NAME)?));
     }
     if name.eq_ignore_ascii_case("Class") {
         return Ok(mlua::Value::String(lua.create_string(group)?));
@@ -1730,6 +1730,17 @@ pub struct SongLuaBoolWrite {
     pub chained: bool,
 }
 
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone)]
+pub struct SongLuaSkinWrite {
+    pub player: usize,
+    pub key: String,
+    pub beat: f64,
+    pub second: f64,
+    pub previous: String,
+    pub current: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct CompiledSongLua<OverlayActor> {
     pub startup: SongLuaStartup,
@@ -1755,6 +1766,8 @@ pub struct CompiledSongLua<OverlayActor> {
     pub overlay_writes: Vec<SongLuaOverlayUpdateTrack>,
     #[cfg(feature = "test-support")]
     pub boolean_writes: Vec<SongLuaBoolWrite>,
+    #[cfg(feature = "test-support")]
+    pub noteskin_writes: Vec<SongLuaSkinWrite>,
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
@@ -1790,6 +1803,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             overlay_writes: Vec::new(),
             #[cfg(feature = "test-support")]
             boolean_writes: Vec::new(),
+            #[cfg(feature = "test-support")]
+            noteskin_writes: Vec::new(),
             stateful_message_captures: Vec::new(),
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
@@ -2007,8 +2022,9 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         font_name: &'static str,
         font_path: PathBuf,
         text: Arc<str>,
-        // Sorted beat/string pairs baked at load; never grown during playback.
+        // Sorted clock/string pairs baked at load; never grown during playback.
         text_changes: Arc<[(f32, Arc<str>)]>,
+        text_changes_in_seconds: bool,
         stroke_color: Option<[f32; 4]>,
         attributes: Arc<[TextAttribute]>,
     },
@@ -2071,9 +2087,9 @@ pub fn sprite_texture_at(
 pub fn overlay_text_at<'a>(
     initial: &'a Arc<str>,
     changes: &'a [(f32, Arc<str>)],
-    beat: f32,
+    time: f32,
 ) -> &'a Arc<str> {
-    let end = changes.partition_point(|(start, _)| *start <= beat);
+    let end = changes.partition_point(|(start, _)| *start <= time);
     end.checked_sub(1)
         .map_or(initial, |index| &changes[index].1)
 }
@@ -2633,6 +2649,7 @@ pub struct SongLuaOverlayState {
     pub diffuse: [f32; 4],
     pub vertex_colors: Option<[[f32; 4]; 4]>,
     pub visible: bool,
+    pub hibernating: bool,
     pub cropleft: f32,
     pub cropright: f32,
     pub croptop: f32,
@@ -2709,6 +2726,13 @@ pub struct SongLuaOverlayState {
     pub stretch_rect: Option<[f32; 4]>,
 }
 
+impl SongLuaOverlayState {
+    #[must_use]
+    pub const fn draw_visible(self) -> bool {
+        self.visible && !self.hibernating
+    }
+}
+
 impl Default for SongLuaOverlayState {
     fn default() -> Self {
         Self {
@@ -2733,6 +2757,7 @@ impl Default for SongLuaOverlayState {
             diffuse: [1.0, 1.0, 1.0, 1.0],
             vertex_colors: None,
             visible: true,
+            hibernating: false,
             cropleft: 0.0,
             cropright: 0.0,
             croptop: 0.0,
@@ -2885,6 +2910,7 @@ pub struct SongLuaOverlayStateDelta {
     pub diffuse: Option<[f32; 4]>,
     pub vertex_colors: Option<[[f32; 4]; 4]>,
     pub visible: Option<bool>,
+    pub hibernating: Option<bool>,
     pub cropleft: Option<f32>,
     pub cropright: Option<f32>,
     pub croptop: Option<f32>,
@@ -2976,6 +3002,7 @@ impl SongLuaOverlayStateDelta {
             Target::Diffuse => self.diffuse.is_some(),
             Target::VertexColors => self.vertex_colors.is_some(),
             Target::Visible => self.visible.is_some(),
+            Target::Hibernating => self.hibernating.is_some(),
             Target::CropLeft => self.cropleft.is_some(),
             Target::CropRight => self.cropright.is_some(),
             Target::CropTop => self.croptop.is_some(),
@@ -3344,6 +3371,9 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.visible {
         state.visible = value;
+    }
+    if let Some(value) = delta.hibernating {
+        state.hibernating = value;
     }
     if let Some(value) = delta.cropleft {
         state.cropleft = value;
@@ -3832,6 +3862,11 @@ pub fn overlay_state_lerp(
     {
         from.visible = to;
     }
+    if let Some(to) = delta.hibernating
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.hibernating = to;
+    }
     if let Some(to) = delta.blend
         && t >= 1.0 - f32::EPSILON
     {
@@ -3939,6 +3974,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.diffuse.is_none()
         && delta.vertex_colors.is_none()
         && delta.visible.is_none()
+        && delta.hibernating.is_none()
         && delta.cropleft.is_none()
         && delta.cropright.is_none()
         && delta.croptop.is_none()
@@ -4064,6 +4100,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.visible.is_some() {
         into.visible = from.visible;
+    }
+    if from.hibernating.is_some() {
+        into.hibernating = from.hibernating;
     }
     if from.cropleft.is_some() {
         into.cropleft = from.cropleft;
@@ -4324,6 +4363,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(diffuse);
     copy_pair!(vertex_colors);
     copy_pair!(visible);
+    copy_pair!(hibernating);
     copy_pair!(cropleft);
     copy_pair!(cropright);
     copy_pair!(croptop);
@@ -4776,6 +4816,7 @@ pub enum SongLuaOverlayUpdateTarget {
     StretchRect,
     AftCreated,
     AftPreserve,
+    Hibernating,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -6172,6 +6213,65 @@ return Def.ActorFrame{}
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "PlayerNumber_P1");
+    }
+
+    #[test]
+    fn compile_song_lua_round_trips_noteskins() {
+        let song_dir = test_dir("noteskin-round-trip");
+        for skin in ["cyber", "default", "cel", "dark", "skew", "turn"] {
+            fs::create_dir_all(song_dir.join(skin)).expect("local skin directory");
+            fs::write(song_dir.join(skin).join("metrics.ini"), "[Global]\n").expect("local metrics");
+        }
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local state = GAMESTATE:GetPlayerState(PLAYER_1)
+local po = state:GetPlayerOptions('ModsLevel_Song')
+assert(po:NoteSkin() == 'cyber')
+assert(THEME:GetMetric('Common', 'DefaultNoteSkinName') == 'cel')
+return Def.ActorFrame{OnCommand=function(self)
+    po:FromString('50% default, 20% dark')
+    assert(po:NoteSkin() == 'default' and math.abs(po:Dark() - 0.2) < 0.000001)
+    assert(state:GetPlayerOptionsString('ModsLevel_Song'):find('Default', 1, true))
+    po:FromString('25% skew')
+    assert(po:NoteSkin() == 'skew' and po:Skew() == 0, 'skin lookup precedes Skew')
+    state:SetPlayerOptions('ModsLevel_Song', 'no noteskin')
+    assert(po:NoteSkin() == 'cel')
+    assert(not state:GetPlayerOptionsString('ModsLevel_Song'):find('Cel', 1, true))
+    po:NoteSkin('CYBER')
+    state:SetPlayerOptions('ModsLevel_Song', '')
+    assert(po:NoteSkin() == 'cel', 'fresh assignment clears prior raw skin')
+    po:FromString('CyBeR')
+    po:FromString('clearall')
+    assert(po:NoteSkin() == 'cel', 'clearall uses theme default')
+    self:SetUpdateFunction(function()
+        po:FromString('50% default, 20% dark')
+        assert(po:NoteSkin() == 'default')
+        state:SetPlayerOptions('ModsLevel_Song', 'CyBeR, 40% Dark')
+        assert(po:NoteSkin() == 'cyber')
+        local before, accepted = po:NoteSkin('CYBER')
+        assert(before == 'cyber' and accepted == true)
+        before, accepted = po:NoteSkin('missing-skin')
+        assert(before == 'CYBER' and accepted == nil and po:NoteSkin() == 'CYBER')
+    end)
+end}
+"#).expect("noteskin fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "noteskin strings");
+        context.players[0].noteskin_name = "cyber".into();
+        context.song_timing_bpms = vec![(0.0, 120.0)];
+        context.music_length_seconds = 0.125;
+        let compiled = test_compile_song_lua(&entry, &context).expect("source-backed skin semantics");
+        #[cfg(feature = "test-support")]
+        {
+            let writes = &compiled.noteskin_writes;
+            assert_eq!(writes[0].previous, "cyber");
+            assert_eq!(writes[0].current, "default");
+            assert_eq!(writes[1].current, "skew");
+            assert_eq!(writes[2].current, "cel");
+            assert_eq!(writes.iter().filter(|write| write.second == 0.0).count(), 7 + 4,
+                "startup and one genuine zero-time update, without discovery duplicates");
+        }
+        #[cfg(not(feature = "test-support"))]
+        let _ = compiled;
     }
 
     #[test]
@@ -7799,10 +7899,13 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "SetUpdateFunction QueueCommand Song"),
         )
         .unwrap();
-        assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "update-queued");
+        assert_eq!(compiled.messages.iter().filter(|event| event.message == "update-queued").count(), 1);
         assert_eq!(compiled.overlays.len(), 1);
-        assert_eq!(compiled.overlays[0].initial_state.x, 12.0);
+        assert_eq!(compiled.overlays[0].initial_state.x, 0.0, "Actor::UpdateTweening(0) does not dispatch Pulse");
+        let queued = compiled.overlays[0].message_commands.iter()
+            .find(|command| command.message == "__songlua_queued_startup")
+            .expect("next-frame Pulse capture");
+        assert_eq!(crate::overlay_state_after_blocks(compiled.overlays[0].initial_state, &queued.blocks, 0.0).x, 12.0);
     }
 
     #[test]
@@ -8013,6 +8116,58 @@ return Def.ActorFrame{
             .find(|event| event.message == "BodyRotateBuildings")
             .expect("queued broadcast");
         assert!((event.beat - 1.7666667).abs() < 0.0001);
+    }
+
+    #[test]
+    fn queued_messages_deliver_empty_tables() {
+        let song_dir = test_dir("queued-message-params");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+            return Def.ActorFrame {
+                OnCommand = function(self)
+                    self:queuemessage("Startup"):sleep(0.05):queuemessage("Later")
+                end,
+                Def.Quad {
+                Name = "Probe",
+                StartupMessageCommand = function(self, params)
+                    if params ~= nil then assert(next(params) == nil); self:x(7) end
+                end,
+                LaterMessageCommand = function(self, params)
+                    if params ~= nil then assert(next(params) == nil); self:x(13) end
+                end,
+                },
+            }
+        "#,
+        )
+        .expect("queued parameter fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Queued parameters");
+        context.music_length_seconds = 0.2;
+        let compiled = test_compile_song_lua(&entry, &context).expect("queued parameters compile");
+        let probe = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Probe"))
+            .expect("parameter probe");
+        assert!(
+            compiled
+                .overlay_updates
+                .iter()
+                .any(|track| track.overlay_index == probe
+                    && track.target == SongLuaOverlayUpdateTarget::X
+                    && track.samples.iter().any(|sample| sample.time == 1.0 / 60.0
+                        && sample.value == SongLuaOverlayUpdateValue::F32(7.0)))
+        );
+        assert!(
+            compiled
+                .overlay_updates
+                .iter()
+                .any(|track| track.overlay_index == probe
+                    && track.target == SongLuaOverlayUpdateTarget::X
+                    && track.samples.iter().any(|sample| sample.time >= 0.05
+                        && sample.value == SongLuaOverlayUpdateValue::F32(13.0)))
+        );
     }
 
     #[test]
@@ -10920,8 +11075,11 @@ return Def.ActorFrame{
     },
     Def.Quad{
         Name="ShakeTarget",
-        ShakeScreenMessageCommand=function(self)
-            self:linear(0.1):x(12)
+        ShakeScreenMessageCommand=function(self, params)
+            if params ~= nil then
+                assert(type(params) == "table" and next(params) == nil)
+                self:linear(0.1):x(12)
+            end
         end,
     },
 }
@@ -10934,12 +11092,18 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Actor Queued Message"),
         )
         .unwrap();
-        assert!(
-            compiled
-                .messages
-                .iter()
-                .any(|event| event.beat == 2.0 && event.message == "ShakeScreen")
-        );
+        let overlay = compiled.overlays.iter()
+            .find(|overlay| overlay.name.as_deref() == Some("ShakeTarget"))
+            .expect("queued message target");
+        let event = compiled.messages.iter()
+            .find(|event| event.beat == 2.0)
+            .expect("queued action is retained at its scheduled beat");
+        let command = overlay.message_commands.iter()
+            .find(|command| command.message == event.message)
+            .expect("queued action captures the listener with its empty table");
+        assert_eq!(overlay.initial_state.x, 0.0);
+        assert_eq!(overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.05).x, 6.0);
+        assert_eq!(overlay_state_after_blocks(overlay.initial_state, &command.blocks, 0.1).x, 12.0);
     }
 
     #[test]
@@ -13323,6 +13487,26 @@ child:SetUpdateRate(3):SetUpdateFunction(update("child"))
     }
 
     #[test]
+    fn update_rate_binding() {
+        let lua = Lua::new();
+        let actor = test_create_dummy_actor(&lua, "ActorFrame").unwrap();
+        lua.globals().set("actor", actor).unwrap();
+        lua.load(r#"
+actor:SetUpdateRate("2")
+for _, value in ipairs{0, -1, -math.huge, false, "bad"} do
+    assert(not pcall(function() actor:SetUpdateRate(value) end))
+    assert(actor:GetUpdateRate() == 2)
+end
+assert(not pcall(function() actor:SetUpdateRate() end))
+assert(pcall(function() actor:SetUpdateRate(0/0) end))
+assert(actor:GetUpdateRate() == 2)
+actor:SetUpdateRate(math.huge)
+assert(actor:GetUpdateRate() == math.huge)
+actor:SetUpdateRate(2)
+"#).exec().unwrap();
+    }
+
+    #[test]
     fn hibernate_wake_replace() {
         for compiled in [false, true] {
             let lua = Lua::new();
@@ -13355,7 +13539,146 @@ child:SetUpdateRate(3):SetUpdateFunction(update("child"))
     }
 
     #[test]
-    fn compile_song_lua_captures_hibernate_visibility_window() {
+    fn hibernate_active_tween() {
+        let song_dir = test_dir("hibernate-active-tween");
+        let entry = song_dir.join("default.lua");
+        // This assertion runs cleanly in linked ITGmania 0.1.7. Hibernation
+        // freezes an already active tween while preserving GetVisible().
+        fs::write(
+            &entry,
+            r#"
+local held
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local actor=self:GetChild("Sleeping")
+        self:SetUpdateFunction(function()
+            local beat=GAMESTATE:GetSongBeat()
+            if beat >= .05 and not held then
+                held=actor:getaux()
+                actor:hibernate(.125)
+            elseif held and beat < .175 then
+                assert(actor:getaux()==held, "runtime hibernation freezes the active tween")
+                assert(actor:GetVisible(), "runtime hibernation preserves own visibility")
+            end
+        end)
+    end,
+    Def.Quad{
+        Name="Sleeping",
+        OnCommand=function(self) self:setsize(16,16):linear(.25):aux(1):diffusealpha(0) end
+    }
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Native runtime hibernation probe");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 4.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(
+            compiled.info.unsupported_perframes, 0,
+            "{:?}",
+            compiled.info
+        );
+        let actor = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Sleeping"))
+            .unwrap();
+        let startup = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == "__songlua_actor_startup")
+            .unwrap();
+        let state = overlay_state_after_blocks(actor.initial_state, &startup.blocks, 0.25);
+        assert!(
+            (state.diffuse[3] - 0.5).abs() < 1.0e-6,
+            "{:?}",
+            state.diffuse
+        );
+    }
+
+    #[test]
+    fn hibernate_startup_tweens() {
+        let song_dir = test_dir("hibernate-startup-tweens");
+        let entry = song_dir.join("default.lua");
+        // Expected frame-eight values are from the linked native Actor fixture
+        // hibernate-rate.lua: parent rate 2, child rate 3, wake remainder 1/120.
+        fs::write(
+            &entry,
+            r#"
+local calls = 0
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local sleeping = self:GetChild("Sleeping")
+        sleeping:SetUpdateFunction(function(actor, delta)
+            calls = calls + 1
+            assert(actor:GetVisible())
+            if calls == 1 then
+                assert(math.abs(delta - 1/60) < 0.000001)
+                assert(actor:GetDiffuseAlpha() == 0, "GetDiffuseAlpha reads the queued destination")
+                assert(actor:GetChild("Child"):GetDiffuseAlpha() == 0, "child getter reads the queued destination")
+            end
+        end)
+        self:SetUpdateFunction(function()
+            if GAMESTATE:GetSongBeat() == 0 then
+                assert(sleeping:GetTweenTimeLeft() == 0.375)
+                assert(self:GetTweenTimeLeft() == 0.375)
+            end
+            if GAMESTATE:GetSongBeat() < 0.125 then
+                assert(calls == 0)
+                assert(sleeping:getaux() == 0, "sleeping aux "..sleeping:getaux())
+                assert(sleeping:GetVisible())
+            end
+        end)
+    end,
+    Def.ActorFrame{
+        Name="Sleeping",
+        OnCommand=function(self)
+            self:SetUpdateRate(2):hibernate(0.125):linear(0.25):aux(1):diffusealpha(0)
+        end,
+        Def.ActorFrame{
+            Name="Child",
+            OnCommand=function(self) self:SetUpdateRate(3):linear(0.25):diffusealpha(0) end,
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Hibernate Startup Tweens");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(
+            compiled.info.unsupported_perframes, 0,
+            "{:?}",
+            compiled.info
+        );
+        for (name, alpha) in [("Sleeping", 14.0 / 15.0), ("Child", 0.8)] {
+            let actor = compiled
+                .overlays
+                .iter()
+                .find(|actor| actor.name.as_deref() == Some(name))
+                .unwrap();
+            let startup = actor
+                .message_commands
+                .iter()
+                .find(|command| command.message == "__songlua_actor_startup")
+                .unwrap();
+            let before =
+                overlay_state_after_blocks(actor.initial_state, &startup.blocks, 7.0 / 60.0);
+            assert_eq!(before.diffuse[3], 1.0, "{name} advances while sleeping");
+            let wake = overlay_state_after_blocks(actor.initial_state, &startup.blocks, 8.0 / 60.0);
+            assert!(
+                (wake.diffuse[3] - alpha).abs() < 1.0e-6,
+                "{name}: {:?}",
+                wake.diffuse
+            );
+        }
+    }
+
+    #[test]
+    fn hibernate_keeps_visible() {
         let song_dir = test_dir("actor-hibernate-visibility");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -13365,30 +13688,33 @@ return Def.ActorFrame{
     Def.Quad{
         PulseMessageCommand=function(self)
             self:hibernate(0.5):diffusealpha(0.25)
+            assert(self:GetVisible())
         end,
     },
 }
 "#,
         )
         .unwrap();
-
         let compiled = test_compile_song_lua(
             &entry,
             &SongLuaCompileContext::new(&song_dir, "Actor Hibernate Visibility"),
         )
         .unwrap();
-        assert_eq!(compiled.overlays.len(), 1);
-        assert_eq!(compiled.overlays[0].message_commands.len(), 1);
+        assert!(!compiled.overlays[0].initial_state.hibernating);
         let command = &compiled.overlays[0].message_commands[0];
         assert_eq!(command.message, "Pulse");
-        assert_eq!(command.blocks.len(), 2);
-        assert_eq!(command.blocks[0].start, 0.0);
-        assert_eq!(command.blocks[0].duration, 0.0);
-        assert_eq!(command.blocks[0].delta.visible, Some(false));
-        assert_eq!(command.blocks[1].start, 0.5);
-        assert_eq!(command.blocks[1].duration, 0.0);
-        assert_eq!(command.blocks[1].delta.visible, Some(true));
-        assert_eq!(command.blocks[1].delta.diffuse.unwrap()[3], 0.25);
+        assert!(
+            command
+                .blocks
+                .iter()
+                .all(|block| block.delta.visible.is_none())
+        );
+        let state =
+            overlay_state_after_blocks(compiled.overlays[0].initial_state, &command.blocks, 0.0);
+        assert!(state.visible);
+        assert!(state.hibernating);
+        assert!(!state.draw_visible());
+        assert_eq!(state.diffuse[3], 0.25);
     }
 
     #[test]
@@ -17987,20 +18313,20 @@ return Def.ActorFrame{
             tostring(po:StealthPastReceptors())
         )
         po:LifeSetting("LifeType_Battery")
-            :DrainSetting("DrainType_NoRecover")
-            :HideLightSetting("HideLightType_HideAllLights")
-            :ModTimerSetting("ModTimerType_Beat", true)
-            :FailSetting("FailType_Off")
-            :MinTNSToHideNotes("TapNoteScore_W3")
-            :WavePeriod(2.5)
-            :PulseInner(0.25)
-            :BounceZ(3)
-            :TanDigitalZPeriod(4)
-            :MoveX16(0.75)
-            :Reverse(1)
-            :VisualDelay(0.12)
-            :BatteryLives(4)
-            :Passmark(0.2)
+        po:DrainSetting("DrainType_NoRecover")
+        po:HideLightSetting("HideLightType_HideAllLights")
+        po:ModTimerSetting("ModTimerType_Beat", true)
+        po:FailSetting("FailType_Off")
+        po:MinTNSToHideNotes("TapNoteScore_W3")
+        po:WavePeriod(2.5)
+        po:PulseInner(0.25)
+        po:BounceZ(3)
+        po:TanDigitalZPeriod(4)
+        po:MoveX16(0.75)
+        po:Reverse(1)
+        po:VisualDelay(0.12)
+        po:BatteryLives(4)
+        po:Passmark(0.2)
         local surface = string.format(
             "%s:%s:%s:%s:%s:%s:%.1f:%.2f:%.0f:%.0f:%.2f:%.0f:%s:%.0f:%.0f:%s:%s:%.1f",
             po:LifeSetting(),
@@ -22504,6 +22830,111 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn center_player_utility() {
+        let song_dir = test_dir("center-player-utility");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local before = Center1Player()
+PREFSMAN:SetPreference("Center1Player", true)
+mod_actions = {{0, tostring(before) .. ":" .. tostring(Center1Player()), true}}
+return Def.ActorFrame{}
+"#).unwrap();
+        for (style, expected) in [
+            ("single", "false:true"),
+            ("double", "true:true"),
+            ("versus", "false:false"),
+        ] {
+            let mut context = SongLuaCompileContext::new(&song_dir, "center player");
+            context.style_name = style.into();
+            let compiled = test_compile_song_lua(&entry, &context).unwrap();
+            assert_eq!(compiled.messages.len(), 1);
+            assert_eq!(compiled.messages[0].message, expected, "{style}");
+        }
+    }
+
+    #[test]
+    fn runtime_text_tracks_frames() {
+        let song_dir = test_dir("runtime-text-frames");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+    local ticks = 0
+    local queued = false
+    return Def.ActorFrame {
+    OnCommand=function(self)
+        self:SetUpdateFunction(function(self)
+            ticks = ticks + 1
+            self:GetChild("Count"):settext(queued and ("queued:" .. ticks) or ticks)
+        end)
+    end,
+    LoadFont("Common Normal") .. {
+        Name="Count", Text="initial",
+        OnCommand=function(self) self:settext("start"):sleep(0.025):queuecommand("Queued") end,
+        QueuedCommand=function(self) queued = true; self:settext("queued") end,
+    },
+    }
+    "#,
+        )
+        .expect("write text replay fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "text frames");
+        context.music_length_seconds = 0.2;
+        context.song_display_bpms = [60.0; 2];
+        context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+            0.125,
+            0.0,
+            &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 60.0)],
+                stops: vec![deadsync_rules::timing::StopSegment {
+                    beat: 0.04,
+                    duration: 0.1,
+                }],
+                ..Default::default()
+            },
+            &[],
+        ));
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile text replay");
+        let actor = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Count"))
+            .expect("text actor");
+        let SongLuaOverlayKind::BitmapText {
+            text,
+            text_changes,
+            text_changes_in_seconds,
+            ..
+        } = &actor.kind
+        else {
+            panic!("text actor kind")
+        };
+        assert!(*text_changes_in_seconds);
+        let origin = context
+            .song_timing
+            .as_ref()
+            .expect("song timing")
+            .get_time_for_beat_exact(0.0);
+        for (frame, expected) in [
+            (0, "1"),
+            (1, "2"),
+            (2, "queued:3"),
+            (3, "queued:4"),
+            (6, "queued:7"),
+        ] {
+            let seconds = frame as f32 / 60.0;
+            assert_eq!(
+                crate::overlay_text_at(text, text_changes, seconds + origin).as_ref(),
+                expected,
+                "frame {frame}"
+            );
+        }
+        assert_eq!(
+            crate::song_beat_at_elapsed_seconds(3.0 / 60.0, &context),
+            crate::song_beat_at_elapsed_seconds(6.0 / 60.0, &context)
+        );
+    }
+
+    #[test]
     fn compile_song_lua_exposes_fallback_theme_utility_helpers() {
         let song_dir = test_dir("fallback-theme-utility-helpers");
         let entry = song_dir.join("default.lua");
@@ -22611,7 +23042,7 @@ return Def.ActorFrame{}
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:default:true:false:15:300:Cancel:__songlua_theme_path:0"
+            "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:cel:true:false:15:300:Cancel:__songlua_theme_path:0"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);
     }
@@ -22980,6 +23411,92 @@ return Def.ActorFrame{
 
         assert!(sampled_zooms.iter().any(|zoom| (1.1..9.9).contains(zoom)));
         assert!(sampled_zooms.iter().any(|zoom| (zoom - 3.25).abs() < 0.75));
+    }
+
+    #[test]
+    fn spline_storage_matches_native_layout() {
+        let lua = Lua::new();
+        let field = lua.create_table().unwrap();
+        let columns = test_note_field_column_actors(&lua, &field).unwrap();
+        let column: Table = columns.raw_get(1).expect("note column");
+        lua.globals().set("column", column.clone()).unwrap();
+        lua.load(
+            r#"
+            local handler = column:GetZoomHandler()
+            handler:SetSplineMode("NoteColumnSplineMode_Offset"):SetSubtractSongBeat(false)
+            spline = handler:GetSpline()
+            assert(spline:GetSize() == 0)
+            spline:SetSize(8.9)
+            assert(spline:get_size() == 8)
+            local point = {-1,-1,-1}
+            spline:SetPoint(8.9, point):Solve()
+            point[1] = 12
+            assert(not pcall(function() spline:SetPoint(9, {0,0,0}) end))
+            assert(not pcall(function() spline:SetPoint(0, {0,0,0}) end))
+            assert(not pcall(function() spline:SetPoint(1, false) end))
+            assert(not pcall(function() spline:SetSize(-1) end))
+        "#,
+        )
+        .exec()
+        .unwrap();
+        let hides = || {
+            let mut out = Vec::new();
+            crate::lua_util::read_note_column_zoom_hides_for_actor(0, 0, &column, &mut out)
+                .unwrap();
+            out
+        };
+        let windows = hides();
+        assert_eq!(
+            windows.len(),
+            1,
+            "copied last knot stays hidden after table mutation"
+        );
+        assert_eq!(windows[0].spline_size, 8);
+        assert_eq!((windows[0].start_beat, windows[0].end_beat), (7.0, 7.0));
+        lua.load("spline:set_size(3):set_size(8):solve()")
+            .exec()
+            .unwrap();
+        assert!(hides().is_empty(), "regrown knots are initialized to zero");
+        let samples =
+            crate::lua_util::read_note_column_transform_samples_for_fields(vec![field.clone()])
+                .unwrap();
+        let zoom = samples
+            .iter()
+            .find(|sample| {
+                sample.column == 0 && sample.target == SongLuaColumnTransformTarget::Zoom
+            })
+            .expect("implicit zero zoom knots");
+        assert_eq!(zoom.value, 1.0);
+        let parent = lua.create_table().unwrap();
+        let children = lua.create_table().unwrap();
+        children.set("NoteField", field).unwrap();
+        parent.set("__songlua_children", children).unwrap();
+        lua.globals()
+            .set("__songlua_top_screen_player_1", parent)
+            .unwrap();
+        lua.load(
+            r#"
+            column:GetPosHandler():SetSplineMode("NoteColumnSplineMode_Position")
+                :GetSpline():SetSize(8):SetPoint(8, {"9"}):Solve()
+        "#,
+        )
+        .exec()
+        .unwrap();
+        let mut frames = Vec::new();
+        crate::lua_util::read_column_position_splines(
+            &lua,
+            |_, _| None,
+            &mut crate::lua_util::ColumnSplineReadScratch::default(),
+            &mut frames,
+        )
+        .unwrap();
+        let position = frames[0].2.position.as_ref().expect("position spline");
+        assert_eq!(position.coefficients.len(), 8);
+        for knot in &position.coefficients[..7] {
+            assert_eq!([knot[0][0], knot[1][0], knot[2][0]], [0.0; 3]);
+        }
+        let last = position.coefficients[7];
+        assert_eq!([last[0][0], last[1][0], last[2][0]], [9.0, 0.0, 0.0]);
     }
 
     #[test]

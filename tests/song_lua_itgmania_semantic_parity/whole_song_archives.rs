@@ -422,6 +422,13 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
     );
     assert!(
         trace
+            .actor_definitions
+            .iter()
+            .all(|definition| definition.properties.get("NoteSkinElement").is_none()),
+        "placeholder noteskin actors invalidate the reference; recapture with native noteskin resources",
+    );
+    assert!(
+        trace
             .update_frames
             .first()
             .is_some_and(|frame| frame.1 == 0.0)
@@ -462,6 +469,70 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         .map(str::parse::<u32>)
         .collect::<Result<Vec<_>, _>>()
         .expect("numeric harness version");
+    let broadcasts =
+        trace.timeline_tracks.iter().any(|track| {
+            track.operation == "MessageManager.Broadcast" && !track.samples.is_empty()
+        }) || trace
+            .command_tracks
+            .iter()
+            .any(|track| track.command.ends_with("MessageCommand") && !track.runs.is_empty());
+    if broadcasts || trace.message_dispatch.is_some() {
+        assert!(
+            version.as_slice() >= [0, 1, 11].as_slice()
+                && trace.message_dispatch.as_deref() == Some("native-subscriber-pointer-order"),
+            "obsolete tree-order broadcast replay; recapture with native dispatch",
+        );
+        assert!(
+            !broadcasts || !trace.message_dispatches.is_empty(),
+            "native broadcast delivery order is missing",
+        );
+        assert!(
+            trace
+                .runtime_actors
+                .iter()
+                .all(|actor| actor.message_order.is_some()),
+            "native actor subscriber ranks are missing"
+        );
+        let ranks: std::collections::HashMap<_, _> = trace
+            .runtime_actors
+            .iter()
+            .map(|actor| (actor.id.as_str(), actor.message_order))
+            .chain(
+                trace
+                    .external_actors
+                    .iter()
+                    .map(|actor| (actor.id.as_str(), actor.message_order)),
+            )
+            .filter_map(|(id, rank)| rank.map(|rank| (id, rank)))
+            .collect();
+        let mut unique = HashSet::new();
+        assert!(
+            ranks.values().all(|rank| *rank > 0 && unique.insert(*rank)),
+            "native subscriber ranks must be distinct and positive"
+        );
+        for dispatch in &trace.message_dispatches {
+            assert!(
+                dispatch.beat.is_finite()
+                    && dispatch.seconds.is_finite()
+                    && dispatch.seconds >= 0.0
+                    && dispatch.seconds as f32 <= trace.end_position.seconds,
+                "invalid native broadcast clock: {}",
+                dispatch.name
+            );
+            let mut previous = 0;
+            for id in &dispatch.actor_ids {
+                let rank = *ranks
+                    .get(id.as_str())
+                    .expect("unknown native message subscriber");
+                assert!(
+                    rank > previous,
+                    "broadcast {} is not in native subscriber order",
+                    dispatch.name
+                );
+                previous = rank;
+            }
+        }
+    }
     assert!(
         !has_operation("hibernate", |value| value > 0.0)
             || version.as_slice() >= [0, 1, 6].as_slice(),
@@ -471,6 +542,19 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
         !has_operation("SetUpdateRate", |value| value != 1.0)
             || version.as_slice() >= [0, 1, 7].as_slice(),
         "obsolete ActorFrame update-rate replay; recapture with harness 0.1.7 or later",
+    );
+    assert!(
+        !has_operation("SetUpdateRate", f32::is_nan) || version.as_slice() >= [0, 1, 9].as_slice(),
+        "obsolete NaN update-rate replay; recapture with harness 0.1.9 or later",
+    );
+    assert!(
+        trace.runtime_actors.iter().all(|actor| {
+            actor
+                .render_state_samples
+                .iter()
+                .all(|sample| sample.1.is_some())
+        }),
+        "lossy native render alpha; recapture with harness 0.1.8 or later",
     );
 }
 
@@ -492,10 +576,20 @@ fn compose_entire_song_with_progress(
         .map(|compiled| WholeSongComposer::new(&compiled.overlays))
         .collect::<Vec<_>>();
     let mut actor_samples = 0usize;
+    let render_actors = projected_drawable_map(trace, compiled_layers)
+        .into_iter()
+        .filter_map(|(id, position)| {
+            trace
+                .runtime_actors
+                .iter()
+                .find(|actor| actor.id == id)
+                .map(|actor| (position, actor))
+        })
+        .collect::<HashMap<_, _>>();
     for frame in 0..frame_count {
         let seconds = frame as f32 / update_hz;
         let beat = song_beat_at_elapsed_seconds(seconds, context);
-        for (compiled, composer) in compiled_layers.iter().zip(&composers) {
+        for (layer, (compiled, composer)) in compiled_layers.iter().zip(&composers).enumerate() {
             let local = compiled_local_states_at(compiled, context, beat, seconds);
             let composed = compose_overlay_states(
                 &compiled.overlays,
@@ -528,12 +622,29 @@ fn compose_entire_song_with_progress(
                     state.diffuse[0],
                     state.diffuse[1],
                     state.diffuse[2],
-                    state.diffuse[3],
                 ];
                 assert!(
                     values.iter().all(|value| value.is_finite()),
-                    "non-finite composed state at frame {frame}, actor {index}"
+                    "non-finite composed state at frame {frame}, actor {index}: {values:?}"
                 );
+                let expected = render_actors.get(&(layer, index)).and_then(|actor| {
+                    let next = actor
+                        .render_state_samples
+                        .partition_point(|sample| sample.0 <= frame);
+                    actor.render_state_samples.get(next.checked_sub(1)?)?.1
+                });
+                if !state.diffuse[3].is_finite() || expected.is_some_and(|alpha| !alpha.is_finite())
+                {
+                    // Actor::SetDiffuseAlpha retains native infinities and NaN.
+                    // Require the exact kind on this frame; an earlier projected
+                    // sample must not authorize an extra nonfinite frame.
+                    assert!(
+                        expected.is_some_and(|alpha| alpha == state.diffuse[3]
+                            || (alpha.is_nan() && state.diffuse[3].is_nan())),
+                        "nonfinite alpha differs at frame {frame}, actor {index}: native {expected:?}, DeadSync {}",
+                        state.diffuse[3],
+                    );
+                }
             }
         }
         if let Some(progress) = progress {
@@ -575,6 +686,70 @@ fn encode_hash(hash: impl AsRef<[u8]>) -> String {
         write!(encoded, "{byte:02x}").expect("writing to a String cannot fail");
     }
     encoded
+}
+
+#[test]
+fn composition_checks_nonfinite_alpha_per_frame() {
+    for (kind, alpha) in [
+        ("infinity", f32::INFINITY),
+        ("-infinity", f32::NEG_INFINITY),
+        ("nan", f32::NAN),
+    ] {
+        let value = serde_json::json!({"type": "number", "value": kind});
+        let mut trace: NativeTrace = serde_json::from_value(serde_json::json!({
+            "oracle": "itgmania_native_actor_conformance", "title": "nonfinite alpha", "style": "single",
+            "simfile": "", "roots": ["quad"],
+            "actor_definitions": [{"id": "quad", "class": "Quad", "name": "quad"}],
+            "runtime_actors": [{"id": "quad", "path": "quad", "render_state_samples": [[0, value, true]]}],
+            "timeline_tracks": [], "tween_tracks": [], "end_position": {"seconds": 0.0},
+            "display": {"width": 640, "height": 480, "logical_width": 640, "logical_height": 480},
+            "fixture_context": {"beat_step": 0.25}, "trace_until_beat": 0.0
+        })).expect("native nonfinite alpha reference");
+        let context = SongLuaCompileContext::new("", "nonfinite alpha");
+        let mut compiled = CompiledSongLua {
+            overlays: vec![deadsync_song_lua::SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Quad,
+                name: Some("quad".into()),
+                parent_index: None,
+                initial_state: SongLuaOverlayState {
+                    diffuse: [1.0, 1.0, 1.0, alpha],
+                    ..SongLuaOverlayState::default()
+                },
+                message_commands: Vec::new(),
+            }],
+            ..CompiledSongLua::default()
+        };
+        let check = |trace: &NativeTrace, compiled: &CompiledSongLua| {
+            compose_entire_song_with_progress(
+                trace,
+                std::slice::from_ref(compiled),
+                &context,
+                60.0,
+                None,
+            );
+        };
+        check(&trace, &compiled);
+        compiled.overlays[0].initial_state.diffuse[3] = 1.0;
+        assert!(
+            std::panic::catch_unwind(|| check(&trace, &compiled)).is_err(),
+            "clamping must fail"
+        );
+        compiled.overlays[0].initial_state.diffuse[3] = if alpha.is_nan() {
+            f32::INFINITY
+        } else {
+            -alpha
+        };
+        assert!(
+            std::panic::catch_unwind(|| check(&trace, &compiled)).is_err(),
+            "the wrong kind must fail"
+        );
+        compiled.overlays[0].initial_state.diffuse[3] = alpha;
+        trace.runtime_actors[0].render_state_samples[0].1 = Some(1.0);
+        assert!(
+            std::panic::catch_unwind(|| check(&trace, &compiled)).is_err(),
+            "an extra nonfinite frame must fail"
+        );
+    }
 }
 
 #[test]
@@ -693,6 +868,68 @@ fn archive_reference_rejects_obsolete_replays() {
         .3 = vec![serde_json::json!(2)];
     archive.manifest.harness_version = "0.1.7".into();
     trace.harness_version = "0.1.7".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.operation_tracks.last_mut().expect("update-rate probe").samples[0].3 =
+        vec![serde_json::json!({"type": "number", "value": "nan"})];
+    archive.manifest.harness_version = "0.1.8".into();
+    trace.harness_version = "0.1.8".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.9".into();
+    trace.harness_version = "0.1.9".into();
+    validate_native_trace(&trace, &archive.manifest);
+    trace.runtime_actors.push(NativeActor {
+        id: "alpha-probe".into(),
+        path: "alpha-probe".into(),
+        parent_id: None,
+        message_order: None,
+        final_render_state: None,
+        render_state_samples: vec![(0, None, true)],
+    });
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace
+        .runtime_actors
+        .last_mut()
+        .expect("alpha probe")
+        .render_state_samples[0]
+        .1 = Some(f32::INFINITY);
+    validate_native_trace(&trace, &archive.manifest);
+    trace.runtime_actors.pop();
+    trace.actor_definitions.push(serde_json::from_value(serde_json::json!({
+        "id": "noteskin-probe", "class": "Sprite", "properties": {"NoteSkinElement": "Explosion"}
+    })).expect("placeholder noteskin probe"));
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.actor_definitions.pop();
+    trace.timeline_tracks.push(NativeTimelineTrack {
+        kind: "message".into(), actor: None, operation: "MessageManager.Broadcast".into(),
+        samples: vec![(0, Some(0.0), Some(0.0), vec![serde_json::json!("Go")], None)],
+    });
+    archive.manifest.harness_version = "0.1.10".into();
+    trace.harness_version = "0.1.10".into();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    archive.manifest.harness_version = "0.1.11".into();
+    trace.harness_version = "0.1.11".into();
+    trace.message_dispatch = Some("native-subscriber-pointer-order".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    for (id, rank) in [("parent-probe", 2), ("child-probe", 1)] {
+        trace.runtime_actors.push(NativeActor {
+            id: id.into(), path: id.into(), parent_id: None, message_order: Some(rank),
+            final_render_state: None, render_state_samples: Vec::new(),
+        });
+    }
+    trace.message_dispatches.push(NativeMessageDispatch {
+        name: "Go".into(), beat: 0.0, seconds: 0.0,
+        actor_ids: vec!["child-probe".into(), "parent-probe".into()],
+    });
+    validate_native_trace(&trace, &archive.manifest);
+    trace.message_dispatches[0].actor_ids.reverse();
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.message_dispatches[0].actor_ids.reverse();
+    trace.message_dispatches[0].actor_ids.push("unknown-probe".into());
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.message_dispatches[0].actor_ids.pop();
+    trace.runtime_actors.last_mut().expect("subscriber probe").message_order = Some(2);
+    assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
+    trace.runtime_actors.last_mut().expect("subscriber probe").message_order = Some(1);
     validate_native_trace(&trace, &archive.manifest);
     trace.dropped_events = 1;
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());

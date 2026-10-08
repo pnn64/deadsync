@@ -1,0 +1,22 @@
+{
+  "harness_version": "0.1.10",
+  "reference_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "executable_sha256": "1f76db7b8d0722bc4ecff9ea25c8592b8c6f36727ff40532de960138034f60ce",
+  "raw_sha256": "f5f7928b9c23462286110b127d003222b21904711236cddfafa991bb09e8534c",
+  "compressed_sha256": "dbf0b4c5a4648e09f1fac18bb7548285a5ad32d4c48691113607339a58f2c329",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "update_frames": 247,
+  "noteskin_root": "DeadSync assets/noteskins; pinned per-file hashes in trace",
+  "sources_sha256": {
+    "song_lua_headless.rs": "ad51b597592b18d2708bbfe95a12802f4e1ca7a6f30e14ee6b0875eb6ddeff0a",
+    "semantic_host.lua": "3684877abd9575fd459b097b19ec79b68438bba6e541f398d138bbdd439f1ffc",
+    "oracle_bridge.cpp": "10457dac8eeacfc98e8e13ece8e2ea437e189ae6ed0649831c3ba17f31eaa15d",
+    "Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+    "default.lua": "9ab5063266dd9d24e73027a784de5024f72cabfc77c06e88f6ccb3d90d0b70c8",
+    "text.sm": "aea6e5bbe8956db74897768d038b4b0264e6fde5d50bb6189f1b7afd3f8e7616"
+  },
+  "coverage": "Native startup Update(0), numeric text coercion, recurring text through a stop, queued child before owner callback, and native PlayerOptions FromString prefix ordering."
+}

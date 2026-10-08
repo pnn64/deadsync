@@ -8519,6 +8519,7 @@ fn song_lua_bitmaptext_applies_rainbow_scroll_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("ABC"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -8564,11 +8565,12 @@ fn song_lua_bitmaptext_applies_rainbow_scroll_at_runtime() {
 
 #[test]
 fn song_lua_countdown_renders_precompiled_text() {
-    let overlay = SongLuaOverlayActor {
+    let mut overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::BitmapText {
             font_name: "miso",
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::from(""),
+            text_changes_in_seconds: false,
             text_changes: Arc::from([
                 (104.0, Arc::from("3")),
                 (112.0_f32.next_up(), Arc::from("2")),
@@ -8583,30 +8585,40 @@ fn song_lua_countdown_renders_precompiled_text() {
     };
     let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
     assert!(scratch[0].text_attribute_capacity >= 1);
-    for uppercase in [false, true] {
-        for (beat, expected) in [(111.0, "3"), (112.0, "3"), (112.01, "2"), (111.0, "3")] {
-            let actor = build_song_lua_overlay_actor_with_scratch(
-                &overlay,
-                SongLuaOverlayState {
-                    uppercase,
-                    ..Default::default()
-                },
-                None,
-                &AssetManager::new(),
-                780,
-                640.0,
-                480.0,
-                0.0,
-                beat,
-                0.0,
-                None,
-                scratch.first_mut(),
-            )
-            .expect_actor("countdown should render");
-            let Actor::Text { content, .. } = actor else {
-                panic!("countdown must be text");
-            };
-            assert_eq!(content.as_str(), expected);
+    for in_seconds in [false, true] {
+        let SongLuaOverlayKind::BitmapText {
+            text_changes_in_seconds,
+            ..
+        } = &mut overlay.kind
+        else {
+            unreachable!()
+        };
+        *text_changes_in_seconds = in_seconds;
+        for uppercase in [false, true] {
+            for (beat, expected) in [(111.0, "3"), (112.0, "3"), (112.01, "2"), (111.0, "3")] {
+                let actor = build_song_lua_overlay_actor_with_scratch(
+                    &overlay,
+                    SongLuaOverlayState {
+                        uppercase,
+                        ..Default::default()
+                    },
+                    None,
+                    &AssetManager::new(),
+                    780,
+                    640.0,
+                    480.0,
+                    if in_seconds { beat } else { 0.0 },
+                    if in_seconds { 104.0 } else { beat },
+                    0.0,
+                    None,
+                    scratch.first_mut(),
+                )
+                .expect_actor("countdown should render");
+                let Actor::Text { content, .. } = actor else {
+                    panic!("countdown must be text");
+                };
+                assert_eq!(content.as_str(), expected);
+            }
         }
     }
 }
@@ -8620,6 +8632,7 @@ fn long_song_lua_rainbow_text_uses_prewarmed_current_phase_buffer() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::from(text.as_str()),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -8679,6 +8692,7 @@ fn song_lua_bitmaptext_shares_compiled_attributes() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("ATTR"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: Arc::clone(&compiled),
         },
@@ -8722,6 +8736,7 @@ fn song_lua_bitmaptext_respects_text_glow_mode_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("GLOW"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: Some([0.0, 0.0, 0.0, 0.5]),
             attributes: empty_text_attributes(),
         },
@@ -8818,6 +8833,7 @@ fn song_lua_bitmaptext_attribute_glow_adds_runtime_glow_pass() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("GLOW"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: Arc::from([TextAttribute {
                 start: 1,
@@ -10053,6 +10069,7 @@ fn song_lua_overlay_applies_mask_flags_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("MASK"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -10133,6 +10150,7 @@ fn song_lua_overlay_applies_alignment_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("ALIGN"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -10663,6 +10681,7 @@ fn song_lua_overlay_applies_bitmaptext_layout_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("WRAP"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -10729,6 +10748,7 @@ fn song_lua_bitmaptext_max_dimension_use_zoom_reaches_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("USEZOOM"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -10779,6 +10799,7 @@ fn song_lua_overlay_applies_bitmaptext_attributes_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("ATTR"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: Arc::from([TextAttribute {
                 start: 1,
@@ -10831,6 +10852,7 @@ fn song_lua_bitmaptext_attributes_can_ignore_actor_diffuse_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("ATTR"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: Arc::from([TextAttribute {
                 start: 1,
@@ -10929,6 +10951,7 @@ fn song_lua_overlay_applies_bitmaptext_uppercase_and_vertspacing_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("Mixed Straße"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -11007,6 +11030,7 @@ fn song_lua_overlay_applies_bitmaptext_skew_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("SKEW"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },
@@ -11062,6 +11086,7 @@ fn song_lua_overlay_applies_bitmaptext_fit_size_at_runtime() {
             font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
             text: Arc::<str>::from("FIT"),
             text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
             stroke_color: None,
             attributes: empty_text_attributes(),
         },

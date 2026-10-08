@@ -1031,6 +1031,118 @@
       "archive": "db0f05f4ae045a58688bccfcdfcaba9bdf415081af2d8eb5d998a5a9fbbfe31f.tar.zst",
       "harness_version": "0.1.6",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 17,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "superseded_archive": "6dcdd139b34f6c0d1a2edba7cfeae6acd328022dcf2dd56016d77e8e840182c4.tar.zst",
+      "archive": "75ab9a044b221eae9f6d2abf2c8fd119072f737c9ff47d8cef44edf3bc3f3582.tar.zst",
+      "harness_version": "0.1.6",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 18,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "superseded_archive": "7d58277dcee3097b755bf22f2bf998f7cccaed65f102157935fce2c37a811f9b.tar.zst",
+      "archive": "67ac57041393ba24be3d15d484c007bbc97eb741a7de7d1d713d947ab5d8d275.tar.zst",
+      "harness_version": "0.1.8",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 19,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "superseded_archive": "30525568cc581a65c8b48ae00dc23056490d494e9d715c6fe38c17d8cb63e54d.tar.zst",
+      "archive": "04eb6389c65a08fc4711ea7e02466871c65681de0683aa26d1f4b81559bdd156.tar.zst",
+      "harness_version": "0.1.8",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 20,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "5c21fcf0142b8e17cb4e295191b19731dc629257b7ddbff6a6cca4c9289e7032.tar.zst",
+      "archive": "0044b7fb565b42508bfa6b3df15a1c7759386e378f1bb579ccfdd955678ba9ad.tar.zst",
+      "harness_version": "0.1.8",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 21,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "superseded_archive": "2f43fed7122972e6b7d272a1c239ea38058c5e845d49b58ffbe41c0158bcafa9.tar.zst",
+      "archive": "e657c3259372c4b2925fcdc49177e99fcd0ce6db2ec78b30d6532eabfa10d119.tar.zst",
+      "harness_version": "0.1.8",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 23,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "e57c20353ce651300e3e8edf2ac6c7a762a1a998315c4152fb8c56cc8e211b34.tar.zst",
+      "archive": "06f189434a38499da35adc5ae226bb68f1c220b840792ff7045c7559c679c3b2.tar.zst",
+      "harness_version": "0.1.11",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 24,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "d3f9acbe26ef5ca7324dd648c807263ad082b3965a73da8f9fc40c395a1a8bd3.tar.zst",
+      "archive": "b9b9ea7d862a66acc7e0c65f1f4cad273e8220d3d71f462d50602c5a9668f5fe.tar.zst",
+      "harness_version": "0.1.11",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 25,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "5b699a3ba33f296be051db2b9f54e2b3c1ecd0326519fdf5caaa15332d2d6837.tar.zst",
+      "archive": "a649a5534ca4d8c61c0af03e817d4dae8b20b586c91d37c5d82b2edfa6813828.tar.zst",
+      "harness_version": "0.1.12",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 27,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "54d5c782bdbdf43c6fd23825be53039fd343ad7db5ca37464d24f1bd1e99bf4e.tar.zst",
+      "archive": "2b913d2a02c46c97bfc48f342520741a8ca622e3567bb57810a07129f913963b.tar.zst",
+      "harness_version": "0.1.13",
+      "reason": "Replace obsolete replay with native message dispatch and independently verified noteskin string state"
+    },
+    {
+      "pass_number": 28,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "257b7bb4bff4c6f447a19f3e4b179d73d033e328e7652a7bca9050c9b6d73fb5.tar.zst",
+      "archive": "b33a57b8e7aeb4c73488a54036ab93b7c9f1c043ac5ccfb1726b668a9a171079.tar.zst",
+      "harness_version": "0.1.13",
+      "reason": "Replace obsolete replay with native message dispatch and independently verified noteskin string state"
+    },
+    {
+      "pass_number": 29,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "superseded_archive": "9930bef5335a264f7182e991bb690ca96dc6b5ed63a17e942166ce82c1d08d7f.tar.zst",
+      "archive": "de6f91a3ec6861dbc1591ab3b8de1f3678f77fbf316648e92d7102f43ae91750.tar.zst",
+      "harness_version": "0.1.13",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 30,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "a03a6bec25440238c8d3fa0206e4ab165058e50a4640f252fadbd57d30e5f48d.tar.zst",
+      "archive": "4738c72fb84ef4ca46e9e90d6c13728b7912987570964d56e1f4d2a333bd6d9f.tar.zst",
+      "harness_version": "0.1.13",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 31,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "73da04c58a35f1e4a8246b4e9d7e9deddb2e4f3a29e2fc38b83fa4f63dd9c48f.tar.zst",
+      "archive": "75ee08d05fae82adeab94b4b611eda8764963f47ae2f410a728213526b0fd2dc.tar.zst",
+      "harness_version": "0.1.13",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 32,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "fb753c9cf62a0d6daf502468ec752d5a22809b14a5c0f835e2af3dfd699bedfe.tar.zst",
+      "archive": "7014cbf42845f417b626f9a1507dba786e059658df8d5ea7c1d42a87f9e43d0a.tar.zst",
+      "harness_version": "0.1.13",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

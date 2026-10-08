@@ -552,7 +552,7 @@ fn compare_multitap_writes(
         for (index, name, track, (seq, beat, seconds, args)) in writes {
             if track.operation.ends_with(".settext") {
                 let SongLuaOverlayKind::BitmapText {
-                    text, text_changes, ..
+                    text, text_changes, text_changes_in_seconds, ..
                 } = &compiled.overlays[index].kind
                 else {
                     panic!("{name} must be text");
@@ -561,7 +561,11 @@ fn compare_multitap_writes(
                     .as_str()
                     .map(str::to_owned)
                     .unwrap_or_else(|| args[0].to_string());
-                let actual = deadsync_song_lua::overlay_text_at(text, text_changes, *beat);
+                let time = if *text_changes_in_seconds {
+                    *seconds * deadsync_song_lua::song_music_rate(context)
+                        + context.song_timing.as_ref().map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0))
+                } else { *beat };
+                let actual = deadsync_song_lua::overlay_text_at(text, text_changes, time);
                 checked += 1;
                 if actual.as_ref() != expected {
                     record_failure(&mut failures, name, &track.operation, || {
@@ -761,6 +765,9 @@ fn perspective_geometry_survives_noteskin_kind_change() {
                     y: 626.16444,
                     z: 10.0,
                     zoom: 0.3,
+                    // Preserve the recorded decoration's geometry when
+                    // replacing its Sprite with this synthetic Quad.
+                    size: Some(track.texture_size),
                     ..Default::default()
                 },
             ),
@@ -870,6 +877,70 @@ fn operation_values(
     Some(pair)
 }
 
+// CubicSpline::resize preserves existing knots and zero-initializes appended
+// knots. An authored SetPoint is not required for every allocated control point.
+fn read_zoom_knots(trace: &NativeTrace, actor: &str) -> Result<Vec<bool>, String> {
+    let mut writes = trace
+        .operation_tracks
+        .iter()
+        .filter(|track| {
+            track.actor == actor
+                && matches!(
+                    track.operation.as_str(),
+                    "Spline.SetSize" | "Spline.SetPoint"
+                )
+        })
+        .flat_map(|track| {
+            track
+                .samples
+                .iter()
+                .map(move |sample| (sample.0, track.operation.as_str(), &sample.3))
+        })
+        .collect::<Vec<_>>();
+    writes.sort_by_key(|write| write.0);
+    let mut points = Vec::new();
+    let mut sized = false;
+    for (_, operation, args) in writes {
+        if operation == "Spline.SetSize" {
+            let size = value_f32(args.first())
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| "missing numeric native spline size".to_owned())?
+                .trunc();
+            if !(0.0..=65536.0).contains(&size) {
+                return Err("native spline size exceeds capture bounds".into());
+            }
+            points.resize(size as usize, false);
+            sized = true;
+        } else {
+            let index = value_f32(args.first())
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| "missing numeric native spline point index".to_owned())?
+                .trunc();
+            if index < 1.0 || index > points.len() as f32 {
+                return Err("native spline point index out of range".into());
+            }
+            let vector = args
+                .get(1)
+                .and_then(Value::as_array)
+                .ok_or_else(|| "missing native spline point vector".to_owned())?;
+            let mut hidden = true;
+            for axis in 0..3 {
+                let value = match vector.get(axis) {
+                    Some(value) => value_f32(Some(value))
+                        .ok_or_else(|| "missing numeric native spline coordinate".to_owned())?,
+                    None => 0.0,
+                };
+                hidden &= value == -1.0;
+            }
+            points[index as usize - 1] = hidden;
+        }
+    }
+    if !sized {
+        return Err("missing native SetSize evidence".into());
+    }
+    Ok(points)
+}
+
 fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
     parity.section("multitap zoom");
     let mut hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
@@ -905,26 +976,14 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], parity:
             .and_then(|track| track.samples.last())
             .and_then(|sample| value_f32(sample.3.first()))
             .expect("zoom spline beat spacing");
-        let mut points = BTreeMap::new();
-        for track in trace
-            .operation_tracks
-            .iter()
-            .filter(|track| track.actor == actor.id && track.operation == "Spline.SetPoint")
-        {
-            for (seq, _, _, args) in &track.samples {
-                let index = args[0].as_u64().expect("spline point index");
-                let point = args[1].as_array().expect("spline point vector");
-                let hidden = point
-                    .iter()
-                    .all(|value| value_f32(Some(value)) == Some(-1.0));
-                if points
-                    .get(&index)
-                    .is_none_or(|(previous, _)| seq > previous)
-                {
-                    points.insert(index, (*seq, hidden));
-                }
+        let points = match read_zoom_knots(trace, &actor.id) {
+            Ok(points) => points,
+            Err(error) => {
+                parity.check(false, || format!("P{player} column {column}: {error}"));
+                checked += 1;
+                continue;
             }
-        }
+        };
         if let Some(hide) = compiled
             .iter()
             .flat_map(|layer| &layer.note_hides)
@@ -966,7 +1025,9 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], parity:
             })
             .collect::<Vec<_>>();
         let (mut offset_reported, mut hiding_reported) = (false, false);
-        for (index, (_, expected)) in points {
+        // Compare unwritten zero knots as well as explicit SetPoint calls.
+        for (offset, expected) in points.into_iter().enumerate() {
+            let index = offset as u64 + 1;
             let beat = (index - 1) as f32 * beats_per_t;
             let actual =
                 deadsync_gameplay::song_lua_note_hidden(&hides[player - 1], column - 1, beat);
@@ -993,6 +1054,69 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], parity:
     assert!(
         checked > 0,
         "multitap zoom spline comparison must not be empty"
+    );
+}
+
+#[test]
+fn sparse_zoom_knots_keep_native_extent() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/fg-comment-chain.json.zst"),
+    );
+    trace.external_actors = serde_json::from_value(serde_json::json!([
+        {"id":"handler", "class":"Spline", "path":"ScreenGameplay/PlayerP1/NoteField/Column1/GetZoomHandler"},
+        {"id":"spline", "class":"Spline", "path":"ScreenGameplay/PlayerP1/NoteField/Column1/GetZoomHandler/GetSpline"}
+    ])).unwrap();
+    trace.operation_tracks = serde_json::from_value(serde_json::json!([
+        {"actor":"handler", "operation":"Spline.SetBeatsPerT", "samples":[[0,0,0,[1]]]},
+        {"actor":"spline", "operation":"Spline.SetSize", "samples":[[1,0,0,[8.9]],[3,0,0,[3]],[4,0,0,[8]]]},
+        {"actor":"spline", "operation":"Spline.SetPoint", "samples":[[2,0,0,[8.9,[-1,-1,-1]]],[5,0,0,[6,[-1,-1,-1]]]]}
+    ])).unwrap();
+    let mut compiled = CompiledSongLua::default();
+    compiled.note_hides = deadsync_song_lua::note_hide_windows_from_flags(
+        0,
+        0,
+        1.0,
+        &[false, false, false, false, false, true, false, false],
+    );
+    let compare = |trace: &NativeTrace, compiled: &CompiledSongLua| {
+        let mut parity = Parity::default();
+        compare_zoom_hides(trace, std::slice::from_ref(compiled), &mut parity);
+        parity
+    };
+    let parity = compare(&trace, &compiled);
+    assert_eq!(
+        parity.checks(),
+        18,
+        "eight allocated knots plus extent and spacing"
+    );
+    parity.assert_complete("sparse native knots including shrink and regrowth");
+    trace.operation_tracks[1].samples[2].3[0] = serde_json::json!(9);
+    assert!(
+        compare(&trace, &compiled)
+            .gaps
+            .iter()
+            .any(|gap| gap.contains("endpoint"))
+    );
+    trace.operation_tracks[1].samples[2].3[0] = serde_json::json!(8);
+    compiled.note_hides = deadsync_song_lua::note_hide_windows_from_flags(
+        0,
+        0,
+        1.0,
+        &[false, false, false, false, true, true, false, false],
+    );
+    assert!(
+        compare(&trace, &compiled)
+            .gaps
+            .iter()
+            .any(|gap| gap.contains("index 5"))
+    );
+    trace
+        .operation_tracks
+        .retain(|track| track.operation != "Spline.SetSize");
+    assert!(
+        !compare(&trace, &compiled).gaps.is_empty(),
+        "incomplete native evidence fails"
     );
 }
 

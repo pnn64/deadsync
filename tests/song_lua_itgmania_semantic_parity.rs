@@ -56,6 +56,10 @@ struct NativeTrace {
     #[serde(default)]
     song_clock: Option<String>,
     #[serde(default)]
+    message_dispatch: Option<String>,
+    #[serde(default)]
+    message_dispatches: Vec<NativeMessageDispatch>,
+    #[serde(default)]
     runtime_errors: Vec<Value>,
     #[serde(default)]
     dropped_events: u64,
@@ -131,6 +135,8 @@ struct NativeDefinition {
     children: Vec<NativeChild>,
     #[serde(default)]
     runtime_actors: Vec<String>,
+    #[serde(default)]
+    properties: Value,
 }
 
 #[derive(Deserialize)]
@@ -146,15 +152,67 @@ struct NativeActor {
     #[serde(default)]
     parent_id: Option<String>,
     #[serde(default)]
-    final_render_state: Option<NativeRenderSnapshot>,
+    message_order: Option<usize>,
     #[serde(default)]
+    final_render_state: Option<NativeRenderSnapshot>,
+    #[serde(default, deserialize_with = "read_render_samples")]
     render_state_samples: Vec<(usize, Option<f32>, bool)>,
 }
 
 #[derive(Deserialize)]
 struct NativeRenderSnapshot {
+    #[serde(default, deserialize_with = "read_render_alpha")]
     alpha: Option<f32>,
     visible: bool,
+}
+
+fn read_render_alpha<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<f32>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    if value.is_null() {
+        return Ok(None);
+    }
+    projected_alpha(&value)
+        .map(Some)
+        .ok_or_else(|| serde::de::Error::custom("invalid native render alpha"))
+}
+
+fn read_render_samples<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<(usize, Option<f32>, bool)>, D::Error> {
+    Vec::<(usize, Value, bool)>::deserialize(deserializer)?
+        .into_iter()
+        .map(|(frame, value, visible)| {
+            let alpha = if value.is_null() {
+                None
+            } else {
+                Some(projected_alpha(&value).ok_or_else(|| {
+                    serde::de::Error::custom("invalid native render alpha sample")
+                })?)
+            };
+            Ok((frame, alpha, visible))
+        })
+        .collect()
+}
+
+#[test]
+fn native_render_alpha_keeps_nonfinite_kind() {
+    for (kind, expected) in [
+        ("infinity", f32::INFINITY),
+        ("-infinity", f32::NEG_INFINITY),
+        ("nan", f32::NAN),
+    ] {
+        let alpha = serde_json::json!({"type": "number", "value": kind});
+        let actor: NativeActor = serde_json::from_value(serde_json::json!({
+            "id": "quad", "path": "quad", "final_render_state": {"alpha": alpha, "visible": true},
+            "render_state_samples": [[0, alpha, true]]
+        })).expect("lossless native render state");
+        let snapshot = actor.final_render_state.expect("final state").alpha.expect("alpha");
+        let sample = actor.render_state_samples[0].1.expect("sample alpha");
+        assert!(snapshot == expected || (snapshot.is_nan() && expected.is_nan()));
+        assert!(sample == expected || (sample.is_nan() && expected.is_nan()));
+    }
 }
 
 #[derive(Deserialize)]
@@ -162,6 +220,16 @@ struct NativeExternalActor {
     id: String,
     path: String,
     class: String,
+    #[serde(default)]
+    message_order: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct NativeMessageDispatch {
+    name: String,
+    beat: f64,
+    seconds: f64,
+    actor_ids: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -527,6 +595,12 @@ fn locate_simfile(trace: &NativeTrace) -> PathBuf {
     }
     if let Some(path) = trace.source_simfile.as_ref().filter(|path| path.is_file()) {
         return path.clone();
+    }
+    if let Some(path) = trace.source_simfile.as_ref() {
+        let path = workspace_root().join("lua-songs").join(path);
+        if path.is_file() {
+            return path;
+        }
     }
     let filename = trace
         .simfile
@@ -992,6 +1066,13 @@ fn collect_native_drawable_definitions<'a>(
         .runtime_actors
         .first()
         .map_or(parent.id.as_str(), String::as_str);
+    if !matches!(parent.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
+        out.push(NativeInstance {
+            id: actor,
+            class: &parent.class,
+            name: parent.name.as_deref(),
+        });
+    }
     collect_native_instances(trace, parent, actor, definitions, true, out);
 }
 
@@ -1239,7 +1320,9 @@ fn compare_final_render_states(
                 compiled_dest_render_state(compiled, overlay_index)
             };
             if expected.wrote_alpha {
-                parity.check((expected.alpha - actual.diffuse[3]).abs() <= EPSILON, || {
+                parity.check(expected.alpha == actual.diffuse[3]
+                    || (expected.alpha.is_nan() && actual.diffuse[3].is_nan())
+                    || (expected.alpha - actual.diffuse[3]).abs() <= EPSILON, || {
                     format!(
                         "layer {layer} final alpha differs for {}/{}: ITGmania {:.4}, DeadSync {:.4}",
                         definition.id, definition.class, expected.alpha, actual.diffuse[3]
@@ -1806,7 +1889,8 @@ fn compare_update_render_persistence(
                     continue;
                 };
                 let actual = actual[3];
-                parity.check((expected - actual).abs() <= 0.03, || {
+                parity.check(expected == actual || (expected.is_nan() && actual.is_nan())
+                    || (expected - actual).abs() <= 0.03, || {
                     format!(
                         "layer {layer} alpha persistence differs for {}/{} at beat {beat:.3}: ITGmania {expected:.4}, DeadSync {actual:.4}",
                         definition.id, definition.class
@@ -2232,6 +2316,7 @@ fn overlay_state_render_value(
         Target::HAlign => UpdateValue::F32(state.halign),
         Target::VAlign => UpdateValue::F32(state.valign),
         Target::Visible => UpdateValue::Bool(state.visible),
+        Target::Hibernating => UpdateValue::Bool(state.hibernating),
         Target::CropLeft => UpdateValue::F32(state.cropleft),
         Target::CropRight => UpdateValue::F32(state.cropright),
         Target::CropTop => UpdateValue::F32(state.croptop),
@@ -4851,6 +4936,9 @@ fn projected_spin_matches_native_draws() {
                 initial_state: SongLuaOverlayState {
                     x: 380.0,
                     y: 280.0,
+                    // The actor oracle loads a 64px Sprite; the adapter must
+                    // give its synthetic Quad the same explicit geometry.
+                    size: Some([64.0, 64.0]),
                     effect_mode: EffectMode::Spin,
                     effect_magnitude: [30.0, 60.0, 90.0],
                     ..SongLuaOverlayState::default()
@@ -5249,7 +5337,7 @@ fn compare_projected_geometry(
             let has_colors = sample.get(9).is_some_and(Value::is_array)
                 && sample.get(10).is_some_and(Value::is_array);
             let actual_visible = state.sprite_texture
-                && state.visible
+                && state.draw_visible()
                 && (actual_diffuse[3] > 0.000_001 || (has_colors && state.glow[3] > 0.000_001));
             if native_visible && has_colors {
                 for (field, actual) in [(9, actual_diffuse), (10, state.glow)] {
@@ -5288,15 +5376,15 @@ fn compare_projected_geometry(
                     .get(overlay_index)
                     .is_some_and(|state| {
                         native_visible
-                            == (state.visible
+                            == (state.draw_visible()
                                 && (state.diffuse[3] > 0.000_001
                                     || (has_colors && state.glow[3] > 0.000_001)))
                     })
             };
             parity.check_once(visibility_matches, &mut reported_visibility, || {
                 format!(
-                    "projected visibility differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_visible}, DeadSync {actual_visible} (visible={}, alpha={:.3})",
-                    track.actor, state.visible, state.diffuse[3]
+                    "projected visibility differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_visible}, DeadSync {actual_visible} (visible={}, hibernating={}, alpha={:.3})",
+                    track.actor, state.visible, state.hibernating, state.diffuse[3]
                 )
             });
             if native_visible && actual_visible {
@@ -5978,10 +6066,12 @@ fn compare_sprite_textures(
             let active = deadsync_song_lua::sprite_texture_at(textures, second + 1e-5);
             let actual = active.map_or(texture_path, |texture| &texture.path);
             let key = active.map_or(texture_key.as_ref(), |texture| texture.key.as_ref());
+            let actual_path = fs::canonicalize(actual);
+            let render_path = fs::canonicalize(key);
             parity.check(expected_path.as_ref().is_ok_and(|path|
-                fs::canonicalize(actual).is_ok_and(|actual| actual == *path)
-                    && fs::canonicalize(key).is_ok_and(|key| key == *path)),
-                || format!("Sprite.Load binding differs for {actor} at {second:.6}s: ITGmania {path:?}, DeadSync {actual:?}, render key {key:?}"));
+                actual_path.as_ref().is_ok_and(|actual| actual == path)
+                    && render_path.as_ref().is_ok_and(|key| key == path)),
+                || format!("Sprite.Load binding differs for {actor} at {second:.6}s: ITGmania {path:?} ({expected_path:?}), DeadSync {actual:?} ({actual_path:?}), render key {key:?} ({render_path:?})"));
         }
     }
 }
@@ -6564,6 +6654,73 @@ fn recurring_visibility_matches_native() {
 }
 
 #[test]
+fn runtime_text_uses_native_song_clock() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/text-prefix-native.json.zst"),
+    );
+    assert!(trace.runtime_errors.is_empty());
+    assert_eq!(trace.dropped_events, 0);
+    assert_eq!(trace.update_frames.len(), 247);
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/text-prefix-native/text.sm"),
+    );
+    let actor = compiled[primary]
+        .overlays
+        .iter()
+        .find(|actor| actor.name.as_deref() == Some("Count"))
+        .expect("native text actor");
+    let SongLuaOverlayKind::BitmapText {
+        text,
+        text_changes,
+        text_changes_in_seconds,
+        ..
+    } = &actor.kind
+    else {
+        panic!("native text actor kind")
+    };
+    assert!(*text_changes_in_seconds);
+    let origin = context
+        .song_timing
+        .as_ref()
+        .expect("native timing")
+        .get_time_for_beat_exact(0.0);
+    let track = trace
+        .operation_tracks
+        .iter()
+        .find(|track| track.operation == "BitmapText.settext")
+        .expect("native recurring text writes");
+    assert_eq!(track.samples.len(), 24);
+    assert!(
+        track
+            .samples
+            .windows(2)
+            .any(|pair| pair[0].1 == pair[1].1 && pair[0].3 != pair[1].3),
+        "native text changes while the song beat is stopped"
+    );
+    for (_, _, seconds, args) in &track.samples {
+        let expected = match &args[0] {
+            Value::String(text) => text.clone(),
+            Value::Number(number) => number.to_string(),
+            value => panic!("unexpected native text argument: {value}"),
+        };
+        assert_eq!(
+            deadsync_song_lua::overlay_text_at(
+                text,
+                text_changes,
+                seconds * deadsync_song_lua::song_music_rate(&context) + origin
+            )
+            .as_ref(),
+            expected,
+            "native text at {seconds} seconds"
+        );
+    }
+    compare_semantics(&trace, &compiled, primary, &context)
+        .assert_complete("Native text and modifier prefixes");
+}
+#[test]
 fn recurring_stop_matches_native() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -6675,7 +6832,7 @@ fn near_camera_native() {
         compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/near-camera.sm"));
     let parity = compare_semantics(&trace, &compiled, primary, &context);
     eprintln!("{}", parity.summary("near camera"));
-    assert_eq!(parity.checks(), 2374);
+    assert_eq!(parity.checks(), 4194);
     parity.assert_complete("near camera");
     let native: Value =
         serde_json::from_reader(
@@ -6710,6 +6867,8 @@ fn near_camera_native() {
             (actor["current"]["position"][2].as_f64().unwrap() as f32).to_bits()
         );
         let states = compiled_overlay_states_at(&compiled[primary], &context, second, second);
+        // This separate actor oracle uses a 64px Sprite. The Lua fixture uses
+        // a unit Quad whose zoom(16/15) replaces zoomto(64,64)'s scale.
         let vertices = compiled_perspective_vertices(
             &compiled[primary],
             &states,
@@ -7543,15 +7702,7 @@ fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
     let trace = read_trace_file(&trace_path);
     let (compiled, primary_index, context) = compile_trace_song(&trace);
     let compiled = &compiled[primary_index];
-    let timing = deadsync_rules::timing::TimingData::from_segments(
-        0.0,
-        0.0,
-        &deadsync_rules::timing::TimingSegments {
-            bpms: context.song_timing_bpms.clone(),
-            ..deadsync_rules::timing::TimingSegments::default()
-        },
-        &[],
-    );
+    let timing = context.song_timing.as_ref().expect("parsed BroGamer timing");
     let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
         compiled, &timing, 0, 0.0,
     );

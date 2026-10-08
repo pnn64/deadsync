@@ -1,3 +1,4 @@
+use crate::lua_util::run_actor_startup_commands;
 use deadlib_present::actors::TextAttribute;
 use mlua::{Lua, Table, Value};
 use std::path::Path;
@@ -23,7 +24,6 @@ use crate::{
     read_tracked_compile_actors, read_update_function_nested_tables, read_update_function_tables,
     read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
     restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
-    run_actor_startup_commands, run_actor_update_functions_with_delta,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
     update_tree_reads_global,
 };
@@ -239,6 +239,8 @@ where
         crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
     let roots = lua.create_table().map_err(|err| err.to_string())?;
     let mut initial_actor_states = std::collections::HashMap::new();
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
     for (index, entry_path) in entry_paths.iter().enumerate() {
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
@@ -293,59 +295,23 @@ where
     // Startup queues and the initial update can consume one-shot broadcasts
     // before the sampled replay starts. Retain their events as well.
     crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
-    let (mut startup_states, mut startup_tweens) =
-        run_actor_startup_commands(&lua, &root, initial_actor_states).map_err(|err| {
-            format!(
-                "failed to run actor startup commands for song lua session '{}': {err}",
-                trace_entry_path.display()
-            )
-        })?;
-    compile_timer.push_stage("startup_commands");
-    let mut screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
-    // Later sampled callbacks must not retroactively change the skin/lead-in
-    // selected for the transition into gameplay.
-    let startup = read_startup(&lua, context).map_err(|err| err.to_string())?;
-    // The zero-delta update can enqueue a child's next-frame state. Keep its
-    // new blocks separate from Init/On and speculative queued startup commands.
-    let mut initial_updates = std::collections::HashMap::new();
-    crate::lua_util::collect_initial_states(&root, &mut initial_updates)
-        .map_err(|err| err.to_string())?;
-    let update_blocks = initial_updates
-        .iter()
-        .map(|(&pointer, (actor, _))| {
-            crate::lua_util::flush_actor_capture(actor).map_err(|err| err.to_string())?;
-            Ok((pointer, crate::lua_util::read_actor_capture_blocks(actor)?))
-        })
-        .collect::<Result<std::collections::HashMap<_, _>, String>>()?;
-    // Init/On use beat zero. The first gameplay update uses the actual song
-    // position at elapsed zero, which can be past an opening warp.
-    crate::set_compile_song_runtime_values(
-        &lua,
-        crate::song_beat_at_elapsed_seconds(0.0, context),
-        0.0,
-    )
-    .map_err(|err| err.to_string())?;
-    run_actor_update_functions_with_delta(&lua, &root, 0.0).map_err(|err| {
+    let captured_startup = run_actor_startup_commands(&lua, &root, initial_actor_states, context)
+        .map_err(|err| {
         format!(
-            "failed to run actor update functions for song lua session '{}': {err}",
+            "failed to run actor startup commands for song lua session '{}': {err}",
             trace_entry_path.display()
         )
     })?;
-    let mut initial_updates = crate::lua_util::capture_startup_states(initial_updates)?;
-    let update_blocks = initial_updates
-        .iter()
-        .map(|(&pointer, update)| {
-            // Stop/finish tweening can replace the capture rather than append.
-            let prefix = update_blocks.get(&pointer).map_or(0, |previous| {
-                if update.blocks.starts_with(previous) {
-                    previous.len()
-                } else {
-                    0
-                }
-            });
-            (pointer, prefix)
-        })
-        .collect::<std::collections::HashMap<_, _>>();
+    #[cfg(feature = "test-support")]
+    let startup_skin_writes = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>()
+        .map(|capture| capture.writes).unwrap_or_default();
+    let startup = captured_startup.options;
+    let startup_states = captured_startup.queued;
+    let mut startup_tweens = captured_startup.tweens;
+    let mut initial_updates = captured_startup.updates;
+    let initial_broadcasts = captured_startup.broadcasts;
+    compile_timer.push_stage("startup_commands");
+    let mut screen_layer_startup = crate::lua_util::capture_startup_states(screen_layer_states)?;
     crate::lua_util::bake_startup_tweens(
         startup_tweens
             .values_mut()
@@ -358,17 +324,6 @@ where
         )
         .into_iter(),
     );
-    for (pointer, update) in &mut initial_updates {
-        // Baking changes progress only; the checked prefix remains in bounds.
-        update.blocks.drain(..update_blocks[pointer]);
-        if update.blocks.iter().any(|block| block.progress.is_some()) {
-            if let Some(state) = startup_states.get_mut(pointer) {
-                state.blocks.extend(update.blocks.iter().cloned());
-            } else if let Some(state) = startup_tweens.get_mut(pointer) {
-                state.blocks.extend(update.blocks.iter().cloned());
-            }
-        }
-    }
     compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
     compile_timer.push_stage("draw_functions");
@@ -403,7 +358,17 @@ where
         screen_height: context.screen_height,
         ..CompiledSongLua::default()
     };
-    merge_runtime_messages(&mut out.messages, 0, &startup_broadcasts);
+    #[cfg(feature = "test-support")]
+    { out.noteskin_writes = startup_skin_writes; }
+    // Real frame-zero broadcasts survive separately from discovery events.
+    // Only the latter are replaced by their chronological queue dispatch.
+    merge_runtime_messages(&mut out.messages, 0, &initial_broadcasts);
+    let runtime_message_start = out.messages.len();
+    merge_runtime_messages(
+        &mut out.messages,
+        runtime_message_start,
+        &startup_broadcasts,
+    );
     let compile_globals =
         snapshot_compile_globals(&lua, &globals).map_err(|err| err.to_string())?;
     let overlays = read_overlay_compile_actors(
@@ -641,7 +606,6 @@ where
     // The sampled reader owns callbacks and named actions. Probing callbacks
     // changes nested tables, upvalues and random state; emitting named actions
     // speculatively also plays schedules the reader never reaches.
-    let runtime_action_message_start = out.messages.len();
     compile_timer.push_stage("global_actions");
     crate::perframe::apply_startup_states(
         context,
@@ -716,6 +680,7 @@ where
                 &mut overlays,
                 &mut tracked_actors,
                 &out.messages,
+                &startup_tweens,
                 &mut sound_events,
                 &mut judgment_textures,
                 &mut sprite_textures,
@@ -736,12 +701,16 @@ where
         out.boolean_writes = writes.0;
     }
     #[cfg(feature = "test-support")]
+    if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>() {
+        out.noteskin_writes.extend(writes.writes);
+    }
+    #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::lua_util::SongLuaOverlayWrites>() {
         out.overlay_writes = writes.0;
     }
     merge_runtime_messages(
         &mut out.messages,
-        runtime_action_message_start,
+        runtime_message_start,
         &runtime_broadcasts,
     );
     for capture in stateful_message_captures {
@@ -1331,6 +1300,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     #[cfg(feature = "test-support")]
     {
         primary.boolean_writes = compiled.boolean_writes;
+        primary.noteskin_writes = compiled.noteskin_writes;
     }
     primary.startup = compiled.startup;
     primary.beat_mods = compiled.beat_mods;
@@ -1349,22 +1319,4 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         sort_compiled_song_lua(output);
     }
     Ok(outputs)
-}
-
-fn read_startup(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<crate::SongLuaStartup> {
-    let globals = lua.globals();
-    let mut startup = crate::SongLuaStartup::default();
-    for (index, key) in crate::SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
-        if context.players[index].enabled {
-            let options = globals.get::<Table>(*key)?;
-            startup.noteskins[index] = options.raw_get("__songlua_noteskin_override")?;
-        }
-    }
-    let screen = globals.get::<Table>("__songlua_top_screen")?;
-    startup.min_seconds_to_music = screen.raw_get("__songlua_min_seconds_to_music")?;
-    let children = crate::actor_children(lua, &screen)?;
-    if let Some(actor) = children.get::<Option<Table>>("In")? {
-        startup.hide_in = actor.get::<Option<bool>>("__songlua_visible")? == Some(false);
-    }
-    Ok(startup)
 }

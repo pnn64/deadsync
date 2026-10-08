@@ -142,6 +142,13 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                 }
                 _ => push(key, value),
             };
+            if operation == "NoteSkin" && detail.as_ref()
+                .and_then(|detail| detail.get("noteskin_option"))
+                .is_some_and(|state| state["previous"].is_string() && state["current"].is_string())
+            {
+                // A string setting has its own native getter/sequence audit.
+                continue;
+            }
             if operation == "FromString" {
                 let raw = args
                     .get(usize::from(state_setter))
@@ -156,6 +163,19 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                         continue;
                     }
                     let key = words.last().expect("nonempty modifier part");
+                    if *key != "clearall" && detail.as_ref()
+                        .and_then(|detail| detail.get("noteskin_option"))
+                        .filter(|state| state["previous"].is_string() && state["current"].is_string())
+                        .and_then(|state| state["parts"].as_array())
+                        .is_some_and(|parts| parts.iter().any(|skin|
+                            skin["part"].as_str().is_some_and(|name| name.eq_ignore_ascii_case(&part))
+                                && skin["target"].is_string()))
+                    {
+                        // The linked native parser identified this exact part.
+                        // compare_noteskin_options must also pass its API state;
+                        // clearall still needs the numeric reset audit below.
+                        continue;
+                    }
                     if let Some(noop) = detail
                         .as_ref()
                         .and_then(|detail| detail.get("indexed_noops"))
@@ -1661,6 +1681,62 @@ end}
 }
 
 #[test]
+fn noteskin_audit_rejects_missing_and_altered_writes() {
+    let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
+    trace.enabled_players = Some([true, false]);
+    trace.timeline_tracks = vec![NativeTimelineTrack {
+        kind: "modifier".into(), actor: Some("player-state:PLAYER_1/options:ModsLevel_Song".into()),
+        operation: "PlayerOptions.FromString".into(),
+        samples: [0.1_f32, 0.15].into_iter().enumerate().map(|(index, second)| (
+            index as u64 + 1, Some(second * 2.0), Some(second), vec![serde_json::json!("CyBeR")],
+            Some(serde_json::json!({ "noteskin_option": {
+                "previous": if index == 0 { "cel" } else { "cyber" }, "current": "cyber",
+                "parts": [{ "part": "CyBeR", "target": "cyber" }],
+            } }))
+        )).collect(),
+    }];
+    let mut compiled = vec![CompiledSongLua {
+        noteskin_writes: [0.1_f32, 0.15].into_iter().enumerate().map(|(index, second)|
+            deadsync_song_lua::SongLuaSkinWrite {
+                player: 0, key: "fromstring".into(), beat: f64::from(second * 2.0),
+                second: f64::from(second), previous: if index == 0 { "cel" } else { "cyber" }.into(),
+                current: "cyber".into(),
+            }).collect(),
+        ..CompiledSongLua::default()
+    }];
+    let mut parity = Parity::default();
+    compare_noteskin_options(&trace, &compiled, &mut parity);
+    parity.assert_complete("complete string-option audit");
+    let (writes, unsupported) = option_writes(&trace);
+    assert!(writes.is_empty() && unsupported.is_empty(), "native string evidence replaces numeric guessing");
+    let correct = compiled[0].noteskin_writes.clone();
+    for mutation in 0..5 {
+        compiled[0].noteskin_writes.clone_from(&correct);
+        match mutation {
+            0 => { compiled[0].noteskin_writes.pop(); },
+            1 => compiled[0].noteskin_writes[0].previous = "default".into(),
+            2 => compiled[0].noteskin_writes[1].current = "CEL".into(),
+            3 => compiled[0].noteskin_writes[0].second = 1.0,
+            _ => compiled[0].noteskin_writes.swap(0, 1),
+        }
+        let mut rejected = Parity::default();
+        compare_noteskin_options(&trace, &compiled, &mut rejected);
+        assert!(!rejected.gaps.is_empty(), "reject changed noteskin sequence {mutation}");
+    }
+    compiled[0].noteskin_writes.clone_from(&correct);
+    trace.timeline_tracks[0].samples[0].4.as_mut().expect("native detail")
+        ["noteskin_option"]["parts"][0]["target"] = serde_json::json!("default");
+    let mut rejected = Parity::default();
+    compare_noteskin_options(&trace, &compiled, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "reject inconsistent native classification");
+    for track in &mut trace.timeline_tracks {
+        for sample in &mut track.samples { sample.4 = None; }
+    }
+    let (writes, _) = option_writes(&trace);
+    assert_eq!(writes.len(), 2, "old captures cannot silently excuse Cyber");
+}
+
+#[test]
 fn boolean_audit_keeps_repeated_writes() {
     let mut trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(DEFAULT_TRACE));
     trace.enabled_players = Some([true, false]);
@@ -2201,7 +2277,9 @@ fn sampled_modifiers_change_on_the_recorded_frame() {
         if change_bpm {
             context.song_timing_bpms.push((7.0, 180.0));
         }
-        context.music_length_seconds = 61.0;
+        // Music length is measured in song seconds. Cover the 60 seconds of
+        // real-time updates below even at accelerated playback rates.
+        context.music_length_seconds = 61.0 * rate;
         context.song_music_rate = rate;
         let timing = deadsync_rules::timing::TimingData::from_segments(
             offset,
@@ -2627,6 +2705,69 @@ fn compare_boolean_options(trace: &NativeTrace, compiled: &[CompiledSongLua], pa
     }
 }
 
+fn compare_noteskin_options(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
+    parity.section("noteskin option API");
+    let mut expected = BTreeMap::<(usize, String), Vec<(u64, f32, f32, &Value)>>::new();
+    for track in &trace.timeline_tracks {
+        let state_setter = track.operation == "PlayerState.SetPlayerOptions";
+        let Some(player) = (0..2).find(|player| track.actor.as_deref() == Some(
+            if state_setter { format!("player-state:PLAYER_{}", player + 1) }
+            else { format!("player-state:PLAYER_{}/options:ModsLevel_Song", player + 1) }.as_str()
+        )) else { continue };
+        if !trace.enabled_players.unwrap_or([true; 2])[player] { continue; }
+        let key = if state_setter { "setplayeroptions".to_owned() }
+            else if let Some(key) = track.operation.strip_prefix("PlayerOptions.") {
+                key.to_ascii_lowercase()
+            } else { continue };
+        for (sequence, beat, second, args, detail) in &track.samples {
+            if state_setter && args.first().and_then(Value::as_str) != Some("ModsLevel_Song") {
+                continue;
+            }
+            if let Some(state) = detail.as_ref().and_then(|detail| detail.get("noteskin_option")) {
+                if matches!(key.as_str(), "fromstring" | "setplayeroptions") {
+                    let raw = args.get(usize::from(state_setter)).and_then(Value::as_str);
+                    let parts = state["parts"].as_array();
+                    // Require the native classifier and live getter to agree.
+                    // Simply Love's Common default is cel when a raw skin is empty.
+                    let target = parts.and_then(|parts| parts.last())
+                        .and_then(|part| part["target"].as_str())
+                        .map(|target| if target.is_empty() { "cel" } else { target })
+                        .or_else(|| if state_setter { Some("cel") } else { state["previous"].as_str() });
+                    parity.check(parts.is_some_and(|parts| parts.iter().all(|part|
+                        part["target"].is_string() && part["part"].as_str().is_some_and(|part|
+                            raw.is_some_and(|raw| raw.split(',').any(|token| token.trim() == part)))))
+                        && target.is_some() && target == state["current"].as_str(), || format!(
+                            "P{} {key} native noteskin classification disagrees with its getter: {state}", player + 1));
+                }
+                parity.check(beat.is_some() && second.is_some(), ||
+                    format!("P{} {key} noteskin call lacks a native clock", player + 1));
+                if let (Some(beat), Some(second)) = (beat, second) {
+                    expected.entry((player, key.clone())).or_default()
+                        .push((*sequence, *beat, *second, state));
+                }
+            }
+        }
+    }
+    if expected.is_empty() { return; }
+    for ((player, key), mut expected) in expected {
+        expected.sort_by_key(|sample| sample.0);
+        let actual = compiled.iter().flat_map(|layer| &layer.noteskin_writes)
+            .filter(|write| write.player == player && write.key == key).collect::<Vec<_>>();
+        parity.check(actual.len() == expected.len(), || format!(
+            "P{} {key} noteskin write count: native {}, DeadSync {}",
+            player + 1, expected.len(), actual.len()));
+        for (index, (_, beat, second, state)) in expected.iter().enumerate() {
+            parity.check(actual.get(index).is_some_and(|write|
+                (write.beat - f64::from(*beat)).abs() < f64::from(EPSILON)
+                    && (write.second - f64::from(*second)).abs() < f64::from(EPSILON)
+                    && state["previous"].as_str() == Some(write.previous.as_str())
+                    && state["current"].as_str() == Some(write.current.as_str())
+            ), || format!("P{} {key} noteskin state differs at beat {beat}: native {state}, DeadSync {:?}",
+                player + 1, actual.get(index)));
+        }
+    }
+}
+
 /// One check per recorded player/option target at each native timestamp.
 pub(super) fn compare_runtime_modifiers(
     trace: &NativeTrace,
@@ -2635,6 +2776,7 @@ pub(super) fn compare_runtime_modifiers(
     parity: &mut Parity,
 ) {
     compare_boolean_options(trace, compiled, parity);
+    compare_noteskin_options(trace, compiled, parity);
     parity.section("runtime modifiers");
     let (writes, unsupported) = option_writes(trace);
     for (part, count) in unsupported {

@@ -1126,7 +1126,11 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
     let overlay_updates = song_lua_overlay_runtime_updates_at(overlays, update_actor_index);
     let mut visible_update_indices = SmallVec::new();
     for (track_index, track) in overlay_updates.iter().enumerate() {
-        if track.target == crate::SongLuaOverlayUpdateTarget::Visible {
+        if matches!(
+            track.target,
+            crate::SongLuaOverlayUpdateTarget::Visible
+                | crate::SongLuaOverlayUpdateTarget::Hibernating
+        ) {
             visible_update_indices.push(track_index);
         }
         if track.overlay_index >= dynamic_local.len() {
@@ -1533,7 +1537,7 @@ impl SongLuaForegroundOwnerIndex {
                         .and_then(|states| states.get(owner.overlay_index)),
                     _ => None,
                 };
-                state.is_some_and(|state| state.visible && state.diffuse[3] > f32::EPSILON)
+                state.is_some_and(|state| state.draw_visible() && state.diffuse[3] > f32::EPSILON)
             })
     }
 }
@@ -1929,6 +1933,7 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
         (None, child) => child,
     };
     child.visible = parent.visible && child.visible;
+    child.hibernating |= parent.hibernating;
     child.mask_source |= parent.mask_source;
     child.mask_dest |= parent.mask_dest;
     for (axis, inherited) in child.inherited_vibrate.iter_mut().enumerate() {
@@ -3441,7 +3446,7 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         clear_depth: false,
         clear_depth_after: false,
         cull_back: false,
-        visible: state.visible,
+        visible: state.draw_visible(),
         blend: song_lua_overlay_blend(state.blend),
         z,
     })
@@ -3495,13 +3500,13 @@ fn append_manual_player(
     z: i16,
 ) {
     let (leaf, tint) = song_lua_draw_matrix(state, clock);
-    if !state.visible || (tint[3] <= 0.0 && state.glow[3] <= 0.0) {
+    if !state.draw_visible() || (tint[3] <= 0.0 && state.glow[3] <= 0.0) {
         return;
     }
     let mut model = Matrix4::IDENTITY;
     for parent in parents {
         let (matrix, tint) = song_lua_draw_matrix(*parent, clock);
-        if !parent.visible || (tint[3] <= 0.0 && parent.glow[3] <= 0.0) {
+        if !parent.draw_visible() || (tint[3] <= 0.0 && parent.glow[3] <= 0.0) {
             return;
         }
         model *= matrix;
@@ -3567,7 +3572,7 @@ fn append_manual_screen(
     let mut model = Matrix4::IDENTITY;
     for parent in parents.iter().chain(std::iter::once(&state)) {
         let (matrix, tint) = song_lua_draw_matrix(*parent, clock);
-        if !parent.visible || (tint[3] <= 0.0 && parent.glow[3] <= 0.0) {
+        if !parent.draw_visible() || (tint[3] <= 0.0 && parent.glow[3] <= 0.0) {
             return;
         }
         model *= matrix;
@@ -3926,7 +3931,7 @@ struct SongLuaCaptureTransform {
 
 #[inline(always)]
 fn song_lua_overlay_is_visible(state: SongLuaOverlayState) -> bool {
-    state.sprite_texture && state.visible && state.diffuse[3] > f32::EPSILON
+    state.sprite_texture && state.draw_visible() && state.diffuse[3] > f32::EPSILON
 }
 
 #[inline(always)]
@@ -4698,7 +4703,7 @@ fn song_lua_capture_opaque_rect<S: NoteskinSlot + Clone>(
         return None;
     }
     let state = local_overlay_states.get(capture_index).copied()?;
-    if !state.visible {
+    if !state.draw_visible() {
         return None;
     }
     let SongLuaOverlayKind::ActorFrameTexture { alpha_buffer, .. } =
@@ -4959,7 +4964,7 @@ fn song_lua_build_proxy_actor_in_space_with_scratch(
     render_space_height: f32,
     mut scratch: Option<&mut SongLuaProxyActorScratch>,
 ) -> Option<Actor> {
-    if !state.visible || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
+    if !state.draw_visible() || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
         return None;
     }
     let blend = Some(song_lua_overlay_blend(state.blend));
@@ -5253,7 +5258,7 @@ fn song_lua_build_proxy_frame_actor_in_space_with_scratch(
     transform: Option<Matrix4>,
     mut scratch: Option<&mut SongLuaProxyActorScratch>,
 ) -> Option<Actor> {
-    if !state.visible || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
+    if !state.draw_visible() || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
         return None;
     }
     let blend = Some(song_lua_overlay_blend(state.blend));
@@ -5623,6 +5628,7 @@ fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayStat
         glow: state.glow,
         diffuse: state.diffuse,
         visible: state.visible,
+        hibernating: state.hibernating,
         mask_source: state.mask_source,
         mask_dest: state.mask_dest,
         depth_test: state.depth_test,
@@ -6273,8 +6279,20 @@ fn song_lua_overlay_update_snap(
             continue;
         }
         let t = match (&from.value, &to.value) {
-            (Value::Bool(false), Value::Bool(true)) => 1.0,
-            (Value::Bool(true), Value::Bool(false)) => 0.0,
+            (Value::Bool(false), Value::Bool(true)) => {
+                if track.target == crate::SongLuaOverlayUpdateTarget::Hibernating {
+                    0.0
+                } else {
+                    1.0
+                }
+            }
+            (Value::Bool(true), Value::Bool(false)) => {
+                if track.target == crate::SongLuaOverlayUpdateTarget::Hibernating {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             _ => continue,
         };
         return Some(SongLuaOverlayUpdateSnap {
@@ -6347,6 +6365,7 @@ pub fn apply_overlay_update(
         return;
     }
     set_value!(Visible, Bool, visible);
+    set_value!(Hibernating, Bool, hibernating);
     set_value!(CropLeft, F32, cropleft);
     set_value!(CropRight, F32, cropright);
     set_value!(CropTop, F32, croptop);
@@ -6837,15 +6856,14 @@ fn song_lua_child_visible(
     message_cache: &mut SongLuaMessageStateCache,
     captured: bool,
 ) -> bool {
-    song_lua_captured_state_from(
+    let state = song_lua_captured_state_from(
         now,
         actor.initial_state,
         &actor.message_commands,
         Some(events),
         message_cache,
-    )
-    .visible
-        || captured
+    );
+    !state.hibernating && (state.visible || captured)
 }
 
 fn song_lua_captured_state_from(
@@ -8419,7 +8437,7 @@ fn song_lua_song_meter_actor(
         ..
     } = &mut actor
     {
-        *visible = state.visible && stream_state.visible;
+        *visible = state.draw_visible() && stream_state.draw_visible();
         *blend = if stream_state.blend == SongLuaOverlayBlendMode::Alpha {
             song_lua_overlay_blend(state.blend)
         } else {
@@ -8540,7 +8558,7 @@ fn song_lua_graph_display_body_actor(
     z: i16,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<Actor> {
-    if !body_state.visible || body_state.diffuse[3] <= f32::EPSILON {
+    if !body_state.draw_visible() || body_state.diffuse[3] <= f32::EPSILON {
         return None;
     }
     let values = graph_display_values_or_default(body_values);
@@ -8599,7 +8617,7 @@ fn song_lua_graph_display_body_actor(
             );
         }
     };
-    let visible = state.visible && body_state.visible;
+    let visible = state.draw_visible() && body_state.draw_visible();
     let blend = if body_state.blend == SongLuaOverlayBlendMode::Alpha {
         song_lua_overlay_blend(state.blend)
     } else {
@@ -8643,7 +8661,7 @@ fn song_lua_graph_display_line_actor(
     z: i16,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<Actor> {
-    if !line_state.visible || line_state.diffuse[3] <= f32::EPSILON {
+    if !line_state.draw_visible() || line_state.diffuse[3] <= f32::EPSILON {
         return None;
     }
     let values = graph_display_values_or_default(body_values);
@@ -8699,7 +8717,7 @@ fn song_lua_graph_display_line_actor(
             );
         }
     };
-    let visible = state.visible && line_state.visible;
+    let visible = state.draw_visible() && line_state.draw_visible();
     let blend = if line_state.blend == SongLuaOverlayBlendMode::Alpha {
         song_lua_overlay_blend(state.blend)
     } else {
@@ -9344,7 +9362,7 @@ fn song_lua_flat_skewed_overlay_actor(
             local_transform: Matrix4::IDENTITY,
             world_z,
             depth_test: state.depth_test,
-            visible: state.visible,
+            visible: state.draw_visible(),
             glow: [1.0, 1.0, 1.0, 0.0],
             texture,
             tint,
@@ -9447,7 +9465,8 @@ fn build_song_lua_aft_sprite_actor(
     total_elapsed: f32,
     projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<SongLuaActorList> {
-    if !state.visible || !state.sprite_texture || !song_lua_overlay_has_visible_output(state) {
+    if !state.draw_visible() || !state.sprite_texture || !song_lua_overlay_has_visible_output(state)
+    {
         return None;
     }
     let (backing, viewport) = song_lua_capture_size(texture_size);
@@ -9533,7 +9552,7 @@ fn build_song_lua_aft_sprite_actor(
             };
             song_lua_overlay_uv_rect(uv_state, None, &[], total_elapsed)
         },
-        visible: state.visible,
+        visible: state.draw_visible(),
         flip_x,
         flip_y,
         cropleft: state.cropleft.clamp(0.0, 1.0),
@@ -9598,7 +9617,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
     ) {
         return None;
     }
-    if !state.visible || !song_lua_overlay_has_visible_output(state) {
+    if !state.draw_visible() || !song_lua_overlay_has_visible_output(state) {
         return Some(false);
     }
 
@@ -9696,7 +9715,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     texture_handle: Option<TextureHandle>,
     mut projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<SongLuaActorList> {
-    if !state.visible || !song_lua_overlay_has_visible_output(state) {
+    if !state.draw_visible() || !song_lua_overlay_has_visible_output(state) {
         return None;
     }
     let x_scale = screen_width() / overlay_space_width.max(1.0);
@@ -10017,7 +10036,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
                 *actor_flip_y ^= flip_y;
-                *visible = state.visible;
+                *visible = state.draw_visible();
             }
             let glow = if let Actor::Sprite { glow, .. } = &actor {
                 *glow
@@ -10034,12 +10053,14 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             font_name,
             text,
             text_changes,
+            text_changes_in_seconds,
             stroke_color,
             attributes,
             ..
         } => {
+            let text_time = if *text_changes_in_seconds { effect_time } else { effect_beat };
             let text_index = text_changes
-                .partition_point(|(beat, _)| *beat <= effect_beat)
+                .partition_point(|(time, _)| *time <= text_time)
                 .checked_sub(1);
             let text = text_index.map_or(text, |index| &text_changes[index].1);
             let content = if state.uppercase {
@@ -10213,7 +10234,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         clear_depth: false,
                         clear_depth_after: false,
                         cull_back: false,
-                        visible: state.visible,
+                        visible: state.draw_visible(),
                         blend: overlay_blend,
                         z,
                     }
@@ -10249,7 +10270,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         clear_depth: false,
                         clear_depth_after: false,
                         cull_back: false,
-                        visible: state.visible,
+                        visible: state.draw_visible(),
                         blend: overlay_blend,
                         z,
                     }
@@ -10283,7 +10304,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                     tint: [1.0; 4],
                     vertices: mesh,
-                    visible: state.visible,
+                    visible: state.draw_visible(),
                     blend: overlay_blend,
                     z,
                 }
@@ -10307,7 +10328,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                     tint: [1.0; 4],
                     vertices: mesh,
-                    visible: state.visible,
+                    visible: state.draw_visible(),
                     blend: overlay_blend,
                     z,
                 }
@@ -10673,7 +10694,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
                 *actor_flip_y ^= flip_y;
-                *visible = state.visible;
+                *visible = state.draw_visible();
             }
             let glow = if let Actor::Sprite { glow, .. } = &actor {
                 *glow
@@ -12138,7 +12159,7 @@ fn prepare_song_lua_layer<S: NoteskinSlot + Clone>(
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
     depth: SongLuaLayerDepth,
 ) -> Option<SongLuaLayerDepth> {
-    if overlays.is_empty() || !song_foreground_state.visible {
+    if overlays.is_empty() || !song_foreground_state.draw_visible() {
         order_scratch.clear();
         return None;
     }
@@ -12283,7 +12304,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 // Effects never change visibility, and hidden proxies draw nothing.
-                if !overlay_state.visible {
+                if !overlay_state.draw_visible() {
                     continue;
                 }
                 let overlay_state =
@@ -12345,7 +12366,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                 float_buffer,
                 ..
             } => {
-                if !overlay_state.visible {
+                if !overlay_state.draw_visible() {
                     continue;
                 }
                 let Some(&texture_handle) = topology_index.aft_texture_handles.get(idx) else {
@@ -13129,7 +13150,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     });
     let hidden_song_layers = std::array::from_fn(|index| {
         show_song_visuals
-            && (!screen_layers[index].visible || screen_layers[index].diffuse[3] <= f32::EPSILON)
+            && (!screen_layers[index].draw_visible()
+                || screen_layers[index].diffuse[3] <= f32::EPSILON)
     });
     song_lua_overlay_state_sets_from_into(
         song_lua_now,
@@ -13372,7 +13394,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     let underlay_start = actors.len();
     if show_song_visuals
         && (proxy_requests.background
-            || (screen_layers[2].visible && screen_layers[2].diffuse[3] > f32::EPSILON))
+            || (screen_layers[2].draw_visible() && screen_layers[2].diffuse[3] > f32::EPSILON))
     {
         draw_layer(ScreenLayer::Background, actors, FieldLayout::default());
         for actor in &mut actors[underlay_start..] {
@@ -13437,7 +13459,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         actors,
         underlay_start,
         song_lua_proxy_actor_scratch.as_mut(),
-        screen_layers[2].visible,
+        screen_layers[2].draw_visible(),
     );
     let cover_alpha = |player_idx: usize| -> f32 {
         if player_idx >= state.num_players() {
@@ -13700,7 +13722,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             }
             let assembly = player_actor_assembly_cache[player_idx].resolve(
                 requests.player && !direct_player_candidates[player_idx],
-                player_state.visible && !covering_proxy_requests.players[player_idx].player,
+                player_state.draw_visible() && !covering_proxy_requests.players[player_idx].player,
                 capture_transform,
             );
             let field_camera = match assembly {
@@ -14279,7 +14301,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     // so Underlay/Overlay visibility must not suppress or capture it.
     let stage_start = actors.len();
     let stage_visible = !hide_gameplay_hud
-        && screen_layers[3].visible
+        && screen_layers[3].draw_visible()
         && screen_layers[3].diffuse[3] > f32::EPSILON;
     if stage_visible || proxy_requests.stage {
         draw_layer(ScreenLayer::Stage, actors, layout);

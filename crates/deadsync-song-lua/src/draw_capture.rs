@@ -189,14 +189,14 @@ fn scoped_context(actor: &Table, prior: &Context) -> mlua::Result<Option<Context
     if let Some(wrappers) = actor.raw_get::<Option<Table>>("__songlua_wrappers")? {
         for index in (1..=wrappers.raw_len()).rev() {
             let wrapper = state(&wrappers.raw_get::<Table>(index)?)?;
-            if !wrapper.visible {
+            if !wrapper.draw_visible() {
                 return Ok(None);
             }
             parents.push(wrapper);
         }
     }
     let state = state(actor)?;
-    if !state.visible {
+    if !state.draw_visible() {
         return Ok(None);
     }
     parents.push(state);

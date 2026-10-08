@@ -149,8 +149,12 @@ fn create_player_state_table(
                 // LunaPlayerState::SetPlayerOptions parses a fresh PlayerOptions
                 // and assigns it. Keep the table identity held by Lua readers,
                 // but reset prior targets and approach speeds before parsing.
+                #[cfg(feature = "test-support")]
+                let previous = player_noteskin(&options_for_set)?;
                 reset_player_options(lua, &options_for_set)?;
                 apply_player_options_string(lua, &options_for_set, &options_text)?;
+                #[cfg(feature = "test-support")]
+                capture_skin_write(lua, &options_for_set, "setplayeroptions", previous)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(())
             }
@@ -254,6 +258,23 @@ fn player_options_parts(lua: &Lua, owner: &Table) -> mlua::Result<Vec<String>> {
             option_string_part(&mut parts, "Tilt", tilt);
         }
     }
+    let skin = owner.raw_get::<Option<String>>("__songlua_noteskin_name")?.unwrap_or_default();
+    if !skin.is_empty() && skin != SONG_LUA_DEFAULT_NOTESKIN_NAME {
+        // RageUtil::Capitalize uppercases the first Unicode character only.
+        let mut name = skin.clone();
+        if let Some(first) = skin.chars().next() {
+            // ITGmania's g_UpperCase only maps ASCII and these Latin-1 ranges.
+            let code = first as u32;
+            let upper = match code {
+                0x61..=0x7a | 0xe0..=0xf6 | 0xf8..=0xfe => code - 0x20,
+                _ => code,
+            };
+            if let Some(upper) = char::from_u32(upper).filter(|upper| *upper != first) {
+                name.replace_range(..first.len_utf8(), &upper.to_string());
+            }
+        }
+        parts.push(name);
+    }
     Ok(parts)
 }
 
@@ -344,7 +365,11 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
             let table = table.clone();
             move |lua, args: MultiValue| {
                 if let Some(text) = method_arg(&args, 0).cloned().and_then(read_string) {
+                    #[cfg(feature = "test-support")]
+                    let previous = player_noteskin(&table)?;
                     apply_player_options_string(lua, &table, &text)?;
+                    #[cfg(feature = "test-support")]
+                    capture_skin_write(lua, &table, "fromstring", previous)?;
                 }
                 Ok(table.clone())
             }
@@ -460,11 +485,12 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
             }) else {
                 return Ok(MultiValue::new());
             };
-            let previous = owner
-                .raw_get::<Option<String>>("__songlua_noteskin_name")?
-                .unwrap_or_else(|| player.noteskin_name.clone());
+            let previous = player_noteskin(&owner)?;
             let mut accepted = Value::Nil;
-            if let Some(noteskin_name) = method_arg(&args, 0).cloned().and_then(read_string) {
+            if let Some(noteskin_name) = method_arg(&args, 0).cloned()
+                .map(|value| lua.coerce_string(value)).transpose()?.flatten()
+            {
+                let noteskin_name = noteskin_name.to_str()?.to_owned();
                 let skins = lua.globals().get::<Table>("NOTESKIN")?;
                 let exists = skins
                     .get::<Function>("DoesNoteSkinExist")?
@@ -473,7 +499,10 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
                     owner.raw_set("__songlua_noteskin_override", noteskin_name.clone())?;
                     owner.raw_set("__songlua_noteskin_name", noteskin_name)?;
                     accepted = Value::Boolean(true);
+                    note_song_lua_side_effect(lua)?;
                 }
+                #[cfg(feature = "test-support")]
+                capture_skin_write(lua, &owner, "noteskin", previous.clone())?;
             }
             if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
                 return Ok(MultiValue::from_vec(vec![Value::Table(owner)]));
@@ -522,47 +551,8 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
-    if (player_option_uses_bool(&name) && name != "overhead")
-        || matches!(
-            name.as_str(),
-            "incoming"
-                | "space"
-                | "hallway"
-                | "distant"
-                | "overhead"
-                | "tilt"
-                | "skew"
-                | "drawsize"
-                | "drawsizeback"
-                | "modtimersetting"
-                | "modtimermult"
-                | "modtimeroffset"
-                | "bumpyx"
-                | "bumpyxoffset"
-                | "bumpyxperiod"
-                | "tanbumpy"
-                | "tanbumpyoffset"
-                | "tanbumpyperiod"
-                | "tanbumpyx"
-                | "tanbumpyxoffset"
-                | "tanbumpyxperiod"
-                | "drunkz"
-                | "drunkzoffset"
-                | "drunkzspeed"
-                | "drunkzperiod"
-                | "tandrunk"
-                | "tandrunkoffset"
-                | "tandrunkspeed"
-                | "tandrunkperiod"
-                | "tandrunkz"
-                | "tandrunkzoffset"
-                | "tandrunkzspeed"
-                | "tandrunkzperiod"
-                | "stealthtype"
-                | "dizzyholds"
-                | "zbuffer"
-                | "cosecant"
-        )
+    if name == "modtimersetting"
+        || (player_option_default_string(&name).is_none() && name != "batterylives")
     {
         return create_native_option(lua, &owner, name);
     }
@@ -734,6 +724,14 @@ fn capture_bool_write(
     Ok(())
 }
 
+fn keep_option_speed(speeds: &Table, key: &str) -> mlua::Result<()> {
+    if speeds.raw_get::<Option<f32>>(key)?.is_none() {
+        // PlayerOptions::Init initializes scalar approach speeds to one.
+        speeds.raw_set(key, 1.0)?;
+    }
+    Ok(())
+}
+
 fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     if key == "modtimersetting" {
         return create_timer_option(lua, owner);
@@ -773,8 +771,12 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
                 set_perspective_angle(&state, &key, 0.0)?;
             }
         } else if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
-            if !set_perspective_angle(&state, &key, value)? {
+            if set_perspective_angle(&state, &key, value)? {
+                keep_option_speed(&speeds, "tilt")?;
+                keep_option_speed(&speeds, "skew")?;
+            } else {
                 state.set(key.as_str(), value)?;
+                keep_option_speed(&speeds, &key)?;
             }
         }
         if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
@@ -854,6 +856,8 @@ fn reset_player_options(lua: &Lua, owner: &Table) -> mlua::Result<()> {
     }
     set_player_speedmod(owner, "xmod", Some(1.0))?;
     owner.raw_set("__songlua_speedmod_explicit", false)?;
+    owner.raw_set("__songlua_noteskin_name", "")?;
+    owner.raw_set("__songlua_noteskin_override", Value::Nil)?;
     set_player_speed_approaches(lua, owner, Some(1.0))
 }
 
@@ -941,41 +945,66 @@ pub(crate) fn player_uses_modifiers(
 }
 
 fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Result<()> {
-    let text = strip_player_option_prefix(raw);
-    let speed = raw
-        .trim_start()
-        .strip_prefix('*')
-        .and_then(|prefix| split_first_word(prefix).0.parse::<f32>().ok())
-        .unwrap_or(1.0)
-        .max(0.0);
-    if text.is_empty() {
+    let mut name = "";
+    let mut amount = 1.0;
+    let mut speed = 1.0;
+    // PlayerOptions::FromOneModString visits every space-separated prefix;
+    // later levels/speeds overwrite earlier ones and the final word is the mod.
+    for part in raw.trim().split(' ').filter(|part| !part.is_empty()) {
+        name = part;
+        if part.eq_ignore_ascii_case("no") {
+            amount = 0.0;
+        } else if part.starts_with(|ch: char| ch.is_ascii_digit() || ch == '-') {
+            if part.ends_with('*') {
+                return Ok(()); // Native rejects a misplaced approach-speed star.
+            }
+            amount = parse_player_option_amount(&part.to_ascii_lowercase()).unwrap_or(0.0);
+        } else if let Some(prefix) = part.strip_prefix('*')
+            && let Some(value) = crate::player_options::parse_option_float(prefix)
+        {
+            speed = if value.is_finite() { value } else { 1.0 };
+        }
+    }
+    if name.is_empty() {
         return Ok(());
     }
-    if apply_player_speed_option(owner, text)? {
+    if apply_player_speed_option(owner, name)? {
         set_player_speed_approaches(lua, owner, Some(speed))?;
         return Ok(());
     }
-
-    let (head, tail) = split_first_word(text);
-    let (amount, name) = if head.eq_ignore_ascii_case("no") && !tail.is_empty() {
-        // PlayerOptions::FromOneModString treats `no` as a zero level,
-        // including when preceded by an approach speed such as `*1000`.
-        (Some(0.0), tail)
-    } else if head.eq_ignore_ascii_case("inf") && !tail.is_empty() {
-        // PlayerOptions::FromOneModString only recognizes levels beginning
-        // with a digit or '-'; positive Lua infinity leaves the default 1.
-        (Some(1.0), tail)
-    } else if !tail.is_empty() {
-        parse_player_option_amount(head).map_or((None, text), |amount| (Some(amount), tail))
-    } else {
-        (None, text)
-    };
+    let lower = name.to_ascii_lowercase();
+    if !crate::player_options::option_blocks_skin(&lower, amount, false)
+        && apply_string_skin(lua, owner, &lower)?
+    {
+        return Ok(());
+    }
+    if !crate::player_options::option_blocks_skin(&lower, amount, true)
+        && apply_string_skin(lua, owner, &raw.trim().to_ascii_lowercase())?
+    {
+        return Ok(());
+    }
     crate::player_options::with_normalized_player_option_key(name, |key| {
         if key.is_empty() {
             return Ok(());
         }
         if key == "clearall" {
             reset_player_options(lua, owner)?;
+            let skins = lua.globals().get::<Table>("NOTESKIN")?;
+            let exists = skins.get::<Function>("DoesNoteSkinExist")?;
+            let name = if exists.call::<bool>((skins.clone(), SONG_LUA_DEFAULT_NOTESKIN_NAME))? {
+                SONG_LUA_DEFAULT_NOTESKIN_NAME.to_owned()
+            } else if exists.call::<bool>((skins.clone(), "default"))? {
+                "default".to_owned()
+            } else {
+                let names = skins.get::<Function>("GetNoteSkinNames")?.call::<Table>(skins)?;
+                names.raw_get::<Option<String>>(2)?.unwrap_or_default()
+            };
+            owner.raw_set("__songlua_noteskin_name", name.clone())?;
+            return owner.raw_set("__songlua_noteskin_override", name);
+        }
+        if key == "noteskin" && amount <= 0.5 {
+            owner.raw_set("__songlua_noteskin_name", SONG_LUA_DEFAULT_NOTESKIN_NAME)?;
+            return owner.raw_set("__songlua_noteskin_override", SONG_LUA_DEFAULT_NOTESKIN_NAME);
         }
         let state = player_option_state(lua, owner)?;
         let timer = match key {
@@ -988,20 +1017,78 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
         if let Some(timer) = timer {
             return state.set("modtimersetting", timer);
         }
-        if set_perspective_angle(&state, key, amount.unwrap_or(1.0))? {
+        if set_perspective_angle(&state, key, amount)? {
             let speeds = player_option_speeds(lua, owner)?;
             speeds.set("tilt", speed)?;
             speeds.set("skew", speed)?;
             return Ok(());
         }
         let value = if player_option_uses_bool(key) {
-            Value::Boolean(amount.unwrap_or(1.0) > 0.5)
+            Value::Boolean(amount > 0.5)
         } else {
-            Value::Number(f64::from(amount.unwrap_or(1.0)))
+            Value::Number(f64::from(amount))
         };
         state.set(key, value)?;
         player_option_speeds(lua, owner)?.set(key, speed)
     })
+}
+
+#[cfg(feature = "test-support")]
+pub(crate) struct SongLuaSkinWrites {
+    pub writes: Vec<SongLuaSkinWrite>,
+    pub active: bool,
+}
+
+#[cfg(feature = "test-support")]
+impl Default for SongLuaSkinWrites {
+    fn default() -> Self { Self { writes: Vec::new(), active: true } }
+}
+
+#[cfg(feature = "test-support")]
+fn capture_skin_write(lua: &Lua, owner: &Table, key: &str, previous: String) -> mlua::Result<()> {
+    if !lua.app_data_ref::<SongLuaSkinWrites>().is_some_and(|capture| capture.active) {
+        return Ok(());
+    }
+    let globals = lua.globals();
+    let mut player = None;
+    for (index, name) in SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
+        if globals.get::<Table>(*name)?.to_pointer() == owner.to_pointer() {
+            player = Some(index);
+            break;
+        }
+    }
+    let Some(player) = player else { return Ok(()) };
+    let runtime = globals.get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+    let write = SongLuaSkinWrite {
+        player, key: key.to_owned(), previous, current: player_noteskin(owner)?,
+        beat: runtime.get(SONG_LUA_RUNTIME_BEAT_KEY)?,
+        second: runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+    };
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaSkinWrites>() {
+        if capture.writes.len() >= 2_000_000 {
+            return Err(mlua::Error::runtime("noteskin audit exceeded two million writes"));
+        }
+        capture.writes.push(write);
+    }
+    Ok(())
+}
+
+fn player_noteskin(owner: &Table) -> mlua::Result<String> {
+    Ok(owner.raw_get::<Option<String>>("__songlua_noteskin_name")?
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| SONG_LUA_DEFAULT_NOTESKIN_NAME.to_owned()))
+}
+
+fn apply_string_skin(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<bool> {
+    let skins = lua.globals().get::<Table>("NOTESKIN")?;
+    let exists = skins.get::<Function>("DoesNoteSkinExist")?
+        .call::<bool>((skins, name))?;
+    if exists {
+        owner.raw_set("__songlua_noteskin_override", name)?;
+        owner.raw_set("__songlua_noteskin_name", name)?;
+        note_song_lua_side_effect(lua)?;
+    }
+    Ok(exists)
 }
 
 fn apply_player_speed_option(owner: &Table, text: &str) -> mlua::Result<bool> {
@@ -1858,6 +1945,18 @@ fn create_steps_by_steps_type_table(
 mod tests {
     use super::*;
 
+    fn options_lua() -> Lua {
+        let lua = Lua::new();
+        // Native FromString/clearall requires a manager even with no skin assets.
+        let skins = lua.create_table().expect("empty noteskin manager");
+        skins.set("DoesNoteSkinExist", lua.create_function(|_, _: MultiValue| Ok(false))
+            .expect("empty skin lookup")).expect("install lookup");
+        skins.set("GetNoteSkinNames", lua.create_function(|lua, _: MultiValue| lua.create_table())
+            .expect("empty skin list")).expect("install names");
+        lua.globals().set("NOTESKIN", skins).expect("expose noteskin manager");
+        lua
+    }
+
     #[test]
     fn reverse_columns_match_native_composition() {
         for (name, expected) in [
@@ -1867,7 +1966,7 @@ mod tests {
                 &[0.5, 0.375, 0.5, 0.625, 1.0, 0.875, 0.75, 0.875][..],
             ),
         ] {
-            let lua = Lua::new();
+            let lua = options_lua();
             let style = crate::tables::create_style_table(&lua, name).expect("style");
             let gamestate = lua.create_table().expect("gamestate");
             gamestate
@@ -1970,7 +2069,7 @@ assert(o:Hallway() == 0.25 and o:Distant() == nil)
 
     #[test]
     fn timer_binding_matches_native_enum_and_float_protocol() {
-        let lua = Lua::new();
+        let lua = options_lua();
         let options =
             create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
         lua.globals().set("o", options).expect("expose options");
@@ -2099,6 +2198,41 @@ assert(options:Reverse() == 0 and options:XMod() == 1)
         for key in ["drunk", "reverse", "xmod", "cmod", "mmod", "tilt", "skew"] {
             assert_eq!(speeds.raw_get::<f32>(key).expect("recorded approach"), 1.0);
         }
+    }
+
+    #[test]
+    fn modifier_prefix_order_matches_native() {
+        let lua = Lua::new();
+        let options =
+            create_player_options_table(&lua, SongLuaPlayerContext::default()).expect("options");
+        lua.globals().set("o", options).expect("expose options");
+        // These assertions also run against the linked ITGmania PlayerOptions
+        // binding in the native text/prefix probe, including negative speeds.
+        lua.load(
+            r#"
+o:Tipsy(7)
+o:FromString('0.8 0% Tipsy')
+assert(o:Tipsy() == 0)
+o:FromString('*2 10% *5 25% Drunk')
+assert(o:Drunk() == 0.25 and select(2, o:Drunk()) == 5)
+o:FromString('50% no Flip')
+assert(o:Flip() == 0)
+o:FromString('no 75% Flip')
+assert(o:Flip() == 0.75)
+o:FromString('*inf 25% Mini')
+assert(o:Mini() == 0.25 and select(2, o:Mini()) == 1)
+o:FromString('*-2 25% Mini')
+assert(select(2, o:Mini()) == -2)
+o:FromString('100ms Passmark')
+assert(math.abs(o:Passmark() - 0.1) < 1e-6)
+o:FromString('25* Drunk')
+assert(o:Drunk() == 0.25)
+o:FromString('.5 Drunk')
+assert(o:Drunk() == 1)
+"#,
+        )
+        .exec()
+        .expect("native modifier prefixes");
     }
 
     #[test]

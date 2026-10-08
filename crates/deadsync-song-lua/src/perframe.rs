@@ -1533,7 +1533,7 @@ fn push_captured_overlay_value(
     track_index
 }
 
-fn overlay_state_update_value(
+pub(crate) fn overlay_state_update_value(
     state: &SongLuaOverlayState,
     target: crate::SongLuaOverlayUpdateTarget,
 ) -> crate::SongLuaOverlayUpdateValue {
@@ -1573,6 +1573,7 @@ fn overlay_state_update_value(
             .map(|value| Value::VertexColors(std::sync::Arc::new(value)))
             .unwrap_or(Value::None),
         Target::Visible => value!(Bool, visible),
+        Target::Hibernating => value!(Bool, hibernating),
         Target::CropLeft => value!(F32, cropleft),
         Target::CropRight => value!(F32, cropright),
         Target::CropTop => value!(F32, croptop),
@@ -1658,7 +1659,7 @@ fn overlay_state_matches_update_value(
     overlay_state_update_value(state, target) == *value
 }
 
-fn set_overlay_state_update_value(
+pub(crate) fn set_overlay_state_update_value(
     state: &mut SongLuaOverlayState,
     target: crate::SongLuaOverlayUpdateTarget,
     value: &crate::SongLuaOverlayUpdateValue,
@@ -1714,6 +1715,7 @@ fn set_overlay_state_update_value(
         return;
     }
     set_value!(Visible, Bool, visible);
+    set_value!(Hibernating, Bool, hibernating);
     set_value!(CropLeft, F32, cropleft);
     set_value!(CropRight, F32, cropright);
     set_value!(CropTop, F32, croptop);
@@ -2930,13 +2932,16 @@ impl ColumnSplineCapture {
     }
 }
 
-pub fn compile_update_functions<Kind>(
+pub fn compile_update_functions<Slot, Vertex, Attribute>(
     lua: &Lua,
     root: &Value,
     context: &SongLuaCompileContext,
-    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    overlays: &mut [SongLuaOverlayCompileActor<
+        crate::SongLuaOverlayKind<Slot, Vertex, Attribute>,
+    >],
     tracked_actors: &mut [SongLuaTrackedActor],
     messages: &[SongLuaMessageEvent],
+    startup_tweens: &crate::lua_util::SongLuaStartupStates,
     sound_events: &mut Vec<crate::SongLuaSoundEvent>,
     judgment_textures: &mut Vec<(usize, crate::SongLuaJudgmentTexture)>,
     sprite_textures: &mut Vec<(usize, crate::SongLuaSpriteTexture)>,
@@ -2987,6 +2992,10 @@ pub fn compile_update_functions<Kind>(
         ));
     }
 
+    crate::lua_util::restore_startup_locals(lua).map_err(|err| err.to_string())?;
+    // Queued discovery sounds describe future bodies. Chronological execution
+    // records the calls actually reached; keep only real startup calls here.
+    sound_events.retain(|event| !event.queued_startup);
     let player_tables = tracked_player_tables(tracked_actors);
     let option_tables = update_player_option_tables(lua)?;
     reset_overlay_compile_actor_capture_tables(lua, overlays)?;
@@ -3014,19 +3023,13 @@ pub fn compile_update_functions<Kind>(
                     )
                     .map_err(|err| err.to_string())?;
             }
-            set_actor_overlay_getter_state(lua, &overlay.table, overlay.actor.initial_state)?;
         }
-        if overlay
-            .table
-            .raw_get::<Option<Table>>("__songlua_state_motion_clock")
-            .map_err(|err| err.to_string())?
-            .is_some()
-        {
-            // Probing queued bodies leaves their future effect state in Lua.
-            // Chronological replay begins with the state after Init/On.
-            set_actor_overlay_getter_state(lua, &overlay.table, overlay.actor.initial_state)?;
-        }
+        // Speculative queue/action captures leave destination values in Lua.
+        // Chronological replay must begin at the actual zero-delta pose for
+        // every actor, including sleeping parents and their paused children.
+        set_actor_overlay_getter_state(lua, &overlay.table, overlay.actor.initial_state)?;
     }
+    crate::lua_util::begin_tween_replay(lua, overlays, startup_tweens);
     let overlay_count = overlays.len();
     // Player transforms use the same chronological tween capture as song
     // actors. Their temporary indices never become drawable overlay tracks.
@@ -3065,6 +3068,8 @@ pub fn compile_update_functions<Kind>(
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaBoolWrites::default());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
     restore_started_message_states(lua, overlays, &replay_overlays, started)?;
@@ -3076,6 +3081,18 @@ pub fn compile_update_functions<Kind>(
     let replay = update_function_replay_beats(context, start, end);
     let sample_count = replay.len();
     let mut sample_beats = frame_buffer(start, sample_count);
+    // Text is not tween state. Retain changes after the complete native-order
+    // update, including parent callbacks that run after their children.
+    let mut text_samples = Vec::new();
+    for (index, overlay) in overlays.iter_mut().enumerate() {
+        if let crate::SongLuaOverlayKind::BitmapText { text, .. } = &mut overlay.actor.kind {
+            overlay
+                .table
+                .raw_set("Text", text.as_ref())
+                .map_err(|err| err.to_string())?;
+            text_samples.push((index, Vec::<(f32, std::sync::Arc<str>)>::new()));
+        }
+    }
     let rate = f64::from(song_music_rate(context));
     let origin = context
         .song_timing
@@ -3175,6 +3192,29 @@ pub fn compile_update_functions<Kind>(
         crate::lua_util::set_prior_positions(lua, &current_overlays);
         let actor_delta = f64::from(seconds as f32 - (seconds - delta_seconds) as f32);
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, actor_delta)?;
+        for (index, samples) in &mut text_samples {
+            let overlay = &overlays[*index];
+            let text = overlay
+                .table
+                .get::<String>("Text")
+                .map_err(|err| err.to_string())?;
+            let crate::SongLuaOverlayKind::BitmapText { text: initial, .. } = &overlay.actor.kind
+            else {
+                unreachable!("text actor kind is unchanged during replay")
+            };
+            if samples
+                .last()
+                .map_or(initial.as_ref(), |sample| sample.1.as_ref())
+                != text
+            {
+                samples.push((next_time, text.into()));
+            }
+        }
+        crate::lua_util::sample_tween_replays(lua);
+        for (overlay, state) in overlays.iter().zip(&mut replay_overlays) {
+            crate::lua_util::replay_tween_pose(lua, &overlay.table, state);
+        }
+        crate::lua_util::capture_tween_poses(lua, &capture_actors);
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, started)?;
@@ -3527,6 +3567,17 @@ pub fn compile_update_functions<Kind>(
     }
 
     overlay_tracks.retain(|track| track.overlay_index < overlay_count);
+    for (index, samples) in text_samples {
+        if let crate::SongLuaOverlayKind::BitmapText {
+            text_changes,
+            text_changes_in_seconds,
+            ..
+        } = &mut overlays[index].actor.kind
+        {
+            *text_changes = samples.into();
+            *text_changes_in_seconds = context.song_timing.is_some();
+        }
+    }
     let mut stateful_messages = crate::lua_util::stateful_message_captures(lua);
     for capture in &mut stateful_messages {
         capture
@@ -3545,6 +3596,7 @@ pub fn compile_update_functions<Kind>(
     judgment_textures.extend(crate::lua_util::take_judgment_textures(lua));
     sprite_textures.extend(crate::lua_util::take_sprite_textures(lua));
     crate::lua_util::apply_message_advances(lua, overlays);
+    crate::lua_util::finish_tween_replay(lua, overlays, startup_tweens);
     lua.remove_app_data::<crate::lua_util::SongLuaCompileFrames>();
     crate::lua_util::end_overlay_update_capture(lua);
     Ok((
@@ -3743,6 +3795,7 @@ fn apply_perframe_active_message<Kind>(
     let current = actor_overlay_initial_state(&overlay.table)?;
     use SongLuaOverlayUpdateTarget as Target;
     for target in [
+        Target::Hibernating,
         Target::Vibrate,
         Target::EffectMagnitude,
         Target::EffectClock,
@@ -3767,6 +3820,9 @@ fn apply_perframe_active_message<Kind>(
             let value = overlay_state_update_value(&current, target);
             set_overlay_state_update_value(&mut state, target, &value);
         }
+    }
+    if command.message == "__songlua_actor_startup" {
+        crate::lua_util::replay_tween_pose(lua, &overlay.table, &mut state);
     }
     active
         .as_mut()
