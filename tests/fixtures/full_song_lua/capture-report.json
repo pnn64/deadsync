@@ -2367,6 +2367,14 @@
       "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "superseded_archive": "bdf17f0bf8d7dccf63d034c97af245f1f0df13ea19ef010456aa6ade80648fcd.tar.zst",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6357,6 +6365,33 @@
         "beat": 290,
         "music_seconds": 102.4335708618164,
         "seconds": 102.42857360839844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 22.60901713371277,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 22.45s",
+        "log_sha256": "c5cda3ca6e8bf9b778e3dfec26c7f94e7b2c88845aa5c56b6fc9f83d120df604",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "312967986f7c4034b4226928cac7bb2c0ea472fab4d237340c15023acf9be8f8",
+      "capture_endpoint": {
+        "beat": 348,
+        "music_seconds": 134.70968627929688,
+        "seconds": 134.70968627929688
       },
       "runtime_errors": 0,
       "dropped_events": 0
