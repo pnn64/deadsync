@@ -1511,6 +1511,14 @@
       "archive": "8faf77356a209b467c23b931ac16664dacaefbff7d16419d9d3c25b75ba058f0.tar.zst",
       "harness_version": "0.1.21",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 57,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "superseded_archive": "c1cb84524c54dec6dd74d0fca6f64f0fec20dbc4faf4da17de6213fb5fff874a.tar.zst",
+      "archive": "6ec3396c15b7b4798cd4e224491b3ffa49fb18601dabd29ecd1687ae4d0e8271.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -2479,6 +2487,31 @@
       "capture_endpoint": {
         "beat": 440,
         "seconds": 127.53623199462892
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 57,
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "6ec3396c15b7b4798cd4e224491b3ffa49fb18601dabd29ecd1687ae4d0e8271.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "6ec3396c15b7b4798cd4e224491b3ffa49fb18601dabd29ecd1687ae4d0e8271.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 26.196664094924927,
+        "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 26.06s",
+        "log_sha256": "17d7740739440b726e46ea5e0dfd1e21c67b5decba9e05b1d8eda95a6bd509cf",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      },
+      "capture_log_sha256": "f02b3c3a70a46066c7fd335d5fd45be2172880337474426c2b78cada4f0b7e7f",
+      "capture_endpoint": {
+        "beat": 290,
+        "seconds": 102.42857360839844
       },
       "runtime_errors": 0,
       "dropped_events": 0
