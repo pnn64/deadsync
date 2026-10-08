@@ -2133,3 +2133,30 @@ inventory and method-shadowing audit is pending and has an independent
 compiled-native control that fails on the semantic adapter.
 Full corpus parity remains unfinished, with 501 simfiles and 492 indexed
 archive variants. The prior eight-archive prefix is historical on .22/.1862.
+
+
+## Pass 62: repair public native method tables in the harness
+
+Compiled native controls expose two more adapter gaps: native own methods exist
+before lookup, and subclass own methods shadow later base overrides. A second
+control verifies inherited false, zero, strings and tables. The .23 semantic
+control fails for missing own BitmapText methods; an intermediate .24 control
+fails for inherited false. Neither failed capture is published as an archive.
+
+Harness commit 6a127f4 replaces lazy inherited-first lookup with eager own
+native methods and fallback declarations, while base lookup preserves values.
+All 142 harness tests pass with two existing skips. Exact Lua assertions match
+compiled native method tables, with five BitmapText helper bodies taken from
+the checked-out fallback script. No engine or theme reference code is changed.
+
+Two complete two-second archives retain their Lua unchanged and have no runtime
+errors or dropped events. DeadSync .1863 already has the correct public table
+behavior and passes all 5,338 comparisons without further production changes.
+The earlier raw-method archive is byte-identical after the inherited-value fix.
+Exact native inputs, outputs, pins and failures are in
+actor-class-tables-provenance.json. Method bodies, font layout, unlinked actor
+subclasses and full Simply Love context remain pending.
+
+The corpus must now be refreshed from the top on harness .24 / DeadSync .1863.
+The .22/.1862 eight-archive prefix is historical; the full 501-simfile and
+492-archive scope is unchanged. Full parity remains unfinished.

@@ -396,5 +396,10 @@
       "log_sha256": "78d394b75e32276e5b357bb3e57561d23259149bb9b2be83664bec978d8d068f",
       "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
     }
-  ]
+  ],
+  "followup_raw_class_repair": {
+    "pass_number": 62,
+    "harness_commit": "6a127f4349612da54f32eb8db0d49b4bb64f330a",
+    "provenance_file": "actor-class-tables-provenance.json"
+  }
 }
