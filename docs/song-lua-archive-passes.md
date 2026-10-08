@@ -2258,3 +2258,9 @@ handle LoadBackground. DeadSync already recognizes that filename. A fresh
 .26 capture and exact comparisons remain necessary before publication; no
 comparator has been relaxed. The historical 17-archive prefix requires refresh
 on .26/.1865. The full 501-simfile and 492-archive scope remains unfinished.
+
+The complete two-second Sprite control archive passes all 2,695 comparisons
+on .1865, with no native runtime errors or dropped events. The previous .1864
+verifier fails the same unchanged control at LoadBackground's return-value
+assertion. The archive includes the original Lua, image and complete trace;
+sprite-load-provenance.json records both immutable binaries and results.

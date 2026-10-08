@@ -209,5 +209,111 @@
     "Quad and other Sprite subclasses, native texture GetPath, font layout and full theme context still require independent audits.",
     "No full-corpus parity claim: 501 simfiles and 492 archive variants remain the scope."
   ],
-  "sharkmode_diagnosis": "The .25 archive omitted sharkmode-bg.png because the harness did not handle LoadBackground. DeadSync already recognizes the filename; no filename-search fix was justified. Fresh .26 capture and exact comparisons are pending."
+  "sharkmode_diagnosis": "The .25 archive omitted sharkmode-bg.png because the harness did not handle LoadBackground. DeadSync already recognizes the filename; no filename-search fix was justified. Fresh .26 capture and exact comparisons are pending.",
+  "complete_control_archive": {
+    "entry": {
+      "title": "Native BitmapText class lookup",
+      "source_simfile": "probe/probe.sm",
+      "harness_version": "0.1.26",
+      "archive": "28590ed27ab7036c998cfeb4deb770d96fd6b87e1c5147ce353ba566fb67ac49.tar.zst",
+      "sha256": "28590ed27ab7036c998cfeb4deb770d96fd6b87e1c5147ce353ba566fb67ac49",
+      "compressed_bytes": 12299
+    },
+    "archive": "C:\\GitHub\\deadsync\\tests\\fixtures\\full_song_lua\\28590ed27ab7036c998cfeb4deb770d96fd6b87e1c5147ce353ba566fb67ac49.tar.zst",
+    "command": [
+      [
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-control\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-control\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      [
+        "song-lua-archive",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-control\\corpus",
+        "--traces",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-control\\traces",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass65-sprite-load-control\\archives"
+      ]
+    ],
+    "native_status": "ok",
+    "end_position": {
+      "beat": 4,
+      "seconds": 2
+    },
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "members": 4,
+    "cli": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass65-sprite-v1.exe",
+      "sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+      "version": "0.1.26",
+      "semantic_host_sha256": "25d283cf4b26fe1af67f59a502f8a6329ff0c70c818e18e78aeec0e14283bf6b",
+      "source_pending_commit": false,
+      "command": [
+        "cargo",
+        "build",
+        "--bin",
+        "itgmania-harness-rs",
+        "--message-format=json"
+      ],
+      "source_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e"
+    },
+    "lua_sha256": "9a76f81d869fc9f04702eeef3d27ad8816094d9f463011429131c8968d380cc1",
+    "capture_log_sha256": "fb48cf384f7d622bd3e56c3fcdafe23bd186c4cf86c2ea1ce6c85d8ff220ff9b"
+  },
+  "deadsync_before": {
+    "archive": "28590ed27ab7036c998cfeb4deb770d96fd6b87e1c5147ce353ba566fb67ac49.tar.zst",
+    "version": "0.5.1864",
+    "executable_sha256": "a10e34d9d84b1b3a2ac78896414288eaa6cc61ad063a1956e05f7074349a7765",
+    "source_commit": "5038f8c60df7aaf715bcd0b1514adf21bb03430f",
+    "exit_code": 1,
+    "seconds": 1.599395513534546,
+    "log_sha256": "ed11a47fee45b49e577cf848699162f7a25509a46d7f661ff567c97830137d5c",
+    "failure": "unchanged native assertion: LoadBackground returns the top argument, not self",
+    "published": false
+  },
+  "deadsync_after": {
+    "archive": "28590ed27ab7036c998cfeb4deb770d96fd6b87e1c5147ce353ba566fb67ac49.tar.zst",
+    "version": "0.5.1865",
+    "exit_code": 0,
+    "seconds": 1.6563138961791992,
+    "result": "result: ok; 1/1 fixtures passed; 2695 comparisons passed, 0 failed (2695 total); elapsed 0.15s",
+    "log_sha256": "45bbfe4c305aa1b7d4487bf6220e12de8a4cf953513c00f5b88ab6184db88903",
+    "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519"
+  },
+  "deadsync_pin": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass65-sprite-full-song-v1.exe",
+    "sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519",
+    "version": "0.5.1865",
+    "command": [
+      "cargo",
+      "rustc",
+      "-p",
+      "deadsync",
+      "--test",
+      "full_song_lua",
+      "--features",
+      "deadsync-theme-simply-love/test-support",
+      "--message-format=json"
+    ],
+    "tested_source_sha256": {
+      "Cargo.toml": "5581b92bb211be8fbe9f1695c510be3afac3883843758f3f89c56fd08933fef9",
+      "Cargo.lock": "a768ad49151caca8480d104c6eedafa82b0b3bba5012910948b85f7c14c53e2f",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "f9cda87743d0d9dc8cad5a7037e1438e76e2c9c574da7bc708e714eec842fc4f",
+      "crates/deadsync-song-lua/src/lua_util.rs": "7859f8fc370969bd2b3133a863098c147b3f662b6880b18ad4ab69595619ce0b",
+      "crates/deadsync-song-lua/src/lib.rs": "345a6c782cf87a019ecc7c6a85b029345ea94ad2172efc1791111de54a17f8ae",
+      "crates/deadsync-simfile/src/cache.rs": "d1557c166512f132994fe552cd922f4264cdff494924a077f89cc2565f224071"
+    },
+    "source_commit": "f488e7f984d0eea60a13f433e6b49e2efa9c1ce0",
+    "source_pending_commit": false
+  }
 }
