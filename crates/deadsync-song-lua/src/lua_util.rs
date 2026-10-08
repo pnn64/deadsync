@@ -6140,13 +6140,26 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |_, args: MultiValue| {
-                if let Some(Value::Table(target)) = args.get(1) {
-                    set_proxy_target_fields(&actor, target)?;
+                let Some(Value::Table(target)) = args.get(1) else {
+                    return Err(mlua::Error::RuntimeError("ActorProxy.SetTarget requires an Actor".into()));
+                };
+                if target.raw_get::<Option<String>>("__songlua_actor_type")?.is_none() {
+                    return Err(mlua::Error::RuntimeError("ActorProxy.SetTarget requires an Actor".into()));
                 }
+                set_proxy_target_fields(&actor, target)?;
                 Ok(actor.clone())
             }
         })?,
     )?;
+    if actor_type_is(actor, "ActorProxy")? {
+        actor.set(
+            "GetTarget",
+            lua.create_function({
+                let actor = actor.clone();
+                move |_, _args: MultiValue| actor.raw_get::<Value>("__songlua_proxy_target_actor")
+            })?,
+        )?;
+    }
     actor.set(
         "visible",
         lua.create_function({

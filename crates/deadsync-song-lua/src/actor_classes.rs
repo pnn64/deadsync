@@ -373,6 +373,7 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
         ("Sprite", Some("Actor"), SPRITE),
         ("ActorFrameTexture", Some("ActorFrame"), AFT),
         ("ActorMultiVertex", Some("Actor"), AMV),
+        ("ActorProxy", Some("Actor"), &["SetTarget", "GetTarget"][..]),
     ] {
         let class = lua.create_table()?;
         for method in methods {
@@ -418,6 +419,7 @@ fn class_name(kind: &str) -> &'static str {
         "Banner" => "Banner",
         "ActorFrameTexture" => "ActorFrameTexture",
         "ActorMultiVertex" => "ActorMultiVertex",
+        "ActorProxy" => "ActorProxy",
         "Player" => "Player",
         "NoteField" => "NoteField",
         kind if is_frame(kind) => "ActorFrame",
@@ -452,6 +454,7 @@ fn is_core(kind: &str) -> bool {
             | "Banner"
             | "ActorFrameTexture"
             | "ActorMultiVertex"
+            | "ActorProxy"
             | "WrapperState"
     )
 }

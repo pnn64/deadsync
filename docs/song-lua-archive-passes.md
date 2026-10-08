@@ -2047,3 +2047,40 @@ Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes al
 Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
 
 Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+## Pass 58: verify and repair ActorProxy against compiled ITGmania
+
+The harness now links the unchanged native ActorProxy.cpp. Compiled userdata
+assertions verify its two own methods, Actor inheritance, absent Frame callbacks
+and child lookup, nil initial target, assigned target identity, rejection of
+missing/scalar/plain-table targets, independent position, caller-added methods
+and live base overrides. The local reference and pinned vendor Proxy sources
+are byte-identical. Native control commit: 050a8d3; harness repair: 7abb249.
+
+Harness .22 passes 138 tests with two existing skips. DeadSync .1862 exposes
+the same public class and own methods, validates targets before assignment,
+and restricts the new GetTarget adapter to Proxy actors. Cache version is 53.
+The unchanged native JSON assertions fail on the old implementation and pass
+on the repaired source. Final source validation passes 486 library tests, two
+integration tests, 183 playback tests and the production check. Three GPU
+tests remain ignored. Both cache roundtrip and old-version rejection pass.
+
+A parallel playback run hit a global texture-generation equality failure. The
+isolated test and both complete serial runs pass without changing its numeric
+assertions. This is recorded in proxy-methods-provenance.json.
+
+Two complete two-second archives retain their Lua unchanged and capture against
+DeadSync's noteskins. They contain zero runtime errors and dropped events. The
+old .1861 executable fails on the expected class assertions. Both the intermediate
+and final .1862 executables pass all 5,342 comparisons. The final executable's
+source hashes match the committed repair, including the Proxy-only GetTarget
+adapter. Explicitly enabling the existing Simply Love test-support feature
+resolved the archive verifier's dependency linking error. No source or golden
+assertion was changed to resolve this build error. These micro controls do not
+establish full-corpus parity.
+
+Other public classes, complete Proxy rendering/argument cases and Simply Love
+screen context remain pending. The previous 17-archive prefix (3,666,254 passing
+comparisons) was checked on harness .21 / DeadSync .1861 and needs refreshing.
+Full scope remains 501 simfiles, including 18 unindexed sources, and 492 archive
+variants. Full-corpus parity is unfinished.

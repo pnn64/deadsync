@@ -6451,6 +6451,23 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn proxy_methods_match_native() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro");
+        let input: serde_json::Value = serde_json::from_slice(
+            &fs::read(fixtures.join("proxy-methods-input.json")).expect("native proxy input"),
+        ).expect("native proxy JSON");
+        let body = input["lua_assertions"].as_str().expect("native proxy Lua assertions");
+        let song_dir = test_dir("native-proxy-methods");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, format!(
+            "native_proxy=Def.ActorProxy{{}}\nnative_target=Def.Actor{{}}\n{body}\nreturn Def.ActorFrame{{native_proxy,native_target}}\n"
+        )).expect("unchanged native proxy assertions");
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native proxy methods"))
+            .expect("native proxy inventory, target identity and live inheritance");
+    }
+
+    #[test]
     fn actor_classes_match_native() {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/itgmania-song-lua-micro");
