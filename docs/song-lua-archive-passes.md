@@ -2084,3 +2084,7 @@ screen context remain pending. The previous 17-archive prefix (3,666,254 passing
 comparisons) was checked on harness .21 / DeadSync .1861 and needs refreshing.
 Full scope remains 501 simfiles, including 18 unindexed sources, and 492 archive
 variants. Full-corpus parity is unfinished.
+
+## Pass 59: revalidate the corpus after native class inheritance
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
