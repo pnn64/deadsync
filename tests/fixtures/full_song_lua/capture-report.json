@@ -1255,6 +1255,14 @@
       "archive": "07573c92ccda03c765b00eda18b3aa09ad264f423fca186292f48becdf3a2b5a.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 51,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "b33a57b8e7aeb4c73488a54036ab93b7c9f1c043ac5ccfb1726b668a9a171079.tar.zst",
+      "archive": "6415d8ad988f31c1c1d74bfd04379cc646fa1794de3125291cd7228fd9db60ea.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1323,6 +1331,24 @@
         "seconds": 7.416351079940796,
         "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 7.30s",
         "log_sha256": "baf8f64c31e84a72b0aaf5c0b9bbb974c2605b5880258a6707512aa6c6b75083",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 51,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "6415d8ad988f31c1c1d74bfd04379cc646fa1794de3125291cd7228fd9db60ea.tar.zst",
+      "harness_version": "0.1.18",
+      "harness_commit": "9b7284ee6a1c83ab917c97ce837437b591b0bbb8",
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "verification": {
+        "archive": "6415d8ad988f31c1c1d74bfd04379cc646fa1794de3125291cd7228fd9db60ea.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 7.580486536026001,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 7.44s",
+        "log_sha256": "6d0341a4ca24812549a0b7acad762f84058c3defe42cf02f079624b3bb43f44e",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
       }
     }
