@@ -2356,3 +2356,5 @@ Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes al
 Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
 
 Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+Archive 18: 280-MODS-[MASTER] Sharkmode/Sharkmode.ssc passes all 304425 comparisons. The verified prefix is now 18/492 archives; full-corpus parity remains unfinished.

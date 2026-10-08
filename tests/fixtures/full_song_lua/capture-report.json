@@ -1927,6 +1927,14 @@
       "archive": "673b436ebabdb5cc4c385e0e480d7bec61d8179f3915e2ce5eed9c273cfe935c.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "superseded_archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
+      "archive": "c0a1741ca9d19cd8b8baf1292402b010423732e0eebad4d371fadb8d6430e85a.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4201,6 +4209,31 @@
       "capture_endpoint": {
         "beat": 324,
         "seconds": 126.23377227783205
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "c0a1741ca9d19cd8b8baf1292402b010423732e0eebad4d371fadb8d6430e85a.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "c0a1741ca9d19cd8b8baf1292402b010423732e0eebad4d371fadb8d6430e85a.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 90.06917262077332,
+        "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 89.89s",
+        "log_sha256": "11f32fcaffdd9fe9514e03b7691559cdbcee783afaa70029b98516f4c7295893",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "197aae3925d2555b628ff8d41e620a4c21d5aaf3a7e4f9525f65cd57c92ee908",
+      "capture_endpoint": {
+        "beat": 357,
+        "seconds": 138.1935577392578
       },
       "runtime_errors": 0,
       "dropped_events": 0
