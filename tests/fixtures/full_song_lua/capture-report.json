@@ -2383,6 +2383,14 @@
       "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6427,6 +6435,33 @@
         "beat": 265,
         "music_seconds": 127.20000457763672,
         "seconds": 127.20000457763672
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 83.93199253082275,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 83.79s",
+        "log_sha256": "97cac0a844dfb4aa9a8ee7e6f9430117b2a3a2c6ec535f6a719d1b38f7d13db4",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "018fe6c78ddbddca650376c82fb73ef89f2847b31a217b3340534dc92a55825e",
+      "capture_endpoint": {
+        "beat": 324,
+        "music_seconds": 126.23377227783205,
+        "seconds": 126.23377227783205
       },
       "runtime_errors": 0,
       "dropped_events": 0
