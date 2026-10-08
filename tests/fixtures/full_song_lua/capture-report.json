@@ -1751,6 +1751,14 @@
       "archive": "f7a2d5e8aa6a48c8709ab3e189b1e54cf282029b6109fbc13ca8794bd3125249.tar.zst",
       "harness_version": "0.1.26",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 66,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "10d9bbb55bd25f3d580fe80a766804e932b0e992af22ba48644fb421a07e5321.tar.zst",
+      "archive": "8c6f3b8a701b258c4e33a3e9cded29eb85583fd63aa7719bc6eb0cac2f7ee881.tar.zst",
+      "harness_version": "0.1.26",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3478,6 +3486,31 @@
         "bytes": 1058414,
         "sha256": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2"
       }
+    },
+    {
+      "pass_number": 66,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "8c6f3b8a701b258c4e33a3e9cded29eb85583fd63aa7719bc6eb0cac2f7ee881.tar.zst",
+      "harness_version": "0.1.26",
+      "harness_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e",
+      "native_executable_sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+      "verification": {
+        "archive": "8c6f3b8a701b258c4e33a3e9cded29eb85583fd63aa7719bc6eb0cac2f7ee881.tar.zst",
+        "version": "0.5.1865",
+        "exit_code": 0,
+        "seconds": 15.411733150482178,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 15.25s",
+        "log_sha256": "e3fdc84e5f7d7dc48d35fc142a63e6f54cb42c633931f0bc85adad06af40d620",
+        "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519"
+      },
+      "capture_log_sha256": "1f5b6f09b57af998c86d62cd23c4528d99a41a23bf280c8e73182ea90c85d249",
+      "capture_endpoint": {
+        "beat": 334,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     }
   ]
 }

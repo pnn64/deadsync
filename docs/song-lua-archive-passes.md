@@ -2273,3 +2273,7 @@ no native runtime errors or dropped events. The archive includes the original
 restores drawable membership and resolves the cascading mesh mapping failures.
 The verified archive replaces the superseded canonical capture, preserving
 its aliases. The full corpus refresh from the top remains pending.
+
+## Pass 66: revalidate the corpus after native Sprite loading
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
