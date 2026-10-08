@@ -1,6 +1,10 @@
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
+
+#[cfg(test)]
+#[path = "wav_performance.rs"]
+mod performance;
 
 const WAV_PACKET_FRAMES: usize = 4096;
 const WAVE_FORMAT_PCM: u16 = 0x0001;
@@ -68,6 +72,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let spec = parse_spec(&mut reader)?;
+    // parse_spec seeks to the data start, leaving no buffered bytes to lose.
+    // Decode whole packets from this buffer instead of keeping a second copy.
+    let packet_bytes = spec.frames_total.min(WAV_PACKET_FRAMES as u64) as usize * spec.block_align;
+    let reader = if packet_bytes > reader.capacity() {
+        BufReader::with_capacity(packet_bytes, reader.into_inner())
+    } else {
+        reader
+    };
     let mut reader = Reader {
         reader,
         spec,
@@ -150,9 +162,18 @@ impl Reader {
         }
         let frames = frames_left.min(WAV_PACKET_FRAMES as u64) as usize;
         let bytes = frames.saturating_mul(self.spec.block_align);
-        self.packet_buf.resize(bytes, 0);
-        self.reader.read_exact(&mut self.packet_buf)?;
-        decode_packet_into(&self.packet_buf, self.spec.encoding, out)?;
+        let buffered = self.reader.fill_buf()?;
+        if buffered.len() >= bytes {
+            let decoded = decode_packet_into(&buffered[..bytes], self.spec.encoding, out);
+            self.reader.consume(bytes);
+            decoded?;
+        } else {
+            // Short reads may split a packet. Preserve the previous output on
+            // I/O failure by collecting the complete packet before decoding.
+            self.packet_buf.resize(bytes, 0);
+            self.reader.read_exact(&mut self.packet_buf)?;
+            decode_packet_into(&self.packet_buf, self.spec.encoding, out)?;
+        }
         Ok(true)
     }
 }
