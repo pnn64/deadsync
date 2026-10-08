@@ -1907,3 +1907,17 @@ class registrations, and Simply Love screen context still need source-backed
 work. Full-corpus parity remains unfinished: 501 simfiles, 483 indexed source
 simfiles, 18 unindexed, and nine historical duplicate captures. The old
 25-archive prefix is not claimed as revalidated on these new versions.
+
+
+## Pass 54: restart the corpus with native method feature probes
+
+Warp Zone is recaptured completely with committed harness 0.1.21, with no
+runtime errors or dropped events. DeadSync 0.5.1860 passes all 212,220
+comparisons. The archive replaces the older reference; its aliases and
+superseded bytes remain preserved. Capture-report.json records exact
+executable and log hashes.
+
+The current-version verified prefix is one archive. The old 25-archive
+prefix remains historical. Full parity remains unfinished across 501
+simfiles, including 18 unindexed sources and nine historical duplicate
+captures. The next ordered source is Let Me Hear That.

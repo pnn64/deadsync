@@ -1407,6 +1407,14 @@
       "archive": "a867a12d25c984a49c2dd29fa06d47f88afe01841ee9d410dbf1332800797336.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 54,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "f8ff6cfef02ef1b12bdeaaf57e40cb94500bffaecee31e398b11987ed883947b.tar.zst",
+      "archive": "f3b577e31ff628b7af7b454699eb06586dcd45b329ba6a4d81e30fcce847b449.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -1854,6 +1862,31 @@
         "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 66.98s",
         "log_sha256": "fdc7675e827c6edc31e2a0872897651b1aed7d3e84dea0eb790bc88d0003eade",
         "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 54,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "f3b577e31ff628b7af7b454699eb06586dcd45b329ba6a4d81e30fcce847b449.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "capture_log_sha256": "7f87cfc57f8746d7358fb4ef1dd0239731bec7936cf694bcd6264523f1b4c2ae",
+      "capture_endpoint": {
+        "beat": 334,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "verification": {
+        "archive": "f3b577e31ff628b7af7b454699eb06586dcd45b329ba6a4d81e30fcce847b449.tar.zst",
+        "version": "0.5.1860",
+        "exit_code": 0,
+        "seconds": 9.958343267440796,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 9.84s",
+        "log_sha256": "458299daadea2071424f741b168cb92438d0878bda5537d728d766c1a2c5cd92",
+        "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
       }
     }
   ]
