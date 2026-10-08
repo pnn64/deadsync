@@ -1159,6 +1159,14 @@
       "archive": "783a1df481fbc910807af44466cc7405085dcdf1abe8caf85d2eb24def95f61a.tar.zst",
       "harness_version": "0.1.16",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 44,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "5c5efbf89acefb3000319f2a61251b772f792b281fd38a6503f3b3ce8cddc5a2.tar.zst",
+      "archive": "3f281787416a3edc35a8099bcc1d9cf5f1fe2c6672f1facdc1fa87999c19fca0.tar.zst",
+      "harness_version": "0.1.16",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ]
 }

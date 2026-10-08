@@ -327,13 +327,14 @@
     {
       "title": "307|MISC|[lv.Death] The Boys Are Back in Town (to kill you)",
       "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
-      "harness_version": "0.1.0",
-      "archive": "5c5efbf89acefb3000319f2a61251b772f792b281fd38a6503f3b3ce8cddc5a2.tar.zst",
-      "sha256": "5c5efbf89acefb3000319f2a61251b772f792b281fd38a6503f3b3ce8cddc5a2",
-      "compressed_bytes": 333901,
-      "uncompressed_sha256": "b6917b8e84009d75a953db815047cb788e6c4facd3b1d548d986f9882f91e4cb",
-      "compression_level": 22,
+      "harness_version": "0.1.16",
+      "archive": "3f281787416a3edc35a8099bcc1d9cf5f1fe2c6672f1facdc1fa87999c19fca0.tar.zst",
+      "sha256": "3f281787416a3edc35a8099bcc1d9cf5f1fe2c6672f1facdc1fa87999c19fca0",
+      "compressed_bytes": 443121,
+      "uncompressed_sha256": "3e841036cc0aad651873ca12b971b1e997170924bce3272dec75069e723df15a",
+      "compression_level": 12,
       "aliases": [
+        "5c5efbf89acefb3000319f2a61251b772f792b281fd38a6503f3b3ce8cddc5a2.tar.zst",
         "f7daf451862435497679cceed2783d9327652e79cabbd06ce8734bbacb5bcdec.tar.zst"
       ]
     },

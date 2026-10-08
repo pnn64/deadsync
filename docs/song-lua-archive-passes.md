@@ -1591,3 +1591,39 @@ tolerance or observation changed in this pass. Together with the 18 rechecked
 archives and the first KABOOOOOM variant, 20 ordered archives now pass all
 8,279,369 comparisons. Receipts, hashes and publication metadata are linked in
 pass43-kaboom-main-comparison.json. Full-corpus verification remains unfinished.
+
+
+## Pass 44: compare manual draws on the song music clock
+
+The Boys Are Back in Town failed 1,055 custom draw-plan comparisons with both
+its old archive and a fresh complete harness-0.1.16 capture. The compiled
+frames contained the expected player draws, starting at music time 1.341;
+the audit looked them up using zero-based native trace seconds. The native
+bridge explicitly restores TimingData's beat-zero music origin before song
+position lookup. DrawFrame.second retains that music timestamp, and gameplay
+selects those frames using the music effect clock. The overlay audit already
+performed this conversion.
+
+The manual plan and manual mesh audits now use the existing Second clock
+conversion, preserving the authored origin and music rate. Production playback,
+DeadSync version 0.5.1855 and song-cache version 46 are unchanged. Independent
+positive- and negative-offset draw controls failed 105 and 30 plan checks
+before this fix; both now pass all 247 observations each. Shifting retained
+frame timestamps by 0.25 seconds still fails, retaining all 241 native frame
+checks in each negative control. The local and linked native SongPosition,
+TimingData, Actor and ActorFrame sources are byte-identical.
+
+The exact same full archive now passes all 179,179 comparisons, with no
+observation or tolerance removed. All 16 native controls pass. Sharkmode, the
+only earlier archive with a manual draw audit, passes all 259,567 checks on
+the corrected comparator. The other 19 prior archives have no manual audit;
+their previously verified comparison paths are unchanged.
+
+The complete 443,121-byte capture replaces the obsolete published fixture,
+retaining its aliases and preserving superseded bytes under target. Native
+capture reaches beat 343.66668701171875 / 129.78482055664062 seconds with 13
+payload members and zero runtime errors or dropped events. Receipts and
+hashes are linked in pass44-manual-clock-comparison.json. The ordered verified
+prefix contains 21 archives / 8,458,548 comparisons; the full corpus is not
+complete. A separate audit of public music-seconds getter semantics is also
+pending; this pass establishes the conversion for the captured clock contract.

@@ -5753,7 +5753,7 @@ fn compare_manual_meshes(
     if trace.manual_draw_frames.is_empty() {
         return;
     }
-    compare_manual_plans(trace, compiled, parity);
+    compare_manual_plans(trace, compiled, context, parity);
     parity.section("manual mesh bindings");
     let map = projected_drawable_map(trace, compiled);
     let mut composers = compiled
@@ -5809,7 +5809,7 @@ fn compare_manual_meshes(
                     &compiled[layer].overlays,
                     states,
                     screen,
-                    *second as f32,
+                    overlay_update_time(context, SongLuaTimeUnit::Second, *beat as f32, *second as f32),
                     *beat as f32,
                 ))
             });
@@ -5931,17 +5931,25 @@ fn compare_manual_meshes(
     parity.gaps.extend(colors.gaps);
 }
 
-fn compare_manual_plans(trace: &NativeTrace, compiled: &[CompiledSongLua], parity: &mut Parity) {
+fn compare_manual_plans(
+    trace: &NativeTrace, compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext, parity: &mut Parity,
+) {
     use deadsync_song_lua::{SongLuaDrawOp as Op, SongLuaDrawSource as Source};
     parity.section("custom draw plan");
     let map = projected_drawable_map(trace, compiled);
     let mut reported = false;
     for (beat, second, calls) in &trace.manual_draw_frames {
+        // Native trace timestamps are relative to beat zero. DrawFrame.second
+        // retains the song music timestamp used by production playback.
+        let music_second = overlay_update_time(
+            context, SongLuaTimeUnit::Second, *beat as f32, *second as f32,
+        );
         let mut actual = Vec::new();
         for (layer, compiled) in compiled.iter().enumerate() {
             let end = compiled
                 .draw_frames
-                .partition_point(|frame| frame.second <= *second as f32 + 0.0001);
+                .partition_point(|frame| frame.second <= music_second + 0.0001);
             if let Some(frame) = end.checked_sub(1).map(|index| &compiled.draw_frames[index]) {
                 actual.extend(frame.ops.iter().map(|op| (layer, op)));
             }
@@ -10679,4 +10687,29 @@ fn wrapper_fade_matches_native() {
     compare_drawable_frames(&trace, &compiled, &context, &mut rejected);
     assert_eq!(rejected.checks(), parity.checks(), "retain every observation");
     assert!(rejected.passed() < rejected.checks(), "missing wrapper fade must fail native colors");
+}
+
+#[test]
+fn manual_draw_clock_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (label, origin) in [("draw-offset", 1.25), ("draw-negative", -0.5)] {
+        let trace = read_trace_file(&root.join(format!("tests/fixtures/itgmania-song-lua-micro/{label}.json")));
+        let (mut compiled, primary, context) = compile_trace_song_at(
+            &trace, &root.join(format!("tests/fixtures/song-lua/{label}.sm")),
+        );
+        assert_eq!(trace.manual_draw_frames.len(), 241);
+        assert_eq!(context.song_timing.as_ref().expect("native song clock").get_time_for_beat_exact(0.0), origin);
+        assert_eq!(compiled[primary].draw_frames[0].second, origin);
+        let parity = compare_semantics(&trace, &compiled, primary, &context);
+        eprintln!("{}", parity.summary(label));
+        assert_eq!(parity.checks(), 247, "retain every native draw observation");
+        parity.assert_complete(label);
+        // A misplaced retained timestamp must fail even with unchanged ops.
+        for frame in &mut compiled[primary].draw_frames { frame.second += 0.25; }
+        let mut rejected = Parity::default();
+        compare_manual_plans(&trace, &compiled, &context, &mut rejected);
+        assert_eq!(rejected.checks(), 241, "retain all native frame observations");
+        assert!(rejected.passed() < rejected.checks(), "incorrect music timestamps must fail");
+    }
 }
