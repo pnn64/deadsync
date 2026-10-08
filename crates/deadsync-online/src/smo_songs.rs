@@ -1433,33 +1433,9 @@ fn is_chart_simfile(name: &str) -> bool {
 }
 
 /// One simfile's text, moved from ITG to NULL sync. A simfile with no
-/// `#OFFSET` is at zero, so it is given one, at the very top -- past any
-/// byte-order mark, ahead of every chart, in the file's own line endings.
+/// `#OFFSET` is at zero, so the writer gives it one.
 fn null_synced_simfile(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let (shifted, changed) =
-        sync_offset::rewrite_simfile_offset_tags(bytes, ITG_SYNC_OFFSET_SECONDS)?;
-    if changed > 0 {
-        return Ok(shifted);
-    }
-    let bom = if bytes.starts_with(b"\xEF\xBB\xBF") {
-        3
-    } else {
-        0
-    };
-    let newline = if bytes.windows(2).any(|pair| pair == b"\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
-    let tag = format!(
-        "#OFFSET:{};{newline}",
-        sync_offset::format_offset_tag_value(ITG_SYNC_OFFSET_SECONDS)
-    );
-    let mut out = Vec::with_capacity(bytes.len() + tag.len());
-    out.extend_from_slice(&bytes[..bom]);
-    out.extend_from_slice(tag.as_bytes());
-    out.extend_from_slice(&bytes[bom..]);
-    Ok(out)
+    sync_offset::shift_simfile_offsets(bytes, ITG_SYNC_OFFSET_SECONDS).map(|(shifted, _)| shifted)
 }
 
 /// The archive's top-level folder name, made safe to be a folder here.
