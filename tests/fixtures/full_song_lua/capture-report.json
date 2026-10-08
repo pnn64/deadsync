@@ -4758,6 +4758,25 @@
         "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
       },
       "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 66.2216694355011,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 66.11s",
+        "log_sha256": "2a3b7617d57c8710f4a5d6e6eaf1e2aacc8f8bd121c3c8260eb6235311a90a60",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
     }
   ]
 }
