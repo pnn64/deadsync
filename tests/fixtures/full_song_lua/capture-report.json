@@ -2415,6 +2415,14 @@
       "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "fcdf1e86b6077e31c4f97adcf1b92c6fd7460d09ee83a380c59cc832464cbbc2.tar.zst",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6567,6 +6575,33 @@
         "beat": 645.75,
         "music_seconds": 199.4571533203125,
         "seconds": 199.4571533203125
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 29.31307554244995,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 29.17s",
+        "log_sha256": "d769b3016800e96bb323e138be15f4cb28ea218b0e028790152b089385fda261",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "dbb86bcdf3d27af37095a4572f980a7085074043c12607f6887b0dba82ffb054",
+      "capture_endpoint": {
+        "beat": 343.66668701171875,
+        "music_seconds": 131.12582397460938,
+        "seconds": 129.78482055664062
       },
       "runtime_errors": 0,
       "dropped_events": 0
