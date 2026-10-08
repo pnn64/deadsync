@@ -2271,6 +2271,14 @@
       "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5922,6 +5930,33 @@
         "beat": 230,
         "music_seconds": 141.94180297851562,
         "seconds": 141.01080322265625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 9.152631759643555,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.01s",
+        "log_sha256": "acc8cbb6d77c82efed12a1b0baee552cc465f0c29bcada3650ed9e45148ca231",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "ba2e3f08ac0b5e3935c10a95e7c8cd0f86cec67cfe6a55e0135610bfa573568f",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "music_seconds": 131.9134063720703,
+        "seconds": 131.9791717529297
       },
       "runtime_errors": 0,
       "dropped_events": 0
