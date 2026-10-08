@@ -2175,6 +2175,14 @@
       "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
       "harness_version": "0.1.30",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "8c0951284de066f905a22e648d3279148a3194aad1a1b77a2527265c04dd3e56.tar.zst",
+      "archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5485,6 +5493,32 @@
       },
       "native_capture_reused": false,
       "capture_log_sha256": "d61e1f2cfa42c64bff9a9e0ac275925d83d0726d36d8d47a86ffa7aeaaf9a4dc",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 9.705448627471924,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.34s",
+        "log_sha256": "5a2a8e4a8ed9ead6074d7bb217a4cb5bc8faab4905d2c2281fde4a6cb16ae853",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "0083668f8a06900db081107d2b8914b9657f30cd0e03f9656dca376147034fc6",
       "capture_endpoint": {
         "beat": 360.75,
         "seconds": 131.9791717529297
