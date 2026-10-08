@@ -1759,6 +1759,14 @@
       "archive": "8c6f3b8a701b258c4e33a3e9cded29eb85583fd63aa7719bc6eb0cac2f7ee881.tar.zst",
       "harness_version": "0.1.26",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 66,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "3ed08c726f22b488ad5de19f0f3ddc21d6d051e0f33541000f7063b29001ebe9.tar.zst",
+      "archive": "880616e0ed6396b820e74fc260a68e7ec3ea097cd94dd3d5b38b79a9eaaa0cc7.tar.zst",
+      "harness_version": "0.1.26",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3508,6 +3516,31 @@
       "capture_endpoint": {
         "beat": 334,
         "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 66,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "880616e0ed6396b820e74fc260a68e7ec3ea097cd94dd3d5b38b79a9eaaa0cc7.tar.zst",
+      "harness_version": "0.1.26",
+      "harness_commit": "5ebb034b423fb94dca734a95cbb1e4621031534e",
+      "native_executable_sha256": "e00e95d7b1b8b183d3e2a47765e7e1f2cda38c1c0ae1a3db8ed0792a6438bfe7",
+      "verification": {
+        "archive": "880616e0ed6396b820e74fc260a68e7ec3ea097cd94dd3d5b38b79a9eaaa0cc7.tar.zst",
+        "version": "0.5.1865",
+        "exit_code": 0,
+        "seconds": 22.730414390563965,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 22.45s",
+        "log_sha256": "60040b8122dcfddf57f6fcebd6eacd4ccdc43fd74e7e6e6f0770ea7d7b6a48ae",
+        "executable_sha256": "6aad346179f4fd46e97df9a68cbd55c944995c899bf4f977e66366519bf92519"
+      },
+      "capture_log_sha256": "9993c331c8b49352148f48b5486472b50feef8cd8ad8c9e95d7e4cb3c85a5d97",
+      "capture_endpoint": {
+        "beat": 266,
+        "seconds": 145.09091186523438
       },
       "runtime_errors": 0,
       "dropped_events": 0
