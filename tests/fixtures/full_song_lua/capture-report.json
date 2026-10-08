@@ -1887,6 +1887,14 @@
       "archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "dec1acc333649d7d4c76f4d6ca7ee120a263d5403453b8f9afd49c5f0a8c3d3b.tar.zst",
+      "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4036,6 +4044,31 @@
       "capture_endpoint": {
         "beat": 481,
         "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 68,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 73.2429039478302,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 73.10s",
+        "log_sha256": "46d12a1513a2a729f915ce34fd3d8ecd8a3f6388b71f1ce0c7c960d6bf40f2e6",
+        "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+      },
+      "capture_log_sha256": "9fc1751f192870b7eb20e9d89a3b37cbbab48396c06c9d4d1b50dc82018ca613",
+      "capture_endpoint": {
+        "beat": 440,
+        "seconds": 127.53623199462892
       },
       "runtime_errors": 0,
       "dropped_events": 0
