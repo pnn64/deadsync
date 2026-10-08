@@ -24453,6 +24453,34 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn command_probe_restores_wrappers() {
+        let lua = Lua::new();
+        let owner = test_create_dummy_actor(&lua, "Quad").expect("probe owner");
+        let other = test_create_dummy_actor(&lua, "Quad").expect("other owner");
+        lua.globals().set("owner", owner.clone()).expect("owner global");
+        lua.globals().set("other", other).expect("other global");
+        lua.load(r#"
+original = owner:AddWrapperState():x(3)
+other_original = other:AddWrapperState():x(7)
+owner.ProbeMessageCommand = function(self)
+    self:AddWrapperState():x(40)
+    other:AddWrapperState():x(50)
+    other:GetWrapperState(1):x(90)
+end
+"#).exec().expect("wrapper command");
+        crate::capture_actor_command_preserving_state(&lua, &owner, "ProbeMessageCommand")
+            .expect("isolated command probe");
+        lua.load(r#"
+assert(owner:GetNumWrapperStates() == 1)
+assert(other:GetNumWrapperStates() == 1)
+assert(owner:GetWrapperState(1) == original)
+assert(other:GetWrapperState(1) == other_original)
+assert(original:GetX() == 3)
+assert(other_original:GetX() == 7)
+"#).exec().expect("membership, identity and existing state restored");
+    }
+
+    #[test]
     fn indexed_actor_capture_blocks_preserve_source_indices() {
         let lua = Lua::new();
         let first = lua.create_table().unwrap();

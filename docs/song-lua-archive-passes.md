@@ -1531,3 +1531,38 @@ in pass41-effect-queue-comparison.json under target/song-lua-archive-passes.
 A separate late-wrapper/fade probe reproduces alpha, visibility and draw-color
 failures (5,393 pass / three fail out of 5,396 checks). It remains under target
 for the next investigation. The full corpus goal remains unfinished.
+
+
+## Pass 42: restore wrapper membership after command probes
+
+The independent late-wrapper/fade chart reproduced three alpha, visibility
+and draw-color failures. A second native probe asserts one wrapper after
+AddWrapperState and before GetWrapperState(1). ITGmania has no runtime errors;
+DeadSync fails the first assertion at the real Begin callback. Speculative
+message-command capture had retained a wrapper on the live owner, so later
+GetWrapperState(1) addressed that orphan instead of the runtime wrapper.
+Actor.cpp:972 creates one wrapper per call; its Lua binding at 2392 returns
+that new object, and the GetWrapperState binding at 2415 is one-indexed.
+
+Actor snapshots now include wrapper membership. Both Rust and Lua snapshot
+forms copy the list while retaining the live Actor tables and their method
+closures; deep cloning those objects would recurse into their owner and lose
+identity. AddWrapperState registers its owner with an active capture scope
+before mutation, so probes touching another owner restore that list too.
+The replaced snapshot path omitted membership. DeadSync is 0.5.1855, with
+song-cache version 46 invalidating earlier compiled wrapper tracks.
+
+The unchanged fade archive now passes all 5,396 checks (previously three
+failures), and the count variant passes all 5,396 (previously six failures).
+The checked-in regression retains 575 observations, including 482 drawable
+frames. Removing its wrapper diffuse track fails native colors without
+removing comparisons. A core regression also preserves existing wrapper
+identity and state on both the direct owner and another touched owner.
+All 15 native controls and all 667 core song-Lua tests pass; three existing
+core tests remain ignored. The production build without test support and both
+cache checks pass.
+
+The identical complete harness-0.1.16 KABOOOOOM archive and the first 18
+previously passing archives are being checked with the new executable.
+Their receipts remain under target/song-lua-archive-passes; full-corpus
+verification remains unfinished.

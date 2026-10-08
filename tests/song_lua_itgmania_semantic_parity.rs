@@ -10649,3 +10649,34 @@ fn callback_wag_matches_native() {
     assert_eq!(rejected.checks(), parity.checks(), "retain every observation");
     assert!(rejected.passed() < rejected.checks(), "an unstopped wag must fail native geometry");
 }
+
+#[test]
+fn wrapper_fade_matches_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/wrapper-fade.json"),
+    );
+    let (mut compiled, primary, context) = compile_trace_song_at(
+        &trace, &root.join("tests/fixtures/song-lua/wrapper-fade.sm"),
+    );
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("Wrapper fade"));
+    assert_eq!(parity.checks(), 575, "retain geometry and all 482 drawable frames");
+    parity.assert_complete("Wrapper fade");
+    let wrappers: Vec<_> = compiled[primary].overlays.iter().enumerate()
+        .filter_map(|(index, actor)| {
+            matches!(actor.kind, SongLuaOverlayKind::WrapperState).then_some(index)
+        }).collect();
+    assert_eq!(wrappers.len(), 1, "probes must leave no extra wrapper");
+    let count = compiled[primary].overlay_updates.len();
+    compiled[primary].overlay_updates.retain(|track| {
+        !(track.overlay_index == wrappers[0] && track.target == SongLuaOverlayUpdateTarget::Diffuse)
+    });
+    assert!(compiled[primary].overlay_updates.len() < count, "runtime wrapper alpha track");
+    let mut rejected = compare_semantics(&trace, &compiled, primary, &context);
+    compare_drawable_frames(&trace, &compiled, &context, &mut rejected);
+    assert_eq!(rejected.checks(), parity.checks(), "retain every observation");
+    assert!(rejected.passed() < rejected.checks(), "missing wrapper fade must fail native colors");
+}

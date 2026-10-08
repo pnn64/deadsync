@@ -2603,6 +2603,7 @@ fn is_actor_mutable_state_key(key: &str) -> bool {
         || matches!(
             key,
             "__songlua_visible"
+                | "__songlua_wrappers"
                 | "__songlua_hibernate_seconds"
                 | "__songlua_theme_hibernating"
                 | "__songlua_update_rate"
@@ -2638,6 +2639,21 @@ fn snapshot_actor_semantic_state(lua: &Lua, actor: &Table) -> mlua::Result<Vec<(
     snapshot_actor_state(lua, actor, is_actor_semantic_state_key)
 }
 
+fn clone_actor_state(lua: &Lua, key: &str, value: Value) -> mlua::Result<Value> {
+    if key == "__songlua_wrappers" {
+        if let Value::Table(wrappers) = value {
+            // Copy membership, retaining the live Actor identities and method
+            // closures. Deep copying a wrapper would also recurse into its owner.
+            let copy = lua.create_table_with_capacity(wrappers.raw_len(), 0)?;
+            for (index, wrapper) in wrappers.sequence_values::<Table>().enumerate() {
+                copy.raw_set(index + 1, wrapper?)?;
+            }
+            return Ok(Value::Table(copy));
+        }
+    }
+    clone_lua_value(lua, value)
+}
+
 fn snapshot_actor_state(
     lua: &Lua,
     actor: &Table,
@@ -2651,7 +2667,7 @@ fn snapshot_actor_state(
         };
         let key = key.to_str()?;
         if keep_key(&key) {
-            out.push((key.to_string(), clone_lua_value(lua, value)?));
+            out.push((key.to_string(), clone_actor_state(lua, &key, value)?));
         }
     }
     Ok(out)
@@ -2780,7 +2796,7 @@ pub fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Re
         if !is_actor_semantic_state_key(&key.to_str()?) {
             continue;
         }
-        let value = clone_lua_value(lua, value)?;
+        let value = clone_actor_state(lua, &key.to_str()?, value)?;
         let entry = lua.create_table_with_capacity(2, 0)?;
         entry.raw_set(1, key)?;
         entry.raw_set(2, value)?;
@@ -9600,6 +9616,7 @@ pub fn install_actor_runtime_child_methods(
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
+                prepare_capture_scope_actor(lua, &actor)?;
                 let wrapper = create_dummy_actor(lua, "WrapperState")?;
                 copy_dummy_actor_tags(&actor, &wrapper)?;
                 wrapper.raw_set("__songlua_parent", actor.clone())?;
