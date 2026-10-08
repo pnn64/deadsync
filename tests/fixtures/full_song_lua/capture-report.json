@@ -2254,6 +2254,24 @@
         "log_sha256": "f818629c1505ee5529f1422c5f1b38772076675d3284a6a4c3b3530eaf0fe870",
         "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
       }
+    },
+    {
+      "pass_number": 57,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "8654de734aa889449769bbfd3a93bbfde4c72eb4a06820a86d96ae4e8a8bc29f.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "8654de734aa889449769bbfd3a93bbfde4c72eb4a06820a86d96ae4e8a8bc29f.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 38.98601984977722,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.90s",
+        "log_sha256": "c8fd769ea2b8fb852355645edd8a845ddd754e03e86dee78a2c2d633fb204cf1",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      }
     }
   ]
 }
