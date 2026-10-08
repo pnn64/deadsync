@@ -1639,6 +1639,14 @@
       "archive": "4abe9618f51450358243b936e11a1002961df7a43e9de511dd3878508d1d3827.tar.zst",
       "harness_version": "0.1.24",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 63,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "e16368cdb933ad1eb4ef71f253e28989ff3ea2ee86690027bfa9c0606007f38f.tar.zst",
+      "archive": "47a5300e43abcea974f0737860c12567ebfd3b9731d19538c5fa357d2cc5d9d4.tar.zst",
+      "harness_version": "0.1.24",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -3004,6 +3012,31 @@
         "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
       },
       "capture_log_sha256": "07bbc23a7489dfd86a71d815f50247d38d0e857a3a2ca26b31626359ae6581f9",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 63,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "47a5300e43abcea974f0737860c12567ebfd3b9731d19538c5fa357d2cc5d9d4.tar.zst",
+      "harness_version": "0.1.24",
+      "harness_commit": "6a127f4349612da54f32eb8db0d49b4bb64f330a",
+      "native_executable_sha256": "6f0e8ff5fd6e04085e9ed3054ef744f932989c2d4a46c191be85b92eb94ef935",
+      "verification": {
+        "archive": "47a5300e43abcea974f0737860c12567ebfd3b9731d19538c5fa357d2cc5d9d4.tar.zst",
+        "version": "0.5.1863",
+        "exit_code": 0,
+        "seconds": 8.830191135406494,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.39s",
+        "log_sha256": "682c9b5a08124b1e86ddec35f4d201dd0661ab374e5a4d479445950a55037129",
+        "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+      },
+      "capture_log_sha256": "9bf8457db768022b8a54e3cbc3798a4bd0f07a6fc030b12ca54d014df366a692",
       "capture_endpoint": {
         "beat": 360.75,
         "seconds": 131.9791717529297
