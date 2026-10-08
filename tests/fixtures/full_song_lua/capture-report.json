@@ -2111,6 +2111,14 @@
       "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "superseded_archive": "e5bc6b2f743a6e9eac19dccab375e599910a7f309bce5bfa9c2701f11d2f5976.tar.zst",
+      "archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5216,6 +5224,32 @@
       "capture_endpoint": {
         "beat": 440,
         "seconds": 127.53623199462892
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 26.427484273910522,
+        "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 26.30s",
+        "log_sha256": "27825adefec4d66e4ae9b8405bea28d178bed6fd64811a83a28be254198bc990",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "668159a606e6f7906919132d8fa2efc9c97eb41f7f34478cd24a6282f76cb766",
+      "capture_endpoint": {
+        "beat": 290,
+        "seconds": 102.42857360839844
       },
       "runtime_errors": 0,
       "dropped_events": 0
