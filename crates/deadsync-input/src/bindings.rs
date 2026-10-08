@@ -9,65 +9,43 @@ use crate::{
 
 #[must_use]
 pub fn default_keymap() -> Keymap {
-    use VirtualAction as A;
     let mut km = Keymap::default();
-    // Player 1 defaults (Pump-standard QESZC + arrows, Enter/Escape).
-    km.bind(
-        A::p1_up,
-        &[
-            InputBinding::Key(KeyCode::ArrowUp),
-            InputBinding::Key(KeyCode::KeyE),
-        ],
-    );
-    km.bind(
-        A::p1_down,
-        &[
-            InputBinding::Key(KeyCode::ArrowDown),
-            InputBinding::Key(KeyCode::KeyQ),
-        ],
-    );
-    km.bind(
-        A::p1_left,
-        &[
-            InputBinding::Key(KeyCode::ArrowLeft),
-            InputBinding::Key(KeyCode::KeyZ),
-        ],
-    );
-    km.bind(
-        A::p1_right,
-        &[
-            InputBinding::Key(KeyCode::ArrowRight),
-            InputBinding::Key(KeyCode::KeyC),
-        ],
-    );
-    km.bind(
-        A::p1_center,
-        &[
-            InputBinding::Key(KeyCode::Space),
-            InputBinding::Key(KeyCode::KeyS),
-        ],
-    );
-    km.bind(A::p1_select, &[InputBinding::Key(KeyCode::Slash)]);
-    km.bind(A::p1_start, &[InputBinding::Key(KeyCode::Enter)]);
-    km.bind(A::p1_back, &[InputBinding::Key(KeyCode::Escape)]);
-    // Player 2 defaults (numpad directions + Start on NumpadEnter).
-    km.bind(A::p2_up, &[InputBinding::Key(KeyCode::Numpad8)]);
-    km.bind(A::p2_down, &[InputBinding::Key(KeyCode::Numpad2)]);
-    km.bind(A::p2_left, &[InputBinding::Key(KeyCode::Numpad4)]);
-    km.bind(A::p2_right, &[InputBinding::Key(KeyCode::Numpad6)]);
-    km.bind(A::p2_center, &[InputBinding::Key(KeyCode::Numpad5)]);
-    km.bind(A::p2_select, &[InputBinding::Key(KeyCode::NumpadDecimal)]);
-    km.bind(A::p2_start, &[InputBinding::Key(KeyCode::NumpadEnter)]);
-    km.bind(A::p2_back, &[InputBinding::Key(KeyCode::Numpad0)]);
-    km.bind(A::p1_operator, &[InputBinding::Key(KeyCode::ScrollLock)]);
-    km.bind(A::p1_coin, &[InputBinding::Key(KeyCode::F1)]);
-    km.bind(A::system_fast_forward, &[InputBinding::Key(KeyCode::Tab)]);
-    km.bind(
-        A::system_slow_down,
-        &[InputBinding::Key(KeyCode::Backquote)],
-    );
-    // Leave dedicated menu buttons, P2 operator/coin, and restart unbound by default for now.
+    for action in ALL_VIRTUAL_ACTIONS {
+        let bindings = default_bindings_for_action(action);
+        if !bindings.is_empty() {
+            km.bind(action, bindings);
+        }
+    }
     km
+}
+
+const fn default_bindings_for_action(action: VirtualAction) -> &'static [InputBinding] {
+    use InputBinding::Key;
+    use KeyCode::*;
+    use VirtualAction as A;
+    match action {
+        A::p1_up => &[Key(ArrowUp), Key(KeyE)],
+        A::p1_down => &[Key(ArrowDown), Key(KeyQ)],
+        A::p1_left => &[Key(ArrowLeft), Key(KeyZ)],
+        A::p1_right => &[Key(ArrowRight), Key(KeyC)],
+        A::p1_center => &[Key(Space), Key(KeyS)],
+        A::p1_select => &[Key(Slash)],
+        A::p1_start => &[Key(Enter)],
+        A::p1_back => &[Key(Escape)],
+        A::p1_operator => &[Key(ScrollLock)],
+        A::p1_coin => &[Key(F1)],
+        A::p2_up => &[Key(Numpad8)],
+        A::p2_down => &[Key(Numpad2)],
+        A::p2_left => &[Key(Numpad4)],
+        A::p2_right => &[Key(Numpad6)],
+        A::p2_center => &[Key(Numpad5)],
+        A::p2_select => &[Key(NumpadDecimal)],
+        A::p2_start => &[Key(NumpadEnter)],
+        A::p2_back => &[Key(Numpad0)],
+        A::system_fast_forward => &[Key(Tab)],
+        A::system_slow_down => &[Key(Backquote)],
+        _ => &[],
+    }
 }
 
 pub fn load_keymap_from_ini_entries<'a, I>(section: Option<I>) -> Keymap
@@ -97,19 +75,13 @@ where
         }
     }
 
-    let defaults = default_keymap();
     for action in ALL_VIRTUAL_ACTIONS {
         if seen & action.bit() != 0 {
             continue;
         }
-        let mut bindings = Vec::new();
-        let mut i = 0;
-        while let Some(binding) = defaults.binding_at(action, i) {
-            bindings.push(binding);
-            i += 1;
-        }
+        let bindings = default_bindings_for_action(action);
         if !bindings.is_empty() {
-            km.bind(action, &bindings);
+            km.bind(action, bindings);
         }
     }
     restore_available_default_bindings(&mut km);
@@ -204,29 +176,8 @@ pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
 #[inline(always)]
 #[must_use]
 pub const fn default_key_for_action(action: VirtualAction) -> Option<KeyCode> {
-    use VirtualAction as A;
-    match action {
-        A::p1_up => Some(KeyCode::ArrowUp),
-        A::p1_down => Some(KeyCode::ArrowDown),
-        A::p1_left => Some(KeyCode::ArrowLeft),
-        A::p1_right => Some(KeyCode::ArrowRight),
-        A::p1_center => Some(KeyCode::Space),
-        A::p1_select => Some(KeyCode::Slash),
-        A::p1_start => Some(KeyCode::Enter),
-        A::p1_back => Some(KeyCode::Escape),
-        A::p1_operator => Some(KeyCode::ScrollLock),
-        A::p1_coin => Some(KeyCode::F1),
-        A::p2_up => Some(KeyCode::Numpad8),
-        A::p2_down => Some(KeyCode::Numpad2),
-        A::p2_left => Some(KeyCode::Numpad4),
-        A::p2_right => Some(KeyCode::Numpad6),
-        A::p2_center => Some(KeyCode::Numpad5),
-        A::p2_select => Some(KeyCode::NumpadDecimal),
-        A::p2_start => Some(KeyCode::NumpadEnter),
-        A::p2_back => Some(KeyCode::Numpad0),
-        // System (non-player) tier: Tab acceleration fast-forward / slow-down.
-        A::system_fast_forward => Some(KeyCode::Tab),
-        A::system_slow_down => Some(KeyCode::Backquote),
+    match default_bindings_for_action(action) {
+        [InputBinding::Key(code), ..] => Some(*code),
         _ => None,
     }
 }
@@ -571,13 +522,7 @@ pub fn protected_default_key_for_action(keymap: &Keymap, action: VirtualAction) 
 
 #[inline(always)]
 fn load_action_bindings(keymap: &Keymap, action: VirtualAction) -> Vec<InputBinding> {
-    let mut bindings = Vec::new();
-    let mut i = 0;
-    while let Some(binding) = keymap.binding_at(action, i) {
-        bindings.push(binding);
-        i += 1;
-    }
-    bindings
+    keymap.bindings_for_action(action).to_vec()
 }
 
 #[inline(always)]
@@ -640,6 +585,7 @@ pub fn restore_available_default_bindings(keymap: &mut Keymap) {
 fn set_binding_at_slot(bindings: &mut Vec<InputBinding>, slot_index: usize, binding: InputBinding) {
     let slot_index = slot_index.min(bindings.len());
     if bindings.len() <= slot_index {
+        bindings.reserve_exact(1);
         bindings.push(binding);
     } else {
         bindings[slot_index] = binding;
@@ -683,7 +629,7 @@ pub fn updated_keymap_unique_keyboard(
             }
         }
 
-        new_map.bind(act, &bindings);
+        new_map.bind_owned(act, bindings);
     }
 
     restore_available_default_bindings(&mut new_map);
@@ -717,7 +663,7 @@ pub fn updated_keymap_unique_gamepad(
             set_binding_at_slot(&mut bindings, effective_index, binding);
         }
 
-        new_map.bind(act, &bindings);
+        new_map.bind_owned(act, bindings);
     }
 
     restore_available_default_bindings(&mut new_map);
@@ -739,7 +685,7 @@ pub fn cleared_keymap(current: &Keymap, action: VirtualAction, index: usize) -> 
                 changed = true;
             }
         }
-        new_map.bind(act, &bindings);
+        new_map.bind_owned(act, bindings);
     }
 
     if changed {

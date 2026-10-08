@@ -301,7 +301,7 @@ impl CompiledKeymap {
 
 #[derive(Clone, Debug)]
 pub struct Keymap {
-    map: HashMap<VirtualAction, Vec<InputBinding>>,
+    map: [Box<[InputBinding]>; VirtualAction::COUNT],
     key_rev: Box<[Vec<VirtualAction>]>,
     key_rev_extra: HashMap<KeyCode, Vec<VirtualAction>>,
     pad_dir_rev: [Vec<VirtualAction>; 4],
@@ -312,7 +312,7 @@ pub struct Keymap {
 impl Default for Keymap {
     fn default() -> Self {
         Self {
-            map: HashMap::new(),
+            map: std::array::from_fn(|_| Box::default()),
             key_rev: new_key_rev(),
             key_rev_extra: HashMap::new(),
             pad_dir_rev: std::array::from_fn(|_| Vec::new()),
@@ -486,15 +486,21 @@ impl Keymap {
 
     #[inline(always)]
     pub fn bind(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
-        if let Some(prev) = self.map.insert(action, inputs.to_vec()) {
-            self.remove_rev(action, &prev);
-        }
-        self.add_rev(action, inputs);
+        self.bind_owned(action, inputs.to_vec());
+    }
+
+    #[inline]
+    pub(crate) fn bind_owned(&mut self, action: VirtualAction, inputs: Vec<InputBinding>) {
+        let prev = std::mem::take(&mut self.map[action.ix()]);
+        self.remove_rev(action, &prev);
+        drop(prev);
+        self.add_rev(action, &inputs);
+        self.map[action.ix()] = inputs.into_boxed_slice();
     }
 
     #[inline]
     pub(crate) fn bindings_for_action(&self, action: VirtualAction) -> &[InputBinding] {
-        self.map.get(&action).map_or(&[], Vec::as_slice)
+        &self.map[action.ix()]
     }
 
     /// Compares ordered bindings for every action, treating missing and empty
@@ -512,14 +518,12 @@ impl Keymap {
     #[inline(always)]
     #[must_use]
     pub fn first_key_binding(&self, action: VirtualAction) -> Option<KeyCode> {
-        self.map.get(&action).and_then(|bindings| {
-            bindings.iter().find_map(|b| {
-                if let InputBinding::Key(code) = b {
-                    Some(*code)
-                } else {
-                    None
-                }
-            })
+        self.bindings_for_action(action).iter().find_map(|b| {
+            if let InputBinding::Key(code) = b {
+                Some(*code)
+            } else {
+                None
+            }
         })
     }
 
@@ -528,10 +532,7 @@ impl Keymap {
     #[inline(always)]
     #[must_use]
     pub fn binding_at(&self, action: VirtualAction, index: usize) -> Option<InputBinding> {
-        self.map
-            .get(&action)
-            .and_then(|bindings| bindings.get(index))
-            .copied()
+        self.bindings_for_action(action).get(index).copied()
     }
 
     #[inline(always)]
@@ -1039,3 +1040,7 @@ mod tests {
         assert_eq!(pad_slot_count, 30);
     }
 }
+
+#[cfg(test)]
+#[path = "perf_tests.rs"]
+mod perf_tests;
