@@ -1527,6 +1527,14 @@
       "archive": "d87d62df91e1eae783f08165262f2aaace96c79d636af40841fa9bfbc4b1bb4a.tar.zst",
       "harness_version": "0.1.21",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 57,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "superseded_archive": "51076d7653effe9cdec908302b75969c92ef7a5b231cb69768c4d0ec4baff7c9.tar.zst",
+      "archive": "03699650497f8b17a46b4302abb9003299946aba1e8d19e99e93fe37386bd95c.tar.zst",
+      "harness_version": "0.1.21",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -2545,6 +2553,31 @@
       "capture_endpoint": {
         "beat": 348,
         "seconds": 134.70968627929688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 57,
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "03699650497f8b17a46b4302abb9003299946aba1e8d19e99e93fe37386bd95c.tar.zst",
+      "harness_version": "0.1.21",
+      "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "verification": {
+        "archive": "03699650497f8b17a46b4302abb9003299946aba1e8d19e99e93fe37386bd95c.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 0,
+        "seconds": 48.767805337905884,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 48.66s",
+        "log_sha256": "56ad3dbedaab451756905869fdf82f50692b2265db44711421a7365336e31d53",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+      },
+      "capture_log_sha256": "110d9e7d8f5e7035b2c7dc3905cac8e5d8b3faae93a4b1ad1323343935d8e27b",
+      "capture_endpoint": {
+        "beat": 265,
+        "seconds": 127.20000457763672
       },
       "runtime_errors": 0,
       "dropped_events": 0
