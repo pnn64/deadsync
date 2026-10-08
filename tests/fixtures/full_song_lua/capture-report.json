@@ -1223,6 +1223,56 @@
       "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
       "harness_version": "0.1.18",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 50,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "06f189434a38499da35adc5ae226bb68f1c220b840792ff7045c7559c679c3b2.tar.zst",
+      "archive": "f8ff6cfef02ef1b12bdeaaf57e40cb94500bffaecee31e398b11987ed883947b.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 50,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "b9b9ea7d862a66acc7e0c65f1f4cad273e8220d3d71f462d50602c5a9668f5fe.tar.zst",
+      "archive": "1ba1acac55d9d5349446423a7335341d3ec8c79631ecff2efe731160e925772e.tar.zst",
+      "harness_version": "0.1.18",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    }
+  ],
+  "parity_verifications": [
+    {
+      "pass_number": 50,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "f8ff6cfef02ef1b12bdeaaf57e40cb94500bffaecee31e398b11987ed883947b.tar.zst",
+      "harness_version": "0.1.18",
+      "verification": {
+        "archive": "f8ff6cfef02ef1b12bdeaaf57e40cb94500bffaecee31e398b11987ed883947b.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 12.611574172973633,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 10.94s",
+        "log_sha256": "425e7541dc024926bd9efc33434ca839a07274d1155e2210376240046d3ff4c7",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
+    },
+    {
+      "pass_number": 50,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "1ba1acac55d9d5349446423a7335341d3ec8c79631ecff2efe731160e925772e.tar.zst",
+      "harness_version": "0.1.18",
+      "verification": {
+        "archive": "1ba1acac55d9d5349446423a7335341d3ec8c79631ecff2efe731160e925772e.tar.zst",
+        "version": "0.5.1858",
+        "exit_code": 0,
+        "seconds": 21.691304683685303,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 20.00s",
+        "log_sha256": "0543bb313565417da42d57dcb536fd3adeaf6acd3011ba74b4a3dd8d967b43ed",
+        "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+      }
     }
   ]
 }

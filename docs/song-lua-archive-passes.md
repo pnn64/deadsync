@@ -1776,3 +1776,18 @@ Three complete archives are verified under the current native clock contract.
 The full 501-simfile / 492-archive audit remains unfinished. The next pass
 recaptures Warp Zone and Let Me Hear That from the start of the corpus;
 earlier prefix counts remain historical until independently revalidated.
+
+## Pass 50: restart the corpus audit with the corrected native clocks
+
+Fresh harness 0.1.18 references for the first two ordered archives, Warp Zone
+and Let Me Hear That, are complete with no runtime errors or dropped events.
+DeadSync 0.5.1858 passes all 212,220 and 205,071 comparisons respectively.
+Both references replace their obsolete fixtures; aliases and superseded
+bytes are preserved. Capture-report.json now records their executable and
+log hashes alongside the exact results.
+
+The current verified prefix is two archives / 417,291 comparisons, with five
+complete archives verified under the corrected native clock contract. The
+full 501-simfile / 492-archive audit remains unfinished. The next archive in
+order is Waltz Capriccio; the audit stops at the next actual capture or parity
+failure for source-backed investigation.
