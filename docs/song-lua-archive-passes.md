@@ -2088,3 +2088,5 @@ variants. Full-corpus parity is unfinished.
 ## Pass 59: revalidate the corpus after native class inheritance
 
 Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
