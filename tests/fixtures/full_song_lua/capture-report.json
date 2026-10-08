@@ -2063,6 +2063,14 @@
       "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
       "harness_version": "0.1.29",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "724604c8bb3f7dbe1b27a8c9a617c09ce9eabf2d65b679e4897e0c0b4a8beaff.tar.zst",
+      "archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -5012,6 +5020,32 @@
       "capture_endpoint": {
         "beat": 338,
         "seconds": 130
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 47.717947006225586,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 47.56s",
+        "log_sha256": "5b816bb584c8b889ec0d213d112b5deac85d9eaae4c3e9f8a09e5b5929080738",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "189c0788dbfd9dec86463b1fb0843b3b1b0a576870dc2f53b48649998a8598bc",
+      "capture_endpoint": {
+        "beat": 580,
+        "seconds": 221.77818298339844
       },
       "runtime_errors": 0,
       "dropped_events": 0
