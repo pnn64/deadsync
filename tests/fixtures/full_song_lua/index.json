@@ -578,13 +578,14 @@
     {
       "title": "99+",
       "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f05d58b8dd90acfdc101dd853723379ef3dffc9b25d5d32108758aa4befa210a.tar.zst",
-      "sha256": "f05d58b8dd90acfdc101dd853723379ef3dffc9b25d5d32108758aa4befa210a",
-      "compressed_bytes": 1103090,
-      "uncompressed_sha256": "a652b379690b898fbde6c5a92aff50b808414101f290429487158ac5ed5c07ce",
-      "compression_level": 22,
+      "harness_version": "0.1.32",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "sha256": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124",
+      "compressed_bytes": 2049658,
+      "uncompressed_sha256": "77831fd4ad5176993c2be0445d95faa71dc9385ac0f19d7e38945f3f2b83b224",
+      "compression_level": 12,
       "aliases": [
+        "f05d58b8dd90acfdc101dd853723379ef3dffc9b25d5d32108758aa4befa210a.tar.zst",
         "54839a382ec10b3a0a610d3b75751b95005f11d0a8c66e8bdc1d7a86ad790b2f.tar.zst"
       ]
     },

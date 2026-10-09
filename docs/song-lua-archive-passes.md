@@ -2601,3 +2601,11 @@ complete, but its comparison with the new verifier and revalidation from the
 top remain pending. The scope is still 501 original simfiles, 483 indexed
 sources, 18 unindexed sources, and nine historical archive variants. Full
 corpus parity remains unfinished.
+
+The complete unchanged 99+ reference on native harness 0.1.32 now passes all
+1,339,513 observations with DeadSync 0.5.1870. The previous comparison had
+26,417 failures. Publish the verified canonical archive and preserve its
+superseded source bytes locally, retaining historical aliases. The preceding
+27 cases were verified on 0.5.1869; revalidation from the top on 0.5.1870
+remains pending. No tolerance, event limit, original source or archive scope
+was reduced. Full-corpus parity remains unfinished.
