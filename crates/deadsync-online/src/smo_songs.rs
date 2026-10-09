@@ -555,9 +555,7 @@ fn resolve_song(
         )?;
     }
 
-    let found = pack_archive::match_song(index, title, artist, |folder| {
-        songs.tags.get(&folder).cloned()
-    });
+    let found = pack_archive::match_song(index, title, artist, |folder| songs.tags.get(&folder));
     let SongMatch::Folder(folder) = found else {
         return Err(no_match(&found, title));
     };
