@@ -439,3 +439,14 @@ over 130.00 seconds and 7,801 native update frames.
 The native capture has no runtime errors or dropped events; original
 sources, prior captures, and historical aliases are retained.
 Full corpus and native framebuffer parity are still incomplete.
+
+## Fresh native revalidation, pass 103
+
+Position 8, ChikuTaku, passed 328,107 comparisons over
+221.78 seconds and 13,308 native update frames. The original
+simfile is unchanged, the native capture has no runtime errors or dropped
+events, and decompressed archive bytes are preserved by lossless level-22
+recompression. Prior captures and historical aliases remain available.
+`native-revalidation-pass103.json` records the source and verifier identities.
+The original 501-source/492-context scope is unchanged. Full corpus,
+physical tiny Sprite uploads, and native framebuffer parity remain open.

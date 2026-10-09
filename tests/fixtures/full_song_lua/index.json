@@ -190,12 +190,12 @@
     {
       "title": "242|MISC.|[lv.02] ChikuTaku",
       "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
-      "harness_version": "0.1.31",
-      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
-      "sha256": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d",
-      "compressed_bytes": 68424348,
-      "uncompressed_sha256": "037739a9a70419eaf952d34b575abde48d1b26329adac4526c212003b5c12a0f",
-      "compression_level": 12,
+      "harness_version": "0.1.49",
+      "archive": "733a636d41eaa4f2add786f07e40a02f94dbddd2937b777b19231594486f16c7.tar.zst",
+      "sha256": "733a636d41eaa4f2add786f07e40a02f94dbddd2937b777b19231594486f16c7",
+      "compressed_bytes": 68365606,
+      "uncompressed_sha256": "64dc696f614452104bee9d7cc4da274c1a34fdc27d2b6d02d5e0f93d2830ad53",
+      "compression_level": 22,
       "aliases": [
         "93c16ea69f9fb27c62939c91b61ea24971d33b8a2fe52784926fa43ddba0261d.tar.zst",
         "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
@@ -207,7 +207,8 @@
         "4d492047030008443585021530eb446c0ef3e87a6eb74f24467777927dd342d1.tar.zst",
         "1d851a1586fffde3b7101c78781e37116f34086b62c5bd68e999533d39f254ee.tar.zst",
         "a3792891b461050fa08a726beb23cab5ad5fc508002adf27a482df1927ad3bb2.tar.zst",
-        "1f7a06de017c4818e7cdf08b0194133f56cb70b794ca734732a6d83d2781023e.tar.zst"
+        "1f7a06de017c4818e7cdf08b0194133f56cb70b794ca734732a6d83d2781023e.tar.zst",
+        "166333b9131f26f595c0c2f0f2e8ab08c4b3d429ee02ebf4dd92b1fe37ff8d6e.tar.zst"
       ]
     },
     {
