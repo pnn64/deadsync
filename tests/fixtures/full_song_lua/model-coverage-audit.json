@@ -809,5 +809,102 @@
         "current .1.42 full-song references and complete 501-simfile/492-archive corpus validation"
       ]
     }
+  ],
+  "native_material_binding_revalidations": [
+    {
+      "deadsync_commit": "1c083768b80b944cdfa3e79f761a6b16fe1bc5b2",
+      "comparator_sha256": "1999cc24f03752d84238d68c3f2585002f9bf4a0c26b5ba3d9ce5f94c2a6cefb",
+      "comparator_build_command": [
+        "cargo",
+        "test",
+        "--config",
+        "profile.dev.package.deadsync.debug=0",
+        "--test",
+        "song_lua_itgmania_semantic_parity",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "comparator_profile": "test/debug with CLI-only root package debug=0",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "native_executable_sha256": "fd62d999abd738f7ed1e66b9840ea058d3c0dba75cd408fe52c1b702404bbe43",
+      "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive_sha256": "84810d25280160952940fc8fff141cdef32ca363d6e8a6d5c2ec96117ba8359b",
+      "archive_bytes": 42029441,
+      "trace_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+      "trace_bytes": 164851025,
+      "native_song_end": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "end_position": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "archive_members_verified": 26,
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "native_draws": 2712,
+      "native_texture_units": 1,
+      "model_texture_bindings": true,
+      "bound_texture_draw_counts": {
+        "noteskin:/dance/cyber/textures/Tap Note parts (mipmaps).png": 2712
+      },
+      "native_sampler_state_draw_counts": [
+        {
+          "filtering": true,
+          "wrapping": true,
+          "sphere": false,
+          "draws": 2712
+        }
+      ],
+      "comparison_exit_code": 101,
+      "comparisons_passed": 12565528,
+      "comparisons_failed": 2712,
+      "distinct_gap_messages": [
+        "Model def-0220 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0220 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0310 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0310 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0223 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0223 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0313 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0313 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation"
+      ],
+      "native_binding_comparisons_failed": 0,
+      "scope": "Every recorded original Model update; local/world/view/clip/NDC/screen geometry, normals, UVs, matrix scale, unlit colors, pass state, bound image identity and sphere state compared. No per-draw sampler representation or independent framebuffer proof.",
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 11.286168899852782,
+          "log_sha256": "ded0da018c9b38a32c24f6c5990d06c412901242548477f50f49c2e3666c73d4"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 101,
+          "seconds": 267.555501899682,
+          "log_sha256": "1294a56a2c5bef2df475ac412248ef8512f8a3e9533be71246452e88056be151"
+        }
+      ],
+      "schema_controls_passed": 3,
+      "schema_controls_log_sha256": "a157193e19828aa39132920f7f29e223a3f3a6ff1547a55b2411e2731b2094a3",
+      "archive_guard_passed": 1,
+      "archive_guard_log_sha256": "0591aa8d56b10ad9df9387ed74642dc104196d219a799dd84a90f7ec80fb4f66",
+      "original_song_and_cyber_sources_unchanged": true,
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "production per-draw filtering and wrapping including forced secondary filtering",
+        "physical multi-image material selection and per-image wrapping",
+        "independent framebuffer and sphere GPU coordinate verification",
+        "lighting and additional depth/cull/target states",
+        "empty meshes, late Model creation and remaining original corpus contexts"
+      ]
+    }
   ]
 }

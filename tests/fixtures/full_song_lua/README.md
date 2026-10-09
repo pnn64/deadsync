@@ -181,3 +181,25 @@ per-image wrapping, physical texture identity, sphere GPU coordinates,
 lighting, other render states and framebuffer validation remain open.
 No original archive was replaced or accepted by this control repair.
 The whole-song Model guard stays closed and full corpus work continues.
+
+The original KABOOM case 18 was recaptured privately with harness 0.1.42
+at `a80f15b`, using unchanged song and Cyber inputs. The archive reaches
+the original endpoint and retains all eight Model tracks at all 11,969
+updates (95,752 samples). Every one of its 2,712 draws now records a
+bound source image, filtering, wrapping and sphere state.
+
+The current comparator at `1c083768b` requires that metadata and compares
+actual submitted image identities, resolving noteskin paths only through
+the verified native inventory. It passes 12,565,528 of 12,568,240 checks
+on this fresh capture. The 2,712 failed observations all report the
+missing production per-draw sampler representation, with eight distinct
+pass messages. Recorded geometry, transforms, UVs, unlit colors, image
+identities and sphere flags produced no other failures. This original
+scene binds one Cyber image; it does not close multi-image atlas gaps.
+
+Three metadata controls and the archive guard pass. Root debug symbols
+were disabled only by the test command after the ordinary Windows bin
+link hit a PDB limit; repository build settings were preserved. The audit
+retains the exact source, executable, archive, trace and log hashes.
+The failed diagnostic archive remains private, the canonical index is
+unchanged and the whole-song Model acceptance guard remains closed.
