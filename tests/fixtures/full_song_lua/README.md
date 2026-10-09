@@ -203,3 +203,29 @@ link hit a PDB limit; repository build settings were preserved. The audit
 retains the exact source, executable, archive, trace and log hashes.
 The failed diagnostic archive remains private, the canonical index is
 unchanged and the whole-song Model acceptance guard remains closed.
+
+
+The sampler gap from that capture is closed for its recorded draws by
+`455663e3f`. Model filtering/wrapping now travels through the render IR,
+batching, clipping and all five backends. Immutable GPU sampler bindings
+are prepared at texture creation. Nearest overrides sample the base image;
+secondary materials force linear filtering; diffuse/glow retain Actor
+sampling; Model wrapping starts enabled as in the native constructor.
+
+The current frozen comparator passes all 12,568,240 recorded comparisons
+on the unchanged harness 0.1.42 original KABOOM capture, including its
+2,712 sampler comparisons. The native image control also checks 732
+sampler booleans across 366 draws through both production builders.
+Renderer controls, playback, application checks, DX12/Vulkan WGPU readback
+and Metal cross-type-checks pass. Fractional UNORM readback permits one
+byte of quantization; nearest and endpoint colors remain exact.
+
+These observations do not establish complete Model framebuffer parity.
+Per-image physical bindings and atlas wrapping, mip/trilinear behavior,
+sphere GPU coordinates, lighting, other render states, empty draws and
+late Model creation still require independent native verification.
+Native Metal, GL and Vulkan backend framebuffer checks also remain open.
+The private archive is retained, the canonical index is unchanged, and
+the complete Model acceptance guard remains closed. All 501 simfiles,
+492 archive contexts, aliases, variants and unindexed sources remain in
+the goal scope.

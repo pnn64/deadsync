@@ -906,5 +906,227 @@
         "empty meshes, late Model creation and remaining original corpus contexts"
       ]
     }
+  ],
+  "native_sampler_revalidations": [
+    {
+      "source_commit": "455663e3f7d19b67011dfa4ce0007b87cf781509",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "comparator_sha256": "ad7fc2ec5e06407aaabad35bc44720efe476f753efbcac5b941e8f5fd0736060",
+      "comparator_profile": "test/debug with CLI-only root package debug=0",
+      "native_trace_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "before_failed_sampler_comparisons": 2712,
+      "after_recorded_comparisons_passed": 12568240,
+      "after_recorded_comparisons_failed": 0,
+      "native_model_tracks": 8,
+      "native_model_updates": 11969,
+      "native_model_samples": 95752,
+      "native_model_draws": 2712,
+      "native_material_control": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "native_material_control_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "native_material_control_draws_both_builders": 366,
+      "native_material_sampler_boolean_checks": 732,
+      "production_contract": "Per-draw filter/wrap participates in batching, clipping and structural frame comparisons. GPU bindings prewarm at texture creation. Nearest overrides sample the base image; secondary Model materials force linear filtering; diffuse/glow retain Actor sampling; Model constructor defaults Repeat.",
+      "native_contract": "Pinned Model.cpp one-unit desktop path and RageDisplay_OGL.cpp filter state; independent native material and original-song captures.",
+      "raster_checks": "Software direct/staged/stripe/environment paths; DX12 and Vulkan WGPU readback on one shared image switching nearest/linear and clamp/repeat. Metal type-checks on x86_64-apple-darwin; native Metal, GL and Vulkan backend framebuffer validation remain open.",
+      "results": [
+        {
+          "receipt": "pass94-renderer-controls-v2.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-render-core",
+            "-p",
+            "deadlib-present",
+            "-p",
+            "deadlib-render-backend-wgpu",
+            "-p",
+            "deadlib-render-backend-vulkan",
+            "-p",
+            "deadlib-render-backend-gl",
+            "-p",
+            "deadlib-render-backend-software",
+            "--lib"
+          ],
+          "seconds": 52.97521260008216,
+          "results": [
+            "test result: ok. 178 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+            "test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+            "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s",
+            "test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+            "test result: ok. 11 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+            "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          ],
+          "log_sha256": "2eb68bc9359dc2cf7bb830f6b22642a98003fe31b8de31559ae0ed379ed5dbeb"
+        },
+        {
+          "receipt": "pass94-frame-compare-v2.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-render-core",
+            "--features",
+            "test-util",
+            "--test",
+            "frame_compare"
+          ],
+          "seconds": 8.655210199765861,
+          "results": [
+            "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          ],
+          "log_sha256": "da6a1a06ba9965bdaba0217ee0dce8d0953e94cc4a5442f327af18557ca4f580"
+        },
+        {
+          "receipt": "pass94-masked-render-v1.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-present",
+            "--test",
+            "masked_render"
+          ],
+          "seconds": 26.47068569995463,
+          "results": [
+            "test result: ok. 156 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+          ],
+          "log_sha256": "666da2bd4701acdac037bb4ecb9224c123d1562ead4a484d35da56da0e655f5b"
+        },
+        {
+          "receipt": "pass94-wgpu-pixels-v2.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-render-backend-wgpu",
+            "--test",
+            "offscreen",
+            "--",
+            "--ignored",
+            "--nocapture"
+          ],
+          "seconds": 16.042052200064063,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.85s"
+          ],
+          "log_sha256": "9dc334cdac2e7797310968b05001dac9012c9847745ab10eeba8ddf7b7b72c20"
+        },
+        {
+          "receipt": "pass94-playback-v3.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadsync-song-lua",
+            "--test",
+            "playback",
+            "--features",
+            "test-support",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 128.1504489001818,
+          "results": [
+            "test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 24.14s"
+          ],
+          "log_sha256": "9c9951560decb80bedbbe8e6a85c468444af0b3201af707b140c6f39a325e823"
+        },
+        {
+          "receipt": "pass94-metal-check-v2.json",
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "deadlib-render-backend-metal",
+            "--target",
+            "x86_64-apple-darwin"
+          ],
+          "seconds": 13.413482600357383,
+          "results": [],
+          "log_sha256": "69b01399f9cb7205e0e22467abcaf6ec34aea9e1d2b2f0d85765f60941f781a5"
+        },
+        {
+          "receipt": "pass94-shell-check-v1.json",
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "deadsync-shell"
+          ],
+          "seconds": 70.57190410001203,
+          "results": [],
+          "log_sha256": "7f4309e336303f16d7752aa8c727d8a60644ad734652c258f0a0f50e68bf3188"
+        },
+        {
+          "receipt": "pass94-render-api-check-v1.json",
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "deadlib-render"
+          ],
+          "seconds": 35.28628099989146,
+          "results": [],
+          "log_sha256": "6a0bc8fb73ede7f0fa7261576a4ac8242df26ed38cc96ac355be057ded50d550"
+        },
+        {
+          "receipt": "pass94-model-metadata-controls-v1.json",
+          "command": [
+            "target/song-lua-archive-passes/pass94-current-material-comparator-v3.exe",
+            "native_model_"
+          ],
+          "seconds": 4.616143099963665,
+          "results": [
+            "test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.01s"
+          ],
+          "log_sha256": "4ec3a3fa56183b0221c85cef35cd0bb94f3e8a5887f8f5b540cb7630d0366d16"
+        },
+        {
+          "receipt": "pass94-archive-model-guard-v1.json",
+          "command": [
+            "target/song-lua-archive-passes/pass94-current-material-comparator-v3.exe",
+            "archive_reference_rejects_missing_model_meshes",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "seconds": 9.800184899941087,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 5.04s"
+          ],
+          "log_sha256": "fbab09bfb84f6c0bd3a06f190d1142d2e6638c9355504c98631b3e1b3656b212"
+        }
+      ],
+      "original_song_and_cyber_sources_unchanged": true,
+      "canonical_fixture_index_changed": false,
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "remaining_required_gaps": [
+        "physical per-image bindings and atlas wrapping",
+        "mip storage and native trilinear sampling",
+        "independent native framebuffer comparisons",
+        "sphere GPU coordinates",
+        "lighting and other depth/cull/target states",
+        "empty draws and late Model creation",
+        "all 501 sources, 492 contexts, aliases, historical variants and unindexed simfiles"
+      ],
+      "diagnostic_results": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "seconds": 11.17613280005753,
+          "exit_code": 0,
+          "log_sha256": "54e0e2e1ba66126726b3e16cba49238db64c4d5cb2bb3ae41ab2d87fd453a9e3"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "seconds": 241.1746686999686,
+          "exit_code": 0,
+          "log_sha256": "b3d9ed2ddd2d8995eaad7a2652547a55d90ecbab04a60c522d5838017b4a5edc"
+        }
+      ]
+    }
   ]
 }
