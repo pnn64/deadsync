@@ -1,6 +1,5 @@
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
-use image::image_dimensions;
 use mlua::{FromLua, Function, Lua, MultiValue, Table, Value, ffi};
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -5111,7 +5110,7 @@ pub fn actor_base_size(actor: &Table) -> mlua::Result<(f32, f32)> {
 pub fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
     if let Some(path) = actor_texture_path(actor)?
         && is_song_lua_image_path(&path)
-        && let Ok((width, height)) = image_dimensions(&path)
+        && let Ok((width, height)) = deadlib_assets::texture_source_size(&path)
     {
         return Ok(Some((width as f32, height as f32)));
     }
@@ -5179,7 +5178,7 @@ fn image_source_size(path: &Path) -> Option<(f32, f32)> {
     if !is_song_lua_image_path(path) {
         return None;
     }
-    let (width, height) = image_dimensions(path).ok()?;
+    let (width, height) = deadlib_assets::texture_source_size(path).ok()?;
     // RageBitmapTexture applies the res override before halving doubleres.
     let (width, height) = deadlib_assets::texture_source_dims_from_real(
         path.to_string_lossy().as_ref(),

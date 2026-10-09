@@ -523,6 +523,86 @@ mod tests {
     use deadlib_render_core::SamplerFilter;
 
     #[test]
+    fn native_indexed_bitmap_pixels() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let cases: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("cases.json")).expect("native indexed manifest"),
+        )
+        .expect("native indexed case JSON");
+        let cases = cases.as_array().expect("native indexed cases");
+        assert_eq!(cases.len(), 33);
+        let mut failures = Vec::new();
+        for case in cases {
+            let name = case["name"].as_str().expect("case name");
+            let source = root.join(case["file"].as_str().expect("source file"));
+            let (width, height) =
+                deadlib_assets::texture_source_size(&source).expect("native source dimensions");
+            assert_eq!(
+                serde_json::json!([width, height]),
+                case["source"],
+                "{name}: source metadata"
+            );
+            let model = case["kind"] == "model";
+            let key = canonical_texture_key(&source);
+            let key = if model { model_texture_key(&key) } else { key };
+            let job = texture_decode_job(&key, model);
+            let image = match deadlib_assets::decode_texture_image(&job.path, &job.hints) {
+                Ok(image) => image,
+                Err(error) => {
+                    failures.push(format!("{name}: {error}"));
+                    continue;
+                }
+            };
+            if serde_json::json!([image.width(), image.height()]) != case["output"] {
+                failures.push(format!(
+                    "{name}: dimensions {:?}, native {}",
+                    image.dimensions(),
+                    case["output"]
+                ));
+                continue;
+            }
+            let native = fs::read(root.join(format!("{name}.rgba"))).expect("native upload bytes");
+            if let Some((index, (actual, expected))) = image
+                .as_raw()
+                .iter()
+                .zip(&native)
+                .enumerate()
+                .find(|(_, (actual, expected))| actual != expected)
+            {
+                failures.push(format!(
+                    "{name}: byte {index}, actual={actual}, native={expected}"
+                ));
+            }
+            assert_eq!(image.as_raw().len(), native.len(), "{name}: byte count");
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn native_indexed_model_dimensions() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let piece = root.join("model.txt");
+        let slots = crate::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+            .expect("native first-frame GIF Model material");
+        let key = slots[0].texture_key();
+        assert_eq!(
+            deadlib_assets::texture_dims(key).map(|meta| (meta.w, meta.h)),
+            Some((8, 8))
+        );
+        let job = texture_decode_job(key, true);
+        let image = deadlib_assets::decode_texture_image(&job.path, &job.hints)
+            .expect("prepared GIF Model image");
+        let native =
+            fs::read(root.join("gif-offset-model.rgba")).expect("native GIF upload pixels");
+        assert_eq!(image.dimensions(), (8, 8));
+        assert_eq!(image.as_raw(), &native);
+    }
+
+    #[test]
     fn native_prepared_pixels() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/itgmania-song-lua-micro/model-texture-preparation");

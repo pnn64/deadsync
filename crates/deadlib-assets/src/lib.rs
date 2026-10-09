@@ -20,6 +20,7 @@ pub use choice::TextureChoice;
 pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
 pub use decode::{
     TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset, texture_image_size,
+    texture_source_size,
 };
 pub use error::AssetError;
 pub use font::{

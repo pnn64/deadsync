@@ -1011,6 +1011,7 @@ dependencies = [
  "deadlib-render",
  "deadlib-render-core",
  "deadlib-video",
+ "gif",
  "image",
  "log",
  "memchr",

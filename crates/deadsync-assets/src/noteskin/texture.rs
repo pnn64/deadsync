@@ -25,7 +25,7 @@ use deadsync_noteskin::{
     neg_rot_sin_cos, sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing,
     sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation_owned,
 };
-use image::image_dimensions;
+use deadlib_assets::texture_source_size;
 use log::warn;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
@@ -823,7 +823,7 @@ pub fn itg_register_texture_dims_for_path(path: &Path) {
     if assets::texture_dims(&key).is_some() {
         return;
     }
-    if let Ok((w, h)) = image_dimensions(path) {
+    if let Ok((w, h)) = texture_source_size(path) {
         assets::register_texture_dims(&key, w, h);
     }
 }
@@ -889,7 +889,7 @@ fn model_image_keys(animation: &ItgTextureAnimation) -> Result<Arc<[Arc<str>]>, 
         .iter()
         .map(|frame| {
             let (width, height) =
-                image_dimensions(&frame.path).map_err(|error| error.to_string())?;
+                texture_source_size(&frame.path).map_err(|error| error.to_string())?;
             let key = crate::textures::model_texture_key(&crate::textures::canonical_texture_key(&frame.path));
             let job = crate::textures::texture_decode_job(&key, true);
             let [width, height] = deadlib_assets::texture_image_size([width, height], &job.hints)
@@ -1267,7 +1267,7 @@ pub fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
         return Some((meta.w, meta.h));
     }
     let path = resolve_asset_path(&PathBuf::from("assets").join(key));
-    let (w, h) = image_dimensions(&path).ok()?;
+    let (w, h) = texture_source_size(&path).ok()?;
     // Runtime construction precedes GPU upload. Retain the first header probe
     // so shared sprites and component variants do not reopen the same image.
     assets::register_texture_dims(key, w, h);

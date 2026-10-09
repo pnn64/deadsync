@@ -14087,6 +14087,34 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_reads_native_indexed_dimensions() {
+        let song_dir = test_dir("native-indexed-dimensions");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let entry = song_dir.join("default.lua");
+        for name in ["gif-offset.gif", "gif-first-frame.gif", "os2-4.bmp"] {
+            fs::copy(root.join(name), song_dir.join(name)).expect("copy native indexed file");
+            fs::write(&entry, format!(r#"
+return Def.Sprite{{
+    Texture="{name}",
+    OnCommand=function(self)
+        local texture = self:GetTexture()
+        mod_actions = {{{{1, string.format("%.0f:%.0f:%.0f:%.0f:%.0f:%.0f",
+            self:GetWidth(), self:GetHeight(),
+            texture:GetSourceWidth(), texture:GetSourceHeight(),
+            texture:GetTextureWidth(), texture:GetTextureHeight()), true}}}}
+    end,
+}}
+"#)).expect("indexed Sprite Lua");
+            let compiled = test_compile_song_lua(
+                &entry, &SongLuaCompileContext::new(&song_dir, "Native Indexed Dimensions"),
+            ).expect("compile indexed Sprite source getters");
+            assert_eq!(compiled.messages.len(), 1);
+            assert_eq!(compiled.messages[0].message, "8:8:8:8:8:8", "{name}");
+        }
+    }
+
+    #[test]
     fn compile_song_lua_sprite_resolution_hints() {
         let song_dir = test_dir("sprite-resolution-hints");
         let entry = song_dir.join("default.lua");

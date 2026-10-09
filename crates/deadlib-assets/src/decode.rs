@@ -2,7 +2,7 @@ use crate::{TextureHints, apply_texture_hints, fix_hidden_alpha, open_image_fall
 use deadlib_render_core::SamplerDesc;
 use image::RgbaImage;
 use std::{
-    io::{BufReader, Read},
+    io::{BufReader, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{Condvar, Mutex},
 };
@@ -185,18 +185,205 @@ fn png_error(error: png::DecodingError) -> image::ImageError {
     ))
 }
 
+fn image_signature(path: &Path) -> image::ImageResult<[u8; 8]> {
+    let mut signature = [0; 8];
+    std::fs::File::open(path)?.read_exact(&mut signature)?;
+    Ok(signature)
+}
+
+/// Raw native texture dimensions before resolution hints or image preparation.
+/// GIF textures use the first frame's dimensions, ignoring canvas and offsets.
+pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
+    let signature = image_signature(path)?;
+    if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
+        let mut reader = gif_reader(path)?;
+        let frame = reader
+            .next_frame_info()
+            .map_err(gif_error)?
+            .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
+        return Ok((u32::from(frame.width), u32::from(frame.height)));
+    }
+    image::ImageReader::open(path)?
+        .with_guessed_format()?
+        .into_dimensions()
+}
+
 fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let mut signature = [0u8; 8];
-    let mut input = std::fs::File::open(path)?;
-    let count = input.read(&mut signature)?;
-    if count == 8 && signature == *b"\x89PNG\r\n\x1a\n" {
+    let signature = image_signature(path)?;
+    if signature == *b"\x89PNG\r\n\x1a\n" {
         return decode_png(path, color_key);
+    }
+    if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
+        return decode_gif(path, color_key);
+    }
+    if &signature[..2] == b"BM" {
+        if let Some(image) = decode_indexed_bmp(path, color_key)? {
+            return Ok(image);
+        }
     }
     let mut image = open_image_fallback(path)?.into_rgba8();
     if color_key {
         key_rgba(&mut image);
     }
     Ok(image)
+}
+
+fn decode_error(format: image::ImageFormat, message: &str) -> image::ImageError {
+    image::ImageError::Decoding(image::error::DecodingError::new(format.into(), message))
+}
+
+fn gif_error(error: gif::DecodingError) -> image::ImageError {
+    image::ImageError::Decoding(image::error::DecodingError::new(
+        image::ImageFormat::Gif.into(),
+        error,
+    ))
+}
+
+fn gif_reader(path: &Path) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
+    let mut options = gif::DecodeOptions::new();
+    options.set_color_output(gif::ColorOutput::Indexed);
+    let limit = std::num::NonZeroU64::new(image::Limits::default().max_alloc.unwrap_or(u64::MAX))
+        .ok_or_else(image_limit)?;
+    options.set_memory_limit(gif::MemoryLimit::Bytes(limit));
+    options
+        .read_info(BufReader::new(std::fs::File::open(path)?))
+        .map_err(gif_error)
+}
+
+fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
+    let mut reader = gif_reader(path)?;
+    let global = reader.global_palette().map(<[u8]>::to_vec);
+    let frame = reader
+        .next_frame_info()
+        .map_err(gif_error)?
+        .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
+    let size = [u32::from(frame.width), u32::from(frame.height)];
+    if size.contains(&0) {
+        return Err(image_limit());
+    }
+    check_image_alloc(size)?;
+    // RageSurface_Load_GIF leaves unused palette entries transparent black.
+    let mut colors = [[0; 4]; 256];
+    for (color, rgb) in colors.iter_mut().zip(
+        frame
+            .palette
+            .as_deref()
+            .or(global.as_deref())
+            .unwrap_or_default()
+            .chunks_exact(3),
+    ) {
+        *color = [rgb[0], rgb[1], rgb[2], 255];
+    }
+    if let Some(index) = frame.transparent {
+        colors[index as usize][3] = 0;
+    }
+    if color_key {
+        key_palette(&mut colors);
+    }
+    let mut indices = vec![0; size[0] as usize * size[1] as usize];
+    reader.read_into_buffer(&mut indices).map_err(gif_error)?;
+    let mut image = RgbaImage::new(size[0], size[1]);
+    for (pixel, index) in image.pixels_mut().zip(indices) {
+        pixel.0 = colors[index as usize];
+    }
+    Ok(image)
+}
+
+// Native indexed BMP parsing stays together: DIB12/DIB40 headers, palette,
+// padded bottom-up rows and bit unpacking share the file offset contract.
+// Other BMP formats retain the existing decoder pending native mask validation.
+fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
+    let mut input = BufReader::new(std::fs::File::open(path)?);
+    let mut header = [0; 54];
+    input.read_exact(&mut header[..18])?;
+    let le32 = |offset| {
+        u32::from_le_bytes([
+            header[offset],
+            header[offset + 1],
+            header[offset + 2],
+            header[offset + 3],
+        ])
+    };
+    let header_size = le32(14);
+    if !matches!(header_size, 12 | 40) {
+        return Ok(None);
+    }
+    let data_offset = le32(10);
+    input.read_exact(&mut header[18..14 + header_size as usize])?;
+    let le16 = |offset| u16::from_le_bytes([header[offset], header[offset + 1]]);
+    let le32 = |offset| {
+        u32::from_le_bytes([
+            header[offset],
+            header[offset + 1],
+            header[offset + 2],
+            header[offset + 3],
+        ])
+    };
+    let (size, planes, bits, compression, declared_colors) = if header_size == 12 {
+        (
+            [u32::from(le16(18)), u32::from(le16(20))],
+            le16(22),
+            le16(24),
+            0,
+            0,
+        )
+    } else {
+        ([le32(18), le32(22)], le16(26), le16(28), le32(30), le32(46))
+    };
+    if !matches!(bits, 1 | 4 | 8) || compression != 0 {
+        return Ok(None);
+    }
+    if size.contains(&0) {
+        return Err(image_limit());
+    }
+    check_image_alloc(size)?;
+    let color_count = if declared_colors == 0 {
+        1 << bits
+    } else {
+        declared_colors
+    };
+    if planes != 1 || color_count > 256 {
+        return Err(decode_error(
+            image::ImageFormat::Bmp,
+            "invalid indexed BMP planes or palette size",
+        ));
+    }
+    let mut colors = [[0; 4]; 256];
+    for color in &mut colors[..color_count as usize] {
+        let mut entry = [0; 4];
+        input.read_exact(&mut entry[..if header_size == 12 { 3 } else { 4 }])?;
+        *color = [entry[2], entry[1], entry[0], 255];
+    }
+    if color_key {
+        key_palette(&mut colors);
+    }
+    let pitch = usize::try_from((u64::from(size[0]) * u64::from(bits)).div_ceil(32) * 4)
+        .map_err(|_| image_limit())?;
+    let mut row = vec![0; pitch];
+    input.seek(SeekFrom::Start(u64::from(data_offset)))?;
+    let mut image = RgbaImage::new(size[0], size[1]);
+    for y in (0..size[1]).rev() {
+        input.read_exact(&mut row)?;
+        for x in 0..size[0] {
+            let index = match bits {
+                1 => (row[x as usize / 8] >> (7 - x % 8)) & 1,
+                // Pinned RageSurface_Load_BMP reads the low nibble first,
+                // including the padding nibble at the end of an odd row.
+                4 => (row[x as usize / 2] >> (4 * (x % 2))) & 15,
+                _ => row[x as usize],
+            };
+            image.put_pixel(x, y, image::Rgba(colors[index as usize]));
+        }
+    }
+    Ok(Some(image))
+}
+
+fn key_palette(colors: &mut [[u8; 4]; 256]) {
+    for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
+        if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
+            color[3] = 0;
+        }
+    }
 }
 
 // PNG indexed entries must remain distinct: native palette color keying
@@ -248,11 +435,7 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
             ];
         }
         if color_key {
-            for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
-                if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
-                    color[3] = 0;
-                }
-            }
+            key_palette(&mut colors);
         }
         let bits = info.bit_depth as usize;
         for (x, y, pixel) in image.enumerate_pixels_mut() {
@@ -472,6 +655,24 @@ mod tests {
             },
             hints: TextureHints::default(),
         }
+    }
+
+    #[test]
+    fn indexed_bmp_rejects_truncation_and_excessive_allocation() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8.bmp");
+        let original = std::fs::read(source).expect("indexed BMP input");
+        let path =
+            std::env::temp_dir().join(format!("invalid-indexed-bmp-{}.bmp", std::process::id()));
+        let mut truncated = original.clone();
+        truncated.pop();
+        let mut oversized = original;
+        oversized[18..22].copy_from_slice(&u32::MAX.to_le_bytes());
+        for bytes in [truncated, oversized] {
+            std::fs::write(&path, bytes).expect("invalid BMP source");
+            assert!(decode_texture_image(&path, &TextureHints::default()).is_err());
+        }
+        std::fs::remove_file(path).expect("remove invalid BMP inputs");
     }
 
     #[test]
