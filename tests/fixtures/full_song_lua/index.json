@@ -620,12 +620,10 @@
     {
       "title": "[08] And Drugs↑↑",
       "source_simfile": "[08] And Drugs - (NO CMOD)/and drugs.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a.tar.zst",
-      "sha256": "9c2eb069df348266cf485de5b6166e404205d072072350fd9091846e4fd7cd4a",
-      "compressed_bytes": 237731,
-      "uncompressed_sha256": "4b068930bc02e05e2ed13b2022c8c4eecd37318294577374ec12f58f9d301fff",
-      "compression_level": 22,
+      "harness_version": "0.1.51",
+      "archive": "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d.tar.zst",
+      "sha256": "b9ce99dda3a745779ad065f03819360a67c2712d75ab9985cccbfc03424ac19d",
+      "compressed_bytes": 255421,
       "aliases": [
         "52fbe29fb4aabcc390cff8d467dd701307e0cc4f320c52e0c43cd60e0310f48f.tar.zst"
       ]

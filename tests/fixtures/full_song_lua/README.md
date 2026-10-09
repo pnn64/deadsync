@@ -554,3 +554,15 @@ was compiled and compared in order; execution stops at the next failure.
 See `native-revalidation-pass109.json`. Position 31 is next.
 The original 501-source/492-context scope and additional pending
 observations remain active. Full corpus and framebuffer parity are open.
+
+## Ordered fixture validation, pass 110
+
+Position 31, And Drugs, passes 182,791 comparisons against committed
+DeadSync `e645dfdda`. Its older continuous-bpm clock was rejected. The
+complete harness 0.1.51 capture supplies native timing and records 7,634
+updates over 127.20 seconds, with no native errors or dropped events.
+Original chart and Lua bytes, the previous archive, and aliases are retained.
+
+See `native-revalidation-pass110.json`. Position 32 is next. The original
+501-source/492-context scope and additional pending observations remain
+active. Full corpus and framebuffer parity are still open.
