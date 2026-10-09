@@ -507,3 +507,21 @@ version. See `native-revalidation-pass105.json`. Position 20 is next;
 the original 501-source/492-context scope remains active. These checks
 establish the captured semantics and represented render states; native
 GPU framebuffer parity and unsupported rendering profiles remain open.
+
+## Ordered fixture validation, pass 106
+
+Positions 20 through 24 pass 15,929,057 comparisons
+on committed DeadSync `fb9d04ed4`. Position 20
+initially stopped because its old harness 0.1.31 capture omitted
+Actor base rotation. Its original chart and Lua files are unchanged;
+a complete harness 0.1.51 native capture supplies the missing observations.
+The previous archive and historical aliases remain available.
+
+Position 20 records 11,969 updates over
+199.46 seconds, with no native runtime errors or
+dropped events; 14,842,953 comparisons pass.
+
+See `native-revalidation-pass106.json`. Position 25 is next.
+The original 501-source/492-context scope remains active. Full corpus,
+unsupported rendering profiles, and native GPU framebuffer parity
+remain incomplete.

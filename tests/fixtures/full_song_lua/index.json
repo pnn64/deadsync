@@ -451,12 +451,10 @@
     {
       "title": "303|MODS|[lv.memes] KABOOOOOM!!!!",
       "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
-      "harness_version": "0.1.31",
-      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
-      "sha256": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249",
-      "compressed_bytes": 35920333,
-      "uncompressed_sha256": "73191834e7cfc89ae4f55856695d6ca112b914deabf77bfd536fba3ecbb934a5",
-      "compression_level": 12,
+      "harness_version": "0.1.51",
+      "archive": "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98.tar.zst",
+      "sha256": "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98",
+      "compressed_bytes": 42080019,
       "aliases": [
         "c1edd24b0ae42410e8bdf8c3ccd83103f46dbe00c8e6e2f69b3a8de772c5a2c9.tar.zst",
         "fff20dd9abb30d919056f85583f7481f46d3cf3f99fd05d5bbfe0f71eaab6a5f.tar.zst",
