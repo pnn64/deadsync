@@ -60,7 +60,7 @@ fn multitap_fixtures_pin_noteskin() {
 }
 
 #[test]
-fn edgar_countdown_onsets_and_hit_commands() {
+fn edgar_native_hits_match() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
     assert_eq!(
@@ -72,6 +72,36 @@ fn edgar_countdown_onsets_and_hit_commands() {
     check_edgar_model_squash(compiled, &context);
     check_edgar_tap_draws(compiled, &context);
     check_edgar_texture_phase(compiled, &context);
+    for player in 1..=2 {
+        for lane in 1..=4 {
+            for grade in ["W1", "W2", "W3", "W4", "W5"] {
+                let message = format!("__songlua_tap_{player}_{lane}_{grade}");
+                assert!(
+                    compiled.overlays.iter().any(|actor| {
+                        actor.message_commands.iter().any(|command| {
+                            command.message == message
+                                && overlay_state_after_blocks(
+                                    actor.initial_state,
+                                    &command.blocks,
+                                    0.0,
+                                )
+                                .diffuse[3]
+                                    > 0.99
+                        })
+                    }),
+                    "P{player} lane {lane} {grade} must light a noteskin explosion"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn edgar_countdown_onsets_and_hit_commands() {
+    crate::paths::init();
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
+    let (layers, primary, context) = compile_trace_song(&trace);
+    let compiled = &layers[primary];
     let named = |name: &str| {
         compiled
             .overlays
@@ -122,26 +152,6 @@ fn edgar_countdown_onsets_and_hit_commands() {
                     let speed = 0.3 + 0.7 * ((beat - 96.0) / 16.0).clamp(0.0, 1.0);
                     assert!((states[frame].y - (-135.0 + travel * speed * 64.0)).abs() < 0.015);
                 }
-            }
-            let prefix = format!("__songlua_tap_{player}_{lane}_");
-            for grade in ["W1", "W2", "W3", "W4", "W5"] {
-                assert!(
-                    compiled
-                        .overlays
-                        .iter()
-                        .any(
-                            |actor| actor.message_commands.iter().any(|command| command.message
-                                == format!("{prefix}{grade}")
-                                && overlay_state_after_blocks(
-                                    actor.initial_state,
-                                    &command.blocks,
-                                    0.0
-                                )
-                                .diffuse[3]
-                                    > 0.99)
-                        ),
-                    "P{player} lane {lane} {grade} must light a noteskin explosion"
-                );
             }
         }
     }
@@ -365,7 +375,6 @@ fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileCon
 fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
     use deadsync_song_lua::playback::{actor_conformance::WholeSongComposer, foreground_elapsed};
     let screen = [context.screen_width, context.screen_height];
-    let mut composer = WholeSongComposer::new(&compiled.overlays);
     let arrow = compiled
         .overlays
         .iter()
@@ -396,9 +405,14 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
     let SongLuaOverlayKind::NoteskinActor { slots, .. } = &compiled.overlays[arrow].kind else {
         panic!("compiled multitap must retain its actual noteskin model");
     };
-    let baseline = composer.render_overlay(&compiled.overlays, &states, arrow, screen, 0.0, beat);
-    assert_eq!(baseline.tmesh_instances.len(), slots.len());
     assert!(slots.iter().any(|slot| slot.uv_velocity == [0.0, -1.0]));
+    let layers = slots
+        .iter()
+        .map(|slot| {
+            deadsync_assets::song_lua::model_layer_from_slot(slot)
+                .expect("actual noteskin material metadata")
+        })
+        .collect::<Vec<_>>();
     let fixture: Value = serde_json::from_slice(
         &fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -410,11 +424,38 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
     for case in fixture["cases"].as_array().expect("native texture cases") {
         let start = case["start_second"].as_f64().expect("start") as f32;
         let rate = case["music_rate"].as_f64().expect("rate") as f32;
-        for sample in case["samples"].as_array().expect("native texture samples") {
+        let samples = case["samples"].as_array().expect("native texture samples");
+        // actor_oracle.cpp evaluate_texture feeds 120 Hz deltas, with a
+        // partial final update at every query. Float accumulation depends on
+        // those inputs; the song's 60 Hz replay is a different schedule.
+        let mut updates = vec![(0.0, 0.0)];
+        let mut updated = 0.0_f64;
+        for sample in samples {
+            let music = sample["music_second"].as_f64().expect("music time") as f32;
+            let target = f64::from(foreground_elapsed(music, start, rate));
+            while updated < target {
+                let delta = (1.0 / 120.0_f64).min(target - updated);
+                updated += delta;
+                updates.push((updated as f32, delta as f32));
+            }
+        }
+        let mut overlays = compiled.overlays.clone();
+        let SongLuaOverlayKind::NoteskinActor { texture_samples, .. } = &mut overlays[arrow].kind
+        else {
+            unreachable!("checked noteskin model above");
+        };
+        *texture_samples = layers
+            .iter()
+            .map(|layer| deadsync_song_lua::replay_model_texture(layer, &updates))
+            .collect();
+        let mut composer = WholeSongComposer::new(&overlays);
+        let baseline = composer.render_overlay(&overlays, &states, arrow, screen, 0.0, beat);
+        assert_eq!(baseline.tmesh_instances.len(), slots.len());
+        for sample in samples {
             let music = sample["music_second"].as_f64().expect("music time") as f32;
             let elapsed = foreground_elapsed(music, start, rate);
             let actual =
-                composer.render_overlay(&compiled.overlays, &states, arrow, screen, elapsed, beat);
+                composer.render_overlay(&overlays, &states, arrow, screen, elapsed, beat);
             assert_eq!(actual.tmesh_instances.len(), slots.len());
             for ((actual, base), slot) in actual
                 .tmesh_instances

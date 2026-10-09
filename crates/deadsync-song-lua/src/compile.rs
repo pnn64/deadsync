@@ -644,6 +644,7 @@ where
     compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     compile_timer.push_stage("note_hides");
+    crate::multitap::install_multitap_hits(&lua, context, &mut overlays)?;
     crate::model_texture::install(&lua, &overlays, model_layer_from_slot);
     let (
         update_eases,
