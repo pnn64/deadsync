@@ -319,7 +319,7 @@ impl WholeSongComposer {
                     texture_key: Some(texture_key),
                     ..
                 } => queue_texture(&mut assets, texture_key),
-                SongLuaOverlayKind::NoteskinActor { slots } => {
+                SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     for slot in slots.iter() {
                         queue_texture(&mut assets, slot.texture_key_shared().as_ref());
                     }

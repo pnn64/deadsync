@@ -7,7 +7,7 @@ use deadsync_noteskin::mine::{
     MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
     mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
 };
-use deadsync_noteskin::model::{ItgModelSlotPlan, ItgTextureAnimation};
+use deadsync_noteskin::model::{ItgModelSlotPlan, ItgTextureAnimation, ItgTextureState};
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
 use deadsync_noteskin::script::{
@@ -174,6 +174,7 @@ fn next_slot_id() -> u64 {
 pub struct SpriteSlot {
     pub sphere_mapped: bool,
     pub model_animation_length: f32,
+    pub model_texture_states: Arc<[ItgTextureState]>,
     pub model_additive: Option<Arc<SpriteSlot>>,
     stable_id: u64,
     pub def: SpriteDefinition,
@@ -208,6 +209,7 @@ impl Clone for SpriteSlot {
         Self {
             sphere_mapped: self.sphere_mapped,
             model_animation_length: self.model_animation_length,
+            model_texture_states: Arc::clone(&self.model_texture_states),
             model_additive: self.model_additive.clone(),
             stable_id: next_slot_id(),
             def: self.def.clone(),
@@ -401,34 +403,31 @@ impl SpriteSlot {
             }
             return uv;
         }
-        let uv = match self.source.as_ref() {
+        let uv = self.uv_for_frame(frame_index);
+
+        // ITG model textures can scroll via AnimatedTexture TexVelocity/TexOffset.
+        // NoteDisplay seeks its cached Model before drawing. Foreground Model
+        // Update history is captured separately by the song Lua compiler.
+        let scale = self.uv_translation_scale();
+        sprite_scrolled_uv(
+            uv,
+            [self.uv_velocity[0] * scale[0], self.uv_velocity[1] * scale[1]],
+            [self.uv_offset[0] * scale[0], self.uv_offset[1] * scale[1]],
+            elapsed,
+            self.model.is_some().then_some(self.uv_cycle_seconds).flatten(),
+        )
+    }
+
+    /// Cached image coordinates before any native material translation.
+    pub fn uv_for_frame(&self, frame_index: usize) -> [f32; 4] {
+        match self.source.as_ref() {
             SpriteSource::Atlas { uv_cache, .. } => uv_cache.get(self.model.is_none()),
             SpriteSource::Animated {
                 frame_indices,
                 uv_cache,
                 ..
             } => uv_cache.get(frame_indices.as_deref(), frame_index, self.model.is_none()),
-        };
-
-        // ITG model textures can scroll via AnimatedTexture TexVelocity/TexOffset.
-        // ITGmania applies TexVelocity over the animation cycle percentage, not
-        // raw seconds (see AnimatedTexture::GetTextureTranslate), so keep model
-        // UVs on that clock. Packed model frames retain translations in the
-        // original image's UV units, just like NoteDisplay's note-color offsets.
-        let scale = self.uv_translation_scale();
-        sprite_scrolled_uv(
-            uv,
-            [
-                self.uv_velocity[0] * scale[0],
-                self.uv_velocity[1] * scale[1],
-            ],
-            [self.uv_offset[0] * scale[0], self.uv_offset[1] * scale[1]],
-            elapsed,
-            self.model
-                .is_some()
-                .then_some(self.uv_cycle_seconds)
-                .flatten(),
-        )
+        }
     }
 
     #[inline(always)]
@@ -628,6 +627,7 @@ pub fn test_model_slot() -> SpriteSlot {
     SpriteSlot {
         sphere_mapped: false,
         model_animation_length: 1.0,
+        model_texture_states: Arc::from([]),
         model_additive: None,
         stable_id: next_slot_id(),
         def: SpriteDefinition::default(),
@@ -771,6 +771,7 @@ pub fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
 pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
     slot.sphere_mapped = plan.sphere_mapped;
     slot.model_animation_length = plan.animation_length;
+    slot.model_texture_states = plan.texture_states;
     slot.model_additive = plan.additive.and_then(|texture| {
         let mut additive = itg_slot_from_path_all_frames(&texture.texture_path, None, false)?;
         additive.sphere_mapped = texture.sphere_mapped;
@@ -1066,6 +1067,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     SpriteSlot {
         sphere_mapped: false,
         model_animation_length: 1.0,
+        model_texture_states: Arc::from([]),
         model_additive: None,
         stable_id: next_slot_id(),
         def,

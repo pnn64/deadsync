@@ -157,6 +157,9 @@ pub(super) fn validate_models(trace: &NativeTrace) -> Result<(), String> {
     if trace.capabilities["actor_base_rotation"].as_bool() != Some(true) {
         return Err("native Model reference omits Actor base rotation; recapture with harness 0.1.38 or newer".into());
     }
+    if trace.capabilities["model_texture_matrix_scale"].as_bool() != Some(true) {
+        return Err("native Model reference omits per-vertex texture matrix scaling; recapture with harness 0.1.39 or newer".into());
+    }
     for dimension in [trace.display.width, trace.display.height] {
         if !dimension.is_finite()
             || dimension <= 0.0
@@ -750,6 +753,7 @@ fn native_model_columns_reject_incomplete_observations() {
         ("/model_geometry_tracks/0/samples", serde_json::json!([])),
         ("/model_geometry_tracks", serde_json::json!([])),
         ("/capabilities/actor_base_rotation", serde_json::json!(false)),
+        ("/capabilities/model_texture_matrix_scale", serde_json::json!(false)),
         ("/capabilities", serde_json::json!({})),
     ] {
         let mut changed = value.clone();
@@ -812,7 +816,7 @@ fn model_trace_value() -> Value {
         "timeline_tracks":[],"tween_tracks":[],"end_position":{"seconds":1},
         "display":{"width":854,"height":480,"logical_width":854,"logical_height":480},
         "fixture_context":{"beat_step":0.25},"trace_until_beat":1,
-        "capabilities":{"actor_base_rotation":true},
+        "capabilities":{"actor_base_rotation":true,"model_texture_matrix_scale":true},
         "update_frames":[[0,0],[1,1]],"model_geometry_encoding":"column-buffer-v1",
         "model_geometry_sample_clock":"update_frames","model_geometry_buffers":buffers,
         "model_geometry_tracks":[{"actor":"actor","definition_id":"actor","class":"Model","native_loaded":true,
@@ -879,7 +883,7 @@ fn native_model_initial_frames_match_selected_trace() {
         let states = compiled_overlay_states_at(&compiled[layer], &context, *beat as f32, *seconds as f32);
         let actor = &compiled[layer].overlays[index];
         eprintln!("{} {} state {:?}", track.actor, kind_name(&actor.kind), states[index]);
-        if let SongLuaOverlayKind::NoteskinActor { slots } = &actor.kind {
+        if let SongLuaOverlayKind::NoteskinActor { slots, .. } = &actor.kind {
             for slot in slots.iter() {
                 eprintln!("slot rotation {} draw {:?}", slot.def.rotation_deg,
                     slot.model_draw_at(*seconds as f32, *beat as f32));

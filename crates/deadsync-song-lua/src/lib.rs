@@ -26,6 +26,12 @@ mod host;
 mod json;
 mod lua_util;
 mod mod_windows;
+mod model_texture;
+pub use model_texture::{
+    SongLuaModelTextureFrame, SongLuaModelTextureUv, SongLuaTextureSample, model_texture_at,
+};
+#[cfg(feature = "test-support")]
+pub use model_texture::replay_model_texture;
 mod multitap;
 mod net;
 mod noteskin;
@@ -1951,7 +1957,7 @@ impl SongLuaOverlayModelDraw {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SongLuaOverlayModelLayer<Vertex> {
     pub material: Option<deadsync_noteskin::ModelMaterial>,
     pub texture_key: Arc<str>,
@@ -1964,11 +1970,33 @@ pub struct SongLuaOverlayModelLayer<Vertex> {
     pub uv_tex_shift: [f32; 2],
     pub uv_velocity: [f32; 2],
     pub uv_cycle_seconds: Option<f32>,
+    pub texture_frames: Arc<[SongLuaModelTextureFrame]>,
+    pub texture_samples: Arc<[SongLuaTextureSample]>,
     pub draw: SongLuaOverlayModelDraw,
 }
 
+impl<Vertex> Clone for SongLuaOverlayModelLayer<Vertex> {
+    fn clone(&self) -> Self {
+        Self {
+            material: self.material,
+            texture_key: Arc::clone(&self.texture_key),
+            additive: self.additive.clone(),
+            vertices: Arc::clone(&self.vertices),
+            model_size: self.model_size,
+            uv_scale: self.uv_scale,
+            uv_offset: self.uv_offset,
+            uv_tex_shift: self.uv_tex_shift,
+            uv_velocity: self.uv_velocity,
+            uv_cycle_seconds: self.uv_cycle_seconds,
+            texture_frames: Arc::clone(&self.texture_frames),
+            texture_samples: Arc::clone(&self.texture_samples),
+            draw: self.draw,
+        }
+    }
+}
+
 impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
-    pub const fn new(
+    pub fn new(
         texture_key: Arc<str>,
         vertices: Arc<[Vertex]>,
         model_size: [f32; 2],
@@ -1990,6 +2018,8 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
             uv_tex_shift,
             uv_velocity,
             uv_cycle_seconds,
+            texture_frames: Arc::from([]),
+            texture_samples: Arc::from([]),
             draw,
         }
     }
@@ -2049,6 +2079,7 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
     },
     NoteskinActor {
         slots: Arc<[NoteskinSlot]>,
+        texture_samples: Arc<[Arc<[SongLuaTextureSample]>]>,
     },
     SongMeterDisplay {
         stream_width: f32,

@@ -644,6 +644,7 @@ where
     compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     compile_timer.push_stage("note_hides");
+    crate::model_texture::install(&lua, &overlays, model_layer_from_slot);
     let (
         update_eases,
         update_overlay_eases,
@@ -651,23 +652,29 @@ where
         update_column_transforms,
         stateful_message_captures,
         runtime_broadcasts,
-    ) = match compile_multitap_update_overlays_for_actors(
-        &lua,
-        &root,
-        context,
-        &mut overlays,
-        noteskin_resolver,
-        |overlays, arrow_index, noteskin| {
-            ensure_overlay_arrow_visual(
-                &lua,
-                overlays,
-                arrow_index,
-                noteskin,
-                create_dummy_actor,
-                |noteskin| multitap_arrow_visual_spec(context, noteskin),
-            )
-        },
-    )? {
+    ) = match if crate::model_texture::active(&lua) {
+        // Native material clocks depend on the original actor update tree.
+        // Retain chronological replay instead of replacing it with curves.
+        None
+    } else {
+        compile_multitap_update_overlays_for_actors(
+            &lua,
+            &root,
+            context,
+            &mut overlays,
+            noteskin_resolver,
+            |overlays, arrow_index, noteskin| {
+                ensure_overlay_arrow_visual(
+                    &lua,
+                    overlays,
+                    arrow_index,
+                    noteskin,
+                    create_dummy_actor,
+                    |noteskin| multitap_arrow_visual_spec(context, noteskin),
+                )
+            },
+        )?
+    } {
         Some(eases) => (
             Vec::new(),
             eases,
@@ -886,6 +893,7 @@ where
             }
         }
     }
+    crate::model_texture::take(&lua, &mut overlays);
     let draw_frames = crate::draw_capture::take(&lua, &overlays, &tracked_actors)?;
     let mut overlay_layers = overlays
         .iter()

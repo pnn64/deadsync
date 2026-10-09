@@ -177,7 +177,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                         }
                     }
                 }
-                SongLuaOverlayKind::NoteskinActor { slots } => {
+                SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     for slot in slots.iter() {
                         if slot.model.is_some() {
                             for texture in

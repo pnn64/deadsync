@@ -3319,7 +3319,7 @@ return root
                         .flat_map(|layer| &layer.overlays),
                 ) {
                     match &overlay.kind {
-                        deadsync_assets::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
+                        deadsync_assets::song_lua::SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                             for slot in slots.iter() {
                                 assets.queue_texture_upload(
                                     slot.texture_key().to_owned(),

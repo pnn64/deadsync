@@ -928,7 +928,7 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::ActorMultiVertex { .. } => "ActorMultiVertex",
         SongLuaOverlayKind::Model { .. } => "Model",
         // A compiled noteskin model uses cached slots for rendering.
-        SongLuaOverlayKind::NoteskinActor { slots }
+        SongLuaOverlayKind::NoteskinActor { slots, .. }
             if !slots.is_empty() && slots.iter().all(|slot| slot.model.is_some()) =>
         {
             "Model"

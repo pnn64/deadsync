@@ -4843,6 +4843,7 @@ pub fn actor_valign(actor: &Table) -> mlua::Result<f32> {
 }
 
 pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlua::Result<()> {
+    crate::model_texture::set_state(lua, actor, state_index.min(i32::MAX as u32) as i32);
     // Sprite::SetState changes animation state immediately, outside Actor's
     // tween queue. A same-command state selection must follow Load's reset.
     capture_immediate_u32(lua, actor, "sprite_state_index", state_index)?;
@@ -11592,13 +11593,16 @@ enum SongLuaCompileUpdateJob {
         actor: Table,
         order: usize,
     },
+    Texture {
+        actor: Table,
+    },
 }
 
 struct SongLuaCompileUpdatePlan {
     jobs: Rc<[SongLuaCompileUpdateJob]>,
 }
 
-fn invalidate_compile_update_plan(lua: &Lua) {
+pub(crate) fn invalidate_compile_update_plan(lua: &Lua) {
     lua.remove_app_data::<SongLuaCompileUpdatePlan>();
 }
 
@@ -11656,6 +11660,9 @@ fn collect_compile_update_jobs(
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
         collect_compile_update_jobs(lua, &stream, Some(actor), false, jobs, order)?;
     }
+    if crate::model_texture::contains(lua, actor) {
+        jobs.push(SongLuaCompileUpdateJob::Texture { actor: actor.clone() });
+    }
     if actor
         .get::<Option<Function>>("__songlua_update_function")?
         .is_some()
@@ -11704,6 +11711,7 @@ pub(crate) fn actor_tree_update_only(lua: &Lua, root: &Value, name: &str) -> mlu
         !matches!(
             job,
             SongLuaCompileUpdateJob::Advance { .. } | SongLuaCompileUpdateJob::Enter { .. }
+                | SongLuaCompileUpdateJob::Texture { .. }
         )
     });
     match (jobs.next(), jobs.next()) {
@@ -12039,6 +12047,10 @@ pub fn run_actor_compile_update_functions_with_delta(
         .expect("phase installed");
     let result = (|| {
         for job in jobs.iter() {
+            if let SongLuaCompileUpdateJob::Texture { actor } = job {
+                crate::model_texture::update(lua, actor);
+                continue;
+            }
             let (actor, order) = match job {
                 SongLuaCompileUpdateJob::Enter {
                     actor,
@@ -12061,6 +12073,9 @@ pub fn run_actor_compile_update_functions_with_delta(
                         })?,
                         None => Some(delta_seconds as f32),
                     };
+                    // Model::Update passes the original delta to its materials
+                    // after Actor::Update, even if that Actor is hibernating.
+                    crate::model_texture::begin(lua, actor, incoming);
                     let delta = incoming
                         .map(|delta| advance_hibernation(lua, actor, delta))
                         .transpose()?
@@ -12080,6 +12095,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                 SongLuaCompileUpdateJob::Advance { actor, order, .. }
                 | SongLuaCompileUpdateJob::Recurring { actor, order, .. }
                 | SongLuaCompileUpdateJob::Callback { actor, order, .. } => (actor, *order),
+                SongLuaCompileUpdateJob::Texture { .. } => unreachable!("texture jobs handled above"),
             };
             let delta = if matches!(job, SongLuaCompileUpdateJob::Advance { .. }) {
                 // A wrapper callback can change the owner's update rate. Native
@@ -12174,7 +12190,7 @@ pub fn run_actor_compile_update_functions_with_delta(
                 SongLuaCompileUpdateJob::Callback { actor, .. } => {
                     run_update_callback(lua, actor, delta_seconds)?
                 }
-                SongLuaCompileUpdateJob::Enter { .. } => unreachable!("actor entry handled above"),
+                SongLuaCompileUpdateJob::Enter { .. } | SongLuaCompileUpdateJob::Texture { .. } => unreachable!("actor entry handled above"),
             }
         }
         Ok(())
@@ -18152,7 +18168,7 @@ where
         }
     } else if actor_type.eq_ignore_ascii_case("Model") {
         if let Some(slots) = read_noteskin_tap_actor_slots(actor, context)? {
-            SongLuaOverlayKind::NoteskinActor { slots }
+            SongLuaOverlayKind::NoteskinActor { slots, texture_samples: Arc::from([]) }
         } else {
             let Some(layers) = read_model_layers(actor)? else {
                 return Ok(None);

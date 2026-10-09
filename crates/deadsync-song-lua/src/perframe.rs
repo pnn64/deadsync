@@ -3023,7 +3023,9 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut overlay_ms = 0.0;
     let mut spline_capture = ColumnSplineCapture::default();
     spline_capture.capture(lua, 0.0)?;
-    if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
+    if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
+        && !crate::model_texture::active(lua)
+    {
         spline_capture.finish(column_splines);
         return Ok((
             Vec::new(),
@@ -3267,6 +3269,7 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         crate::lua_util::set_prior_positions(lua, &current_overlays);
         let actor_delta = f64::from(seconds as f32 - (seconds - delta_seconds) as f32);
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, actor_delta)?;
+        crate::model_texture::sample(lua, seconds as f32);
         crate::lua_util::append_wrapper_actors(lua, &mut capture_actors, &mut [
             &mut baseline_overlays, &mut current_overlays, &mut replay_overlays,
             &mut update_overlays, &mut scheduled_states,

@@ -117,6 +117,19 @@ fn model_layer_from_slot_frame(
         song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
     );
     layer.material = model.material;
+    layer.texture_frames = slot.model_texture_states.iter().enumerate()
+        .map(|(index, state)| {
+            let base = slot.uv_for_frame(index);
+            let (scale, offset, shift) = slot.model_uv_params(base);
+            let glow = deadsync_song_lua::SongLuaModelTextureUv { scale, offset, shift };
+            let mut diffuse = glow;
+            for axis in 0..2 {
+                let shift = (slot.uv_offset[axis] + state.translation[axis]) * scale[axis];
+                diffuse.offset[axis] += shift;
+                diffuse.shift[axis] += shift;
+            }
+            deadsync_song_lua::SongLuaModelTextureFrame { delay: state.delay, diffuse, glow }
+        }).collect();
     if let Some(texture) = &slot.model_additive {
         let frames = model_additive_frames(texture);
         layer.additive = Some((texture.texture_key_shared(), frames));

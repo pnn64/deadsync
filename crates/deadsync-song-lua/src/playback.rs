@@ -749,7 +749,7 @@ fn song_lua_projected_mesh_scratch_for<S: NoteskinSlot + Clone>(
                     SongLuaProjectedMeshScratch::graph(vertex_count)
                 }
                 SongLuaOverlayKind::Model { layers } => SongLuaProjectedMeshScratch::model(layers),
-                SongLuaOverlayKind::NoteskinActor { slots } => {
+                SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     SongLuaProjectedMeshScratch::noteskin(slots)
                 }
                 _ => SongLuaProjectedMeshScratch::default(),
@@ -3886,7 +3886,7 @@ fn song_lua_aft_actor_capacity<S: NoteskinSlot + Clone>(kind: &SongLuaOverlayKin
         SongLuaOverlayKind::AftSprite { .. } => 2,
         SongLuaOverlayKind::ActorProxy { .. } => 1,
         SongLuaOverlayKind::Model { layers } => layers.len().saturating_mul(2),
-        SongLuaOverlayKind::NoteskinActor { slots } => slots.len().saturating_mul(2),
+        SongLuaOverlayKind::NoteskinActor { slots, .. } => slots.len().saturating_mul(2),
         _ => 2,
     }
 }
@@ -7978,16 +7978,28 @@ fn append_song_lua_model_actors(
             if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
                 continue;
             }
-            let scroll = song_lua_model_layer_scroll(layer, total_elapsed);
+            let sample = crate::model_texture_at(&layer.texture_samples, total_elapsed);
+            let scroll = if sample.is_some() { [0.0; 2] } else {
+                song_lua_model_layer_scroll(layer, total_elapsed)
+            };
             let shift = match state.texcoord_offset {
                 Some([dx, dy]) => [scroll[0] + dx, scroll[1] + dy],
                 None => scroll,
             };
-            let uv_offset = [layer.uv_offset[0] + shift[0], layer.uv_offset[1] + shift[1]];
-            let uv_tex_shift = [
+            let mut uv_offset = [layer.uv_offset[0] + shift[0], layer.uv_offset[1] + shift[1]];
+            let mut uv_tex_shift = [
                 layer.uv_tex_shift[0] + shift[0],
                 layer.uv_tex_shift[1] + shift[1],
             ];
+            let mut uv_scale = layer.uv_scale;
+            if let Some(sample) = sample {
+                let uv = song_lua_model_uv(
+                    if glow_pass { sample.glow } else { sample.diffuse }, state.texcoord_offset,
+                );
+                uv_scale = uv.scale;
+                uv_offset = uv.offset;
+                uv_tex_shift = uv.shift;
+            }
             let (ancestor_scale, model_scale) = state.scale_factors.map_or(
                 (
                     Matrix4::IDENTITY,
@@ -8064,7 +8076,7 @@ fn append_song_lua_model_actors(
                     .and_then(|keys| keys.get(idx))
                     .copied()
                     .unwrap_or(INVALID_TMESH_CACHE_KEY),
-                uv_scale: layer.uv_scale,
+                uv_scale,
                 uv_offset,
                 uv_tex_shift,
                 depth_test: state.depth_test,
@@ -8136,10 +8148,25 @@ fn song_lua_model_layer_scroll(layer: &SongLuaOverlayModelLayer, total_elapsed: 
     [layer.uv_velocity[0] * clock, layer.uv_velocity[1] * clock]
 }
 
+fn song_lua_model_uv(
+    mut uv: crate::SongLuaModelTextureUv,
+    offset: Option<[f32; 2]>,
+) -> crate::SongLuaModelTextureUv {
+    if let Some(offset) = offset {
+        for axis in 0..2 {
+            let shift = offset[axis] * uv.scale[axis];
+            uv.offset[axis] += shift;
+            uv.shift[axis] += shift;
+        }
+    }
+    uv
+}
+
 #[allow(clippy::too_many_arguments)]
 fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     out: &mut impl Extend<Actor>,
     slots: &[S],
+    texture_samples: &[Arc<[crate::SongLuaTextureSample]>],
     state: SongLuaOverlayState,
     camera_state: Option<SongLuaOverlayState>,
     asset_manager: &AssetManager,
@@ -8283,6 +8310,17 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             let Some(mut actor) = actor else {
                 continue;
             };
+            if let Some(sample) = texture_samples.get(idx)
+                .and_then(|samples| crate::model_texture_at(samples, total_elapsed))
+                && let Actor::TexturedMesh { uv_scale, uv_offset, uv_tex_shift, .. } = &mut actor
+            {
+                let uv = song_lua_model_uv(
+                    if glow_pass { sample.glow } else { sample.diffuse }, state.texcoord_offset,
+                );
+                *uv_scale = uv.scale;
+                *uv_offset = uv.offset;
+                *uv_tex_shift = uv.shift;
+            }
             if slot.model().is_some() {
                 if let Actor::TexturedMesh {
                     local_transform,
@@ -8349,6 +8387,7 @@ fn song_lua_noteskin_actor<S: NoteskinSlot + Clone>(
     append_song_lua_noteskin_actors(
         &mut out,
         slots,
+        &[],
         state,
         None,
         asset_manager,
@@ -9791,9 +9830,10 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
                 glow_vertices,
             )
         }
-        SongLuaOverlayKind::NoteskinActor { slots } => append_song_lua_noteskin_actors(
+        SongLuaOverlayKind::NoteskinActor { slots, texture_samples } => append_song_lua_noteskin_actors(
             out,
             slots,
+            texture_samples,
             state,
             camera_state,
             asset_manager,
@@ -10506,7 +10546,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             )
             .then_some(out)
         }
-        SongLuaOverlayKind::NoteskinActor { slots } => {
+        SongLuaOverlayKind::NoteskinActor { slots, texture_samples } => {
             let mut tint = state.diffuse;
             let mut glow = state.glow;
             let mut effect_offset = [0.0, 0.0, 0.0];
@@ -10527,6 +10567,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             append_song_lua_noteskin_actors(
                 &mut out,
                 slots,
+                texture_samples,
                 state,
                 camera_state,
                 asset_manager,

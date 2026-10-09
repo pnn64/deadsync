@@ -393,7 +393,7 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
         screen,
         [song_elapsed_seconds_at(beat, context), beat],
     );
-    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[arrow].kind else {
+    let SongLuaOverlayKind::NoteskinActor { slots, .. } = &compiled.overlays[arrow].kind else {
         panic!("compiled multitap must retain its actual noteskin model");
     };
     let baseline = composer.render_overlay(&compiled.overlays, &states, arrow, screen, 0.0, beat);
