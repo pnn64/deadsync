@@ -148,3 +148,20 @@ draws after wakeup. Texture identity, secondary material animation, lighting,
 additional render states, empty meshes, late creation and framebuffer
 validation remain pending. The whole-song Model guard stays closed and the
 fresh diagnostic archive stays private.
+
+Harness `0.1.42` at `a80f15b` now observes registered native texture identity
+and sampler state for every Model draw. An independent 61-update scene
+retains all 183 diffuse, additive and glow draws with four distinct images.
+DeadSync `ad222a896` fixes the secondary material's independent update
+clock and queued state selection, replacing its elapsed-time selector.
+Both production builders match 122 submitted secondary rectangles and
+translations (488 coordinates at 0.000001 tolerance); 193 playback tests,
+the material asset control and gameplay shell check pass. The audit retains
+this separate control and its before/after evidence.
+
+The earlier 12,217,036-check result remains pinned to its original harness
+0.1.41 and DeadSync sources. It does not compare the newly observed texture
+bindings and is not a current full-song validation. Separate additive
+rendering, forced secondary filtering, per-image atlas wrapping, physical
+image identity, secondary per-vertex scaling and the other recorded Model
+gaps remain open. The whole-song Model acceptance guard stays closed.
