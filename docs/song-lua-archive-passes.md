@@ -2609,3 +2609,15 @@ superseded source bytes locally, retaining historical aliases. The preceding
 27 cases were verified on 0.5.1869; revalidation from the top on 0.5.1870
 remains pending. No tolerance, event limit, original source or archive scope
 was reduced. Full-corpus parity remains unfinished.
+
+The from-top revalidation on the committed 0.5.1870 verifier now passes
+all 12,752,563 comparisons across the first 28/492 archive cases.
+Reuse the preceding 27 complete native captures only after inspecting
+their original Lua for affected FOV declarations and camera operations;
+none reaches the corrected native branch. Case 28 uses the fresh 0.1.32
+99+ reference and its completed receipt from this same verifier. Preserve
+each capture's actual version, source revision and executable hash.
+The next case is [07] 7th Gear - (No CMOD); its native capture is ready,
+and its DeadSync comparison is pending. Full-corpus parity remains
+unfinished; the original 501 simfiles and all 492 archive cases remain
+in scope.
