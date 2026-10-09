@@ -525,3 +525,22 @@ See `native-revalidation-pass106.json`. Position 25 is next.
 The original 501-source/492-context scope remains active. Full corpus,
 unsupported rendering profiles, and native GPU framebuffer parity
 remain incomplete.
+
+## Ordered fixture validation, pass 108
+
+Position 25, 321STARS, passes all 51,262,467 comparisons
+against DeadSync `e645dfdda`. The old harness 0.1.31
+capture omitted Model base rotation; a complete 0.1.51 capture retains
+the original chart and Lua bytes and records 4,794 updates with no runtime
+errors or dropped events. The earlier archive and aliases remain available.
+
+The fresh capture initially failed 264,768 texture comparisons because
+the comparator used music time for material history indexed by elapsed
+time. An independent native actor control confirms elapsed deltas. The
+positive-offset regression passes 561,139 checks after the correction.
+No production behavior or comparison tolerance was changed.
+
+See `native-revalidation-pass108.json`. Position 26 is next. The original
+501-source/492-context scope remains active. The record retains additional
+explicit Model culling and multitap boundary observations; full corpus
+and native framebuffer parity remain incomplete.

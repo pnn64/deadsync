@@ -534,12 +534,10 @@
     {
       "title": "321STARS",
       "source_simfile": "321STARS/321STARS.ssc",
-      "harness_version": "0.1.31",
-      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
-      "sha256": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7",
-      "compressed_bytes": 699277,
-      "uncompressed_sha256": "02eb029da084fc62b59ec83244dc2105fdff16a50fe02e0df86d1c04749d95af",
-      "compression_level": 12,
+      "harness_version": "0.1.51",
+      "archive": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373.tar.zst",
+      "sha256": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373",
+      "compressed_bytes": 25750477,
       "aliases": [
         "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
         "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
