@@ -2,6 +2,7 @@ use crate::{TextureHints, apply_texture_hints, fix_hidden_alpha, open_image_fall
 use deadlib_render_core::SamplerDesc;
 use image::RgbaImage;
 use std::{
+    io::{BufReader, Read},
     path::{Path, PathBuf},
     sync::{Condvar, Mutex},
 };
@@ -126,18 +127,261 @@ fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
 }
 
 pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageResult<RgbaImage> {
-    let source = open_image_fallback(path)?;
-    // Sources without alpha become opaque RGBA. Applied alphamaps have white
-    // RGB everywhere, including transparent pixels, so neither needs cleanup.
-    let needs_alpha_fix = source.color().has_alpha() && (hints.is_default() || !hints.alphamap);
-    let mut image = source.into_rgba8();
+    let mut image = if hints.hot_pink_color_key {
+        keyed_image(path)?
+    } else {
+        open_image_fallback(path)?.into_rgba8()
+    };
+    let size = texture_image_size([image.width(), image.height()], hints)?;
+    if size != [image.width(), image.height()] {
+        image = zoom_image(image, size);
+    }
     if !hints.is_default() {
         apply_texture_hints(&mut image, hints);
     }
-    if needs_alpha_fix {
-        fix_hidden_alpha(&mut image);
+    // Native cleanup follows color keying and the final resize, including
+    // sources that gain an alpha channel during preparation.
+    fix_hidden_alpha(&mut image);
+    Ok(image)
+}
+
+pub fn texture_image_size(source: [u32; 2], hints: &TextureHints) -> image::ImageResult<[u32; 2]> {
+    let max_size = hints.max_size.unwrap_or(u32::MAX);
+    let mut size = source.map(|dimension| dimension.min(max_size));
+    if size.contains(&0) {
+        return Err(image_limit());
+    }
+    if hints.stretch {
+        for dimension in &mut size {
+            *dimension = dimension
+                .checked_next_power_of_two()
+                .ok_or_else(image_limit)?
+                .max(8);
+        }
+    }
+    if size.iter().any(|dimension| *dimension > max_size) {
+        return Err(image_limit());
+    }
+    check_image_alloc(size)?;
+    Ok(size)
+}
+
+fn check_image_alloc(size: [u32; 2]) -> image::ImageResult<()> {
+    let limit = image::Limits::default().max_alloc.unwrap_or(u64::MAX);
+    if u64::from(size[0]) * u64::from(size[1]) > limit / 4 {
+        return Err(image::ImageError::Limits(
+            image::error::LimitError::from_kind(image::error::LimitErrorKind::InsufficientMemory),
+        ));
+    }
+    Ok(())
+}
+
+fn image_limit() -> image::ImageError {
+    image::ImageError::Limits(image::error::LimitError::from_kind(
+        image::error::LimitErrorKind::DimensionError,
+    ))
+}
+
+fn png_error(error: png::DecodingError) -> image::ImageError {
+    image::ImageError::Decoding(image::error::DecodingError::new(
+        image::ImageFormat::Png.into(),
+        error,
+    ))
+}
+
+fn keyed_image(path: &Path) -> image::ImageResult<RgbaImage> {
+    let mut signature = [0u8; 8];
+    let mut input = std::fs::File::open(path)?;
+    let count = input.read(&mut signature)?;
+    if count == 8 && signature == *b"\x89PNG\r\n\x1a\n" {
+        return keyed_png(path);
+    }
+    let mut image = open_image_fallback(path)?.into_rgba8();
+    key_rgba(&mut image);
+    Ok(image)
+}
+
+// PNG indexed entries must remain distinct: native palette color keying
+// changes the first matching entry, even when another entry has identical RGB.
+// Native PNG loading strips 16-bit channels rather than rescaling their values.
+fn keyed_png(path: &Path) -> image::ImageResult<RgbaImage> {
+    let mut decoder = png::Decoder::new(BufReader::new(std::fs::File::open(path)?));
+    // Match the image loader's allocation limit instead of png's smaller default.
+    decoder.set_limits(png::Limits {
+        bytes: image::Limits::default()
+            .max_alloc
+            .unwrap_or(usize::MAX as u64)
+            .min(usize::MAX as u64) as usize,
+    });
+    let header = decoder.read_header_info().map_err(png_error)?;
+    check_image_alloc([header.width, header.height])?;
+    let indexed = header.color_type == png::ColorType::Indexed;
+    decoder.set_transformations(
+        png::Transformations::STRIP_16
+            | if indexed {
+                png::Transformations::IDENTITY
+            } else {
+                png::Transformations::EXPAND
+            },
+    );
+    let mut reader = decoder.read_info().map_err(png_error)?;
+    let palette = reader.info().palette.clone();
+    let alpha = reader.info().trns.clone();
+    let mut bytes = vec![0; reader.output_buffer_size().ok_or_else(image_limit)?];
+    let info = reader.next_frame(&mut bytes).map_err(png_error)?;
+    let mut image = RgbaImage::new(info.width, info.height);
+    if indexed {
+        let mut colors = [[0, 0, 0, 255]; 256];
+        for (i, rgb) in palette
+            .as_deref()
+            .unwrap_or_default()
+            .chunks_exact(3)
+            .enumerate()
+        {
+            colors[i] = [
+                rgb[0],
+                rgb[1],
+                rgb[2],
+                alpha
+                    .as_deref()
+                    .and_then(|a| a.get(i))
+                    .copied()
+                    .unwrap_or(255),
+            ];
+        }
+        for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
+            if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
+                color[3] = 0;
+            }
+        }
+        let bits = info.bit_depth as usize;
+        for (x, y, pixel) in image.enumerate_pixels_mut() {
+            let bit = x as usize * bits;
+            let byte = bytes[y as usize * info.line_size + bit / 8];
+            let index = (byte >> (8 - bits - bit % 8)) & ((1u16 << bits) - 1) as u8;
+            pixel.0 = colors[index as usize];
+        }
+    } else {
+        let channels = info.color_type.samples();
+        for (pixel, source) in image
+            .pixels_mut()
+            .zip(bytes[..info.buffer_size()].chunks_exact(channels))
+        {
+            pixel.0 = match info.color_type {
+                png::ColorType::Rgb => [source[0], source[1], source[2], 255],
+                png::ColorType::Rgba => [source[0], source[1], source[2], source[3]],
+                png::ColorType::Grayscale => [source[0], source[0], source[0], 255],
+                png::ColorType::GrayscaleAlpha => [source[0], source[0], source[0], source[1]],
+                png::ColorType::Indexed => unreachable!("indexed branch handled above"),
+            };
+        }
+        key_rgba(&mut image);
     }
     Ok(image)
+}
+
+fn key_rgba(image: &mut RgbaImage) {
+    let off_pink = [248, 0, 248, 255];
+    let edge_has_key = image.width() > 0
+        && image.height() > 0
+        && (0..image.width()).any(|x| {
+            image.get_pixel(x, 0).0 == off_pink
+                || image.get_pixel(x, image.height() - 1).0 == off_pink
+        });
+    let key = if edge_has_key {
+        off_pink
+    } else {
+        [255, 0, 255, 255]
+    };
+    for pixel in image.pixels_mut() {
+        if pixel.0 == key {
+            pixel.0 = [0; 4];
+        }
+    }
+}
+
+/*
+ * Port of RageSurfaceUtils_Zoom, copyright (c) A. Schiffler, Glenn Maynard.
+ * All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, and/or sell copies of the Software, and to permit persons to
+ * whom the Software is furnished to do so, provided that the above
+ * copyright notice(s) and this permission notice appear in all copies of
+ * the Software and that both the above copyright notice(s) and this
+ * permission notice appear in supporting documentation.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+ * THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS
+ * INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT
+ * OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+ * OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+ * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ * PERFORMANCE OF THIS SOFTWARE.
+ */
+// RageSurfaceUtils_Zoom uses float coordinates and 24-bit fixed-point weights;
+// it floors horizontal interpolation and rounds the final vertical blend.
+fn zoom_axis(source: u32, destination: u32) -> Vec<(u32, u32, u32)> {
+    let ratio = source as f32 / destination as f32;
+    (0..destination)
+        .map(|x| {
+            if source >= destination {
+                let center = ratio * x as f32 + ratio / 2.0;
+                let left = (center - ratio / 4.0) as u32;
+                let right = (center + ratio / 4.0) as u32;
+                let weight = if left == right {
+                    1 << 24
+                } else {
+                    ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0)
+                        as u32
+                };
+                (left, right, weight)
+            } else {
+                let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
+                (
+                    (center as u32).min(source - 1),
+                    ((center + 1.0) as u32).min(source - 1),
+                    ((1.0 - (center - center.floor())) * 16777216.0) as u32,
+                )
+            }
+        })
+        .collect()
+}
+
+fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
+    while [image.width(), image.height()] != size {
+        let next = std::array::from_fn::<_, 2, _>(|axis| {
+            let current = [image.width(), image.height()][axis];
+            let ratio = (size[axis] as f32 / current as f32).clamp(0.5, 2.0);
+            (current as f32 * ratio).round_ties_even() as u32
+        });
+        let xs = zoom_axis(image.width(), next[0]);
+        let ys = zoom_axis(image.height(), next[1]);
+        let mut output = RgbaImage::new(next[0], next[1]);
+        for (y, &(top, bottom, wy)) in ys.iter().enumerate() {
+            for (x, &(left, right, wx)) in xs.iter().enumerate() {
+                let c00 = image.get_pixel(left, top).0;
+                let c01 = image.get_pixel(right, top).0;
+                let c10 = image.get_pixel(left, bottom).0;
+                let c11 = image.get_pixel(right, bottom).0;
+                let pixel = output.get_pixel_mut(x as u32, y as u32);
+                for c in 0..4 {
+                    let upper =
+                        (u32::from(c00[c]) * wx + u32::from(c01[c]) * (16777216 - wx)) >> 24;
+                    let lower =
+                        (u32::from(c10[c]) * wx + u32::from(c11[c]) * (16777216 - wx)) >> 24;
+                    pixel[c] = ((upper * wy + lower * (16777216 - wy) + 8388608) >> 24) as u8;
+                }
+            }
+        }
+        image = output;
+    }
+    image
 }
 
 /// Decodes on workers while the caller consumes completed images immediately.

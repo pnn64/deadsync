@@ -808,9 +808,9 @@ mod tests {
                 "alpha-green.png",
                 "alpha-white.png",
             ] {
-                let key = deadsync_assets::textures::canonical_texture_key(
-                    piece.parent().unwrap().join(image),
-                );
+                let key = deadsync_assets::textures::model_texture_key(
+                    &deadsync_assets::textures::canonical_texture_key(
+                        piece.parent().unwrap().join(image)));
                 assert_eq!(
                     textures
                         .iter()

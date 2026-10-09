@@ -323,7 +323,9 @@ fn model_texture_key(
             if path.is_absolute() { path } else { context.song_dir.join(path) }
         }, |relative| context.song_dir.join(relative))
     };
-    Ok(Some(deadsync_assets::textures::canonical_texture_key(path)))
+    // Native Model requests differ from Sprite RageTextureIDs for this file.
+    Ok(Some(deadsync_assets::textures::model_texture_key(
+        &deadsync_assets::textures::canonical_texture_key(path))))
 }
 
 fn compare_frame(
@@ -786,7 +788,8 @@ fn native_model_texture_paths_require_reference_inventory() {
     let context = SongLuaCompileContext::new(&directory, "Model texture identities");
     let texture = serde_json::json!("song:/frame-red.png");
     assert_eq!(model_texture_key(&trace, &context, &texture).unwrap(),
-        Some(deadsync_assets::textures::canonical_texture_key(directory.join("frame-red.png"))));
+        Some(deadsync_assets::textures::model_texture_key(
+            &deadsync_assets::textures::canonical_texture_key(directory.join("frame-red.png")))));
     assert_eq!(model_texture_key(&trace, &context, &Value::Null).unwrap(), None);
     let texture = serde_json::json!("noteskin:/dance/cyber/textures/Tap Note parts (mipmaps).png");
     assert!(model_texture_key(&trace, &context, &texture).is_err());
@@ -794,8 +797,8 @@ fn native_model_texture_paths_require_reference_inventory() {
     trace.noteskin_reference = Some(NativeNoteskin { skin: "cyber".into(),
         files: vec![NativeResourceFile { path: relative.clone(), sha256: "inventory already verified by compilation".into() }] });
     assert_eq!(model_texture_key(&trace, &context, &texture).unwrap(),
-        Some(deadsync_assets::textures::canonical_texture_key(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins").join(relative))));
+        Some(deadsync_assets::textures::model_texture_key(&deadsync_assets::textures::canonical_texture_key(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins").join(relative)))));
 }
 
 #[test]

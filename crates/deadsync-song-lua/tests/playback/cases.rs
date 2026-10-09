@@ -8072,8 +8072,8 @@ fn native_model_material_passes_match_production() {
                 let image = Path::new(reference["texture"].as_str().unwrap())
                     .file_name()
                     .unwrap();
-                let expected_key =
-                    deadsync_assets::textures::canonical_texture_key(directory.join(image));
+                let expected_key = deadsync_assets::textures::model_texture_key(
+                    &deadsync_assets::textures::canonical_texture_key(directory.join(image)));
                 assert_eq!(
                     composer.texture_key(run.texture_handle), expected_key,
                     "noteskin={noteskin} update={ordinal} pass={pass}: native image binding"

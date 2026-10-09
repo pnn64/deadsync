@@ -10,6 +10,7 @@ deadlib-present = { path = "../deadlib-present" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadlib-video = { path = "../deadlib-video" }
 image = "0.25.10"
+png = "0.18.1"
 log = "0.4.34"
 memchr = "2.8.3"
 rustc-hash = "2.1.3"

@@ -834,6 +834,9 @@ pub fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
 }
 
 pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
+    if plan.model.is_some() && !slot.sprite_mesh && !plan.texture_states.is_empty() {
+        bind_model_source(slot);
+    }
     slot.sphere_mapped = plan.sphere_mapped;
     slot.model_animation_length = plan.animation_length;
     slot.model_texture_states = plan.texture_states;
@@ -842,6 +845,9 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
         additive.sphere_mapped = texture.sphere_mapped;
         additive.model_texture_states = texture.states;
         additive.model = plan.model.clone();
+        if additive.model.is_some() && !additive.model_texture_states.is_empty() {
+            bind_model_source(&mut additive);
+        }
         if let Some(animation) = texture.animation {
             match model_image_keys(&animation) {
                 Ok(keys) => additive.model_texture_keys = keys,
@@ -884,11 +890,29 @@ fn model_image_keys(animation: &ItgTextureAnimation) -> Result<Arc<[Arc<str>]>, 
         .map(|frame| {
             let (width, height) =
                 image_dimensions(&frame.path).map_err(|error| error.to_string())?;
-            let key = crate::textures::canonical_texture_key(&frame.path);
+            let key = crate::textures::model_texture_key(&crate::textures::canonical_texture_key(&frame.path));
+            let job = crate::textures::texture_decode_job(&key, true);
+            let [width, height] = deadlib_assets::texture_image_size([width, height], &job.hints)
+                .map_err(|error| error.to_string())?;
             assets::register_texture_dims(&key, width, height);
             Ok(Arc::<str>::from(key))
         })
         .collect()
+}
+
+fn bind_model_source(slot: &mut SpriteSlot) {
+    let key = crate::textures::model_texture_key(slot.texture_key());
+    if key == slot.texture_key() { return; }
+    let dims = match slot.source.as_ref() {
+        SpriteSource::Atlas { tex_dims, .. } | SpriteSource::Animated { tex_dims, .. } => *tex_dims,
+    };
+    let job = crate::textures::texture_decode_job(&key, true);
+    if let Ok([width, height]) = deadlib_assets::texture_image_size([dims.0, dims.1], &job.hints) {
+        assets::register_texture_dims(&key, width, height);
+    }
+    // Replace the worker-owned source; shared Sprite sources retain their raw
+    // image identity, dimensions and UV cache. Native Model states own timing.
+    replace_sprite_source(&mut slot.source, atlas_source(key.into(), dims, &slot.def));
 }
 
 pub fn load_itg_model_slots(
@@ -1676,7 +1700,7 @@ mod contract_tests {
 
     #[test]
     fn model_material_loads_independent_secondary_animation() {
-        crate::noteskin::tests::init_asset_paths();
+        crate::init_asset_paths();
         let root = std::env::temp_dir().join(format!("deadsync-material-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         for (name, size, color) in [
@@ -1735,11 +1759,11 @@ Materials: 1
         let (second_key, second) = slot.model_additive(0.3).unwrap();
         assert_eq!(
             key.as_ref(),
-            crate::textures::canonical_texture_key(root.join("a.png"))
+            crate::textures::model_texture_key(&crate::textures::canonical_texture_key(root.join("a.png")))
         );
         assert_eq!(
             second_key.as_ref(),
-            crate::textures::canonical_texture_key(root.join("b.png"))
+            crate::textures::model_texture_key(&crate::textures::canonical_texture_key(root.join("b.png")))
         );
         assert_eq!(first, [0.0, 0.0, 1.0, 1.0]);
         assert_eq!(second, first);

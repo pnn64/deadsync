@@ -1014,6 +1014,7 @@ dependencies = [
  "image",
  "log",
  "memchr",
+ "png",
  "rustc-hash 2.1.3",
  "twox-hash",
  "winit",
@@ -1367,6 +1368,7 @@ dependencies = [
  "image",
  "log",
  "rustc-hash 2.1.3",
+ "serde_json",
 ]
 
 [[package]]

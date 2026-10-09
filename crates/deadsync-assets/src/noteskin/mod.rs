@@ -582,25 +582,7 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    pub(super) fn init_asset_paths() {
-        static INIT: std::sync::Once = std::sync::Once::new();
-        INIT.call_once(|| {
-            let bundle = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .and_then(Path::parent)
-                .expect("crate is under the workspace crates directory")
-                .to_path_buf();
-            let data = std::env::temp_dir()
-                .join(format!("deadsync-noteskin-paths-{}", std::process::id()));
-            let dirs = deadsync_config::dirs::AppDirs {
-                cache_dir: data.join("cache"),
-                data_dir: data,
-                exe_dir: bundle,
-                portable: false,
-            };
-            crate::init_paths(dirs.asset_paths(None)).expect("initialize fixture asset paths");
-        });
-    }
+    use crate::init_asset_paths;
 
     fn temp_noteskin_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
@@ -1010,12 +992,11 @@ return Def.Model {
                     for layers in [&skin.note_layers[index], &skin.lift_note_layers[index]] {
                         assert_eq!(layers.len(), 2);
                         assert!(
-                            layers[0].texture_key().ends_with("border.png"),
+                            crate::textures::texture_source_key(layers[0].texture_key()).ends_with("border.png"),
                             "keep authored material order"
                         );
                         assert!(
-                            layers[1]
-                                .texture_key()
+                            crate::textures::texture_source_key(layers[1].texture_key())
                                 .ends_with(&format!("{side}-{color}.png")),
                             "column {col}, quant {quant}: {}",
                             layers[1].texture_key()
@@ -1138,7 +1119,7 @@ return Def.Model {
                 assert_eq!(layers.len(), 5);
                 for (index, slot) in layers.iter().enumerate() {
                     let moving = matches!(index, 2 | 4);
-                    assert!(slot.texture_key().ends_with(if moving {
+                    assert!(crate::textures::texture_source_key(slot.texture_key()).ends_with(if moving {
                         "moving.png"
                     } else {
                         "plain.png"
@@ -1313,8 +1294,8 @@ Bones: 0
                     assert_eq!(frame, expected);
                     let uv = mine.uv_for_frame_at(frame, phase);
                     assert_eq!(uv, [0.0, 0.0, 1.0, 1.0]);
-                    let image = crate::open_image_fallback(Path::new(&*mine.model_texture_keys[frame]))
-                        .unwrap().into_rgba8();
+                    let job = crate::textures::texture_decode_job(&mine.model_texture_keys[frame], true);
+                    let image = deadlib_assets::decode_texture_image(&job.path, &job.hints).unwrap();
                     assert_eq!(image.get_pixel(image.width() / 2, image.height() / 2).0, color);
                 }
                 let mut warmed = HashSet::new();
@@ -2113,7 +2094,7 @@ Bones: 0
         );
         assert_eq!(
             slot.texture_key(),
-            "graphics/menu_bg_technique/arrow_tex.png"
+            crate::textures::model_texture_key("graphics/menu_bg_technique/arrow_tex.png")
         );
         assert!(
             slot.uv_velocity[1] < -0.9 && slot.uv_velocity[1] > -1.1,
@@ -2169,7 +2150,8 @@ Bones: 0
             .map(|slot| slot.texture_key().to_string())
             .collect::<HashSet<_>>();
         assert!(
-            textures.contains("noteskins/dance/cel/textures/Tap Note parts (mipmaps).png"),
+            textures.contains(&crate::textures::model_texture_key(
+                "noteskins/dance/cel/textures/Tap Note parts (mipmaps).png")),
             "expected cel model tap note layers to resolve Tap Note parts texture; got {textures:?}"
         );
     }

@@ -18,7 +18,9 @@ pub use builtin::{
 };
 pub use choice::TextureChoice;
 pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
-pub use decode::{TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset};
+pub use decode::{
+    TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset, texture_image_size,
+};
 pub use error::AssetError;
 pub use font::{
     FontAssetSpec, ParsedFontAsset, PreparedFontTexture, font_texture_key, parse_font_asset_specs,
@@ -52,6 +54,8 @@ pub struct TextureHints {
     pub alphamap: bool,
     pub doubleres: bool,
     pub stretch: bool,
+    pub hot_pink_color_key: bool,
+    pub max_size: Option<u32>,
     pub dither: bool,
     pub color_depth: Option<u32>,
     pub sampler_filter: Option<SamplerFilter>,
