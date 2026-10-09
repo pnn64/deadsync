@@ -1,0 +1,52 @@
+{
+  "pass": 101,
+  "deadsync_source_commit": "65351713dc9b0e7f92ce979c135a81946a5bb9c4",
+  "harness_source_commit": "e5ee5826a0cf4024301c969087b1ee3b863e4242",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_execution": "embedded bundled ITGmania Lua and C++ actor implementation",
+  "comparator": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass101-current-comparators-v1-full_song_lua.exe",
+    "sha256": "15fd2f08a73fa28d486063230cd612170c250abc7ef8cc967f8bc2b2c03f348f"
+  },
+  "native_cli_sha256": "be7d5ffa45f5cf75220e21921625d94a278a7c96dd595135e90330437ad8157d",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "checks": "Complete archive/member hashes, native endpoint and frame coverage, complete Lua compile and full-duration composition, semantic/render geometry/texture/command/modifier/player transform comparisons",
+  "charts": [
+    {
+      "position": 1,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "ded0f7ff19513e30119e0d6f65b57a661f1683872fc9ffced27737db06c49993.tar.zst",
+      "archive_sha256": "ded0f7ff19513e30119e0d6f65b57a661f1683872fc9ffced27737db06c49993",
+      "archive_bytes": 490935,
+      "compression_level": 22,
+      "uncompressed_sha256": "b47f78e87f5ec0c7f64f460593f6689eff52c5e08992cf9df0f551eb498f4481",
+      "native_trace_sha256": "7347619be1c9c0f89c68f5bb4ce81d22c547828ee2a8f289380b8d07be54a116",
+      "harness_version": "0.1.49",
+      "native_capture_log_sha256": "14449679086c75df13c756aa4597d5dfe314b7f970c7d648327208cf42b9d25a",
+      "native_archive_log_sha256": "89aae343288a2aebfdacacc2c63122c140d2d5f2cfb3314f4e16fad788a47452",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 156.56248474121094,
+      "update_frames": 9395,
+      "original_source_unchanged": true,
+      "source_simfile_sha256": "8a026125f7b82423ce652c41798ed3ce43b70deecfdca60afb1a49c09f63d51b",
+      "comparisons_passed": 212220,
+      "comparisons_failed": 0,
+      "test_log_sha256": "d78614092959952e494c053b9fe1bd681e19c56cc1ba49b1f655e21451e20a1d",
+      "original_archive_retained": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "historical_aliases_retained": true,
+      "native_receipt": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass101-top-001-warp-zone-v1.json",
+      "native_receipt_sha256": "457f5840df9515c12867c5c4f982c463dea5490cc75ec1851f15690fd1efd18b"
+    }
+  ],
+  "next_position": 2,
+  "remaining": "Continue all original sources and contexts; Model acceptance, native framebuffer and remaining texture/render policy remain open"
+}

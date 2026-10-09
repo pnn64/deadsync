@@ -372,3 +372,19 @@ precision, other generic image consumers, complete bitmap policy, Lua error
 behavior, physical mips and native framebuffer output remain open. Complete
 Model acceptance remains closed and the original 501-source/492-context scope
 and canonical archive index are unchanged.
+
+## Fresh native revalidation, pass 101
+
+Warp Zone was recaptured from the unchanged original song with harness
+`0.1.49`, using the pinned native ITGmania implementation. The current
+DeadSync comparator passed 212,220 checks, including complete composition
+over 156.56 seconds and the recorded player transforms. The native capture
+contains 9,395 update frames, no runtime errors, and no dropped events.
+The refreshed archive uses zstd level 22; recompression preserves all
+decompressed native bytes. The previous archive and historical aliases
+remain available. `native-revalidation-pass101.json` records the source,
+CLI, trace, archive, and verification identities.
+
+This is the first chart in the renewed corpus pass. The original scope
+remains 501 simfiles and 492 contexts; full corpus and native framebuffer
+parity are still incomplete.
