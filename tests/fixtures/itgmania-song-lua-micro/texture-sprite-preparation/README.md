@@ -23,8 +23,15 @@ Run the portable control with the pinned harness:
 
     itgmania-harness-rs actor-conformance control.json --out reproduced.json
 
-These are native CPU upload surfaces. Physical tiny Sprite uploads in
-DeadSync remain open: its ordinary decoder still returns raw tiny sizes.
-The repair must preserve logical source geometry and check image-coordinate
-offsets and normalized UVs together with prepared pixels. Native framebuffer,
-GPU mip storage, and the rest of the 501-source/492-context corpus remain open.
+DeadSync `20e14e048` applies native sizing to ordinary Sprite uploads while
+retaining logical source dimensions. Its default high-resolution profile
+checks nine controls: eight complete images (68,352 native RGBA bytes)
+and the padded NPOT metadata control. `prepared-pixels.json` identifies
+the exported `.rgba` byte arrays. Production software upload readback,
+startup jobs, replacement handling, logical bindings and tiny image
+offsets are verified; 1,437 domain tests pass.
+
+These are native CPU upload surfaces. The high-resolution-disabled control
+is retained but its alternate production profile is unproven. Complete
+NPOT coordinate/sampling behavior, native GPU framebuffer output, mip
+storage and the rest of the 501-source/492-context corpus remain open.

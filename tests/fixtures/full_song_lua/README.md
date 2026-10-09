@@ -459,3 +459,25 @@ A 7x9 control excludes unused allocation padding. DeadSync physical
 tiny uploads, logical source binding, image-coordinate offsets and UV
 mapping still need repair against these native controls. Framebuffer
 and complete corpus parity remain open.
+
+## Fresh native revalidation, pass 104
+
+Position 9, Spooky, passed 157,678 comparisons over
+118.01 seconds and 7,082 native update frames. The original
+song files are unchanged. Native harness `0.1.50` reports no runtime errors
+or dropped events. Lossless level-22 recompression preserves decompressed
+native bytes; prior captures and aliases remain available.
+
+The first nine refreshed archives passed 2,107,636 comparisons
+on committed DeadSync `20e14e048`, after its Sprite preparation repair.
+Ordinary Sprite uploads now apply native minimum-eight and maximum-2048
+sizing while retaining logical source dimensions. The default high-resolution
+controls compare eight complete prepared images (68,352 native RGBA bytes),
+with an additional padded NPOT metadata control. Software upload readback,
+startup jobs, replacement handling and tiny image offsets are checked;
+1,437 domain tests pass. See `native-revalidation-pass104.json` and
+`../itgmania-song-lua-micro/texture-sprite-preparation`. Earlier pass
+sections describe the source at that time. Alternate low-resolution
+profiles, complete NPOT coordinate/sampling behavior, native GPU/mip
+and framebuffer output remain open. The original 501-source/492-context
+scope is unchanged; full corpus parity is incomplete.

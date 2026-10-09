@@ -214,12 +214,12 @@
     {
       "title": "271|MODS|[lv.01] Spooky",
       "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
-      "harness_version": "0.1.31",
-      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
-      "sha256": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25",
-      "compressed_bytes": 166912,
-      "uncompressed_sha256": "29e05c3f56c99da39ec129ac7f3b61d140c61f67fb074d34619080eb6a8dc10d",
-      "compression_level": 12,
+      "harness_version": "0.1.50",
+      "archive": "7e73aaa02c615547366bfc6300f335702d8d8885bfea9a0858e4e6ab929dcad0.tar.zst",
+      "sha256": "7e73aaa02c615547366bfc6300f335702d8d8885bfea9a0858e4e6ab929dcad0",
+      "compressed_bytes": 158051,
+      "uncompressed_sha256": "e7e949322d1e800e450023e74c0aca7df67fafd1e92ac8bb9648b88b70f6b977",
+      "compression_level": 22,
       "aliases": [
         "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
         "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
@@ -232,7 +232,8 @@
         "9930bef5335a264f7182e991bb690ca96dc6b5ed63a17e942166ce82c1d08d7f.tar.zst",
         "1568a3b4b13f22a1895a65946d09d1b8a1057408c26b35a2898ef2936f3b511d.tar.zst",
         "bc2abb30e2bafa458fec4c897ed1d1b38659b7a6566b747ca890d888b28bfd15.tar.zst",
-        "4d108b9372c96a5690a53e5c98ca4a94697ecdb6ae09c93cf238ac0e19bf21e5.tar.zst"
+        "4d108b9372c96a5690a53e5c98ca4a94697ecdb6ae09c93cf238ac0e19bf21e5.tar.zst",
+        "404a333a95c0c2f307d198e6231a2a0ed67403bdcdafa7adfafdeb0370fff15b.tar.zst"
       ]
     },
     {
