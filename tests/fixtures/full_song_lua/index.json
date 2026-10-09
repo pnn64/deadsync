@@ -239,12 +239,12 @@
     {
       "title": "272|MODS|[lv.02] Riddle",
       "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
-      "harness_version": "0.1.31",
-      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
-      "sha256": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d",
-      "compressed_bytes": 160941,
-      "uncompressed_sha256": "d66d500796f19e19cf6a97a8bf3f2d668e1e73b497f80ad6270f85329c3a7b1e",
-      "compression_level": 12,
+      "harness_version": "0.1.50",
+      "archive": "7ffacb89fd95ab788758e273ba878c30380c4622406f1bb22d8c51292ca78d83.tar.zst",
+      "sha256": "7ffacb89fd95ab788758e273ba878c30380c4622406f1bb22d8c51292ca78d83",
+      "compressed_bytes": 139441,
+      "compression_level": 22,
+      "uncompressed_sha256": "0ea85870bff6f89d40ec9ff9a770363feff74800034fb01e99f4188dec295fe1",
       "aliases": [
         "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
         "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
@@ -255,7 +255,8 @@
         "45be98118e8a0ab0db2cfb017f52de2475650620cda25a3639686f424f9e900c.tar.zst",
         "96f438e4abf9fe94163e1aab9834f2602dda96b407fa1b9d1bb463317bfbef99.tar.zst",
         "dd2642a3338bc3f53179bbbe4a55ba44db0369dc1ab8f5b4c3f30471477b3132.tar.zst",
-        "ce9f069c68b48d6bd7cb4c181342b0f1797952140d6712428a34ba8e70702399.tar.zst"
+        "ce9f069c68b48d6bd7cb4c181342b0f1797952140d6712428a34ba8e70702399.tar.zst",
+        "148d584a7cc889508c3682c8086225630ce8bfe1f39d398e275a179442fdab7b.tar.zst"
       ]
     },
     {
@@ -435,12 +436,10 @@
     {
       "title": "303|MODS|[lv.memes] KABOOOOOM!!!!",
       "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
-      "harness_version": "0.1.31",
-      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
-      "sha256": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a",
-      "compressed_bytes": 35927592,
-      "uncompressed_sha256": "77383ee11ef9fdf8fcea459b4d924eda6dabba0855f02cdfad6579dd3b06d75f",
-      "compression_level": 12,
+      "harness_version": "0.1.51",
+      "archive": "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst",
+      "sha256": "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85",
+      "compressed_bytes": 42039171,
       "aliases": [
         "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
         "1383c72f18d789124eb40dcffca0243712bfe0d226274689e3696edf0f0cd071.tar.zst",

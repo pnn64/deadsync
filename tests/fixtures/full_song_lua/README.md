@@ -481,3 +481,29 @@ sections describe the source at that time. Alternate low-resolution
 profiles, complete NPOT coordinate/sampling behavior, native GPU/mip
 and framebuffer output remain open. The original 501-source/492-context
 scope is unchanged; full corpus parity is incomplete.
+
+## Ordered fixture validation, pass 105
+
+DeadSync `def9a12f1` restores Technique's startup Model texture bindings.
+Seven Technique checks pass, including actual OpenGL arrow pixels and
+advancing rotation. The existing archives at positions 10–18 pass, as
+does the fresh Riddle capture: 2,064,514 comparisons across ten archives
+covering nine canonical positions. Completed logs removed from the local
+build directory were recovered by repeating only the affected checks.
+
+The first remaining case is position 19, KABOOOOOM. Harness `0.1.51`
+captures 11,969 updates over 199.46 seconds with no runtime errors or
+dropped events. Its complete 42,039,171-byte native archive is retained,
+along with the earlier version. Its production Model comparison passes
+12,568,240 checks. DeadSync `fb9d04ed4` removes the blanket Model
+rejection that prevented these comparisons from running in the archive
+suite. Complete per-actor/update observations remain required; missing
+Model tracks and incomplete columns still fail. The complete archive
+passes 14,842,953 comparisons, with no failures.
+
+The two source revisions above validate 16,907,467 comparisons across
+eleven archives covering positions 10–19 and the retained Riddle
+version. See `native-revalidation-pass105.json`. Position 20 is next;
+the original 501-source/492-context scope remains active. These checks
+establish the captured semantics and represented render states; native
+GPU framebuffer parity and unsupported rendering profiles remain open.
