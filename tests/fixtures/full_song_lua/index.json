@@ -631,12 +631,10 @@
     {
       "title": "[09] Delightful Day",
       "source_simfile": "[09] Delightful Day - (NO CMOD)/Delightful Day.ssc",
-      "harness_version": "0.1.0",
-      "archive": "94383304ec7beb36cd8c721e9209af6791f3a118f156012cd8d4bf503c2751cc.tar.zst",
-      "sha256": "94383304ec7beb36cd8c721e9209af6791f3a118f156012cd8d4bf503c2751cc",
-      "compressed_bytes": 64055,
-      "uncompressed_sha256": "3b893227543aec834ba487f38302c2ff2b2ea578b6e9b559af7f9513b65ccece",
-      "compression_level": 22,
+      "harness_version": "0.1.51",
+      "archive": "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6.tar.zst",
+      "sha256": "fb68cc6fb753f0c189c94f760e0c32673d9039e2e95c31e4ff2d2d9a9dc16ff6",
+      "compressed_bytes": 51875837,
       "aliases": [
         "22dd92290acead307e0abf7d8875c80da90931162476040425404f1b7552db2d.tar.zst"
       ]

@@ -566,3 +566,16 @@ Original chart and Lua bytes, the previous archive, and aliases are retained.
 See `native-revalidation-pass110.json`. Position 32 is next. The original
 501-source/492-context scope and additional pending observations remain
 active. Full corpus and framebuffer parity are still open.
+
+## Ordered fixture validation, pass 111
+
+Position 32, [09] Delightful Day, passes 282,140 comparisons
+against committed DeadSync `e1557ce33`. The complete
+harness 0.1.51 native capture records 12,740 updates
+over 212.31 seconds, with no native runtime errors
+or dropped events. Original chart and Lua bytes, the prior archive, and
+historical aliases are retained.
+
+See `native-revalidation-pass111.json`. Position 33 is next. The original
+501-source/492-context scope and additional pending observations remain
+active. Full corpus and framebuffer parity are still open.
