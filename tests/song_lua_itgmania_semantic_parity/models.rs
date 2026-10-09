@@ -646,12 +646,8 @@ pub(super) fn compare_models(
                 states,
                 index,
                 [context.screen_width, context.screen_height],
-                overlay_update_time(
-                    context,
-                    SongLuaTimeUnit::Second,
-                    beat as f32,
-                    seconds as f32,
-                ),
+                // Actor tracks use music time; material history uses elapsed time.
+                seconds as f32,
                 beat as f32,
             );
             compare_frame(
@@ -963,6 +959,30 @@ fn native_model_trace_columns_cover_every_update() {
 }
 
 #[test]
+fn native_model_elapsed_clock_ignores_simfile_offset() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-clock-offset");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (compiled, _, context) = compile_trace_song_at(&trace, &root.join("offset.ssc"));
+    let origin = context
+        .song_timing
+        .as_ref()
+        .expect("native song timing")
+        .get_time_for_beat_exact(0.0);
+    assert!((origin + 0.010).abs() <= 0.000_001);
+    assert_eq!(trace.update_frames.len(), 61);
+    let mut parity = Parity::default();
+    compare_models(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native Model material clock with simfile offset");
+    assert!(
+        parity.checks() > 10_000,
+        "compare complete Model observations"
+    );
+}
+
+#[test]
 #[ignore = "requires an explicitly selected native trace and its original simfile"]
 fn native_model_meshes_match_selected_trace() {
     crate::paths::init();
@@ -1028,12 +1048,7 @@ fn native_model_initial_frames_match_selected_trace() {
             &states,
             index,
             [context.screen_width, context.screen_height],
-            overlay_update_time(
-                &context,
-                SongLuaTimeUnit::Second,
-                *beat as f32,
-                *seconds as f32,
-            ),
+            *seconds as f32,
             *beat as f32,
         );
         let matrices = composer.model_matrices(
