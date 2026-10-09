@@ -41,6 +41,10 @@ struct NativeModelDraw {
     normals_buffer: usize,
     texture_matrix_scale_buffer: usize,
     texture_mode: String,
+    texture: Value,
+    texture_filtering: bool,
+    texture_wrapping: bool,
+    sphere_environment: bool,
     blend_mode: usize,
     cull_mode: usize,
     z_test: usize,
@@ -103,6 +107,9 @@ fn validate_draw(trace: &NativeTrace, draw: &NativeModelDraw) -> Result<(), Stri
     if !matches!(draw.texture_mode.as_str(), "modulate" | "glow") {
         return Err(format!("unknown Model texture mode {}", draw.texture_mode));
     }
+    if !draw.texture.is_null() && !draw.texture.as_str().is_some_and(|path| !path.is_empty()) {
+        return Err("native Model texture binding must be a source path or explicit null".into());
+    }
     if draw.viewport.contains(&0) {
         return Err("invalid native Model viewport".into());
     }
@@ -159,6 +166,14 @@ pub(super) fn validate_models(trace: &NativeTrace) -> Result<(), String> {
     }
     if trace.capabilities["model_texture_matrix_scale"].as_bool() != Some(true) {
         return Err("native Model reference omits per-vertex texture matrix scaling; recapture with harness 0.1.39 or newer".into());
+    }
+    for capability in ["model_hardware_mesh_path", "model_update_order", "model_texture_bindings"] {
+        if trace.capabilities[capability].as_bool() != Some(true) {
+            return Err(format!("native Model reference omits {capability}; recapture with harness 0.1.42 or newer"));
+        }
+    }
+    if trace.model_texture_units != Some(1) {
+        return Err("native Model reference requires the observed desktop one-texture-unit profile".into());
     }
     for dimension in [trace.display.width, trace.display.height] {
         if !dimension.is_finite()
@@ -285,11 +300,39 @@ fn check_flag(
     }
 }
 
+fn model_texture_key(
+    trace: &NativeTrace,
+    context: &SongLuaCompileContext,
+    texture: &Value,
+) -> Result<Option<String>, String> {
+    let Some(raw) = texture.as_str() else { return Ok(None) };
+    let path = if let Some(relative) = raw.strip_prefix("noteskin:/") {
+        if !trace.noteskin_reference.as_ref().is_some_and(|skin|
+            skin.files.iter().any(|file| file.path == Path::new(relative))) {
+            return Err(format!("Model texture is absent from the native noteskin inventory: {raw}"));
+        }
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins").join(relative)
+    } else if let Some(relative) = raw.strip_prefix("judgment:/") {
+        if !trace.judgment_reference.as_ref().is_some_and(|graphic| graphic.path == Path::new(relative)) {
+            return Err(format!("Model texture is absent from the native judgment inventory: {raw}"));
+        }
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/graphics/judgements").join(relative)
+    } else {
+        raw.strip_prefix("song:/").map_or_else(|| {
+            let path = PathBuf::from(raw);
+            if path.is_absolute() { path } else { context.song_dir.join(path) }
+        }, |relative| context.song_dir.join(relative))
+    };
+    Ok(Some(deadsync_assets::textures::canonical_texture_key(path)))
+}
+
 fn compare_frame(
     trace: &NativeTrace,
     draws: &[NativeModelDraw],
     frame: &RenderFrame,
     matrices: [[[f32; 4]; 4]; 2],
+    composer: &WholeSongComposer,
+    context: &SongLuaCompileContext,
     actor: &str,
     clock: f64,
     parity: &mut Parity,
@@ -327,6 +370,18 @@ fn compare_frame(
     for (pass, ((run, instance), draw)) in actual.iter().zip(draws).enumerate() {
         let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
         let prefix = format!("Model {actor} pass {pass}");
+        let expected_texture = model_texture_key(trace, context, &draw.texture);
+        let actual_texture = (run.texture_handle != 0).then(|| composer.texture_key(run.texture_handle));
+        check_flag(parity, reported, &format!("{prefix} texture binding"),
+            expected_texture.as_ref().is_ok_and(|expected| actual_texture == expected.as_deref())
+                && run.additive_texture == 0,
+            || format!("Model {actor} at {clock:.6}s pass {pass} binds {actual_texture:?}, native binds {expected_texture:?}"));
+        // TexturedMeshRun currently has no per-draw sampler selection. Do not
+        // infer equivalence from a resource's default hints or ignore native
+        // overrides (Model forces secondary filtering regardless of Actor).
+        check_flag(parity, reported, &format!("{prefix} sampler representation"), false,
+            || format!("Model {actor} pass {pass} native sampler filtering={} wrapping={} has no production per-draw representation",
+                draw.texture_filtering, draw.texture_wrapping));
         check_flag(
             parity,
             reported,
@@ -440,6 +495,10 @@ fn compare_frame(
             .clamp(0.0, 1.0)
         });
         for (vertex_index, vertex) in vertices.iter().take(draw.vertex_count).enumerate() {
+            let sphere = instance.texture_mask <= 0.5 && vertex.normal[3] as u8 & 1 != 0;
+            check_flag(parity, reported, &format!("{prefix} sphere state"),
+                sphere == draw.sphere_environment,
+                || format!("Model {actor} pass {pass} changes native sphere mapping state"));
             let position = [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0];
             let actual_world = project_world(world_matrix, position);
             let actual_view = project_world(matrices[1], actual_world);
@@ -600,6 +659,8 @@ pub(super) fn compare_models(
                     index,
                     [context.screen_width, context.screen_height],
                 ),
+                &composers[layer],
+                context,
                 &track.actor,
                 seconds,
                 parity,
@@ -679,7 +740,8 @@ fn compare_manual_models(
             let draws: Vec<NativeModelDraw> = serde_json::from_value(call["primitives"].clone())
                 .expect("validated manual Model primitives");
             compare_frame(
-                trace, &draws, &frame, matrices, actor, *seconds, parity, reported,
+                trace, &draws, &frame, matrices, &composers[layer], context,
+                actor, *seconds, parity, reported,
             );
         }
         for (layer, frames) in rendered {
@@ -711,6 +773,26 @@ fn native_model_columns_preserve_nulls() {
         !parity.is_complete(),
         "an undefined native value cannot pass as zero"
     );
+}
+
+#[test]
+fn native_model_texture_paths_require_reference_inventory() {
+    crate::paths::init();
+    let mut trace: NativeTrace = serde_json::from_value(model_trace_value()).unwrap();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua-micro/model-texture-images");
+    let context = SongLuaCompileContext::new(&directory, "Model texture identities");
+    let texture = serde_json::json!("song:/frame-red.png");
+    assert_eq!(model_texture_key(&trace, &context, &texture).unwrap(),
+        Some(deadsync_assets::textures::canonical_texture_key(directory.join("frame-red.png"))));
+    assert_eq!(model_texture_key(&trace, &context, &Value::Null).unwrap(), None);
+    let texture = serde_json::json!("noteskin:/dance/cyber/textures/Tap Note parts (mipmaps).png");
+    assert!(model_texture_key(&trace, &context, &texture).is_err());
+    let relative = PathBuf::from("dance/cyber/textures/Tap Note parts (mipmaps).png");
+    trace.noteskin_reference = Some(NativeNoteskin { skin: "cyber".into(),
+        files: vec![NativeResourceFile { path: relative.clone(), sha256: "inventory already verified by compilation".into() }] });
+    assert_eq!(model_texture_key(&trace, &context, &texture).unwrap(),
+        Some(deadsync_assets::textures::canonical_texture_key(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins").join(relative))));
 }
 
 #[test]
@@ -771,6 +853,13 @@ fn native_model_columns_reject_incomplete_observations() {
         ("/model_geometry_tracks", serde_json::json!([])),
         ("/capabilities/actor_base_rotation", serde_json::json!(false)),
         ("/capabilities/model_texture_matrix_scale", serde_json::json!(false)),
+        ("/capabilities/model_hardware_mesh_path", serde_json::json!(false)),
+        ("/capabilities/model_update_order", serde_json::json!(false)),
+        ("/capabilities/model_texture_bindings", serde_json::json!(false)),
+        ("/model_texture_units", serde_json::json!(0)),
+        ("/model_texture_units", serde_json::json!(2)),
+        ("/model_geometry_tracks/0/samples/0/3/0/texture", serde_json::json!("")),
+        ("/model_geometry_tracks/0/samples/0/3/0/texture", serde_json::json!(true)),
         ("/capabilities", serde_json::json!({})),
     ] {
         let mut changed = value.clone();
@@ -799,6 +888,11 @@ fn native_model_columns_reject_incomplete_observations() {
     extra["model_geometry_tracks"][0]["samples"][0][3][0]["vertex_buffers"]["unknown"] =
         serde_json::json!(1);
     mutations.push(("unknown vertex field", extra));
+    for field in ["texture", "texture_filtering", "texture_wrapping", "sphere_environment"] {
+        let mut absent = value.clone();
+        absent["model_geometry_tracks"][0]["samples"][0][3][0].as_object_mut().unwrap().remove(field);
+        mutations.push((field, absent));
+    }
     for (name, changed) in mutations {
         let rejected = serde_json::from_value::<NativeTrace>(changed)
             .map(|trace| validate_models(&trace).is_err())
@@ -824,6 +918,7 @@ fn model_trace_value() -> Value {
         "model_mesh_name":"Triangle","vertex_count":3,
         "vertex_buffers":{"local":1,"world":2,"view":3,"clip":4,"ndc":5,"screen":6,"uv":7,"transformed_uv":8,"color":9},
         "normals_buffer":10,"texture_matrix_scale_buffer":11,"texture_mode":"modulate",
+        "texture":null,"texture_filtering":true,"texture_wrapping":false,"sphere_environment":false,
         "blend_mode":0,"cull_mode":0,"z_test":1,"z_write":true,"lighting":false,"lights":{},
         "material":{"ambient":[0,0,0,1],"diffuse":[1,1,1,1],"emissive":[0,0,0,0],"specular":[0,0,0,0],"shininess":1},
         "texture_matrix":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],"render_target":0,"viewport":[854,480]});
@@ -833,7 +928,9 @@ fn model_trace_value() -> Value {
         "timeline_tracks":[],"tween_tracks":[],"end_position":{"seconds":1},
         "display":{"width":854,"height":480,"logical_width":854,"logical_height":480},
         "fixture_context":{"beat_step":0.25},"trace_until_beat":1,
-        "capabilities":{"actor_base_rotation":true,"model_texture_matrix_scale":true},
+        "capabilities":{"actor_base_rotation":true,"model_texture_matrix_scale":true,
+            "model_hardware_mesh_path":true,"model_update_order":true,"model_texture_bindings":true},
+        "model_texture_units":1,
         "update_frames":[[0,0],[1,1]],"model_geometry_encoding":"column-buffer-v1",
         "model_geometry_sample_clock":"update_frames","model_geometry_buffers":buffers,
         "model_geometry_tracks":[{"actor":"actor","definition_id":"actor","class":"Model","native_loaded":true,
@@ -960,6 +1057,8 @@ fn native_model_initial_frames_match_selected_trace() {
             draws,
             &frame,
             matrices,
+            &composer,
+            &context,
             &track.actor,
             *seconds,
             &mut parity,

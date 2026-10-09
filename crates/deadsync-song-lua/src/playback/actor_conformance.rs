@@ -289,6 +289,12 @@ pub struct WholeSongComposer {
 }
 
 impl WholeSongComposer {
+    /// Read the actual resource identity bound by production composition.
+    #[must_use]
+    pub fn texture_key(&self, handle: deadlib_render_core::TextureHandle) -> &str {
+        self.assets.texture_context().texture_key(handle)
+    }
+
     /// Read the world-space basis and camera view used by the production Model
     /// builder. The actor instance supplies its own local-to-world transform.
     #[must_use]

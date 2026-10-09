@@ -121,6 +121,8 @@ struct NativeTrace {
     #[serde(default)]
     model_geometry_sample_clock: Option<String>,
     #[serde(default)]
+    model_texture_units: Option<u32>,
+    #[serde(default)]
     model_geometry_buffers: Vec<Vec<Vec<Option<f64>>>>,
     #[serde(default)]
     model_geometry_tracks: Vec<models::NativeModelTrack>,
