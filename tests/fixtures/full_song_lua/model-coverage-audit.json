@@ -1967,6 +1967,75 @@
         "decode_integration": "ac4de1e1a58a02f61c2abd170605138e5db410d48c0c498fd66d68dd76327ac5",
         "harness": "2dc42eb813838fa7015a532900dbea4bbf70ac19b1044160adbcca2113ecdb16"
       }
+    },
+    {
+      "updated_utc": "2026-10-09T17:34:37.032782+00:00",
+      "source_commit": "59f62fd3b11ee4c65cf6e4eba094d784422da079",
+      "indexed_decoder_commit": "d0d3746ce78e0d70ea85eeddb20e26006fb8e948",
+      "harness_file_oracle_commit": "2ea017def6b963471102d07dcc3c1e3d170ffc68",
+      "harness_file_oracle_version": "0.1.48",
+      "harness_header_commit": "e5ee5826a0cf4024301c969087b1ee3b863e4242",
+      "harness_header_version": "0.1.49",
+      "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_file_oracle_executable_sha256": "5a5e22f078f426803ede703aabe27fbb80be1a3b6fcc51aa895a9bf51c27345b",
+      "native_header_oracle_executable_sha256": "be7d5ffa45f5cf75220e21921625d94a278a7c96dd595135e90330437ad8157d",
+      "codec_commits": {
+        "libpng": "ea127968204cc5d10f3fc9250c306b9e8cbd9b80",
+        "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+        "libjpeg-turbo": "20ade4dea9589515a69793e447a6c6220b464535"
+      },
+      "local_reference_files_matched": 15,
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files",
+      "original_control_requests": 35,
+      "successful_pixel_controls": 33,
+      "native_rejection_controls": 2,
+      "matched_rgba_bytes": 8704,
+      "byte_tolerance": 0,
+      "rejection_scope": "production decoder and raw source-dimension probing",
+      "covered": [
+        "Windows and OS/2 indexed BMP1/BMP4/BMP8",
+        "low-first BMP4 nibbles including odd-row padding",
+        "duplicate palette color keys and transparent unused palette entries",
+        "first-frame GIF global/local palettes, offsets, interlacing and multiple frames",
+        "Model texture registration and compiled Lua source/texture getters",
+        "native BMP read-order rejection after another registered bitmap extension"
+      ],
+      "before_failed_pixel_controls": 22,
+      "before_regular_gif_model": "PNG/JPEG-only adapter rejected a valid native GIF",
+      "tests": {
+        "deadsync_passed": 1434,
+        "harness_passed": 210,
+        "harness_existing_ignored": 5
+      },
+      "test_log_sha256": {
+        "deadsync": [
+          "c8e543f41e530c7c8b78db7d6370e731528b2b6bef9e7cb7da018daa9356a674",
+          "2b406dfee82f01d174eda81d2b0de5037841061b2edc33d71b599aadba0a531e"
+        ],
+        "harness": "594d3d17f72652dcadc7e94eae1b725284d16d50eb70b3654582e1142a49226f"
+      },
+      "native_bitmap_regressions_unchanged": 28,
+      "native_header_cases": 2,
+      "native_regular_gif_model_draws": 3,
+      "original_corpus_gif_headers": {
+        "files": 21,
+        "different_from_canvas": 0,
+        "native_json_sha256": "93f12565f5370fea20a0d2d9e2e74216dcd0b3ee7c02d40a476ba35b25b71df2",
+        "full_song_revalidation_complete": false
+      },
+      "dependency_pins_preserved": true,
+      "framebuffer_verified": false,
+      "full_corpus_complete": false,
+      "model_archive_acceptance_open": false,
+      "canonical_archive_index_unchanged": true,
+      "remaining": [
+        "default tiny Sprite stretching, source/image/allocation identities and normalized UV mapping",
+        "true-color BMP masks, JPEG codec precision, complete bitmap hints/settings/device policy",
+        "other generic image consumers, including mine color sampling and font metadata",
+        "Lua error-message and unsupported/invalid input behavior beyond these decoder rejections",
+        "effective mip requests, physical mip storage, native framebuffer and remaining render state",
+        "all original 501 simfiles, 492 contexts, aliases, historical variants and 18 unindexed sources"
+      ]
     }
   ]
 }

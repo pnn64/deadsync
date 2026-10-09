@@ -342,3 +342,33 @@ fully initialized. Production indexed GIF/BMP handling, default tiny Sprite
 stretching, complete bitmap policy, effective mips, physical mip storage and
 native framebuffer output remain open. Complete Model acceptance stays closed;
 the canonical archive index and full 501-source/492-context scope are unchanged.
+
+
+DeadSync `d0d3746ce` and `59f62fd3b`
+close the indexed BMP/GIF decoder controls using actual native file-loader and
+CPU upload output from committed harness 0.1.48 (`2ea017def`).
+All 35 original inputs are covered: 33 exact pixel comparisons (8,704 RGBA
+bytes, zero tolerance) and two matching decoder/source-probe rejections.
+The baseline had 22 failing pixel controls. Windows/OS2 BMP1/4/8, low-first
+BMP4 packing and odd rows, palette identity/keying, GIF local/global tables,
+transparency, offsets, interlacing and first-frame selection are retained in
+the portable `indexed-bitmap-files` fixture. The 15 local reference files
+match the pinned sources after line-ending normalization.
+
+Harness 0.1.49 (`e5ee5826a`) replaces handwritten regular
+texture and archive metadata probes with actual native LoadFile. A valid GIF
+Model previously rejected by the PNG/JPEG-only adapter now matches all three
+native source/image/allocation observations. The 28 prior bitmap controls are
+unchanged. All 210 harness tests pass (five existing skips); DeadSync passes
+1,434 current unit/integration tests, including compiled Lua getters and Model
+registration. Existing dependency pins are preserved.
+
+The native header oracle also loads all 21 original-corpus GIF files. Their
+first-frame sizes match their canvas sizes; this inventory does not establish
+full-song rendering parity. Sprite upload pixels are now captured only when
+their power-of-two inputs fill the allocation; other undefined padding remains
+excluded. Tiny Sprite preparation/metadata/UV behavior, true-color BMP and JPEG
+precision, other generic image consumers, complete bitmap policy, Lua error
+behavior, physical mips and native framebuffer output remain open. Complete
+Model acceptance remains closed and the original 501-source/492-context scope
+and canonical archive index are unchanged.
