@@ -5464,7 +5464,7 @@ pub fn install_actor_image_coord_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let Some((width, height)) = actor_image_texture_size(&actor)? else {
+                let Some([width, height]) = actor_upload_image_size(&actor)? else {
                     return Ok(actor.clone());
                 };
                 let dx = method_arg(&args, 0)
@@ -5488,6 +5488,17 @@ pub fn install_actor_image_coord_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         })?,
     )?;
     Ok(())
+}
+
+fn actor_upload_image_size(actor: &Table) -> mlua::Result<Option<[f32; 2]>> {
+    let Some((width, height)) = actor_image_texture_size(actor)? else { return Ok(None); };
+    let path = actor_texture_path(actor)?.unwrap_or_default();
+    let mut hints = deadlib_assets::parse_texture_hints(&path.to_string_lossy());
+    hints.max_size = Some(2048);
+    hints.min_size = Some(8);
+    deadlib_assets::texture_image_size([width as u32, height as u32], &hints)
+        .map(|size| Some(size.map(|dimension| dimension as f32)))
+        .map_err(mlua::Error::external)
 }
 
 pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -5657,20 +5668,15 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     // RageBitmapTexture caps the image at the native game preference (2048),
     // then stretches both axes if either allocation is under eight pixels.
     // Logical source hints do not change this prepared image/allocation pair.
-    // Physical UV helpers retain the decoded image dimensions independently.
-    let bitmap_sizes = actor_image_texture_size(actor)?
-        .map(|(width, height)| {
-            let image = [(width as u32).min(2048), (height as u32).min(2048)];
+    let bitmap_sizes = actor_upload_image_size(actor)?
+        .map(|image| {
             let allocation = image.map(|dimension| {
-                dimension
+                (dimension as u32)
                     .checked_next_power_of_two()
                     .unwrap_or(u32::MAX)
                     .max(8)
             });
-            let stretch = image.iter().any(|dimension| *dimension <= 4)
-                || deadlib_assets::parse_texture_hints(&path).stretch;
-            let image = if stretch { allocation } else { image };
-            (image.map(|value| value as f32), allocation.map(|value| value as f32))
+            (image, allocation.map(|value| value as f32))
         });
     let ([image_width, image_height], [texture_width, texture_height]) =
         bitmap_sizes.unwrap_or(([source_width, source_height], [source_width, source_height]));

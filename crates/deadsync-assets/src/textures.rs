@@ -78,6 +78,10 @@ pub fn texture_source_key(key: &str) -> &str {
 fn decode_texture_hints(key: &str) -> TextureHints {
     let source = texture_source_key(key);
     let mut hints = parse_texture_hints(source);
+    // The native game profile caps images to 2048; allocations below 8 force
+    // both axes to stretch. Logical Sprite sizes retain their original source.
+    hints.max_size = Some(2048);
+    hints.min_size = Some(8);
     if source.len() != key.len() {
         hints.non_default = true;
         hints.stretch = true;
@@ -161,10 +165,9 @@ pub fn initial_texture_jobs(
     textures
         .map(|(key, path)| TextureDecodeJob {
             sampler: initial_texture_sampler(&key, needs_repeat(&key)),
+            hints: decode_texture_hints(&key),
             key,
             path,
-            // Startup historically uses raw pixels; on-demand loads apply filename effects.
-            hints: TextureHints::default(),
         })
         .collect()
 }
@@ -523,6 +526,47 @@ mod tests {
     use deadlib_render_core::SamplerFilter;
 
     #[test]
+    fn native_sprite_prepared_pixels() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation");
+        let control: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("control.json")).expect("native Sprite controls"),
+        ).expect("Sprite control JSON");
+        let native: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("native.json")).expect("native Sprite pixels"),
+        ).expect("native Sprite JSON");
+        let mut failures = Vec::new();
+        let mut checked = 0;
+        for (spec, case) in control["texture_files"].as_array().expect("controls").iter()
+            .zip(native["cases"].as_array().expect("native cases")) {
+            // The production headless profile resolves high-resolution textures on.
+            if spec["high_resolution"] == false { continue; }
+            let name = case["name"].as_str().expect("case name");
+            let source = root.join(spec["file"].as_str().expect("source file"));
+            let key = canonical_texture_key(&source);
+            let job = texture_decode_job(&key, false);
+            let image = deadlib_assets::decode_texture_image(&job.path, &job.hints)
+                .unwrap_or_else(|error| panic!("{name}: {error}"));
+            checked += 1;
+            if serde_json::json!([image.width(), image.height()]) != case["dimensions"]["image"] {
+                failures.push(format!("{name}: actual {:?}, native {}", image.dimensions(), case["dimensions"]["image"]));
+                continue;
+            }
+            if case["upload"]["pixels_captured"] == true {
+                let expected: Vec<u8> = case["upload"]["pixels"].as_array().expect("native pixels").iter()
+                    .flat_map(|pixel| pixel.as_array().expect("RGBA").iter().map(|byte| byte.as_u64().expect("byte") as u8)).collect();
+                if image.as_raw() != &expected {
+                    let difference = image.as_raw().iter().zip(&expected).position(|(actual, expected)| actual != expected);
+                    failures.push(format!("{name}: native pixel difference at {difference:?}"));
+                }
+            }
+        }
+        assert_eq!(checked, 9);
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
     fn native_indexed_bitmap_pixels() {
         crate::init_asset_paths();
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -798,7 +842,9 @@ mod tests {
         assert_eq!(skin_jobs.len(), 1);
         assert_eq!(skin_jobs[0].path, dirs.data_dir.join("assets").join(key));
         assert_eq!(skin_jobs[0].sampler.filter, SamplerFilter::Nearest);
-        assert_eq!(skin_jobs[0].hints, TextureHints::default());
+        assert!(skin_jobs[0].hints.grayscale);
+        assert_eq!(skin_jobs[0].hints.min_size, Some(8));
+        assert_eq!(skin_jobs[0].hints.max_size, Some(2048));
         assert!(!jobs.iter().any(|job| job.key.ends_with("ignored.txt")));
         let manifest_job = &jobs[0];
         assert_eq!(manifest_job.key, "boundary (nearest).png");

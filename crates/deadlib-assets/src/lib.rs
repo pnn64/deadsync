@@ -19,7 +19,7 @@ pub use builtin::{
 pub use choice::TextureChoice;
 pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
 pub use decode::{
-    TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset, texture_image_size,
+    DecodedTexture, TextureAssetSpec, TextureDecodeJob, decode_texture, decode_texture_image, texture_asset, texture_image_size,
     texture_source_size,
 };
 pub use error::AssetError;
@@ -57,6 +57,8 @@ pub struct TextureHints {
     pub stretch: bool,
     pub hot_pink_color_key: bool,
     pub max_size: Option<u32>,
+    /// Minimum allocation axis. Falling below it stretches both image axes.
+    pub min_size: Option<u32>,
     pub dither: bool,
     pub color_depth: Option<u32>,
     pub sampler_filter: Option<SamplerFilter>,

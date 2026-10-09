@@ -14115,6 +14115,28 @@ return Def.Sprite{{
     }
 
     #[test]
+    fn compile_song_lua_tiny_image_offsets() {
+        let song_dir = test_dir("tiny-image-offsets");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation");
+        fs::copy(root.join("tiny.png"), song_dir.join("tiny.png")).expect("native tiny input");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.Sprite{Texture="tiny.png", OnCommand=function(self)
+    mod_actions={{1, string.format("%.0f:%.0f", self:GetWidth(), self:GetHeight()), true}}
+    self:addimagecoords(1,2)
+end}
+"#).expect("tiny image offset Lua");
+        let compiled = test_compile_song_lua(&entry,
+            &SongLuaCompileContext::new(&song_dir, "Native Tiny Offsets")).expect("compile offsets");
+        assert_eq!(compiled.messages[0].message, "3:2");
+        // Sprite.cpp AddImageCoords divides by native allocation axes. This
+        // native 3x2 input fills its prepared 8x8 allocation (bitmap golden).
+        assert_eq!(compiled.overlays[0].initial_state.custom_texture_rect,
+            Some([0.125, 0.25, 1.125, 1.25]));
+    }
+
+    #[test]
     fn compile_song_lua_native_image_getters() {
         let song_dir = test_dir("native-image-getters");
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))

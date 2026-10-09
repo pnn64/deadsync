@@ -25,7 +25,13 @@ pub struct TextureDecodeJob {
 pub(crate) struct TextureDecodeResult {
     pub key: String,
     pub sampler: SamplerDesc,
-    pub image: image::ImageResult<RgbaImage>,
+    pub decoded: image::ImageResult<DecodedTexture>,
+}
+
+/// A prepared upload and its original bitmap size, before resize or source hints.
+pub struct DecodedTexture {
+    pub image: RgbaImage,
+    pub source_size: [u32; 2],
 }
 
 struct DecodeSlot {
@@ -120,15 +126,20 @@ pub const fn texture_asset(path: &'static str) -> TextureAssetSpec {
 
 fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
     TextureDecodeResult {
-        image: decode_texture_image(&job.path, &job.hints),
+        decoded: decode_texture(&job.path, &job.hints),
         key: job.key,
         sampler: job.sampler,
     }
 }
 
 pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageResult<RgbaImage> {
+    decode_texture(path, hints).map(|decoded| decoded.image)
+}
+
+pub fn decode_texture(path: &Path, hints: &TextureHints) -> image::ImageResult<DecodedTexture> {
     let mut image = decode_image(path, hints.hot_pink_color_key)?;
-    let size = texture_image_size([image.width(), image.height()], hints)?;
+    let source_size = [image.width(), image.height()];
+    let size = texture_image_size(source_size, hints)?;
     if size != [image.width(), image.height()] {
         image = zoom_image(image, size);
     }
@@ -138,7 +149,7 @@ pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageRe
     // Native cleanup follows color keying and the final resize, including
     // sources that gain an alpha channel during preparation.
     fix_hidden_alpha(&mut image);
-    Ok(image)
+    Ok(DecodedTexture { image, source_size })
 }
 
 pub fn texture_image_size(source: [u32; 2], hints: &TextureHints) -> image::ImageResult<[u32; 2]> {
@@ -147,12 +158,20 @@ pub fn texture_image_size(source: [u32; 2], hints: &TextureHints) -> image::Imag
     if size.contains(&0) {
         return Err(image_limit());
     }
-    if hints.stretch {
+    let min_size = hints.min_size.unwrap_or(0);
+    if hints.min_size.is_some() && (!min_size.is_power_of_two() || min_size > max_size) {
+        return Err(image_limit());
+    }
+    let allocation = if hints.stretch || min_size != 0 {
+        [size[0].checked_next_power_of_two().ok_or_else(image_limit)?,
+         size[1].checked_next_power_of_two().ok_or_else(image_limit)?]
+    } else { size };
+    if hints.stretch || allocation.iter().any(|dimension| *dimension < min_size) {
         for dimension in &mut size {
             *dimension = dimension
                 .checked_next_power_of_two()
                 .ok_or_else(image_limit)?
-                .max(8);
+                .max(min_size.max(8));
         }
     }
     if size.iter().any(|dimension| *dimension > max_size) {
@@ -715,7 +734,7 @@ mod tests {
         decode_texture_jobs_with(vec![job], |result| {
             assert_eq!(result.key, "missing-0");
             assert_eq!(result.sampler, sampler);
-            assert!(result.image.is_err());
+            assert!(result.decoded.is_err());
             Ok::<_, ()>(())
         })
         .expect("consumer accepts failures");
@@ -760,7 +779,7 @@ mod tests {
         let mut consumed = 0;
         decode_texture_jobs_with(jobs, |result| {
             assert_eq!(result.sampler, sampler);
-            let image = result.image.expect("decode fixture");
+            let image = result.decoded.expect("decode fixture").image;
             if result.key == "plain.png" {
                 let pixel = image.get_pixel(0, 0).0;
                 assert_eq!(pixel[0], pixel[1]);
