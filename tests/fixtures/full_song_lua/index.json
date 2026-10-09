@@ -606,13 +606,14 @@
     {
       "title": "[1115] [07] Spooky (Medium)",
       "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061.tar.zst",
-      "sha256": "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061",
-      "compressed_bytes": 117064,
-      "uncompressed_sha256": "d197995963dac7f10a621ed3fbdb938d22f392a46516d52157b9a0a2741a6ef7",
-      "compression_level": 22,
+      "harness_version": "0.1.33",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "sha256": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3",
+      "compressed_bytes": 167161,
+      "uncompressed_sha256": "626f62bdd1c8937244cbdf76e0759c5357f5440c079c203ff4543133d07e4639",
+      "compression_level": 12,
       "aliases": [
+        "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061.tar.zst",
         "a9c211f75c490cad17d4d83cd020c6610aa5ad234e1f67f9326218d520e19ff9.tar.zst"
       ]
     },

@@ -2661,3 +2661,21 @@ parity has not passed. The completed 29-case prefix belongs to 0.5.1870 and
 must be revalidated on the new verifier. Preserve all 501 original simfiles,
 483 originally indexed sources, 18 unindexed sources and 492 archive cases.
 The full parity goal remains unfinished.
+
+## Pass 77: verify native Spooky and audit Model coverage
+
+The complete unchanged [07] Spooky reference from native harness
+0.1.33 passes all 157,678 strict comparisons with DeadSync 0.5.1871.
+Retain the previous archive locally and preserve reference aliases.
+This independently verified case is index 29; revalidation of the
+preceding 29 cases is still running on this verifier.
+
+Fresh Mawaru9 capture contains all 325 required archive members,
+including 58 recovered model dependencies. It remains private:
+the current song Lua reference excludes Model projected geometry.
+An isolated native Model probe executes the actual ITGmania loader
+and draw path, verifies its Y flip, normalized normals, material
+diffuse and separate glow pass; the prior harness rejects this
+actor type. Production song traces still need Model coverage.
+The original 501 simfiles and all 492 archive cases remain in
+scope; full-corpus parity is unfinished.

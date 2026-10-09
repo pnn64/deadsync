@@ -2487,6 +2487,14 @@
       "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
       "harness_version": "0.1.32",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 77,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "superseded_archive": "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061.tar.zst",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "harness_version": "0.1.33",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -7552,6 +7560,34 @@
       "native_capture_reused": false,
       "runtime_errors": 0,
       "dropped_events": 0,
+      "full_corpus_complete": false
+    },
+    {
+      "pass_number": 77,
+      "index": 29,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "harness_version": "0.1.33",
+      "harness_commit": "71b414f2412ac2a1b34a3b286b3d7d5ea8684591",
+      "native_executable_sha256": "99f80eb407a5f0ae9d63c314d30b5a78e49b3574a8fd78d719b635e116c4dd39",
+      "verification": {
+        "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 8.967792987823486,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.73s",
+        "log_sha256": "dc53e2b29518d58d0df8f416e1aeb4f7da58e64f65589126dd292000c6350b9d",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": false,
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "capture_log_sha256": "1e776175ff4fcb9b615676e6d58d885b5aadd02e738ac427d461445490509e5e",
+      "capture_endpoint": {
+        "beat": 275.3541564941406,
+        "music_seconds": 117.99392700195312,
+        "seconds": 118.00892639160156
+      },
       "full_corpus_complete": false
     }
   ]
