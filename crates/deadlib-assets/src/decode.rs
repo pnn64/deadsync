@@ -201,7 +201,13 @@ pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
             .next_frame_info()
             .map_err(gif_error)?
             .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
+        if frame.width == 0 || frame.height == 0 {
+            return Err(image_limit());
+        }
         return Ok((u32::from(frame.width), u32::from(frame.height)));
+    }
+    if &signature[..2] == b"BM" {
+        check_bmp_reader_order(path)?;
     }
     image::ImageReader::open(path)?
         .with_guessed_format()?
@@ -217,6 +223,7 @@ fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         return decode_gif(path, color_key);
     }
     if &signature[..2] == b"BM" {
+        check_bmp_reader_order(path)?;
         if let Some(image) = decode_indexed_bmp(path, color_key)? {
             return Ok(image);
         }
@@ -226,6 +233,24 @@ fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         key_rgba(&mut image);
     }
     Ok(image)
+}
+
+// RageSurface_Load tries a registered extension first. Load_BMP retains
+// the previous reader's wrong-format error, so BMP cannot be a fallback after
+// another registered bitmap reader. An unknown extension tries BMP first.
+fn check_bmp_reader_order(path: &Path) -> image::ImageResult<()> {
+    if path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["png", "gif", "jpg", "jpeg"]
+                .iter()
+                .any(|format| extension.eq_ignore_ascii_case(format))
+        })
+    {
+        return Err(decode_error(image::ImageFormat::Bmp, "Unknown file format"));
+    }
+    Ok(())
 }
 
 fn decode_error(format: image::ImageFormat, message: &str) -> image::ImageError {

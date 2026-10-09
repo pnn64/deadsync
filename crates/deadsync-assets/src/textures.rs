@@ -581,6 +581,35 @@ mod tests {
     }
 
     #[test]
+    fn native_indexed_bitmap_rejections() {
+        crate::init_asset_paths();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
+        let cases: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("native-rejections.json")).expect("native rejection manifest"),
+        )
+        .expect("native rejection cases");
+        let cases = cases.as_array().expect("rejection array");
+        assert_eq!(cases.len(), 2);
+        for case in cases {
+            let name = case["name"].as_str().expect("rejection name");
+            let source = root.join(case["file"].as_str().expect("native rejected source"));
+            let model = case["kind"] == "model";
+            let key = canonical_texture_key(&source);
+            let key = if model { model_texture_key(&key) } else { key };
+            let job = texture_decode_job(&key, model);
+            assert!(
+                deadlib_assets::decode_texture_image(&job.path, &job.hints).is_err(),
+                "{name}: native rejected this source"
+            );
+            assert!(
+                deadlib_assets::texture_source_size(&source).is_err(),
+                "{name}: native rejected its source dimensions"
+            );
+        }
+    }
+
+    #[test]
     fn native_indexed_model_dimensions() {
         crate::init_asset_paths();
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))

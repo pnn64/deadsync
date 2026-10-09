@@ -96,5 +96,6 @@
   "native_json_sha256": "e9f145fc201b7838db7475d9b9cc3abc0a55b5d65ee70e2cf0c34bfdc036800e",
   "positive_control_json_sha256": "04ab6d8d7c4b2b016bcdbc8b8f66cb7ce4a070c067756fe67f92d025da53d935",
   "control_json_sha256": "9471092fef2f5d80d2a75f4b366123dd5a2a7a5c5b5e280c7393d114cb98c6a9",
-  "rejection_parity_verified_in_deadsync": false
+  "rejection_parity_verified_in_deadsync": true,
+  "rejection_parity_scope": "production decoder and raw source-dimension probing"
 }
