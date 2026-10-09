@@ -92,25 +92,28 @@ impl SongRow {
     /// `artist  -  150 bpm  -  1:52  -  Charter`, with any part absent.
     #[must_use]
     pub fn subline(&self) -> String {
-        let bpm = if self.bpm.is_empty() {
-            String::new()
-        } else {
-            format!("{} bpm", self.bpm)
-        };
-        let mut bits: Vec<&str> = Vec::with_capacity(4);
-        if !self.artist.is_empty() {
-            bits.push(self.artist.as_str());
+        let parts = [
+            (self.artist.as_str(), ""),
+            (self.bpm.as_str(), " bpm"),
+            (self.length.as_str(), ""),
+            (self.credit.as_str(), ""),
+        ]
+        .into_iter()
+        .filter(|(text, _)| !text.is_empty());
+        let capacity = parts
+            .clone()
+            .map(|(text, suffix)| text.len() + suffix.len() + "  -  ".len())
+            .sum::<usize>()
+            .saturating_sub("  -  ".len());
+        let mut out = String::with_capacity(capacity);
+        for (text, suffix) in parts {
+            if !out.is_empty() {
+                out.push_str("  -  ");
+            }
+            out.push_str(text);
+            out.push_str(suffix);
         }
-        if !bpm.is_empty() {
-            bits.push(bpm.as_str());
-        }
-        if !self.length.is_empty() {
-            bits.push(self.length.as_str());
-        }
-        if !self.credit.is_empty() {
-            bits.push(self.credit.as_str());
-        }
-        bits.join("  -  ")
+        out
     }
 }
 
@@ -869,3 +872,7 @@ mod tests {
         assert_eq!(page.difficulty_span(), None);
     }
 }
+
+#[cfg(test)]
+#[path = "pack_page_perf.rs"]
+mod perf_tests;
