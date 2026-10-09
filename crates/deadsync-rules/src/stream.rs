@@ -79,6 +79,9 @@ pub fn stream_run_progress(
     threshold: usize,
     current_measure: usize,
 ) -> Option<(usize, usize)> {
+    if data.is_empty() {
+        return (threshold == 0 && current_measure == 0).then_some((1, 1));
+    }
     match lanes {
         5 => stream_run_progress_impl::<5>(data, threshold, current_measure),
         8 => stream_run_progress_impl::<8>(data, threshold, current_measure),
@@ -89,9 +92,15 @@ pub fn stream_run_progress(
 
 #[must_use]
 pub fn stream_sequences_threshold(measures: &[u8], threshold: usize) -> Vec<StreamSegment> {
-    let mut segs = Vec::with_capacity(measures.len().min(64));
-    for_each_stream_segment(measures, threshold, |segment| segs.push(segment));
-    segs
+    if measures.is_empty() {
+        return Vec::new();
+    }
+    let mut segs = None;
+    for_each_stream_segment(measures, threshold, |segment| {
+        segs.get_or_insert_with(|| Vec::with_capacity(measures.len().min(64)))
+            .push(segment);
+    });
+    segs.unwrap_or_default()
 }
 
 /// Builds optional measure-counter and `ZMod` output in one density traversal.
@@ -531,7 +540,7 @@ pub fn zmod_stream_totals_full_measures(
 fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
     const ROWS_PER_MEASURE_HINT: usize = 16;
     let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * ROWS_PER_MEASURE_HINT) + 1);
-    for_each_measure_density::<LANES, 0>(data, |density| {
+    for_each_measure_density::<LANES>(data, None, |density| {
         densities.push(density);
         true
     });
@@ -541,7 +550,7 @@ fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
 fn stream_measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<u8> {
     const ROWS_PER_MEASURE_HINT: usize = 16;
     let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * ROWS_PER_MEASURE_HINT) + 1);
-    for_each_measure_density::<LANES, 32>(data, |density| {
+    for_each_measure_density::<LANES>(data, Some(32), |density| {
         densities.push(density as u8);
         true
     });
@@ -554,7 +563,8 @@ fn stream_run_progress_impl<const LANES: usize>(
     current_measure: usize,
 ) -> Option<(usize, usize)> {
     let mut progress = StreamProgress::new(threshold, current_measure);
-    for_each_measure_density::<LANES, 0>(data, |density| progress.record(density));
+    // Run membership only needs to know whether each measure meets the threshold.
+    for_each_measure_density::<LANES>(data, Some(threshold), |density| progress.record(density));
     progress.finish()
 }
 
@@ -610,21 +620,41 @@ impl StreamProgress {
     }
 }
 
-fn for_each_measure_density<const LANES: usize, const CAP: usize>(
-    data: &[u8],
+fn for_each_measure_density<const LANES: usize>(
+    mut data: &[u8],
+    cap: Option<usize>,
     mut visit: impl FnMut(usize) -> bool,
 ) {
     // Empty-subdivision reduction cannot remove a step: a nonzero off-grid row
     // prevents that reduction level. The reduced density is this direct count.
     let mut measure_steps = 0usize;
-    let mut done = false;
-
-    for raw in data.split(|&byte| byte == b'\n') {
-        let line = skip_ws(trim_cr(raw));
+    while !data.is_empty() {
+        if data[0].is_ascii_whitespace() {
+            data = skip_ws(data);
+            continue;
+        }
+        // Minimized charts normally contain exactly one fixed-width row per line.
+        if data.len() > LANES
+            && (data[LANES] == b'\n' || data[LANES..].starts_with(b"\r\n"))
+            && !data[..LANES].contains(&b'\n')
+            && data[LANES - 1] != b'\r'
+            && !matches!(data[0], b'/' | b',' | b';')
+        {
+            if cap.is_none_or(|limit| measure_steps < limit) {
+                measure_steps += usize::from(density_row_has_step::<LANES>(data));
+            }
+            data = &data[LANES + 1 + usize::from(data[LANES] == b'\r')..];
+            continue;
+        }
+        let (raw, rest) = data
+            .iter()
+            .position(|&byte| byte == b'\n')
+            .map_or((data, &[][..]), |end| (&data[..end], &data[end + 1..]));
+        data = rest;
+        let line = trim_cr(raw);
         if line.is_empty() || line[0] == b'/' {
             continue;
         }
-
         match line[0] {
             b',' => {
                 if !visit(std::mem::take(&mut measure_steps)) {
@@ -632,20 +662,16 @@ fn for_each_measure_density<const LANES: usize, const CAP: usize>(
                 }
             }
             b';' => {
-                visit(std::mem::take(&mut measure_steps));
-                done = true;
-                break;
+                visit(measure_steps);
+                return;
             }
-            _ if line.len() >= LANES && (CAP == 0 || measure_steps < CAP) => {
+            _ if line.len() >= LANES && cap.is_none_or(|limit| measure_steps < limit) => {
                 measure_steps += usize::from(density_row_has_step::<LANES>(line));
             }
             _ => {}
         }
     }
-
-    if !done {
-        visit(measure_steps);
-    }
+    visit(measure_steps);
 }
 
 fn density_row_has_step<const LANES: usize>(line: &[u8]) -> bool {
@@ -841,3 +867,7 @@ mod tests {
         assert_eq!(total_break, 0.0);
     }
 }
+
+#[cfg(test)]
+#[path = "stream_perf.rs"]
+mod stream_perf;
