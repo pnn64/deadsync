@@ -129,8 +129,7 @@ fn validate_draw(trace: &NativeTrace, draw: &NativeModelDraw) -> Result<(), Stri
     Ok(())
 }
 
-/// Shape checks never establish rendering parity. The archive coverage gate
-/// remains closed until these observations match actual production draws.
+/// Require complete observations; `compare_models` checks production draws.
 pub(super) fn validate_models(trace: &NativeTrace) -> Result<(), String> {
     let mut expected = HashMap::new();
     for definition in trace

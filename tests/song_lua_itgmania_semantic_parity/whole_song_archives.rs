@@ -436,22 +436,12 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
             .all(|definition| definition.properties.get("NoteSkinElement").is_none()),
         "placeholder noteskin actors invalidate the reference; recapture with native noteskin resources",
     );
-    // Decode Model columns before comparing, but keep the archive gate closed:
-    // complete camera/world data, texture identity, lighting and render-state
-    // equivalence are not established by the new mesh observations alone.
+    // Require complete native observations before compiling. The production
+    // Model comparator checks every update's geometry, transforms, bindings
+    // and render state; unsupported states remain failed comparisons.
     if let Err(error) = models::validate_models(trace) {
         panic!("native Model mesh geometry is not captured and compared: {error}; this archive cannot establish full-song parity");
     }
-    let model = trace.actor_definitions.iter().find(|definition| {
-        definition.class == "Model"
-            && (!definition.runtime_actors.is_empty()
-                || trace.runtime_actors.iter().any(|actor| actor.id == definition.id))
-    });
-    assert!(
-        model.is_none(),
-        "native Model mesh geometry is not captured and compared for {}; this archive cannot establish full-song parity",
-        model.map(|definition| definition.id.as_str()).unwrap_or_default(),
-    );
     assert!(
         trace
             .update_frames
@@ -933,13 +923,15 @@ fn archive_reference_rejects_missing_model_meshes() {
     validate_native_trace(&trace, &archive.manifest);
 
     let model = index.archives.iter().find(|entry| {
-        entry.source_simfile == "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc"
-    }).expect("native Cyber Model reference");
+        entry.archive == "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst"
+    }).expect("complete native KABOOOOOM Model reference");
     let archive = extract_archive(model);
-    let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
     assert!(trace.actor_definitions.iter().any(|definition| {
         definition.class == "Model" && !definition.runtime_actors.is_empty()
     }));
+    validate_native_trace(&trace, &archive.manifest);
+    trace.model_geometry_tracks.clear();
     let error = std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest))
         .expect_err("an omitted native Model mesh must invalidate the reference");
     let message = error.downcast_ref::<String>().map(String::as_str)
