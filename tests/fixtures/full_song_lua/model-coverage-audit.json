@@ -1128,5 +1128,198 @@
         }
       ]
     }
+  ],
+  "native_image_binding_revalidations": [
+    {
+      "source_commit": "e7252ef75a0b2a19b59343036ab880e98916adf4",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "comparator_sha256": "278f4c5a8c0437ab6bb88cc137d3576cadf04ed6863d09b9971ab4130a483f10",
+      "comparator_profile": "test/debug in isolated target with CLI-only profile.dev.debug=0",
+      "local_reference_source_audit": {
+        "native_vendor_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "local_reference": "C:/GitHub/rework/itgmania/src",
+        "sources": [
+          {
+            "source": "Model.cpp",
+            "normalized_source_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
+            "same_source": true
+          },
+          {
+            "source": "ModelTypes.cpp",
+            "normalized_source_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+            "same_source": true
+          },
+          {
+            "source": "RageBitmapTexture.cpp",
+            "normalized_source_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+            "same_source": true
+          },
+          {
+            "source": "RageDisplay_OGL.cpp",
+            "normalized_source_sha256": "06300e9bbb3ccdc31707084ea6f0f57144f485db4387e38b0163856baab45758",
+            "same_source": true
+          }
+        ]
+      },
+      "native_contract": "ModelTypes.cpp AnimatedTexture::GetCurrentTexture selects one loaded image per state. Model.cpp shares primary translation with the independent secondary pass and binds the primary image for glow.",
+      "production_contract": "Remove generated Model frame atlases. Retain per-state image keys and dimensions; record compact primary/secondary state indices with native Update history; select full-image UVs and prewarm every image for gameplay and both preview consumers. NoteDisplay seeks actual image states.",
+      "before_native_image_binding_failure": "diffuse.ini#model-frames submitted where the native control binds frame-red.png",
+      "before_failed_control_log_sha256": "2749449b920d004d7c6ce3752946eb48489b5c85f70ff5676a680a25dc9d312b",
+      "native_material_control": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "native_material_control_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "native_material_image_bindings_both_builders": 366,
+      "native_material_uv_coordinates_both_builders": 2196,
+      "native_material_sampler_boolean_checks": 732,
+      "secondary_loading_control": "Static primary, three secondary states with unequal dimensions and repeated image; actual image colors/state selection survive compiled-skin cache reload. Both preview catalogs prepare all four native control images once.",
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "native_trace_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+      "original_recorded_comparisons_passed": 12568240,
+      "original_recorded_comparisons_failed": 0,
+      "results": [
+        {
+          "receipt": "pass95-model-domain-tests-v4.json",
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-assets",
+            "-p",
+            "deadsync-noteskin",
+            "-p",
+            "deadsync-notefield",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 203.87559209996834,
+          "results": [
+            "test result: ok. 146 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.69s",
+            "test result: ok. 450 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.35s",
+            "test result: ok. 263 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s"
+          ],
+          "log_sha256": "3e159e85e61ec0e7e00a7ddb47211e03fbb9e2008f737cc1a6a6a250b283bdaf"
+        },
+        {
+          "receipt": "pass95-preview-images-v1.json",
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-theme-simply-love",
+            "--lib",
+            "previews_warm_every_model_material_image",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 180.5056616999209,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1264 filtered out; finished in 0.16s"
+          ],
+          "log_sha256": "504ca11ab3eef9a2d3bb135b886d4e3e96be84219eb3e19ea33bc92f0d0b7cae"
+        },
+        {
+          "receipt": "pass95-playback-v1.json",
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-song-lua",
+            "--test",
+            "playback",
+            "--features",
+            "test-support",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 127.70240440033376,
+          "results": [
+            "test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 25.96s"
+          ],
+          "log_sha256": "712b596284f213f81f1bf66d4789881433b037c68c5a4c60a08e92ea66551e92"
+        },
+        {
+          "receipt": "pass95-shell-check-v1.json",
+          "command": [
+            "cargo",
+            "check",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-shell"
+          ],
+          "seconds": 144.32587320031598,
+          "results": [],
+          "log_sha256": "888e1be908f65374f661394a43751436985855f9c168b810667d12c15e9b6d64"
+        },
+        {
+          "receipt": "pass95-model-metadata-v1.json",
+          "command": [
+            "target\\song-lua-archive-passes\\pass95-current-material-comparator-v1.exe",
+            "native_model_",
+            "--test-threads=1"
+          ],
+          "seconds": 6.0851078000850976,
+          "results": [
+            "test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.02s"
+          ],
+          "log_sha256": "38ca95288b789f5e91df9049a34dbe18f5b4f69d332073987aa79b18ad550bc0"
+        },
+        {
+          "receipt": "pass95-archive-model-guard-v1.json",
+          "command": [
+            "target\\song-lua-archive-passes\\pass95-current-material-comparator-v1.exe",
+            "archive_reference_rejects_missing_model_meshes",
+            "--test-threads=1"
+          ],
+          "seconds": 9.760341600049287,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 4.96s"
+          ],
+          "log_sha256": "4ef37e136de14c66c788d33542ae2a6a4b358788c3ebd7c76c1276194b447fce"
+        }
+      ],
+      "diagnostic_results": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "seconds": 9.062825300265104,
+          "exit_code": 0,
+          "log_sha256": "1347a5e5bf942748bb78bf7eaa46f020299a1e6150953388bbf3828076fa3c26"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "seconds": 248.71506949979812,
+          "exit_code": 0,
+          "log_sha256": "409c5b5157203256c92976c9725453c83b13a6a837eb952bedf2b7c57d3fdcd0"
+        }
+      ],
+      "original_song_and_cyber_sources_unchanged": true,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2",
+      "canonical_fixture_index_changed": false,
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "remaining_required_gaps": [
+        "native mip storage/trilinear state and image preprocessing",
+        "independent native framebuffer comparisons and per-image wrapping pixels",
+        "sphere GPU coordinates, lighting and other depth/cull/target states",
+        "empty draws and late Model creation",
+        "501 sources, 492 contexts, aliases, historical variants and 18 unindexed simfiles"
+      ]
+    }
   ]
 }

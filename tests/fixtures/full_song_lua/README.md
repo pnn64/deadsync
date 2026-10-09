@@ -229,3 +229,25 @@ The private archive is retained, the canonical index is unchanged, and
 the complete Model acceptance guard remains closed. All 501 simfiles,
 492 archive contexts, aliases, variants and unindexed sources remain in
 the goal scope.
+
+
+Per-state image selection is repaired in `e7252ef75`. Model animations now
+retain their individual source images and full UV domains, including unequal
+image dimensions and repeated image states. Replay records both material
+state indices; gameplay and preview preparation load every image before use.
+The generated Model atlas path is removed.
+
+The independent harness 0.1.42 image control verifies 366 actual image
+bindings and 2,196 native UV coordinates through both production builders,
+without mapping native UVs into an atlas. All 859 asset/noteskin/note-field
+checks, 194 playback checks, the preview residency control and shell build
+pass. The comparator frozen from this committed source also passes all
+12,568,240 comparisons on the unchanged original KABOOM capture. Metadata
+controls and the complete-archive guard pass.
+
+This proves selected image identity and recorded draw parameters for these
+controls. Native framebuffer output, wrapping pixels, image preprocessing,
+mip/trilinear sampling, sphere coordinates and the remaining Model states
+still require independent verification. The private diagnostic archive and
+canonical index are retained; complete Model acceptance remains closed.
+The full 501-source/492-context scope is unchanged.
