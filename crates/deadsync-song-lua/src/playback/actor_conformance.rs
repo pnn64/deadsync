@@ -461,6 +461,7 @@ impl WholeSongComposer {
             &mut actors,
             &overlays[index],
             states[index],
+            song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index),
             &self.assets,
             0,
             screen[0],

@@ -2823,3 +2823,41 @@ World/view transforms, texture identity, native lighting and independent
 depth write/test states still need complete production comparisons. The
 whole-song Model rejection remains in place, and the new KABOOOOOM archive
 stays private. Original sources and comparison tolerances remain unchanged.
+
+## Pass 84: preserve Model cameras and depth placement
+
+Native Model::Model enables the Z buffer. DeadSync now starts Model actors
+with that default while preserving an explicit Lua override. The fast
+multi-output Model builders now receive the same inherited ActorFrame
+camera as the single-output builder. Both ordinary and noteskin Models
+retain actor Z in their mesh placement. Noteskin Models use affine geometry
+under that camera, replacing a notefield perspective approximation that
+projected them before the actual inherited camera was applied.
+
+The flat compositor reuses adjacent identical camera matrices. A control
+with 300 repeated scopes verifies that Models under one camera retain its
+camera ID instead of exhausting the eight-bit camera index. Prewarmed
+geometry identities and native diffuse/glow pass ordering remain checked.
+
+The new model-camera micro fixture records eight actual native draws from
+harness 0.1.37. It covers an off-center perspective camera, inheritance
+through a frame without a camera setting, an explicit zero-FOV reset,
+actor Z, and rotation under ancestor Y scaling. The production song Model
+and noteskin Model paths match all 16 draws and 672 local/clip/NDC/screen
+coordinate checks at the existing 0.002 tolerance. All 492 song Lua library,
+186 playback integration and 177 presentation tests pass; the playback
+suite retains its three existing ignores. The two reader tests and two
+archive rejection controls pass as well.
+
+The unchanged original KABOOOOOM trace still supplies all 95,752 Model
+observations. Its fresh production diagnostic runs the same 9,450,796
+comparisons: 7,465,778 pass and 1,985,018 fail. This removes 1,382,024
+failures from pass 83, including every depth-test mismatch. The remaining
+reported gaps concern clip/NDC/screen transforms and animated texture
+phase boundaries. Original source hashes and tolerances are unchanged.
+
+The controlled camera fix does not establish complete Model or song
+parity. World/view transforms, texture identity, lighting and independent
+depth states still need complete comparisons. Keep the whole-song Model
+acceptance guard and the private KABOOOOOM archive pending. All 501
+original simfiles and 492 archive contexts remain in scope.

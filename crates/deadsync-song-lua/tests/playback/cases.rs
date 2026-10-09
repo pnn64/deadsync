@@ -4539,17 +4539,24 @@ fn song_lua_zero_fov_resets_parent_camera() {
     let clip = view_proj.1 * Vector4::new(320.0, 180.0, 125.0, 1.0);
     assert_eq!(clip.w, 1.0);
     assert!((clip.z + 0.125).abs() < 1e-7);
-    let point = song_lua_project_overlay_point(view_proj, [320.0, 180.0, 125.0]).expect("ortho point");
+    let point =
+        song_lua_project_overlay_point(view_proj, [320.0, 180.0, 125.0]).expect("ortho point");
     assert!((point[0] - 320.0).abs() < 0.0001);
     assert!((point[1] - 180.0).abs() < 0.0001);
     for fov in [-2.0, 0.01, f32::EPSILON / 2.0] {
         let actual = song_lua_overlay_view_proj(
-            SongLuaOverlayState { fov: Some(fov), ..SongLuaOverlayState::default() },
+            SongLuaOverlayState {
+                fov: Some(fov),
+                ..SongLuaOverlayState::default()
+            },
             854.0,
             480.0,
         );
         let clamped = song_lua_overlay_view_proj(
-            SongLuaOverlayState { fov: Some(0.1), ..SongLuaOverlayState::default() },
+            SongLuaOverlayState {
+                fov: Some(0.1),
+                ..SongLuaOverlayState::default()
+            },
             854.0,
             480.0,
         );
@@ -7538,12 +7545,127 @@ fn native_unlit_model_colors_match_production() {
                     }
                 }
             }
-            assert_eq!(
-                pass_count,
-                expected.as_array().unwrap().len()
-            );
+            assert_eq!(pass_count, expected.as_array().unwrap().len());
         }
         assert_eq!(checked, 4128);
+    }
+}
+
+#[test]
+#[cfg(feature = "test-support")]
+fn native_model_cameras_match_production() {
+    crate::tests::init_paths();
+    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-camera");
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json"
+    )))
+    .expect("captured native Model cameras");
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, "Model Camera");
+    context.screen_width = 854.0;
+    let compiled = compile_song_lua(&directory.join("default.lua"), &context)
+        .expect("compile native camera control");
+    let local = compiled
+        .overlays
+        .iter()
+        .map(|actor| actor.initial_state)
+        .collect::<Vec<_>>();
+    let states = actor_conformance::compose_overlay_states(
+        &compiled.overlays,
+        &local,
+        [854.0, 480.0],
+        [0.0; 2],
+    );
+    // Both paths consume the same native mesh and inherited ActorFrame camera.
+    // Compare shader clip coordinates as well as divided screen coordinates:
+    // a visually similar orthographic placement cannot satisfy perspective W.
+    for noteskin in [false, true] {
+        let mut overlays = compiled.overlays.clone();
+        if noteskin {
+            let piece = directory.join("../model-material/triangle.txt");
+            let slots = deadsync_assets::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+                .expect("native triangle noteskin slots");
+            for actor in &mut overlays {
+                if matches!(actor.kind, SongLuaOverlayKind::Model { .. }) {
+                    actor.kind = SongLuaOverlayKind::NoteskinActor {
+                        slots: slots.clone().into(),
+                    };
+                }
+            }
+        }
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut checked = 0;
+        let mut passes = 0;
+        for (index, actor) in overlays.iter().enumerate() {
+            let Some(expected) = actor
+                .name
+                .as_deref()
+                .and_then(|name| native["actors"].get(name))
+            else {
+                continue;
+            };
+            assert!(
+                states[index].depth_test,
+                "native Model enables depth by default"
+            );
+            let frame =
+                composer.render_overlay(&overlays, &states, index, [854.0, 480.0], 0.0, 0.0);
+            let mut pass = 0;
+            for op in &frame.ops {
+                let deadlib_render_core::DrawOp::TexturedMesh(run) = op else {
+                    panic!("unexpected native Model operation");
+                };
+                let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                for instance in &frame.tmesh_instances[run.instance_start as usize..]
+                    [..run.instance_count as usize]
+                {
+                    let draw = &expected[pass];
+                    assert_eq!(draw["z_test"], 1);
+                    assert_eq!(draw["z_write"], true);
+                    assert!(run.depth_test, "{:?} pass {pass}: native depth", actor.name);
+                    assert_eq!(vertices.len(), draw["vertices"].as_array().unwrap().len());
+                    let matrix = actor_conformance::matrix_rows(
+                        frame.cameras[usize::from(run.camera)] * instance.transform(),
+                    );
+                    for (vertex, expected) in
+                        vertices.iter().zip(draw["vertices"].as_array().unwrap())
+                    {
+                        let local = [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0];
+                        let clip = actor_conformance::project_world(matrix, local);
+                        let ndc = [clip[0] / clip[3], clip[1] / clip[3], clip[2] / clip[3]];
+                        let screen = [(ndc[0] + 1.0) * 427.0, (1.0 - ndc[1]) * 240.0, ndc[2]];
+                        for (field, actual) in [
+                            ("local", local.as_slice()),
+                            ("clip", clip.as_slice()),
+                            ("ndc", ndc.as_slice()),
+                            ("screen", screen.as_slice()),
+                        ] {
+                            for (axis, &actual) in actual.iter().enumerate() {
+                                let reference = expected[field][axis].as_f64().unwrap() as f32;
+                                assert!(
+                                    (actual - reference).abs() <= 0.002,
+                                    "{:?} noteskin={noteskin} pass={pass} {field}[{axis}]: {actual} != {reference}",
+                                    actor.name
+                                );
+                                checked += 1;
+                            }
+                        }
+                    }
+                    pass += 1;
+                    passes += 1;
+                }
+            }
+            assert_eq!(pass, expected.as_array().unwrap().len());
+            // A Lua depth override must reach the noteskin path as well.
+            let mut disabled = states.clone();
+            disabled[index].depth_test = false;
+            let frame =
+                composer.render_overlay(&overlays, &disabled, index, [854.0, 480.0], 0.0, 0.0);
+            assert!(frame.ops.iter().all(|op| matches!(op,
+                deadlib_render_core::DrawOp::TexturedMesh(run) if !run.depth_test)));
+        }
+        assert_eq!(passes, 8);
+        assert_eq!(checked, 336);
     }
 }
 
@@ -7621,7 +7743,8 @@ fn song_lua_model_builds_textured_mesh_layers() {
         0.0,
         1.0,
     )
-    .expect_actor("Model overlay should render");
+    .expect_actors("Model overlay should render");
+    let actor = &model_meshes(&actor)[0];
 
     let Actor::TexturedMesh {
         offset,
@@ -7689,6 +7812,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
             &mut direct,
             &multi_layer,
             multi_state,
+            None,
             &asset_manager,
             323,
             screen_width(),
@@ -7700,7 +7824,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
         ),
         Some(true)
     );
-    assert_eq!(expected.len(), 6);
+    assert_eq!(model_meshes(&expected).len(), 6);
     assert_eq!(format!("{expected:?}"), format!("{direct:?}"));
 
     let mut scratches = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&multi_layer));
@@ -7719,6 +7843,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
                 out,
                 &multi_layer,
                 multi_state,
+                None,
                 &asset_manager,
                 323,
                 screen_width(),
@@ -7739,11 +7864,12 @@ fn song_lua_model_builds_textured_mesh_layers() {
         }
     }
     assert_eq!(format!("{expected:?}"), format!("{normalized:?}"));
+    let warmed_meshes = model_meshes(&warmed);
     for (layer_index, prewarmed_vertices) in prewarmed.iter().enumerate() {
         let Actor::TexturedMesh {
             geom_cache_key: base_key,
             ..
-        } = &warmed[layer_index]
+        } = &warmed_meshes[layer_index]
         else {
             panic!("expected prewarmed static model base mesh");
         };
@@ -7752,7 +7878,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
             geom_cache_key: glow_key,
             blend,
             ..
-        } = &warmed[prewarmed.len() + layer_index]
+        } = &warmed_meshes[prewarmed.len() + layer_index]
         else {
             panic!("expected prewarmed static model glow mesh");
         };
@@ -7763,12 +7889,21 @@ fn song_lua_model_builds_textured_mesh_layers() {
         assert!(Arc::ptr_eq(vertices, prewarmed_vertices));
     }
     append_warmed(&mut warmed);
+    let warmed_meshes = model_meshes(&warmed);
     for (layer_index, prewarmed_vertices) in prewarmed.iter().enumerate() {
-        let Actor::TexturedMesh { vertices, .. } = &warmed[prewarmed.len() + layer_index] else {
+        let Actor::TexturedMesh { vertices, .. } = &warmed_meshes[prewarmed.len() + layer_index] else {
             panic!("expected prewarmed static model glow mesh");
         };
         assert!(Arc::ptr_eq(vertices, prewarmed_vertices));
     }
+}
+
+fn model_meshes(actors: &[Actor]) -> &[Actor] {
+    assert!(matches!(actors.first(), Some(Actor::CameraPush { .. })));
+    assert!(matches!(actors.last(), Some(Actor::CameraPop)));
+    let meshes = &actors[1..actors.len()-1];
+    assert!(meshes.iter().all(|actor| matches!(actor, Actor::TexturedMesh { .. })));
+    meshes
 }
 
 #[test]
@@ -7884,6 +8019,7 @@ fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
             rot_z_deg: 90.0,
             ..SongLuaOverlayState::default()
         },
+        None,
         &asset_manager,
         323,
         1.0,
@@ -7975,6 +8111,7 @@ fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
             &mut warmed,
             &overlay,
             state,
+            None,
             &asset_manager,
             323,
             screen_width(),
@@ -7993,7 +8130,7 @@ fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
         }
     }
     assert_eq!(format!("{expected:?}"), format!("{normalized:?}"));
-    let (base_pass, glow_pass) = warmed.split_at(slots.len());
+    let (base_pass, glow_pass) = model_meshes(&warmed).split_at(slots.len());
     for (slot_index, (base, glow)) in base_pass.iter().zip(glow_pass).enumerate() {
         let Actor::TexturedMesh {
             geom_cache_key: base_key,

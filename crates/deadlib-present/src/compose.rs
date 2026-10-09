@@ -5745,10 +5745,8 @@ fn build_actor_sequence_with_state<'a, T, I>(
             actors::Actor::CameraPush { view_proj } => {
                 let view_proj = camera_prefix.map_or(*view_proj, |prefix| prefix * *view_proj);
                 let matrix = segment_camera.map_or(view_proj, |camera| view_proj * *camera.suffix);
-                cameras.push(matrix);
                 sequence.camera_stack.push(sequence.active_camera);
-                sequence.active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-                sequence.last_root_camera = Some((matrix, sequence.active_camera));
+                sequence.active_camera = sequence.camera_id(matrix, cameras);
                 root_camera_id = None;
             }
             actors::Actor::CameraPop => {
@@ -10358,6 +10356,14 @@ mod tests {
         }
         assert_eq!(nested_render.ops, flat_render.ops);
         assert_eq!(nested_render.mesh_vertices, flat_render.mesh_vertices);
+
+        // Repeated Models under the same frame must reuse its camera rather
+        // than exhaust the u8 camera IDs and fall back to the default camera.
+        let repeated = flat.iter().cloned().cycle().take(300 * flat.len()).collect::<Vec<_>>();
+        let repeated_render = build_screen(&repeated, [0.0; 4], &metrics, &fonts, 0.0);
+        assert_eq!(repeated_render.cameras.len(), 2);
+        assert!(repeated_render.ops.iter().all(|op| matches!(op,
+            deadlib_render_core::DrawOp::Mesh(run) if run.camera == 1)));
 
         let resources = ActorResourceArena::new(0);
         let mut contiguous_text = TextLayoutCache::default();

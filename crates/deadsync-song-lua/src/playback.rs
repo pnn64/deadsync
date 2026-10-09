@@ -32,7 +32,7 @@ use deadsync_notefield::ViewOverride as NotefieldViewOverride;
 use deadsync_notefield::{
     CapturedActorSource, FieldPlacement, ModelMeshCache, NotefieldCameraCache,
     ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride, actor_from_flat_draw,
-    noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
+    noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
     song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
     song_lua_player_y_fold_actor,
 };
@@ -3741,6 +3741,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                         &mut slot.actors,
                         &overlays[*index],
                         composed,
+                        *camera,
                         assets,
                         z,
                         screen[0],
@@ -5811,6 +5812,7 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
                 out,
                 overlay,
                 state,
+                topology_index.camera_state(overlay_states, index),
                 asset_manager,
                 z,
                 overlay_space_width,
@@ -6102,6 +6104,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
                     out,
                     overlay,
                     overlay_state,
+                    topology_index.camera_state(capture_states, idx),
                     asset_manager,
                     z,
                     overlay_space_width,
@@ -7728,10 +7731,22 @@ fn song_lua_overlay_view_proj(
     // LoadMenuPerspective resets the view and selects the ortho depth range.
     if fov_deg == 0.0 {
         let projection = Matrix4::from_cols_array(&[
-            2.0 / width, 0.0, 0.0, 0.0,
-            0.0, -2.0 / height, 0.0, 0.0,
-            0.0, 0.0, -2.0 / 2000.0, 0.0,
-            -1.0, 1.0, 0.0, 1.0,
+            2.0 / width,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -2.0 / height,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -2.0 / 2000.0,
+            0.0,
+            -1.0,
+            1.0,
+            0.0,
+            1.0,
         ]);
         return Some((Matrix4::IDENTITY, projection));
     }
@@ -7929,6 +7944,7 @@ fn append_song_lua_model_actors(
     out: &mut impl Extend<Actor>,
     layers: &[SongLuaOverlayModelLayer],
     state: SongLuaOverlayState,
+    camera_state: Option<SongLuaOverlayState>,
     asset_manager: &AssetManager,
     z: i16,
     x_scale: f32,
@@ -7945,6 +7961,9 @@ fn append_song_lua_model_actors(
     prewarmed_glow_vertices: Option<&[Arc<[TexturedMeshVertex]>]>,
 ) -> bool {
     let mut emitted = false;
+    out.extend([Actor::CameraPush {
+        view_proj: song_lua_model_camera(camera_state, x_scale, y_scale),
+    }]);
     let offset = [
         effect_offset[0].mul_add(x_scale, state.x * x_scale),
         effect_offset[1].mul_add(y_scale, state.y * y_scale),
@@ -8028,7 +8047,7 @@ fn append_song_lua_model_actors(
                 environment,
                 align: [0.0, 0.0],
                 offset,
-                world_z: song_lua_biased_world_z(state, effect_offset[2]),
+                world_z: state.z + song_lua_biased_world_z(state, effect_offset[2]),
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 local_transform,
                 texture: Arc::clone(&layer.texture_key).into(),
@@ -8075,7 +8094,30 @@ fn append_song_lua_model_actors(
             }
         }
     }
+    out.extend([Actor::CameraPop]);
     emitted
+}
+
+fn song_lua_model_camera(
+    camera: Option<SongLuaOverlayState>,
+    x_scale: f32,
+    y_scale: f32,
+) -> Matrix4 {
+    let (view, projection) = camera
+        .and_then(|camera| {
+            song_lua_overlay_view_proj(camera, screen_width() / x_scale, screen_height() / y_scale)
+        })
+        .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
+    // Composition uses centered coordinates with positive Y up. RageDisplay
+    // menu cameras consume top-left coordinates with positive Y down.
+    projection
+        * view
+        * Matrix4::from_translation(Vector3::new(
+            screen_width() * 0.5,
+            screen_height() * 0.5,
+            0.0,
+        ))
+        * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
 }
 
 fn song_lua_model_layer_scroll(layer: &SongLuaOverlayModelLayer, total_elapsed: f32) -> [f32; 2] {
@@ -8096,6 +8138,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     out: &mut impl Extend<Actor>,
     slots: &[S],
     state: SongLuaOverlayState,
+    camera_state: Option<SongLuaOverlayState>,
     asset_manager: &AssetManager,
     z: i16,
     x_scale: f32,
@@ -8112,6 +8155,11 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> bool {
     let mut emitted = false;
+    let camera = (camera_state.is_some() || slots.iter().any(|slot| slot.model().is_some()))
+        .then(|| song_lua_model_camera(camera_state, x_scale, y_scale));
+    if let Some(view_proj) = camera {
+        out.extend([Actor::CameraPush { view_proj }]);
+    }
     let (mut model_cache, glow_vertices) = match scratch {
         Some(scratch) => (
             scratch.noteskin_model_cache.as_mut(),
@@ -8119,6 +8167,11 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
         ),
         None => (None, None),
     };
+    // Uncached callers already build geometry during load/inspection. Gameplay
+    // supplies the sealed, prewarmed slot cache and never takes this cold path.
+    let mut cold_geometry =
+        (model_cache.is_none() && slots.iter().any(|slot| slot.model().is_some()))
+            .then(|| ModelMeshCache::with_capacity(slots.len()));
     let center = [
         effect_offset[0].mul_add(x_scale, state.x * x_scale),
         effect_offset[1].mul_add(y_scale, state.y * y_scale),
@@ -8184,32 +8237,33 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                 draw.zoom[1] *= y_scale * local[1] * effect_scale[1];
                 draw.zoom[2] *= local[2] * effect_scale[2];
                 let size = base_size;
-                if let Some(cache) = model_cache.as_deref_mut() {
-                    noteskin_model_actor_from_draw_cached(
-                        slot,
-                        draw,
-                        center,
-                        size,
-                        uv,
-                        -(slot.sprite_def().rotation_deg as f32 + effect_rot[2]),
-                        tint,
-                        blend,
-                        layer_z,
-                        cache,
-                    )
+                let cache = model_cache
+                    .as_deref_mut()
+                    .or(cold_geometry.as_mut())
+                    .expect("Model slots have either a prewarmed or a cold geometry cache");
+                let Some((key, vertices)) = cache.model_geometry(slot) else {
+                    continue;
+                };
+                let key = if cold_geometry.is_some() {
+                    INVALID_TMESH_CACHE_KEY
                 } else {
-                    noteskin_model_actor_from_draw(
-                        slot,
-                        draw,
-                        center,
-                        size,
-                        uv,
-                        -(slot.sprite_def().rotation_deg as f32 + effect_rot[2]),
-                        tint,
-                        blend,
-                        layer_z,
-                    )
-                }
+                    key
+                };
+                // Song Models use their inherited RageDisplay camera. The
+                // notefield's local focal approximation would project twice.
+                noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry(
+                    slot,
+                    draw,
+                    center,
+                    size,
+                    uv,
+                    slot.sprite_def().rotation_deg as f32 + effect_rot[2],
+                    tint,
+                    blend,
+                    layer_z,
+                    vertices,
+                    key,
+                )
             } else {
                 song_lua_noteskin_sprite_actor(
                     slot,
@@ -8228,9 +8282,14 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             };
             if slot.model().is_some() {
                 if let Actor::TexturedMesh {
-                    local_transform, ..
+                    local_transform,
+                    depth_test,
+                    world_z,
+                    ..
                 } = &mut actor
                 {
+                    *depth_test = state.depth_test;
+                    *world_z += state.z + song_lua_biased_world_z(state, effect_offset[2]);
                     *local_transform =
                         Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
                 }
@@ -8257,6 +8316,9 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                 emitted = true;
             }
         }
+    }
+    if camera.is_some() {
+        out.extend([Actor::CameraPop]);
     }
     emitted
 }
@@ -8285,6 +8347,7 @@ fn song_lua_noteskin_actor<S: NoteskinSlot + Clone>(
         &mut out,
         slots,
         state,
+        None,
         asset_manager,
         z,
         x_scale,
@@ -9647,6 +9710,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
     out: &mut Vec<Actor>,
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
+    camera_state: Option<SongLuaOverlayState>,
     asset_manager: &AssetManager,
     z: i16,
     overlay_space_width: f32,
@@ -9707,6 +9771,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
                 out,
                 layers,
                 state,
+                camera_state,
                 asset_manager,
                 z,
                 x_scale,
@@ -9727,6 +9792,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
             out,
             slots,
             state,
+            camera_state,
             asset_manager,
             z,
             x_scale,
@@ -10103,7 +10169,11 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             attributes,
             ..
         } => {
-            let text_time = if *text_changes_in_seconds { effect_time } else { effect_beat };
+            let text_time = if *text_changes_in_seconds {
+                effect_time
+            } else {
+                effect_beat
+            };
             let text_index = text_changes
                 .partition_point(|(time, _)| *time <= text_time)
                 .checked_sub(1);
@@ -10415,6 +10485,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut out,
                 layers,
                 state,
+                camera_state,
                 asset_manager,
                 z,
                 x_scale,
@@ -10454,6 +10525,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut out,
                 slots,
                 state,
+                camera_state,
                 asset_manager,
                 z,
                 x_scale,
@@ -12513,6 +12585,9 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                     out,
                     overlay,
                     overlay_state,
+                    topology_index
+                        .camera_state(overlay_states, idx)
+                        .or(screen_camera),
                     asset_manager,
                     z,
                     space_width,
