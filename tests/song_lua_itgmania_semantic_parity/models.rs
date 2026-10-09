@@ -154,6 +154,9 @@ pub(super) fn validate_models(trace: &NativeTrace) -> Result<(), String> {
     if expected.is_empty() && trace.model_geometry_tracks.is_empty() && !has_manual {
         return Ok(());
     }
+    if trace.capabilities["actor_base_rotation"].as_bool() != Some(true) {
+        return Err("native Model reference omits Actor base rotation; recapture with harness 0.1.38 or newer".into());
+    }
     for dimension in [trace.display.width, trace.display.height] {
         if !dimension.is_finite()
             || dimension <= 0.0
@@ -746,6 +749,8 @@ fn native_model_columns_reject_incomplete_observations() {
         ("/model_geometry_buffers/0/0", serde_json::json!([0, 0, 0])),
         ("/model_geometry_tracks/0/samples", serde_json::json!([])),
         ("/model_geometry_tracks", serde_json::json!([])),
+        ("/capabilities/actor_base_rotation", serde_json::json!(false)),
+        ("/capabilities", serde_json::json!({})),
     ] {
         let mut changed = value.clone();
         *changed.pointer_mut(path).expect("control mutation path") = replacement;
@@ -807,6 +812,7 @@ fn model_trace_value() -> Value {
         "timeline_tracks":[],"tween_tracks":[],"end_position":{"seconds":1},
         "display":{"width":854,"height":480,"logical_width":854,"logical_height":480},
         "fixture_context":{"beat_step":0.25},"trace_until_beat":1,
+        "capabilities":{"actor_base_rotation":true},
         "update_frames":[[0,0],[1,1]],"model_geometry_encoding":"column-buffer-v1",
         "model_geometry_sample_clock":"update_frames","model_geometry_buffers":buffers,
         "model_geometry_tracks":[{"actor":"actor","definition_id":"actor","class":"Model","native_loaded":true,
@@ -849,4 +855,55 @@ fn native_model_meshes_match_selected_trace() {
         parity.checks() > trace.update_frames.len(),
         "exercise native Model geometry"
     );
+}
+
+#[test]
+#[ignore = "diagnoses each Model's first visible observation in a selected original trace"]
+fn native_model_initial_frames_match_selected_trace() {
+    crate::paths::init();
+    let trace_path = std::env::var_os(TRACE_ENV).expect("selected native trace");
+    let simfile = std::env::var_os(SIMFILE_ENV).expect("selected original simfile");
+    let trace = read_trace_file(Path::new(&trace_path));
+    validate_models(&trace).expect("complete original Model observations");
+    deadlib_present::space::set_current_window_px(trace.display.width as u32, trace.display.height as u32);
+    let (compiled, _, context) = compile_trace_song_at(&trace, Path::new(&simfile));
+    let map = projected_drawable_map(&trace, &compiled);
+    let mut parity = Parity::default();
+    parity.section("first visible Model frames");
+    let mut reported = HashSet::new();
+    for track in &trace.model_geometry_tracks {
+        let Some((beat, seconds, _, draws)) = track.samples.iter().find(|sample| !sample.3.is_empty()) else {
+            continue;
+        };
+        let &(layer, index) = map.get(&track.actor).expect("compiled original Model");
+        let states = compiled_overlay_states_at(&compiled[layer], &context, *beat as f32, *seconds as f32);
+        let actor = &compiled[layer].overlays[index];
+        eprintln!("{} {} state {:?}", track.actor, kind_name(&actor.kind), states[index]);
+        if let SongLuaOverlayKind::NoteskinActor { slots } = &actor.kind {
+            for slot in slots.iter() {
+                eprintln!("slot rotation {} draw {:?}", slot.def.rotation_deg,
+                    slot.model_draw_at(*seconds as f32, *beat as f32));
+            }
+        }
+        let mut composer = WholeSongComposer::new(&compiled[layer].overlays);
+        let frame = composer.render_overlay(&compiled[layer].overlays, &states, index,
+            [context.screen_width, context.screen_height],
+            overlay_update_time(&context, SongLuaTimeUnit::Second, *beat as f32, *seconds as f32),
+            *beat as f32);
+        for op in &frame.ops {
+            if let DrawOp::TexturedMesh(run) = op {
+                let instance = &frame.tmesh_instances[run.instance_start as usize];
+                let vertex = frame.tmesh_geometries[run.geometry as usize].vertices[0];
+                let point = project_world(matrix_rows(instance.transform()),
+                    [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0]);
+                eprintln!("{} first production world {:?} transform {:?}", track.actor,
+                    [point[0]+context.screen_width*0.5, context.screen_height*0.5-point[1], point[2], point[3]],
+                    matrix_rows(instance.transform()));
+            }
+        }
+        compare_frame(&trace, draws, &frame, &track.actor, *seconds, &mut parity, &mut reported);
+    }
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("selected first visible Model observations (partial diagnostic)");
+    assert!(parity.checks() > 0);
 }

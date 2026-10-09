@@ -2861,3 +2861,33 @@ parity. World/view transforms, texture identity, lighting and independent
 depth states still need complete comparisons. Keep the whole-song Model
 acceptance guard and the private KABOOOOOM archive pending. All 501
 original simfiles and 492 archive contexts remain in scope.
+
+## Pass 85: reject Model references that omit base rotation
+
+The first-visible-frame diagnostic identified an error in the harness oracle.
+The original KABOOOOOM script calls baserotationz with the lane orientation,
+then rotationz with ArrowEffects' additional rotation. Actor::BeginDraw adds
+those independent values. DeadSync's composed Models retained the lane
+rotation; the harness's song world matrices omitted it. The old case 18
+capture therefore cannot identify those orientation differences as DeadSync
+bugs. Its previous failure counts remain historical diagnostic results.
+
+An independent native actor tree reproduces the harness error: a world
+coordinate at time zero was 74.5958023071289 instead of -1.6716537475585938.
+The new model-base-rotation fixture covers all three base axes on parent and
+Model actors, immediate changes while a tween is queued, replacement base
+values, and ordinary rotation tweening. The harness now adds immediate base
+rotation after effect application, following the native source rule.
+
+DeadSync rejects Model traces without the new actor_base_rotation capability.
+Removing or disabling that capability is a negative reader control. The
+first-visible-frame test is an explicitly selected partial diagnostic; it
+prints the production state and transforms to identify gaps and cannot
+establish complete song parity. The whole-song Model guard remains closed.
+
+The earlier independent camera and material controls remain valid native
+actor captures. The private 0.1.37 KABOOOOOM song capture needs regeneration
+with harness 0.1.38 before further production mesh comparisons. Keep the
+original sources, all update observations and tolerances intact, and keep
+every incomplete archive private. The full 501-simfile/492-context scope
+remains unfinished.
