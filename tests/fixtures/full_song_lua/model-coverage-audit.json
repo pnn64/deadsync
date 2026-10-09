@@ -1905,5 +1905,68 @@
       "canonical_fixture_index_changed": false,
       "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
     }
+  ],
+  "native_bitmap_file_revalidations": [
+    {
+      "updated_utc": "2026-10-09T16:30:55.506998+00:00",
+      "source_commit": "4e68a4a4871964926db2239dd46d6a44fb304373",
+      "harness_file_oracle_commit": "17e23b4a925b69d455be5e5bff6052d2a99d03e9",
+      "harness_file_oracle_version": "0.1.46",
+      "harness_game_profile_commit": "40790ab228a6ee10cff4b4959340af094a3557ea",
+      "harness_game_profile_version": "0.1.47",
+      "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_file_oracle_executable_sha256": "e5d4e1f1886d0f5e15a6d97ab7fe53b5856f3c349ee3d9fbbe62411d6cfef917",
+      "codec_commits": {
+        "libpng": "ea127968204cc5d10f3fc9250c306b9e8cbd9b80",
+        "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+        "libjpeg-turbo": "20ade4dea9589515a69793e447a6c6220b464535"
+      },
+      "local_reference_files_matched": 14,
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding",
+      "native_png16_formats": [
+        "RGB16",
+        "RGBA16",
+        "grayscale16",
+        "grayscale-alpha16"
+      ],
+      "matched_rgba_bytes": 560,
+      "byte_tolerance": 0,
+      "production_before_mismatch": {
+        "rgb16_strip_last_red": {
+          "deadsync": 24,
+          "native": 23
+        }
+      },
+      "assets_passed": 224,
+      "decode_integration_passed": 1,
+      "harness_passed": 208,
+      "harness_existing_ignored": 5,
+      "native_file_cases": 24,
+      "native_game_profile_model_draws": 3,
+      "native_game_profile_image": [
+        2048,
+        8
+      ],
+      "harness_before_image": [
+        1024,
+        8
+      ],
+      "dependency_pins_preserved": true,
+      "sprite_upload_pixels_captured": false,
+      "framebuffer_verified": false,
+      "full_corpus_complete": false,
+      "model_archive_acceptance_open": false,
+      "remaining": [
+        "indexed GIF/BMP production decode and native BMP4 nibble order",
+        "full bitmap hint/format/device-size policy and default tiny Sprite stretching",
+        "effective mipmap requests, physical mip storage and native framebuffer output",
+        "all original 501 simfiles and 492 contexts"
+      ],
+      "test_log_sha256": {
+        "assets": "9a06c4fdd9c56d239a7d3d805dc1222c64c49644bafe47d56b47f5574768430c",
+        "decode_integration": "ac4de1e1a58a02f61c2abd170605138e5db410d48c0c498fd66d68dd76327ac5",
+        "harness": "2dc42eb813838fa7015a532900dbea4bbf70ac19b1044160adbcca2113ecdb16"
+      }
+    }
   ]
 }

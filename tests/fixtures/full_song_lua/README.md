@@ -314,3 +314,31 @@ Native file-loader execution, indexed GIF/BMP behavior, full bitmap
 format/settings/device-size policy, effective mip state, physical mip
 storage and native framebuffer output remain open. Complete Model acceptance
 stays closed and the full 501-source/492-context scope remains unchanged.
+
+
+DeadSync `4e68a4a48` extends native PNG high-byte stripping to
+ordinary texture views. Four actual file-loader controls from committed harness
+0.1.46 (`17e23b4a9`) match all 560 decoded RGBA bytes exactly,
+covering RGB16, RGBA16, grayscale16 and grayscale-alpha16. The previous generic
+path produced red 24 for a sample that native decoding produces as 23.
+All 224 asset tests and the existing 8-bit decode integration pass.
+
+The file oracle executes pinned PNG/GIF/BMP/JPEG loaders and RageBitmapTexture
+preparation with explicit settings. Its 24 controls distinguish adjusted IDs
+from final upload format and mipmap requests. The 14 local source files match
+the pinned reference after line-ending normalization. The portable
+`bitmap-file-decoding` micro fixture retains raw native output, source files,
+byte goldens and source/codec/executable hashes.
+
+Harness 0.1.47 (`40790ab22`) also applies game texture defaults
+extracted from native PrefsManager initializers. A 2051x3 Model now uses a
+2048x8 image/allocation matching actual RageBitmapTexture with game settings;
+the constructor-only capture previously capped it to 1024x8. All 208 harness
+tests pass, with five existing corpus tests ignored and dependency pins
+preserved. Explicit file-oracle profiles retain identical native results.
+
+Sprite upload pixels remain excluded because unused native POT padding is not
+fully initialized. Production indexed GIF/BMP handling, default tiny Sprite
+stretching, complete bitmap policy, effective mips, physical mip storage and
+native framebuffer output remain open. Complete Model acceptance stays closed;
+the canonical archive index and full 501-source/492-context scope are unchanged.
