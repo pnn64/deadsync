@@ -1533,5 +1533,377 @@
       "canonical_fixture_index_changed": false,
       "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
     }
+  ],
+  "native_image_preparation_revalidations": [
+    {
+      "source_commit": "bd18c8663b1b8fa6adca355d60de6236898cd352",
+      "harness_commit": "2eb6b85d465c70af1dbdaa3af0e634ba52609e1f",
+      "harness_version": "0.1.45",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_contract": "ModelTypes loads images with stretch and hot-pink keying in a distinct RageTextureID. RageTextureID defaults to max size 2048. RageBitmapTexture keys before native Zoom and fixes hidden RGB after final resize. PNG palette indices remain distinct; 16-bit channels retain their high byte.",
+      "production_repair": "Keep separately resident Model image keys, route primary/secondary animation images through native CPU key/resize preparation, preserve raw Sprite sources and remove the decode cleanup shortcut after alpha-changing hints.",
+      "before_production_failure": {
+        "log_sha256": "986932d117b8a380934f47bc2e52de6a11d2936c9a536709b0cda729b9b5f78e",
+        "model_shared_sprite_identity": true,
+        "model_size": [
+          5,
+          9
+        ],
+        "native_size": [
+          8,
+          16
+        ]
+      },
+      "native_control_provenance": {
+        "harness_commit": "2eb6b85d465c70af1dbdaa3af0e634ba52609e1f",
+        "harness_version": "0.1.45",
+        "harness_executable_sha256": "ca7b9355ddce02d6b8f905caa1b33e04a877b9786533f7d6404b8a72e75daa23",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "command": [
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass98-native-prep-cli-v1.exe",
+          "actor-conformance",
+          "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\model-texture-preparation\\control.json",
+          "--out",
+          "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\model-texture-preparation\\native.json"
+        ],
+        "files_sha256": {
+          ".gitattributes": "57b227eddb3a5b1742ddf7b3dc4c751d69a365665a60d9cf12badd09be97b13b",
+          "cases.json": "9446c35d1ab589a30328cbc4b2a29ac48fb4f73fab6923e6dfd57b3883eaef83",
+          "control.json": "1434a7f44b28f4533f40ae129611fb89d9d921f34b669e304d916cea1e2e27c2",
+          "gray2-expand.png": "0b693488977ac122a4238c35cb6c136b99ee430f13960010633d4ed70fd03d58",
+          "gray2-expand.rgba": "eb02c69d0f40ecadbc75a1ee8a67722a352dc0fbadfa5b840a9a3dd9c7619672",
+          "iterative-odd-reduction.png": "832d09cbfff2294185a66151cdd59872173c6bc5218ea0077550453eeca66040",
+          "iterative-odd-reduction.rgba": "484c1a731b20e23144af4c5bf4816e056584632a5ce8981dd9490aa08fc4ed1f",
+          "iterative-reduction.png": "f4963393556251426d002caed580aa5c475ce6f2d1f5879172acc9dc928c4c3f",
+          "iterative-reduction.rgba": "192c68b5289290f88c073a079748b45148ea75fdc1697b2d3e109ddeb941e704",
+          "mixed-hidden-rgb.png": "2c96e9d326b95d08f2f1648808c3928a383e3dac5ea02d0a877e92c47332b00c",
+          "mixed-hidden-rgb.rgba": "bffecc73016434e8e6142cfc127a60b2f0a2ea4c91d89fd1076313a50bc732ee",
+          "model-max-size.png": "7f6dddb8444ae65d2ab44b89c942d23a1f504a717f8b6862429a441c27f3b16e",
+          "model-max-size.rgba": "d7c19ac5a8b998db7384556ad5fb3f43d7442753c3a1d57ff4eae23ae44c6215",
+          "model-mixed-axis.png": "aacc90b3c3a880b982a3d4512cf8629cabbab46fe8cb3bb47a24148586b26129",
+          "model-mixed-axis.rgba": "3b906ec221920eafcec34337aab1e68f9d43dcd46ff1a42bee86649b4610dc81",
+          "model-pink-npot.png": "da19383146fbe80dd5df8542a46cdaebd280969d11c3748379f4394680b923ae",
+          "model-pink-npot.rgba": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+          "native.json": "e97880dcb2bf9222be44d136d7840fff7416cac1d2c09ae85d8a76ea7b0a4e66",
+          "npot-linear-stretch.png": "e9e3d25903c44c56e48dcac486ad84ed38d38bbc5d9d69a8cb40b2c474abf3f2",
+          "npot-linear-stretch.rgba": "898a0ce90a6978fbf415d60cb6f7e6ec2c58993f67b0cce4f81241aef5e6d76a",
+          "off-pink-side-middle.png": "7747c1168f2725fee331f10058bca7d35e266c1304928df546e3c8e184bfb4e4",
+          "off-pink-side-middle.rgba": "2d572a4a517b6f85f76d3c70de7f87d667b884a2657e608c4c3171645baf396e",
+          "off-pink-top-edge.png": "530ca202d9f6fd1129d02eb171f037cc6172d2ae509f0276e572faf65bf74682",
+          "off-pink-top-edge.rgba": "dbd754c63e990438e01d9f4af97255d72b32d15d6bd46afea042cbb8ce620f6f",
+          "one-pixel-expansion.png": "a4d687c839cac54e05e54806d04eda222733fb70ee701c5b81118997a4348262",
+          "one-pixel-expansion.rgba": "cd47ab9663b3c95e26ea9775dbca0998b5c98deae364e4f6e7dae81908054a4a",
+          "palette-duplicates.png": "faab23f8279d679c5d5cab134b2081ed13d4c1e049ecc8b9ee4e98908ebe6f64",
+          "palette-duplicates.rgba": "87ec593f74a8016d313c25cd27001ac6607b16a1f0a75eed8652bf34a1b2ab19",
+          "palette-keys-both-pinks.png": "bcb2c0a84891e5e2398c7bb961c6d8af419c29a912d963887c78aa08f07ac69b",
+          "palette-keys-both-pinks.rgba": "adf58ce79235ba402fafb01da22bd1e0704f6a1a705ac26716fa3f4e82979562",
+          "palette-packed-duplicates.png": "6203d3a30df0bf1d9d557fa927fe4072f737df0fb05a43178490dc9e0ed01a69",
+          "palette-packed-duplicates.rgba": "fd817b52ed4d2770ff96d562690276e3b79c6a3bba77b8a2a0e1d2ea9dece1ff",
+          "palette-partial-alpha.png": "7db0acb21346278fece032d54d05e65cbfb7b6766cd8504df6e4674c44be21a9",
+          "palette-partial-alpha.rgba": "071ac6166bc11f19b8a6909a36b1b604c4b0a530f87129ed59ec139aa8d6afe1",
+          "partial-alpha-pink.png": "153cce20d90c5d0cd70efc0f2c14da815d137f3446aa8ec3270de3c4ec535fee",
+          "partial-alpha-pink.rgba": "7bf72a43a54a94f95222aaddeb4d20b57e2d9b06e75406910f3c76d192a24586",
+          "rgb-key-adds-alpha.png": "88feb0219050980b83868af8f160e40ce2c687411d874a637c14d4c45022d337",
+          "rgb-key-adds-alpha.rgba": "771458c5fbb4e051c7d53395786580a6ed5f333cfeb3e683f0a54e534ed74527",
+          "rgb16-strip.png": "5a0874e5435d72d1ca6ab5229410f0ea0f8182c5ae803b148a9a5447da9eb294",
+          "rgb16-strip.rgba": "04e556d32c818afb5c7987859acb467daa31a0f7565045c7ac3408d4d8e86f8f",
+          "rgba16-strip.png": "85efe20ae6177e6a61c0878e68733d0a64ee70a316dec8ce3e51a5e2058d249e",
+          "rgba16-strip.rgba": "04e556d32c818afb5c7987859acb467daa31a0f7565045c7ac3408d4d8e86f8f",
+          "transparent-hidden-rgb.png": "09151ddc21ba23a2674e148baf9d87ce07a62b23a194129d924eb798856aace1",
+          "transparent-hidden-rgb.rgba": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+          "uniform-hidden-rgb.png": "7ca95d88a99dd88cfcfb760df6b50f268a93ca3bd620aee00cef09d2beb21de2",
+          "uniform-hidden-rgb.rgba": "e1b70abde62219868d58802627b493827de4cdf60edb52925b8a2cd988785bec"
+        },
+        "case_count": 21,
+        "compared_rgba_bytes": 69776,
+        "byte_tolerance": 0,
+        "framebuffer_verified": false,
+        "scope": "Compiled ApplyHotPinkColorKey, Zoom and FixHiddenAlpha on explicit decoded surfaces. PNG encodings follow local RageSurface_Load_PNG source. Native PNG loader and full RageBitmapTexture/GPU policy are not executed."
+      },
+      "production_decoder_controls": 21,
+      "production_compared_rgba_bytes": 69776,
+      "comparison_tolerance_bytes": 0,
+      "consumer_verification": {
+        "pass98-assets-after-v3": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadlib-assets",
+            "-p",
+            "deadsync-assets",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s",
+            "test result: ok. 149 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.46s"
+          ],
+          "log_sha256": "67bbe7ac7723fd15dd10c9c290d85a12820675ee08bcad4ad9e39b0cded2adf0",
+          "seconds": 21.488859300035983
+        },
+        "pass98-textures-final-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-assets",
+            "--lib",
+            "textures::tests::",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 130 filtered out; finished in 0.07s"
+          ],
+          "log_sha256": "039333f309e9d2f47df27f922f89481aa53d0ab972ddf58fc8dc0e4ff7ecd642",
+          "seconds": 12.540264999959618
+        },
+        "pass98-original-decode-after-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadlib-assets",
+            "--test",
+            "texture_decode",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+          ],
+          "log_sha256": "44dd142c54c7aa6a917f58cc2f6ae25e5427249e8cf4e23085594eda227ed661",
+          "seconds": 15.832900600042194
+        },
+        "pass98-model-domain-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-noteskin",
+            "-p",
+            "deadsync-notefield",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 450 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s",
+            "test result: ok. 263 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s"
+          ],
+          "log_sha256": "5359e91cd2b73994030369f4bf7ac7f3f6b31138eb951b246d5dec3432771fe5",
+          "seconds": 66.88201850000769
+        },
+        "pass98-playback-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-song-lua",
+            "--test",
+            "playback",
+            "--features",
+            "test-support",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 22.89s"
+          ],
+          "log_sha256": "2465b598d89ff515d47bca34d0f4f5eb79a5df118da06ebd7cd548e957686183",
+          "seconds": 111.35450130002573
+        },
+        "pass98-preview-images-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-theme-simply-love",
+            "--lib",
+            "previews_warm_every_model_material_image",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1264 filtered out; finished in 0.16s"
+          ],
+          "log_sha256": "f1e0cd94dd805e197af749eaaa284f1286a2346a8168a9333f49abfc680d615e",
+          "seconds": 117.85617309994996
+        },
+        "pass98-shell-check-v1": {
+          "command": [
+            "cargo",
+            "check",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-shell"
+          ],
+          "exit_code": 0,
+          "results": [],
+          "log_sha256": "d6cdf98d165fe8e6ec9139cae40c373954e49bc59df844e1810ef55cdaf11423",
+          "seconds": 71.25450100004673
+        },
+        "pass98-model-schema-v1": {
+          "command": [
+            "target/song-lua-archive-passes/pass98-current-prep-comparator-v1.exe",
+            "models::",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.02s"
+          ],
+          "log_sha256": "38ca95288b789f5e91df9049a34dbe18f5b4f69d332073987aa79b18ad550bc0",
+          "seconds": 5.008352700155228
+        }
+      },
+      "original_song_revalidation": {
+        "comparator_source_commit": "bd18c8663b1b8fa6adca355d60de6236898cd352",
+        "comparator_sha256": "8081402d66a6d641637d9bd34fe6b3df36790502de610e8338c634fb55d2af69",
+        "native_capture_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+        "results": [
+          {
+            "test": "native_model_trace_columns_cover_every_update",
+            "exit_code": 0,
+            "seconds": 10.426357000134885,
+            "log_sha256": "1347a5e5bf942748bb78bf7eaa46f020299a1e6150953388bbf3828076fa3c26",
+            "tail": "\nrunning 1 test\nnative Model capture: 8 tracks, 11969 update frames, 95752 samples, 13466 column buffers\ntest models::native_model_trace_columns_cover_every_update ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 9.01s\n\n"
+          },
+          {
+            "test": "native_model_meshes_match_selected_trace",
+            "exit_code": 0,
+            "seconds": 240.7528241998516,
+            "log_sha256": "aef4e6e5307014bea6e763d5c1e2359aaf0c09d3ab7e8cddb6af619647410374",
+            "tail": "\nrunning 1 test\n1\t58946\n2\t58946\n3\t11714\n4\t23858\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\t58946\n2\t58946\n3\t11714\n4\t23858\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\ntest models::native_model_meshes_match_selected_trace has been running for over 60 seconds\n303|MODS|[lv.memes] KABOOOOOM!!!!: 12568240/12568240 ok\n  native Model meshes  12568240/12568240 ok\ntest models::native_model_meshes_match_selected_trace ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 240.68s\n\n",
+            "sampler_gap_closed_for_recorded_draws": true,
+            "binding_failure_lines": [],
+            "comparison_summary": []
+          }
+        ],
+        "original_song_sources_unchanged": true,
+        "original_cyber_sources_unchanged": true,
+        "comparisons": {
+          "passed": 12568240,
+          "total": 12568240,
+          "failed": 0
+        }
+      },
+      "local_reference_source_audit": {
+        "reference_root": "C:\\GitHub\\rework\\itgmania\\src",
+        "pinned_root": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "files": [
+          {
+            "name": "ModelTypes.cpp",
+            "reference_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+            "pinned_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageTextureID.cpp",
+            "reference_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+            "pinned_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageTextureID.h",
+            "reference_sha256": "fb877c2f728a6b9e8b89a0a76ace4e23b3e9ce4944158705bf465320ce380e1b",
+            "pinned_sha256": "fb877c2f728a6b9e8b89a0a76ace4e23b3e9ce4944158705bf465320ce380e1b",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageBitmapTexture.cpp",
+            "reference_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+            "pinned_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageSurface_Load_PNG.cpp",
+            "reference_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+            "pinned_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageSurfaceUtils.cpp",
+            "reference_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+            "pinned_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageSurfaceUtils_Zoom.cpp",
+            "reference_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+            "pinned_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+            "equal_after_crlf_normalization": true
+          }
+        ]
+      },
+      "harness_verification": {
+        "pass98-harness-tests-v1": {
+          "exit_code": 0,
+          "source_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+          "log_sha256": "c7c32ff53636a73fbeb2e8053d4306702fd23492230144a28cdf846bc7dd363c",
+          "results": [
+            "test result: ok. 163 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 143.28s",
+            "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.39s",
+            "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s",
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+            "test result: ok. 15 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 43.92s"
+          ]
+        },
+        "pass98-release-build-v1": {
+          "exit_code": 0,
+          "source_commit": "2eb6b85d465c70af1dbdaa3af0e634ba52609e1f",
+          "log_sha256": "4379a13a5cab3230325d6318ff7149ac8bf5b8d8a6e746e97da13bb87bb8496d",
+          "results": []
+        }
+      },
+      "scope": "CPU image preparation and distinct resource identities for verified PNG controls; exact recorded native Model geometry/material checks remain intact. Native file-loader execution, full bitmap conversion policy and GPU framebuffer output are not established.",
+      "remaining_required_gaps": [
+        "native PNG file-loader execution and bitmap format/settings/device-size policy",
+        "indexed GIF/BMP preparation",
+        "native effective mip state, physical mip storage and trilinear sampling",
+        "native framebuffer, sphere coordinates and remaining Model draw states",
+        "all 501 simfiles/492 contexts including aliases, historical variants and 18 unindexed sources"
+      ],
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "canonical_fixture_index_changed": false,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
+    }
   ]
 }

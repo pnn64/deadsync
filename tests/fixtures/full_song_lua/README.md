@@ -288,3 +288,29 @@ Model default stretch/color-key preparation, distinct Sprite/Model resource
 identities, effective mip state, physical mip storage and native framebuffer
 output remain open. Complete Model acceptance stays closed; the canonical
 index and the full 501-source/492-context scope remain unchanged.
+
+
+DeadSync `bd18c8663` keeps native Model images separately resident from
+Sprite images and applies the native CPU color-key/stretch preparation.
+Harness 0.1.45 (`2eb6b85d4`) supplies bounded native
+surface controls for the Model 2048 size limit. The seven local reference
+files match the pinned ITGmania source.
+
+All 21 production PNG controls match 69,776 compiled native RGBA bytes
+exactly. These cover palette duplicates, packed indices and alpha, 16-bit
+high-byte stripping, edge-key selection, iterative rounding, odd sizes and
+mixed-axis resizing. The shared-image control retains the Sprite's original
+5x9 opaque image while preparing an independent 8x16 transparent Model view.
+The portable `model-texture-preparation` fixture retains the independent
+native output, source PNGs and pixel goldens.
+
+Asset, noteskin, note-field, playback and preview checks pass, and the shell
+compiles. The original KABOOM capture is revalidated with the committed
+comparator; source chart and cyber noteskin bytes remain unchanged. The
+12,568,240 recorded material/geometry comparisons pass exactly; they do
+not prove framebuffer pixels.
+
+Native file-loader execution, indexed GIF/BMP behavior, full bitmap
+format/settings/device-size policy, effective mip state, physical mip
+storage and native framebuffer output remain open. Complete Model acceptance
+stays closed and the full 501-source/492-context scope remains unchanged.
