@@ -7949,119 +7949,130 @@ fn append_song_lua_model_actors(
         effect_offset[0].mul_add(x_scale, state.x * x_scale),
         effect_offset[1].mul_add(y_scale, state.y * y_scale),
     ];
-    for (idx, layer) in layers.iter().enumerate() {
-        if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
+    // Model::DrawPrimitives emits every diffuse mesh before its glow pass.
+    // Keep one z bucket so composition preserves that native insertion order.
+    for glow_pass in [false, true] {
+        if glow_pass && glow[3] <= f32::EPSILON {
             continue;
         }
-        let scroll = song_lua_model_layer_scroll(layer, total_elapsed);
-        let shift = match state.texcoord_offset {
-            Some([dx, dy]) => [scroll[0] + dx, scroll[1] + dy],
-            None => scroll,
-        };
-        let uv_offset = [layer.uv_offset[0] + shift[0], layer.uv_offset[1] + shift[1]];
-        let uv_tex_shift = [
-            layer.uv_tex_shift[0] + shift[0],
-            layer.uv_tex_shift[1] + shift[1],
-        ];
-        let (ancestor_scale, model_scale) =
-            state
-                .scale_factors
-                .map_or((Matrix4::IDENTITY, actor_scale), |[ancestor, local]| {
+        for (idx, layer) in layers.iter().enumerate() {
+            if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
+                continue;
+            }
+            let scroll = song_lua_model_layer_scroll(layer, total_elapsed);
+            let shift = match state.texcoord_offset {
+                Some([dx, dy]) => [scroll[0] + dx, scroll[1] + dy],
+                None => scroll,
+            };
+            let uv_offset = [layer.uv_offset[0] + shift[0], layer.uv_offset[1] + shift[1]];
+            let uv_tex_shift = [
+                layer.uv_tex_shift[0] + shift[0],
+                layer.uv_tex_shift[1] + shift[1],
+            ];
+            let (ancestor_scale, model_scale) = state.scale_factors.map_or(
+                (Matrix4::IDENTITY, actor_scale),
+                |[ancestor, local]| {
                     (
                         Matrix4::from_scale(Vector3::from(ancestor)),
                         [local[0], local[1]],
                     )
-                });
-        let local_transform = ancestor_scale
-            * song_lua_model_local_transform(
-                layer.model_size,
-                layer.draw,
-                x_scale,
-                y_scale,
-                model_scale,
-                effect_scale,
-                effect_rot,
-                [state.skew_x, state.skew_y],
+                },
             );
-        let environment = layer
-            .vertices
-            .first()
-            .filter(|vertex| vertex.normal[3] != 0.0)
-            .map(|_| {
-                let (additive_texture, mut additive_uv) = layer.additive.as_ref().map_or(
-                    (None, [0.0, 0.0, 1.0, 1.0]),
-                    |(key, frames)| {
-                        let duration = frames.last().map_or(1.0, |frame| frame.1).max(f32::EPSILON);
-                        let time = total_elapsed.rem_euclid(duration);
-                        let frame = frames
-                            .partition_point(|frame| frame.1 <= time)
-                            .min(frames.len().saturating_sub(1));
-                        (
-                            Some(Arc::clone(key)),
-                            frames
-                                .get(frame)
-                                .map_or([0.0, 0.0, 1.0, 1.0], |frame| frame.0),
-                        )
-                    },
+            let local_transform = ancestor_scale
+                * song_lua_model_local_transform(
+                    layer.model_size,
+                    layer.draw,
+                    x_scale,
+                    y_scale,
+                    model_scale,
+                    effect_scale,
+                    effect_rot,
+                    [state.skew_x, state.skew_y],
                 );
-                for axis in 0..2 {
-                    let shift = uv_tex_shift[axis] / layer.uv_scale[axis].max(f32::EPSILON);
-                    let delta = shift * (additive_uv[axis + 2] - additive_uv[axis]);
-                    additive_uv[axis] += delta;
-                    additive_uv[axis + 2] += delta;
-                }
-                deadlib_present::actors::MeshEnvironment {
-                    camera: None,
-                    transform: local_transform,
-                    additive_texture,
-                    additive_uv,
-                }
-            });
-        let actor = Actor::TexturedMesh {
-            environment,
-            align: [0.0, 0.0],
-            offset,
-            world_z: song_lua_biased_world_z(state, effect_offset[2]),
-            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            local_transform,
-            texture: Arc::clone(&layer.texture_key).into(),
-            tint: deadsync_noteskin::model_unlit_color(
-                layer.material,
-                song_lua_capture_tint(layer.draw.tint, tint),
-            ),
-            glow: [1.0, 1.0, 1.0, 0.0],
-            vertices: Arc::clone(&layer.vertices),
-            geom_cache_key: prewarmed_geometry_keys
-                .and_then(|keys| keys.get(idx))
-                .copied()
-                .unwrap_or(INVALID_TMESH_CACHE_KEY),
-            uv_scale: layer.uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test: state.depth_test,
-            clear_depth: false,
-            clear_depth_after: false,
-            cull_back: false,
-            visible: true,
-            blend: if layer.draw.blend_add {
-                BlendMode::Add
-            } else {
-                blend
-            },
-            z: song_lua_add_z(z, idx.min(i16::MAX as usize) as i16)
-                .min(SONG_LUA_FOREGROUND_DEPTH.ceiling),
-        };
-        let glow_actor = song_lua_overlay_glow_actor_with_static_vertices(
-            &actor,
-            glow,
-            state.text_glow_mode,
-            None,
-            prewarmed_glow_vertices.and_then(|vertices| vertices.get(idx)),
-        );
-        out.extend([actor]);
-        emitted = true;
-        if let Some(glow_actor) = glow_actor {
-            out.extend([glow_actor]);
+            let environment = layer
+                .vertices
+                .first()
+                .filter(|vertex| vertex.normal[3] != 0.0)
+                .map(|_| {
+                    let (additive_texture, mut additive_uv) = layer.additive.as_ref().map_or(
+                        (None, [0.0, 0.0, 1.0, 1.0]),
+                        |(key, frames)| {
+                            let duration =
+                                frames.last().map_or(1.0, |frame| frame.1).max(f32::EPSILON);
+                            let time = total_elapsed.rem_euclid(duration);
+                            let frame = frames
+                                .partition_point(|frame| frame.1 <= time)
+                                .min(frames.len().saturating_sub(1));
+                            (
+                                Some(Arc::clone(key)),
+                                frames
+                                    .get(frame)
+                                    .map_or([0.0, 0.0, 1.0, 1.0], |frame| frame.0),
+                            )
+                        },
+                    );
+                    for axis in 0..2 {
+                        let shift = uv_tex_shift[axis] / layer.uv_scale[axis].max(f32::EPSILON);
+                        let delta = shift * (additive_uv[axis + 2] - additive_uv[axis]);
+                        additive_uv[axis] += delta;
+                        additive_uv[axis + 2] += delta;
+                    }
+                    deadlib_present::actors::MeshEnvironment {
+                        camera: None,
+                        transform: local_transform,
+                        additive_texture,
+                        additive_uv,
+                    }
+                });
+            let actor = Actor::TexturedMesh {
+                environment,
+                align: [0.0, 0.0],
+                offset,
+                world_z: song_lua_biased_world_z(state, effect_offset[2]),
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                local_transform,
+                texture: Arc::clone(&layer.texture_key).into(),
+                tint: deadsync_noteskin::model_unlit_color(
+                    layer.material,
+                    song_lua_capture_tint(layer.draw.tint, tint),
+                ),
+                glow: [1.0, 1.0, 1.0, 0.0],
+                vertices: Arc::clone(&layer.vertices),
+                geom_cache_key: prewarmed_geometry_keys
+                    .and_then(|keys| keys.get(idx))
+                    .copied()
+                    .unwrap_or(INVALID_TMESH_CACHE_KEY),
+                uv_scale: layer.uv_scale,
+                uv_offset,
+                uv_tex_shift,
+                depth_test: state.depth_test,
+                clear_depth: false,
+                clear_depth_after: false,
+                cull_back: false,
+                visible: true,
+                blend: if layer.draw.blend_add {
+                    BlendMode::Add
+                } else {
+                    blend
+                },
+                z: z.min(SONG_LUA_FOREGROUND_DEPTH.ceiling),
+            };
+            if !glow_pass {
+                out.extend([actor]);
+                emitted = true;
+                continue;
+            }
+            let glow_actor = song_lua_overlay_glow_actor_with_static_vertices(
+                &actor,
+                glow,
+                state.text_glow_mode,
+                None,
+                prewarmed_glow_vertices.and_then(|vertices| vertices.get(idx)),
+            );
+            if let Some(glow_actor) = glow_actor {
+                out.extend([glow_actor]);
+                emitted = true;
+            }
         }
     }
     emitted
@@ -8120,111 +8131,131 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             song_lua_overlay_z_scale(state),
         ],
     ]);
-    for (idx, slot) in slots.iter().enumerate() {
-        if !asset_manager.has_texture_key(slot.texture_key_shared().as_ref()) {
+    // Slots extracted from one native Model share its diffuse/glow passes.
+    // Other noteskin actor trees retain their per-actor draw order.
+    let model_passes = slots.iter().all(|slot| slot.model().is_some());
+    for glow_pass in [false, true] {
+        if glow_pass && (!model_passes || glow[3] <= f32::EPSILON) {
             continue;
         }
-        let mut draw = model_cache.as_deref_mut().map_or_else(
-            || slot.model_draw_at(total_elapsed, effect_beat),
-            |cache| cache.draw_at(slot, total_elapsed, effect_beat),
-        );
-        let scales = if slot.model().is_some() {
-            local
-        } else {
-            [
-                actor_scale[0],
-                actor_scale[1],
-                song_lua_overlay_z_scale(state),
-            ]
-        };
-        draw.pos[0] *= x_scale * scales[0] * effect_scale[0];
-        draw.pos[1] *= y_scale * scales[1] * effect_scale[1];
-        draw.pos[2] *= scales[2] * effect_scale[2];
-        draw.rot[0] += effect_rot[0];
-        draw.rot[1] += effect_rot[1];
-        let frame = slot.frame_index(total_elapsed, effect_beat);
-        let uv = song_lua_noteskin_slot_uv(slot, frame, total_elapsed, state.texcoord_offset);
-        let base_size = song_lua_noteskin_slot_size(slot);
-        let size = [
-            base_size[0] * x_scale * actor_scale[0] * effect_scale[0],
-            base_size[1] * y_scale * actor_scale[1] * effect_scale[1],
-        ];
-        if size[0].abs() <= f32::EPSILON || size[1].abs() <= f32::EPSILON {
-            continue;
-        }
-        let layer_z = song_lua_add_z(z, idx.min(i16::MAX as usize) as i16)
-            .min(SONG_LUA_FOREGROUND_DEPTH.ceiling);
-        let actor = if slot.model().is_some() {
-            // Actor::BeginDraw scales each model axis independently. The
-            // noteskin renderer fits models uniformly from size[1], so pass
-            // native dimensions and put the composed Lua scale in the draw.
-            draw.zoom[0] *= x_scale * local[0] * effect_scale[0];
-            draw.zoom[1] *= y_scale * local[1] * effect_scale[1];
-            draw.zoom[2] *= local[2] * effect_scale[2];
-            let size = base_size;
-            if let Some(cache) = model_cache.as_deref_mut() {
-                noteskin_model_actor_from_draw_cached(
-                    slot,
-                    draw,
-                    center,
-                    size,
-                    uv,
-                    -(slot.sprite_def().rotation_deg as f32 + effect_rot[2]),
-                    tint,
-                    blend,
-                    layer_z,
-                    cache,
-                )
+        for (idx, slot) in slots.iter().enumerate() {
+            if !asset_manager.has_texture_key(slot.texture_key_shared().as_ref()) {
+                continue;
+            }
+            let mut draw = model_cache.as_deref_mut().map_or_else(
+                || slot.model_draw_at(total_elapsed, effect_beat),
+                |cache| cache.draw_at(slot, total_elapsed, effect_beat),
+            );
+            let scales = if slot.model().is_some() {
+                local
             } else {
-                noteskin_model_actor_from_draw(
+                [
+                    actor_scale[0],
+                    actor_scale[1],
+                    song_lua_overlay_z_scale(state),
+                ]
+            };
+            draw.pos[0] *= x_scale * scales[0] * effect_scale[0];
+            draw.pos[1] *= y_scale * scales[1] * effect_scale[1];
+            draw.pos[2] *= scales[2] * effect_scale[2];
+            draw.rot[0] += effect_rot[0];
+            draw.rot[1] += effect_rot[1];
+            let frame = slot.frame_index(total_elapsed, effect_beat);
+            let uv = song_lua_noteskin_slot_uv(slot, frame, total_elapsed, state.texcoord_offset);
+            let base_size = song_lua_noteskin_slot_size(slot);
+            let size = [
+                base_size[0] * x_scale * actor_scale[0] * effect_scale[0],
+                base_size[1] * y_scale * actor_scale[1] * effect_scale[1],
+            ];
+            if size[0].abs() <= f32::EPSILON || size[1].abs() <= f32::EPSILON {
+                continue;
+            }
+            let layer_z = if model_passes {
+                z
+            } else {
+                song_lua_add_z(z, idx.min(i16::MAX as usize) as i16)
+            }
+            .min(SONG_LUA_FOREGROUND_DEPTH.ceiling);
+            let actor = if slot.model().is_some() {
+                // Actor::BeginDraw scales each model axis independently. The
+                // noteskin renderer fits models uniformly from size[1], so pass
+                // native dimensions and put the composed Lua scale in the draw.
+                draw.zoom[0] *= x_scale * local[0] * effect_scale[0];
+                draw.zoom[1] *= y_scale * local[1] * effect_scale[1];
+                draw.zoom[2] *= local[2] * effect_scale[2];
+                let size = base_size;
+                if let Some(cache) = model_cache.as_deref_mut() {
+                    noteskin_model_actor_from_draw_cached(
+                        slot,
+                        draw,
+                        center,
+                        size,
+                        uv,
+                        -(slot.sprite_def().rotation_deg as f32 + effect_rot[2]),
+                        tint,
+                        blend,
+                        layer_z,
+                        cache,
+                    )
+                } else {
+                    noteskin_model_actor_from_draw(
+                        slot,
+                        draw,
+                        center,
+                        size,
+                        uv,
+                        -(slot.sprite_def().rotation_deg as f32 + effect_rot[2]),
+                        tint,
+                        blend,
+                        layer_z,
+                    )
+                }
+            } else {
+                song_lua_noteskin_sprite_actor(
                     slot,
                     draw,
                     center,
                     size,
                     uv,
-                    -(slot.sprite_def().rotation_deg as f32 + effect_rot[2]),
+                    effect_rot[2],
                     tint,
                     blend,
                     layer_z,
                 )
+            };
+            let Some(mut actor) = actor else {
+                continue;
+            };
+            if slot.model().is_some() {
+                if let Actor::TexturedMesh {
+                    local_transform, ..
+                } = &mut actor
+                {
+                    *local_transform =
+                        Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
+                }
             }
-        } else {
-            song_lua_noteskin_sprite_actor(
-                slot,
-                draw,
-                center,
-                size,
-                uv,
-                effect_rot[2],
-                tint,
-                blend,
-                layer_z,
-            )
-        };
-        let Some(mut actor) = actor else {
-            continue;
-        };
-        if slot.model().is_some() {
-            if let Actor::TexturedMesh {
-                local_transform, ..
-            } = &mut actor
-            {
-                *local_transform = Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
+            let glow_actor = (glow_pass || !model_passes)
+                .then(|| {
+                    song_lua_overlay_glow_actor_with_static_vertices(
+                        &actor,
+                        glow,
+                        state.text_glow_mode,
+                        None,
+                        glow_vertices
+                            .and_then(|vertices| vertices.get(idx))
+                            .and_then(Option::as_ref),
+                    )
+                })
+                .flatten();
+            if !glow_pass {
+                out.extend([actor]);
+                emitted = true;
             }
-        }
-        let glow_actor = song_lua_overlay_glow_actor_with_static_vertices(
-            &actor,
-            glow,
-            state.text_glow_mode,
-            None,
-            glow_vertices
-                .and_then(|vertices| vertices.get(idx))
-                .and_then(Option::as_ref),
-        );
-        out.extend([actor]);
-        emitted = true;
-        if let Some(glow_actor) = glow_actor {
-            out.extend([glow_actor]);
+            if let Some(glow_actor) = glow_actor {
+                out.extend([glow_actor]);
+                emitted = true;
+            }
         }
     }
     emitted

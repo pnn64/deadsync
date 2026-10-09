@@ -2754,3 +2754,36 @@ the ignored target directory. Longer Model captures need lossless sharing
 of repeated observations to avoid excessive memory and trace size; no
 frames, vertices, original scripts or comparison tolerances may be omitted
 to fit the GitHub upload limit.
+
+## Pass 82: capture every Model update and preserve native pass order
+
+Harness 7ba1318 (0.1.37) records ordinary Model geometry on every native
+update. ITGmania's Model::Update advances animation and texture clocks
+each frame; sparse beat sampling was omitting intermediate observations.
+The independent native control verifies 61 observations for visible and
+invisible Models with sparse beat sampling, including midpoint geometry.
+All 195 harness tests pass with five existing ignores.
+
+The fresh private case 18 KABOOOOOM archive reaches the native chart end
+at beat 645.75 and 199.4571533203125 seconds with no runtime errors or
+dropped events. Each of its eight Models now has all 11,969 update-frame
+observations, replacing the previous 2,328 sampled observations. The audit
+checks 95,752 Model samples, 2,712 primitives, 29,832 shared columns and
+all 26 archive members. The bounded sharing index saturates without
+discarding observations. The archive is 41,948,792 bytes; its 164,570,710
+byte raw trace stays in the ignored harness target directory. Original
+song and Cyber noteskin source hashes remain unchanged.
+
+DeadSync interleaved each mesh's diffuse and glow passes. Native
+Model::DrawPrimitives draws every diffuse mesh before every glow mesh.
+The production song Model and NoteskinActor paths now preserve that
+sequence in a shared composition z bucket. The portable native material
+control checks the ordered 24 draws and 8,256 vertex color components
+across both paths. Prewarmed geometry identity checks remain in place.
+
+These fixes establish complete native Model update observations and the
+controlled production pass order. They do not establish full-song Model
+geometry, render states, lighting or framebuffer parity. Keep the whole-song
+Model rejection and the new archive private until real mesh comparisons
+are wired into the production verifier. All 501 original simfiles and
+492 archive contexts remain in scope; full-corpus parity is unfinished.

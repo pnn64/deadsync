@@ -7447,8 +7447,8 @@ fn native_unlit_model_colors_match_production() {
         [0.0; 2],
     );
     // Exercise both song Def.Model and the notefield model builder used by
-    // NoteskinActor. This test covers colors; mesh/pass ordering stays subject
-    // to the full-song native geometry coverage gate.
+    // NoteskinActor. Compare the final pass sequence, not separate lists of
+    // diffuse and glow draws: native Model draws every diffuse mesh first.
     for noteskin in [false, true] {
         let mut overlays = compiled.overlays.clone();
         for actor in &mut overlays {
@@ -7498,7 +7498,7 @@ fn native_unlit_model_colors_match_production() {
             };
             let frame =
                 composer.render_overlay(&overlays, &states, index, [854.0, 480.0], 0.0, 0.0);
-            let mut pass_counts = [0; 2];
+            let mut pass_count = 0;
             for op in &frame.ops {
                 let deadlib_render_core::DrawOp::TexturedMesh(run) = op else {
                     panic!("unexpected model draw operation");
@@ -7511,13 +7511,15 @@ fn native_unlit_model_colors_match_production() {
                     let reference = expected
                         .as_array()
                         .unwrap()
-                        .iter()
-                        .filter(|pass| {
-                            pass["texture_mode"] == if glow == 1 { "glow" } else { "modulate" }
-                        })
-                        .nth(pass_counts[glow])
+                        .get(pass_count)
                         .expect("native draw for each production mesh pass");
-                    pass_counts[glow] += 1;
+                    assert_eq!(
+                        reference["texture_mode"],
+                        if glow == 1 { "glow" } else { "modulate" },
+                        "{:?} noteskin={noteskin} pass={pass_count}: native mesh pass order",
+                        overlay.name
+                    );
+                    pass_count += 1;
                     assert_eq!(
                         vertices.len(),
                         reference["vertex_count"].as_u64().unwrap() as usize
@@ -7537,7 +7539,7 @@ fn native_unlit_model_colors_match_production() {
                 }
             }
             assert_eq!(
-                pass_counts.iter().sum::<usize>(),
+                pass_count,
                 expected.as_array().unwrap().len()
             );
         }
@@ -7741,7 +7743,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
         let Actor::TexturedMesh {
             geom_cache_key: base_key,
             ..
-        } = &warmed[layer_index * 2]
+        } = &warmed[layer_index]
         else {
             panic!("expected prewarmed static model base mesh");
         };
@@ -7750,7 +7752,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
             geom_cache_key: glow_key,
             blend,
             ..
-        } = &warmed[layer_index * 2 + 1]
+        } = &warmed[prewarmed.len() + layer_index]
         else {
             panic!("expected prewarmed static model glow mesh");
         };
@@ -7762,7 +7764,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
     }
     append_warmed(&mut warmed);
     for (layer_index, prewarmed_vertices) in prewarmed.iter().enumerate() {
-        let Actor::TexturedMesh { vertices, .. } = &warmed[layer_index * 2 + 1] else {
+        let Actor::TexturedMesh { vertices, .. } = &warmed[prewarmed.len() + layer_index] else {
             panic!("expected prewarmed static model glow mesh");
         };
         assert!(Arc::ptr_eq(vertices, prewarmed_vertices));
@@ -7991,21 +7993,23 @@ fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
         }
     }
     assert_eq!(format!("{expected:?}"), format!("{normalized:?}"));
-    for (slot_index, actors) in warmed.as_chunks::<2>().0.iter().enumerate() {
-        let [
-            Actor::TexturedMesh {
-                geom_cache_key: base_key,
-                ..
-            },
-            Actor::TexturedMesh {
-                vertices,
-                geom_cache_key: glow_key,
-                blend,
-                ..
-            },
-        ] = actors
+    let (base_pass, glow_pass) = warmed.split_at(slots.len());
+    for (slot_index, (base, glow)) in base_pass.iter().zip(glow_pass).enumerate() {
+        let Actor::TexturedMesh {
+            geom_cache_key: base_key,
+            ..
+        } = base
         else {
-            panic!("expected prewarmed noteskin base/glow pair");
+            panic!("expected prewarmed noteskin base mesh");
+        };
+        let Actor::TexturedMesh {
+            vertices,
+            geom_cache_key: glow_key,
+            blend,
+            ..
+        } = glow
+        else {
+            panic!("expected prewarmed noteskin glow mesh");
         };
         assert_ne!(*base_key, INVALID_TMESH_CACHE_KEY);
         assert_ne!(*glow_key, INVALID_TMESH_CACHE_KEY);

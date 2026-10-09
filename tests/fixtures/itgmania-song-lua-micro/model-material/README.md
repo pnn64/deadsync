@@ -1,6 +1,7 @@
-This control checks unlit Model material colors in the production song Lua
-and noteskin render paths. `default.lua` and `control.json` describe the same
-four actors. Cyber uses the original bundled meshes and textures.
+This control checks unlit Model material colors and mesh pass order in the
+production song Lua and noteskin render paths. `default.lua` and
+`control.json` describe the same four actors. Cyber uses the original bundled
+meshes and textures.
 
 `native.json` retains the real ITGmania Model draw materials, mesh sizes, and
 diffuse/glow modes captured by harness 0.1.35 at commit `e8b6048`, linked to
@@ -17,8 +18,11 @@ shader input comparison, not a sampled GPU framebuffer capture.
 The controls cover RGB saturation after tinting, diffuse alpha distinct from
 MilkShape transparency, the untinted fixed material for mesh index -1, and
 glow independent of diffuse material color. The production compositor test
-checks 4,128 vertex color components through each of its two model paths.
+checks 4,128 vertex color components and the ordered 12 draw passes through
+each of its two model paths. Cyber's two meshes must both draw their diffuse
+passes before either glow pass, as in `Model::DrawPrimitives`; composition
+must preserve that order rather than sort each mesh's glow beside its base.
 
-Geometry transforms, pass ordering, lighting, skeletal animation, and sampled
-texture pixels are outside this control. Full-song Model references remain
+Geometry transforms, lighting, skeletal animation, and sampled texture
+pixels are outside this control. Full-song Model references remain
 rejected until their actual geometry and draw states are compared.
