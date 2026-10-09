@@ -433,3 +433,9 @@ binding establish getter values; 1,206 domain tests pass. See
 `../itgmania-song-lua-micro/texture-image-getters` for native inputs and
 goldens. Physical tiny Sprite uploads and framebuffer parity remain open.
 Full corpus and native framebuffer parity are still incomplete.
+
+Position 7, 188|HS|Holdswitch[lv.08] the shadow, passed 345,742 comparisons
+over 130.00 seconds and 7,801 native update frames.
+The native capture has no runtime errors or dropped events; original
+sources, prior captures, and historical aliases are retained.
+Full corpus and native framebuffer parity are still incomplete.

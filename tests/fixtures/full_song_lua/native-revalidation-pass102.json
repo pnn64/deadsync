@@ -107,9 +107,40 @@
       "historical_aliases_retained": true,
       "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-top-006-1035-v1.json",
       "native_receipt_sha256": "5ae59c76c633e7559751f00898eb73c27e31204762c0250b7bb215f742509655"
+    },
+    {
+      "position": 7,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "b2737bf93ef8331b18b58ef7e3732042e5d680454c7910ca62130c511b8cdc8a.tar.zst",
+      "archive_sha256": "b2737bf93ef8331b18b58ef7e3732042e5d680454c7910ca62130c511b8cdc8a",
+      "archive_bytes": 161879,
+      "compression_level": 22,
+      "uncompressed_sha256": "543d7960c8dcd5bb81eeb4881a899b9d17ec0a2f525e4080c5c02c6c9f9479ed",
+      "native_trace_sha256": "ab45d50df7c0638f57fdbfeee5f5a90b20731fa0e414bd19aabe19a43a691a83",
+      "harness_version": "0.1.49",
+      "native_capture_log_sha256": "96aff15c0a781a0eb314b3de9a8c97f25e5ef1ea64093783c0de8375c9398770",
+      "native_archive_log_sha256": "46884cb90bdd8f68a0f5cd4c6f7828beda8e552075d3c50ceb7e36ddaf7a4935",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 130,
+      "update_frames": 7801,
+      "original_source_unchanged": true,
+      "source_simfile_sha256": "21951a872e5e519bb40fb6f8c8327a3c00c1a1bed0be75ea025dfcb4150844f1",
+      "comparisons_passed": 345742,
+      "comparisons_failed": 0,
+      "test_log_sha256": "54f205a5913ecdeec6df362a5425952c53f725c279851660992fb1ca220dfaa8",
+      "verification_repository_commit": "55212b44e343443a266984d300281bc263f5cf49",
+      "verification_comparator": {
+        "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass102-current-image-getter-comparators-v1-full_song_lua.exe",
+        "sha256": "51857347af03fa15071cc288ad293360d9e0ca8831c70a3594390f6f3b345908"
+      },
+      "original_archive_retained": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "historical_aliases_retained": true,
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-top-007-shadow-v1.json",
+      "native_receipt_sha256": "54d8bccb525df7e69cf2abbf366ad28ad51792dd4d94956d67968ea97e45d514"
     }
   ],
-  "next_position": 7,
+  "next_position": 8,
   "checks": "Complete archive/member integrity, native endpoint and frame coverage, full Lua runtime and duration composition, semantic geometry/blend/command/modifier/player transform comparisons",
   "storage": "Complete native movie archives retain native zstd level 12 and are ignored locally; only the reference and proof records are committed",
   "post_getter_revalidation": {
