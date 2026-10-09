@@ -268,6 +268,10 @@ fn forget_failure(runtime: &mut RuntimeState, pack_id: u64) {
 /// the textures, so it decides when they actually go.
 pub fn overflow() -> Vec<u64> {
     let mut runtime = lock_runtime();
+    // Done banners are a subset of all slots, so none can overflow this bound.
+    if runtime.slots.len() <= MAX_CACHED {
+        return Vec::new();
+    }
     let mut held: Vec<(u64, u64)> = runtime
         .slots
         .iter()
@@ -418,7 +422,7 @@ mod tests {
     /// looks like the retry rule misbehaving.
     static SERIAL: Mutex<()> = Mutex::new(());
 
-    fn exclusively() -> MutexGuard<'static, ()> {
+    pub(super) fn exclusively() -> MutexGuard<'static, ()> {
         SERIAL.lock().unwrap_or_else(|error| error.into_inner())
     }
 
@@ -730,3 +734,11 @@ mod tests {
         runtime.slots.clear();
     }
 }
+
+#[cfg(test)]
+#[path = "banners_original.rs"]
+mod original;
+
+#[cfg(test)]
+#[path = "banners_perf.rs"]
+mod perf_tests;

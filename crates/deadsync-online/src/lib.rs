@@ -97,3 +97,7 @@ mod tests {
         assert_eq!(timeout.to_string(), "request timed out");
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
