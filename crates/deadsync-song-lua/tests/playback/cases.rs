@@ -7554,17 +7554,34 @@ fn native_unlit_model_colors_match_production() {
 #[test]
 #[cfg(feature = "test-support")]
 fn native_model_cameras_match_production() {
+    check_native_model_draws(
+        "model-camera",
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json")),
+        8,
+    );
+}
+
+#[test]
+#[cfg(feature = "test-support")]
+fn native_model_signed_scales_match_production() {
+    check_native_model_draws(
+        "model-signed-scale",
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-signed-scale/native.json")),
+        10,
+    );
+}
+
+#[cfg(feature = "test-support")]
+fn check_native_model_draws(name: &str, native: &str, expected_passes: usize) {
     crate::tests::init_paths();
-    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-camera");
-    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json"
-    )))
-    .expect("captured native Model cameras");
-    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, "Model Camera");
+    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro").join(name);
+    let native: serde_json::Value = serde_json::from_str(native).expect("captured native Models");
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, name);
     context.screen_width = 854.0;
     let compiled = compile_song_lua(&directory.join("default.lua"), &context)
-        .expect("compile native camera control");
+        .expect("compile native Model control");
     let local = compiled
         .overlays
         .iter()
@@ -7664,8 +7681,8 @@ fn native_model_cameras_match_production() {
             assert!(frame.ops.iter().all(|op| matches!(op,
                 deadlib_render_core::DrawOp::TexturedMesh(run) if !run.depth_test)));
         }
-        assert_eq!(passes, 8);
-        assert_eq!(checked, 336);
+        assert_eq!(passes, expected_passes);
+        assert_eq!(checked, expected_passes * 42);
     }
 }
 

@@ -467,9 +467,9 @@ fn model_affine_transform(
         1.0
     };
     let local_scale = Vector3::new(
-        scale * draw.zoom[0].max(0.0),
-        scale * draw.zoom[1].max(0.0),
-        scale * draw.zoom[2].max(0.0),
+        scale * draw.zoom[0],
+        scale * draw.zoom[1],
+        scale * draw.zoom[2],
     );
     let align_y = (0.5 - draw.vert_align) * size[1];
     Matrix4::from_translation(Vector3::new(draw.pos[0], draw.pos[1], draw.pos[2]))

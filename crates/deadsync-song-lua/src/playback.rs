@@ -7989,11 +7989,14 @@ fn append_song_lua_model_actors(
                 layer.uv_tex_shift[1] + shift[1],
             ];
             let (ancestor_scale, model_scale) = state.scale_factors.map_or(
-                (Matrix4::IDENTITY, actor_scale),
+                (
+                    Matrix4::IDENTITY,
+                    [actor_scale[0], actor_scale[1], song_lua_overlay_z_scale(state)],
+                ),
                 |[ancestor, local]| {
                     (
                         Matrix4::from_scale(Vector3::from(ancestor)),
-                        [local[0], local[1]],
+                        local,
                     )
                 },
             );
@@ -8469,7 +8472,7 @@ fn song_lua_model_local_transform(
     draw: SongLuaOverlayModelDraw,
     x_scale: f32,
     y_scale: f32,
-    actor_scale: [f32; 2],
+    actor_scale: [f32; 3],
     effect_scale: [f32; 3],
     effect_rot: [f32; 3],
     skew: [f32; 2],
@@ -8478,7 +8481,7 @@ fn song_lua_model_local_transform(
     let scale = Vector3::new(
         x_scale * actor_scale[0] * effect_scale[0] * draw.zoom[0],
         y_scale * actor_scale[1] * effect_scale[1] * draw.zoom[1],
-        actor_scale[1].abs() * effect_scale[2] * draw.zoom[2],
+        actor_scale[2] * effect_scale[2] * draw.zoom[2],
     );
     Matrix4::from_translation(Vector3::new(
         draw.pos[0] * x_scale,
