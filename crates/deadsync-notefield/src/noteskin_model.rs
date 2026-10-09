@@ -629,7 +629,7 @@ fn actor_from_draw<S: NoteskinSlot>(
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let blend = model_blend(draw, blend);
     let vertices = build_model_geometry(slot);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
@@ -685,7 +685,7 @@ pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = model_draw_transform(model.size(), affine);
     let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
@@ -725,7 +725,7 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = model_draw_transform(model.size(), affine);
     let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
@@ -764,7 +764,7 @@ pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry<S: Not
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let blend = model_blend(draw, blend);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = affine * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
@@ -823,6 +823,7 @@ mod tests {
             Self {
                 def: SpriteDefinition::default(),
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
                         normal: [0.0, 0.0, 1.0],
                         pos: [2.0, 3.0, 4.0],

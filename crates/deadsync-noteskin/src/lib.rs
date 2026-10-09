@@ -23,10 +23,10 @@ pub mod workshop;
 
 pub use draw::{
     ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
-    ModelMesh, ModelTweenCursor, ModelTweenSegment, ModelVertex, TweenType, glowshift_mix,
-    model_auto_rot_z_at, model_draw_at, model_draw_at_cursor, model_effect_clock_units,
-    model_effect_mix, model_glow_at, model_glow_with_draw, model_texture_uv_params,
-    model_texture_uv_params_cached,
+    ModelMaterial, ModelMesh, ModelTweenCursor, ModelTweenSegment, ModelVertex, TweenType,
+    glowshift_mix, model_auto_rot_z_at, model_draw_at, model_draw_at_cursor,
+    model_effect_clock_units, model_effect_mix, model_glow_at, model_glow_with_draw,
+    model_texture_uv_params, model_texture_uv_params_cached, model_unlit_color,
 };
 pub use explosion::{
     ExplosionAngle, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,

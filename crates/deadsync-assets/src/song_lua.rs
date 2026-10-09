@@ -116,6 +116,7 @@ fn model_layer_from_slot_frame(
         slot.uv_cycle_seconds,
         song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
     );
+    layer.material = model.material;
     if let Some(texture) = &slot.model_additive {
         let frames = model_additive_frames(texture);
         layer.additive = Some((texture.texture_key_shared(), frames));

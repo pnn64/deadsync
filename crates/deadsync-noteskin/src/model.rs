@@ -1,7 +1,8 @@
 use crate::itg as noteskin_itg;
 use crate::lua::itg_quoted_strings;
 use crate::{
-    ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex,
+    ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMaterial, ModelMesh, ModelTweenSegment,
+    ModelVertex,
 };
 use std::cell::OnceCell;
 use std::fs;
@@ -360,6 +361,7 @@ struct ItgSharedMilkshapeMeshLayer {
 // Resolution is scoped to one model load. Materials reused by several meshes
 // share their file/INI lookup, including misses, while layers keep owned data.
 struct ItgMilkshapeMaterial<'a> {
+    material: ModelMaterial,
     texture: &'a str,
     additive: &'a str,
     flags: ItgModelMaterialFlags,
@@ -889,15 +891,38 @@ pub fn itg_parse_milkshape_model_layers(
     let mut material_textures = Vec::with_capacity(material_count);
     for _ in 0..material_count {
         let name = lines.next()?.trim();
-        let _ambient = lines.next()?;
-        let _diffuse = lines.next()?;
-        let _specular = lines.next()?;
-        let _emissive = lines.next()?;
-        let _shininess = lines.next()?;
-        let _transparency = lines.next()?;
+        let mut read_color = || {
+            let mut parts = lines.next()?.split_whitespace();
+            let mut color = [0.0; 4];
+            for value in &mut color {
+                *value = parts.next()?.parse::<f32>().ok()?;
+                if !value.is_finite() {
+                    return None;
+                }
+            }
+            Some(color)
+        };
+        let ambient = read_color()?;
+        let diffuse = read_color()?;
+        let specular = read_color()?;
+        let emissive = read_color()?;
+        let shininess = lines.next()?.parse::<f32>().ok()?;
+        let transparency = lines.next()?.parse::<f32>().ok()?;
+        if !shininess.is_finite() || !transparency.is_finite() {
+            return None;
+        }
         let texture = lines.next()?.trim();
         let additive = lines.next()?.trim();
         material_textures.push(ItgMilkshapeMaterial {
+            material: ModelMaterial {
+                ambient,
+                diffuse,
+                specular,
+                emissive,
+                shininess,
+                transparency,
+                modulate: true,
+            },
             texture,
             additive,
             flags: itg_parse_model_material_flags(name),
@@ -988,6 +1013,12 @@ pub fn itg_parse_milkshape_model_layers(
             mesh: Arc::new(ModelMesh {
                 vertices: mesh.vertices,
                 bounds,
+                material: Some(
+                    usize::try_from(mesh.material_index)
+                        .ok()
+                        .and_then(|index| material_textures.get(index))
+                        .map_or_else(ModelMaterial::unassigned, |material| material.material),
+                ),
             }),
             texture,
             flags,
@@ -1059,6 +1090,7 @@ mod tests {
 
     fn test_mesh() -> Arc<ModelMesh> {
         Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from([ModelVertex {
                 normal: [0.0, 0.0, 1.0],
                 pos: [0.0, 0.0, 0.0],

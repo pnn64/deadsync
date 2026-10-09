@@ -7421,6 +7421,131 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
 }
 
 #[test]
+#[cfg(feature = "test-support")]
+fn native_unlit_model_colors_match_production() {
+    crate::tests::init_paths();
+    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-material");
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-song-lua-micro/model-material/native.json"
+    )))
+    .expect("native material reference");
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, "Model Material");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    let compiled = compile_song_lua(&directory.join("default.lua"), &context)
+        .expect("load real model materials through the production asset bridge");
+    let local: Vec<_> = compiled
+        .overlays
+        .iter()
+        .map(|actor| actor.initial_state)
+        .collect();
+    let states = actor_conformance::compose_overlay_states(
+        &compiled.overlays,
+        &local,
+        [854.0, 480.0],
+        [0.0; 2],
+    );
+    // Exercise both song Def.Model and the notefield model builder used by
+    // NoteskinActor. This test covers colors; mesh/pass ordering stays subject
+    // to the full-song native geometry coverage gate.
+    for noteskin in [false, true] {
+        let mut overlays = compiled.overlays.clone();
+        for actor in &mut overlays {
+            let Some(expected) = actor
+                .name
+                .as_deref()
+                .and_then(|name| native["actors"].get(name))
+            else {
+                continue;
+            };
+            let SongLuaOverlayKind::Model { layers } = &actor.kind else {
+                panic!("expected compiled Model for {actor:?}");
+            };
+            assert_eq!(layers.len() * 2, expected.as_array().unwrap().len());
+            if actor.name.as_deref() == Some("Triangle") {
+                let material = layers[0]
+                    .material
+                    .expect("material preserved through asset compilation");
+                assert_eq!(material.diffuse[3], 0.4);
+                assert_eq!(material.transparency, 0.2);
+                assert_eq!(material.shininess, 4.0);
+                assert_eq!(material.specular, [0.3, 0.2, 0.1, 1.0]);
+            }
+            if noteskin {
+                let path = match actor.name.as_deref().unwrap() {
+                    "Triangle" => directory.join("triangle.txt"),
+                    "Unassigned" => directory.join("unassigned.txt"),
+                    _ => workspace_root()
+                        .join("assets/noteskins/dance/cyber/_down tap note model.txt"),
+                };
+                actor.kind = SongLuaOverlayKind::NoteskinActor {
+                    slots: deadsync_assets::noteskin::load_itg_model_slots(&path, &path, &path)
+                        .expect("native control model slots")
+                        .into(),
+                };
+            }
+        }
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut checked = 0;
+        for (index, overlay) in overlays.iter().enumerate() {
+            let Some(expected) = overlay
+                .name
+                .as_deref()
+                .and_then(|name| native["actors"].get(name))
+            else {
+                continue;
+            };
+            let frame =
+                composer.render_overlay(&overlays, &states, index, [854.0, 480.0], 0.0, 0.0);
+            let mut pass_counts = [0; 2];
+            for op in &frame.ops {
+                let deadlib_render_core::DrawOp::TexturedMesh(run) = op else {
+                    panic!("unexpected model draw operation");
+                };
+                let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                for instance in &frame.tmesh_instances[run.instance_start as usize
+                    ..(run.instance_start + run.instance_count) as usize]
+                {
+                    let glow = usize::from(instance.texture_mask != 0.0);
+                    let reference = expected
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .filter(|pass| {
+                            pass["texture_mode"] == if glow == 1 { "glow" } else { "modulate" }
+                        })
+                        .nth(pass_counts[glow])
+                        .expect("native draw for each production mesh pass");
+                    pass_counts[glow] += 1;
+                    assert_eq!(
+                        vertices.len(),
+                        reference["vertex_count"].as_u64().unwrap() as usize
+                    );
+                    for vertex in vertices.iter() {
+                        for axis in 0..4 {
+                            let actual = vertex.color[axis] * instance.tint[axis];
+                            let expected = reference["unlit_color"][axis].as_f64().unwrap() as f32;
+                            assert!(
+                                (actual - expected).abs() <= 0.000_001,
+                                "{:?} noteskin={noteskin} glow={glow} axis={axis}: {actual} != {expected}",
+                                overlay.name
+                            );
+                            checked += 1;
+                        }
+                    }
+                }
+            }
+            assert_eq!(
+                pass_counts.iter().sum::<usize>(),
+                expected.as_array().unwrap().len()
+            );
+        }
+        assert_eq!(checked, 4128);
+    }
+}
+
+#[test]
 fn song_lua_model_builds_textured_mesh_layers() {
     let texture_key = "song-lua-model-texture.png".to_string();
     let mut asset_manager = AssetManager::new();
@@ -7428,6 +7553,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
     let overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::Model {
             layers: Arc::from(vec![SongLuaOverlayModelLayer {
+                material: None,
                 texture_key: Arc::from(texture_key.as_str()),
                 additive: None,
                 vertices: Arc::from(vec![

@@ -657,6 +657,7 @@ pub fn test_model_slot() -> SpriteSlot {
         beat_receptor_start: None,
         note_color_translate: false,
         model: Some(Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from([ModelVertex {
                 normal: [0.0, 0.0, 1.0],
                 pos: [0.0, 0.0, 0.0],
@@ -1968,6 +1969,7 @@ Materials: 1
     fn model_layers_ignore_texture_resolution() {
         let mut slot = test_model_slot();
         slot.model = Some(Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from([]),
             bounds: [-30.0, -31.0, 0.0, 30.0, 31.0, 8.0],
         }));

@@ -1348,6 +1348,7 @@ mod tests {
         fn model() -> Self {
             Self {
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
                         normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],

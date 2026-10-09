@@ -8025,7 +8025,10 @@ fn append_song_lua_model_actors(
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
             local_transform,
             texture: Arc::clone(&layer.texture_key).into(),
-            tint: song_lua_capture_tint(layer.draw.tint, tint),
+            tint: deadsync_noteskin::model_unlit_color(
+                layer.material,
+                song_lua_capture_tint(layer.draw.tint, tint),
+            ),
             glow: [1.0, 1.0, 1.0, 0.0],
             vertices: Arc::clone(&layer.vertices),
             geom_cache_key: prewarmed_geometry_keys

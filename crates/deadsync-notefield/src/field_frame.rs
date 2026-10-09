@@ -2213,6 +2213,7 @@ mod note_layer_tests {
             },
             draw: ModelDrawState::default(),
             model: Some(ModelMesh {
+                material: None,
                 bounds: [-32.0, -32.0, 0.0, 32.0, 32.0, 0.0],
                 vertices: [[-32.0, 32.0, 0.0], [-32.0, -32.0, 0.0], [32.0, -32.0, 0.0]]
                     .map(|pos| deadsync_noteskin::ModelVertex {

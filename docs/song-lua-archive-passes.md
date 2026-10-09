@@ -2717,3 +2717,40 @@ pass, including the existing obsolete-replay mutation controls.
 No observations, tolerances or original sources were reduced.
 Previously recorded passing receipts retain their actual verifier
 provenance and the newly documented Model coverage limitation.
+
+## Pass 80: preserve native unlit Model materials
+
+Harness e8b6048 (0.1.35) captures real native Model draw observations in
+song traces. A private four-second Cyber control matches the independent
+0.1.34 native Model runner across 6,517,845 scalar comparisons and 241
+samples. This is an actor control, not a complete simfile reference.
+
+DeadSync discarded MilkShape material colors and rendered white vertices
+with only the actor tint. It now preserves ambient, diffuse, specular,
+emissive, shininess and transparency data. Unlit song and noteskin draws
+use Model::DrawPrimitives tinting and RageDisplay_Legacy::SetMaterial's
+diffuse-plus-emissive-plus-ambient RGB calculation. Final color is clamped
+before texture modulation; alpha comes from diffuse, not the separate
+MilkShape transparency field. Meshes with material index -1 use the native
+untinted fixed material. Glow retains its independent color.
+
+The committed model-material micro control records 12 actual native
+material passes for tinted and dark Cyber models, a translucent triangle,
+and an unassigned-material triangle. Its portable request reproduces the
+captured material values. The production compositor checks 8,256 vertex
+color components through both Def.Model and NoteskinActor rendering.
+The four affected crates and playback integrations pass 1,536 tests with
+three existing ignores. Original Cyber source hashes remain unchanged.
+
+This comparison covers unlit draw colors and shader inputs. It does not
+prove framebuffer pixels, lighting, mesh transforms, draw-pass ordering,
+skeletal animation or the complete song. Keep the whole-song Model
+coverage rejection until actual geometry and render-state comparisons
+exist. Resume at original case 18; all 501 simfiles and 492 archive
+contexts remain in scope, and full-corpus parity is unfinished.
+
+The private four-second song trace is 109,940,785 bytes and stays under
+the ignored target directory. Longer Model captures need lossless sharing
+of repeated observations to avoid excessive memory and trace size; no
+frames, vertices, original scripts or comparison tolerances may be omitted
+to fit the GitHub upload limit.

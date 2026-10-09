@@ -34,6 +34,51 @@ pub struct ModelVertex {
 pub struct ModelMesh {
     pub vertices: Arc<[ModelVertex]>,
     pub bounds: [f32; 6], // min_x, min_y, min_z, max_x, max_y, max_z
+    pub material: Option<ModelMaterial>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelMaterial {
+    pub ambient: [f32; 4],
+    pub diffuse: [f32; 4],
+    pub specular: [f32; 4],
+    pub emissive: [f32; 4],
+    pub shininess: f32,
+    /// MilkShape stores this separately; ITG's draw uses diffuse alpha.
+    pub transparency: f32,
+    /// Model::DrawPrimitives does not tint meshes with material index -1.
+    pub modulate: bool,
+}
+
+impl ModelMaterial {
+    pub const fn unassigned() -> Self {
+        Self {
+            ambient: [0.2, 0.2, 0.2, 1.0],
+            diffuse: [0.7, 0.7, 0.7, 1.0],
+            specular: [0.2, 0.2, 0.2, 1.0],
+            emissive: [0.0; 4],
+            shininess: 1.0,
+            transparency: 1.0,
+            modulate: false,
+        }
+    }
+}
+
+/// Model::DrawPrimitives and RageDisplay_Legacy::SetMaterial with lighting off.
+/// Clamp the final color before texture modulation, as fixed-function GL does.
+pub fn model_unlit_color(material: Option<ModelMaterial>, tint: [f32; 4]) -> [f32; 4] {
+    let Some(material) = material else {
+        return tint;
+    };
+    let tint = if material.modulate { tint } else { [1.0; 4] };
+    let mut color = [0.0; 4];
+    for axis in 0..3 {
+        color[axis] = (material.diffuse[axis] * tint[axis]
+            + (material.emissive[axis] * tint[axis] + material.ambient[axis] * tint[axis]))
+            .clamp(0.0, 1.0);
+    }
+    color[3] = (material.diffuse[3] * tint[3]).clamp(0.0, 1.0);
+    color
 }
 
 impl ModelMesh {

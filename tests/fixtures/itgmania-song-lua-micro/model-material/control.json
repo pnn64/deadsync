@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "name": "unlit-model-material",
+  "samples": [0],
+  "screen": {"width": 854, "height": 480},
+  "root": {
+    "kind": "frame", "name": "Root",
+    "camera": {"fov": 0, "vanish": [427, 240]},
+    "children": [
+      {
+        "kind": "model", "name": "Triangle",
+        "model_paths": ["triangle.txt", "triangle.txt", "triangle.txt"],
+        "state": {"diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+      },
+      {
+        "kind": "model", "name": "Unassigned",
+        "model_paths": ["unassigned.txt", "unassigned.txt", "unassigned.txt"],
+        "state": {"diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+      },
+      {
+        "kind": "model", "name": "Cyber",
+        "model_paths": [
+          "../../../../assets/noteskins/dance/cyber/_down tap note model.txt",
+          "../../../../assets/noteskins/dance/cyber/_down tap note model.txt",
+          "../../../../assets/noteskins/dance/cyber/_down tap note model.txt"
+        ],
+        "state": {"diffuse": [0.5, 0.75, 1, 0.6], "glow": [1, 0, 0, 0.25]}
+      },
+      {
+        "kind": "model", "name": "DarkCyber",
+        "model_paths": [
+          "../../../../assets/noteskins/dance/cyber/_down tap note model.txt",
+          "../../../../assets/noteskins/dance/cyber/_down tap note model.txt",
+          "../../../../assets/noteskins/dance/cyber/_down tap note model.txt"
+        ],
+        "state": {"diffuse": [0.25, 0.25, 0.25, 0.25], "glow": [1, 0, 0, 0.25]}
+      }
+    ]
+  }
+}

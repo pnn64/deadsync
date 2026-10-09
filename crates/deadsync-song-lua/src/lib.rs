@@ -1953,6 +1953,7 @@ impl SongLuaOverlayModelDraw {
 
 #[derive(Debug, Clone)]
 pub struct SongLuaOverlayModelLayer<Vertex> {
+    pub material: Option<deadsync_noteskin::ModelMaterial>,
     pub texture_key: Arc<str>,
     /// Secondary GL_ADD stage: atlas key and (UV rectangle, frame-end seconds).
     pub additive: Option<(Arc<str>, Arc<[([f32; 4], f32)]>)>,
@@ -1981,6 +1982,7 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
         Self {
             texture_key,
             additive: None,
+            material: None,
             vertices,
             model_size,
             uv_scale,
