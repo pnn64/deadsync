@@ -2455,6 +2455,14 @@
       "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "666/666.ssc",
+      "superseded_archive": "1f117cff001e8fd6014deec3ef1ddd960b258b600fc323d36d6a7d9f1153be5d.tar.zst",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6745,6 +6753,34 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 25,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 33.224263429641724,
+        "result": "result: ok; 1/1 fixtures passed; 552285 comparisons passed, 0 failed (552285 total); elapsed 31.07s",
+        "log_sha256": "c51f2536d2d1abed34e7f928cd8838bd8661b6c35cde96c2dcb2650dc7efcc1e",
+        "executable_sha256": "3ca8d327befc6426bb0018ba76941f1488d9e098bf318050b3627befa45b455f"
+      },
+      "native_capture_reused": true,
+      "capture_log_sha256": "b4801dac8c330a876aa804bdf2591de2ec8a03bdf95aac76d9b7cff015c6863c",
+      "capture_endpoint": {
+        "beat": 680,
+        "music_seconds": 117.77569580078124,
+        "seconds": 118.1981964111328
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "endpoint_guard_regression": "one f64 rounding step below the endpoint passes only when native float seconds are equal; one native float step short and nonfinite frames fail"
     }
   ]
 }

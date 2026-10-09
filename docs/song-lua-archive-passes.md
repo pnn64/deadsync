@@ -2562,3 +2562,11 @@ Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK
 Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 24/492 archives; full-corpus parity remains unfinished.
 
 Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
+
+## Pass 74: compare endpoint coverage at native clock precision
+
+ITGmania SongPosition stores float music seconds and the native bridge converts Lua frame seconds to float before updating it. The archive guard compared a JSON double frame timestamp with a widened float endpoint, falsely rejecting the complete original 666.ssc capture by one double rounding step. Compare the frame clock at native float precision; retain strict raw music endpoint coverage and reject nonfinite frames.
+
+The complete unchanged native 0.1.31 capture passes all 552285 comparisons. The positive round-trip control, eight incomplete-replay mutations, focused Igaku reference (358379 comparisons and its rotation omission probe), and archive integrity guards pass. The original song and native capture were reused without modification.
+
+The verified prefix is 26/492 archives. The remaining canonical sources, nine historical contexts and 18 unindexed simfiles still require review; full-corpus parity is unfinished.
