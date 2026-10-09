@@ -388,3 +388,15 @@ CLI, trace, archive, and verification identities.
 This is the first chart in the renewed corpus pass. The original scope
 remains 501 simfiles and 492 contexts; full corpus and native framebuffer
 parity are still incomplete.
+
+Position 2, Let Me Hear That, also passed 205,071 comparisons against
+a fresh `0.1.49` native capture: 145.09 seconds, 8,707 update
+frames, no native runtime errors or dropped events. Its original archive
+and historical aliases remain available. Full corpus and framebuffer
+parity are still incomplete.
+
+Position 3, Waltz Capriccio, also passed 260,300 comparisons against
+a fresh `0.1.49` native capture: 141.01 seconds, 8,462 update
+frames, no native runtime errors or dropped events. Its original archive
+and historical aliases remain available. Full corpus and framebuffer
+parity are still incomplete.

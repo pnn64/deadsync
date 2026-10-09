@@ -32,12 +32,12 @@
     {
       "title": "Let Me Hear That",
       "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
-      "harness_version": "0.1.31",
-      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
-      "sha256": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0",
-      "compressed_bytes": 802102,
-      "uncompressed_sha256": "3ceb14e402b5c2f509687273be5713ce25d7417c4c72518aea7cc38a4ee0dac7",
-      "compression_level": 12,
+      "harness_version": "0.1.49",
+      "archive": "2a77063dd2ab8c43bbdbb9e101be7fcf73156302e21e9771c88797218317d327.tar.zst",
+      "sha256": "2a77063dd2ab8c43bbdbb9e101be7fcf73156302e21e9771c88797218317d327",
+      "compressed_bytes": 769576,
+      "uncompressed_sha256": "01d8050ee0d57201723dfb8d35e1c9c3f81f9e062a649276307bf1ebc45d64d7",
+      "compression_level": 22,
       "aliases": [
         "adf7cae38b6febc5504a3323f6f46b9ca87418a4409c123aa1b9b87dd4441f79.tar.zst",
         "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
@@ -54,18 +54,19 @@
         "b92716e36a8b1e460e7d52ce3530bf7a4dbd92ff2843b04bb2672bce56b37bbc.tar.zst",
         "0a88b6ea96e7abe307b749a10c76005b34c117ae20bfde30de635b27e3ab45db.tar.zst",
         "ded3626a5b627270035ff26730920fbc17f4bf8187666176e747adb54b178b80.tar.zst",
-        "375e45dd917ebe44dd960f0ceae76f66bc208c6e5e1f8a9f2d23773d4be34481.tar.zst"
+        "375e45dd917ebe44dd960f0ceae76f66bc208c6e5e1f8a9f2d23773d4be34481.tar.zst",
+        "648501a5ff0182a168c5252bc09cf0e2e36f8769da4d68419d55f1b4ffb5b028.tar.zst"
       ]
     },
     {
       "title": "Waltz Capriccio",
       "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
-      "harness_version": "0.1.31",
-      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
-      "sha256": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f",
-      "compressed_bytes": 8637053,
-      "uncompressed_sha256": "91762195de3ee01759add646eb9dc8ae0b130fb0ad50538328c9c976ce60ae17",
-      "compression_level": 12,
+      "harness_version": "0.1.49",
+      "archive": "2397fdbd00edd8679ca0a5d184b696deb32951fdfef2aa02bf9e15f17a9ac2cb.tar.zst",
+      "sha256": "2397fdbd00edd8679ca0a5d184b696deb32951fdfef2aa02bf9e15f17a9ac2cb",
+      "compressed_bytes": 8586685,
+      "uncompressed_sha256": "c3bbb88aae16afe3c521f0fa34cb3cde4d5fd59bd8ea4ece086416e3fdae1f83",
+      "compression_level": 22,
       "aliases": [
         "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
         "6e714e46b10d10dfccb200a706f4c07dcfd1efa699b600d432ed182bc2705ed9.tar.zst",
@@ -82,7 +83,8 @@
         "e37dbafcf2ebfb7b60b054ff2f640ede4df9a4832dfda309d56fd3d6967b2908.tar.zst",
         "74fbbff3280c609547ed3517772b121bd57476a46dcfe136c76ff31300a5415c.tar.zst",
         "c05dc759b9709606a61148a0ea1b6e59a69eb17bc706e2105f02ab5283d2424d.tar.zst",
-        "d726158238380b3a345dcc3e79ed1bafdafae3b37b94f39dc68e98b178a849cf.tar.zst"
+        "d726158238380b3a345dcc3e79ed1bafdafae3b37b94f39dc68e98b178a849cf.tar.zst",
+        "4236cd30967a59d61bfd74837dbcad61f21cadbe0bdfa9fee6e1b26c2a3b056f.tar.zst"
       ]
     },
     {
