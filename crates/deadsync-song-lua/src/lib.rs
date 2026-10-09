@@ -14115,6 +14115,51 @@ return Def.Sprite{{
     }
 
     #[test]
+    fn compile_song_lua_native_image_getters() {
+        let song_dir = test_dir("native-image-getters");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-image-getters");
+        let cases: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("cases.json")).expect("native image dimensions"),
+        ).expect("captured native dimension cases");
+        let entry = song_dir.join("default.lua");
+        fs::copy(root.join("sheet 2x1.png"), song_dir.join("sheet 2x1.png"))
+            .expect("replacement texture");
+        for case in cases.as_array().expect("native cases") {
+            let file = case["file"].as_str().expect("native source filename");
+            fs::copy(root.join(file), song_dir.join(file)).expect("native image input");
+            fs::write(&entry, format!(r#"
+return Def.ActorFrame{{
+    Def.Sprite{{Texture="{file}"}},
+    Def.Sprite{{
+    Texture="{file}",
+    OnCommand=function(self)
+        local texture = self:GetTexture()
+        local sizes = string.format("%.0f:%.0f:%.0f:%.0f:%.0f:%.0f",
+            texture:GetSourceWidth(), texture:GetSourceHeight(),
+            texture:GetImageWidth(), texture:GetImageHeight(),
+            texture:GetTextureWidth(), texture:GetTextureHeight())
+        self:Load("sheet 2x1.png")
+        mod_actions = {{{{1, sizes .. string.format(":%.0f:%.0f",
+            texture:GetImageWidth(), texture:GetImageHeight()), true}}}}
+    end,
+    }},
+}}
+"#)).expect("texture getter Lua");
+            let compiled = test_compile_song_lua(
+                &entry, &SongLuaCompileContext::new(&song_dir, "Native Image Getters"),
+            ).expect("compile native texture getters");
+            let dims = &case["dimensions"];
+            let expected = ["source", "image", "texture", "image"].into_iter()
+                .flat_map(|kind| dims[kind].as_array().expect("native dimension pair"))
+                .map(|value| value.as_u64().expect("native dimension").to_string())
+                .collect::<Vec<_>>().join(":");
+            assert_eq!(compiled.messages.len(), 1, "{file}");
+            assert_eq!(compiled.messages[0].message, expected, "{file}");
+        }
+    }
+
+    #[test]
     fn compile_song_lua_sprite_resolution_hints() {
         let song_dir = test_dir("sprite-resolution-hints");
         let entry = song_dir.join("default.lua");

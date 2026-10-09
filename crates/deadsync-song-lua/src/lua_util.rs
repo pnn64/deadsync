@@ -5609,15 +5609,8 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
             (height as u32)
                 .checked_next_power_of_two()
                 .unwrap_or(u32::MAX) as f32,
+            (width, height),
             1,
-        )?;
-        texture.set(
-            "GetImageWidth",
-            lua.create_function(move |_, _: MultiValue| Ok(width))?,
-        )?;
-        texture.set(
-            "GetImageHeight",
-            lua.create_function(move |_, _: MultiValue| Ok(height))?,
         )?;
         texture.set(
             "BeginRenderingTo",
@@ -5661,22 +5654,26 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
             .as_deref()
             .unwrap_or_else(|| Path::new(&raw_texture)),
     )?;
-    // RageBitmapTexture reports its padded power-of-two allocation. DeadSync's
-    // physical UV helpers continue to use the decoded image's dimensions.
-    let (texture_width, texture_height) = actor_image_texture_size(actor)?
+    // RageBitmapTexture caps the image at the native game preference (2048),
+    // then stretches both axes if either allocation is under eight pixels.
+    // Logical source hints do not change this prepared image/allocation pair.
+    // Physical UV helpers retain the decoded image dimensions independently.
+    let bitmap_sizes = actor_image_texture_size(actor)?
         .map(|(width, height)| {
-            (
-                (width as u32)
+            let image = [(width as u32).min(2048), (height as u32).min(2048)];
+            let allocation = image.map(|dimension| {
+                dimension
                     .checked_next_power_of_two()
                     .unwrap_or(u32::MAX)
-                    .max(8) as f32,
-                (height as u32)
-                    .checked_next_power_of_two()
-                    .unwrap_or(u32::MAX)
-                    .max(8) as f32,
-            )
-        })
-        .unwrap_or((source_width, source_height));
+                    .max(8)
+            });
+            let stretch = image.iter().any(|dimension| *dimension <= 4)
+                || deadlib_assets::parse_texture_hints(&path).stretch;
+            let image = if stretch { allocation } else { image };
+            (image.map(|value| value as f32), allocation.map(|value| value as f32))
+        });
+    let ([image_width, image_height], [texture_width, texture_height]) =
+        bitmap_sizes.unwrap_or(([source_width, source_height], [source_width, source_height]));
     install_texture_proxy_methods(
         lua,
         &texture,
@@ -5686,6 +5683,7 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         source_height,
         texture_width,
         texture_height,
+        (image_width, image_height),
         frame_count,
     )?;
     Ok(texture)
@@ -5724,6 +5722,7 @@ pub fn install_texture_proxy_methods(
     source_height: f32,
     texture_width: f32,
     texture_height: f32,
+    image_size: (f32, f32),
     frame_count: u32,
 ) -> mlua::Result<()> {
     let path = collapse_texture_name(&path);
@@ -5764,6 +5763,14 @@ pub fn install_texture_proxy_methods(
     texture.set(
         "GetTextureHeight",
         lua.create_function(move |_, _args: MultiValue| Ok(texture_height))?,
+    )?;
+    texture.set(
+        "GetImageWidth",
+        lua.create_function(move |_, _args: MultiValue| Ok(image_size.0))?,
+    )?;
+    texture.set(
+        "GetImageHeight",
+        lua.create_function(move |_, _args: MultiValue| Ok(image_size.1))?,
     )?;
     texture.set(
         "GetNumFrames",
