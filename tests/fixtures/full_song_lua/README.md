@@ -251,3 +251,18 @@ mip/trilinear sampling, sphere coordinates and the remaining Model states
 still require independent verification. The private diagnostic archive and
 canonical index are retained; complete Model acceptance remains closed.
 The full 501-source/492-context scope is unchanged.
+
+
+Harness 0.1.43 (`32b73981`) repairs a separate reference-adapter error:
+Model's explicit stretch request was ignored. The 5x9 native request
+control now reports an 8x16 image and allocation, and retains requested
+stretch/mipmap/hot-pink flags in all three material passes. All 202
+harness tests pass, with five existing corpus tests ignored.
+
+The portable `model-texture-request` micro fixture pins this clean native
+capture. A runtime probe of the committed DeadSync decoder confirms a
+5x9 opaque-pink image with no Model stretch or mip defaults. That is an
+open production gap. The native capture proves requests and headless
+dimensions; preprocessing pixels, effective mip state, mip storage and
+framebuffer output still need independent verification. Complete Model
+archive acceptance remains closed, and the canonical index is unchanged.
