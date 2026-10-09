@@ -596,7 +596,7 @@ fn simfile_for(
     let Some(entry) = index.folders[folder].simfile else {
         return Err(Failure::Reader("this song has no simfile".to_owned()));
     };
-    let extension = extension_of(&index.entries[entry].name);
+    let extension = extension_of(&index.entries[entry].name).to_ascii_lowercase();
     if let Some(bytes) = read {
         return Ok((bytes, extension));
     }
@@ -628,16 +628,16 @@ fn simfile_for(
     Ok((bytes, extension))
 }
 
-/// Lowercase, no dot.
-fn extension_of(name: &str) -> String {
-    name.rsplit_once('.')
-        .map(|(_, extension)| extension.to_ascii_lowercase())
-        .unwrap_or_default()
+/// The extension without its dot, preserving case.
+fn extension_of(name: &str) -> &str {
+    name.rsplit_once('.').map_or("", |(_, extension)| extension)
 }
 
 fn is_audio(name: &str) -> bool {
     let extension = extension_of(name);
-    AUDIO_EXTENSIONS.contains(&extension.as_str())
+    AUDIO_EXTENSIONS
+        .iter()
+        .any(|audio| extension.eq_ignore_ascii_case(audio))
 }
 
 /// An entry's path inside its song folder: past the pack's root and the
@@ -920,7 +920,7 @@ fn fetch_audio(
     entry: usize,
     job: &PreviewJob,
 ) -> Result<PathBuf, Failure> {
-    let extension = extension_of(&index.entries[entry].name);
+    let extension = extension_of(&index.entries[entry].name).to_ascii_lowercase();
     if !AUDIO_EXTENSIONS.contains(&extension.as_str()) {
         return Err(Failure::Reader(
             "the sample is in a format this game cannot play".to_owned(),
@@ -1429,7 +1429,8 @@ fn null_sync_song(folder: &Path) -> Result<usize, String> {
 
 /// The engine reads `.ssc` and `.sm`; a `.dwi` beside them is left as it is.
 fn is_chart_simfile(name: &str) -> bool {
-    matches!(extension_of(name).as_str(), "sm" | "ssc")
+    let extension = extension_of(name);
+    extension.eq_ignore_ascii_case("sm") || extension.eq_ignore_ascii_case("ssc")
 }
 
 /// One simfile's text, moved from ITG to NULL sync. A simfile with no
@@ -1623,7 +1624,7 @@ mod tests {
         assert!(is_audio("Pack/Song/a.mp3"));
         assert!(!is_audio("Pack/Song/a.png"));
         assert!(!is_audio("Pack/Song/ogg"));
-        assert_eq!(extension_of("x/y.SSC"), "ssc");
+        assert_eq!(extension_of("x/y.SSC"), "SSC");
     }
 
     /// Simfile text is kept while it fits, and a second copy of a song is not
@@ -1928,3 +1929,7 @@ mod tests {
         assert!(SongInstallsSnapshot::default().installs.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "smo_extensions_perf.rs"]
+mod extension_perf_tests;
