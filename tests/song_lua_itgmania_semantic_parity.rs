@@ -3218,6 +3218,73 @@ fn stateful_command_matches(
         .all(|(_, block)| stateful_block_matches(writes, overlay_index, targets, block))
 }
 
+#[test]
+fn replayed_alpha_messages_keep_queue_delay() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/message-alpha-tail");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (mut compiled, primary, context) = compile_trace_song_at(&trace, &root.join("tail.ssc"));
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    compare_drawable_frames(&trace, &compiled, &context, &mut parity);
+    eprintln!("{}", parity.summary("message alpha tail"));
+    parity.assert_complete("message alpha tail");
+    let native: Value = serde_json::from_reader(
+        zstd::stream::read::Decoder::new(
+            fs::File::open(root.join("independent-native.json.zst")).expect("native alpha control"),
+        )
+        .expect("compressed native alpha control"),
+    )
+    .expect("native alpha JSON");
+    let fade = compiled[primary]
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Fade"))
+        .expect("fade actor");
+    let samples = native["samples"].as_array().expect("native frame samples");
+    assert_eq!(samples.len(), 648);
+    assert_eq!(trace.update_frames.len(), samples.len());
+    for (sample, &(beat, seconds)) in samples.iter().zip(&trace.update_frames) {
+        let actor = sample["actors"]
+            .as_array()
+            .expect("native actors")
+            .iter()
+            .find(|actor| actor["name"] == "Fade")
+            .expect("native fade");
+        let expected = value_f32(actor["current"]["diffuse"][0].get(3)).expect("native alpha");
+        let states =
+            compiled_overlay_states_at(&compiled[primary], &context, beat as f32, seconds as f32);
+        assert!(
+            (states[fade].diffuse[3] - expected).abs() <= 0.000_001,
+            "queued alpha at {seconds:.6}s: {} versus native {expected}",
+            states[fade].diffuse[3]
+        );
+    }
+    let capture = compiled[primary]
+        .stateful_message_captures
+        .iter_mut()
+        .find(|capture| capture.message == "LightsOn")
+        .expect("LightsOn provenance");
+    let write = capture
+        .writes
+        .iter_mut()
+        .find(|write| {
+            write.target == SongLuaOverlayUpdateTarget::Diffuse
+                && (write.duration_seconds - 0.8).abs() < EPSILON
+        })
+        .expect("queued alpha write");
+    assert!((write.delay_seconds - 0.366_666_7).abs() <= EPSILON);
+    write.delay_seconds = 0.0;
+    let mut rejected = Parity::default();
+    compare_commands(&trace, &compiled, primary, &mut rejected);
+    assert_eq!(rejected.checks(), 3, "retain all message targets");
+    assert_eq!(
+        rejected.passed(),
+        2,
+        "incorrect queue timing must still fail"
+    );
+}
+
 fn compare_commands(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],

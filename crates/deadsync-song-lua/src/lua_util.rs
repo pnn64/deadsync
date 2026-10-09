@@ -10748,6 +10748,59 @@ fn record_tween_write(
         .map_or(&mut replay.current, |step| &mut step.to);
     crate::perframe::set_overlay_state_update_value(dest, target, value);
     drop(replays);
+    // Pose replay owns the queue, but message provenance must retain its
+    // actual delay. Static command blocks cannot describe an existing tail.
+    let broadcast = lua
+        .app_data_ref::<SongLuaOverlayUpdateCapture>()
+        .is_some_and(|capture| capture.active_broadcast.is_some());
+    if broadcast {
+        let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
+        let duration = actor
+            .get::<Option<f32>>("__songlua_capture_duration")
+            .ok()
+            .flatten()
+            .unwrap_or(0.0);
+        let delay = if duration > 0.0 {
+            let hibernate = actor
+                .raw_get::<Option<f32>>("__songlua_hibernate_seconds")
+                .ok()
+                .flatten()
+                .unwrap_or(0.0);
+            lua.app_data_ref::<ActorTweenReplays>()
+                .and_then(|replays| {
+                    replays.0.get(&(actor.to_pointer() as usize)).map(|replay| {
+                        replay
+                            .queue
+                            .iter()
+                            .take(replay.queue.len().saturating_sub(1))
+                            .fold(hibernate, |total, step| total + step.left)
+                    })
+                })
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        let easing = actor
+            .get::<Option<String>>("__songlua_capture_easing")
+            .ok()
+            .flatten();
+        let opt1 = actor
+            .get::<Option<f32>>("__songlua_capture_opt1")
+            .ok()
+            .flatten();
+        if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+            capture.record_stateful_message(
+                actor,
+                beat,
+                target,
+                value.clone(),
+                delay,
+                duration,
+                easing,
+                opt1,
+            );
+        }
+    }
     #[cfg(feature = "test-support")]
     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
         if let Some(index) = capture.touch(actor) {
