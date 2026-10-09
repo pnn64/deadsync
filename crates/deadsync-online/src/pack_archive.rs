@@ -2363,6 +2363,19 @@ pub(crate) enum SongMatch {
 /// and a folder name that differs only in punctuation. A name that is all
 /// punctuation keeps it, rather than comparing equal to every other one.
 fn match_key(text: &str) -> String {
+    if text.is_ascii() {
+        let count = text.bytes().filter(u8::is_ascii_alphanumeric).count();
+        if count == 0 {
+            return text.trim().to_lowercase();
+        }
+        let mut key = String::with_capacity(count);
+        key.extend(
+            text.bytes()
+                .filter(u8::is_ascii_alphanumeric)
+                .map(|byte| char::from(byte.to_ascii_lowercase())),
+        );
+        return key;
+    }
     let key: String = text
         .chars()
         .flat_map(char::to_lowercase)
@@ -3987,3 +4000,11 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
         );
     }
 }
+
+#[cfg(test)]
+#[path = "match_keys_original.rs"]
+mod match_keys_original;
+
+#[cfg(test)]
+#[path = "match_keys_perf.rs"]
+mod match_keys_perf_tests;
