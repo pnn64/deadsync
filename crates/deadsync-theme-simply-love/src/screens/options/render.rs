@@ -125,22 +125,22 @@ fn truncate_help_block(block: RenderedHelpBlock, max_lines: usize) -> RenderedHe
     }
 }
 
-fn fit_help_blocks(blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
+fn fit_help_blocks(mut blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
     let max_height = DESC_H - DESC_TITLE_TOP_PAD_PX - DESC_BOTTOM_PAD_PX;
     if help_blocks_height(&blocks) <= max_height {
         return blocks;
     }
 
-    let mut fitted = Vec::with_capacity(blocks.len());
     let mut remaining = max_height;
     let block_count = blocks.len();
-    for (idx, block) in blocks.into_iter().enumerate() {
-        let line_height = match &block {
+    for idx in 0..block_count {
+        let block = &blocks[idx];
+        let line_height = match block {
             RenderedHelpBlock::Paragraph { .. } => DESC_TITLE_LINE_H_PX,
             RenderedHelpBlock::Bullet { .. } => DESC_BODY_LINE_H_PX,
         };
         let paragraph_gap =
-            if idx + 1 < block_count && matches!(&block, RenderedHelpBlock::Paragraph { .. }) {
+            if idx + 1 < block_count && matches!(block, RenderedHelpBlock::Paragraph { .. }) {
                 DESC_BULLET_TOP_PAD_PX
             } else {
                 0.0
@@ -155,17 +155,18 @@ fn fit_help_blocks(blocks: Vec<RenderedHelpBlock>) -> Vec<RenderedHelpBlock> {
         };
         if fits {
             remaining -= full_height;
-            fitted.push(block);
             continue;
         }
 
         let max_lines = (remaining / line_height).floor() as usize;
+        blocks.truncate(idx + usize::from(max_lines > 0));
         if max_lines > 0 {
-            fitted.push(truncate_help_block(block, max_lines));
+            let block = blocks.pop().expect("retained overflowing help block");
+            blocks.push(truncate_help_block(block, max_lines));
         }
         break;
     }
-    fitted
+    blocks
 }
 
 #[cfg(test)]
@@ -1462,3 +1463,6 @@ pub fn get_actors(
     );
     actors
 }
+
+#[cfg(test)]
+mod resource_perf;
