@@ -489,5 +489,69 @@
     24
   ],
   "scope": "first30 cases; original Lua source scan and archived definition classes",
-  "full_corpus_complete": false
+  "full_corpus_complete": false,
+  "diagnostic_revalidations": [
+    {
+      "date": "2026-10-09",
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "deadsync_commit": "6ef81312c6559cb65ef60050615bf0456a527897",
+      "comparator_sha256": "cb72f21346644b255b1ba8b6679756bb8a2f0c5a815610f92158e91424f306da",
+      "harness_commit": "1ceab4b7a6842e254212ad92b2afb8b05da816ca",
+      "harness_version": "0.1.39",
+      "native_executable_sha256": "258ec1b69e3f1067158457477192013288dc79387640d4f3554aa22aa2431e87",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "private_archive_sha256": "1810d49373a136e018bf9b96baa47e7b42bb111b8e3d818621045911f3eecfae",
+      "private_archive_bytes": 42067298,
+      "trace_sha256": "62dc997837b9de9f7aec0d5a41b636251f127e94b9cd97cad985281470e967fa",
+      "trace_bytes": 164400315,
+      "original_sources_unchanged": true,
+      "archive_members_verified": 26,
+      "endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "comparisons_passed": 9450796,
+      "comparisons_failed": 0,
+      "compared_vertex_fields": [
+        "local",
+        "clip",
+        "ndc",
+        "screen",
+        "normal",
+        "uv",
+        "transformed_uv",
+        "texture_scale",
+        "color"
+      ],
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 11.614876300096512,
+          "log_sha256": "6ca02390172b5b3468260e355ac5fa05230e99fdd6ebc197498d8e6332bff980"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 0,
+          "seconds": 280.3813831000589,
+          "log_sha256": "6de89a2edc567197f90a3ed4dc3fc260f6203f046f20d9bac10cbae5ed3274c7"
+        }
+      ],
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "world and view coordinates",
+        "texture identity and secondary material animation",
+        "lighting and unrepresented depth, cull and render target states",
+        "queued SetState ordering, hibernation and update rate controls",
+        "native hardware mesh merging and framebuffer validation"
+      ],
+      "scope": "Every-update Model diagnostic only; canonical archive and whole-song acceptance remain unchanged."
+    }
+  ]
 }

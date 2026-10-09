@@ -105,3 +105,21 @@ Fresh checkouts report unavailable local-only archives and omit them from
 bulk runs; explicitly selecting an absent archive fails with an explanation.
 Missing tracked fixtures still fail validation. Recreate the two Episode 16
 captures from the original corpus using harness `0.1.4` and level-22 zstd.
+
+## Model diagnostic revalidation (2026-10-09)
+
+The original KABOOM case 18 was recaptured privately with harness `0.1.39`
+at `1ceab4b`, using unchanged song and Cyber noteskin inputs. The capture
+reaches the native chart endpoint and records all eight Model tracks at
+all 11,969 updates, for 95,752 samples. Archive member hashes were verified.
+
+DeadSync `6ef81312c` passes 9,450,796 of 9,450,796 Model comparisons,
+including transformed UVs with native per-vertex texture flags and material
+update history. `model-coverage-audit.json` records the exact source pins,
+executable, archive, trace and test-log hashes, coverage and remaining gaps.
+
+This is a Model diagnostic result. World/view coordinates, texture identity,
+lighting, additional render states and timing controls still need verification.
+The whole-song Model acceptance guard remains closed. The private capture
+does not replace the canonical archive or add an index entry; the full corpus
+is still incomplete.
