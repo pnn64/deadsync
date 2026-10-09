@@ -90,12 +90,12 @@
     {
       "title": "Episode 16",
       "source_simfile": "100 Bad Days/100 Bad Days.sm",
-      "harness_version": "0.1.31",
-      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
-      "sha256": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426",
-      "compressed_bytes": 129881820,
-      "uncompressed_sha256": "9ceb6416ee47537617be40452de7294fbfb358b76872b3e8abe3d615f7f2ecbc",
+      "harness_version": "0.1.49",
+      "archive": "8194e7406862c5d2992eb78613dba5a1afaf55656b3a50a1d4f1972da7739a5e.tar.zst",
+      "sha256": "8194e7406862c5d2992eb78613dba5a1afaf55656b3a50a1d4f1972da7739a5e",
+      "compressed_bytes": 129882069,
       "compression_level": 12,
+      "local_only": true,
       "aliases": [
         "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
         "900f27995dc3d53a245db17c943f22efda0b8ab220cf54434638463678ac06bf.tar.zst",
@@ -111,18 +111,17 @@
         "058ab150014913091397e9b345272d887f17c96663859140e5b494ca417c36b7.tar.zst",
         "cd076a0f887e93f2ec4e6e54d4065943c984a99c750218ab1b2abe4e7dc4d7f4.tar.zst",
         "aecc5841c5b16f4195b9b5fe9f798212554c4e38dfd9a3e1a75ba5823f232cb4.tar.zst"
-      ],
-      "local_only": true
+      ]
     },
     {
       "title": "Episode 16",
       "source_simfile": "100 Bad Days/100 Bad Days.ssc",
-      "harness_version": "0.1.31",
-      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
-      "sha256": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5",
-      "compressed_bytes": 129882025,
-      "uncompressed_sha256": "7171ced807394436b3f62b6be23b01c46df52d30ccf0d3e495941a41516202ef",
+      "harness_version": "0.1.49",
+      "archive": "56a576184203e1fc7cb3585c884b3289b0026769cf4833b7735516763c260fcc.tar.zst",
+      "sha256": "56a576184203e1fc7cb3585c884b3289b0026769cf4833b7735516763c260fcc",
+      "compressed_bytes": 129882236,
       "compression_level": 12,
+      "local_only": true,
       "aliases": [
         "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
         "8c0951284de066f905a22e648d3279148a3194aad1a1b77a2527265c04dd3e56.tar.zst",
@@ -138,8 +137,7 @@
         "f4aefa1e0577a06195de4e2562f00f103ac963b253a608c1cec8fe5960f57b25.tar.zst",
         "87faee68a8915840ee0c94f1281cdf25eb814d53843a7823e8d3577aec1ed3c0.tar.zst",
         "7f65fd0494b4b76cd59553aa2dacae6c154275667c690ad6b5a48621dc528384.tar.zst"
-      ],
-      "local_only": true
+      ]
     },
     {
       "title": "10:35",

@@ -400,3 +400,23 @@ a fresh `0.1.49` native capture: 141.01 seconds, 8,462 update
 frames, no native runtime errors or dropped events. Its original archive
 and historical aliases remain available. Full corpus and framebuffer
 parity are still incomplete.
+
+## Fresh native revalidation, pass 102
+
+Complete movie archives over 100 MB retain the native level-12 encoding
+and stay ignored locally. The small index and proof records are committed;
+the local archive remains usable with the full-song runner.
+
+Position 4, `100 Bad Days/100 Bad Days.sm`, passed 175,181 comparisons
+against fresh native `0.1.49` capture over 131.98 seconds and 7,920
+update frames, with no native runtime errors or dropped events. Original
+sources and historical aliases are retained. This checks movie geometry
+and blend/command behavior; movie pixels and native framebuffer parity
+remain unproven. `native-revalidation-pass102.json` records the identities.
+
+Position 5, `100 Bad Days/100 Bad Days.ssc`, passed 175,181 comparisons
+against fresh native `0.1.49` capture over 131.98 seconds and 7,920
+update frames, with no native runtime errors or dropped events. Original
+sources and historical aliases are retained. This checks movie geometry
+and blend/command behavior; movie pixels and native framebuffer parity
+remain unproven. `native-revalidation-pass102.json` records the identities.
