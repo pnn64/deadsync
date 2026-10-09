@@ -2701,3 +2701,19 @@ and draw passes in its conformance oracle; all 192 tests pass with
 five existing ignored tests. Song-level Model traces and mesh comparison
 still require implementation. Mawaru9 remains private. Full parity for
 the original 501 simfiles and 492 archive cases is unfinished.
+
+## Pass 78: reject incomplete Model references before comparison
+
+Whole-song archive validation now rejects instantiated Model actors
+because the current song trace and comparator omit their meshes.
+The linked native conformance oracle is ready, but its availability
+does not make the old song reference complete. Keep the rejection
+until native song meshes are captured and compared.
+
+The complete Spooky archive passes the positive reference control.
+The original KABOOOOOM archive fails with the explicit missing-Model
+geometry reason before compilation. Both focused archive guard tests
+pass, including the existing obsolete-replay mutation controls.
+No observations, tolerances or original sources were reduced.
+Previously recorded passing receipts retain their actual verifier
+provenance and the newly documented Model coverage limitation.

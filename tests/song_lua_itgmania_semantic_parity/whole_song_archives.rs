@@ -436,6 +436,19 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
             .all(|definition| definition.properties.get("NoteSkinElement").is_none()),
         "placeholder noteskin actors invalidate the reference; recapture with native noteskin resources",
     );
+    // The current song trace and comparator omit Model meshes. Definitions
+    // supplied by noteskins still instantiate and draw real native Models.
+    // Reject their incomplete references before compilation can report a pass.
+    let model = trace.actor_definitions.iter().find(|definition| {
+        definition.class == "Model"
+            && (!definition.runtime_actors.is_empty()
+                || trace.runtime_actors.iter().any(|actor| actor.id == definition.id))
+    });
+    assert!(
+        model.is_none(),
+        "native Model mesh geometry is not captured and compared for {}; this archive cannot establish full-song parity",
+        model.map(|definition| definition.id.as_str()).unwrap_or_default(),
+    );
     assert!(
         trace
             .update_frames
@@ -903,6 +916,32 @@ fn empty_song_layers_match_native_archive() {
         !rejected.gaps.is_empty(),
         "uncompiled native layers must fail"
     );
+}
+
+#[test]
+fn archive_reference_rejects_missing_model_meshes() {
+    crate::paths::init();
+    let index = archive_index();
+    let control = index.archives.iter().find(|entry| {
+        entry.source_simfile == "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc"
+    }).expect("complete native non-Model reference");
+    let archive = extract_archive(control);
+    let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    validate_native_trace(&trace, &archive.manifest);
+
+    let model = index.archives.iter().find(|entry| {
+        entry.source_simfile == "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc"
+    }).expect("native Cyber Model reference");
+    let archive = extract_archive(model);
+    let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    assert!(trace.actor_definitions.iter().any(|definition| {
+        definition.class == "Model" && !definition.runtime_actors.is_empty()
+    }));
+    let error = std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest))
+        .expect_err("an omitted native Model mesh must invalidate the reference");
+    let message = error.downcast_ref::<String>().map(String::as_str)
+        .or_else(|| error.downcast_ref::<&str>().copied()).unwrap_or_default();
+    assert!(message.contains("native Model mesh geometry is not captured and compared"), "{message}");
 }
 
 #[test]
