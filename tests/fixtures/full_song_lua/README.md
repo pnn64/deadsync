@@ -450,3 +450,12 @@ recompression. Prior captures and historical aliases remain available.
 `native-revalidation-pass103.json` records the source and verifier identities.
 The original 501-source/492-context scope is unchanged. Full corpus,
 physical tiny Sprite uploads, and native framebuffer parity remain open.
+
+The native tiny Sprite upload oracle is repaired in harness `0.1.50`.
+Ten varied-color and alpha controls retain native metadata and nine
+fully initialized prepared images (68,608 RGBA bytes), with byte-identical
+repeat captures. See `../itgmania-song-lua-micro/texture-sprite-preparation`.
+A 7x9 control excludes unused allocation padding. DeadSync physical
+tiny uploads, logical source binding, image-coordinate offsets and UV
+mapping still need repair against these native controls. Framebuffer
+and complete corpus parity remain open.
