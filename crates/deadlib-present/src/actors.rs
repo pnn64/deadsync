@@ -626,6 +626,7 @@ pub enum FlatMeshVertices {
 /// Material texture stages and an affine transform before model projection.
 #[derive(Clone, Debug)]
 pub struct MeshEnvironment {
+    pub sampler: Option<deadlib_render_core::MeshSampler>,
     /// Matching world-to-clip and world-to-eye cameras, before model projection.
     pub camera: Option<(Matrix4, Matrix4)>,
     pub transform: Matrix4,

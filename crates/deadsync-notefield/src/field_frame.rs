@@ -2368,6 +2368,7 @@ mod camera_wrap_tests {
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let actor = actor_from_flat_draw(FlatDraw::TexturedMesh(FlatTexturedMesh {
             environment: Some(deadlib_present::actors::MeshEnvironment {
+                sampler: None,
                 camera: None,
                 transform: Mat4::from_rotation_y(0.5),
                 additive_texture: Some(Arc::from("reflection")),

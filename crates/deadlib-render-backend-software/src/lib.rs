@@ -1,9 +1,9 @@
 use deadlib_render_core::{
-    BlendMode, DrawOp, DrawStats, RenderFrame, RenderTargetFrame, SOFTWARE_MESH_STORAGE_SLOT,
-    SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerDesc, SamplerFilter,
-    SamplerWrap, TextureHandle, TexturedMeshGeometry, TexturedMeshInstanceRaw, Yuv420Upload,
-    draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest,
+    BlendMode, DrawOp, DrawStats, MeshSampler, RenderFrame, RenderTargetFrame,
+    SOFTWARE_MESH_STORAGE_SLOT, SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT,
+    SamplerDesc, SamplerFilter, SamplerWrap, TextureHandle, TexturedMeshGeometry,
+    TexturedMeshInstanceRaw, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, render_target_uses_nearest, texture_sampler_desc,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use image::RgbaImage;
@@ -201,6 +201,7 @@ enum PreparedObject {
         blend: BlendMode,
         depth_test: bool,
         texture_handle: TextureHandle,
+        sampler: Option<MeshSampler>,
     },
     DirectTexturedMesh {
         geometry: u32,
@@ -209,6 +210,7 @@ enum PreparedObject {
         blend: BlendMode,
         depth_test: bool,
         texture_handle: TextureHandle,
+        sampler: Option<MeshSampler>,
     },
 }
 
@@ -1161,6 +1163,7 @@ fn prepare_objects(
                             blend: run.blend,
                             depth_test: frame.depth && run.depth_test,
                             texture_handle: run.texture_handle,
+                            sampler: run.sampler,
                         });
                         continue;
                     }
@@ -1190,6 +1193,7 @@ fn prepare_objects(
                         blend: run.blend,
                         depth_test: frame.depth && run.depth_test,
                         texture_handle: run.texture_handle,
+                        sampler: run.sampler,
                     });
                 }
             }
@@ -1425,6 +1429,7 @@ fn draw_prepared<'a>(
             blend,
             depth_test,
             texture_handle,
+            sampler,
             ..
         } => {
             if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
@@ -1438,7 +1443,7 @@ fn draw_prepared<'a>(
                     *texture_mask,
                     *blend,
                     tex.texels(),
-                    effective_sampler(tex, *texture_handle),
+                    texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                     tex.opaque,
                     stripe_y_start,
                     stripe_y_end,
@@ -1456,6 +1461,7 @@ fn draw_prepared<'a>(
             blend,
             depth_test,
             texture_handle,
+            sampler,
         } => {
             let Some(geometry) = frame.tmesh_geometries.get(*geometry as usize) else {
                 return 0;
@@ -1478,6 +1484,7 @@ fn draw_prepared<'a>(
                     *instance,
                     *blend,
                     tex,
+                    texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                     additive,
                     width,
                     height,
@@ -1497,7 +1504,7 @@ fn draw_prepared<'a>(
                 instance.texture_mask != 0.0,
                 *blend,
                 tex.texels(),
-                effective_sampler(tex, *texture_handle),
+                texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                 tex.opaque,
                 width,
                 height,
@@ -1548,6 +1555,7 @@ fn draw_prepared_triangle<'a>(
             blend,
             depth_test,
             texture_handle,
+            sampler,
             ..
         } => {
             let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
@@ -1560,10 +1568,7 @@ fn draw_prepared_triangle<'a>(
                 *blend,
                 *texture_mask,
                 tex.texels(),
-                SamplerDesc {
-                    wrap: SamplerWrap::Repeat,
-                    ..effective_sampler(tex, *texture_handle)
-                },
+                texture_sampler_desc(tex.sampler, *texture_handle, true, *sampler),
                 tex.opaque,
                 stripe_y_start,
                 stripe_y_end,
@@ -2162,10 +2167,6 @@ fn rasterize_prepared_tmesh(
 
     depth: &mut DepthRows<'_>,
 ) {
-    let sampler = SamplerDesc {
-        wrap: SamplerWrap::Repeat,
-        ..sampler
-    };
     for triangle in triangles {
         rasterize_triangle_tex_color_prepared(
             &triangle.vertices,
@@ -2253,6 +2254,7 @@ fn rasterize_environment(
     instance: deadlib_render_core::TexturedMeshInstanceRaw,
     blend: BlendMode,
     primary: &Texture,
+    primary_sampler: SamplerDesc,
     additive: Option<&Texture>,
     width: usize,
     height: usize,
@@ -2308,11 +2310,7 @@ fn rasterize_environment(
             else {
                 continue;
             };
-            let sample = |texture: &Texture, uv: [f32; 2]| {
-                let sampler = SamplerDesc {
-                    wrap: SamplerWrap::Repeat,
-                    ..texture.sampler
-                };
+            let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
                 let image = texture.texels();
                 if sampler.filter == SamplerFilter::Linear {
                     sample_tex_linear::<false>(
@@ -2363,7 +2361,7 @@ fn rasterize_environment(
                             w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
                         ]
                     };
-                    let texel = sample(primary, uv(&p));
+                    let texel = sample(primary, primary_sampler, uv(&p));
                     let tint: [f32; 4] = std::array::from_fn(|i| {
                         w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
                     });
@@ -2371,7 +2369,14 @@ fn rasterize_environment(
                     if instance.texture_mask > 0.5 {
                         color[..3].copy_from_slice(&tint[..3]);
                     } else if triangle[0].normal[3] as u8 & 4 != 0 {
-                        let reflection = sample(additive.unwrap_or(primary), uv(&q));
+                        let reflection = sample(
+                            additive.unwrap_or(primary),
+                            SamplerDesc {
+                                wrap: SamplerWrap::Repeat,
+                                ..additive.unwrap_or(primary).sampler
+                            },
+                            uv(&q),
+                        );
                         for i in 0..3 {
                             color[i] = (color[i] + reflection[i]).min(1.0);
                         }
@@ -2416,11 +2421,6 @@ fn rasterize_textured_mesh_triangles(
     if vertices.len() < 3 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
         return 0;
     }
-
-    let sampler = SamplerDesc {
-        wrap: SamplerWrap::Repeat,
-        ..sampler
-    };
 
     let mut verts_drawn = 0u32;
     for chunk in vertices.as_chunks::<3>().0 {
@@ -3728,6 +3728,7 @@ mod tests {
                 for textured in [false, true] {
                     frame.ops = vec![if textured {
                         DrawOp::TexturedMesh(TexturedMeshRun {
+                            sampler: None,
                             additive_texture: 0,
                             geometry: 0,
                             instance_start: 0,
@@ -4326,6 +4327,10 @@ mod tests {
                 instance,
                 BlendMode::Alpha,
                 &gradient,
+                SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..gradient.sampler
+                },
                 None,
                 64,
                 64,
@@ -4359,6 +4364,10 @@ mod tests {
                 instance,
                 BlendMode::Alpha,
                 &base,
+                SamplerDesc {
+                    wrap: SamplerWrap::Repeat,
+                    ..base.sampler
+                },
                 Some(&reflection),
                 64,
                 64,
@@ -4804,6 +4813,7 @@ mod tests {
             ops: (0..3)
                 .map(|i| {
                     DrawOp::TexturedMesh(TexturedMeshRun {
+                        sampler: None,
                         additive_texture: 0,
                         geometry: i,
                         instance_start: i,
@@ -4848,6 +4858,7 @@ mod tests {
             frame.ops.truncate(3);
             if overlay {
                 frame.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
                     additive_texture: 0,
                     geometry: 1,
                     instance_start: 3,
@@ -4919,6 +4930,164 @@ mod tests {
     }
 
     #[test]
+    fn model_sampler_pixels_match_in_every_raster_path() {
+        use deadlib_render_core::MeshSampler;
+        let image = RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                Rgba([255, 0, 0, 255])
+            } else {
+                Rgba([0, 0, 255, 255])
+            }
+        });
+        let textures = TestTextures {
+            texture: create_texture(&image, SamplerDesc::default()).unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        let cases = [
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                0.5,
+                [0, 0, 255],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Linear,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                0.5,
+                [128, 0, 128],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                0.5,
+                [0, 0, 255],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Clamp,
+                }),
+                1.25,
+                [0, 0, 255],
+            ),
+            (
+                Some(MeshSampler {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Repeat,
+                }),
+                1.25,
+                [255, 0, 0],
+            ),
+            (None, 0.5, [128, 0, 128]),
+        ];
+        for staged in [false, true] {
+            for indexed in [false, true] {
+                for environment in [false, true] {
+                    for (sampler, u, expected) in cases {
+                        let vertices = [
+                            [-1.0, -1.0],
+                            [1.0, -1.0],
+                            [1.0, 1.0],
+                            [-1.0, -1.0],
+                            [1.0, 1.0],
+                            [-1.0, 1.0],
+                        ]
+                        .map(|[x, y]| TexturedMeshVertex {
+                            normal: [0.0, 0.0, 1.0, if environment { 2.0 } else { 0.0 }],
+                            pos: [x, y, 0.0],
+                            uv: [u, 0.5],
+                            tex_matrix_scale: [1.0; 2],
+                            color: [1.0; 4],
+                        });
+                        let frame = RenderFrame {
+                            clear_color: [0.0; 4],
+                            render_targets: vec![],
+                            cameras: vec![Matrix4::IDENTITY],
+                            sprite_instances: vec![],
+                            mesh_vertices: vec![],
+                            tmesh_geometries: vec![TexturedMeshGeometry {
+                                cache_key: 0,
+                                vertices: TexturedMeshVertices::Shared(Arc::from(vertices)),
+                            }],
+                            tmesh_instances: vec![TexturedMeshInstanceRaw::new(
+                                Matrix4::IDENTITY,
+                                [1.0; 4],
+                                [1.0; 2],
+                                [0.0; 2],
+                                [0.0; 2],
+                                false,
+                            )],
+                            ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+                                sampler,
+                                additive_texture: 0,
+                                geometry: 0,
+                                instance_start: 0,
+                                instance_count: 1,
+                                texture_handle: TEXTURE_HANDLE,
+                                blend: BlendMode::Alpha,
+                                camera: 0,
+                                depth_test: false,
+                                clear_depth: false,
+                            })],
+                        };
+                        let mut prepared = Vec::new();
+                        let mut mesh = Vec::with_capacity(16);
+                        let mut tmesh = Vec::with_capacity(16);
+                        let fixed = prepare_objects(
+                            (&frame).into(),
+                            Matrix4::IDENTITY,
+                            &textures,
+                            64,
+                            64,
+                            &mut prepared,
+                            &mut mesh,
+                            &mut tmesh,
+                            staged,
+                        );
+                        let mut bins = StripeBins::warmed();
+                        bins.build(&prepared, &mesh, &tmesh, 64);
+                        let mut pixels = vec![0; 64 * 64];
+                        for (stripe_index, stripe) in
+                            pixels.chunks_mut(64 * SOFTWARE_ROW_CHUNK).enumerate()
+                        {
+                            let start = stripe_index * SOFTWARE_ROW_CHUNK;
+                            draw_rows(
+                                (&frame).into(),
+                                &prepared,
+                                indexed.then(|| bins.stripe(stripe_index)),
+                                &mesh,
+                                &tmesh,
+                                &textures,
+                                64,
+                                64,
+                                start,
+                                start + stripe.len() / 64,
+                                &mut byte_writer(stripe),
+                                fixed,
+                                &mut [],
+                            );
+                        }
+                        let actual = pixels[32 * 64 + 32];
+                        for (channel, expected) in expected.into_iter().enumerate() {
+                            let value = ((actual >> (16 - channel * 8)) & 255) as u8;
+                            assert!(
+                                value.abs_diff(expected) <= 1,
+                                "staged={staged} indexed={indexed} environment={environment} sampler={sampler:?} u={u}: {actual:08x}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn depth_resets_skip_rows_without_depth_draws() {
         let textures = TestTextures {
             texture: create_texture(
@@ -4944,6 +5113,7 @@ mod tests {
         };
         let run = |geometry, instance_start, depth_test, clear_depth| {
             DrawOp::TexturedMesh(TexturedMeshRun {
+                sampler: None,
                 additive_texture: 0,
                 geometry,
                 instance_start,
@@ -5658,6 +5828,7 @@ mod tests {
                     camera: 0,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
                     additive_texture: 0,
                     geometry: 0,
                     instance_start: 0,
@@ -5669,6 +5840,7 @@ mod tests {
                     clear_depth: false,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
+                    sampler: None,
                     additive_texture: 0,
                     geometry: 0,
                     instance_start: 1,

@@ -16570,11 +16570,12 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
 
 pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
     let mut state = SongLuaOverlayState::default();
-    // Model::Model enables the Z buffer before Lua commands override it.
+    // Model::Model enables the Z buffer and texture wrapping before Lua overrides.
     state.depth_test = actor
         .raw_get::<Option<String>>("__songlua_actor_type")
         .map_err(|err| err.to_string())?
         .is_some_and(|kind| kind.eq_ignore_ascii_case("Model"));
+    state.texture_wrapping = state.depth_test;
     state.hibernating = actor
         .raw_get::<Option<f32>>("__songlua_hibernate_seconds")
         .map_err(|err| err.to_string())?

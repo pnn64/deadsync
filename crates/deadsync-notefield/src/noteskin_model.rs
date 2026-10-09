@@ -526,6 +526,7 @@ fn model_environment<S: NoteskinSlot>(
         additive_uv[axis + 2] += delta * span;
     }
     Some(deadlib_present::actors::MeshEnvironment {
+        sampler: None,
         camera: None,
         // The affine model coordinates are y-up; presentation places them y-down.
         transform: Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)) * affine,

@@ -561,6 +561,84 @@ pub struct SamplerDesc {
     pub mipmaps: bool,
 }
 
+/// Per-draw filtering and addressing, independent of a texture's mip storage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MeshSampler {
+    pub filter: SamplerFilter,
+    pub wrap: SamplerWrap,
+}
+
+impl MeshSampler {
+    #[must_use]
+    pub const fn apply(self, texture: SamplerDesc) -> SamplerDesc {
+        SamplerDesc {
+            filter: self.filter,
+            wrap: self.wrap,
+            // ITGmania's nearest override samples the base image only.
+            mipmaps: texture.mipmaps && matches!(self.filter, SamplerFilter::Linear),
+        }
+    }
+}
+
+#[must_use]
+pub const fn texture_sampler_desc(
+    texture: SamplerDesc,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) -> SamplerDesc {
+    if let Some(sampler) = sampler {
+        return sampler.apply(texture);
+    }
+    SamplerDesc {
+        wrap: if repeat {
+            SamplerWrap::Repeat
+        } else {
+            texture.wrap
+        },
+        filter: if render_target_uses_nearest(handle) {
+            SamplerFilter::Nearest
+        } else {
+            texture.filter
+        },
+        mipmaps: texture.mipmaps && !render_target_uses_nearest(handle),
+    }
+}
+
+/// All default and per-draw choices are prepared at texture creation. There
+/// are at most six distinct descriptions in the fixed eight-slot domain;
+/// drawing only indexes retained resources and never allocates or evicts.
+#[must_use]
+pub const fn texture_sampler_variants(texture: SamplerDesc) -> [SamplerDesc; 6] {
+    [
+        texture,
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..texture
+        },
+        MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(texture),
+        MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Clamp,
+        }
+        .apply(texture),
+        MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Repeat,
+        }
+        .apply(texture),
+        MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+        }
+        .apply(texture),
+    ]
+}
+
 impl Default for SamplerDesc {
     #[inline(always)]
     fn default() -> Self {
@@ -915,6 +993,33 @@ mod tests {
             vec!["replacement", "second"]
         );
         assert!(values.is_empty());
+    }
+
+    #[test]
+    fn mesh_sampler_prewarms_cover_overrides_and_default_restore() {
+        for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
+            for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                for mipmaps in [false, true] {
+                    let texture = SamplerDesc {
+                        filter,
+                        wrap,
+                        mipmaps,
+                    };
+                    let variants = texture_sampler_variants(texture);
+                    for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
+                        for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                            let sampler = MeshSampler { filter, wrap };
+                            let wanted = texture_sampler_desc(texture, 1, true, Some(sampler));
+                            assert!(variants.contains(&wanted));
+                            assert_eq!(wanted.filter, filter);
+                            assert_eq!(wanted.wrap, wrap);
+                            assert_eq!(wanted.mipmaps, mipmaps && filter == SamplerFilter::Linear);
+                        }
+                    }
+                    assert_eq!(texture_sampler_desc(texture, 1, false, None), texture);
+                }
+            }
+        }
     }
 
     #[test]

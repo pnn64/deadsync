@@ -1,7 +1,7 @@
 //! Native Model observations and comparisons of the production mesh pipeline.
 
 use super::*;
-use deadlib_present::render::{DrawOp, RenderFrame, textured_mesh_uvs};
+use deadlib_present::render::{DrawOp, MeshSampler, RenderFrame, SamplerFilter, SamplerWrap, textured_mesh_uvs};
 use deadsync_song_lua::playback::actor_conformance::{
     WholeSongComposer, matrix_rows, multiply_matrices, project_world,
 };
@@ -376,12 +376,15 @@ fn compare_frame(
             expected_texture.as_ref().is_ok_and(|expected| actual_texture == expected.as_deref())
                 && run.additive_texture == 0,
             || format!("Model {actor} at {clock:.6}s pass {pass} binds {actual_texture:?}, native binds {expected_texture:?}"));
-        // TexturedMeshRun currently has no per-draw sampler selection. Do not
-        // infer equivalence from a resource's default hints or ignore native
-        // overrides (Model forces secondary filtering regardless of Actor).
-        check_flag(parity, reported, &format!("{prefix} sampler representation"), false,
-            || format!("Model {actor} pass {pass} native sampler filtering={} wrapping={} has no production per-draw representation",
-                draw.texture_filtering, draw.texture_wrapping));
+        let expected_sampler = MeshSampler {
+            filter: if draw.texture_filtering { SamplerFilter::Linear }
+                else { SamplerFilter::Nearest },
+            wrap: if draw.texture_wrapping { SamplerWrap::Repeat }
+                else { SamplerWrap::Clamp },
+        };
+        check_flag(parity, reported, &format!("{prefix} sampler"),
+            run.sampler == Some(expected_sampler),
+            || format!("Model {actor} pass {pass} sampler {:?} differs from native {expected_sampler:?}", run.sampler));
         check_flag(
             parity,
             reported,
