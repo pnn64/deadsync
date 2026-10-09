@@ -563,13 +563,14 @@
     {
       "title": "7th Gear",
       "source_simfile": "7th Gear/7th Gear.ssc",
-      "harness_version": "0.1.28",
-      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
-      "sha256": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a",
-      "compressed_bytes": 7293706,
-      "uncompressed_sha256": "320041fc3bb2be634ace485b1ec5c8a83d6b82d3307c5361452cdceaaadf9d5a",
+      "harness_version": "0.1.31",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "sha256": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d",
+      "compressed_bytes": 7300486,
+      "uncompressed_sha256": "718a787a838c89e62b3b5baf0491985927b56d077da603805cb5f3b6eeefaf57",
       "compression_level": 12,
       "aliases": [
+        "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
         "8212e118c8866bc755091fd249497fdb853c6c2cdb99219a6776ad70563d3984.tar.zst",
         "1ddf6912247513fa3263b175e4ced5881a53f514ae3af175a00e59d9cafb8ddb.tar.zst"
       ]

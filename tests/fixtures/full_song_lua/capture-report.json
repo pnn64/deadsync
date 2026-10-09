@@ -2463,6 +2463,14 @@
       "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
       "harness_version": "0.1.31",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "superseded_archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -6781,6 +6789,33 @@
       "runtime_errors": 0,
       "dropped_events": 0,
       "endpoint_guard_regression": "one f64 rounding step below the endpoint passes only when native float seconds are equal; one native float step short and nonfinite frames fail"
+    },
+    {
+      "pass_number": 72,
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 165.28854727745056,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 165.13s",
+        "log_sha256": "cfb71e8a24a768177798d925d880c4bef09787abd32a5c4a691b3d2c2ded8415",
+        "executable_sha256": "3ca8d327befc6426bb0018ba76941f1488d9e098bf318050b3627befa45b455f"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "112997b925c6bf2f7299a81041c570c1a585eb09d7c14a0063b5a6c4b85f8091",
+      "capture_endpoint": {
+        "beat": 238.74998474121097,
+        "music_seconds": 130.24826049804688,
+        "seconds": 130.22726440429688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
     }
   ]
 }

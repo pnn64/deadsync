@@ -2570,3 +2570,5 @@ ITGmania SongPosition stores float music seconds and the native bridge converts 
 The complete unchanged native 0.1.31 capture passes all 552285 comparisons. The positive round-trip control, eight incomplete-replay mutations, focused Igaku reference (358379 comparisons and its rotation omission probe), and archive integrity guards pass. The original song and native capture were reused without modification.
 
 The verified prefix is 26/492 archives. The remaining canonical sources, nine historical contexts and 18 unindexed simfiles still require review; full-corpus parity is unfinished.
+
+Archive 27: 7th Gear/7th Gear.ssc passes all 881665 comparisons. The verified prefix is now 27/492 archives; full-corpus parity remains unfinished.
