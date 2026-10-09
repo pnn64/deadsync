@@ -230,6 +230,10 @@ fn build_pump_hold_events_core(
     } else {
         0
     };
+    // The sizing pass already proved that no eligible hold can emit an event.
+    if reserve_events && capacity == 0 {
+        return (Vec::new(), [0; MAX_PLAYERS]);
+    }
     let mut events = Vec::with_capacity(capacity);
     for player in 0..num_players.min(MAX_PLAYERS) {
         let compact_player = u8::try_from(player).expect("gameplay player index must fit u8");
@@ -1830,3 +1834,7 @@ pub const fn let_go_head_beat(
         .clamp(note_beat, end_beat)
         .min(visible_beat.max(note_beat))
 }
+
+#[cfg(test)]
+#[path = "gameplay_state_perf.rs"]
+mod state_perf;
