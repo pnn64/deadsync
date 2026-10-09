@@ -1417,5 +1417,121 @@
       "canonical_fixture_index_changed": false,
       "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
     }
+  ],
+  "native_surface_revalidations": [
+    {
+      "source_commit": "3b1ef26f72ed3e3c6a1fd033bac7dd7c55ca123d",
+      "harness_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+      "harness_version": "0.1.44",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "harness_executable_sha256": "b48119414dffdf60f230aa9060f0ab6537859105a32981bf6925229a882c654e",
+      "native_sources": [
+        "RageSurfaceUtils.cpp",
+        "RageSurfaceUtils_Zoom.cpp"
+      ],
+      "native_contract": "Compiled native ApplyHotPinkColorKey, Zoom and FixHiddenAlpha operate on explicit decoded RGB, RGBA and indexed surfaces. FindAlphaRGB defaults to black when no visible pixel exists; SetAlphaRGB still writes hidden RGB.",
+      "production_repair": "Remove the fully transparent early return from fix_hidden_alpha. Default both edge scans to black and retain the normal mixed/uniform edge behavior.",
+      "before_production_decode_failure": {
+        "case": "transparent-hidden-rgb",
+        "preserved_hidden_rgb": true,
+        "native_output": "sixteen zero RGBA bytes",
+        "log_sha256": "f66477b9d47086b285ef38ed3b11b5b9b57400b36ebf6e1aa68f6604706ee287"
+      },
+      "native_control_provenance": {
+        "harness_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+        "harness_version": "0.1.44",
+        "harness_executable_sha256": "b48119414dffdf60f230aa9060f0ab6537859105a32981bf6925229a882c654e",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "control_sha256": "9ac802830c42cb759097703d07521ffb7430c9ee87669b9888ca7d1d96c97d60",
+        "native_sha256": "f0d8ba5b28e6b3c132063953ae7c3f0d675aedd219c5be59fb5c004de1c5ae04",
+        "source_png_sha256": {
+          "transparent-hidden-rgb.png": "09151ddc21ba23a2674e148baf9d87ce07a62b23a194129d924eb798856aace1",
+          "uniform-hidden-rgb.png": "7ca95d88a99dd88cfcfb760df6b50f268a93ca3bd620aee00cef09d2beb21de2",
+          "mixed-hidden-rgb.png": "2c96e9d326b95d08f2f1648808c3928a383e3dac5ea02d0a877e92c47332b00c"
+        },
+        "native_rgba_sha256": {
+          "transparent-hidden-rgb.rgba": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+          "uniform-hidden-rgb.rgba": "e1b70abde62219868d58802627b493827de4cdf60edb52925b8a2cd988785bec",
+          "mixed-hidden-rgb.rgba": "bffecc73016434e8e6142cfc127a60b2f0a2ea4c91d89fd1076313a50bc732ee"
+        },
+        "native_surface_cases": 12,
+        "production_decoder_cases": [
+          "transparent-hidden-rgb",
+          "uniform-hidden-rgb",
+          "mixed-hidden-rgb"
+        ],
+        "scope": "Compiled native CPU surface routines, with explicit decoded input representation and resize dimensions. No RageBitmapTexture file loading, effective GPU mip storage or native framebuffer proof.",
+        "framebuffer_verified": false,
+        "control_line_endings": "LF, enforced by fixture .gitattributes"
+      },
+      "native_cpu_output_pixels": 356,
+      "production_decoder_controls": 3,
+      "production_decoder_compared_pixels": 10,
+      "production_decoder_compared_rgba_bytes": 40,
+      "comparison_tolerance_bytes": 0,
+      "asset_verification": {
+        "passed": 220,
+        "results": [
+          "test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s",
+          "test result: ok. 146 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.54s"
+        ],
+        "log_sha256": "777ba4fb28c622a441a4fcdcc34ff2860e98b7d60e84107d7cf0139efef7fb00",
+        "source_file_sha256": "96fda86172be7d24e9c74722244e5c31e7c5d8532942e6480d84045d59f2910e"
+      },
+      "harness_verification": {
+        "source_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+        "harness_version": "0.1.44",
+        "verified_test_source_sha256_unchanged": true,
+        "suite_receipt": "pass97-harness-tests-v1.json",
+        "suite_log_sha256": "2d32bd9cf5966b23a64b29dce509a02a5cce10147b742ca3afcfad6d4ba3e9d8",
+        "passed": 204,
+        "existing_corpus_ignored": 5,
+        "native_sources": [
+          "RageSurfaceUtils.cpp",
+          "RageSurfaceUtils_Zoom.cpp"
+        ],
+        "removed_stub": "RageSurfaceUtils::Zoom no-op",
+        "scope": "Native CPU surface subroutine outputs; no full bitmap loader or framebuffer proof"
+      },
+      "local_reference_source_audit": [
+        {
+          "file": "RageSurface.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "78d21f407fac9ef39cf4ca9d3ec9a99f569a577768f03ace4ce86f756b2881b0"
+        },
+        {
+          "file": "RageSurfaceUtils.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed"
+        },
+        {
+          "file": "RageSurfaceUtils_Zoom.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473"
+        },
+        {
+          "file": "RageBitmapTexture.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e"
+        },
+        {
+          "file": "ModelTypes.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e"
+        }
+      ],
+      "native_output_identical_after_lf_control_recapture": true,
+      "scope": "Native CPU surface subroutines and three actual DeadSync PNG decode outputs. This is not full RageBitmapTexture file-loader policy, GPU mip storage or native framebuffer parity.",
+      "remaining_required_gaps": [
+        "Model default stretch and hot-pink preparation with distinct Sprite/Model resource identities",
+        "native effective mip state, physical mip storage and trilinear sampling",
+        "full native framebuffer, sphere coordinates and remaining Model draw states",
+        "501 simfiles and all 492 contexts, aliases, historical variants and 18 unindexed sources"
+      ],
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "canonical_fixture_index_changed": false,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
+    }
   ]
 }

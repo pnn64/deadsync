@@ -266,3 +266,25 @@ open production gap. The native capture proves requests and headless
 dimensions; preprocessing pixels, effective mip state, mip storage and
 framebuffer output still need independent verification. Complete Model
 archive acceptance remains closed, and the canonical index is unchanged.
+
+
+Harness 0.1.44 (`f812935e`) links the pinned native surface utilities for
+CPU pixel controls and removes the no-op Zoom stub. Twelve controls cover
+RGB/RGBA/palette hot-pink selection, native resizing and hidden-alpha
+cleanup. The local reference sources match the pinned native sources.
+All 204 harness tests pass; five existing corpus tests remain ignored.
+
+These controls exposed a production decoder error: fully transparent
+images retained hidden RGB values, while native FixHiddenAlpha clears
+them to black. DeadSync `3b1ef26f7` removes that early-return path. Three
+actual PNG decode controls now match all 40 native RGBA bytes exactly,
+covering fully transparent, uniform-edge and mixed-edge images. All 220
+asset tests pass. The new portable `texture-surface` micro fixture retains
+the clean native capture and binary pixel goldens; JSON line endings are
+fixed so its source hashes survive checkout.
+
+This closes the verified hidden-RGB cleanup gap for these decoder cases.
+Model default stretch/color-key preparation, distinct Sprite/Model resource
+identities, effective mip state, physical mip storage and native framebuffer
+output remain open. Complete Model acceptance stays closed; the canonical
+index and the full 501-source/492-context scope remain unchanged.

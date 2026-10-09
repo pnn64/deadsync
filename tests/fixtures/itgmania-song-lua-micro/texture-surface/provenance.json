@@ -3,7 +3,7 @@
   "harness_version": "0.1.44",
   "harness_executable_sha256": "b48119414dffdf60f230aa9060f0ab6537859105a32981bf6925229a882c654e",
   "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
-  "control_sha256": "6a13becdcffc12c8b180c48e6d26648e9e03b88ef216ae3cf8acf1e95b53be01",
+  "control_sha256": "9ac802830c42cb759097703d07521ffb7430c9ee87669b9888ca7d1d96c97d60",
   "native_sha256": "f0d8ba5b28e6b3c132063953ae7c3f0d675aedd219c5be59fb5c004de1c5ae04",
   "source_png_sha256": {
     "transparent-hidden-rgb.png": "09151ddc21ba23a2674e148baf9d87ce07a62b23a194129d924eb798856aace1",
@@ -22,5 +22,6 @@
     "mixed-hidden-rgb"
   ],
   "scope": "Compiled native CPU surface routines, with explicit decoded input representation and resize dimensions. No RageBitmapTexture file loading, effective GPU mip storage or native framebuffer proof.",
-  "framebuffer_verified": false
+  "framebuffer_verified": false,
+  "control_line_endings": "LF, enforced by fixture .gitattributes"
 }
