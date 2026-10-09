@@ -339,11 +339,15 @@ impl WholeSongComposer {
                 SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     for slot in slots.iter() {
                         queue_texture(&mut assets, slot.texture_key_shared().as_ref());
+                        if let Some((key, _)) = slot.model_additive(0.0) {
+                            queue_texture(&mut assets, &key);
+                        }
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
                         queue_texture(&mut assets, &layer.texture_key);
+                        if let Some(key) = &layer.additive { queue_texture(&mut assets, key); }
                     }
                 }
                 _ => {}

@@ -1961,8 +1961,8 @@ impl SongLuaOverlayModelDraw {
 pub struct SongLuaOverlayModelLayer<Vertex> {
     pub material: Option<deadsync_noteskin::ModelMaterial>,
     pub texture_key: Arc<str>,
-    /// Secondary GL_ADD stage: atlas key and (UV rectangle, frame-end seconds).
-    pub additive: Option<(Arc<str>, Arc<[([f32; 4], f32)]>)>,
+    /// Secondary material source; its frame clock is captured independently.
+    pub additive: Option<Arc<str>>,
     pub vertices: Arc<[Vertex]>,
     pub model_size: [f32; 2],
     pub uv_scale: [f32; 2],
@@ -1971,6 +1971,7 @@ pub struct SongLuaOverlayModelLayer<Vertex> {
     pub uv_velocity: [f32; 2],
     pub uv_cycle_seconds: Option<f32>,
     pub texture_frames: Arc<[SongLuaModelTextureFrame]>,
+    pub additive_frames: Arc<[SongLuaModelTextureFrame]>,
     pub texture_samples: Arc<[SongLuaTextureSample]>,
     pub draw: SongLuaOverlayModelDraw,
 }
@@ -1989,6 +1990,7 @@ impl<Vertex> Clone for SongLuaOverlayModelLayer<Vertex> {
             uv_velocity: self.uv_velocity,
             uv_cycle_seconds: self.uv_cycle_seconds,
             texture_frames: Arc::clone(&self.texture_frames),
+            additive_frames: Arc::clone(&self.additive_frames),
             texture_samples: Arc::clone(&self.texture_samples),
             draw: self.draw,
         }
@@ -2019,6 +2021,7 @@ impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
             uv_velocity,
             uv_cycle_seconds,
             texture_frames: Arc::from([]),
+            additive_frames: Arc::from([]),
             texture_samples: Arc::from([]),
             draw,
         }

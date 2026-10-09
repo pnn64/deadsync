@@ -7965,6 +7965,70 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
 }
 
 #[test]
+#[cfg(feature = "test-support")]
+fn native_model_secondary_frames_match_production() {
+    crate::tests::init_paths();
+    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-texture-images");
+    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json")))
+        .expect("independent native material image observations");
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, "secondary materials");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua(&directory.join("default.lua"), &context)
+        .expect("compile paired native material control");
+    let model_index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Animated"))
+        .expect("named native Model");
+    for noteskin in [false, true] {
+        let mut overlays = compiled.overlays.clone();
+        if noteskin {
+            let SongLuaOverlayKind::Model { layers } = &overlays[model_index].kind else {
+                panic!("compiled Model");
+            };
+            let tracks = layers.iter().map(|layer| Arc::clone(&layer.texture_samples)).collect();
+            let piece = directory.join("model.txt");
+            overlays[model_index].kind = SongLuaOverlayKind::NoteskinActor {
+                slots: deadsync_assets::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+                    .expect("native material slots"),
+                texture_samples: tracks,
+            };
+        }
+        let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+        for (ordinal, sample) in native["samples"].as_array().unwrap().iter().enumerate() {
+            let reference = &sample["actors"]["Animated"][1];
+            assert_eq!(reference["blend_mode"], 1, "independent native additive pass");
+            let image = Path::new(reference["texture"].as_str().unwrap()).file_name().unwrap();
+            // The asset loader packs these two 8px images horizontally. Check
+            // the submitted secondary frame rectangle and native translation;
+            // this does not establish framebuffer or atlas-wrap equivalence.
+            let start = match image.to_str().unwrap() {
+                "alpha-green.png" => 0.0_f32,
+                "alpha-white.png" => 0.5_f32,
+                other => panic!("unexpected native secondary image {other}"),
+            };
+            let translation = &reference["texture_matrix"];
+            let expected = [0.5, 1.0,
+                start + translation[0][3].as_f64().unwrap() as f32 * 0.5,
+                translation[1][3].as_f64().unwrap() as f32];
+            let second = sample["second"].as_f64().unwrap() as f32;
+            let frame = composer.render_overlay(&overlays, &states, model_index,
+                [854.0, 480.0], second, second);
+            let deadlib_render_core::DrawOp::TexturedMesh(run) = &frame.ops[0] else {
+                panic!("production Model mesh");
+            };
+            assert_ne!(run.additive_texture, 0, "submit a bound secondary texture");
+            let actual = frame.tmesh_instances[run.instance_start as usize].additive_uv;
+            for axis in 0..4 {
+                assert!((actual[axis] - expected[axis]).abs() <= 0.000_001,
+                    "noteskin={noteskin} update={ordinal} second={second} secondary[{axis}]: {} != {} (native {})",
+                    actual[axis], expected[axis], image.display());
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_model_builds_textured_mesh_layers() {
     let texture_key = "song-lua-model-texture.png".to_string();
     let mut asset_manager = AssetManager::new();
@@ -8005,6 +8069,7 @@ fn song_lua_model_builds_textured_mesh_layers() {
                 uv_velocity: [0.0, -1.0],
                 uv_cycle_seconds: Some(2.0),
                 texture_frames: Arc::from([]),
+                additive_frames: Arc::from([]),
                 texture_samples: Arc::from([]),
                 draw: SongLuaOverlayModelDraw {
                     pos: [2.0, 3.0, 4.0],

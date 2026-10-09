@@ -8031,26 +8031,27 @@ fn append_song_lua_model_actors(
                 .map(|_| {
                     let (additive_texture, mut additive_uv) = layer.additive.as_ref().map_or(
                         (None, [0.0, 0.0, 1.0, 1.0]),
-                        |(key, frames)| {
-                            let duration =
-                                frames.last().map_or(1.0, |frame| frame.1).max(f32::EPSILON);
-                            let time = total_elapsed.rem_euclid(duration);
-                            let frame = frames
-                                .partition_point(|frame| frame.1 <= time)
-                                .min(frames.len().saturating_sub(1));
+                        |key| {
+                            let uv = layer.additive_frames.first().map(|frame| frame.glow);
                             (
                                 Some(Arc::clone(key)),
-                                frames
-                                    .get(frame)
-                                    .map_or([0.0, 0.0, 1.0, 1.0], |frame| frame.0),
+                                uv.map_or([0.0, 0.0, 1.0, 1.0], |uv|
+                                    [uv.offset[0], uv.offset[1],
+                                        uv.offset[0] + uv.scale[0], uv.offset[1] + uv.scale[1]]),
                             )
                         },
                     );
-                    for axis in 0..2 {
-                        let shift = uv_tex_shift[axis] / layer.uv_scale[axis].max(f32::EPSILON);
-                        let delta = shift * (additive_uv[axis + 2] - additive_uv[axis]);
-                        additive_uv[axis] += delta;
-                        additive_uv[axis + 2] += delta;
+                    if let Some(uv) = sample.and_then(|sample| sample.additive) {
+                        let uv = song_lua_model_uv(uv, state.texcoord_offset);
+                        additive_uv = [uv.offset[0], uv.offset[1],
+                            uv.offset[0] + uv.scale[0], uv.offset[1] + uv.scale[1]];
+                    } else {
+                        for axis in 0..2 {
+                            let shift = uv_tex_shift[axis] / layer.uv_scale[axis].max(f32::EPSILON);
+                            let delta = shift * (additive_uv[axis + 2] - additive_uv[axis]);
+                            additive_uv[axis] += delta;
+                            additive_uv[axis + 2] += delta;
+                        }
                     }
                     deadlib_present::actors::MeshEnvironment {
                         camera: None,
@@ -8314,7 +8315,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             };
             if let Some(sample) = texture_samples.get(idx)
                 .and_then(|samples| crate::model_texture_at(samples, total_elapsed))
-                && let Actor::TexturedMesh { uv_scale, uv_offset, uv_tex_shift, .. } = &mut actor
+                && let Actor::TexturedMesh { uv_scale, uv_offset, uv_tex_shift, environment, .. } = &mut actor
             {
                 let uv = song_lua_model_uv(
                     if glow_pass { sample.glow } else { sample.diffuse }, state.texcoord_offset,
@@ -8322,6 +8323,11 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                 *uv_scale = uv.scale;
                 *uv_offset = uv.offset;
                 *uv_tex_shift = uv.shift;
+                if let Some(uv) = sample.additive && let Some(environment) = environment {
+                    let uv = song_lua_model_uv(uv, state.texcoord_offset);
+                    environment.additive_uv = [uv.offset[0], uv.offset[1],
+                        uv.offset[0] + uv.scale[0], uv.offset[1] + uv.scale[1]];
+                }
             }
             if slot.model().is_some() {
                 if let Actor::TexturedMesh {

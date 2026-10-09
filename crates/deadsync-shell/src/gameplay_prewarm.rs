@@ -165,7 +165,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
                         for key in std::iter::once(&layer.texture_key)
-                            .chain(layer.additive.as_ref().map(|(key, _)| key))
+                            .chain(layer.additive.as_ref())
                         {
                             prewarm_model_texture_key(
                                 assets,

@@ -775,6 +775,7 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
     slot.model_additive = plan.additive.and_then(|texture| {
         let mut additive = itg_slot_from_path_all_frames(&texture.texture_path, None, false)?;
         additive.sphere_mapped = texture.sphere_mapped;
+        additive.model_texture_states = texture.states;
         additive.model = plan.model.clone();
         if let Some(animation) = texture.animation {
             match model_animation_source(&animation) {
@@ -1715,6 +1716,7 @@ mod contract_tests {
 
     #[test]
     fn model_material_loads_independent_secondary_animation() {
+        crate::noteskin::tests::init_asset_paths();
         let root = std::env::temp_dir().join(format!("deadsync-material-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         for (name, color) in [
