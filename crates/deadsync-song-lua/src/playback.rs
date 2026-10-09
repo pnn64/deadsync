@@ -379,10 +379,8 @@ struct SongLuaProjectedMeshScratch {
     graph_body_key: Option<[u32; 10]>,
     graph_line_key: Option<[u32; 11]>,
     graph_frame: Option<SharedActorFrameScratch>,
-    model_geometry_keys: Option<Vec<TMeshCacheKey>>,
-    model_glow_vertices: Option<Vec<Arc<[TexturedMeshVertex]>>>,
+    model_passes: Option<Vec<Option<SongLuaModelGeometry>>>,
     noteskin_model_cache: Option<ModelMeshCache>,
-    noteskin_glow_vertices: Option<Vec<Option<Arc<[TexturedMeshVertex]>>>>,
     text_diffuse_attributes: Option<Arc<Vec<TextAttribute>>>,
     text_glow_attributes: Option<Arc<Vec<TextAttribute>>>,
     uppercase_text: Option<Arc<str>>,
@@ -431,10 +429,8 @@ impl SongLuaProjectedMeshScratch {
             graph_body_key: None,
             graph_line_key: None,
             graph_frame: None,
-            model_geometry_keys: None,
-            model_glow_vertices: None,
+            model_passes: None,
             noteskin_model_cache: None,
-            noteskin_glow_vertices: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
             uppercase_text: None,
@@ -459,10 +455,8 @@ impl SongLuaProjectedMeshScratch {
             graph_body_key: None,
             graph_line_key: None,
             graph_frame: None,
-            model_geometry_keys: None,
-            model_glow_vertices: None,
+            model_passes: None,
             noteskin_model_cache: None,
-            noteskin_glow_vertices: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
             uppercase_text: None,
@@ -485,17 +479,12 @@ impl SongLuaProjectedMeshScratch {
     }
 
     fn model(layers: &[SongLuaOverlayModelLayer]) -> Self {
-        let model_geometry_keys = layers
+        let model_passes = layers
             .iter()
-            .map(|layer| song_lua_model_geometry_key(&layer.vertices))
-            .collect();
-        let model_glow_vertices = layers
-            .iter()
-            .map(|layer| song_lua_static_glow_vertices(&layer.vertices))
+            .map(|layer| Some(SongLuaModelGeometry::new(&layer.vertices)))
             .collect();
         Self {
-            model_geometry_keys: Some(model_geometry_keys),
-            model_glow_vertices: Some(model_glow_vertices),
+            model_passes: Some(model_passes),
             ..Self::default()
         }
     }
@@ -505,18 +494,18 @@ impl SongLuaProjectedMeshScratch {
         for slot in slots {
             model_cache.prewarm_slot(slot);
         }
-        let noteskin_glow_vertices = slots
+        let model_passes = slots
             .iter()
             .map(|slot| {
                 model_cache
                     .model_geometry(slot)
-                    .map(|(_, vertices)| song_lua_static_glow_vertices(&vertices))
+                    .map(|(_, vertices)| SongLuaModelGeometry::new(&vertices))
             })
             .collect();
         model_cache.seal();
         Self {
             noteskin_model_cache: Some(model_cache),
-            noteskin_glow_vertices: Some(noteskin_glow_vertices),
+            model_passes: Some(model_passes),
             ..Self::default()
         }
     }
@@ -667,11 +656,45 @@ fn song_lua_static_glow_vertices(vertices: &[TexturedMeshVertex]) -> Arc<[Textur
     )
 }
 
+/// Song-local geometry, built at screen entry and released on transition.
+/// Diffuse and secondary passes retain separate sphere-mapping flags; both
+/// keep native per-vertex texture-matrix scaling. Gameplay only clones Arcs.
+struct SongLuaModelGeometry {
+    diffuse: (TMeshCacheKey, Arc<[TexturedMeshVertex]>),
+    additive: Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)>,
+    glow: Arc<[TexturedMeshVertex]>,
+}
+
+impl SongLuaModelGeometry {
+    fn new(vertices: &Arc<[TexturedMeshVertex]>) -> Self {
+        let mode = vertices.first().map_or(0, |vertex| vertex.normal[3] as u8);
+        let pass = |sphere: u8| {
+            let vertices: Arc<[TexturedMeshVertex]> = if mode == sphere { Arc::clone(vertices) } else {
+                vertices.iter().copied().map(|mut vertex| {
+                    vertex.normal[3] = f32::from(sphere);
+                    vertex
+                }).collect()
+            };
+            (song_lua_model_geometry_key(&vertices), vertices)
+        };
+        let diffuse = pass(mode & 1);
+        let additive = (mode & 4 != 0).then(|| {
+            let sphere = (mode >> 1) & 1;
+            if sphere == mode & 1 { (diffuse.0, Arc::clone(&diffuse.1)) } else { pass(sphere) }
+        });
+        let glow = song_lua_static_glow_vertices(&diffuse.1);
+        Self { diffuse, additive, glow }
+    }
+}
+
 fn song_lua_model_geometry_key(vertices: &[TexturedMeshVertex]) -> TMeshCacheKey {
     let mut hasher = rustc_hash::FxHasher::default();
-    hasher.write(b"deadsync-song-lua-model-v1");
+    hasher.write(b"deadsync-song-lua-model-v2");
     hasher.write_usize(vertices.len());
     for vertex in vertices {
+        for value in vertex.normal {
+            hasher.write_u32(value.to_bits());
+        }
         for value in vertex.pos {
             hasher.write_u32(value.to_bits());
         }
@@ -7957,8 +7980,7 @@ fn append_song_lua_model_actors(
     glow: [f32; 4],
     blend: BlendMode,
     total_elapsed: f32,
-    prewarmed_geometry_keys: Option<&[TMeshCacheKey]>,
-    prewarmed_glow_vertices: Option<&[Arc<[TexturedMeshVertex]>]>,
+    prewarmed_passes: Option<&[Option<SongLuaModelGeometry>]>,
 ) -> bool {
     let mut emitted = false;
     let [projection, view, space] = song_lua_model_camera(camera_state, x_scale, y_scale);
@@ -7980,6 +8002,14 @@ fn append_song_lua_model_actors(
                 continue;
             }
             let sample = crate::model_texture_at(&layer.texture_samples, total_elapsed);
+            let cold_geometry;
+            let geometry = if let Some(geometry) = prewarmed_passes
+                .and_then(|passes| passes.get(idx)).and_then(Option::as_ref) {
+                geometry
+            } else {
+                cold_geometry = SongLuaModelGeometry::new(&layer.vertices);
+                &cold_geometry
+            };
             let scroll = if sample.is_some() { [0.0; 2] } else {
                 song_lua_model_layer_scroll(layer, total_elapsed)
             };
@@ -8024,40 +8054,15 @@ fn append_song_lua_model_actors(
                     effect_rot,
                     [state.skew_x, state.skew_y],
                 );
-            let environment = layer
-                .vertices
+            let environment = geometry.diffuse.1
                 .first()
                 .filter(|vertex| vertex.normal[3] != 0.0)
                 .map(|_| {
-                    let (additive_texture, mut additive_uv) = layer.additive.as_ref().map_or(
-                        (None, [0.0, 0.0, 1.0, 1.0]),
-                        |key| {
-                            let uv = layer.additive_frames.first().map(|frame| frame.glow);
-                            (
-                                Some(Arc::clone(key)),
-                                uv.map_or([0.0, 0.0, 1.0, 1.0], |uv|
-                                    [uv.offset[0], uv.offset[1],
-                                        uv.offset[0] + uv.scale[0], uv.offset[1] + uv.scale[1]]),
-                            )
-                        },
-                    );
-                    if let Some(uv) = sample.and_then(|sample| sample.additive) {
-                        let uv = song_lua_model_uv(uv, state.texcoord_offset);
-                        additive_uv = [uv.offset[0], uv.offset[1],
-                            uv.offset[0] + uv.scale[0], uv.offset[1] + uv.scale[1]];
-                    } else {
-                        for axis in 0..2 {
-                            let shift = uv_tex_shift[axis] / layer.uv_scale[axis].max(f32::EPSILON);
-                            let delta = shift * (additive_uv[axis + 2] - additive_uv[axis]);
-                            additive_uv[axis] += delta;
-                            additive_uv[axis + 2] += delta;
-                        }
-                    }
                     deadlib_present::actors::MeshEnvironment {
                         camera: None,
                         transform: local_transform,
-                        additive_texture,
-                        additive_uv,
+                        additive_texture: None,
+                        additive_uv: [0.0, 0.0, 1.0, 1.0],
                     }
                 });
             let actor = Actor::TexturedMesh {
@@ -8073,11 +8078,9 @@ fn append_song_lua_model_actors(
                     song_lua_capture_tint(layer.draw.tint, tint),
                 ),
                 glow: [1.0, 1.0, 1.0, 0.0],
-                vertices: Arc::clone(&layer.vertices),
-                geom_cache_key: prewarmed_geometry_keys
-                    .and_then(|keys| keys.get(idx))
-                    .copied()
-                    .unwrap_or(INVALID_TMESH_CACHE_KEY),
+                vertices: Arc::clone(&geometry.diffuse.1),
+                geom_cache_key: if prewarmed_passes.is_some() { geometry.diffuse.0 }
+                    else { INVALID_TMESH_CACHE_KEY },
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
@@ -8086,15 +8089,28 @@ fn append_song_lua_model_actors(
                 clear_depth_after: false,
                 cull_back: false,
                 visible: true,
-                blend: if layer.draw.blend_add {
-                    BlendMode::Add
-                } else {
-                    blend
-                },
+                // Native Model resets blending after each diffuse mesh.
+                blend: if (glow_pass && tint[3] > 0.0) || idx != 0 { BlendMode::Alpha }
+                    else if layer.draw.blend_add { BlendMode::Add } else { blend },
                 z: z.min(SONG_LUA_FOREGROUND_DEPTH.ceiling),
             };
             if !glow_pass {
+                let secondary = layer.additive.as_ref().filter(|key| asset_manager.has_texture_key(key))
+                    .and_then(|key| {
+                        let uv = sample.and_then(|sample| sample.additive).map(|uv|
+                            song_lua_model_uv(uv, state.texcoord_offset)).or_else(|| {
+                            let mut uv = layer.additive_frames.first()?.glow;
+                            for axis in 0..2 {
+                                let shift = uv_tex_shift[axis] / uv_scale[axis] * uv.scale[axis];
+                                uv.offset[axis] += shift;
+                                uv.shift[axis] += shift;
+                            }
+                            Some(uv)
+                        })?;
+                        song_lua_secondary_model_actor(&actor, Arc::clone(key), geometry, uv)
+                    });
                 out.extend([actor]);
+                if let Some(secondary) = secondary { out.extend([secondary]); }
                 emitted = true;
                 continue;
             }
@@ -8103,7 +8119,7 @@ fn append_song_lua_model_actors(
                 glow,
                 state.text_glow_mode,
                 None,
-                prewarmed_glow_vertices.and_then(|vertices| vertices.get(idx)),
+                Some(&geometry.glow),
             );
             if let Some(glow_actor) = glow_actor {
                 out.extend([glow_actor]);
@@ -8113,6 +8129,32 @@ fn append_song_lua_model_actors(
     }
     out.extend([Actor::CameraPop]);
     emitted
+}
+
+fn song_lua_secondary_model_actor(
+    actor: &Actor,
+    key: Arc<str>,
+    geometry: &SongLuaModelGeometry,
+    uv: crate::SongLuaModelTextureUv,
+) -> Option<Actor> {
+    let (geom_key, secondary) = geometry.additive.as_ref()?;
+    let mut actor = actor.clone();
+    let Actor::TexturedMesh { texture, vertices, geom_cache_key, uv_scale, uv_offset,
+        uv_tex_shift, blend, environment, local_transform, .. } = &mut actor else { return None };
+    *texture = key.into();
+    *vertices = Arc::clone(secondary);
+    *geom_cache_key = if *geom_cache_key == INVALID_TMESH_CACHE_KEY { INVALID_TMESH_CACHE_KEY }
+        else { *geom_key };
+    *uv_scale = uv.scale;
+    *uv_offset = uv.offset;
+    *uv_tex_shift = uv.shift;
+    *blend = BlendMode::Add;
+    let transform = environment.as_ref().map_or(*local_transform, |environment| environment.transform);
+    *environment = secondary.first().filter(|vertex| vertex.normal[3] != 0.0).map(|_| {
+        deadlib_present::actors::MeshEnvironment { camera: None, transform,
+            additive_texture: None, additive_uv: [0.0, 0.0, 1.0, 1.0] }
+    });
+    Some(actor)
 }
 
 fn song_lua_model_camera(
@@ -8193,10 +8235,10 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     if let Some(view_proj) = camera {
         out.extend([Actor::CameraPush { view_proj }]);
     }
-    let (mut model_cache, glow_vertices) = match scratch {
+    let (mut model_cache, prewarmed_passes) = match scratch {
         Some(scratch) => (
             scratch.noteskin_model_cache.as_mut(),
-            scratch.noteskin_glow_vertices.as_deref(),
+            scratch.model_passes.as_deref(),
         ),
         None => (None, None),
     };
@@ -8313,9 +8355,18 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             let Some(mut actor) = actor else {
                 continue;
             };
-            if let Some(sample) = texture_samples.get(idx)
-                .and_then(|samples| crate::model_texture_at(samples, total_elapsed))
-                && let Actor::TexturedMesh { uv_scale, uv_offset, uv_tex_shift, environment, .. } = &mut actor
+            let cold_passes;
+            let passes = if let Some(passes) = prewarmed_passes
+                .and_then(|passes| passes.get(idx)).and_then(Option::as_ref) {
+                Some(passes)
+            } else if slot.model().is_some() && let Actor::TexturedMesh { vertices, .. } = &actor {
+                cold_passes = SongLuaModelGeometry::new(vertices);
+                Some(&cold_passes)
+            } else { None };
+            let sample = texture_samples.get(idx)
+                .and_then(|samples| crate::model_texture_at(samples, total_elapsed));
+            if let Some(sample) = sample
+                && let Actor::TexturedMesh { uv_scale, uv_offset, uv_tex_shift, .. } = &mut actor
             {
                 let uv = song_lua_model_uv(
                     if glow_pass { sample.glow } else { sample.diffuse }, state.texcoord_offset,
@@ -8323,11 +8374,6 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                 *uv_scale = uv.scale;
                 *uv_offset = uv.offset;
                 *uv_tex_shift = uv.shift;
-                if let Some(uv) = sample.additive && let Some(environment) = environment {
-                    let uv = song_lua_model_uv(uv, state.texcoord_offset);
-                    environment.additive_uv = [uv.offset[0], uv.offset[1],
-                        uv.offset[0] + uv.scale[0], uv.offset[1] + uv.scale[1]];
-                }
             }
             if slot.model().is_some() {
                 if let Actor::TexturedMesh {
@@ -8343,6 +8389,30 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                         Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
                 }
             }
+            let secondary = if !glow_pass { passes.and_then(|passes| {
+                let (key, _) = slot.model_additive(total_elapsed)?;
+                if !asset_manager.has_texture_key(&key) { return None; }
+                let uv = sample.and_then(|sample| sample.additive).map(|uv|
+                    song_lua_model_uv(uv, state.texcoord_offset)).or_else(|| {
+                    let Actor::TexturedMesh { environment: Some(environment), uv_scale, uv_tex_shift, .. } = &actor
+                        else { return None };
+                    let rect = environment.additive_uv;
+                    let scale = [rect[2] - rect[0], rect[3] - rect[1]];
+                    let shift = std::array::from_fn(|axis| uv_tex_shift[axis] / uv_scale[axis] * scale[axis]);
+                    Some(crate::SongLuaModelTextureUv { scale, offset: [rect[0], rect[1]], shift })
+                })?;
+                song_lua_secondary_model_actor(&actor, key, passes, uv)
+            }) } else { None };
+            if let Some(passes) = passes && let Actor::TexturedMesh {
+                vertices, geom_cache_key, environment, blend: pass_blend, .. } = &mut actor {
+                *vertices = Arc::clone(&passes.diffuse.1);
+                *geom_cache_key = if prewarmed_passes.is_some() { passes.diffuse.0 }
+                    else { INVALID_TMESH_CACHE_KEY };
+                if let Some(environment) = environment { environment.additive_texture = None; }
+                if model_passes && (idx != 0 || (glow_pass && tint[3] > 0.0)) {
+                    *pass_blend = BlendMode::Alpha;
+                }
+            }
             let glow_actor = (glow_pass || !model_passes)
                 .then(|| {
                     song_lua_overlay_glow_actor_with_static_vertices(
@@ -8350,14 +8420,13 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                         glow,
                         state.text_glow_mode,
                         None,
-                        glow_vertices
-                            .and_then(|vertices| vertices.get(idx))
-                            .and_then(Option::as_ref),
+                        passes.map(|passes| &passes.glow),
                     )
                 })
                 .flatten();
             if !glow_pass {
                 out.extend([actor]);
+                if let Some(secondary) = secondary { out.extend([secondary]); }
                 emitted = true;
             }
             if let Some(glow_actor) = glow_actor {
@@ -9810,13 +9879,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
 
     Some(match &overlay.kind {
         SongLuaOverlayKind::Model { layers } => {
-            let (geometry_keys, glow_vertices) =
-                scratch.as_deref().map_or((None, None), |scratch| {
-                    (
-                        scratch.model_geometry_keys.as_deref(),
-                        scratch.model_glow_vertices.as_deref(),
-                    )
-                });
+            let passes = scratch.as_deref().and_then(|scratch| scratch.model_passes.as_deref());
             append_song_lua_model_actors(
                 out,
                 layers,
@@ -9834,8 +9897,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
                 glow,
                 blend,
                 total_elapsed,
-                geometry_keys,
-                glow_vertices,
+                passes,
             )
         }
         SongLuaOverlayKind::NoteskinActor { slots, texture_samples } => append_song_lua_noteskin_actors(
@@ -10523,15 +10585,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_rot,
             );
             let mut out = SongLuaActorList::new();
-            let (geometry_keys, glow_vertices) =
-                projected_mesh_scratch
-                    .as_deref()
-                    .map_or((None, None), |scratch| {
-                        (
-                            scratch.model_geometry_keys.as_deref(),
-                            scratch.model_glow_vertices.as_deref(),
-                        )
-                    });
+            let passes = projected_mesh_scratch.as_deref()
+                .and_then(|scratch| scratch.model_passes.as_deref());
             append_song_lua_model_actors(
                 &mut out,
                 layers,
@@ -10549,8 +10604,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 glow,
                 overlay_blend,
                 total_elapsed,
-                geometry_keys,
-                glow_vertices,
+                passes,
             )
             .then_some(out)
         }
