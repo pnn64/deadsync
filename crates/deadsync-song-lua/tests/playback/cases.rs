@@ -4522,6 +4522,42 @@ fn song_lua_overlay_perspective_keeps_logical_center_fixed() {
 }
 
 #[test]
+fn song_lua_zero_fov_resets_parent_camera() {
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        854.0, 480.0,
+    ));
+    // RageDisplay::LoadMenuPerspective(0) loads identity view and native
+    // orthographic projection with the -1000..1000 depth range.
+    let camera = SongLuaOverlayState {
+        fov: Some(0.0),
+        vanishpoint: Some([17.0, 29.0]),
+        ..SongLuaOverlayState::default()
+    };
+    let view_proj =
+        song_lua_overlay_view_proj(camera, 854.0, 480.0).expect("explicit orthographic camera");
+    assert_eq!(view_proj.0, Matrix4::IDENTITY);
+    let clip = view_proj.1 * Vector4::new(320.0, 180.0, 125.0, 1.0);
+    assert_eq!(clip.w, 1.0);
+    assert!((clip.z + 0.125).abs() < 1e-7);
+    let point = song_lua_project_overlay_point(view_proj, [320.0, 180.0, 125.0]).expect("ortho point");
+    assert!((point[0] - 320.0).abs() < 0.0001);
+    assert!((point[1] - 180.0).abs() < 0.0001);
+    for fov in [-2.0, 0.01, f32::EPSILON / 2.0] {
+        let actual = song_lua_overlay_view_proj(
+            SongLuaOverlayState { fov: Some(fov), ..SongLuaOverlayState::default() },
+            854.0,
+            480.0,
+        );
+        let clamped = song_lua_overlay_view_proj(
+            SongLuaOverlayState { fov: Some(0.1), ..SongLuaOverlayState::default() },
+            854.0,
+            480.0,
+        );
+        assert_eq!(actual, clamped);
+    }
+}
+
+#[test]
 fn song_lua_projection_preserves_vertices_behind_camera_for_gpu_clipping() {
     let camera = SongLuaOverlayState {
         fov: Some(120.0),

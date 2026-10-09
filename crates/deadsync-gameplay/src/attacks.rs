@@ -629,10 +629,13 @@ pub enum SongLuaEaseMaskTarget {
     VisualSquarePeriod,
     VisualDigitalPeriod,
     VisualSquareZ,
+    VisualZigzag,
     VisualZigzagZ,
     VisualSquareZOffset,
+    VisualZigzagOffset,
     VisualZigzagZOffset,
     VisualSquareZPeriod,
+    VisualZigzagPeriod,
     VisualZigzagZPeriod,
     VisualXmode,
     VisualParabolaZ,
@@ -2300,10 +2303,13 @@ fn append_song_lua_ease_targets_key(
         "squareperiod" => push(SongLuaEaseMaskTarget::VisualSquarePeriod, pct_from, pct_to),
         "digitalperiod" => push(SongLuaEaseMaskTarget::VisualDigitalPeriod, pct_from, pct_to),
         "squarez" => push(SongLuaEaseMaskTarget::VisualSquareZ, pct_from, pct_to),
+        "zigzag" => push(SongLuaEaseMaskTarget::VisualZigzag, pct_from, pct_to),
         "zigzagz" => push(SongLuaEaseMaskTarget::VisualZigzagZ, pct_from, pct_to),
         "squarezoffset" => push(SongLuaEaseMaskTarget::VisualSquareZOffset, pct_from, pct_to),
+        "zigzagoffset" => push(SongLuaEaseMaskTarget::VisualZigzagOffset, pct_from, pct_to),
         "zigzagzoffset" => push(SongLuaEaseMaskTarget::VisualZigzagZOffset, pct_from, pct_to),
         "squarezperiod" => push(SongLuaEaseMaskTarget::VisualSquareZPeriod, pct_from, pct_to),
+        "zigzagperiod" => push(SongLuaEaseMaskTarget::VisualZigzagPeriod, pct_from, pct_to),
         "zigzagzperiod" => push(SongLuaEaseMaskTarget::VisualZigzagZPeriod, pct_from, pct_to),
         "xmode" => push(SongLuaEaseMaskTarget::VisualXmode, pct_from, pct_to),
         "parabolaz" => push(SongLuaEaseMaskTarget::VisualParabolaZ, pct_from, pct_to),
@@ -2992,10 +2998,13 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualSquarePeriod => visual.square_period = Some(value),
         SongLuaEaseMaskTarget::VisualDigitalPeriod => visual.digital_period = Some(value),
         SongLuaEaseMaskTarget::VisualSquareZ => visual.square_z = Some(value),
+        SongLuaEaseMaskTarget::VisualZigzag => visual.zigzag = Some(value),
         SongLuaEaseMaskTarget::VisualZigzagZ => visual.zigzag_z = Some(value),
         SongLuaEaseMaskTarget::VisualSquareZOffset => visual.square_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualZigzagOffset => visual.zigzag_offset = Some(value),
         SongLuaEaseMaskTarget::VisualZigzagZOffset => visual.zigzag_z_offset = Some(value),
         SongLuaEaseMaskTarget::VisualSquareZPeriod => visual.square_z_period = Some(value),
+        SongLuaEaseMaskTarget::VisualZigzagPeriod => visual.zigzag_period = Some(value),
         SongLuaEaseMaskTarget::VisualZigzagZPeriod => visual.zigzag_z_period = Some(value),
         SongLuaEaseMaskTarget::VisualXmode => visual.xmode = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
@@ -3249,10 +3258,13 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualSquarePeriod => window.visual.square_period.is_some(),
         SongLuaEaseMaskTarget::VisualDigitalPeriod => window.visual.digital_period.is_some(),
         SongLuaEaseMaskTarget::VisualSquareZ => window.visual.square_z.is_some(),
+        SongLuaEaseMaskTarget::VisualZigzag => window.visual.zigzag.is_some(),
         SongLuaEaseMaskTarget::VisualZigzagZ => window.visual.zigzag_z.is_some(),
         SongLuaEaseMaskTarget::VisualSquareZOffset => window.visual.square_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualZigzagOffset => window.visual.zigzag_offset.is_some(),
         SongLuaEaseMaskTarget::VisualZigzagZOffset => window.visual.zigzag_z_offset.is_some(),
         SongLuaEaseMaskTarget::VisualSquareZPeriod => window.visual.square_z_period.is_some(),
+        SongLuaEaseMaskTarget::VisualZigzagPeriod => window.visual.zigzag_period.is_some(),
         SongLuaEaseMaskTarget::VisualZigzagZPeriod => window.visual.zigzag_z_period.is_some(),
         SongLuaEaseMaskTarget::VisualXmode => window.visual.xmode.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
@@ -4633,10 +4645,13 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.square_period, visual.square_period);
     mark_active_target(&mut targets.digital_period, visual.digital_period);
     mark_active_target(&mut targets.square_z, visual.square_z);
+    mark_active_target(&mut targets.zigzag, visual.zigzag);
     mark_active_target(&mut targets.zigzag_z, visual.zigzag_z);
     mark_active_target(&mut targets.square_z_offset, visual.square_z_offset);
+    mark_active_target(&mut targets.zigzag_offset, visual.zigzag_offset);
     mark_active_target(&mut targets.zigzag_z_offset, visual.zigzag_z_offset);
     mark_active_target(&mut targets.square_z_period, visual.square_z_period);
+    mark_active_target(&mut targets.zigzag_period, visual.zigzag_period);
     mark_active_target(&mut targets.zigzag_z_period, visual.zigzag_z_period);
     mark_active_target(&mut targets.xmode, visual.xmode);
     mark_active_target(&mut targets.parabola_z, visual.parabola_z);
@@ -5528,15 +5543,22 @@ fn apply_song_lua_approach_targets(
                 attack.visual_speed.digital_period = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualSquareZ => attack.visual_speed.square_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualZigzag => attack.visual_speed.zigzag = Some(speed),
             SongLuaEaseMaskTarget::VisualZigzagZ => attack.visual_speed.zigzag_z = Some(speed),
             SongLuaEaseMaskTarget::VisualSquareZOffset => {
                 attack.visual_speed.square_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualZigzagOffset => {
+                attack.visual_speed.zigzag_offset = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualZigzagZOffset => {
                 attack.visual_speed.zigzag_z_offset = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualSquareZPeriod => {
                 attack.visual_speed.square_z_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualZigzagPeriod => {
+                attack.visual_speed.zigzag_period = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualZigzagZPeriod => {
                 attack.visual_speed.zigzag_z_period = Some(speed)
@@ -6399,6 +6421,15 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.zigzag,
+        &mut values.visual_speed.zigzag,
+        window.visual.zigzag,
+        window.visual_speed.zigzag,
+        active_targets.visual.zigzag,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.zigzag_z,
         &mut values.visual_speed.zigzag_z,
         window.visual.zigzag_z,
@@ -6417,6 +6448,15 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.zigzag_offset,
+        &mut values.visual_speed.zigzag_offset,
+        window.visual.zigzag_offset,
+        window.visual_speed.zigzag_offset,
+        active_targets.visual.zigzag_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.zigzag_z_offset,
         &mut values.visual_speed.zigzag_z_offset,
         window.visual.zigzag_z_offset,
@@ -6431,6 +6471,15 @@ fn apply_active_visual_window(
         window.visual.square_z_period,
         window.visual_speed.square_z_period,
         active_targets.visual.square_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.zigzag_period,
+        &mut values.visual_speed.zigzag_period,
+        window.visual.zigzag_period,
+        window.visual_speed.zigzag_period,
+        active_targets.visual.zigzag_period,
         active_clear_all,
         persisted,
     );
@@ -7315,6 +7364,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "zigzag" => set_approached_mod(
+            &mut out.visual.zigzag,
+            &mut out.visual_speed.zigzag,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "zigzagz" => set_approached_mod(
             &mut out.visual.zigzag_z,
             &mut out.visual_speed.zigzag_z,
@@ -7327,6 +7382,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "zigzagoffset" => set_approached_mod(
+            &mut out.visual.zigzag_offset,
+            &mut out.visual_speed.zigzag_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "zigzagzoffset" => set_approached_mod(
             &mut out.visual.zigzag_z_offset,
             &mut out.visual_speed.zigzag_z_offset,
@@ -7336,6 +7397,12 @@ fn apply_runtime_mod(
         "squarezperiod" => set_approached_mod(
             &mut out.visual.square_z_period,
             &mut out.visual_speed.square_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "zigzagperiod" => set_approached_mod(
+            &mut out.visual.zigzag_period,
+            &mut out.visual_speed.zigzag_period,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -7872,10 +7939,13 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         square_period: merge_attack_value(base.square_period, attack.square_period),
         digital_period: merge_attack_value(base.digital_period, attack.digital_period),
         square_z: merge_attack_value(base.square_z, attack.square_z),
+        zigzag: merge_attack_value(base.zigzag, attack.zigzag),
         zigzag_z: merge_attack_value(base.zigzag_z, attack.zigzag_z),
         square_z_offset: merge_attack_value(base.square_z_offset, attack.square_z_offset),
+        zigzag_offset: merge_attack_value(base.zigzag_offset, attack.zigzag_offset),
         zigzag_z_offset: merge_attack_value(base.zigzag_z_offset, attack.zigzag_z_offset),
         square_z_period: merge_attack_value(base.square_z_period, attack.square_z_period),
+        zigzag_period: merge_attack_value(base.zigzag_period, attack.zigzag_period),
         zigzag_z_period: merge_attack_value(base.zigzag_z_period, attack.zigzag_z_period),
         xmode: merge_attack_value(base.xmode, attack.xmode),
         parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),

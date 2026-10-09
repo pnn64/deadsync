@@ -3714,7 +3714,8 @@ mod tests {
         let mods = parse_attack_mods(
             "*2 50% digital,*4 300% digitalsteps,\
             *6 3200% digitaloffset,*8 -100% digitalperiod,*10 300% zigzagz,\
-            *12 -75% zigzagzoffset,*14 150% zigzagzperiod",
+            *12 -75% zigzagzoffset,*14 150% zigzagzperiod,\
+            *16 300% zigzag,*18 -75% zigzagoffset,*20 150% zigzagperiod",
         );
         assert_eq!(
             [
@@ -3724,13 +3725,19 @@ mod tests {
                 mods.visual.digital_period,
                 mods.visual.zigzag_z,
                 mods.visual.zigzag_z_offset,
-                mods.visual.zigzag_z_period
+                mods.visual.zigzag_z_period,
+                mods.visual.zigzag,
+                mods.visual.zigzag_offset,
+                mods.visual.zigzag_period
             ],
             [
                 Some(0.5),
                 Some(3.0),
                 Some(32.0),
                 Some(-1.0),
+                Some(3.0),
+                Some(-0.75),
+                Some(1.5),
                 Some(3.0),
                 Some(-0.75),
                 Some(1.5)
@@ -3753,15 +3760,19 @@ mod tests {
                 merged.digital_period,
                 merged.zigzag_z,
                 merged.zigzag_z_offset,
-                merged.zigzag_z_period
+                merged.zigzag_z_period,
+                merged.zigzag,
+                merged.zigzag_offset,
+                merged.zigzag_period
             ],
-            [0.5, 1.0, 1.5, -1.0, 2.5, -0.75, 1.5]
+            [0.5, 1.0, 1.5, -1.0, 2.5, -0.75, 1.5, 3.0, -0.75, 1.5]
         );
         approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
         assert!(!current.any());
         let cleared = parse_attack_mods(
             "no digital,no digitalsteps,no digitaloffset,\
-            no digitalperiod,no zigzagz,no zigzagzoffset,no zigzagzperiod",
+            no digitalperiod,no zigzagz,no zigzagzoffset,no zigzagzperiod,\
+            no zigzag,no zigzagoffset,no zigzagperiod",
         );
         assert_eq!(
             [
@@ -3771,9 +3782,12 @@ mod tests {
                 cleared.visual.digital_period,
                 cleared.visual.zigzag_z,
                 cleared.visual.zigzag_z_offset,
-                cleared.visual.zigzag_z_period
+                cleared.visual.zigzag_z_period,
+                cleared.visual.zigzag,
+                cleared.visual.zigzag_offset,
+                cleared.visual.zigzag_period
             ],
-            [Some(0.0); 7]
+            [Some(0.0); 10]
         );
     }
 

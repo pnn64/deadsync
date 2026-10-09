@@ -2150,6 +2150,34 @@ mod tests {
             (-2.5, 73.25, 0.25, 1.5, -61.75),
             (0.5, -200.0, -0.75, -2.0, 9.499997),
         ] {
+            // Native GetXPos uses the same RageTriangle phase as GetZPos,
+            // then applies Tiny to travel and lane spacing before MoveX.
+            let x_params = NoteXParams {
+                zigzag: amount,
+                zigzag_offset: offset,
+                zigzag_period: period,
+                ..NoteXParams::default()
+            };
+            let expected_x = (-96.0 + expected) * 0.5 + 32.0;
+            for actual_x in [
+                note_x_offset(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado,
+                    &[0.5; 4], x_params, 1.0,
+                ),
+                super::note_x_offset_cached(
+                    0, y, 0.0, 0.0, &columns, &inverse, &tornado,
+                    &[], &[32.0; 4], x_params, 0.5,
+                ),
+            ] {
+                assert!(
+                    (actual_x - expected_x).abs() < 0.00002,
+                    "X travel y={y}: {actual_x} vs {expected_x}"
+                );
+            }
+            assert!(!super::fill_static_note_x_offsets(
+                4, &columns, &inverse, &tornado, &[0.0; 4],
+                x_params, 1.0, &mut [0.0; 4],
+            ));
             let params = VisualEffectParams {
                 zigzag_z: amount,
                 zigzag_z_offset: offset,

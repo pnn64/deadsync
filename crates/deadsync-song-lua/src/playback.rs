@@ -7719,12 +7719,23 @@ fn song_lua_overlay_view_proj(
     overlay_space_height: f32,
 ) -> Option<(Matrix4, Matrix4)> {
     let mut fov_deg = camera_state.fov?;
-    if !fov_deg.is_finite() || fov_deg <= f32::EPSILON {
+    if !fov_deg.is_finite() || fov_deg == -1.0 {
         return None;
     }
-    fov_deg = fov_deg.clamp(0.1, 179.9);
     let width = screen_width().max(1.0);
     let height = screen_height().max(1.0);
+    // ActorFrame::BeginDraw pushes a camera for FOV zero too. Native
+    // LoadMenuPerspective resets the view and selects the ortho depth range.
+    if fov_deg == 0.0 {
+        let projection = Matrix4::from_cols_array(&[
+            2.0 / width, 0.0, 0.0, 0.0,
+            0.0, -2.0 / height, 0.0, 0.0,
+            0.0, 0.0, -2.0 / 2000.0, 0.0,
+            -1.0, 1.0, 0.0, 1.0,
+        ]);
+        return Some((Matrix4::IDENTITY, projection));
+    }
+    fov_deg = fov_deg.clamp(0.1, 179.9);
     let x_scale = width / overlay_space_width.max(1.0);
     let y_scale = height / overlay_space_height.max(1.0);
     let vanish = camera_state

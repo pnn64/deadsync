@@ -303,6 +303,9 @@ fn compose_field_contents<S, F>(
         parabola_x: visual.parabola_x,
         square: visual.square,
         digital: visual.digital,
+        zigzag: visual.zigzag,
+        zigzag_offset: visual.zigzag_offset,
+        zigzag_period: visual.zigzag_period,
         square_offset: visual.square_offset,
         digital_offset: visual.digital_offset,
         digital_steps: visual.digital_steps,
@@ -1732,6 +1735,7 @@ fn hold_lane_frame(
             && visual.xmode == 0.0
             && visual.parabola_z == 0.0
             && visual.digital == 0.0
+            && visual.zigzag == 0.0
             && visual.zigzag_z == 0.0
             && visual.square == 0.0
             && visual.square_z == 0.0

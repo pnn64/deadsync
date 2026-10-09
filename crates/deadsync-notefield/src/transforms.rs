@@ -215,6 +215,9 @@ pub(crate) struct NoteXParams {
     pub parabola_x: f32,
     pub square: f32,
     pub digital: f32,
+    pub zigzag: f32,
+    pub zigzag_offset: f32,
+    pub zigzag_period: f32,
     pub square_offset: f32,
     pub digital_offset: f32,
     pub digital_steps: f32,
@@ -582,7 +585,7 @@ pub(crate) fn triangle_wave_offset(y: f32, amount: f32, offset: f32, period: f32
     if amount == 0.0 || !amount.is_finite() {
         return 0.0;
     }
-    // ArrowEffects::GetZPos and RageTriangle wrap negative phases before
+    // ArrowEffects::GetXPos/GetZPos and RageTriangle wrap negative phases before
     // evaluating the three linear parts of the triangle wave.
     let angle = std::f32::consts::PI
         * (1.0 / (period + 1.0))
@@ -1348,6 +1351,9 @@ pub(crate) fn note_x_extra(
     if signed_effect_active(params.beat) {
         out += beat_x_extra(y, beat_factor_value, params.beat, params.beat_period);
     }
+    out += triangle_wave_offset(
+        y, params.zigzag, params.zigzag_offset, params.zigzag_period,
+    );
     // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
@@ -1466,6 +1472,9 @@ pub(crate) fn note_x_offset_cached(
     if signed_effect_active(params.beat) {
         extra += beat_x_extra(y, beat_factor_value, params.beat, params.beat_period);
     }
+    extra += triangle_wave_offset(
+        y, params.zigzag, params.zigzag_offset, params.zigzag_period,
+    );
     // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
@@ -1502,6 +1511,7 @@ pub(crate) fn fill_static_note_x_offsets(
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
         || (params.xmode.is_finite() && params.xmode != 0.0)
         || (params.digital.is_finite() && params.digital != 0.0)
+        || (params.zigzag.is_finite() && params.zigzag != 0.0)
         || (params.square.is_finite() && params.square != 0.0)
     {
         return false;

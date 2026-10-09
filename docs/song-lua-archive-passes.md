@@ -2572,3 +2572,32 @@ The complete unchanged native 0.1.31 capture passes all 552285 comparisons. The 
 The verified prefix is 26/492 archives. The remaining canonical sources, nine historical contexts and 18 unindexed simfiles still require review; full-corpus parity is unfinished.
 
 Archive 27: 7th Gear/7th Gear.ssc passes all 881665 comparisons. The verified prefix is now 27/492 archives; full-corpus parity remains unfinished.
+
+## Pass 75: follow native Zigzag and camera projection branches
+
+ArrowEffects::GetXPos uses the same RageTriangle phase as GetZPos before
+Tiny spacing and MoveX. Add Zigzag, ZigzagOffset and ZigzagPeriod throughout
+modifier parsing, approach, easing, active targets and note/receptor/feedback
+geometry. Native travel vectors cover cached and uncached X paths and reject
+static caching while Zigzag is active. Increment the compiled-song cache to 60.
+
+ActorFrame::LoadFromNode reads the case-sensitive FOV attribute. Its BeginDraw
+pushes a camera even for zero, and RageDisplay::LoadMenuPerspective selects
+orthographic projection before clamping nonzero FOV. The old harness incorrectly
+accepted Fov and clamped zero; DeadSync incorrectly inherited a parent camera
+through explicit zero. Harness commit f5e0dc9 corrects its trace generation;
+DeadSync now resets zero FOV to the native identity view and depth projection.
+
+The new 0.1.32 micro reference invokes the actual linked native matrix function
+for zero, inherited, negative, small and wrong-case FOV. All 131 observations
+pass through production compilation and composition; an omitted zero camera
+reset fails the comparison. The dependency hashes match DeadSync's noteskin
+context. Gameplay has 794 passing tests, note-field 450, and playback 183 with
+three existing ignored tests. The harness has 190 passing tests and five
+existing ignored tests. Original song, theme and ITGmania sources are unchanged.
+
+The previous verifier reached 27/492 archives. Fresh native 99+ capture is
+complete, but its comparison with the new verifier and revalidation from the
+top remain pending. The scope is still 501 original simfiles, 483 indexed
+sources, 18 unindexed sources, and nine historical archive variants. Full
+corpus parity remains unfinished.

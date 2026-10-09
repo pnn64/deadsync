@@ -9472,6 +9472,38 @@ fn unnamed_message_child_matches_native() {
 }
 
 #[test]
+fn zero_fov_matches_native_parent_camera() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/zero-fov.json.zst"),
+    );
+    assert!(trace.runtime_errors.is_empty());
+    assert_eq!(trace.dropped_events, 0);
+    let (compiled, primary, context) = compile_trace_song_at(
+        &trace,
+        &root.join("tests/fixtures/song-lua/zero-fov.sm"),
+    );
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary("native zero FOV"));
+    assert_eq!(parity.checks(), 131, "retain every native camera observation");
+    parity.assert_complete("native zero FOV");
+    let mut inherited = compiled.clone();
+    let zero = inherited[primary].overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("Zero"))
+        .expect("zero FOV child");
+    let parent = inherited[primary].overlays[zero].parent_index
+        .expect("zero FOV frame");
+    assert_eq!(inherited[primary].overlays[parent].initial_state.fov, Some(0.0));
+    inherited[primary].overlays[parent].initial_state.fov = None;
+    let mut rejected = Parity::default();
+    compare_projected_geometry(&trace, &inherited, &context, &mut rejected);
+    assert!(
+        !rejected.gaps.is_empty(),
+        "the audit must reject inheriting perspective through explicit FOV zero"
+    );
+}
+
+#[test]
 fn shared_screen_translation_matches_native() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let trace = read_trace_file(
