@@ -132,3 +132,19 @@ same-name mesh loader repair and uses the harness `0.1.39` reference. Harness
 `0.1.40` corrects the hardware mesh path; refresh the original reference before
 claiming complete Model parity. Texture identity, lighting, additional render
 states, timing controls and framebuffer validation remain unresolved.
+
+The fresh original capture from harness `0.1.41` at `b57bf3c` now includes
+both the corrected hardware mesh path and native Model update ordering.
+DeadSync `d5e0b6704` passes 12,217,036 of 12,217,036 comparisons
+on that capture, retaining the original endpoint, all eight Model tracks and
+every update. The audit records this separate reference and comparator pin.
+
+An independent native actor scene also verifies queued `setstate`, own and
+parent hibernation, and parent update rate through the production compiler
+and both Model builders: 1,688 draws and 10,128 transformed UV coordinates
+at 0.000001 tolerance. The harness checks suppressed and visible draws against
+the same native scene; the playback test checks material history on native
+draws after wakeup. Texture identity, secondary material animation, lighting,
+additional render states, empty meshes, late creation and framebuffer
+validation remain pending. The whole-song Model guard stays closed and the
+fresh diagnostic archive stays private.

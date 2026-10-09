@@ -615,6 +615,89 @@
         "refresh the original reference with the corrected hardware mesh path; framebuffer validation"
       ],
       "scope": "Every-update Model diagnostic at committed source807df3fe4, before the subsequent same-name mesh loader repair; canonical archive and whole-song acceptance remain unchanged."
+    },
+    {
+      "date": "2026-10-09",
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "deadsync_commit": "d5e0b6704439daf621d5b60167fde59b64f7145d",
+      "comparator_sha256": "86308cebd9adde29c576ccbb734177d6fde80c4b66417610c677715372b9b2db",
+      "harness_commit": "b57bf3cc879e3198fd6e9cf4082874ba02965563",
+      "harness_version": "0.1.41",
+      "native_executable_sha256": "9b7d58db6b245218b06da11215d66f93a5d2a5d4cf58ecd15accf5393d0771f8",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "private_archive_sha256": "61306b65813fae7de865cd976c03c53e609dc9efa62b7e8717b8b430cb526563",
+      "private_archive_bytes": 42120356,
+      "trace_sha256": "258c7a0da9db74c925be8e24fd1544925449041a7c9dc74d752c36703f295fa4",
+      "trace_bytes": 164374264,
+      "original_sources_unchanged": true,
+      "archive_members_verified": 26,
+      "endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "comparisons_passed": 12217036,
+      "comparisons_failed": 0,
+      "compared_vertex_fields": [
+        "local",
+        "world",
+        "view",
+        "clip",
+        "ndc",
+        "screen",
+        "normal",
+        "uv",
+        "transformed_uv",
+        "texture_scale",
+        "color"
+      ],
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 10.99206760013476,
+          "log_sha256": "c9d87c907867fb042bcc3f37dcdc181bfb3e1359b9479c7f28e2caf8bfd3ba43"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 0,
+          "seconds": 261.8215641002171,
+          "log_sha256": "0ca6ab4455a4a293fd054ff17b0829e2ea3f5f410b9614763d2df342a1e12eb5"
+        }
+      ],
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "texture identity and secondary material animation",
+        "lighting and unrepresented depth, cull and render target states",
+        "empty mesh observations and late Model creation",
+        "independent framebuffer validation"
+      ],
+      "scope": "Fresh original case18 Model diagnostic with corrected native hardware geometry and update ordering, using committed DeadSync source. Canonical archive and whole-song acceptance remain unchanged.",
+      "model_update_order": true,
+      "model_hardware_mesh_path": true,
+      "temporal_contract_control": {
+        "fixture": "tests/fixtures/itgmania-song-lua-micro/model-texture-order/native.json",
+        "fixture_sha256": "fc8e2ec990dada5c53d2b04597bd3e3733c17c91b6d42861c5cf8f90624b7b59",
+        "raw_native_sha256": "fb984e9b77225335833a4959901fc1af554ac65b03e103577352530aee1b3c35",
+        "native_draws": 844,
+        "production_draws_both_builders": 1688,
+        "transformed_uv_checks": 10128,
+        "uv_tolerance": 1e-06,
+        "deadsync_test_log_sha256": "f81c654897de8fa898da88f939f4111a99ae346f77f67d14370774a2f46df40c",
+        "tested_source_hashes_match_committed_worktree": true,
+        "contracts": [
+          "queued setstate precedes material update",
+          "own hibernation retains incoming material delta",
+          "parent hibernation suppresses child updates",
+          "parent update rate scales child delta"
+        ],
+        "draw_suppression_compared_by_playback_test": false
+      }
     }
   ]
 }
