@@ -133,6 +133,9 @@ fn closest_standard_chart_ix(
         };
         let distance = diff_ix.abs_diff(preferred);
         if distance < best_distance {
+            if distance == 0 {
+                return Some(chart_ix);
+            }
             best = Some(chart_ix);
             best_distance = distance;
         }
@@ -791,5 +794,8 @@ mod tests {
             min_bpm: 120.0,
             max_bpm: 120.0,
         }
+    }
+    mod perf {
+        include!("cabinet_chart_perf.rs");
     }
 }
