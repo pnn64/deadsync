@@ -36,6 +36,12 @@ pub struct ItgTextureFrame {
     pub delay: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ItgTextureState {
+    pub delay: f32,
+    pub translation: [f32; 2],
+}
+
 #[derive(Debug, Clone)]
 pub struct ItgTextureAnimation {
     pub path: PathBuf,
@@ -47,6 +53,8 @@ pub struct ItgResolvedModelTexture {
     pub sphere_mapped: bool,
     pub texture_path: PathBuf,
     pub animation: Option<ItgTextureAnimation>,
+    /// Native states remain distinct even when every state uses one image.
+    pub states: Arc<[ItgTextureState]>,
     pub tex: ItgModelTexturePath,
 }
 
@@ -56,6 +64,7 @@ impl ItgResolvedModelTexture {
             sphere_mapped: texture_path.to_string_lossy().contains("sphere"),
             texture_path,
             animation: None,
+            states: Arc::from([ItgTextureState { delay: 1.0, translation: [0.0; 2] }]),
             tex: ItgModelTexturePath::default(),
         }
     }
@@ -241,6 +250,7 @@ fn itg_resolve_animated_texture_ini(
         .unwrap_or(0.0);
     let mut cycle_seconds = 0.0f32;
     let mut frames = Vec::new();
+    let mut states = Vec::new();
     let mut has_distinct_image = false;
     // Keep common prefixes on the stack. Longer single-image sequences still
     // need no heap scratch; a later path change can revisit the parsed INI.
@@ -261,6 +271,13 @@ fn itg_resolve_animated_texture_ini(
         if !delay.is_finite() || delay < 0.0 {
             return None;
         }
+        let translation = [*b"TranslateX0000", *b"TranslateY0000"].map(|key| {
+            let key = itg_animated_texture_key(key, idx);
+            ini.get("AnimatedTexture", itg_animated_texture_key_str(&key))
+                .and_then(noteskin_itg::parse_ini_float)
+                .unwrap_or(0.0)
+        });
+        states.push(ItgTextureState { delay, translation });
         if frames.is_empty()
             && let Some(cached) = prefix_delays.get_mut(idx - first_frame_idx)
         {
@@ -315,6 +332,7 @@ fn itg_resolve_animated_texture_ini(
             frames,
         }),
         texture_path,
+        states: states.into(),
         tex: ItgModelTexturePath {
             uv_velocity: [tex_velocity_x, tex_velocity_y],
             uv_offset: [tex_offset_x, tex_offset_y],
@@ -325,9 +343,9 @@ fn itg_resolve_animated_texture_ini(
 }
 
 #[inline]
-fn itg_animated_texture_key(mut key: [u8; 9], mut index: usize) -> [u8; 9] {
+fn itg_animated_texture_key<const N: usize>(mut key: [u8; N], mut index: usize) -> [u8; N] {
     debug_assert!(index < 10_000);
-    for digit in key[5..].iter_mut().rev() {
+    for digit in key[N - 4..].iter_mut().rev() {
         *digit = b'0' + (index % 10) as u8;
         index /= 10;
     }
@@ -335,7 +353,7 @@ fn itg_animated_texture_key(mut key: [u8; 9], mut index: usize) -> [u8; 9] {
 }
 
 #[inline]
-fn itg_animated_texture_key_str(key: &[u8; 9]) -> &str {
+fn itg_animated_texture_key_str(key: &[u8]) -> &str {
     std::str::from_utf8(key).expect("animated texture keys are always ASCII")
 }
 
@@ -386,6 +404,7 @@ pub struct ItgModelSlotPlan {
     pub additive: Option<ItgResolvedModelTexture>,
     pub animation_length: f32,
     pub texture_animation: Option<ItgTextureAnimation>,
+    pub texture_states: Arc<[ItgTextureState]>,
     pub model: Option<Arc<ModelMesh>>,
     pub model_draw: ModelDrawState,
     pub model_timeline: Arc<[ModelTweenSegment]>,
@@ -421,6 +440,7 @@ impl ItgModelSlotPlan {
             additive: layer.additive,
             animation_length: layer.animation_length,
             texture_animation: layer.texture.animation,
+            texture_states: layer.texture.states,
             model: Some(layer.mesh),
             model_draw,
             model_timeline,
@@ -451,6 +471,7 @@ impl ItgModelSlotPlan {
             additive: None,
             animation_length: tex.uv_cycle_seconds.unwrap_or(1.0),
             texture_animation: texture.animation,
+            texture_states: texture.states,
             model,
             model_draw,
             model_timeline,
@@ -1139,6 +1160,7 @@ mod tests {
                 sphere_mapped: false,
                 texture_path: PathBuf::from("tap.png"),
                 animation: None,
+                states: Arc::from([]),
                 tex: ItgModelTexturePath {
                     uv_velocity: [2.0, -1.0],
                     uv_offset: [0.25, 0.5],
@@ -1249,6 +1271,7 @@ Materials: 1
             sphere_mapped: false,
             texture_path: PathBuf::from("tap.png"),
             animation: None,
+            states: Arc::from([]),
             tex: ItgModelTexturePath {
                 uv_velocity: [1.0, 2.0],
                 uv_offset: [0.1, 0.2],
@@ -1474,6 +1497,36 @@ Materials: 1
             }
         }
         for name in ["zero.png", "one.png", "texture.ini"] {
+            fs::remove_file(root.join(name)).unwrap();
+        }
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn animated_texture_retains_repeated_image_states() {
+        let root = temp_model_root("repeated-image-states");
+        fs::write(root.join("same.png"), []).unwrap();
+        let path = root.join("texture.ini");
+        fs::write(&path, "[AnimatedTexture]\n\
+            TexVelocityX=0.5\nTexOffsetY=0.25\n\
+            Frame0000=same.png\nDelay0000=0.75\nTranslateX0000=0.125\nTranslateY0000=-0.25\n\
+            Frame0001=same.png\nDelay0001=1.25\nTranslateX0001=-0.375\nTranslateY0001=0.5\n")
+            .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(), name: "test".to_string(),
+            metrics: noteskin_itg::IniData::default(), search_dirs: vec![root.clone()],
+        };
+        let texture = itg_resolve_animated_texture_ini(&data, &path).expect("native repeated states");
+        assert!(texture.animation.is_none(), "one image needs no duplicate atlas tiles");
+        assert_eq!(texture.texture_path, root.join("same.png"));
+        assert_eq!(texture.tex.uv_cycle_seconds, Some(2.0));
+        assert_eq!(texture.tex.uv_velocity, [0.5, 0.0]);
+        assert_eq!(texture.tex.uv_offset, [0.0, 0.25]);
+        assert_eq!(&*texture.states, &[
+            ItgTextureState { delay: 0.75, translation: [0.125, -0.25] },
+            ItgTextureState { delay: 1.25, translation: [-0.375, 0.5] },
+        ]);
+        for name in ["same.png", "texture.ini"] {
             fs::remove_file(root.join(name)).unwrap();
         }
         fs::remove_dir(root).unwrap();
