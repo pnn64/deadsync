@@ -643,17 +643,17 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 }
 
 pub fn fix_hidden_alpha(image: &mut RgbaImage) {
-    let Some(first) = image
+    // RageSurfaceUtils::FindAlphaRGB defaults to black when the surface has
+    // no visible pixel; native SetAlphaRGB still clears its hidden RGB.
+    let first = image
         .as_raw()
         .as_chunks::<4>()
         .0
         .iter()
         .find(|pixel| pixel[3] != 0)
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-    else {
-        return;
-    };
-    let Some(last) = image
+        .unwrap_or([0; 3]);
+    let last = image
         .as_raw()
         .as_chunks::<4>()
         .0
@@ -661,9 +661,7 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .rev()
         .find(|pixel| pixel[3] != 0)
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-    else {
-        return;
-    };
+        .unwrap_or([0; 3]);
     let [r, g, b] = if first == last { first } else { [0, 0, 0] };
     for pixel in image.as_mut().as_chunks_mut::<4>().0 {
         if pixel[3] == 0 {
@@ -923,13 +921,34 @@ mod tests {
     }
 
     #[test]
-    fn fix_hidden_alpha_preserves_fully_transparent_image() {
-        let original = vec![12, 34, 56, 0, 78, 90, 12, 0];
-        let mut image = RgbaImage::from_raw(2, 1, original.clone()).expect("test image");
+    fn hidden_alpha_clears_rgb() {
+        let mut image =
+            RgbaImage::from_raw(2, 1, vec![12, 34, 56, 0, 78, 90, 12, 0]).expect("test image");
 
         fix_hidden_alpha(&mut image);
 
-        assert_eq!(image.as_raw(), &original);
+        // Native RageSurfaceUtils::FindAlphaRGB returns black when neither
+        // scan finds a visible pixel, and SetAlphaRGB applies it to all pixels.
+        assert_eq!(image.as_raw(), &[0; 8]);
+    }
+
+    #[test]
+    fn native_alpha_decode() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-surface");
+        for (name, dimensions) in [
+            ("transparent-hidden-rgb", (2, 2)),
+            ("uniform-hidden-rgb", (3, 1)),
+            ("mixed-hidden-rgb", (3, 1)),
+        ] {
+            let image =
+                decode_texture_image(&root.join(format!("{name}.png")), &TextureHints::default())
+                    .expect("decode native control source");
+            let native = std::fs::read(root.join(format!("{name}.rgba")))
+                .expect("pinned native RageSurfaceUtils output");
+            assert_eq!(image.dimensions(), dimensions, "{name}");
+            assert_eq!(image.as_raw(), &native, "{name}");
+        }
     }
 
     #[test]
