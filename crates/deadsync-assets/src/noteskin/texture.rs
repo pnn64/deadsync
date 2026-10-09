@@ -175,6 +175,9 @@ pub struct SpriteSlot {
     pub sphere_mapped: bool,
     pub model_animation_length: f32,
     pub model_texture_states: Arc<[ItgTextureState]>,
+    /// Song/skin-owned image identities. Load and prewarm before gameplay;
+    /// drawing only indexes this immutable, INI-bounded (1000 states) table.
+    pub model_texture_keys: Arc<[Arc<str>]>,
     pub model_additive: Option<Arc<SpriteSlot>>,
     stable_id: u64,
     pub def: SpriteDefinition,
@@ -210,6 +213,7 @@ impl Clone for SpriteSlot {
             sphere_mapped: self.sphere_mapped,
             model_animation_length: self.model_animation_length,
             model_texture_states: Arc::clone(&self.model_texture_states),
+            model_texture_keys: Arc::clone(&self.model_texture_keys),
             model_additive: self.model_additive.clone(),
             stable_id: next_slot_id(),
             def: self.def.clone(),
@@ -283,6 +287,9 @@ impl SpriteSlot {
 
     #[must_use]
     pub fn frame_index(&self, time: f32, beat: f32) -> usize {
+        if !self.model_texture_states.is_empty() {
+            return self.model_frame_at(time + self.animation_start_time);
+        }
         if let Some(start) = self.beat_receptor_start {
             return if beat < start {
                 2
@@ -311,6 +318,13 @@ impl SpriteSlot {
 
     #[must_use]
     pub fn frame_index_from_phase(&self, phase: f32) -> usize {
+        if !self.model_texture_states.is_empty() {
+            let cycle = self
+                .model_texture_states
+                .iter()
+                .fold(0.0_f32, |sum, state| sum + state.delay);
+            return self.model_frame_at(phase * cycle);
+        }
         match self.source.as_ref() {
             SpriteSource::Atlas { .. } => 0,
             SpriteSource::Animated {
@@ -325,6 +339,26 @@ impl SpriteSlot {
                 phase,
             ),
         }
+    }
+
+    // NoteDisplay seeks the Model; standalone song Models use recorded Update
+    // history instead. Match AnimatedTexture::SetSecondsIntoAnimation here.
+    fn model_frame_at(&self, seconds: f32) -> usize {
+        let cycle = self
+            .model_texture_states
+            .iter()
+            .fold(0.0_f32, |sum, state| sum + state.delay);
+        if cycle <= f32::EPSILON || !cycle.is_finite() {
+            return 0;
+        }
+        let mut seconds = seconds % cycle;
+        for (index, state) in self.model_texture_states.iter().enumerate() {
+            if seconds < state.delay {
+                return index;
+            }
+            seconds -= state.delay;
+        }
+        0
     }
 
     #[must_use]
@@ -411,15 +445,24 @@ impl SpriteSlot {
         let scale = self.uv_translation_scale();
         sprite_scrolled_uv(
             uv,
-            [self.uv_velocity[0] * scale[0], self.uv_velocity[1] * scale[1]],
+            [
+                self.uv_velocity[0] * scale[0],
+                self.uv_velocity[1] * scale[1],
+            ],
             [self.uv_offset[0] * scale[0], self.uv_offset[1] * scale[1]],
             elapsed,
-            self.model.is_some().then_some(self.uv_cycle_seconds).flatten(),
+            self.model
+                .is_some()
+                .then_some(self.uv_cycle_seconds)
+                .flatten(),
         )
     }
 
     /// Cached image coordinates before any native material translation.
     pub fn uv_for_frame(&self, frame_index: usize) -> [f32; 4] {
+        if !self.model_texture_states.is_empty() {
+            return [0.0, 0.0, 1.0, 1.0];
+        }
         match self.source.as_ref() {
             SpriteSource::Atlas { uv_cache, .. } => uv_cache.get(self.model.is_none()),
             SpriteSource::Animated {
@@ -433,12 +476,16 @@ impl SpriteSlot {
     #[inline(always)]
     #[must_use]
     pub fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        let atlas_origin = match self.source.as_ref() {
-            SpriteSource::Atlas { uv_cache, .. } => {
-                let uv = uv_cache.get(false);
-                Some([uv[0], uv[1]])
+        let atlas_origin = if !self.model_texture_states.is_empty() {
+            Some([0.0; 2])
+        } else {
+            match self.source.as_ref() {
+                SpriteSource::Atlas { uv_cache, .. } => {
+                    let uv = uv_cache.get(false);
+                    Some([uv[0], uv[1]])
+                }
+                SpriteSource::Animated { .. } => None,
             }
-            SpriteSource::Animated { .. } => None,
         };
         deadsync_noteskin::model_texture_uv_params_cached(uv_rect, atlas_origin)
     }
@@ -466,6 +513,16 @@ impl NoteskinSlot for SpriteSlot {
         Self::uv_uses_phase(self)
     }
 
+    fn model_texture_keys(&self) -> &[Arc<str>] {
+        &self.model_texture_keys
+    }
+
+    fn model_additive_keys(&self) -> &[Arc<str>] {
+        self.model_additive
+            .as_ref()
+            .map_or(&[], |slot| &slot.model_texture_keys)
+    }
+
     fn model(&self) -> Option<&ModelMesh> {
         self.model.as_deref()
     }
@@ -485,7 +542,7 @@ impl NoteskinSlot for SpriteSlot {
     fn model_additive(&self, seconds: f32) -> Option<(Arc<str>, [f32; 4])> {
         let slot = self.model_additive.as_ref()?;
         let frame = slot.frame_index(seconds, 0.0);
-        Some((slot.texture_key_shared(), slot.uv_for_frame_at(frame, 0.0)))
+        Some((slot.model_texture_at(seconds), slot.uv_for_frame(frame)))
     }
 
     fn model_cull_back(&self) -> bool {
@@ -499,7 +556,11 @@ impl NoteskinSlot for SpriteSlot {
 
     #[inline(always)]
     fn frame_count(&self) -> usize {
-        self.source.frame_count()
+        if self.model_texture_states.is_empty() {
+            self.source.frame_count()
+        } else {
+            self.model_texture_states.len()
+        }
     }
 
     #[inline(always)]
@@ -531,6 +592,9 @@ impl NoteskinSlot for SpriteSlot {
     }
 
     fn uv_translation_scale(&self) -> [f32; 2] {
+        if !self.model_texture_states.is_empty() {
+            return [1.0; 2];
+        }
         if self.uv_uses_phase()
             && self.custom_uv.is_none()
             && let SpriteSource::Animated {
@@ -628,6 +692,7 @@ pub fn test_model_slot() -> SpriteSlot {
         sphere_mapped: false,
         model_animation_length: 1.0,
         model_texture_states: Arc::from([]),
+        model_texture_keys: Arc::from([]),
         model_additive: None,
         stable_id: next_slot_id(),
         def: SpriteDefinition::default(),
@@ -778,8 +843,8 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
         additive.model_texture_states = texture.states;
         additive.model = plan.model.clone();
         if let Some(animation) = texture.animation {
-            match model_animation_source(&animation) {
-                Ok(source) => additive.source = source,
+            match model_image_keys(&animation) {
+                Ok(keys) => additive.model_texture_keys = keys,
                 Err(error) => warn!(
                     "Model additive texture '{}': {error}",
                     animation.path.display()
@@ -789,8 +854,8 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
         Some(Arc::new(additive))
     });
     if let Some(animation) = plan.texture_animation {
-        match model_animation_source(&animation) {
-            Ok(source) => slot.source = source,
+        match model_image_keys(&animation) {
+            Ok(keys) => slot.model_texture_keys = keys,
             Err(error) => warn!(
                 "Model texture animation '{}': {error}",
                 animation.path.display()
@@ -810,126 +875,20 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
     slot.uv_cycle_seconds = plan.uv_cycle_seconds;
 }
 
-// The atlas builder has already resized the frame and validated tile bounds.
-fn copy_model_atlas_frame(atlas: &mut image::RgbaImage, frame: &image::RgbaImage, x: u32, y: u32) {
-    let atlas_stride = atlas.width() as usize * 4;
-    let frame_stride = frame.width() as usize * 4;
-    let offset = y as usize * atlas_stride + x as usize * 4;
-    let pixels: &mut [u8] = atlas.as_mut();
-    for (row, source) in frame.as_raw().chunks_exact(frame_stride).enumerate() {
-        let start = offset + row * atlas_stride;
-        pixels[start..start + frame_stride].copy_from_slice(source);
-    }
-}
-
-// Built on the asset worker, retained by the existing generated-texture registry,
-// and uploaded with the skin before gameplay. Drawing only selects cached UVs.
-// Bound each atlas to 64 MiB / 8192px; no runtime decoding or cache maintenance.
-fn model_animation_atlas(
-    animation: &ItgTextureAnimation,
-    size: [u32; 2],
-    grid: [u32; 2],
-) -> Result<image::RgbaImage, String> {
-    let [width, height] = size;
-    let [columns, rows] = grid;
-    let atlas_width = width * columns;
-    let atlas_height = height * rows;
-    let mut atlas = image::RgbaImage::new(atlas_width, atlas_height);
-    let mut previous: Option<(&Path, image::RgbaImage)> = None;
-    for (index, frame) in animation.frames.iter().enumerate() {
-        if previous
-            .as_ref()
-            .is_none_or(|(path, _)| path.as_os_str() != frame.path.as_os_str())
-        {
-            // Release the old prepared frame before decoding another image.
-            drop(previous.take());
-            let image = assets::open_image_fallback(&frame.path)
-                .map_err(|error| error.to_string())?
-                .into_rgba8();
-            let image = if image.dimensions() == (width, height) {
-                image
-            } else {
-                image::imageops::resize(
-                    &image,
-                    width,
-                    height,
-                    image::imageops::FilterType::Triangle,
-                )
-            };
-            previous = Some((&frame.path, image));
-        }
-        let image = &previous.as_ref().expect("a frame image was decoded").1;
-        copy_model_atlas_frame(
-            &mut atlas,
-            image,
-            index as u32 % columns * width,
-            index as u32 / columns * height,
-        );
-    }
-    Ok(atlas)
-}
-
-fn model_animation_source(animation: &ItgTextureAnimation) -> Result<Arc<SpriteSource>, String> {
-    let count = animation.frames.len();
-    let first = animation.frames.first().ok_or("empty frame sequence")?;
-    let (width, height) = image_dimensions(&first.path).map_err(|error| error.to_string())?;
-    let columns = (count as f32).sqrt().ceil() as u32;
-    let rows = (count as u32).div_ceil(columns.max(1));
-    let atlas_width = width.checked_mul(columns).ok_or("atlas width overflow")?;
-    let atlas_height = height.checked_mul(rows).ok_or("atlas height overflow")?;
-    if width == 0
-        || height == 0
-        || atlas_width > 8192
-        || atlas_height > 8192
-        || u64::from(atlas_width) * u64::from(atlas_height) > 16 * 1024 * 1024
-    {
-        return Err("frame atlas exceeds 64 MiB or 8192px".into());
-    }
-    let key = format!(
-        "{}#model-frames",
-        crate::textures::canonical_texture_key(&animation.path)
-    );
-    if assets::texture_dims(&key).is_none() {
-        let atlas = model_animation_atlas(animation, [width, height], [columns, rows])?;
-        assets::register_generated_texture(
-            &key,
-            atlas,
-            crate::textures::model_texture_sampler(&key),
-        );
-    }
-    Ok(model_animation_source_data(
-        key,
-        (atlas_width, atlas_height),
-        [width as i32, height as i32],
-        (columns as usize, rows as usize),
-        animation,
-    ))
-}
-
-fn model_animation_source_data(
-    key: String,
-    tex_dims: (u32, u32),
-    frame_size: [i32; 2],
-    grid: (usize, usize),
-    animation: &ItgTextureAnimation,
-) -> Arc<SpriteSource> {
-    let def = SpriteDefinition {
-        size: frame_size,
-        ..SpriteDefinition::default()
-    };
-    // Frame count is known: write delays into their shared storage once.
-    let durations = animation.frames.iter().map(|frame| frame.delay).collect();
-    Arc::new(animated_source(
-        key.into(),
-        tex_dims,
-        frame_size,
-        grid,
-        animation.frames.len(),
-        None,
-        AnimationRate::FramesPerSecond(1.0),
-        Some(durations),
-        &def,
-    ))
+// Keep actual image identities and dimensions; native Model textures never
+// share a Sprite atlas. All I/O happens while the asset worker loads the skin.
+fn model_image_keys(animation: &ItgTextureAnimation) -> Result<Arc<[Arc<str>]>, String> {
+    animation
+        .frames
+        .iter()
+        .map(|frame| {
+            let (width, height) =
+                image_dimensions(&frame.path).map_err(|error| error.to_string())?;
+            let key = crate::textures::canonical_texture_key(&frame.path);
+            assets::register_texture_dims(&key, width, height);
+            Ok(Arc::<str>::from(key))
+        })
+        .collect()
 }
 
 pub fn load_itg_model_slots(
@@ -1069,6 +1028,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         sphere_mapped: false,
         model_animation_length: 1.0,
         model_texture_states: Arc::from([]),
+        model_texture_keys: Arc::from([]),
         model_additive: None,
         stable_id: next_slot_id(),
         def,
@@ -1719,18 +1679,18 @@ mod contract_tests {
         crate::noteskin::tests::init_asset_paths();
         let root = std::env::temp_dir().join(format!("deadsync-material-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
-        for (name, color) in [
-            ("base.png", [128, 128, 128, 255]),
-            ("a.png", [255, 0, 0, 255]),
-            ("b.png", [0, 255, 0, 255]),
+        for (name, size, color) in [
+            ("base.png", [8, 8], [128, 128, 128, 255]),
+            ("a.png", [8, 16], [255, 0, 0, 255]),
+            ("b.png", [32, 8], [0, 255, 0, 255]),
         ] {
-            image::RgbaImage::from_pixel(8, 8, image::Rgba(color))
+            image::RgbaImage::from_pixel(size[0], size[1], image::Rgba(color))
                 .save(root.join(name))
                 .unwrap();
         }
         std::fs::write(
             root.join("reflection sphere.ini"),
-            "[AnimatedTexture]\nFrame0000=a.png\nDelay0000=0.2\nFrame0001=b.png\nDelay0001=0.3\n",
+            "[AnimatedTexture]\nFrame0000=a.png\nDelay0000=0.2\nFrame0001=b.png\nDelay0001=0.3\nFrame0002=a.png\nDelay0002=0.1\n",
         )
         .unwrap();
         let model = root.join("model.txt");
@@ -1772,13 +1732,35 @@ Materials: 1
                 .all(|vertex| vertex.normal == [0.0, 0.0, 1.0, 6.0])
         );
         let (key, first) = slot.model_additive(0.1).unwrap();
-        let (_, second) = slot.model_additive(0.3).unwrap();
-        assert!(key.ends_with("#model-frames"));
-        assert_eq!(first, [0.0, 0.0, 0.5, 1.0]);
-        assert_eq!(second, [0.5, 0.0, 1.0, 1.0]);
-        assert_eq!(slot.model_additive(0.6).unwrap().1, first);
+        let (second_key, second) = slot.model_additive(0.3).unwrap();
+        assert_eq!(
+            key.as_ref(),
+            crate::textures::canonical_texture_key(root.join("a.png"))
+        );
+        assert_eq!(
+            second_key.as_ref(),
+            crate::textures::canonical_texture_key(root.join("b.png"))
+        );
+        assert_eq!(first, [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(second, first);
+        assert_eq!(slot.model_additive(0.55).unwrap().0, key);
+        assert_eq!(slot.model_additive(0.65).unwrap().0, key);
+        assert_eq!(
+            assets::texture_dims(&key).map(|meta| (meta.w, meta.h)),
+            Some((8, 16))
+        );
+        assert_eq!(
+            assets::texture_dims(&second_key).map(|meta| (meta.w, meta.h)),
+            Some((32, 8))
+        );
+        let secondary = slot.model_additive.as_ref().unwrap();
+        assert_eq!(secondary.model_texture_keys.len(), 3);
+        assert_eq!(
+            secondary.model_texture_keys[0],
+            secondary.model_texture_keys[2]
+        );
         // The primary texture's one-second cycle does not override the
-        // secondary texture's independent half-second frame sequence.
+        // secondary texture's independent frame sequence.
         assert_eq!(slot.texture_key_shared(), slots[0].texture_key_shared());
         std::fs::remove_dir_all(root).unwrap();
     }

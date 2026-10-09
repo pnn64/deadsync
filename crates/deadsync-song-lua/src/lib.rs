@@ -27,11 +27,11 @@ mod json;
 mod lua_util;
 mod mod_windows;
 mod model_texture;
+#[cfg(feature = "test-support")]
+pub use model_texture::replay_model_texture;
 pub use model_texture::{
     SongLuaModelTextureFrame, SongLuaModelTextureUv, SongLuaTextureSample, model_texture_at,
 };
-#[cfg(feature = "test-support")]
-pub use model_texture::replay_model_texture;
 mod multitap;
 mod net;
 mod noteskin;
@@ -1998,6 +1998,22 @@ impl<Vertex> Clone for SongLuaOverlayModelLayer<Vertex> {
 }
 
 impl<Vertex> SongLuaOverlayModelLayer<Vertex> {
+    #[must_use]
+    pub fn texture_key_at(&self, state: usize) -> &Arc<str> {
+        self.texture_frames
+            .get(state)
+            .and_then(|frame| frame.texture_key.as_ref())
+            .unwrap_or(&self.texture_key)
+    }
+
+    #[must_use]
+    pub fn additive_key_at(&self, state: usize) -> Option<&Arc<str>> {
+        self.additive_frames
+            .get(state)
+            .and_then(|frame| frame.texture_key.as_ref())
+            .or(self.additive.as_ref())
+    }
+
     pub fn new(
         texture_key: Arc<str>,
         vertices: Arc<[Vertex]>,

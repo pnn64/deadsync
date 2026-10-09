@@ -8012,10 +8012,12 @@ fn append_song_lua_model_actors(
             continue;
         }
         for (idx, layer) in layers.iter().enumerate() {
-            if !layer.draw.visible || !asset_manager.has_texture_key(layer.texture_key.as_ref()) {
+            let sample = crate::model_texture_at(&layer.texture_samples, total_elapsed);
+            let texture_key =
+                layer.texture_key_at(sample.map_or(0, |sample| sample.diffuse_state as usize));
+            if !layer.draw.visible || !asset_manager.has_texture_key(texture_key) {
                 continue;
             }
-            let sample = crate::model_texture_at(&layer.texture_samples, total_elapsed);
             let cold_geometry;
             let geometry = if let Some(geometry) = prewarmed_passes
                 .and_then(|passes| passes.get(idx))
@@ -8101,7 +8103,7 @@ fn append_song_lua_model_actors(
                 world_z: state.z + song_lua_biased_world_z(state, effect_offset[2]),
                 size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 local_transform,
-                texture: Arc::clone(&layer.texture_key).into(),
+                texture: Arc::clone(texture_key).into(),
                 tint: deadsync_noteskin::model_unlit_color(
                     layer.material,
                     song_lua_capture_tint(layer.draw.tint, tint),
@@ -8133,8 +8135,9 @@ fn append_song_lua_model_actors(
             };
             if !glow_pass {
                 let secondary = layer
-                    .additive
-                    .as_ref()
+                    .additive_key_at(
+                        sample.and_then(|sample| sample.additive_state).unwrap_or(0) as usize
+                    )
                     .filter(|key| asset_manager.has_texture_key(key))
                     .and_then(|key| {
                         let uv = sample
@@ -8340,7 +8343,17 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             continue;
         }
         for (idx, slot) in slots.iter().enumerate() {
-            if !asset_manager.has_texture_key(slot.texture_key_shared().as_ref()) {
+            let sample = texture_samples
+                .get(idx)
+                .and_then(|samples| crate::model_texture_at(samples, total_elapsed));
+            let texture_key = sample
+                .and_then(|sample| {
+                    slot.model_texture_keys()
+                        .get(sample.diffuse_state as usize)
+                        .cloned()
+                })
+                .unwrap_or_else(|| slot.model_texture_at(total_elapsed));
+            if !asset_manager.has_texture_key(&texture_key) {
                 continue;
             }
             let mut draw = model_cache.as_deref_mut().map_or_else(
@@ -8442,9 +8455,11 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             } else {
                 None
             };
-            let sample = texture_samples
-                .get(idx)
-                .and_then(|samples| crate::model_texture_at(samples, total_elapsed));
+            if slot.model().is_some()
+                && let Actor::TexturedMesh { texture, .. } = &mut actor
+            {
+                *texture = texture_key.into();
+            }
             if let Some(sample) = sample
                 && let Actor::TexturedMesh {
                     uv_scale,
@@ -8503,7 +8518,10 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
             }
             let secondary = if !glow_pass {
                 passes.and_then(|passes| {
-                    let (key, _) = slot.model_additive(total_elapsed)?;
+                    let key = sample
+                        .and_then(|sample| sample.additive_state)
+                        .and_then(|state| slot.model_additive_keys().get(state as usize).cloned())
+                        .or_else(|| slot.model_additive(total_elapsed).map(|(key, _)| key))?;
                     if !asset_manager.has_texture_key(&key) {
                         return None;
                     }

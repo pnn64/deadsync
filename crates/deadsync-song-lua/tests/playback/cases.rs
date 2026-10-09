@@ -8072,14 +8072,12 @@ fn native_model_material_passes_match_production() {
                 let image = Path::new(reference["texture"].as_str().unwrap())
                     .file_name()
                     .unwrap();
-                // Native UVs address one image. These two 8px image atlases
-                // need an explicit affine mapping for this geometry control;
-                // physical binding, wrapping and framebuffer proof stay open.
-                let start = match image.to_str().unwrap() {
-                    "frame-red.png" | "alpha-green.png" => 0.0_f32,
-                    "frame-blue.png" | "alpha-white.png" => 0.5_f32,
-                    other => panic!("unexpected native material image {other}"),
-                };
+                let expected_key =
+                    deadsync_assets::textures::canonical_texture_key(directory.join(image));
+                assert_eq!(
+                    composer.texture_key(run.texture_handle), expected_key,
+                    "noteskin={noteskin} update={ordinal} pass={pass}: native image binding"
+                );
                 let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
                 assert_eq!(
                     vertices.len(),
@@ -8098,11 +8096,7 @@ fn native_model_material_passes_match_production() {
                     for axis in 0..2 {
                         let native_uv =
                             native_vertex["transformed_uv"][axis].as_f64().unwrap() as f32;
-                        let expected_uv = if axis == 0 {
-                            native_uv * 0.5 + start
-                        } else {
-                            native_uv
-                        };
+                        let expected_uv = native_uv;
                         assert!(
                             (uv[axis] - expected_uv).abs() <= 0.000_001,
                             "noteskin={noteskin} update={ordinal} pass={pass} uv[{axis}]: {} != {expected_uv}",

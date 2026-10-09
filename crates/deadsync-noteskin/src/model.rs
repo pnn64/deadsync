@@ -310,7 +310,7 @@ fn itg_resolve_animated_texture_ini(
             }
         }
         // Path equality also accepts aliases such as ./frames/a.png. Preserve
-        // those spellings in stored frames without creating a duplicate atlas.
+        // those spellings in stored frames while keeping their actual image identity.
         has_distinct_image = has_distinct_image || frame_path.as_ref() != texture_path;
         if !frames.is_empty() {
             frames.push(ItgTextureFrame {
@@ -322,8 +322,8 @@ fn itg_resolve_animated_texture_ini(
     }
     Some(ItgResolvedModelTexture {
         sphere_mapped: path.to_string_lossy().contains("sphere"),
-        // Repeated references to one image need no atlas. Keep its full UV
-        // domain for scrolling materials instead of adding duplicate tiles.
+        // Repeated references to one image need no binding table. Keep its full UV
+        // domain while retaining each state's delay and translation.
         animation: (has_distinct_image
             && cycle_seconds > f32::EPSILON
             && cycle_seconds.is_finite())

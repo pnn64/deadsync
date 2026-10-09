@@ -1297,9 +1297,10 @@ Bones: 0
             .unwrap();
             for col in 0..4 {
                 let mine = &skin.mine_layers[col][0];
-                assert_eq!(mine.source.frame_count(), 3);
+                assert_eq!(mine.model_texture_states.len(), 3);
+                assert_eq!(mine.model_texture_keys.len(), 3);
                 assert_eq!(mine.logical_size(), [64.0; 2]);
-                let atlas = deadlib_assets::generated_texture(mine.texture_key()).unwrap();
+
                 for (phase, expected, color) in [
                     (0.0, 0, [255, 0, 0, 255]),
                     (0.249, 0, [255, 0, 0, 255]),
@@ -1311,13 +1312,18 @@ Bones: 0
                     let frame = mine.frame_index_from_phase(phase);
                     assert_eq!(frame, expected);
                     let uv = mine.uv_for_frame_at(frame, phase);
-                    let x = ((uv[0] + uv[2]) * 0.5 * atlas.image.width() as f32) as u32;
-                    let y = ((uv[1] + uv[3]) * 0.5 * atlas.image.height() as f32) as u32;
-                    assert_eq!(atlas.image.get_pixel(x, y).0, color);
+                    assert_eq!(uv, [0.0, 0.0, 1.0, 1.0]);
+                    let image = crate::open_image_fallback(Path::new(&*mine.model_texture_keys[frame]))
+                        .unwrap().into_rgba8();
+                    assert_eq!(image.get_pixel(image.width() / 2, image.height() / 2).0, color);
                 }
-                let mut warmed = false;
-                skin.for_each_slot(|slot| warmed |= slot.texture_key() == mine.texture_key());
-                assert!(warmed, "the entire frame atlas reaches texture prewarming");
+                let mut warmed = HashSet::new();
+                skin.for_each_slot(|slot| {
+                    warmed.insert(slot.texture_key().to_owned());
+                    warmed.extend(slot.model_texture_keys.iter().map(ToString::to_string));
+                });
+                assert!(mine.model_texture_keys.iter().all(|key| warmed.contains(key.as_ref())),
+                    "all material images reach texture prewarming after cache reload");
                 for grade in 1..=5 {
                     for bright in [false, true] {
                         let explosion = skin

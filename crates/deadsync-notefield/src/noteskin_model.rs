@@ -538,6 +538,7 @@ fn model_environment<S: NoteskinSlot>(
 #[inline(always)]
 fn actor_from_vertices<S: NoteskinSlot>(
     slot: &S,
+    texture_seconds: f32,
     xy: [f32; 2],
     tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
@@ -558,7 +559,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform,
-        texture: slot.texture_key_shared().into(),
+        texture: slot.model_texture_at(texture_seconds).into(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
@@ -579,6 +580,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
 #[inline(always)]
 fn flat_from_vertices<S: NoteskinSlot>(
     slot: &S,
+    texture_seconds: f32,
     xy: [f32; 2],
     tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
@@ -596,7 +598,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
         offset: xy,
         world_z: 0.0,
         local_transform,
-        texture: slot.texture_key_shared().into(),
+        texture: slot.model_texture_at(texture_seconds).into(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: deadlib_present::actors::FlatMeshVertices::Shared(vertices),
@@ -638,6 +640,7 @@ fn actor_from_draw<S: NoteskinSlot>(
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -693,6 +696,7 @@ pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -733,6 +737,7 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(flat_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -772,6 +777,7 @@ pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry<S: Not
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,

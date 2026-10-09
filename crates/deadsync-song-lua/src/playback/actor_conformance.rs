@@ -348,12 +348,29 @@ impl WholeSongComposer {
                         if let Some((key, _)) = slot.model_additive(0.0) {
                             queue_texture(&mut assets, &key);
                         }
+                        for key in slot
+                            .model_texture_keys()
+                            .iter()
+                            .chain(slot.model_additive_keys())
+                        {
+                            queue_texture(&mut assets, key);
+                        }
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
                         queue_texture(&mut assets, &layer.texture_key);
-                        if let Some(key) = &layer.additive { queue_texture(&mut assets, key); }
+                        if let Some(key) = &layer.additive {
+                            queue_texture(&mut assets, key);
+                        }
+                        for key in layer
+                            .texture_frames
+                            .iter()
+                            .chain(layer.additive_frames.iter())
+                            .filter_map(|frame| frame.texture_key.as_ref())
+                        {
+                            queue_texture(&mut assets, key);
+                        }
                     }
                 }
                 _ => {}

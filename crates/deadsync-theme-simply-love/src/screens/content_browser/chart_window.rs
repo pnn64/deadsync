@@ -101,10 +101,13 @@ pub fn preview_skin_textures(skin: &Noteskin) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
     noteskin_draw::for_each_field_slot(skin, SKIN_COLS, |slot: &SpriteSlot| {
         for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
-            let key = texture_slot.texture_key_shared();
-            match textures.iter_mut().find(|(known, _)| *known == key) {
-                Some((_, model)) => *model |= slot.model.is_some(),
-                None => textures.push((key, slot.model.is_some())),
+            for key in std::iter::once(texture_slot.texture_key_shared())
+                .chain(texture_slot.model_texture_keys.iter().cloned())
+            {
+                match textures.iter_mut().find(|(known, _)| *known == key) {
+                    Some((_, model)) => *model |= slot.model.is_some(),
+                    None => textures.push((key, slot.model.is_some())),
+                }
             }
         }
     });
@@ -785,6 +788,39 @@ mod tests {
             Some("HARD  9")
         );
         assert_eq!(chart_line(&state, &preview, None, 0.0), None);
+    }
+
+    #[test]
+    fn previews_warm_every_model_material_image() {
+        let mut skin = (*dance_skin("cyber")).clone();
+        let piece = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/model-texture-images/model.txt");
+        let slots =
+            deadsync_assets::noteskin::load_itg_model_slots(&piece, &piece, &piece).unwrap();
+        skin.mine_layers = vec![slots; SKIN_COLS];
+        for textures in [
+            preview_skin_textures(&skin),
+            crate::screens::player_options::noteskin_preview_textures(&skin, 1 << 8),
+        ] {
+            for image in [
+                "frame-red.png",
+                "frame-blue.png",
+                "alpha-green.png",
+                "alpha-white.png",
+            ] {
+                let key = deadsync_assets::textures::canonical_texture_key(
+                    piece.parent().unwrap().join(image),
+                );
+                assert_eq!(
+                    textures
+                        .iter()
+                        .filter(|(source, model)| **source == key && *model)
+                        .count(),
+                    1,
+                    "every native material image must be resident before preview: {image}"
+                );
+            }
+        }
     }
 
     /// The loader readies the window's pieces once each, and every model the
