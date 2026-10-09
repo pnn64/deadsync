@@ -7794,6 +7794,7 @@ fn check_native_model_draws(
 #[cfg(feature = "test-support")]
 fn native_model_texture_history_matches_production() {
     check_native_model_textures(
+        "model-texture-history",
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
             "/../../tests/fixtures/itgmania-song-lua-micro/model-texture-history/native.json")),
         true,
@@ -7805,6 +7806,7 @@ fn native_model_texture_history_matches_production() {
 #[cfg(feature = "test-support")]
 fn native_model_texture_replay_matches_production() {
     check_native_model_textures(
+        "model-texture-history",
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
             "/../../tests/fixtures/itgmania-song-lua-micro/model-texture-history/native-frames.json")),
         false,
@@ -7812,10 +7814,22 @@ fn native_model_texture_replay_matches_production() {
     );
 }
 
+#[test]
 #[cfg(feature = "test-support")]
-fn check_native_model_textures(native: &str, explicit_updates: bool, expected_draws: usize) {
+fn native_model_texture_commands_match_production() {
+    check_native_model_textures(
+        "model-texture-order",
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-texture-order/native.json")),
+        false,
+        844,
+    );
+}
+
+#[cfg(feature = "test-support")]
+fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool, expected_draws: usize) {
     crate::tests::init_paths();
-    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-texture-history");
+    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro").join(name);
     let native: serde_json::Value = serde_json::from_str(native).expect("captured native texture clocks");
     let samples = native["samples"].as_array().expect("native update samples");
     let mut previous = 0.0_f32;
@@ -7830,9 +7844,8 @@ fn check_native_model_textures(native: &str, explicit_updates: bool, expected_dr
     context.music_length_seconds = if explicit_updates { 0.0 } else { previous };
     let compiled = compile_song_lua(&directory.join("default.lua"), &context)
         .expect("compile native texture control");
-    let local = compiled.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
-    let states = actor_conformance::compose_overlay_states(
-        &compiled.overlays, &local, [854.0, 480.0], [0.0; 2],
+    let runtime_updates = crate::gameplay::build_song_lua_overlay_update_tracks(
+        &compiled, &TimingData::default(), 0.0,
     );
     for noteskin in [false, true] {
         let mut overlays = compiled.overlays.clone();
@@ -7845,17 +7858,23 @@ fn check_native_model_textures(native: &str, explicit_updates: bool, expected_dr
             let samples = layers.iter().map(|layer| if explicit_updates {
                 deadsync_song_lua::replay_model_texture(layer, &updates)
             } else {
-                assert!(layer.texture_samples.len() >= updates.len(), "compiler must retain every update");
+                let actor_name = actor.name.as_deref().expect("named native Model");
+                let visible_updates = native["samples"].as_array().unwrap().iter()
+                    .filter(|sample| !sample["actors"][actor_name].as_array().unwrap().is_empty()).count();
+                assert!(layer.texture_samples.len() >= visible_updates,
+                    "compiler must retain every visible update for {actor_name}");
                 Arc::clone(&layer.texture_samples)
             }).collect::<Vec<_>>();
             assert!(samples.iter().all(|track| !track.is_empty()),
                 "{:?}: missing native material metadata: {layers:?}", actor.name);
             if noteskin {
-                let piece = directory.join(match actor.name.as_deref() {
-                    Some("Single") => "single.txt",
-                    Some("Repeated") => "repeated.txt",
-                    _ => panic!("unexpected native Model"),
-                });
+                let actor_name = actor.name.as_deref().expect("named native Model");
+                let piece = directory.join(native["model_pieces"][actor_name].as_str()
+                    .unwrap_or_else(|| match actor_name {
+                        "Single" => "single.txt",
+                        "Repeated" => "repeated.txt",
+                        _ => panic!("missing native Model piece for {actor_name}"),
+                    }));
                 let slots = deadsync_assets::noteskin::load_itg_model_slots(&piece, &piece, &piece)
                     .expect("native animated material slots");
                 actor.kind = SongLuaOverlayKind::NoteskinActor {
@@ -7869,13 +7888,30 @@ fn check_native_model_textures(native: &str, explicit_updates: bool, expected_dr
             tracks.push(samples);
         }
         let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+        let mut update_cursors = vec![0; runtime_updates.len()];
+        let mut message_caches = vec![SongLuaMessageStateCache::default(); overlays.len()];
         let mut checked = 0;
         let mut draws = 0;
         for (ordinal, sample) in samples.iter().enumerate() {
             let second = updates[ordinal].0;
+            let local = overlays.iter().enumerate().map(|(index, overlay)| {
+                let start = runtime_updates.partition_point(|track| track.overlay_index < index);
+                let end = runtime_updates.partition_point(|track| track.overlay_index <= index);
+                song_lua_overlay_render_state_from(
+                    second, index, overlay, &[], &[], &[], &runtime_updates, start..end,
+                    &mut update_cursors, None, &mut message_caches[index],
+                )
+            }).collect::<Vec<_>>();
+            let states = actor_conformance::compose_overlay_states(
+                &overlays, &local, [854.0, 480.0], [second, second],
+            );
             for index in 0..overlays.len() {
                 let Some(expected) = overlays[index].name.as_deref()
                     .and_then(|name| sample["actors"].get(name)) else { continue };
+                // Material clocks keep running during a Model's own sleep.
+                // Their retained history is checked on every native draw;
+                // this control does not compare draw suppression itself.
+                if expected.as_array().unwrap().is_empty() { continue; }
                 if explicit_updates {
                     // A zero-delta Update can change native state. Render the
                     // known prefix so an equal-time future update stays future.
@@ -7919,7 +7955,8 @@ fn check_native_model_textures(native: &str, explicit_updates: bool, expected_dr
                         draws += 1;
                     }
                 }
-                assert_eq!(pass, expected.as_array().unwrap().len());
+                assert_eq!(pass, expected.as_array().unwrap().len(),
+                    "{:?} noteskin={noteskin} update={ordinal} second={second}", overlays[index].name);
             }
         }
         assert_eq!(draws, expected_draws);
