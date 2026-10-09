@@ -420,3 +420,16 @@ update frames, with no native runtime errors or dropped events. Original
 sources and historical aliases are retained. This checks movie geometry
 and blend/command behavior; movie pixels and native framebuffer parity
 remain unproven. `native-revalidation-pass102.json` records the identities.
+
+Position 6, 10:35, passed 248,156 comparisons
+over 166.62 seconds and 9,999 native update frames.
+The native capture has no runtime errors or dropped events; original
+sources, prior captures, and historical aliases are retained.
+
+The first six refreshed archives passed 1,276,109 comparisons on
+DeadSync `55212b44e`, after the native texture image getter fix. Ten
+native bitmap controls and ten assertions through the native Lua texture
+binding establish getter values; 1,206 domain tests pass. See
+`../itgmania-song-lua-micro/texture-image-getters` for native inputs and
+goldens. Physical tiny Sprite uploads and framebuffer parity remain open.
+Full corpus and native framebuffer parity are still incomplete.

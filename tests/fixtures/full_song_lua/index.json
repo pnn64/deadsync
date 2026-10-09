@@ -142,12 +142,12 @@
     {
       "title": "10:35",
       "source_simfile": "1035/1035.sm",
-      "harness_version": "0.1.31",
-      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
-      "sha256": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47",
-      "compressed_bytes": 74207,
-      "uncompressed_sha256": "5878b62ea8512002538d7c7b2fbdc58a5b610ac2d55f38b2bea5cbb9f9d4a21d",
-      "compression_level": 12,
+      "harness_version": "0.1.49",
+      "archive": "4131f2a7a418e19205e0e1f3c2e23cc78334699d2db3049e949a1b65ef356054.tar.zst",
+      "sha256": "4131f2a7a418e19205e0e1f3c2e23cc78334699d2db3049e949a1b65ef356054",
+      "compressed_bytes": 63466,
+      "uncompressed_sha256": "3c2fd2851fdb67e71a5386d4d1fac4846355bd9a4dbe282aea077bc3a0a38771",
+      "compression_level": 22,
       "aliases": [
         "78d2a83a38d4ec61c54d3873017e7a3dce7bfa4f2bfac694d51255cbffe6c358.tar.zst",
         "54fbf164497bab4d1e56666876c05b2a8f0bf03529130ded37d481684549ad1d.tar.zst",
@@ -159,7 +159,8 @@
         "150693f162462dd89173d5e3b8b49db858d7956a2665eff50cc740db24409aef.tar.zst",
         "473c8629b4d9604f055a333170aa731cb41a4afe68c71ca964407be9a245c52c.tar.zst",
         "86d614310d0cfd0f681d6c7c2c52032448765c1d4ce31f95a2e0ed079c19742c.tar.zst",
-        "a0837c2abec2f00c763770d57f2a0cc87577cb4d209cee5fb1ac88628547ad97.tar.zst"
+        "a0837c2abec2f00c763770d57f2a0cc87577cb4d209cee5fb1ac88628547ad97.tar.zst",
+        "eca8ef91da09bf1e91f205d27e50d1a834843afaaf89087547e7b2921a8b546b.tar.zst"
       ]
     },
     {

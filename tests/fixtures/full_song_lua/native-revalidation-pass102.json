@@ -76,9 +76,121 @@
       "historical_aliases_retained": true,
       "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-top-005-100-bad-days-ssc-v1.json",
       "native_receipt_sha256": "22cc7b3702772d1b2ecfc99119a4ee745b35324c79219f52139d26a7b0624e95"
+    },
+    {
+      "position": 6,
+      "source_simfile": "1035/1035.sm",
+      "archive": "4131f2a7a418e19205e0e1f3c2e23cc78334699d2db3049e949a1b65ef356054.tar.zst",
+      "archive_sha256": "4131f2a7a418e19205e0e1f3c2e23cc78334699d2db3049e949a1b65ef356054",
+      "archive_bytes": 63466,
+      "compression_level": 22,
+      "uncompressed_sha256": "3c2fd2851fdb67e71a5386d4d1fac4846355bd9a4dbe282aea077bc3a0a38771",
+      "native_trace_sha256": "a04a74b1f846a58536d160b99408b39c61cd00235461feb48bdf4eeab370a4c7",
+      "harness_version": "0.1.49",
+      "native_capture_log_sha256": "2f01b9ab0489bd2e8f3765dacb7e4ad423c98c66b48a3f3c364662c1aeec1715",
+      "native_archive_log_sha256": "b0d9cf19392a92c1fc64c0bb7ff48aac4afd03806e340a73eb0eb08cf827674c",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 166.625,
+      "update_frames": 9999,
+      "original_source_unchanged": true,
+      "source_simfile_sha256": "7d2cb1dd6b8385a301896dbd45b2f644f2240213e3235af54ad119a77e23b820",
+      "comparisons_passed": 248156,
+      "comparisons_failed": 0,
+      "test_log_sha256": "84318bc41cb14db7cea716fbbfd9c9d64db6c07924edff95cebd9fe652424c9c",
+      "verification_repository_commit": "55212b44e343443a266984d300281bc263f5cf49",
+      "verification_comparator": {
+        "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass102-current-image-getter-comparators-v1-full_song_lua.exe",
+        "sha256": "51857347af03fa15071cc288ad293360d9e0ca8831c70a3594390f6f3b345908"
+      },
+      "original_archive_retained": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "historical_aliases_retained": true,
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-top-006-1035-v1.json",
+      "native_receipt_sha256": "5ae59c76c633e7559751f00898eb73c27e31204762c0250b7bb215f742509655"
     }
   ],
-  "next_position": 6,
+  "next_position": 7,
   "checks": "Complete archive/member integrity, native endpoint and frame coverage, full Lua runtime and duration composition, semantic geometry/blend/command/modifier/player transform comparisons",
-  "storage": "Complete native movie archives retain native zstd level 12 and are ignored locally; only the reference and proof records are committed"
+  "storage": "Complete native movie archives retain native zstd level 12 and are ignored locally; only the reference and proof records are committed",
+  "post_getter_revalidation": {
+    "source_commit": "55212b44e343443a266984d300281bc263f5cf49",
+    "binary": {
+      "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass102-current-image-getter-comparators-v1-full_song_lua.exe",
+      "sha256": "51857347af03fa15071cc288ad293360d9e0ca8831c70a3594390f6f3b345908"
+    },
+    "rows": [
+      {
+        "position": 1,
+        "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+        "archive": "ded0f7ff19513e30119e0d6f65b57a661f1683872fc9ffced27737db06c49993.tar.zst",
+        "exit_code": 0,
+        "log_sha256": "2777650f9f8e5768d9da8516559cec0e94b9e756f6e6923707ca31ca99444227",
+        "checks_passed": 212220,
+        "checks_failed": 0,
+        "log": "pass102-prefix-position-001-after-v1.log",
+        "reused_completed_check": true
+      },
+      {
+        "position": 2,
+        "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+        "archive": "2a77063dd2ab8c43bbdbb9e101be7fcf73156302e21e9771c88797218317d327.tar.zst",
+        "exit_code": 0,
+        "log": "pass102-prefix-position-002-after-v2.log",
+        "log_sha256": "ac86f5c6ff69002e0d05bbb88881176761d1fbbcc9ee5d3a33c7b3f0a74fdffb",
+        "checks_passed": 205071,
+        "checks_failed": 0
+      },
+      {
+        "position": 3,
+        "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+        "archive": "2397fdbd00edd8679ca0a5d184b696deb32951fdfef2aa02bf9e15f17a9ac2cb.tar.zst",
+        "exit_code": 0,
+        "log": "pass102-prefix-position-003-after-v2.log",
+        "log_sha256": "fbeffa46b5e0811dc1a4255121f7fb4047dd9d5840c17db634cbbfb62fc10d72",
+        "checks_passed": 260300,
+        "checks_failed": 0
+      },
+      {
+        "position": 4,
+        "source_simfile": "100 Bad Days/100 Bad Days.sm",
+        "archive": "8194e7406862c5d2992eb78613dba5a1afaf55656b3a50a1d4f1972da7739a5e.tar.zst",
+        "exit_code": 0,
+        "log": "pass102-prefix-position-004-after-v2.log",
+        "log_sha256": "b9db90c64a9ba254a6f69948f4f22068a3932754da29c29a3f37086c562bc304",
+        "checks_passed": 175181,
+        "checks_failed": 0
+      },
+      {
+        "position": 5,
+        "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+        "archive": "56a576184203e1fc7cb3585c884b3289b0026769cf4833b7735516763c260fcc.tar.zst",
+        "exit_code": 0,
+        "log": "pass102-prefix-position-005-after-v2.log",
+        "log_sha256": "5d4b61708c4bfc6c2bfc0563c88cd68cd437600ba9ae0ab88b827cd726cf5655",
+        "checks_passed": 175181,
+        "checks_failed": 0
+      },
+      {
+        "position": 6,
+        "source_simfile": "1035/1035.sm",
+        "archive": "4131f2a7a418e19205e0e1f3c2e23cc78334699d2db3049e949a1b65ef356054.tar.zst",
+        "exit_code": 0,
+        "log": "pass102-prefix-position-006-after-v2.log",
+        "log_sha256": "84318bc41cb14db7cea716fbbfd9c9d64db6c07924edff95cebd9fe652424c9c",
+        "checks_passed": 248156,
+        "checks_failed": 0
+      }
+    ],
+    "comparisons_passed": 1276109,
+    "comparisons_failed": 0,
+    "full_corpus_complete": false,
+    "native_framebuffer_pixel_parity_proven": false
+  },
+  "texture_image_getter_proof": {
+    "fixture": "../itgmania-song-lua-micro/texture-image-getters",
+    "native_bitmap_cases": 10,
+    "native_lua_assertions": 10,
+    "deadsync_domain_tests_passed": 1206,
+    "physical_sprite_upload_pixel_parity_proven": false
+  }
 }
