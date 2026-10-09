@@ -3481,7 +3481,7 @@ pub fn call_actor_function(
         .app_data_mut::<SongLuaActionCaptureActive>()
         .is_some_and(|mut scope| scope.functions.insert(command.to_pointer() as usize));
     if preserve {
-        let locals = snapshot_function_locals(lua, command, Vec::new())?;
+        let locals = snapshot_function_locals(lua, std::slice::from_ref(command), Vec::new())?;
         lua.app_data_mut::<SongLuaActionCaptureActive>()
             .expect("capture scope remains active while snapshotting")
             .locals
@@ -3958,7 +3958,8 @@ pub fn capture_actor_command_preserving_state(
     else {
         return Ok(Vec::new());
     };
-    let locals = snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
+    let locals = snapshot_function_action_tables(lua, std::slice::from_ref(&command))
+        .map_err(|err| err.to_string())?;
     let snapshot = snapshot_actor_mutable_state(lua, actor).map_err(|err| err.to_string())?;
     let globals_snapshot = snapshot_scalar_globals(lua).map_err(|err| err.to_string())?;
     let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
@@ -11478,8 +11479,10 @@ pub(crate) fn run_actor_startup_commands(
     // Native queued commands do not execute on the zero-delta startup frame.
     // Discovery probes must leave shared Lua locals and globals at that frame,
     // otherwise chronological replay begins with counters already advanced.
-    let mut locals = Vec::new();
-    if !queued.0.is_empty() {
+    let locals = if queued.0.is_empty() {
+        None
+    } else {
+        let mut functions = Vec::new();
         let mut seen = HashSet::new();
         for (actor, _) in initial_states.values() {
             actor.for_each::<Value, Value>(|_, value| {
@@ -11487,12 +11490,15 @@ pub(crate) fn run_actor_startup_commands(
                     && function.info().what != "C"
                     && seen.insert(function.to_pointer() as usize)
                 {
-                    locals.push(snapshot_function_action_tables(lua, &function)?);
+                    functions.push(function);
                 }
                 Ok(())
             })?;
         }
-    }
+        // The queued probes share one pre-probe Lua state. Capture each
+        // global, local table and closure once across all command roots.
+        Some(snapshot_function_action_tables(lua, &functions)?)
+    };
     // Keep Init/On tweens before queued-command capture resets the song tree.
     let startup_tweens = capture_startup_states(initial_states).map_err(mlua::Error::external)?;
     let mut states = HashMap::new();
@@ -11539,13 +11545,14 @@ pub(crate) fn run_actor_startup_commands(
     })
 }
 
-struct SongLuaStartupLocals(Vec<FunctionActionSnapshot>);
+struct SongLuaStartupLocals(Option<FunctionActionSnapshot>);
 
 pub(crate) fn restore_startup_locals(lua: &Lua) -> mlua::Result<()> {
-    if let Some(locals) = lua.remove_app_data::<SongLuaStartupLocals>() {
-        for snapshot in locals.0 {
-            restore_function_action_tables(lua, snapshot)?;
-        }
+    if let Some(snapshot) = lua
+        .remove_app_data::<SongLuaStartupLocals>()
+        .and_then(|locals| locals.0)
+    {
+        restore_function_action_tables(lua, snapshot)?;
     }
     Ok(())
 }
@@ -15241,49 +15248,35 @@ fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTa
 
 fn snapshot_function_action_tables(
     lua: &Lua,
-    function: &Function,
+    functions: &[Function],
 ) -> mlua::Result<FunctionActionSnapshot> {
     let globals = lua.globals();
-    // Resolve the environment before snapshotting either table, preserving
-    // lookup/error order. The function environment may alias the globals.
-    let target = if let Some(environment) = function.environment() {
-        let target = environment
-            .raw_get::<Option<Table>>("__songlua_env_target")?
-            .unwrap_or(environment);
-        (target.to_pointer() != globals.to_pointer()).then_some(target)
-    } else {
-        None
-    };
-    let mut snapshots = Vec::with_capacity(1 + usize::from(target.is_some()));
-    snapshots.push(snapshot_function_action_table(globals.clone())?);
-    if let Some(target) = target {
+    // Resolve environments before capturing their shared pre-probe state.
+    let mut targets = Vec::new();
+    let mut seen = HashSet::from([globals.to_pointer() as usize]);
+    for function in functions {
+        if let Some(environment) = function.environment() {
+            let target = environment
+                .raw_get::<Option<Table>>("__songlua_env_target")?
+                .unwrap_or(environment);
+            if seen.insert(target.to_pointer() as usize) {
+                targets.push(target);
+            }
+        }
+    }
+    let mut snapshots = Vec::with_capacity(1 + targets.len());
+    snapshots.push(snapshot_function_action_table(globals)?);
+    for target in targets {
         snapshots.push(snapshot_function_action_table(target)?);
     }
-    snapshot_function_locals(lua, function, snapshots)
+    snapshot_function_locals(lua, functions, snapshots)
 }
 
 fn snapshot_function_locals(
     lua: &Lua,
-    function: &Function,
+    functions: &[Function],
     mut snapshots: Vec<FunctionActionTableSnapshot>,
 ) -> mlua::Result<FunctionActionSnapshot> {
-    // Host closures have no song locals. Keep their common snapshot path
-    // limited to the original shallow table snapshots.
-    // SAFETY: exec_raw owns a frame containing this function. The predicate
-    // reads its type and replaces the frame with one boolean return value.
-    let is_c = unsafe {
-        lua.exec_raw::<bool>(function.clone(), |state| {
-            let is_c = ffi::lua_iscfunction(state, 1);
-            ffi::lua_settop(state, 0);
-            ffi::lua_pushboolean(state, is_c);
-        })?
-    };
-    if is_c {
-        return Ok(FunctionActionSnapshot {
-            tables: snapshots,
-            cells: Vec::new(),
-        });
-    }
     // Command probes may edit shared local tables or replace upvalue cells.
     // Preserve their identities, including cycles and aliases. Actor state
     // belongs to the existing action capture scope; C closures own host data.
@@ -15295,7 +15288,11 @@ fn snapshot_function_locals(
     for snapshot in &snapshots {
         seen.insert(snapshot.table.to_pointer() as usize);
     }
-    let mut pending = vec![Value::Function(function.clone())];
+    let mut pending = functions
+        .iter()
+        .cloned()
+        .map(Value::Function)
+        .collect::<Vec<_>>();
     while let Some(value) = pending.pop() {
         match value {
             Value::Function(function)
@@ -15421,7 +15418,7 @@ fn capture_function_action_blocks_inner(
     restore_function_tables: bool,
 ) -> Result<SongLuaFunctionActionCapture, String> {
     let table_snapshots = restore_function_tables
-        .then(|| snapshot_function_action_tables(lua, function))
+        .then(|| snapshot_function_action_tables(lua, std::slice::from_ref(function)))
         .transpose()
         .map_err(|err| err.to_string())?;
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
@@ -15593,7 +15590,8 @@ pub(crate) fn capture_deferred_messages<Kind>(
             .get::<Function>(deferred.command.as_str())
             .map_err(|err| err.to_string())?;
         let snapshots =
-            snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
+            snapshot_function_action_tables(lua, std::slice::from_ref(&command))
+                .map_err(|err| err.to_string())?;
         let runner = message_capture_runner(lua, &deferred.actor, &deferred.command, &command)
             .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
@@ -15696,7 +15694,8 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
     let mut additions = Vec::new();
     for (source_index, source, command_name, message, command) in commands {
         let table_snapshots =
-            snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
+            snapshot_function_action_tables(lua, std::slice::from_ref(&command))
+                .map_err(|err| err.to_string())?;
         let runner = message_capture_runner(lua, &source, &command_name, &command)
             .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;

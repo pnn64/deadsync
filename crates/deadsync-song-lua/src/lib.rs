@@ -17750,6 +17750,60 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_many_queued_closures() {
+        let song_dir = test_dir("many-queued-closures");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local count = 1024
+local account = {nested = {count = 0}}
+account.self = account
+local original = account
+for index = 1, 512 do _G["queue_alias_" .. index] = account end
+queue_account = {count = 0}
+local global_original = queue_account
+local root = Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            assert(account == original and account.self == account)
+            assert(queue_alias_1 == original and queue_alias_512 == original)
+            assert(queue_account == global_original)
+            if GAMESTATE:GetSongBeat() == 0 then
+                assert(account.nested.count == 0 and queue_account.count == 0)
+            elseif GAMESTATE:GetSongBeat() >= 0.5 then
+                assert(account.nested.count == count and queue_account.count == count)
+            end
+        end)
+    end,
+}
+for index = 1, count do
+    root[#root + 1] = Def.Quad{
+        OnCommand=function(self) self:queuecommand("Bind") end,
+        BindCommand=function(self)
+            account.nested.count = account.nested.count + 1
+            queue_account.count = queue_account.count + 1
+            self:x(index)
+        end,
+    }
+end
+return root
+"#,
+        )
+        .expect("queued closure fixture");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Queued closures");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("shared startup state");
+        assert_eq!(compiled.overlays.len(), 1024);
+        assert!(
+            compiled
+                .overlays
+                .iter()
+                .all(|actor| actor.initial_state.x == 0.0)
+        );
+    }
+
+    #[test]
     fn compile_song_lua_defers_queuecommand_until_after_oncommand() {
         let song_dir = test_dir("queuecommand-order");
         let entry = song_dir.join("default.lua");

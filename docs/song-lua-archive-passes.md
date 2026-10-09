@@ -2629,3 +2629,35 @@ native harness 0.1.32 passes all 881,665 comparisons with the immutable
 DeadSync 0.5.1870 verifier. The verified prefix on that verifier is
 29/492 archive cases; full-corpus parity remains unfinished. Retain
 the superseded archive locally and preserve all reference aliases.
+
+Mawaru9 exhausted Lua's reference stack while copying the same startup globals
+and reachable locals separately for each command callback. The diagnostic
+capture failed after 616 snapshots, each containing about 837 table entries.
+The source-preserving candidate captured all 4,915 command functions in one
+graph: 1,977 distinct tables, 10,638 entries and 746 upvalue cells. It passed
+the startup stage and exposed the separate missing-model dependency gap.
+
+Actor::UpdateTweening requires positive delta time before dispatching queued
+commands. Bundled Lua 5.1's luaE_newthread shares the global table, as used by
+ITGmania's LuaManager. Retain one shared pre-probe graph across every startup
+command, including distinct function environments, aliases, cycles and upvalue
+cells; restore it once before chronological replay. Remove the duplicate
+per-callback snapshots and the redundant C-function fast path; the graph
+traversal still excludes host closures. No commands or state are omitted.
+
+The 1,024-actor regression retains 512 aliases to cyclic shared state, verifies
+the untouched zero-delta state and checks queued counters in chronological
+updates. The previous implementation fails this same regression with the
+original stack error. Production has 492 passing core tests, two overlay tests
+and 184 playback tests, with three existing ignored playback tests. Bump
+DeadSync to 0.5.1871 and invalidate compiled song data with cache version 61.
+Diagnostic hooks and logging are absent from production.
+
+Harness commit 71b414f archives native Model text files, material textures and
+animated INI frames using the local Model.cpp and ModelTypes.cpp directory
+rules. Its 191 tests pass with five existing ignored tests. Fresh complete
+Mawaru9 capture on that committed 0.1.33 build is still running; full Mawaru9
+parity has not passed. The completed 29-case prefix belongs to 0.5.1870 and
+must be revalidated on the new verifier. Preserve all 501 original simfiles,
+483 originally indexed sources, 18 unindexed sources and 492 archive cases.
+The full parity goal remains unfinished.
