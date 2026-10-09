@@ -7961,8 +7961,9 @@ fn append_song_lua_model_actors(
     prewarmed_glow_vertices: Option<&[Arc<[TexturedMeshVertex]>]>,
 ) -> bool {
     let mut emitted = false;
+    let [projection, view, space] = song_lua_model_camera(camera_state, x_scale, y_scale);
     out.extend([Actor::CameraPush {
-        view_proj: song_lua_model_camera(camera_state, x_scale, y_scale),
+        view_proj: projection * view * space,
     }]);
     let offset = [
         effect_offset[0].mul_add(x_scale, state.x * x_scale),
@@ -8117,7 +8118,7 @@ fn song_lua_model_camera(
     camera: Option<SongLuaOverlayState>,
     x_scale: f32,
     y_scale: f32,
-) -> Matrix4 {
+) -> [Matrix4; 3] {
     let (view, projection) = camera
         .and_then(|camera| {
             song_lua_overlay_view_proj(camera, screen_width() / x_scale, screen_height() / y_scale)
@@ -8125,14 +8126,12 @@ fn song_lua_model_camera(
         .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
     // Composition uses centered coordinates with positive Y up. RageDisplay
     // menu cameras consume top-left coordinates with positive Y down.
-    projection
-        * view
-        * Matrix4::from_translation(Vector3::new(
-            screen_width() * 0.5,
-            screen_height() * 0.5,
-            0.0,
-        ))
-        * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
+    let space = Matrix4::from_translation(Vector3::new(
+        screen_width() * 0.5,
+        screen_height() * 0.5,
+        0.0,
+    )) * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+    [projection, view, space]
 }
 
 fn song_lua_model_layer_scroll(layer: &SongLuaOverlayModelLayer, total_elapsed: f32) -> [f32; 2] {
@@ -8186,7 +8185,10 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
 ) -> bool {
     let mut emitted = false;
     let camera = (camera_state.is_some() || slots.iter().any(|slot| slot.model().is_some()))
-        .then(|| song_lua_model_camera(camera_state, x_scale, y_scale));
+        .then(|| {
+            let [projection, view, space] = song_lua_model_camera(camera_state, x_scale, y_scale);
+            projection * view * space
+        });
     if let Some(view_proj) = camera {
         out.extend([Actor::CameraPush { view_proj }]);
     }

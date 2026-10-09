@@ -3,7 +3,7 @@
 use super::*;
 use deadlib_present::render::{DrawOp, RenderFrame, textured_mesh_uvs};
 use deadsync_song_lua::playback::actor_conformance::{
-    WholeSongComposer, matrix_rows, project_world,
+    WholeSongComposer, matrix_rows, multiply_matrices, project_world,
 };
 
 #[derive(Deserialize)]
@@ -289,6 +289,7 @@ fn compare_frame(
     trace: &NativeTrace,
     draws: &[NativeModelDraw],
     frame: &RenderFrame,
+    matrices: [[[f32; 4]; 4]; 2],
     actor: &str,
     clock: f64,
     parity: &mut Parity,
@@ -401,9 +402,14 @@ fn compare_frame(
             || format!("Model {actor} pass {pass} changes native blending"),
         );
         let matrix = matrix_rows(frame.cameras[usize::from(run.camera)] * instance.transform());
+        let world_matrix = multiply_matrices(matrices[0], matrix_rows(instance.transform()));
         let fields = &draw.vertex_buffers;
         let local = column(trace, fields.local, draw.vertex_count, 4)
             .expect("validated Model local column");
+        let world = column(trace, fields.world, draw.vertex_count, 4)
+            .expect("validated Model world column");
+        let view =
+            column(trace, fields.view, draw.vertex_count, 4).expect("validated Model view column");
         let clip =
             column(trace, fields.clip, draw.vertex_count, 4).expect("validated Model clip column");
         let ndc =
@@ -435,6 +441,8 @@ fn compare_frame(
         });
         for (vertex_index, vertex) in vertices.iter().take(draw.vertex_count).enumerate() {
             let position = [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0];
+            let actual_world = project_world(world_matrix, position);
+            let actual_view = project_world(matrices[1], actual_world);
             let actual_clip = project_world(matrix, position);
             let actual_ndc = std::array::from_fn(|axis| actual_clip[axis] / actual_clip[3]);
             let actual_screen = [
@@ -444,6 +452,8 @@ fn compare_frame(
             ];
             for (field, actual, reference) in [
                 ("local", position, &local[vertex_index]),
+                ("world", actual_world, &world[vertex_index]),
+                ("view", actual_view, &view[vertex_index]),
                 ("clip", actual_clip, &clip[vertex_index]),
             ] {
                 check_row(
@@ -585,6 +595,11 @@ pub(super) fn compare_models(
                 trace,
                 &sample.3,
                 &frame,
+                composers[layer].model_matrices(
+                    states,
+                    index,
+                    [context.screen_width, context.screen_height],
+                ),
                 &track.actor,
                 seconds,
                 parity,
@@ -646,13 +661,13 @@ fn compare_manual_models(
                             *beat as f32,
                         )
                         .into_iter()
-                        .filter(|(index, _)| {
+                        .filter(|(index, _, _)| {
                             kind_name(&compiled[layer].overlays[*index].kind) == "Model"
                         })
                         .collect::<Vec<_>>(),
                 )
             });
-            let Some((actual_index, frame)) = frames.pop_front() else {
+            let Some((actual_index, frame, matrices)) = frames.pop_front() else {
                 parity.check(false, || {
                     format!("manual Model {actor} at {seconds:.6}s has no production draw")
                 });
@@ -663,7 +678,9 @@ fn compare_manual_models(
             });
             let draws: Vec<NativeModelDraw> = serde_json::from_value(call["primitives"].clone())
                 .expect("validated manual Model primitives");
-            compare_frame(trace, &draws, &frame, actor, *seconds, parity, reported);
+            compare_frame(
+                trace, &draws, &frame, matrices, actor, *seconds, parity, reported,
+            );
         }
         for (layer, frames) in rendered {
             parity.check(frames.is_empty(), || {
@@ -869,43 +886,85 @@ fn native_model_initial_frames_match_selected_trace() {
     let simfile = std::env::var_os(SIMFILE_ENV).expect("selected original simfile");
     let trace = read_trace_file(Path::new(&trace_path));
     validate_models(&trace).expect("complete original Model observations");
-    deadlib_present::space::set_current_window_px(trace.display.width as u32, trace.display.height as u32);
+    deadlib_present::space::set_current_window_px(
+        trace.display.width as u32,
+        trace.display.height as u32,
+    );
     let (compiled, _, context) = compile_trace_song_at(&trace, Path::new(&simfile));
     let map = projected_drawable_map(&trace, &compiled);
     let mut parity = Parity::default();
     parity.section("first visible Model frames");
     let mut reported = HashSet::new();
     for track in &trace.model_geometry_tracks {
-        let Some((beat, seconds, _, draws)) = track.samples.iter().find(|sample| !sample.3.is_empty()) else {
+        let Some((beat, seconds, _, draws)) =
+            track.samples.iter().find(|sample| !sample.3.is_empty())
+        else {
             continue;
         };
         let &(layer, index) = map.get(&track.actor).expect("compiled original Model");
-        let states = compiled_overlay_states_at(&compiled[layer], &context, *beat as f32, *seconds as f32);
+        let states =
+            compiled_overlay_states_at(&compiled[layer], &context, *beat as f32, *seconds as f32);
         let actor = &compiled[layer].overlays[index];
-        eprintln!("{} {} state {:?}", track.actor, kind_name(&actor.kind), states[index]);
+        eprintln!(
+            "{} {} state {:?}",
+            track.actor,
+            kind_name(&actor.kind),
+            states[index]
+        );
         if let SongLuaOverlayKind::NoteskinActor { slots, .. } = &actor.kind {
             for slot in slots.iter() {
-                eprintln!("slot rotation {} draw {:?}", slot.def.rotation_deg,
-                    slot.model_draw_at(*seconds as f32, *beat as f32));
+                eprintln!(
+                    "slot rotation {} draw {:?}",
+                    slot.def.rotation_deg,
+                    slot.model_draw_at(*seconds as f32, *beat as f32)
+                );
             }
         }
         let mut composer = WholeSongComposer::new(&compiled[layer].overlays);
-        let frame = composer.render_overlay(&compiled[layer].overlays, &states, index,
+        let frame = composer.render_overlay(
+            &compiled[layer].overlays,
+            &states,
+            index,
             [context.screen_width, context.screen_height],
-            overlay_update_time(&context, SongLuaTimeUnit::Second, *beat as f32, *seconds as f32),
-            *beat as f32);
+            overlay_update_time(
+                &context,
+                SongLuaTimeUnit::Second,
+                *beat as f32,
+                *seconds as f32,
+            ),
+            *beat as f32,
+        );
+        let matrices = composer.model_matrices(
+            &states,
+            index,
+            [context.screen_width, context.screen_height],
+        );
         for op in &frame.ops {
             if let DrawOp::TexturedMesh(run) = op {
                 let instance = &frame.tmesh_instances[run.instance_start as usize];
                 let vertex = frame.tmesh_geometries[run.geometry as usize].vertices[0];
-                let point = project_world(matrix_rows(instance.transform()),
-                    [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0]);
-                eprintln!("{} first production world {:?} transform {:?}", track.actor,
-                    [point[0]+context.screen_width*0.5, context.screen_height*0.5-point[1], point[2], point[3]],
-                    matrix_rows(instance.transform()));
+                let point = project_world(
+                    multiply_matrices(matrices[0], matrix_rows(instance.transform())),
+                    [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0],
+                );
+                eprintln!(
+                    "{} first production world {:?} transform {:?}",
+                    track.actor,
+                    point,
+                    matrix_rows(instance.transform())
+                );
             }
         }
-        compare_frame(&trace, draws, &frame, &track.actor, *seconds, &mut parity, &mut reported);
+        compare_frame(
+            &trace,
+            draws,
+            &frame,
+            matrices,
+            &track.actor,
+            *seconds,
+            &mut parity,
+            &mut reported,
+        );
     }
     eprintln!("{}", parity.summary(&trace.title));
     parity.assert_complete("selected first visible Model observations (partial diagnostic)");

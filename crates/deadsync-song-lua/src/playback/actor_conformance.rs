@@ -289,6 +289,23 @@ pub struct WholeSongComposer {
 }
 
 impl WholeSongComposer {
+    /// Read the world-space basis and camera view used by the production Model
+    /// builder. The actor instance supplies its own local-to-world transform.
+    #[must_use]
+    pub fn model_matrices(
+        &self,
+        states: &[SongLuaOverlayState],
+        index: usize,
+        screen: [f32; 2],
+    ) -> [[[f32; 4]; 4]; 2] {
+        let [_, view, space] = song_lua_model_camera(
+            self.topology.camera_state(states, index),
+            screen_width() / screen[0].max(1.0),
+            screen_height() / screen[1].max(1.0),
+        );
+        [matrix_rows(space), matrix_rows(view)]
+    }
+
     /// Stable resource identity allocated by the production song topology.
     #[must_use]
     pub fn capture_handle(&self, index: usize) -> Option<deadlib_render_core::TextureHandle> {
@@ -351,6 +368,8 @@ impl WholeSongComposer {
 
     /// Materialize every pass together before inspecting leaves. Repeated RGB
     /// draws therefore cannot pass by mutating one shared geometry buffer.
+    /// Each result retains the world basis and view from its compiled draw
+    /// camera, which may differ from the actor's automatic ancestor camera.
     #[must_use]
     pub fn render_manual_frame<S: NoteskinSlot + Clone>(
         &mut self,
@@ -359,7 +378,7 @@ impl WholeSongComposer {
         screen: [f32; 2],
         seconds: f32,
         beat: f32,
-    ) -> Vec<(usize, deadlib_render_core::RenderFrame)> {
+    ) -> Vec<(usize, deadlib_render_core::RenderFrame, [[[f32; 4]; 4]; 2])> {
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
         ));
@@ -395,6 +414,7 @@ impl WholeSongComposer {
             .filter_map(|(op, draw)| {
                 let SongLuaDrawOp::Draw {
                     source: SongLuaDrawSource::Overlay(overlay),
+                    camera,
                     ..
                 } = draw
                 else {
@@ -408,6 +428,11 @@ impl WholeSongComposer {
                 ) {
                     return None;
                 }
+                let [_, view, space] = song_lua_model_camera(
+                    *camera,
+                    screen_width() / screen[0].max(1.0),
+                    screen_height() / screen[1].max(1.0),
+                );
                 Some((
                     *overlay,
                     deadlib_present::compose::build_screen_with_texture_context(
@@ -418,6 +443,7 @@ impl WholeSongComposer {
                         seconds,
                         self.assets.texture_context(),
                     ),
+                    [matrix_rows(space), matrix_rows(view)],
                 ))
             })
             .collect()

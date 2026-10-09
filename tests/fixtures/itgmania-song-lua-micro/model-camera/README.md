@@ -11,9 +11,19 @@ native executable and complete native output. Reproduce that output with
 The scene covers an inherited perspective camera with an off-center vanish
 point, an intermediate ActorFrame without a camera setting, an explicit
 zero-FOV reset, nonzero actor Z and a rotated Model under a vertically scaled
-parent. The production compositor compares local, clip, NDC and screen
-coordinates for all diffuse and glow vertices. Across the song Model and
-noteskin Model paths, it checks 16 draws and 672 coordinate values.
+parent. The production compositor compares local, world, view, clip, NDC
+and screen coordinates for all diffuse and glow vertices. Across the song Model and
+noteskin Model paths, it checks 16 draws and 1,056 coordinate values.
+
+`manual.lua` reuses the captured Perspective and Orthographic actors in
+equivalent draw scopes. The perspective actor lives under a zero-FOV storage
+frame but is drawn directly under the root camera; drawing the Reset frame
+then installs its zero-FOV camera. A repeated direct draw verifies restoration
+of the root camera. Both production paths compare twelve diffuse/glow draws
+and 792 coordinate values against the corresponding native draws. These
+checks use each compiled draw operation's camera, rather than the automatic
+ancestor camera. The native coordinate baseline is the C++ scene above;
+the manual Lua callback itself has not been recaptured natively.
 
 `Model::Model` enables the Z buffer. `ActorFrame::DrawPrimitives` installs
 declared cameras; `RageDisplay::LoadMenuPerspective` implements the

@@ -16,8 +16,8 @@ negative scales mirror geometry instead of collapsing it.
 
 The production comparison checks all diffuse and glow vertices at the
 existing 0.002 coordinate tolerance. Across both paths, it checks twenty
-draws and 840 local/clip/NDC/screen coordinate values. The camera control
-uses the same assertions, including native depth defaults and an explicit
+draws and 1,320 local/world/view/clip/NDC/screen coordinate values. The camera
+control uses the same assertions, including native depth defaults and an explicit
 Lua depth override.
 
 This establishes controlled geometry and shader inputs. Texture clocks,

@@ -7557,9 +7557,12 @@ fn native_unlit_model_colors_match_production() {
 fn native_model_cameras_match_production() {
     check_native_model_draws(
         "model-camera",
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json")),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json"
+        )),
         8,
+        false,
     );
 }
 
@@ -7568,21 +7571,44 @@ fn native_model_cameras_match_production() {
 fn native_model_signed_scales_match_production() {
     check_native_model_draws(
         "model-signed-scale",
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/itgmania-song-lua-micro/model-signed-scale/native.json")),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-signed-scale/native.json"
+        )),
         10,
+        false,
+    );
+}
+
+#[test]
+#[cfg(feature = "test-support")]
+fn native_model_manual_cameras_match_production() {
+    check_native_model_draws(
+        "model-camera",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json"
+        )),
+        6,
+        true,
     );
 }
 
 #[cfg(feature = "test-support")]
-fn check_native_model_draws(name: &str, native: &str, expected_passes: usize) {
+fn check_native_model_draws(name: &str, native: &str, expected_passes: usize, manual: bool) {
     crate::tests::init_paths();
-    let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro").join(name);
+    let directory = workspace_root()
+        .join("tests/fixtures/itgmania-song-lua-micro")
+        .join(name);
     let native: serde_json::Value = serde_json::from_str(native).expect("captured native Models");
     let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, name);
     context.screen_width = 854.0;
-    let compiled = compile_song_lua(&directory.join("default.lua"), &context)
-        .expect("compile native Model control");
+    context.music_length_seconds = if manual { 0.1 } else { 0.0 };
+    let compiled = compile_song_lua(
+        &directory.join(if manual { "manual.lua" } else { "default.lua" }),
+        &context,
+    )
+    .expect("compile native Model control");
     let local = compiled
         .overlays
         .iter()
@@ -7615,7 +7641,35 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize) {
         let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
         let mut checked = 0;
         let mut passes = 0;
-        for (index, actor) in overlays.iter().enumerate() {
+        let frames = if manual {
+            assert!(
+                !compiled.draw_frames.is_empty(),
+                "compiled manual Model draws"
+            );
+            composer.set_draw_frames(&overlays, &compiled.draw_frames);
+            composer.render_manual_frame(&overlays, &states, [854.0, 480.0], 0.0, 0.0)
+        } else {
+            overlays
+                .iter()
+                .enumerate()
+                .filter_map(|(index, actor)| {
+                    native["actors"].get(actor.name.as_deref()?).map(|_| {
+                        let frame = composer.render_overlay(
+                            &overlays,
+                            &states,
+                            index,
+                            [854.0, 480.0],
+                            0.0,
+                            0.0,
+                        );
+                        let matrices = composer.model_matrices(&states, index, [854.0, 480.0]);
+                        (index, frame, matrices)
+                    })
+                })
+                .collect()
+        };
+        for (index, frame, matrices) in frames {
+            let actor = &overlays[index];
             let Some(expected) = actor
                 .name
                 .as_deref()
@@ -7627,8 +7681,6 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize) {
                 states[index].depth_test,
                 "native Model enables depth by default"
             );
-            let frame =
-                composer.render_overlay(&overlays, &states, index, [854.0, 480.0], 0.0, 0.0);
             let mut pass = 0;
             for op in &frame.ops {
                 let deadlib_render_core::DrawOp::TexturedMesh(run) = op else {
@@ -7646,15 +7698,23 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize) {
                     let matrix = actor_conformance::matrix_rows(
                         frame.cameras[usize::from(run.camera)] * instance.transform(),
                     );
+                    let world_matrix = actor_conformance::multiply_matrices(
+                        matrices[0],
+                        actor_conformance::matrix_rows(instance.transform()),
+                    );
                     for (vertex, expected) in
                         vertices.iter().zip(draw["vertices"].as_array().unwrap())
                     {
                         let local = [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0];
+                        let world = actor_conformance::project_world(world_matrix, local);
+                        let view = actor_conformance::project_world(matrices[1], world);
                         let clip = actor_conformance::project_world(matrix, local);
                         let ndc = [clip[0] / clip[3], clip[1] / clip[3], clip[2] / clip[3]];
                         let screen = [(ndc[0] + 1.0) * 427.0, (1.0 - ndc[1]) * 240.0, ndc[2]];
                         for (field, actual) in [
                             ("local", local.as_slice()),
+                            ("world", world.as_slice()),
+                            ("view", view.as_slice()),
                             ("clip", clip.as_slice()),
                             ("ndc", ndc.as_slice()),
                             ("screen", screen.as_slice()),
@@ -7676,15 +7736,17 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize) {
             }
             assert_eq!(pass, expected.as_array().unwrap().len());
             // A Lua depth override must reach the noteskin path as well.
-            let mut disabled = states.clone();
-            disabled[index].depth_test = false;
-            let frame =
-                composer.render_overlay(&overlays, &disabled, index, [854.0, 480.0], 0.0, 0.0);
-            assert!(frame.ops.iter().all(|op| matches!(op,
-                deadlib_render_core::DrawOp::TexturedMesh(run) if !run.depth_test)));
+            if !manual {
+                let mut disabled = states.clone();
+                disabled[index].depth_test = false;
+                let frame =
+                    composer.render_overlay(&overlays, &disabled, index, [854.0, 480.0], 0.0, 0.0);
+                assert!(frame.ops.iter().all(|op| matches!(op,
+                    deadlib_render_core::DrawOp::TexturedMesh(run) if !run.depth_test)));
+            }
         }
         assert_eq!(passes, expected_passes);
-        assert_eq!(checked, expected_passes * 42);
+        assert_eq!(checked, expected_passes * 66);
     }
 }
 

@@ -5917,9 +5917,9 @@ fn compare_manual_meshes(
             });
             let frame = frames
                 .iter()
-                .position(|(overlay, _)| *overlay == index)
+                .position(|(overlay, _, _)| *overlay == index)
                 .and_then(|position| frames.remove(position))
-                .map(|(_, frame)| frame);
+                .map(|(_, frame, _)| frame);
             let Some(frame) = frame else {
                 parity.check_once(false, &mut failed, || {
                     format!("manual mesh {actor} has no rendered pass at beat {beat:.3}")
