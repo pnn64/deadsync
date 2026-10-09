@@ -744,5 +744,70 @@
         "independent framebuffer validation"
       ]
     }
+  ],
+  "native_material_pass_controls": [
+    {
+      "deadsync_commit": "e92b253f7ba4454f6174143a3547de515a4675fd",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "native_executable_sha256": "fd62d999abd738f7ed1e66b9840ea058d3c0dba75cd408fe52c1b702404bbe43",
+      "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_texture_units": 1,
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "fixture_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "raw_native_sha256": "f6a01497ab4351e96c981500e7ba23b2707b352d05bc9c93390bc654903b8823",
+      "updates": 61,
+      "native_draws": 183,
+      "production_draws_both_builders": 366,
+      "transformed_uv_coordinates_checked": 2196,
+      "unlit_color_components_checked": 4392,
+      "comparison_tolerance": 1e-06,
+      "before_fix_log_sha256": "3dabe013b91bd6c4010684a11ff7b746d861c65895932c1774f1d2fa0cdf99ea",
+      "before_fix_failure": "Production emitted two draws; native emitted three at the first update",
+      "playback_log_sha256": "48b019dcdbadf4c49faa0331d1fb95d215b1f71676bdf8b9b3d4bc64f633fce7",
+      "playback_passed": 194,
+      "playback_ignored": 3,
+      "shell_check_log_sha256": "cb1102b38c3cf5b7857c32718e09b94eff5bc735245b7dab88367bc9b3d33dd4",
+      "tested_source_hashes_match_committed_worktree": true,
+      "sphere_control": {
+        "fixture": "tests/fixtures/itgmania-song-lua-micro/model-material-mapping/native.json",
+        "fixture_sha256": "afe1eb6f34907364d3eba504ae6492604749d2163ee2c8d061df77417cb7ccea",
+        "raw_native_sha256": "2d934d352041074ae286768cb6c29b82bbe521d53b3e349b1c0ff059619516d8",
+        "input_sha256": {
+          "alpha sphere.ini": "2a1cca22d6a7dc8334a564c2c7c89f4e400ca1f896a089555dee1351790d1be0",
+          "alpha-green.png": "2d57caf9bf0fc48df833f928512ca4df44f1c132cf0a52fcf2c8cc9acfb01426",
+          "alpha-white.png": "ea2e756cfae73ae84195aab2e1de0c1dff8d5f517fd7e42c9a9ae610c0a14d70",
+          "alpha.ini": "2a1cca22d6a7dc8334a564c2c7c89f4e400ca1f896a089555dee1351790d1be0",
+          "control.json": "beca5f9379522b43aa68e44f224f51e52fb75e6c0f3cd648fdf490bfcb335e8d",
+          "default.lua": "f686c8ffac30c881cadccff30370a8b0676b44343c9c311d7d9795dba703bb5a",
+          "diffuse sphere.ini": "2f5d846d82a4e6e4f4d6d7d70615d4cddeaa802ab9e34ee792ec6d2d266c6339",
+          "diffuse.ini": "2f5d846d82a4e6e4f4d6d7d70615d4cddeaa802ab9e34ee792ec6d2d266c6339",
+          "diffuse.txt": "d3b4901e4ea3f4210ec7753500299b5acd370378b1ee2a49fe1558606907b57d",
+          "frame-blue.png": "4c4a0ed079a0894a4196d13af94492f9342e51aa7c019a982b88642cff1db462",
+          "frame-red.png": "b201e2de7fd1a6eee7faf6b18a27ff99e0816f951b5d826f2c0b8436e0b60320",
+          "secondary.txt": "c07e1b4653d33754c4404c276d71679e012645370f6e79836d5eacaddd1581d1"
+        },
+        "native_draws": 6,
+        "production_vertex_flags_checked_both_builders": 36,
+        "log_sha256": "7cbf6432a97ff7358bd86343a2266d188d155600ae4d21389b600b5c0f0818d9",
+        "scope": "Captured native pass sphere state and production geometry cache separation; no GPU texgen or framebuffer comparison"
+      },
+      "source_contracts": [
+        "ITGmania Model.cpp desktop one-unit diffuse/additive/glow ordering",
+        "native additive blend and normal blend reset after each diffuse mesh",
+        "shared diffuse translation with per-vertex matrix scaling on both material passes",
+        "distinct diffuse and secondary sphere geometry retained in cache identity"
+      ],
+      "scope": "Production material draw order, blend, unlit colors and UVs through both Model builders; native UVs explicitly mapped into the two-image atlas",
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "forced secondary filtering and dynamic actor sampler state",
+        "per-image atlas wrapping and physical image identity comparison",
+        "GPU sphere coordinate and framebuffer validation",
+        "lighting and additional depth/cull/target states",
+        "empty meshes and late Model creation",
+        "current .1.42 full-song references and complete 501-simfile/492-archive corpus validation"
+      ]
+    }
   ]
 }

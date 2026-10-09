@@ -165,3 +165,19 @@ bindings and is not a current full-song validation. Separate additive
 rendering, forced secondary filtering, per-image atlas wrapping, physical
 image identity, secondary per-vertex scaling and the other recorded Model
 gaps remain open. The whole-song Model acceptance guard stays closed.
+
+DeadSync `e92b253f7` now submits separate diffuse, additive and
+glow passes through both production Model builders. The same retained
+native material scene verifies 366 production draws, 2,196 transformed
+UV coordinates and 4,392 unlit color components at 0.000001 tolerance.
+A second independent native scene checks 36 per-material sphere flags
+and geometry cache separation. Geometry is precomputed before gameplay;
+the prewarm regressions, all 194 playback tests and the shell check pass.
+
+The audit appends this source pin and its before/after evidence without
+changing historical results. UV comparisons explicitly map individual
+native images into the current atlas. Forced secondary filtering,
+per-image wrapping, physical texture identity, sphere GPU coordinates,
+lighting, other render states and framebuffer validation remain open.
+No original archive was replaced or accepted by this control repair.
+The whole-song Model guard stays closed and full corpus work continues.
