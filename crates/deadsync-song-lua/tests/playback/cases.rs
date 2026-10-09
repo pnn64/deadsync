@@ -7562,6 +7562,7 @@ fn native_model_cameras_match_production() {
             "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json"
         )),
         8,
+        24,
         false,
     );
 }
@@ -7576,6 +7577,7 @@ fn native_model_signed_scales_match_production() {
             "/../../tests/fixtures/itgmania-song-lua-micro/model-signed-scale/native.json"
         )),
         10,
+        30,
         false,
     );
 }
@@ -7590,17 +7592,50 @@ fn native_model_manual_cameras_match_production() {
             "/../../tests/fixtures/itgmania-song-lua-micro/model-camera/native.json"
         )),
         6,
+        18,
         true,
     );
 }
 
+#[test]
 #[cfg(feature = "test-support")]
-fn check_native_model_draws(name: &str, native: &str, expected_passes: usize, manual: bool) {
+fn native_model_mesh_merge_matches_production() {
+    check_native_model_draws(
+        "model-merged-meshes",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/native.json"
+        )),
+        4,
+        18,
+        false,
+    );
+}
+
+#[cfg(feature = "test-support")]
+fn check_native_model_draws(
+    name: &str,
+    native: &str,
+    expected_passes: usize,
+    expected_vertices: usize,
+    manual: bool,
+) {
     crate::tests::init_paths();
     let directory = workspace_root()
         .join("tests/fixtures/itgmania-song-lua-micro")
         .join(name);
     let native: serde_json::Value = serde_json::from_str(native).expect("captured native Models");
+    let control: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(directory.join("control.json")).expect("native Model control input"),
+    )
+    .expect("native Model control JSON");
+    let pieces = [0, 1, 2].map(|index| {
+        directory.join(
+            control["root"]["children"][0]["model_paths"][index]
+                .as_str()
+                .expect("native Model piece path"),
+        )
+    });
     let mut context = deadsync_song_lua::SongLuaCompileContext::new(&directory, name);
     context.screen_width = 854.0;
     context.music_length_seconds = if manual { 0.1 } else { 0.0 };
@@ -7626,9 +7661,9 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize, ma
     for noteskin in [false, true] {
         let mut overlays = compiled.overlays.clone();
         if noteskin {
-            let piece = directory.join("../model-material/triangle.txt");
-            let slots = deadsync_assets::noteskin::load_itg_model_slots(&piece, &piece, &piece)
-                .expect("native triangle noteskin slots");
+            let slots =
+                deadsync_assets::noteskin::load_itg_model_slots(&pieces[0], &pieces[1], &pieces[2])
+                    .expect("native Model control noteskin slots");
             for actor in &mut overlays {
                 if matches!(actor.kind, SongLuaOverlayKind::Model { .. }) {
                     actor.kind = SongLuaOverlayKind::NoteskinActor {
@@ -7694,7 +7729,12 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize, ma
                     assert_eq!(draw["z_test"], 1);
                     assert_eq!(draw["z_write"], true);
                     assert!(run.depth_test, "{:?} pass {pass}: native depth", actor.name);
-                    assert_eq!(vertices.len(), draw["vertices"].as_array().unwrap().len());
+                    assert_eq!(
+                        vertices.len(),
+                        draw["vertices"].as_array().unwrap().len(),
+                        "{:?} noteskin={noteskin} pass={pass}: native vertex count",
+                        actor.name
+                    );
                     let matrix = actor_conformance::matrix_rows(
                         frame.cameras[usize::from(run.camera)] * instance.transform(),
                     );
@@ -7746,7 +7786,7 @@ fn check_native_model_draws(name: &str, native: &str, expected_passes: usize, ma
             }
         }
         assert_eq!(passes, expected_passes);
-        assert_eq!(checked, expected_passes * 66);
+        assert_eq!(checked, expected_vertices * 22);
     }
 }
 
