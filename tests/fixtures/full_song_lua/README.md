@@ -592,3 +592,16 @@ historical aliases are retained.
 See `native-revalidation-pass112.json`. Position 34 is next. The original
 501-source/492-context scope and additional pending observations remain
 active. Full corpus and framebuffer parity are still open.
+
+## Ordered fixture validation, pass 113
+
+Position 34, [3959] [09] Spectrum Sequence (Hard), passes 252,881 comparisons
+against committed DeadSync `e1557ce33`. The complete
+harness 0.1.51 native capture records 8,178 updates
+over 136.28 seconds, with no native runtime errors
+or dropped events. Original chart and Lua bytes, the prior archive, and
+historical aliases are retained.
+
+See `native-revalidation-pass113.json`. Position 35 is next. The original
+501-source/492-context scope and additional pending observations remain
+active. Full corpus and framebuffer parity are still open.

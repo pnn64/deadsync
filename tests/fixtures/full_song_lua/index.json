@@ -653,12 +653,10 @@
     {
       "title": "[3959] [09] Spectrum Sequence (Hard)",
       "source_simfile": "[09] Spectrum Sequence (SH) [DRILLBOT vs. valgrind]/spectrumsequence.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7e3430c811167ef32d22ba6abccddfab07452fc98403c98c778c92d867025b5a.tar.zst",
-      "sha256": "7e3430c811167ef32d22ba6abccddfab07452fc98403c98c778c92d867025b5a",
-      "compressed_bytes": 268925,
-      "uncompressed_sha256": "b698f701a530cee4565c140b7df1d77e97028f06649dde0a47e344826b6649e2",
-      "compression_level": 22,
+      "harness_version": "0.1.51",
+      "archive": "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e.tar.zst",
+      "sha256": "b487670d43ad4d4aacd6fffa69b60b3d4ad028622f65bb5666137ec610f4a90e",
+      "compressed_bytes": 309510,
       "aliases": [
         "e571ba04f9421ea7039df947c3a967adf95e3a86f82330c064ff9adafdaee484.tar.zst"
       ]
