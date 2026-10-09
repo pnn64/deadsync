@@ -2679,3 +2679,25 @@ diffuse and separate glow pass; the prior harness rejects this
 actor type. Production song traces still need Model coverage.
 The original 501 simfiles and all 492 archive cases remain in
 scope; full-corpus parity is unfinished.
+
+The committed 0.5.1871 verifier finishes all 13,634,228 recorded
+comparisons across the first 29 archive cases. Together with the
+independently committed Spooky result, the first 30 cases have passing
+comparison receipts. Retain each capture's actual executable, version
+and source provenance; none is relabeled as a later capture.
+
+The archive definition audit finds instantiated Cyber noteskin Models
+at zero-based indices 18, 19 and 24 (the two KABOOOOOM contexts and
+321STARS). They have no projected Model mesh observations. The original
+song Lua scan misses these definitions because noteskin loading supplies
+them. Passing recorded comparisons therefore do not establish complete
+visual parity for these cases. Keep the evidence and all corpus cases;
+resume from the first Model coverage gap at index 18 before extending
+the corpus verification. The tracked model-coverage-audit.json retains
+the archive hashes, definition IDs and original Lua hashes.
+
+Harness b144c3a (0.1.34) now executes the actual native Model loader
+and draw passes in its conformance oracle; all 192 tests pass with
+five existing ignored tests. Song-level Model traces and mesh comparison
+still require implementation. Mawaru9 remains private. Full parity for
+the original 501 simfiles and 492 archive cases is unfinished.

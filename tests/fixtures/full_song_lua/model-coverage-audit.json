@@ -1,0 +1,493 @@
+{
+  "rows": [
+    {
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "53748e13d827eacc8cf2667f631335d4a02241e5e18c9d0b9a5c156dfa2771c1",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "e9188a0432656f0014b4da18112d8a21995741e495adb89dab0bd21b3580677e"
+    },
+    {
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "fa9078d5f971fb4eddb38a98db91b74dfe9f14a74dbd0df86ddf75eb28f59e79",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "77b7a0e6b020d6d13b39f1c9ed35c85c9bd2edb2b02055ee7df288016e9ba2f7"
+    },
+    {
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "original_lua_sha256": {
+        "bg/default.lua": "d5d1bddadde5ef0ca64e58002fa88e91317d770f1ad18a6e791a8aa325e67753",
+        "lua/default.lua": "0566eb420edee299ae7d8172eceb2bee8382e79c4fb4478f47d1ee19b5bec41e",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "af1dcee50a9f0643bac2fcce307710f768044fca43fd615a6a53fa2b6619fe36"
+    },
+    {
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "fb2e36e6b95440dc0b97a7fe25c0ba0a64863da166e42b482887d913aaab06ab"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "257ca11d46511a42d60ed21efc45f75a30a929b2a68aebf2671177a75a830145"
+    },
+    {
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "fb2e36e6b95440dc0b97a7fe25c0ba0a64863da166e42b482887d913aaab06ab"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "83919202c4e93de193c440ca08009e16d93ef45e49cae8a7240dec3aefeddf3c"
+    },
+    {
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "original_lua_sha256": {
+        "bg/Default.lua": "54d2db583d6f78d307d334e171ee6c3b0a3a6963a012c1500ca8952d91fa1f8c"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "82351538dc48c2c845ea98d772ffc5d3c4be50a4d3bccbb4389de10b39d69026"
+    },
+    {
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "ee17880c0e21b794fd7d12188c12c2d08c4586b74fc9746b787b785514a2ebf7",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "242c6a0a31cf82c6e06eb0ea80446e33497b8e53fd322941e66ed2e58a79f8f9"
+    },
+    {
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "c3468e26403da99e85c4cc8170b38139c1e01505a9f911a400289969194b4947",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "7862a474eb8baea8a144e8aadb12af7543d67a5164225af8dc22b0f14f1b4c81"
+    },
+    {
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "9c70b3d3b1f7392eadd7d37143d8875da541f3420bedbda663c5bcb4464c5d29",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "50503adf228f5b3a200be92674e36a87e3494a5ba0d681b123a4c989f6c5fa45",
+        "lua/mods.lua": "cddc8734f41e533cd05152a26dce036dfe62edde4babdd57672adc9ba7f8ddb5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "c250f7df4fa32b57a6fcf9c00661719fe204509b359f1950143dd239092b741f"
+    },
+    {
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "b46efc54c91080640db483376c77bca84cb319bf1f8a1f6c1c9a3c245bc2f3db",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "8c505d5167579ec7c16cb97dd459e0a4aa27737e6a3826b3d2a60294054335d3"
+    },
+    {
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "581bf87e6813fb6f944b87f1d0dd106954d41130641741274310ff27c2e1df13",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "95137697735498b5573a064ded1a6300d27fc1abe51b6cfc75ec932175ea30e2",
+        "lua/mods.lua": "fd99a26cd06f7dbf8fe3a36c858c31c01e4a64ad773c1dfdbd7f19eea149c7c2"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "e8eb21c82df717523b0bac5a7dcf817b22d617c4baa216943701b2abad781da8"
+    },
+    {
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "original_lua_sha256": {
+        "bg/default.lua": "53c5083e9e9d17747be6360b3fe427f3a5010512f76af956f12ff6e9491c26cc",
+        "lua/default.lua": "e0488f92c451d15ba2583bf4644480186a9fe93f18cbfdeb7f10c4b4f951eb75",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "daa0ba3c016219d428ec4ba0909c74074deb7862cc43b27298353bc1c634f902"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "4eb6e270e0bd1521a7ffc73aec8eab1954ca47705c601be045f336a2d5a68562"
+    },
+    {
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "3504a61d91ba08d07c59473ee4a7c02a60162b74c857ff257c9dec5ca4c38100",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "282cf636085dc0978d086356f01a23fd943ddcc8add1219045d86bd7aae563e1"
+    },
+    {
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "1882efb996ce4a6c57ff895232ca2ec8e1bedf9ca27606a8f964961648ba1ea1",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "9952d5447277b6db1794b3a93ca2f9b7debd313b377e90d9f3034f437d1ef87a"
+    },
+    {
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "4dbc8fc17aeac419a81be1c48dc04be98e1113aa86928350c9408ef9e0af0ae1",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "2a06c17d624747fb189f678a9342b4cb3358f05f622104c3757ccd84764fc5e1"
+    },
+    {
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "ace0f23d5e92fa5dcfcdafede9c66bacd22322e4ea6bfd114abfb1eb13d03f3d",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "8a702c9f534b550dfb3ce9fcc5b3ce030ae68f8c9b5cbe4debd89b25649e5ef3"
+    },
+    {
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "0d1b0d15aab096b281be07b56cc5814e611125b3172faa8ce3d8275c596a3f13",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "280c72c9bba483ec10ad92bc080386b74871a8e7814f4dbbfb7660e7768e399b"
+    },
+    {
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "original_lua_sha256": {
+        "code/draw.lua": "5fb737b2b13ade1449550490d1ba53db328cae96226772db7e88eedc102c9ef6",
+        "code/update.lua": "45f61ecb879e762a92131234f910d03c793b3d791cf0cf01580b579a1b684984",
+        "default.lua": "500fc3f94b28c76d96ebba3e6c660ab78cce538d2bc650adeb0f6563f9daf26d",
+        "sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+        "sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "sm5/core/main.lua": "e0ff7ba0ee4c33a685a92a802b3237e48f942c4ee810ccc7cfffcad16a773703",
+        "sm5/core/modparser.lua": "032ff3742b37a584de39e3ffc9d85d0445929d7f5f14d43fbae0f9caf64b7d96",
+        "sm5/core/players.lua": "fad50389bdced4f8312542b4d03ca002514e6a55925af071474c68969fd70b1d",
+        "sm5/modules/conversions.lua": "4bcdb1b4a175d07a5eb403c27bca0c8b0a0f1a77f4c5b7616bccbb73083ac17c",
+        "sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "sm5/modules/fakemods.lua": "3d30a573d1fe4e1d5236ad0482ec8728a1cfb3bfe60cd5be06add9487d03e22b",
+        "sm5/modules/grabactors.lua": "0294e1a4e0ad38f36fbb23bd8db1f30b1993d9667f47a32e6a33def8029d56ba",
+        "sm5/modules/helpers.lua": "40d8883835415e589cf27cc534d857ccf63f264191cc94d848551efcc8625f97",
+        "sm5/modules/multipliers.lua": "35d698a0f8211d148b39046701f97a2063575152aa56f99db2381236f3601ec9",
+        "sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf",
+        "sm5/modules/speedmods.lua": "3038b831549aeb5dfd5c13664941337406cf621a85774b663dc543057da9f79c"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "6047e0702c0403227912375633a79262394a1e1ff1f7b0312d498c6ad63f88d4"
+    },
+    {
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "79286b8847168e68a45d23e33cd9c4f06ebc442f567f7018de8248a0e1ebbe73",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/multitap_data.lua": "0a52f0b651abd01d0472d5fd606afb37b51eca13ce75e1da93c8e8c6038252de"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [
+        "def-0220",
+        "def-0223",
+        "def-0226",
+        "def-0229",
+        "def-0310",
+        "def-0313",
+        "def-0316",
+        "def-0319"
+      ],
+      "trace_sha256": "a5b780833cd24b11428cce9561c9ce67129957cce4c93bf50e582b3b36cb9b87"
+    },
+    {
+      "index": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "79286b8847168e68a45d23e33cd9c4f06ebc442f567f7018de8248a0e1ebbe73",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/multitap_data.lua": "0a52f0b651abd01d0472d5fd606afb37b51eca13ce75e1da93c8e8c6038252de"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [
+        "def-0220",
+        "def-0223",
+        "def-0226",
+        "def-0229",
+        "def-0310",
+        "def-0313",
+        "def-0316",
+        "def-0319"
+      ],
+      "trace_sha256": "ccda92923b51652895b37305089761d0e994151506811ab03671711db7595a0d"
+    },
+    {
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "original_lua_sha256": {
+        "code/draw.lua": "90c9c40d853c19502e17828532e52ab9a67debfe44be2521fb4d313fbbe70177",
+        "code/update.lua": "2c6d1d5d1b646670afb6a994835086bee8e0d12696f32db70cf456638cbfecfb",
+        "default.lua": "4eaa2adacd6c1984c8defda75d22d858d28102900a4134cc8dcb01e5b586e1d1",
+        "sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+        "sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "sm5/core/main.lua": "f1e18ebd1b631f064bd3f51a72716f73d17539b29e5218f83dd75b672b282ba7",
+        "sm5/core/players.lua": "d4818d02998ac85ab84bac691b3264ff685e1aed5ddd7ab21a83c72d96c3fe91",
+        "sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "sm5/modules/helpers.lua": "9fe855ccc4327e9bfae9fcd0ff1875273d003cb6f56c3e30c5175ee0a4a2ba12",
+        "sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "e10cdcf05e0c5ffea394f01a678b89a4b498fa9ed4422a4bbe85b954dedd2cc9"
+    },
+    {
+      "index": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "original_lua_sha256": {
+        "code/draw.lua": "90c9c40d853c19502e17828532e52ab9a67debfe44be2521fb4d313fbbe70177",
+        "code/update.lua": "2c6d1d5d1b646670afb6a994835086bee8e0d12696f32db70cf456638cbfecfb",
+        "default.lua": "4eaa2adacd6c1984c8defda75d22d858d28102900a4134cc8dcb01e5b586e1d1",
+        "sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+        "sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "sm5/core/main.lua": "f1e18ebd1b631f064bd3f51a72716f73d17539b29e5218f83dd75b672b282ba7",
+        "sm5/core/players.lua": "d4818d02998ac85ab84bac691b3264ff685e1aed5ddd7ab21a83c72d96c3fe91",
+        "sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "sm5/modules/helpers.lua": "9fe855ccc4327e9bfae9fcd0ff1875273d003cb6f56c3e30c5175ee0a4a2ba12",
+        "sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "42d9b412f7e97b0265fe9a7f51698ed0fa0b4b684a6c17a974219aa3039b280d"
+    },
+    {
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "original_lua_sha256": {
+        "lalalalalalala/default.lua": "34c4945a54b9d322f894e02f6c683caba66501201323475ce4966f748e6385f5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "4d04f75db522186322b300eef17c04241106004c7e49b5a6c966ef78b671de6c"
+    },
+    {
+      "index": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "original_lua_sha256": {
+        "lalalalalalala/default.lua": "34c4945a54b9d322f894e02f6c683caba66501201323475ce4966f748e6385f5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "fe556b82e1116cbaf6dd4db2b011808121852abc978803f49c66aa0790d6684b"
+    },
+    {
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "original_lua_sha256": {
+        "multitap/Default.lua": "98bc769d417aeda0a9f51dc5ae7d1018a14f36092054d8a8f10e4b64f0b4bc32",
+        "multitap/multitap_data.lua": "abfc2ff2b54b3db875a00afa6538c825bbd2ba244d35d7aeef144a2aca9820a8"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [
+        "def-0081",
+        "def-0084",
+        "def-0087",
+        "def-0090",
+        "def-0093",
+        "def-0096",
+        "def-0099",
+        "def-0102",
+        "def-0105",
+        "def-0108",
+        "def-0111",
+        "def-0114",
+        "def-0117",
+        "def-0120",
+        "def-0123",
+        "def-0126",
+        "def-0207",
+        "def-0210",
+        "def-0213",
+        "def-0216",
+        "def-0219",
+        "def-0222",
+        "def-0225",
+        "def-0228",
+        "def-0231",
+        "def-0234",
+        "def-0237",
+        "def-0240",
+        "def-0243",
+        "def-0246",
+        "def-0249",
+        "def-0252"
+      ],
+      "trace_sha256": "bd591a1941f607680a3118b9aef0398c1021749c67f07de61900bd7f3db6fc9a"
+    },
+    {
+      "index": 25,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "original_lua_sha256": {
+        "lua/_script.lua": "b70666ee31676dd1ff507bc84258c1d3be72d80a4a4c6105a6b198dadf8b7c39",
+        "lua/default.lua": "eb3917ac0f3c70d298a58a3dee6f848160e96b209cd91630b9de8706c261c8db",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/gfx/_gfx.lua": "ea1af4637c42c59cc9dd727b6254701006d35c1fb0161323ac5fe15a06eb607d",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "79ccf1e9ff897fbbc3df317dbb53448adb5b758fc1eaed13b57bca9ee13d651c"
+    },
+    {
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "358f2a5f3770c74c031e2ac8febd577836b5cea24c229a567e2242f42fff927e"
+    },
+    {
+      "index": 27,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "original_lua_sha256": {
+        "background/default.lua": "db5e2c8873c9432bb83ac2c5715d877bd57fffe4912ab6d337aebd51a6be10d2",
+        "lua/default.lua": "a0f7f1a0728558bd3444c3e17875509a25fc3025b6389fd8bc08589c3486dc73",
+        "lua/goodies/actors.lua": "97638c21c85e7e613b58c8ed19d8967ad776a7007bb176a9426915529c1715aa",
+        "lua/goodies/mods.lua": "275cbfb72f9728418530ece11127c5aa5445b5bdfea6658b890fde859ac048cb",
+        "lua/helpers/modhelpers.lua": "1a588a693b31c9011f216448beef4caa055d909323b02328e0d55e921bdd01d5",
+        "lua/helpers/modreaders.lua": "8cf6c35b5f2072e89fe23d1553c25c5be230ea021af23c765732cab2c2a047fb",
+        "lua/helpers/tweens.lua": "21ef67f5ee74cab728f393cee02e56006aabcd6b3ea34d9b48953ed838ff7570"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "a273167da75dba780c055a8e0847a76713229ffefcea25cfcd89950b9f4d5c56"
+    },
+    {
+      "index": 28,
+      "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "b0cfa917944bcdc2ccd31ed9d53b4ae800b168029ab045e387057d1554ec3eab",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "53642c2ed453196d7c462537a46898eba7fb994aba22c51916362f5e49a74ebb"
+    },
+    {
+      "index": 29,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "9c70b3d3b1f7392eadd7d37143d8875da541f3420bedbda663c5bcb4464c5d29",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "50503adf228f5b3a200be92674e36a87e3494a5ba0d681b123a4c989f6c5fa45",
+        "lua/mods.lua": "cddc8734f41e533cd05152a26dce036dfe62edde4babdd57672adc9ba7f8ddb5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "1d8c88e2536fbd387ff8e9cf889a291e53c9d6c9f35aa753c08bbf192f6878f3"
+    }
+  ],
+  "model_cases": [],
+  "captured_model_cases": [
+    18,
+    19,
+    24
+  ],
+  "scope": "first30 cases; original Lua source scan and archived definition classes",
+  "full_corpus_complete": false
+}
