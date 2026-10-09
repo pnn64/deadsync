@@ -127,11 +127,7 @@ fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
 }
 
 pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageResult<RgbaImage> {
-    let mut image = if hints.hot_pink_color_key {
-        keyed_image(path)?
-    } else {
-        open_image_fallback(path)?.into_rgba8()
-    };
+    let mut image = decode_image(path, hints.hot_pink_color_key)?;
     let size = texture_image_size([image.width(), image.height()], hints)?;
     if size != [image.width(), image.height()] {
         image = zoom_image(image, size);
@@ -189,22 +185,24 @@ fn png_error(error: png::DecodingError) -> image::ImageError {
     ))
 }
 
-fn keyed_image(path: &Path) -> image::ImageResult<RgbaImage> {
+fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     let mut signature = [0u8; 8];
     let mut input = std::fs::File::open(path)?;
     let count = input.read(&mut signature)?;
     if count == 8 && signature == *b"\x89PNG\r\n\x1a\n" {
-        return keyed_png(path);
+        return decode_png(path, color_key);
     }
     let mut image = open_image_fallback(path)?.into_rgba8();
-    key_rgba(&mut image);
+    if color_key {
+        key_rgba(&mut image);
+    }
     Ok(image)
 }
 
 // PNG indexed entries must remain distinct: native palette color keying
 // changes the first matching entry, even when another entry has identical RGB.
 // Native PNG loading strips 16-bit channels rather than rescaling their values.
-fn keyed_png(path: &Path) -> image::ImageResult<RgbaImage> {
+fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     let mut decoder = png::Decoder::new(BufReader::new(std::fs::File::open(path)?));
     // Match the image loader's allocation limit instead of png's smaller default.
     decoder.set_limits(png::Limits {
@@ -249,9 +247,11 @@ fn keyed_png(path: &Path) -> image::ImageResult<RgbaImage> {
                     .unwrap_or(255),
             ];
         }
-        for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
-            if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
-                color[3] = 0;
+        if color_key {
+            for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
+                if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
+                    color[3] = 0;
+                }
             }
         }
         let bits = info.bit_depth as usize;
@@ -275,7 +275,9 @@ fn keyed_png(path: &Path) -> image::ImageResult<RgbaImage> {
                 png::ColorType::Indexed => unreachable!("indexed branch handled above"),
             };
         }
-        key_rgba(&mut image);
+        if color_key {
+            key_rgba(&mut image);
+        }
     }
     Ok(image)
 }

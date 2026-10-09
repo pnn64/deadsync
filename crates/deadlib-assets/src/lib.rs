@@ -956,6 +956,28 @@ mod tests {
     }
 
     #[test]
+    fn native_png16_decode() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding");
+        for (name, dimensions) in [
+            ("rgb16-strip", (3, 2)),
+            ("rgba16-strip", (3, 2)),
+            ("gray16-strip", (8, 8)),
+            ("gray-alpha16-strip", (8, 8)),
+        ] {
+            let image = decode_texture_image(
+                &root.join(format!("{name}.png")),
+                &TextureHints::default(),
+            )
+            .expect("decode native PNG16 file");
+            let native = std::fs::read(root.join(format!("{name}.rgba")))
+                .expect("pinned native PNG file-loader output");
+            assert_eq!(image.dimensions(), dimensions, "{name}");
+            assert_eq!(image.as_raw(), &native, "{name}");
+        }
+    }
+
+    #[test]
     fn fix_hidden_alpha_preserves_opaque_image() {
         let original = vec![12, 34, 56, 255, 78, 90, 12, 128];
         let mut image = RgbaImage::from_raw(2, 1, original.clone()).expect("test image");
