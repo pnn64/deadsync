@@ -544,3 +544,13 @@ See `native-revalidation-pass108.json`. Position 26 is next. The original
 501-source/492-context scope remains active. The record retains additional
 explicit Model culling and multitap boundary observations; full corpus
 and native framebuffer parity remain incomplete.
+
+## Ordered fixture validation, pass 109
+
+Positions 26 through 30 pass 3,812,806 comparisons
+against DeadSync `e645dfdda`. Each complete archive
+was compiled and compared in order; execution stops at the next failure.
+
+See `native-revalidation-pass109.json`. Position 31 is next.
+The original 501-source/492-context scope and additional pending
+observations remain active. Full corpus and framebuffer parity are open.
