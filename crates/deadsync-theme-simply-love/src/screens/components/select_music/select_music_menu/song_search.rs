@@ -274,19 +274,14 @@ pub fn song_search_backspace(open: &mut SongSearchOpen) -> bool {
 
 /// Delete trailing whitespace then the word before it. Returns whether it changed.
 pub fn song_search_delete_word(open: &mut SongSearchOpen) -> bool {
-    let mut chars: Vec<char> = open.query.chars().collect();
-    let before = chars.len();
-    while chars.last().is_some_and(|c| c.is_whitespace()) {
-        chars.pop();
-    }
-    while chars.last().is_some_and(|c| !c.is_whitespace()) {
-        chars.pop();
-    }
-    if chars.len() == before {
-        return false;
-    }
-    open.query = chars.into_iter().collect();
-    true
+    let before = open.query.len();
+    let end = open
+        .query
+        .trim_end()
+        .trim_end_matches(|c: char| !c.is_whitespace())
+        .len();
+    open.query.truncate(end);
+    end != before
 }
 
 #[inline(always)]
@@ -1340,3 +1335,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "song_search/data_paths_perf.rs"]
+mod data_paths_perf;
