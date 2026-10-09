@@ -552,6 +552,69 @@
         "native hardware mesh merging and framebuffer validation"
       ],
       "scope": "Every-update Model diagnostic only; canonical archive and whole-song acceptance remain unchanged."
+    },
+    {
+      "date": "2026-10-09",
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "deadsync_commit": "807df3fe4405e4df269fad0298de9ef234abd70b",
+      "comparator_sha256": "47df12e75f758cf79b262231a0214ecaf67e1a0b96db53533126904cf726d190",
+      "harness_commit": "1ceab4b7a6842e254212ad92b2afb8b05da816ca",
+      "harness_version": "0.1.39",
+      "native_executable_sha256": "258ec1b69e3f1067158457477192013288dc79387640d4f3554aa22aa2431e87",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "private_archive_sha256": "1810d49373a136e018bf9b96baa47e7b42bb111b8e3d818621045911f3eecfae",
+      "private_archive_bytes": 42067298,
+      "trace_sha256": "62dc997837b9de9f7aec0d5a41b636251f127e94b9cd97cad985281470e967fa",
+      "trace_bytes": 164400315,
+      "original_sources_unchanged": true,
+      "archive_members_verified": 26,
+      "endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "comparisons_passed": 12217036,
+      "comparisons_failed": 0,
+      "compared_vertex_fields": [
+        "local",
+        "world",
+        "view",
+        "clip",
+        "ndc",
+        "screen",
+        "normal",
+        "uv",
+        "transformed_uv",
+        "texture_scale",
+        "color"
+      ],
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 11.410812200047076,
+          "log_sha256": "223c8774c18306af48f64c45535eb8b49c0dd9a7168906db7d6c172eadfd12f5"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 0,
+          "seconds": 286.4862317997031,
+          "log_sha256": "7c3c2f4685b57298b744d49a30796e6c02611a3ec39c1fe53894c58d779e9221"
+        }
+      ],
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "texture identity and secondary material animation",
+        "lighting and unrepresented depth, cull and render target states",
+        "queued SetState ordering, hibernation and update rate controls",
+        "refresh the original reference with the corrected hardware mesh path; framebuffer validation"
+      ],
+      "scope": "Every-update Model diagnostic at committed source807df3fe4, before the subsequent same-name mesh loader repair; canonical archive and whole-song acceptance remain unchanged."
     }
   ]
 }

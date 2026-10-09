@@ -123,3 +123,12 @@ lighting, additional render states and timing controls still need verification.
 The whole-song Model acceptance guard remains closed. The private capture
 does not replace the canonical archive or add an index entry; the full corpus
 is still incomplete.
+
+The expanded comparator at `807df3fe4` additionally verifies every recorded
+Model world/view coordinate against production matrices. It passes
+12,217,036 of 12,217,036 checks on the same private capture; the audit retains
+this separate executable and log provenance. That run predates the subsequent
+same-name mesh loader repair and uses the harness `0.1.39` reference. Harness
+`0.1.40` corrects the hardware mesh path; refresh the original reference before
+claiming complete Model parity. Texture identity, lighting, additional render
+states, timing controls and framebuffer validation remain unresolved.
