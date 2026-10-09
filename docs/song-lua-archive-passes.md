@@ -2621,3 +2621,11 @@ The next case is [07] 7th Gear - (No CMOD); its native capture is ready,
 and its DeadSync comparison is pending. Full-corpus parity remains
 unfinished; the original 501 simfiles and all 492 archive cases remain
 in scope.
+
+## Pass 76: shared startup state and complete model dependencies
+
+The complete original [07] 7th Gear - (No CMOD) reference from
+native harness 0.1.32 passes all 881,665 comparisons with the immutable
+DeadSync 0.5.1870 verifier. The verified prefix on that verifier is
+29/492 archive cases; full-corpus parity remains unfinished. Retain
+the superseded archive locally and preserve all reference aliases.

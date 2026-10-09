@@ -592,13 +592,14 @@
     {
       "title": "[07] 7th Gear",
       "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7a7232e518056e7db219999c22e7e742e1effd2a53dd94cf6cfe4da979779f19.tar.zst",
-      "sha256": "7a7232e518056e7db219999c22e7e742e1effd2a53dd94cf6cfe4da979779f19",
-      "compressed_bytes": 6456698,
-      "uncompressed_sha256": "25b9e75d7855107977f14267c61c49ea3e6629dd2091eabb8b1cf4590b5c6743",
-      "compression_level": 22,
+      "harness_version": "0.1.32",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "sha256": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1",
+      "compressed_bytes": 7290297,
+      "uncompressed_sha256": "97d62cbbfa29a6d918fe20ff97f040216d60a43668aecc8d70fd92ae302dcbc7",
+      "compression_level": 12,
       "aliases": [
+        "7a7232e518056e7db219999c22e7e742e1effd2a53dd94cf6cfe4da979779f19.tar.zst",
         "1ec84b3fc8039abbe8f9e3cdc3e1f22f6d7f4a1f66000993825090a7380ad2da.tar.zst"
       ]
     },
