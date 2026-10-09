@@ -642,12 +642,10 @@
     {
       "title": "[3878] [09] LALA (Hard)",
       "source_simfile": "[09] LALA (SH) [Exschwasion]/lala.ssc",
-      "harness_version": "0.1.0",
-      "archive": "13c1e34ac23ac8c1b9f1a216f5085359db3805d4c61f5d06953e09079fa896f8.tar.zst",
-      "sha256": "13c1e34ac23ac8c1b9f1a216f5085359db3805d4c61f5d06953e09079fa896f8",
-      "compressed_bytes": 189498,
-      "uncompressed_sha256": "a38759ac7d969f4b456896eb813fc4373fd3fe0e93b5e20fa23206cd370ef059",
-      "compression_level": 22,
+      "harness_version": "0.1.51",
+      "archive": "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0.tar.zst",
+      "sha256": "35b7f1aec8a7abfa64193d365a8f235daf9862574ab6f1c5234a8035d77f9ca0",
+      "compressed_bytes": 241730,
       "aliases": [
         "b4d69b7e820d75854b5b78923a5c64e36b1e6b6e19ffda9a65f4f7615b468515.tar.zst"
       ]

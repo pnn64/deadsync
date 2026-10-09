@@ -579,3 +579,16 @@ historical aliases are retained.
 See `native-revalidation-pass111.json`. Position 33 is next. The original
 501-source/492-context scope and additional pending observations remain
 active. Full corpus and framebuffer parity are still open.
+
+## Ordered fixture validation, pass 112
+
+Position 33, [3878] [09] LALA (Hard), passes 203,003 comparisons
+against committed DeadSync `e1557ce33`. The complete
+harness 0.1.51 native capture records 8,309 updates
+over 138.46 seconds, with no native runtime errors
+or dropped events. Original chart and Lua bytes, the prior archive, and
+historical aliases are retained.
+
+See `native-revalidation-pass112.json`. Position 34 is next. The original
+501-source/492-context scope and additional pending observations remain
+active. Full corpus and framebuffer parity are still open.
