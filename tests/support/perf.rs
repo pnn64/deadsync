@@ -4,12 +4,12 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Churn {
-    allocs: usize,
-    reallocs: usize,
-    frees: usize,
-    allocated_bytes: usize,
-    freed_bytes: usize,
+pub struct Churn {
+    pub allocs: usize,
+    pub reallocs: usize,
+    pub frees: usize,
+    pub allocated_bytes: usize,
+    pub freed_bytes: usize,
 }
 
 thread_local! {
@@ -91,14 +91,20 @@ impl Drop for Tracking {
     }
 }
 
+#[allow(dead_code)] // This shared helper is optional in allocation-measurement suites.
 pub fn assert_no_churn(work: impl FnOnce()) {
-    let tracking = Tracking::start();
-    work();
-    let counts = COUNTS.get().expect("tracking is active");
-    drop(tracking);
+    let (_, counts) = measure(work);
     assert_eq!(
         counts,
         Churn::default(),
         "hot path allocated or freed memory"
     );
+}
+
+pub fn measure<T>(work: impl FnOnce() -> T) -> (T, Churn) {
+    let tracking = Tracking::start();
+    let result = work();
+    let counts = COUNTS.get().expect("tracking is active");
+    drop(tracking);
+    (result, counts)
 }
