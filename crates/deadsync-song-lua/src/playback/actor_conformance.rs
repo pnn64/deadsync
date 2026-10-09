@@ -360,6 +360,9 @@ impl WholeSongComposer {
         seconds: f32,
         beat: f32,
     ) -> Vec<(usize, deadlib_render_core::RenderFrame)> {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            screen[0], screen[1],
+        ));
         let Some(index) = self.manual.frame_at(seconds) else {
             return Vec::new();
         };
@@ -400,6 +403,8 @@ impl WholeSongComposer {
                 if !matches!(
                     overlays[*overlay].kind,
                     SongLuaOverlayKind::ActorMultiVertex { .. }
+                        | SongLuaOverlayKind::Model { .. }
+                        | SongLuaOverlayKind::NoteskinActor { .. }
                 ) {
                     return None;
                 }
@@ -430,6 +435,9 @@ impl WholeSongComposer {
         seconds: f32,
         beat: f32,
     ) -> deadlib_render_core::RenderFrame {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            screen[0], screen[1],
+        ));
         let mut actors = Vec::new();
         if matches!(overlays[index].kind, SongLuaOverlayKind::AftSprite { .. }) {
             if let Some(target) = self.topology.aft_sprite_targets[index].get()

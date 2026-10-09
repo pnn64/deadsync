@@ -49,6 +49,9 @@ mod multitap;
 #[path = "song_lua_itgmania_semantic_parity/corpora.rs"]
 mod corpora;
 
+#[path = "song_lua_itgmania_semantic_parity/models.rs"]
+mod models;
+
 #[derive(Deserialize)]
 struct NativeTrace {
     #[serde(default)]
@@ -111,6 +114,14 @@ struct NativeTrace {
     player_render_tracks: Vec<NativePlayerRenderTrack>,
     #[serde(default)]
     projected_vertex_tracks: Vec<NativeProjectedVertexTrack>,
+    #[serde(default)]
+    model_geometry_encoding: Option<String>,
+    #[serde(default)]
+    model_geometry_sample_clock: Option<String>,
+    #[serde(default)]
+    model_geometry_buffers: Vec<Vec<Vec<Option<f64>>>>,
+    #[serde(default)]
+    model_geometry_tracks: Vec<models::NativeModelTrack>,
     #[serde(default)]
     manual_draw_frames: Vec<(f64, f64, Vec<Value>)>,
     #[serde(default)]
@@ -5807,6 +5818,7 @@ fn compare_semantics_with_progress(
     compare_column_splines(trace, compiled, context, &mut parity);
     multitap::compare_multitap(trace, compiled, context, &mut parity);
     compare_projected_geometry(trace, compiled, context, &mut parity);
+    models::compare_models(trace, compiled, context, &mut parity);
     compare_manual_meshes(trace, compiled, context, &mut parity);
     compare_projected_vibration_coverage(trace, compiled, context, &mut parity);
     if let Some(primary) = compiled.get(primary_index) {

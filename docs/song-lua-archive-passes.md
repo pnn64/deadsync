@@ -2787,3 +2787,39 @@ geometry, render states, lighting or framebuffer parity. Keep the whole-song
 Model rejection and the new archive private until real mesh comparisons
 are wired into the production verifier. All 501 original simfiles and
 492 archive contexts remain in scope; full-corpus parity is unfinished.
+
+## Pass 83: compare native Model observations through production draws
+
+The semantic verifier now decodes the harness's column-buffer-v1 Model
+observations. It checks actor identities, ordered triangle passes, all
+column references and widths, ordinary update clocks, and manual draw
+clocks. Missing observations, duplicated actors, obsolete sparse clocks,
+invalid pixel dimensions, and malformed manual references are rejected.
+Native null numeric values remain undefined and cannot pass as zero.
+
+The comparison renders each observation through WholeSongComposer and
+checks production vertex positions, clip/NDC/screen coordinates, normals,
+raw and transformed UVs, texture scales, colors, diffuse/glow pass order,
+depth testing, backface culling and blending. It processes one update at
+a time rather than retaining the entire composed song. The test adapter
+now installs its logical presentation bounds before rendering; default
+thread-local bounds of 2 by 2 were corrupting the first comparison.
+Physical pixel dimensions are configured independently from those bounds.
+Manual draw composition also supports Model and noteskin Model actors.
+
+The two focused reader tests and two archive rejection tests pass. All
+185 playback integration tests pass with three existing ignores. The
+original KABOOOOOM reader validates eight tracks, 11,969 update frames,
+95,752 samples and 13,466 shared columns against the private 0.1.37 capture.
+
+The selected original KABOOOOOM renderer diagnostic runs 9,450,796 checks:
+6,083,754 pass and 3,367,042 fail. Its first failures concern native Model
+depth testing, perspective projection and animated texture phase boundaries.
+The diagnostic remains failing and requires an explicitly selected trace
+and original simfile. No failed result is counted as archive acceptance.
+
+This is a partial Model comparison, not complete archive acceptance.
+World/view transforms, texture identity, native lighting and independent
+depth write/test states still need complete production comparisons. The
+whole-song Model rejection remains in place, and the new KABOOOOOM archive
+stays private. Original sources and comparison tolerances remain unchanged.

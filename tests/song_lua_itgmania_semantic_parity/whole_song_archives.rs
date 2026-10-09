@@ -436,9 +436,12 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
             .all(|definition| definition.properties.get("NoteSkinElement").is_none()),
         "placeholder noteskin actors invalidate the reference; recapture with native noteskin resources",
     );
-    // The current song trace and comparator omit Model meshes. Definitions
-    // supplied by noteskins still instantiate and draw real native Models.
-    // Reject their incomplete references before compilation can report a pass.
+    // Decode Model columns before comparing, but keep the archive gate closed:
+    // complete camera/world data, texture identity, lighting and render-state
+    // equivalence are not established by the new mesh observations alone.
+    if let Err(error) = models::validate_models(trace) {
+        panic!("native Model mesh geometry is not captured and compared: {error}; this archive cannot establish full-song parity");
+    }
     let model = trace.actor_definitions.iter().find(|definition| {
         definition.class == "Model"
             && (!definition.runtime_actors.is_empty()
