@@ -240,7 +240,7 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
     if files.is_empty() {
         return Ok(Vec::new());
     }
-    let mut groups = BTreeMap::<(String, String), Choice>::new();
+    let mut groups = BTreeMap::<(&str, String), Choice>::new();
     let other = if family == "Cel" { "Metal" } else { "Cel" };
     let mut label = String::new();
     let mut folder_text = String::new();
@@ -249,19 +249,25 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
             .strip_prefix(root)
             .map_err(|e| Error::Invalid(e.to_string()))?
             .to_str()
-            .ok_or_else(|| Error::Invalid("non-UTF8 workshop path".into()))?
-            .replace('\\', "/");
-        let mut parts = relative.splitn(3, '/');
+            .ok_or_else(|| Error::Invalid("non-UTF8 workshop path".into()))?;
+        let mut parts = relative.splitn(3, ['\\', '/']);
         parts.next();
         let category = parts.next();
-        let Some((folders, filename)) = parts.next().and_then(|rest| rest.rsplit_once('/')) else {
-            return Err(Error::Invalid(format!("invalid customization: {relative}")));
+        let Some((folders, filename)) = parts.next().and_then(|rest| rest.rsplit_once(['\\', '/']))
+        else {
+            return Err(Error::Invalid(format!(
+                "invalid customization: {}",
+                relative.replace('\\', "/")
+            )));
         };
-        if folders.split('/').any(|folder| folder.contains(other)) {
+        if folders
+            .split(['\\', '/'])
+            .any(|folder| folder.contains(other))
+        {
             continue;
         }
         label.clear();
-        for folder in folders.split('/') {
+        for folder in folders.split(['\\', '/']) {
             folder_text.clear();
             for part in folder.split(family) {
                 folder_text.push_str(part);
@@ -274,7 +280,6 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
                 label.push_str(trimmed);
             }
         }
-        let inactive = filename.to_lowercase().contains("inactive");
         let slot = match category.expect("three path components were present") {
             "Arrows" => "arrows",
             "Receptors" => "receptors",
@@ -284,14 +289,14 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
             "Mine Size" => "mine_size",
             "Lifts" => "lifts",
             "Holds" => {
-                if inactive {
+                if filename.to_lowercase().contains("inactive") {
                     "hold_inactive"
                 } else {
                     "hold_active"
                 }
             }
             "Rolls" => {
-                if inactive {
+                if filename.to_lowercase().contains("inactive") {
                     "roll_inactive"
                 } else {
                     "roll_active"
@@ -301,10 +306,10 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
         };
         let id = slug(&label);
         let choice = groups
-            .entry((slot.into(), id.clone()))
-            .or_insert_with(|| Choice {
+            .entry((slot, id))
+            .or_insert_with_key(|(_, id)| Choice {
                 slot: slot.into(),
-                id,
+                id: id.clone(),
                 label: label.clone(),
                 cell: 0,
                 files: vec![],
@@ -315,13 +320,16 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
         }
         choice.files.push(FileSwap {
             target: filename.into(),
-            source: relative,
+            source: relative.replace('\\', "/"),
         });
     }
     let mut choices: Vec<_> = groups.into_values().collect();
     for choice in &mut choices {
+        if choice.slot != "arrows" {
+            continue;
+        }
         let label = choice.label.to_lowercase();
-        if choice.slot == "arrows" && (label.contains("rgb") || label.contains("ddr vivid")) {
+        if label.contains("rgb") || label.contains("ddr vivid") {
             choice.metrics.push(MetricSwap {
                 section: "NoteDisplay".into(),
                 key: "TapNoteAnimationLength".into(),
@@ -475,3 +483,7 @@ mod tests {
         assert!(matches!(result, Err(Error::Invalid(message)) if message == "bad PNG"));
     }
 }
+
+#[cfg(test)]
+#[path = "workshop_perf.rs"]
+mod direct_data_perf;
