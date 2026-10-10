@@ -1513,12 +1513,10 @@
     {
       "title": "Badlands",
       "source_simfile": "Badlands/Badlands.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7.tar.zst",
-      "sha256": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7",
-      "compressed_bytes": 127088,
-      "uncompressed_sha256": "231f769bbf402814243197ebf9463b207df211dae558d6c8c5df842152e6225b",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c.tar.zst",
+      "sha256": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c",
+      "compressed_bytes": 480548,
       "aliases": [
         "b416acd5931d9f4a28b44dcd91c77f6008e7cda4699ae6855a6eeb1da4b81e52.tar.zst"
       ]

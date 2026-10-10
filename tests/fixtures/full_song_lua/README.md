@@ -1681,3 +1681,17 @@ See `native-revalidation-pass190.json`. Position 112 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 191
+
+Position 112, Badlands, passes all
+699,483 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 8,395 updates over 139.89 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass191.json`. Position 113 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
