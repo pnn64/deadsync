@@ -1650,12 +1650,10 @@
     {
       "title": "Black Out",
       "source_simfile": "Black Out [Gpop]/Black Out.ssc",
-      "harness_version": "0.1.0",
-      "archive": "3a06e61d6bb500cb3d136381c1fe9ac63214b5b1ed035ba23000e3d5b0a1423f.tar.zst",
-      "sha256": "3a06e61d6bb500cb3d136381c1fe9ac63214b5b1ed035ba23000e3d5b0a1423f",
-      "compressed_bytes": 71221,
-      "uncompressed_sha256": "a52cebb71fde931f7afd5ace5609b8ce40c35337144d9472625317f08401a376",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9.tar.zst",
+      "sha256": "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9",
+      "compressed_bytes": 95716,
       "aliases": [
         "7eabd2301cdcdf2faa49a2509b3b7430f800675abe1a71af68068a48bd7b5854.tar.zst"
       ]

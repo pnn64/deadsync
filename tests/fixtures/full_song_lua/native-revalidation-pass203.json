@@ -1,0 +1,106 @@
+{
+  "pass": 203,
+  "previous_record": "native-revalidation-pass202.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+  "comparator_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    124
+  ],
+  "next_position": 125,
+  "comparisons_passed": 157387,
+  "charts": [
+    {
+      "position": 124,
+      "entry": {
+        "title": "Black Out",
+        "source_simfile": "Black Out [Gpop]/Black Out.ssc",
+        "harness_version": "0.1.64",
+        "archive": "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9.tar.zst",
+        "sha256": "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9",
+        "compressed_bytes": 95716,
+        "aliases": [
+          "7eabd2301cdcdf2faa49a2509b3b7430f800675abe1a71af68068a48bd7b5854.tar.zst"
+        ]
+      },
+      "original_archive_retained": "3a06e61d6bb500cb3d136381c1fe9ac63214b5b1ed035ba23000e3d5b0a1423f.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "9299788f7ef2e53c46b3c565b17966b09b0b0cc519c3fd6ecf24d2878f4dfdee",
+      "original_source_sha256": {
+        "Black Out [Gpop]/Black Out - bg hd.png": "2c196135b135e69446d1a1f4c944007adf6dc6c358fd4423e011800d8584a2b5",
+        "Black Out [Gpop]/Black Out - bg.png": "56ecd6025a55bb0ecefda5a4fca004a1b45a5bd8c5566c58e79bf808d3060fcc",
+        "Black Out [Gpop]/Black Out - bn.png": "467d6fe1b534f049d120777573226d7c2f2997d4c84bfbdf23ea969fdf012f13",
+        "Black Out [Gpop]/Black Out - jacket.png": "112625170269bbd32c6c17ff6cde160948f78c88f64d3168636bb59f7596ba3c",
+        "Black Out [Gpop]/Black Out.avi": "0f52b3af26cb2bbe8909850d2400cf0780182f01e728a74346668ff05368cba3",
+        "Black Out [Gpop]/Black Out.ogg": "d59363e700f10d45b4fdca4eaa97e4eaecbeb691f9c8d22d21f11fd4821d6393",
+        "Black Out [Gpop]/Black Out.ssc": "bcc5399b88d5037e34a5bcd7c9d2d1cc41df94b49ef0d7cf585de15f1bf595fd",
+        "Black Out [Gpop]/gpopcdtitle.png": "93e71211552d268b52eae46f6a8e4af3c7cf216cd1bb04e847299981c5827583",
+        "Black Out [Gpop]/lua/default.lua": "07ad33fc3cc930a493f59e1a764e014296a9b80cf676c8a446238414fd550d34",
+        "Black Out [Gpop]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Black Out [Gpop]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Black Out [Gpop]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6553,
+      "duration_seconds": 109.1999969482422,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 124,
+      "source_simfile": "Black Out [Gpop]/Black Out.ssc",
+      "archive": "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9.tar.zst",
+      "archive_sha256": "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9",
+      "harness_version": "0.1.64",
+      "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+      "source_pending_commit": false,
+      "binary_sha256": "332064e9b8c045c4441cde0d86a3ee0268483aa0114e839969ec94cd34ad962d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-full_song_lua.exe",
+        "8fb60715eadec9d906d868033018b73a87bb562975dc510de9ce45f2a39b8bf9.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.262174899689853,
+      "comparisons_passed": 157387,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-124-user-merge-checkpoint-v1.log",
+      "log_sha256": "d45d98a01fa48fdb4d4d7924e50e7145ab5bf77fd307ce56f53f039f1242052d",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass251-top-124-rage-file-v1.json",
+      "native_receipt_sha256": "7cebd107a4f817bda2480f35e102fce2834883bd92f73c0e7896a784a3fe0bdc",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "e26bc17dd9fa6b0b5104994bb1652e62fddfbe7f",
+    "source_pending_commit": false,
+    "binary_sha256": "b0e8f5223fb6f054e64146ce459f958d7ac216ea083b4697424cf01f58d2b0ac",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\user-merge-checkpoint-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1408732999116182,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-124-native-pass203.log",
+    "log_sha256": "5c5af6452be04f6297713dcc6ba0e38d47e92a57b79ac880cf565c1ed508f129",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.57s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
