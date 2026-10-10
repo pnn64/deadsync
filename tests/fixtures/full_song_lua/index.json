@@ -774,12 +774,10 @@
     {
       "title": "[5813] [11] 西新宿清掃曲",
       "source_simfile": "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "e8b2f04707b665c334a8495abac3cb3e719c314283bbe2be17a90f1707bb6d0b.tar.zst",
-      "sha256": "e8b2f04707b665c334a8495abac3cb3e719c314283bbe2be17a90f1707bb6d0b",
-      "compressed_bytes": 2014748,
-      "uncompressed_sha256": "2769203e934802efc404d29e7c9728f86b5962f729a3ba93c38a3d7a51fe580c",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8.tar.zst",
+      "sha256": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8",
+      "compressed_bytes": 2928481,
       "aliases": [
         "8d3d240cb4c779869a2c4295590038e7e8aad2989c69f99ddeaf9ae923a58af0.tar.zst"
       ]
