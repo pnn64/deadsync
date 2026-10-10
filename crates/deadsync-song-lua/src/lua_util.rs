@@ -3362,7 +3362,7 @@ pub fn call_actor_function(
         .is_some_and(|mut scope| scope.functions.insert(command.to_pointer() as usize));
     if preserve {
         let functions = lua.create_sequence_from([command.clone()])?;
-        let locals = snapshot_function_locals(lua, &functions, Vec::new())?;
+        let locals = snapshot_function_locals(lua, &functions, lua.create_table()?)?;
         lua.app_data_mut::<SongLuaActionCaptureActive>()
             .expect("capture scope remains active while snapshotting")
             .locals
@@ -15359,17 +15359,12 @@ pub struct SongLuaFunctionActionCapture {
     pub side_effects: i64,
 }
 
-struct FunctionActionTableSnapshot {
-    table: Table,
-    entries: Table,
-}
-
 struct FunctionActionSnapshot {
-    tables: Vec<FunctionActionTableSnapshot>,
+    tables: Table,
     cells: Table,
 }
 
-fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<FunctionActionTableSnapshot> {
+fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<Table> {
     let entries = lua.create_table()?;
     let mut count = 0;
     // Keep the traversal key on Lua's stack. `pairs` clones it for its Rust
@@ -15379,7 +15374,7 @@ fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<Funct
         entries.raw_set(count, lua.create_sequence_from([key, value])?)?;
         Ok(())
     })?;
-    Ok(FunctionActionTableSnapshot { table, entries })
+    lua.create_sequence_from([table, entries])
 }
 
 fn snapshot_function_action_tables(
@@ -15388,7 +15383,7 @@ fn snapshot_function_action_tables(
 ) -> mlua::Result<FunctionActionSnapshot> {
     let globals = lua.globals();
     // Resolve environments before capturing their shared pre-probe state.
-    let mut targets = Vec::new();
+    let targets = lua.create_table()?;
     let mut seen = HashSet::from([globals.to_pointer() as usize]);
     for function in functions.sequence_values::<Function>() {
         let function = function?;
@@ -15397,14 +15392,14 @@ fn snapshot_function_action_tables(
                 .raw_get::<Option<Table>>("__songlua_env_target")?
                 .unwrap_or(environment);
             if seen.insert(target.to_pointer() as usize) {
-                targets.push(target);
+                targets.raw_set(targets.raw_len() + 1, target)?;
             }
         }
     }
-    let mut snapshots = Vec::with_capacity(1 + targets.len());
-    snapshots.push(snapshot_function_action_table(lua, globals)?);
-    for target in targets {
-        snapshots.push(snapshot_function_action_table(lua, target)?);
+    let snapshots = lua.create_table()?;
+    snapshots.raw_set(1, snapshot_function_action_table(lua, globals)?)?;
+    for target in targets.sequence_values::<Table>() {
+        snapshots.raw_set(snapshots.raw_len() + 1, snapshot_function_action_table(lua, target?)?)?;
     }
     snapshot_function_locals(lua, functions, snapshots)
 }
@@ -15412,7 +15407,7 @@ fn snapshot_function_action_tables(
 fn snapshot_function_locals(
     lua: &Lua,
     functions: &Table,
-    mut snapshots: Vec<FunctionActionTableSnapshot>,
+    snapshots: Table,
 ) -> mlua::Result<FunctionActionSnapshot> {
     // Command probes may edit shared local tables or replace upvalue cells.
     // Preserve their identities, including cycles and aliases. Actor state
@@ -15423,11 +15418,12 @@ fn snapshot_function_locals(
     // Global bindings are shallow snapshots. Preserve referenced table contents
     // alongside locals without following the entire host environment through _G.
     seen.insert(lua.globals().to_pointer() as usize);
-    for snapshot in &snapshots {
-        seen.insert(snapshot.table.to_pointer() as usize);
+    for snapshot in snapshots.sequence_values::<Table>() {
+        seen.insert(snapshot?.raw_get::<Table>(1)?.to_pointer() as usize);
     }
-    // Lua owns saved references. Keeping thousands of mlua Values in Rust
-    // would consume the auxiliary stack, which Lua 5.1 bounds at 8000 slots.
+    // Lua owns both entries and snapshot rows. Even two Rust Table handles per
+    // saved table exhaust mlua's 8000-slot Lua 5.1 auxiliary stack for large
+    // scripts such as Bad Trails. Keep only the current row in Rust.
     let pending = functions.clone();
     let mut pending_count = pending.raw_len();
     while pending_count > 0 {
@@ -15492,11 +15488,11 @@ fn snapshot_function_locals(
                     && table.raw_get::<Value>("__songlua_actor_type")?.is_nil() =>
             {
                 let snapshot = snapshot_function_action_table(lua, table)?;
-                for entry in snapshot.entries.sequence_values::<Table>() {
+                for entry in snapshot.raw_get::<Table>(2)?.sequence_values::<Table>() {
                     pending_count += 1;
                     pending.raw_set(pending_count, entry?.raw_get::<Value>(2)?)?;
                 }
-                snapshots.push(snapshot);
+                snapshots.raw_set(snapshots.raw_len() + 1, snapshot)?;
             }
             _ => {}
         }
@@ -15547,13 +15543,13 @@ fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -
             })?;
         }
     }
-    for snapshot in snapshot.tables {
-        snapshot.table.clear()?;
-        for entry in snapshot.entries.sequence_values::<Table>() {
+    for row in snapshot.tables.sequence_values::<Table>() {
+        let row = row?;
+        let table = row.raw_get::<Table>(1)?;
+        table.clear()?;
+        for entry in row.raw_get::<Table>(2)?.sequence_values::<Table>() {
             let entry = entry?;
-            snapshot
-                .table
-                .raw_set(entry.raw_get::<Value>(1)?, entry.raw_get::<Value>(2)?)?;
+            table.raw_set(entry.raw_get::<Value>(1)?, entry.raw_get::<Value>(2)?)?;
         }
     }
     Ok(())
@@ -19824,4 +19820,43 @@ pub fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
 #[must_use]
 pub fn method_arg_offset(args: &MultiValue) -> usize {
     usize::from(matches!(args.front(), Some(Value::Table(_))))
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+
+    #[test]
+    fn large_snapshot_restores_aliases_and_cells() {
+        let lua = Lua::new();
+        let functions = lua.load(r#"
+local graph = {}
+for i = 1, 10000 do graph[i] = {value = i} end
+local original = graph
+local shared = graph[9999]
+graph.alias = shared
+graph.self = graph
+local function mutate()
+    for i = 1, 10000 do graph[i].value = -i end
+    graph.alias = {}
+    graph.self = nil
+    shared.extra = 'changed'
+    graph = {replacement = true}
+end
+local function verify()
+    assert(graph == original and graph.self == graph)
+    assert(graph.alias == shared and graph[9999] == shared)
+    assert(shared.extra == nil)
+    for i = 1, 10000 do assert(graph[i].value == i) end
+end
+return {mutate, verify}
+"#).eval::<Table>().expect("large aliased graph");
+        let mutate = functions.raw_get::<Function>(1).expect("mutation");
+        let verify = functions.raw_get::<Function>(2).expect("verification");
+        let snapshot = snapshot_function_locals(&lua, &functions, lua.create_table().expect("snapshot rows"))
+            .expect("large snapshot must fit the unmodified native Lua stack limit");
+        mutate.call::<()>(()).expect("mutate saved locals");
+        restore_function_action_tables(&lua, snapshot).expect("restore saved locals");
+        verify.call::<()>(()).expect("restore identities, values, aliases and replaced upvalue cells");
+    }
 }
