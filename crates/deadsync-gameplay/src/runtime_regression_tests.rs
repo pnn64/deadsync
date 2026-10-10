@@ -94,6 +94,10 @@ mod runtime_regression_tests {
             0
         }
 
+        fn accel_mask_bits(&self) -> u8 {
+            0
+        }
+
         fn visual_mask_bits(&self) -> u16 {
             0
         }
@@ -1273,6 +1277,38 @@ mod runtime_regression_tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn expand_phase_uses_gameplay_wall_delta() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*9999 50% ExpandPeriod")
+                .expect("native period modifier"),
+        );
+        // Expected phases come from unchanged native ArrowEffects::Update.
+        // Song time remains fixed while wall delta crosses multiple wraps.
+        for (delta, expected) in [
+            (0_f32, 0_f32),
+            (0.0166666675_f32, 0.0166666675_f32),
+            (0.25_f32, 0.266666681_f32),
+            (1_f32, 1.26666665_f32),
+            (7_f32, 4.07787609_f32),
+            (2_f32, 1.88908577_f32),
+            (0.0500000007_f32, 1.93908572_f32),
+            (0.0166666675_f32, 1.95575237_f32),
+            (0.125_f32, 2.08075237_f32),
+            (8_f32, 1.70317173_f32),
+            (0.25_f32, 1.95317173_f32),
+            (0_f32, 1.95317173_f32),
+        ] {
+            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            assert!(
+                (state.mods.expand_seconds[0] - expected).abs() < 0.00001,
+                "delta={delta}, actual={}",
+                state.mods.expand_seconds[0]
+            );
         }
     }
 

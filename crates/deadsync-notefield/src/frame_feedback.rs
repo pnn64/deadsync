@@ -1138,6 +1138,7 @@ mod tests {
             },
             visual: NotefieldVisualState {
                 elapsed_screen_s: 0.1,
+                expand_seconds: 0.1,
                 current_display_beat: 1.0,
                 accel: AccelEffects::default(),
                 scroll: ScrollEffects::default(),
@@ -5389,6 +5390,222 @@ mod tests {
                 "{v}; actual={actual}"
             );
         }
+    }
+
+    #[test]
+    fn composed_expand_matches_native_travel() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/expand-motion.json"
+        ))
+        .expect("independently compiled native Expand travel");
+        let mut ns = noteskin();
+        // Native NoteDisplay anchors reversed heads at the original head only
+        // when this noteskin metric is enabled.
+        ns.note_display_metrics.flip_head_and_tail_when_reverse = true;
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|col| {
+                TestSlot::new(if col < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        for col in 0..2 {
+            ns.hold_columns[col].head_inactive =
+                Some(TestSlot::new(if col == 0 { "note0" } else { "note1" }));
+            ns.hold_columns[col].body_inactive = Some(TestSlot::new("body"));
+            ns.hold_columns[col].topcap_inactive = Some(TestSlot::new("top"));
+            ns.hold_columns[col].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        }
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut checked = 0;
+        let mut body_checked = 0;
+        for vector in native["vectors"].as_array().expect("vectors") {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("raw");
+            let speed = value("speed");
+            if value("sequence") != 2.0 || travel < 0.0 {
+                continue;
+            }
+            for mini in [0.5, 1.0, 1.5] {
+                for depth in [false, true] {
+                    for col in 0..2 {
+                        for kind in [
+                            NoteType::Tap,
+                            NoteType::Mine,
+                            NoteType::Hold,
+                            NoteType::Roll,
+                        ] {
+                            let mut n = note(col);
+                            n.note_type = kind;
+                            n.beat = travel / 64.0;
+                            n.row_index =
+                                usize::try_from(deadsync_core::timing::beat_to_note_row(n.beat))
+                                    .expect("row");
+                            if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                                n.hold = Some(HoldData {
+                                    end_row_index: n.row_index + 96,
+                                    end_beat: n.beat + 2.0,
+                                    result: None,
+                                    life: 1.0,
+                                    let_go_started_at: None,
+                                    let_go_starting_life: 1.0,
+                                    last_held_row_index: n.row_index,
+                                    last_held_beat: n.beat,
+                                });
+                            }
+                            let notes = [n];
+                            let mut lanes = [vec![], vec![]];
+                            lanes[col].push(
+                                deadsync_gameplay::ChartNoteIndex::try_from_usize(0)
+                                    .expect("index"),
+                            );
+                            let rows = [deadsync_core::timing::beat_to_note_row(notes[0].beat)];
+                            let mut request = request(
+                                &ns,
+                                &timing,
+                                &notes,
+                                &hides,
+                                FieldPlacement::P1,
+                                0,
+                                1,
+                                2,
+                                2,
+                            );
+                            request.chart.lane_note_row_indices = &lanes;
+                            request.chart.lane_hold_indices = &lanes;
+                            request.chart.note_itg_rows = &rows;
+                            request.chart.visible_beat = 0.0;
+                            request.chart.search_beat = 0.0;
+                            request.visual.current_display_beat = 0.0;
+                            request.geometry.column_dirs.fill(1.0);
+                            request.geometry.draw_distance_before_targets = 1536.0;
+                            request.geometry.draw_distance_after_targets = 1536.0;
+                            request.geometry.field_zoom = mini;
+                            request.geometry.draw_distance_before_targets = 4096.0;
+                            request.geometry.scroll_speed =
+                                deadsync_rules::scroll::ScrollSpeedSetting::XMod(speed);
+                            request.visual.visual.z_buffer = depth;
+                            request.visual.expand_seconds = value("seconds");
+                            request.visual.accel.expand = value("strength");
+                            request.visual.accel.expand_period = value("period");
+                            request.visual.elapsed_screen_s = 321.0;
+                            request.arrow_effect_time_s = 876.0;
+                            let prepared =
+                                prepare_notefield(&request).expect("prepared Expand field");
+                            let frame = NotefieldFieldFrameView {
+                                feedback: spline_feedback(&[]),
+                                completed_rows: Default::default(),
+                            };
+                            let mut draws = Vec::new();
+                            compose_notefield_field(
+                                &mut Vec::new(),
+                                &mut draws,
+                                &mut Vec::new(),
+                                &mut ModelMeshCache::default(),
+                                &mut HoldMeshScratch::with_columns(2),
+                                &mut CapturedActorScratch::with_capacities(32, 0),
+                                &mut NotefieldCameraCache::default(),
+                                &request,
+                                &prepared,
+                                &frame,
+                                &source,
+                            );
+                            let mut arrow = None;
+                            let mut receptor = None;
+
+                            for draw in &draws {
+                                if let FlatDraw::Sprite(sprite) = draw {
+                                    let key = sprite.source.texture_key();
+                                    if key == Some(if col == 0 { "note0" } else { "note1" }) {
+                                        arrow = Some([
+                                            sprite.center[0],
+                                            sprite.center[1],
+                                            sprite.world_z,
+                                        ]);
+                                    } else if key
+                                        == Some(if col == 0 { "target0" } else { "target1" })
+                                    {
+                                        receptor = Some(sprite.center);
+                                    }
+                                }
+                            }
+                            let arrow = arrow.expect("composed note or hold head");
+                            let receptor = receptor.expect("composed receptor");
+                            assert!(
+                                (arrow[1] - receptor[1] - value("y") * mini).abs() < 0.002,
+                                "{kind:?}: {vector}; actual={arrow:?}"
+                            );
+                            if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                                let mut ends = [false; 2];
+                                for draw in &draws {
+                                    if let FlatDraw::Sprite(sprite) = draw {
+                                        if sprite.source.texture_key() == Some("body") {
+                                            for y in [
+                                                sprite.center[1] - sprite.size[1] * 0.5,
+                                                sprite.center[1] + sprite.size[1] * 0.5,
+                                            ] {
+                                                for (end, key) in ["y", "tail_y"].iter().enumerate()
+                                                {
+                                                    ends[end] |=
+                                                        (y - receptor[1] - mini * value(key)).abs()
+                                                            < 0.002;
+                                                }
+                                            }
+                                        }
+                                        continue;
+                                    }
+
+                                    let FlatDraw::TexturedMesh(mesh) = draw else {
+                                        continue;
+                                    };
+                                    if mesh.texture.texture_key() != Some("body") {
+                                        continue;
+                                    }
+                                    let vertices = match &mesh.vertices {
+                                        FlatMeshVertices::Shared(v) => v.as_ref(),
+                                        FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                    };
+                                    for quad in vertices.chunks_exact(6) {
+                                        for (left, right) in
+                                            [(&quad[0], &quad[1]), (&quad[5], &quad[4])]
+                                        {
+                                            let y = (left.pos[1] + right.pos[1]) * 0.5;
+                                            for (end, key) in ["y", "tail_y"].iter().enumerate() {
+                                                ends[end] |= (y - receptor[1] - mini * value(key))
+                                                    .abs()
+                                                    < 0.002;
+                                            }
+                                        }
+                                    }
+                                }
+                                assert_eq!(
+                                    ends, [true; 2],
+                                    "{kind:?} native hold endpoints (depth={depth}): {vector}"
+                                );
+                                body_checked += 1;
+                            }
+                            checked += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(checked, 82944);
+        assert_eq!(body_checked, 41472);
     }
 
     #[test]

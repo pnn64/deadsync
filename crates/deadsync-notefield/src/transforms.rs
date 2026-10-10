@@ -209,6 +209,7 @@ pub(crate) struct AccelYParams {
     pub wave_period: f32,
     pub parabola_y: f32,
     pub expand: f32,
+    pub expand_period: f32,
     pub boomerang: f32,
 }
 
@@ -384,11 +385,10 @@ pub(crate) fn accel_y_is_identity(accel: AccelYParams) -> bool {
         || accel.boomerang != 0.0)
 }
 
-pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParams) -> AccelYCache {
+pub(crate) fn accel_y_cache(seconds: f32, effect_height: f32, accel: AccelYParams) -> AccelYCache {
     let expand_scale = if accel.expand != 0.0 {
-        let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
         let multiplier = sm_scale(
-            (seconds * EXPAND_MULTIPLIER_FREQUENCY).cos(),
+            (seconds * EXPAND_MULTIPLIER_FREQUENCY * (accel.expand_period + 1.0)).cos(),
             EXPAND_MULTIPLIER_SCALE_FROM_LOW,
             EXPAND_MULTIPLIER_SCALE_FROM_HIGH,
             EXPAND_MULTIPLIER_SCALE_TO_LOW,
@@ -2340,6 +2340,56 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expand_matches_native_phase_and_travel() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/expand-motion.json"
+        ))
+        .expect("full native GetYOffset and phase update block");
+        let vectors = native["vectors"].as_array().expect("native Expand vectors");
+        assert_eq!(vectors.len(), 6480);
+        let mut phases = [0.0; 12];
+        let mut steps = 0;
+        for v in vectors {
+            let value = |key: &str| v[key].as_f64().expect("native input") as f32;
+            let seq = value("sequence") as usize;
+            let flags = value("flags") as usize;
+            if value("strength") == -0.5 && value("raw") == -128.0 && value("speed") == 0.5 {
+                let phase = &mut phases[seq * 4 + flags];
+                *phase = deadsync_gameplay::advance_expand_phase(
+                    *phase,
+                    value("delta"),
+                    value("period"),
+                    flags & 1 != 0,
+                    flags & 2 != 0,
+                );
+                assert!(
+                    (*phase - value("seconds")).abs() < 0.00001,
+                    "phase {v}; actual={phase}"
+                );
+                steps += 1;
+            }
+            let accel = AccelYParams {
+                expand: value("strength"),
+                expand_period: value("period"),
+                ..Default::default()
+            };
+            let actual = apply_accel_y_with_peak_cached(
+                value("raw"),
+                480.0,
+                480.0,
+                accel,
+                accel_y_cache(value("seconds"), 480.0, accel),
+            )
+            .0 * value("speed");
+            assert!(
+                (actual - value("y")).abs() < 0.0001,
+                "travel {v}; actual={actual}"
+            );
+        }
+        assert_eq!(steps, 144);
+    }
 
     #[test]
     fn shrink_matches_native_zoom() {

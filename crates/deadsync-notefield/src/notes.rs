@@ -627,7 +627,7 @@ pub(crate) struct ScrollTravelRequest<'a> {
     pub draw_distance_after_targets: f32,
     pub draw_distance_before_targets: f32,
     pub field_zoom: f32,
-    pub elapsed_screen_s: f32,
+    pub expand_seconds: f32,
     pub effect_height: f32,
     pub screen_height: f32,
     pub note_count_stats: &'a [NoteCountStat],
@@ -732,11 +732,7 @@ pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_
         displayed_speed_percent,
         post_accel_scale,
         accel_is_identity: accel_y_is_identity(request.accel),
-        accel_cache: accel_y_cache(
-            request.elapsed_screen_s,
-            request.effect_height,
-            request.accel,
-        ),
+        accel_cache: accel_y_cache(request.expand_seconds, request.effect_height, request.accel),
         random_speed_lane_seeds,
     }
 }
@@ -1484,7 +1480,7 @@ mod tests {
             draw_distance_after_targets: 64.0,
             draw_distance_before_targets: 64.0,
             field_zoom: 1.0,
-            elapsed_screen_s: 0.0,
+            expand_seconds: 0.0,
             effect_height: 640.0,
             screen_height: 720.0,
             note_count_stats: &[],
@@ -2269,6 +2265,7 @@ mod tests {
             wave_period: 0.0,
             parabola_y: 0.0,
             expand: 0.6,
+            expand_period: 0.0,
             boomerang: 0.2,
         };
         let travel = scroll_travel(travel_request);
@@ -2320,6 +2317,7 @@ mod tests {
             wave_period: 3.0,
             parabola_y: 0.0,
             expand: 0.0,
+            expand_period: 0.0,
             boomerang: -0.0,
         };
         let travel = scroll_travel(travel_request);

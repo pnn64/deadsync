@@ -1212,6 +1212,7 @@ where
             profiles: player_profiles,
         },
         mods: GameplayModRuntimeState {
+            expand_seconds: [0.0; MAX_PLAYERS],
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
             attacks: {

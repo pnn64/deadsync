@@ -52,6 +52,7 @@ pub struct NotefieldGeometry {
 #[derive(Clone, Copy, Debug)]
 pub struct NotefieldVisualState {
     pub elapsed_screen_s: f32,
+    pub expand_seconds: f32,
     pub current_display_beat: f32,
     pub accel: AccelEffects,
     pub scroll: ScrollEffects,
@@ -688,6 +689,7 @@ fn prepare_notes<'a, S>(
             parabola_y: request.visual.visual.parabola_y,
             boomerang: request.visual.accel.boomerang,
             expand: request.visual.accel.expand,
+            expand_period: request.visual.accel.expand_period,
         },
         random_speed: request.visual.visual.random_speed,
         stage_seed: request.geometry.stage_seed,
@@ -701,7 +703,7 @@ fn prepare_notes<'a, S>(
         draw_distance_after_targets: -after,
         draw_distance_before_targets: before,
         field_zoom,
-        elapsed_screen_s: request.visual.elapsed_screen_s,
+        expand_seconds: request.visual.expand_seconds,
         effect_height,
         screen_height: request.geometry.screen_height,
         note_count_stats: request.chart.note_count_stats,

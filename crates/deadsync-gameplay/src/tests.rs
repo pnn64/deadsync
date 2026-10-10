@@ -2462,6 +2462,7 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
                 now: 1.0,
                 delta_time: 0.5,
                 attacks_cleared_for_outro: false,
@@ -2473,6 +2474,7 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2515,6 +2517,7 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
                 now: 1.0,
                 delta_time: 1.0,
                 attacks_cleared_for_outro: true,
@@ -2526,6 +2529,7 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: visibility,
@@ -2569,6 +2573,7 @@ mod tests {
         active_visual.move_y_cols[7] = Some(0.25);
         let states = [
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2577,6 +2582,7 @@ mod tests {
                 outro_attack_visual: VisualOverrides::default(),
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
                 attack_current_appearance: AppearanceEffects {
                     hidden: 0.9,
                     sudden: 0.8,
@@ -2604,6 +2610,7 @@ mod tests {
         for state in states {
             for delta_time in [0.0, 1.0 / 120.0, 0.25, 2.0] {
                 let input = ActiveAttackRefreshInput {
+                    base_accel: AccelEffects::default(),
                     now: 42.0,
                     delta_time,
                     attacks_cleared_for_outro: false,

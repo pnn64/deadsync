@@ -170,6 +170,7 @@ pub struct AccelOverrides {
     pub wave: Option<f32>,
     pub wave_period: Option<f32>,
     pub expand: Option<f32>,
+    pub expand_period: Option<f32>,
     pub boomerang: Option<f32>,
 }
 
@@ -182,6 +183,7 @@ impl AccelOverrides {
             || self.wave.is_some()
             || self.wave_period.is_some()
             || self.expand.is_some()
+            || self.expand_period.is_some()
             || self.boomerang.is_some()
     }
 }
@@ -649,6 +651,7 @@ pub struct AccelEffects {
     pub wave: f32,
     pub wave_period: f32,
     pub expand: f32,
+    pub expand_period: f32,
     pub boomerang: f32,
 }
 
@@ -662,6 +665,7 @@ impl AccelEffects {
             wave: f32::from((mask & ACCEL_MASK_BIT_WAVE) != 0),
             wave_period: 0.0,
             expand: f32::from((mask & ACCEL_MASK_BIT_EXPAND) != 0),
+            expand_period: 0.0,
             boomerang: f32::from((mask & ACCEL_MASK_BIT_BOOMERANG) != 0),
         }
     }
@@ -2247,5 +2251,61 @@ impl ChartAttackEffects {
     #[must_use]
     pub const fn has_note_masks(self) -> bool {
         self.insert_mask != 0 || self.remove_mask != 0 || self.holds_mask != 0
+    }
+}
+
+// ArrowEffects::Update deliberately uses OR: a freeze alone or delay alone
+// continues Expand. The accumulator uses wall delta, not song/mod-timer time.
+pub fn advance_expand_phase(
+    seconds: f32,
+    delta: f32,
+    period: f32,
+    freeze: bool,
+    delay: bool,
+) -> f32 {
+    if !freeze || !delay {
+        (seconds + delta) % (std::f32::consts::TAU / (period + 1.0))
+    } else {
+        seconds
+    }
+}
+
+fn approach_accel_overrides(
+    current: &mut AccelOverrides,
+    target: AccelOverrides,
+    speed: AccelOverrides,
+    base: AccelEffects,
+    delta: f32,
+) {
+    for (current, target, speed, base) in [
+        (&mut current.boost, target.boost, speed.boost, base.boost),
+        (&mut current.brake, target.brake, speed.brake, base.brake),
+        (&mut current.wave, target.wave, speed.wave, base.wave),
+        (
+            &mut current.wave_period,
+            target.wave_period,
+            speed.wave_period,
+            base.wave_period,
+        ),
+        (
+            &mut current.expand,
+            target.expand,
+            speed.expand,
+            base.expand,
+        ),
+        (
+            &mut current.expand_period,
+            target.expand_period,
+            speed.expand_period,
+            base.expand_period,
+        ),
+        (
+            &mut current.boomerang,
+            target.boomerang,
+            speed.boomerang,
+            base.boomerang,
+        ),
+    ] {
+        approach_attack_value(current, target, base, speed, delta, 1.0);
     }
 }
