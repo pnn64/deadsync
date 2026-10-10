@@ -3839,3 +3839,10 @@ fn graphics_refresh_change_emits_request_on_exit() {
         )]
     ));
 }
+
+mod enumeration {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/option_enumeration.rs"
+    ));
+}
