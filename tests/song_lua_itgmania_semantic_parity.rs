@@ -967,6 +967,37 @@ fn native_option_assignment() {
 }
 
 #[test]
+fn native_assignment_snapshots() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/options-assignment");
+    let mut trace = read_trace_file(&root.join("native-snapshot.json"));
+    let (compiled, _, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let assignment = trace.timeline_tracks.iter_mut()
+        .find(|track| track.operation == "PlayerState.SetPlayerOptions")
+        .expect("native fresh assignments");
+    assert_eq!(assignment.samples.len(), 4);
+    assert!(assignment.samples.iter().all(|sample| sample.4.as_ref()
+        .is_some_and(|detail| detail["numeric_options"].is_array())));
+    let mut parity = Parity::default();
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("compiled native assignment getters");
+    assert_eq!(parity.checks(), 24, "eight numeric targets plus finite/coverage guards");
+
+    let assignment = trace.timeline_tracks.iter_mut()
+        .find(|track| track.operation == "PlayerState.SetPlayerOptions").expect("assignments");
+    let final_fields = assignment.samples.last_mut().expect("final assignment").4
+        .as_mut().expect("native detail")["numeric_options"]
+        .as_array_mut().expect("native numeric snapshot");
+    let dark = final_fields.iter_mut().find(|field| field[0] == "dark")
+        .expect("native dark getter");
+    dark[1] = serde_json::json!(0.75);
+    let mut parity = Parity::default();
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(!parity.gaps.is_empty(), "native getter snapshots must affect the audit");
+}
+
+#[test]
 fn native_load_order() {
     paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))

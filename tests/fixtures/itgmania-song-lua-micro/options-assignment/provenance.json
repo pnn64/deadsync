@@ -1231,5 +1231,84 @@
     "original_archives_or_tolerances_changed": false,
     "current_vs_song_options_complete": false
   },
-  "numeric_playback_parity_scope": "This unchanged 4-second native assignment control only; broader Current/Song progression remains open."
+  "numeric_playback_parity_scope": "This unchanged 4-second native assignment control only; broader Current/Song progression remains open.",
+  "native_numeric_snapshot_regression": {
+    "source_parent_commit": "5965054488746e98c7f89730da2b5d30a7928573",
+    "test_source_sha256": "b66f7e97713e2968e2e0a73249524acfacb400ec40f82e3a2c5dce4f9957bc10",
+    "native_capture": {
+      "harness_commit": "0caa61639b50365afb48eb230000b28d14abd435",
+      "binary_sha256": "a49d5cb3faddce6f74908745498a4a81829821a0f3f62ce07e02cdc07cc48827",
+      "capture_exit_code": 0,
+      "control_sha256": "075136da4c315a37b5c1339758c3399e574d3fe21318381106b05061b8542812",
+      "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass158-preserve-options-snapshot-v1\\traces\\control\\control.ssc.semantic.json",
+      "trace_sha256": "63508058fcdc4af45a573ac1232b0665474470f3f137efd1f24feba7fa0476e9",
+      "runtime_errors": [],
+      "dropped_events": 0,
+      "reference_source_sha256": {
+        "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+        "PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+        "ModsGroup.h": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0"
+      },
+      "semantic_loader_used": true,
+      "native_cpp_player_options_methods_used": true
+    },
+    "complete_native_archive": {
+      "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass158-preserve-options-snapshot-v1\\archives\\99934fde595133a96e79c4ba25deb8e778587b09f973423eb26b1e6aec463dd3.tar.zst",
+      "archive_sha256": "99934fde595133a96e79c4ba25deb8e778587b09f973423eb26b1e6aec463dd3",
+      "archive_entry": {
+        "title": "Native player options",
+        "source_simfile": "control/control.ssc",
+        "harness_version": "0.1.57",
+        "archive": "99934fde595133a96e79c4ba25deb8e778587b09f973423eb26b1e6aec463dd3.tar.zst",
+        "sha256": "99934fde595133a96e79c4ba25deb8e778587b09f973423eb26b1e6aec463dd3",
+        "compressed_bytes": 13493
+      },
+      "harness_commit": "0caa61639b50365afb48eb230000b28d14abd435",
+      "binary_sha256": "a49d5cb3faddce6f74908745498a4a81829821a0f3f62ce07e02cdc07cc48827",
+      "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass158-preserve-options-snapshot-v1\\traces\\control\\control.ssc.semantic.json",
+      "trace_sha256": "63508058fcdc4af45a573ac1232b0665474470f3f137efd1f24feba7fa0476e9",
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "update_frames": 241,
+      "semantic_loader_under_test": true,
+      "native_cpp_loader_used": false
+    },
+    "full_control_comparison": {
+      "exit_code": 0,
+      "comparisons_passed": 5333,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.163947799708694,
+      "archive_sha256": "99934fde595133a96e79c4ba25deb8e778587b09f973423eb26b1e6aec463dd3",
+      "binary_sha256": "54b8c54bd3e26013756202489805e13d3ae3822f6d81e37d1d207c4e99fa93b8",
+      "source_commit": "5965054488746e98c7f89730da2b5d30a7928573",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\preserve-options-snapshot-full-v2.log",
+      "log_sha256": "9988e96e1ede24dfb83619900332de930003f7f5de72dc725f2257b5af050832",
+      "control_complete": true
+    },
+    "getter_mutation_regression": {
+      "source_commit": "5965054488746e98c7f89730da2b5d30a7928573",
+      "source_pending_commit": true,
+      "binary_sha256": "7215cff15fb7b8b06ca503757c4934aabe2ca30933608ef8e36ec32833a3eadc",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-assignment-snapshots-v2-song_lua_itgmania_semantic_parity.exe",
+        "native_assignment_snapshots",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.027904700022191,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-assignment-snapshots-v2.log",
+      "log_sha256": "6d96198413bdd90859877290cdbf27be4d0f4449a58f1af02cddd0f8bd559aa5",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.13s"
+      ]
+    },
+    "public_trace": "native-snapshot.json",
+    "public_trace_sha256": "63508058fcdc4af45a573ac1232b0665474470f3f137efd1f24feba7fa0476e9",
+    "original_trace_retained": true,
+    "authored_lua_unchanged": true,
+    "mutation": "Changing the final native Dark getter to 0.75 must produce a comparison gap",
+    "full_corpus_complete": false
+  }
 }

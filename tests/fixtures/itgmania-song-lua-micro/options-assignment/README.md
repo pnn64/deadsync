@@ -1,7 +1,9 @@
 This complete native options control checks empty assignment, numeric-only
 assignment, explicit skin reset, and explicit skin replacement against
 compiled ITGmania PlayerOptions and ModsGroup code. Reference sources and
-the original native trace are unchanged.
+the original native trace are unchanged. The additional native-snapshot.json
+records compiled getter fields after fresh assignment; altering one of
+those fields must fail the permanent regression.
 
 The previous runtime dropped startup numeric targets for a static actor.
 The comparison also missed resets omitted by a replacement options string.
