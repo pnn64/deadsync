@@ -1535,12 +1535,10 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.sm",
-      "harness_version": "0.1.31",
-      "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
-      "sha256": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f",
-      "compressed_bytes": 55098,
-      "uncompressed_sha256": "a3a7deaa31fd84ab8c8c3593440171184f4aabeff5e70ab1866373c74bed373c",
-      "compression_level": 12,
+      "harness_version": "0.1.64",
+      "archive": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf.tar.zst",
+      "sha256": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf",
+      "compressed_bytes": 55318,
       "aliases": [
         "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
         "3a11347bbb603a5a02eca3de3ddbe5ff45624b040cadec32440c329bfda1736d.tar.zst",
