@@ -1,5 +1,5 @@
 use super::*;
-use deadlib_render_core::TexturedMeshVertex;
+use deadlib_render_core::{CullMode, TexturedMeshVertex};
 use glam::Vec3 as Vector3;
 use std::hint::black_box;
 
@@ -59,6 +59,7 @@ fn render(
     vertices: &[TexturedMeshVertex],
     instance: TexturedMeshInstanceRaw,
     primary: &Texture,
+    sampler: Option<MeshSampler>,
     additive: Option<&Texture>,
     width: usize,
     stripe: (usize, usize),
@@ -66,6 +67,7 @@ fn render(
     depth: &mut DepthRows<'_>,
 ) -> u32 {
     let mut writer = byte_writer(pixels);
+    let primary_sampler = texture_sampler_desc(primary.sampler, 0, true, sampler);
     match variant {
         0 => original::original(
             mvp,
@@ -73,6 +75,7 @@ fn render(
             instance,
             BlendMode::Alpha,
             primary,
+            primary_sampler,
             additive,
             width,
             width,
@@ -87,6 +90,7 @@ fn render(
             instance,
             BlendMode::Alpha,
             primary,
+            primary_sampler,
             additive,
             width,
             width,
@@ -101,6 +105,7 @@ fn render(
             instance,
             BlendMode::Alpha,
             primary,
+            primary_sampler,
             additive,
             width,
             width,
@@ -156,14 +161,54 @@ fn environment_pixels_depth_and_counts_match_original() {
                     glam::camera::rh::proj::opengl::perspective(1.2, 1.0, 0.1, 100.0)
                         * Matrix4::from_translation(Vector3::new(0.0, 0.0, -1.0)),
                 ] {
-                    for (cull, stripe, depth_mode, additive) in [
-                        (false, (0, 32), 0, None),
-                        (false, (7, 23), 1, Some(&reflection)),
-                        (true, (0, 32), 2, Some(&reflection)),
-                        (true, (7, 23), 0, None),
+                    for (cull, stripe, depth_mode, additive, sampler) in [
+                        (CullMode::None, (0, 32), 0, None, None),
+                        (CullMode::None, (7, 23), 1, Some(&reflection), None),
+                        (CullMode::Back, (0, 32), 2, Some(&reflection), None),
+                        (CullMode::Back, (7, 23), 0, None, None),
+                        (
+                            CullMode::Front,
+                            (0, 32),
+                            2,
+                            Some(&reflection),
+                            Some(MeshSampler {
+                                filter: SamplerFilter::Nearest,
+                                wrap: SamplerWrap::Clamp,
+                            }),
+                        ),
+                        (
+                            CullMode::Front,
+                            (7, 23),
+                            0,
+                            None,
+                            Some(MeshSampler {
+                                filter: SamplerFilter::Linear,
+                                wrap: SamplerWrap::Repeat,
+                            }),
+                        ),
+                        (
+                            CullMode::None,
+                            (7, 23),
+                            1,
+                            Some(&reflection),
+                            Some(MeshSampler {
+                                filter: SamplerFilter::Nearest,
+                                wrap: SamplerWrap::Repeat,
+                            }),
+                        ),
+                        (
+                            CullMode::Back,
+                            (0, 32),
+                            2,
+                            Some(&reflection),
+                            Some(MeshSampler {
+                                filter: SamplerFilter::Linear,
+                                wrap: SamplerWrap::Clamp,
+                            }),
+                        ),
                     ] {
                         let mut inst = instance(mask);
-                        inst.cull_back = if cull { 1.0 } else { 0.0 };
+                        inst.cull_mode = cull as u8 as f32;
                         let mut results = Vec::new();
                         for variant in 0..3 {
                             let mut pixels = vec![0xff14_283c; 32 * (stripe.1 - stripe.0)];
@@ -175,6 +220,7 @@ fn environment_pixels_depth_and_counts_match_original() {
                                 &vertices,
                                 inst,
                                 &primary,
+                                sampler,
                                 additive,
                                 32,
                                 stripe,
@@ -192,11 +238,11 @@ fn environment_pixels_depth_and_counts_match_original() {
                         }
                         assert_eq!(
                             results[0], results[1],
-                            "hoist: mode={mode} mask={mask} cull={cull}"
+                            "hoist: mode={mode} mask={mask} cull={cull:?} sampler={sampler:?}"
                         );
                         assert_eq!(
                             results[0], results[2],
-                            "projection: mode={mode} mask={mask} cull={cull}"
+                            "projection: mode={mode} mask={mask} cull={cull:?} sampler={sampler:?}"
                         );
                     }
                 }
@@ -233,6 +279,7 @@ fn benchmark_environment_geometry() {
                 black_box(&vertices),
                 black_box(instance(mask)),
                 &primary,
+                None,
                 Some(&reflection),
                 64,
                 (0, 64),

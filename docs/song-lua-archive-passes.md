@@ -1531,3 +1531,1400 @@ in pass41-effect-queue-comparison.json under target/song-lua-archive-passes.
 A separate late-wrapper/fade probe reproduces alpha, visibility and draw-color
 failures (5,393 pass / three fail out of 5,396 checks). It remains under target
 for the next investigation. The full corpus goal remains unfinished.
+
+
+## Pass 42: restore wrapper membership after command probes
+
+The independent late-wrapper/fade chart reproduced three alpha, visibility
+and draw-color failures. A second native probe asserts one wrapper after
+AddWrapperState and before GetWrapperState(1). ITGmania has no runtime errors;
+DeadSync fails the first assertion at the real Begin callback. Speculative
+message-command capture had retained a wrapper on the live owner, so later
+GetWrapperState(1) addressed that orphan instead of the runtime wrapper.
+Actor.cpp:972 creates one wrapper per call; its Lua binding at 2392 returns
+that new object, and the GetWrapperState binding at 2415 is one-indexed.
+
+Actor snapshots now include wrapper membership. Both Rust and Lua snapshot
+forms copy the list while retaining the live Actor tables and their method
+closures; deep cloning those objects would recurse into their owner and lose
+identity. AddWrapperState registers its owner with an active capture scope
+before mutation, so probes touching another owner restore that list too.
+The replaced snapshot path omitted membership. DeadSync is 0.5.1855, with
+song-cache version 46 invalidating earlier compiled wrapper tracks.
+
+The unchanged fade archive now passes all 5,396 checks (previously three
+failures), and the count variant passes all 5,396 (previously six failures).
+The checked-in regression retains 575 observations, including 482 drawable
+frames. Removing its wrapper diffuse track fails native colors without
+removing comparisons. A core regression also preserves existing wrapper
+identity and state on both the direct owner and another touched owner.
+All 15 native controls and all 667 core song-Lua tests pass; three existing
+core tests remain ignored. The production build without test support and both
+cache checks pass.
+
+The identical complete harness-0.1.16 KABOOOOOM archive now passes all
+2,274,713 comparisons (previously 11 failures). Its complete 35,928,363-byte
+capture, with zero native errors or drops, replaces the obsolete indexed
+archive. The superseded bytes remain under target; aliases and fixture
+references follow the validated replacement. No observation, tolerance or
+comparison was removed.
+
+The first 18 previously passing archives also pass all 3,729,943 comparisons
+with the new executable. Together with KABOOOOOM this verifies 19 archives and
+6,004,656 comparisons. Hashes, production gates, count control and same-archive
+results are linked in pass42-wrapper-fade-comparison.json under
+target/song-lua-archive-passes. Full-corpus verification remains unfinished.
+
+
+## Pass 43: replace the second obsolete KABOOOOOM capture
+
+The next Tech Spectrum Super variant's indexed capture was rejected before
+comparisons because it lacked the required native wrapper draw evidence.
+An unchanged harness-0.1.16 executable captured its original source through
+beat 645.75 / 199.4571533203125 seconds, with 26 payload members and zero native
+errors or dropped events. The new complete archive passes all 2,274,713
+comparisons on the same DeadSync-0.5.1855 executable used in pass 42.
+
+The 35,928,262-byte archive replaces the obsolete fixture and preserves its
+aliases; the superseded bytes remain under target. No production code,
+tolerance or observation changed in this pass. Together with the 18 rechecked
+archives and the first KABOOOOOM variant, 20 ordered archives now pass all
+8,279,369 comparisons. Receipts, hashes and publication metadata are linked in
+pass43-kaboom-main-comparison.json. Full-corpus verification remains unfinished.
+
+
+## Pass 44: compare manual draws on the song music clock
+
+The Boys Are Back in Town failed 1,055 custom draw-plan comparisons with both
+its old archive and a fresh complete harness-0.1.16 capture. The compiled
+frames contained the expected player draws, starting at music time 1.341;
+the audit looked them up using zero-based native trace seconds. The native
+bridge explicitly restores TimingData's beat-zero music origin before song
+position lookup. DrawFrame.second retains that music timestamp, and gameplay
+selects those frames using the music effect clock. The overlay audit already
+performed this conversion.
+
+The manual plan and manual mesh audits now use the existing Second clock
+conversion, preserving the authored origin and music rate. Production playback,
+DeadSync version 0.5.1855 and song-cache version 46 are unchanged. Independent
+positive- and negative-offset draw controls failed 105 and 30 plan checks
+before this fix; both now pass all 247 observations each. Shifting retained
+frame timestamps by 0.25 seconds still fails, retaining all 241 native frame
+checks in each negative control. The local and linked native SongPosition,
+TimingData, Actor and ActorFrame sources are byte-identical.
+
+The exact same full archive now passes all 179,179 comparisons, with no
+observation or tolerance removed. All 16 native controls pass. Sharkmode, the
+only earlier archive with a manual draw audit, passes all 259,567 checks on
+the corrected comparator. The other 19 prior archives have no manual audit;
+their previously verified comparison paths are unchanged.
+
+The complete 443,121-byte capture replaces the obsolete published fixture,
+retaining its aliases and preserving superseded bytes under target. Native
+capture reaches beat 343.66668701171875 / 129.78482055664062 seconds with 13
+payload members and zero runtime errors or dropped events. Receipts and
+hashes are linked in pass44-manual-clock-comparison.json. The ordered verified
+prefix contains 21 archives / 8,458,548 comparisons; the full corpus is not
+complete. A separate audit of public music-seconds getter semantics is also
+pending; this pass establishes the conversion for the captured clock contract.
+
+
+## Pass 45: replace the obsolete Epidermis timing capture
+
+The next indexed Venetian Snares - Epidermis archive was rejected before any
+comparisons because it used the obsolete continuous-BPM song clock. The
+authored foreground reads GetSongBeat to fade a quad between beats 126 and
+163.5. An unchanged harness-0.1.16 executable recaptured the original source
+using native TimingData through beat 910.75 / 273.2250061035156 seconds, with
+three payload members and zero native runtime errors or dropped events.
+
+The complete 100,673-byte replacement passes all 363,873 comparisons on the
+unchanged DeadSync-0.5.1855 executable. It replaces the obsolete published
+archive while retaining aliases and preserving its superseded bytes under
+target. No production code, tolerance or observation changed in this pass.
+
+The second Boys Are Back in Town variant also passes all 179,179 checks.
+Together with the prior verified prefix, 23 ordered archives now pass
+9,001,600 comparisons. Receipts and hashes are linked in
+pass45-epidermis-comparison.json under target/song-lua-archive-passes. The
+full corpus and separate public music-seconds getter audit remain unfinished.
+
+
+## Pass 46: replace the second obsolete Epidermis capture
+
+The Tech Spectrum Super variant also failed before comparisons because its
+archive retained the obsolete continuous-BPM clock. The unchanged native
+harness recaptured the original source through the same complete endpoint,
+beat 910.75 / 273.2250061035156 seconds, with three payload members and no
+native runtime errors or dropped events. All 363,873 comparisons pass on the
+same pinned DeadSync-0.5.1855 executable.
+
+The verified 100,620-byte archive replaces the obsolete published fixture,
+retaining aliases and preserving superseded bytes under target. No code,
+tolerance or observation changed. The ordered prefix now contains 24 archives
+and 9,365,473 comparisons; full-corpus parity and the public music-seconds
+getter audit remain unfinished. Receipts and hashes are linked in
+pass46-epidermis-main-comparison.json.
+
+
+## Pass 47: expose native public music seconds in both implementations
+
+SongPosition.cpp assigns the raw music timestamp to m_fMusicSeconds and its
+Lua binding returns that native float. GameState.GetCurMusicSeconds returns
+the same field. Simply Love's StepStatistics/Time.lua handles negative music
+time and divides it by rate itself. Both the harness and DeadSync instead
+exposed elapsed trace time, silently agreeing on the wrong API when offsets
+or music rate mattered.
+
+Harness 0.1.17 now compiles SongPosition.cpp and invokes its UpdateSongPosition
+and actual Lua getters. Its independent positive-offset assertion failed
+with public 0 versus native 1.25 before the fix. Both offset probes now pass
+on every frame. All 170 harness tests pass, with five existing tests ignored.
+The lighting preference uses the checked-out LightsManager default of 0.05.
+
+DeadSync 0.5.1856 restores the music origin, music rate and native float
+precision for public song/player position getters and GetCurMusicSeconds.
+The elapsed timer remains unchanged. Lua 5.1 whole-number formatting is
+preserved without rounding tiny fractional times away. Song-cache version 47
+invalidates previously compiled getter-dependent tracks. The replaced path
+returned elapsed seconds directly.
+
+Each of five getters drives a drawable quad; a sixth quad retains elapsed
+timer time. The positive control failed 170 of 5,256 checks before the fix.
+Both controls now pass all 10,512 observations. Zeroing only Clock1's retained
+X samples still fails, without removing observations. The two existing manual
+draw controls were recaptured from the native getter and pass all 494 checks.
+All 16 native controls, all 668 core song-Lua tests, the production build
+without test support and both cache checks pass; three existing core tests
+remain ignored. Source and capture hashes are pinned in the micro provenance.
+
+Full archives now require the native-music-seconds capture marker. A fresh
+Bank Account reference passes 116,603 checks, and a fresh Boys Are Back in Town
+reference passes 179,179. Both complete archives replace their obsolete
+fixtures, retaining aliases and preserving superseded bytes under target.
+The obsolete-reference guard regression also passes. Earlier prefix results
+are historical: those references require recapture and revalidation under
+the corrected contract, so this pass does not claim a new verified prefix.
+
+The complete fresh 321STARS capture remains unpublished with eight multitap
+write differences out of 372,891 comparisons: visibility at beat 52, and
+color/zoom at beat 56. Receipts are linked in pass47-public-music-comparison.json.
+Full-corpus parity remains unfinished. A separate source-backed audit of the
+music effect clock remains pending; this pass establishes the public getters.
+
+## Pass 48: verify music effect clocks against compiled Actor behavior
+
+ITGmania Actor.cpp advances music effect clocks from Actor::SetBGMTime;
+GameState.cpp supplies the visible/raw music timestamp independently of the
+nonnegative elapsed Actor::Update delta. The harness still used trace elapsed
+seconds for music effects after pass 47 fixed the public SongPosition getters.
+Two offset controls independently run the compiled Actor implementation with
+music origins 1.25 and -0.5. Each checks 1,629 exact effect-time, delta and spin
+rotation fields, plus 4,344 pulse vertex axes. Both previously failed at the
+first music-clock getter. They now pass, including timer controls. The negative
+case also exposed a harness helper that incorrectly passed a negative effect
+delta to Actor::Update; it now calls the compiled internal spin update instead.
+Harness 0.1.18 is committed as 9b7284ee6a1c83ab917c97ce837437b591b0bbb8.
+
+DeadSync 0.5.1857 uses native music timestamps for non-timer time clocks,
+shares the existing motion-clock delta with spin, and records effect-time
+anchors in the raw music coordinate used by production rendering. Selected
+effects and music clocks initialize during the existing zero-delta startup
+update, before child getters and parent callbacks. No additional callback is
+added; the native text and callback-count regressions remain unchanged.
+The geometry comparator also needed raw music time for composition and leaf
+effect rendering. Both offset traces retain all 27,168 observations per case,
+including every pulse, spin, color, crop, shadow and drawable-frame check.
+Incorrect getter tracks are rejected without removing observations.
+Song-cache version 48 invalidates previously compiled effect clock anchors.
+
+Full archives now require the native-music-seconds music_effect_clock marker.
+The guard independently rejects missing and elapsed-seconds effect clocks.
+Only the newly captured Bank Account and extra-chart Boys archives have been
+verified under this contract; older prefix counts remain historical. The full
+501-simfile / 492-archive audit remains unfinished, including the eight known
+321STARS multitap differences. No failing chart has been published as verified.
+Detailed native source, fixture and executable hashes are committed in
+music-effect-clock-provenance.json; local gate and publication receipts are
+recorded in pass48-music-effect-comparison.json.
+
+## Pass 49: retain strict native multitap boundaries
+
+A complete harness 0.1.18 recapture of 321STARS retained eight differences
+at beats 52 and 56. Both clocks report those exact beats. The original
+multitap/Default.lua keeps a multitap visible at its final tap and advances
+its bounce/color only for beat > tap. DeadSync's analytic multitap path
+encoded those edges with tap.next_up(), which can round back to the same
+float seconds when converted for playback.
+
+DeadSync 0.5.1858 checks whether those strict edges survive conversion before
+replacing the authored callback with analytic curves. When they collapse,
+the existing chronological compiler replays the original Lua and bakes its
+native frame writes. Gameplay continues to consume compiled tracks. Cache
+version 49 invalidates the obsolete analytic windows. No comparison or
+observation was removed or relaxed.
+
+The same complete archive now passes all 372,891 comparisons, including all
+77,904 multitap writes. A strict-boundary regression covers the exact first
+tap and adjacent native frames; existing multitap, public music getter and
+music effect clock controls pass. All 668 core song-Lua tests, the production
+check and both cache checks pass. The clean archive replaces the obsolete
+fixture, with its aliases retained and original bytes saved under target.
+Hashes and before/after evidence are in multitap-boundary-provenance.json.
+
+Three complete archives are verified under the current native clock contract.
+The full 501-simfile / 492-archive audit remains unfinished. The next pass
+recaptures Warp Zone and Let Me Hear That from the start of the corpus;
+earlier prefix counts remain historical until independently revalidated.
+
+## Pass 50: restart the corpus audit with the corrected native clocks
+
+Fresh harness 0.1.18 references for the first two ordered archives, Warp Zone
+and Let Me Hear That, are complete with no runtime errors or dropped events.
+DeadSync 0.5.1858 passes all 212,220 and 205,071 comparisons respectively.
+Both references replace their obsolete fixtures; aliases and superseded
+bytes are preserved. Capture-report.json now records their executable and
+log hashes alongside the exact results.
+
+The current verified prefix is two archives / 417,291 comparisons, with five
+complete archives verified under the corrected native clock contract. The
+full 501-simfile / 492-archive audit remains unfinished. The next archive in
+order is Waltz Capriccio; the audit stops at the next actual capture or parity
+failure for source-backed investigation.
+
+## Pass 51: continue the current native clock corpus audit
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
+
+Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+Archive 18: 280-MODS-[MASTER] Sharkmode/Sharkmode.ssc passes all 304425 comparisons. The verified prefix is now 18/492 archives; full-corpus parity remains unfinished.
+
+Archive 19: 303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc passes all 2274713 comparisons. The verified prefix is now 19/492 archives; full-corpus parity remains unfinished.
+
+Archive 20: 303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc passes all 2274713 comparisons. The verified prefix is now 20/492 archives; full-corpus parity remains unfinished.
+
+Archive 21: 307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 21/492 archives; full-corpus parity remains unfinished.
+
+Archive 22: 307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 22/492 archives; full-corpus parity remains unfinished.
+
+Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 23/492 archives; full-corpus parity remains unfinished.
+
+Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 24/492 archives; full-corpus parity remains unfinished.
+
+Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 52: verify actor lookup against native Lua bindings
+
+A direct compiled ActorFrameTexture control calls ITGmania's real ActorFrame
+Lua methods. All eight assertions pass: missing named and unnamed children
+return nil without creating actors, and GetText and UnknownMethod are absent.
+The old harness 0.1.18 fails the unchanged missing-child and GetText assertions.
+Harness 0.1.20 fixes those two behaviors and preserves GetText on the nine
+BitmapText subclasses identified in ITGmania's declarations. Generic unknown
+method lookup and the external Simply Love screen context remain pending.
+
+DeadSync 0.5.1859 exposes GetText only for BitmapText and its native subclasses,
+adds the native BPMDisplay constructor, and corrects StepsDisplay's ActorFrame
+inheritance. Its fabricated difficulty text, helper and tags are deleted.
+Cache version 50 invalidates tracks compiled with the old feature probes.
+Two existing theme tests now assert StepsDisplay.GetText is absent, following
+StepsDisplay.cpp's Lua registration rather than the previous fabricated API.
+
+The complete unchanged two-assertion probe fails compilation in DeadSync
+0.5.1858 at the GetText assertion and passes all 2,669 comparisons in 0.5.1859.
+The earlier probe with a mismatched noteskin hash is not lookup evidence.
+All 669 core song-Lua tests, the production check, both cache checks and the
+retained public-music, effect-clock and strict-multitap controls pass.
+Warp Zone retains all 212,220 observations and 321STARS all 372,891, with no
+differences. No observations or tolerances were removed or relaxed.
+
+The synthetic archive, native control input/output, source hashes and complete
+before/after receipts are in actor-lookup-provenance.json under the micro
+fixtures. The probe is not counted as a corpus song. Full parity remains
+unfinished across 501 simfiles, including 18 without indexed archives and
+nine historical duplicate captures. The 25-archive prefix from pass 51 records
+harness 0.1.18 and DeadSync 0.5.1858; these focused checks do not revalidate the
+entire prefix on the new versions. ArrowQuest still needs a complete capture
+after its 900-second timeout; no truncated or diagnostic archive was published.
+
+
+## Pass 53: replace invented method probes with native inheritance
+
+A direct compiled ActorFrameTexture control verifies inherited native methods,
+unknown-method absence, GetChildAt absence, and callback ownership. Native
+Actor and Sprite have no SetUpdateFunction; ActorFrame registers it. A caller's
+Lua function added to ActorFrame is inherited by native ActorFrameTexture.
+The native source files match the local ITGmania reference tree byte for byte.
+
+Harness 0.1.21 now uses actual compiled prototypes for Actor, ActorFrame,
+ActorFrameTexture, ActorMultiVertex and Sprite; Quad has Sprite's Lua type.
+It deletes the invented GetChildAt and arbitrary ActorFrame method fallback,
+keeps declared fallback helper names, and uses native external player/field
+class labels. Source-invalid synthetic callbacks now belong to ActorFrames.
+All existing numeric samples, counts and tolerances remain. The full native
+suite passes 136 tests with two existing ignored tests.
+
+DeadSync 0.5.1860 deletes GetChildAt from class and instance adapters and deletes
+the unused numeric child-index helpers. Cache version 51 invalidates compiled
+tracks with the previous feature decision. The unchanged complete two-assertion
+probe fails in 0.5.1859 and passes all 2,669 comparisons in 0.5.1860. All 669 core
+tests, the production and cache checks, and the retained native public-music,
+effect-clock and strict-multitap controls pass. Warp Zone retains all 212,220
+comparisons and 321STARS all 372,891, with no differences.
+
+The tiny complete archive and independent native input/output are committed
+under the micro fixtures with method-probes-provenance.json. It is not a new
+corpus song. DeadSync's non-Frame callback registration, unlinked harness actor
+class registrations, and Simply Love screen context still need source-backed
+work. Full-corpus parity remains unfinished: 501 simfiles, 483 indexed source
+simfiles, 18 unindexed, and nine historical duplicate captures. The old
+25-archive prefix is not claimed as revalidated on these new versions.
+
+
+## Pass 54: restart the corpus with native method feature probes
+
+Warp Zone is recaptured completely with committed harness 0.1.21, with no
+runtime errors or dropped events. DeadSync 0.5.1860 passes all 212,220
+comparisons. The archive replaces the older reference; its aliases and
+superseded bytes remain preserved. Capture-report.json records exact
+executable and log hashes.
+
+The current-version verified prefix is one archive. The old 25-archive
+prefix remains historical. Full parity remains unfinished across 501
+simfiles, including 18 unindexed sources and nine historical duplicate
+captures. The next ordered source is Let Me Hear That.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 55: establish the remaining native actor class contract
+
+The renewed .21/.1860 audit reaches 11 complete archives and 2,503,481
+comparisons with no differences, each committed as soon as verification
+passes. The audit stops intentionally after CRYSTAL_ACCESS to investigate
+an independently proven class-registration gap, rather than a song failure.
+
+Actual compiled ITGmania bindings verify the complete own-function
+inventory of Actor (171), ActorFrame (25), Sprite (27), ActorFrameTexture
+(7) and ActorMultiVertex (39). The 269-method check works in both directions:
+every declared entry exists and every actual own function is represented.
+It includes the two methods generated by Actor.cpp
+ADD_GET_SET_METHODS(tween_uses_effect_delta). Fallback Lua helper names
+remain separate source evidence.
+
+Two additional native userdata controls verify inheritance, Frame-only
+callback ownership, absence of ActorFrame.fardistz, caller-added class Lua
+functions and live base/derived method replacement. In particular, existing
+ActorFrameTexture userdata immediately sees changes to Actor.GetX and
+ActorFrame.GetX and inherits the base override when the derived override
+is removed. A repair that leaves instance functions shadowing those class
+tables would still be incorrect.
+
+The unchanged complete class-inheritance archive captures cleanly under
+harness .21 but fails compilation in DeadSync .1860 at the native Actor
+class-exists assertion. The archive and actual native controls are preserved
+under micro fixtures with actor-class-provenance.json. This is verified
+failure evidence; the DeadSync implementation repair is still pending.
+No production source or Lua song content is changed in this evidence commit,
+and the probe is not counted as a corpus song or passing parity fixture.
+
+## Pass 56: repair native public class inheritance
+
+DeadSync .1861 exposes the compiled 269-method inventory through public Actor,
+ActorFrame, Sprite, ActorFrameTexture and ActorMultiVertex class tables.
+Existing instances see caller-added Lua methods and live base/derived overrides.
+Frame callbacks remain unavailable on plain Actor and Sprite/Quad. Native
+Actor::AddWrapperState allocates ActorFrame, so wrappers retain those callbacks
+and all original hibernation timing assertions. Independent native controls
+verify wrapper ownership, invalid callback arguments and multiple return values.
+
+Banner is a distinct Sprite subclass using the 14 own method declarations in
+local Banner.cpp. Those declarations are source-backed; Banner is not linked
+into the compiled oracle. The obsolete standalone class forwarders and invented
+ActorFrame.fardistz and AMV getters are removed from public lookup. The AMV shape
+test uses GetDestDrawMode and verifies line width through a drawn three-pixel
+line, retaining the original quad vertex and color assertions.
+
+Synthetic callback owners are corrected to ActorFrame while drawable Quads,
+numeric expectations, playback golden samples and tolerances remain intact.
+Cache version 52 invalidates compiled tracks with the old method decisions.
+All 670 core tests pass with three existing GPU tests ignored. Production,
+clock-cache and old-cache rejection checks pass, as do the retained native
+public-music, effect-clock and strict-multitap controls. The unchanged complete
+class-inheritance archive passes all 2,694 comparisons after failing in
+.1860. Exact receipts are preserved in actor-class-repair-provenance.json.
+
+The unchanged archive also exposes a comparator mistake: a never-textured
+Sprite was counted as drawable despite native Sprite::EarlyAbortDraw and
+the trace's lack of Sprite geometry. Drawable membership now retains every
+Sprite with a declared texture, recorded load/SetTexture or projected track;
+the empty actor stays in the tree without inventing a primitive. All original
+2,670 checks remain, and the image texture alias control passes unchanged.
+
+This repair verifies class registration and lookup, not every native method
+body or fallback helper. Full corpus parity remains unfinished: 501 simfiles,
+483 indexed sources, 18 unindexed and nine historical extra captures. The prior
+11-archive prefix is historical on .21/.1860 until revalidated with .1861.
+
+## Pass 57: revalidate the corpus after native class inheritance
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
+
+Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+## Pass 58: verify and repair ActorProxy against compiled ITGmania
+
+The harness now links the unchanged native ActorProxy.cpp. Compiled userdata
+assertions verify its two own methods, Actor inheritance, absent Frame callbacks
+and child lookup, nil initial target, assigned target identity, rejection of
+missing/scalar/plain-table targets, independent position, caller-added methods
+and live base overrides. The local reference and pinned vendor Proxy sources
+are byte-identical. Native control commit: 050a8d3; harness repair: 7abb249.
+
+Harness .22 passes 138 tests with two existing skips. DeadSync .1862 exposes
+the same public class and own methods, validates targets before assignment,
+and restricts the new GetTarget adapter to Proxy actors. Cache version is 53.
+The unchanged native JSON assertions fail on the old implementation and pass
+on the repaired source. Final source validation passes 486 library tests, two
+integration tests, 183 playback tests and the production check. Three GPU
+tests remain ignored. Both cache roundtrip and old-version rejection pass.
+
+A parallel playback run hit a global texture-generation equality failure. The
+isolated test and both complete serial runs pass without changing its numeric
+assertions. This is recorded in proxy-methods-provenance.json.
+
+Two complete two-second archives retain their Lua unchanged and capture against
+DeadSync's noteskins. They contain zero runtime errors and dropped events. The
+old .1861 executable fails on the expected class assertions. Both the intermediate
+and final .1862 executables pass all 5,342 comparisons. The final executable's
+source hashes match the committed repair, including the Proxy-only GetTarget
+adapter. Explicitly enabling the existing Simply Love test-support feature
+resolved the archive verifier's dependency linking error. No source or golden
+assertion was changed to resolve this build error. These micro controls do not
+establish full-corpus parity.
+
+Other public classes, complete Proxy rendering/argument cases and Simply Love
+screen context remain pending. The previous 17-archive prefix (3,666,254 passing
+comparisons) was checked on harness .21 / DeadSync .1861 and needs refreshing.
+Full scope remains 501 simfiles, including 18 unindexed sources, and 492 archive
+variants. Full-corpus parity is unfinished.
+
+## Pass 59: revalidate the corpus after native class inheritance
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 60: verify BitmapText against compiled ITGmania
+
+The unchanged native BitmapText.cpp and FontManager.cpp are now linked into
+the actor oracle. Native control f576833 verifies 19 own methods, Actor
+inheritance, absent Frame methods and unknown probes, empty text, live class
+and base overrides, and the macro boolean setter. Numeric zero, strings and
+tables are true; false, nil and missing values are false. The native label has
+no loaded font, so this does not establish text layout or rendering parity.
+
+Harness repair a9ee894 exposes the native class and corrects this setter.
+All 140 harness tests pass with two existing skips. DeadSync .1863 installs
+the same native inventory and strict lookup, preserves the five stock fallback
+helper bodies, and invalidates old compiled behavior with cache version 54.
+All 672 core tests pass with three existing GPU skips; production, clock-cache
+and old-cache rejection checks pass. Native assertions are unchanged.
+
+The style test now calls native wrapwidthpixels with its original numeric
+expectations. The obsolete unconditional _wrapwidthpixels alias is removed: the
+checked-out Simply Love helper has separate 8-bit and Unicode branches and is
+not a native or fallback method. Full Simply Love wrapping remains pending.
+
+Two complete two-second archives contain no runtime errors or dropped events.
+Both fail on .1862 at the expected class assertions. Their .1863 archive
+comparisons now pass all 5,342 checks using the pinned .1863 executable.
+The source repair is committed as a93778308. The harness public raw-table
+inventory and method-shadowing audit is pending and has an independent
+compiled-native control that fails on the semantic adapter.
+Full corpus parity remains unfinished, with 501 simfiles and 492 indexed
+archive variants. The prior eight-archive prefix is historical on .22/.1862.
+
+
+## Pass 62: repair public native method tables in the harness
+
+Compiled native controls expose two more adapter gaps: native own methods exist
+before lookup, and subclass own methods shadow later base overrides. A second
+control verifies inherited false, zero, strings and tables. The .23 semantic
+control fails for missing own BitmapText methods; an intermediate .24 control
+fails for inherited false. Neither failed capture is published as an archive.
+
+Harness commit 6a127f4 replaces lazy inherited-first lookup with eager own
+native methods and fallback declarations, while base lookup preserves values.
+All 142 harness tests pass with two existing skips. Exact Lua assertions match
+compiled native method tables, with five BitmapText helper bodies taken from
+the checked-out fallback script. No engine or theme reference code is changed.
+
+Two complete two-second archives retain their Lua unchanged and have no runtime
+errors or dropped events. DeadSync .1863 already has the correct public table
+behavior and passes all 5,338 comparisons without further production changes.
+The earlier raw-method archive is byte-identical after the inherited-value fix.
+Exact native inputs, outputs, pins and failures are in
+actor-class-tables-provenance.json. Method bodies, font layout, unlinked actor
+subclasses and full Simply Love context remain pending.
+
+The corpus must now be refreshed from the top on harness .24 / DeadSync .1863.
+The .22/.1862 eight-archive prefix is historical; the full 501-simfile and
+492-archive scope is unchanged. Full parity remains unfinished.
+
+## Pass 63: revalidate the corpus after native class inheritance
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
+
+Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 64: correct native actor identity and BitmapText arguments
+
+Compiled ITGmania userdata independently rejects nonboolean arguments to
+rainbowscroll, jitter and uppercase. These bindings use BArg, unlike BIArg and
+lua_toboolean. Luna::tostring_T returns the native class and an opaque pointer;
+actor names and hierarchy paths do not appear in that string. Matching sources
+are checked in the local reference tree and the compiled vendor revision.
+
+The .24 harness leaked hierarchy paths into actor strings. Sharkmode's original
+grabactors.lua classified Sprites under PlayerP1 as Players and attempted an
+invalid GetNumChildren call. The unchanged runtime control also exposed the
+internal name field shadowing actor:name(...). Harness 52385fe
+fixes those semantics and passes 143 tests, with two existing skips.
+
+DeadSync .1863 fails both complete control archives at the native assertions.
+The replacement identity strings, native name setter and strict boolean
+bindings pass both controls on .1864: 5,346 exact comparisons. The full song-Lua
+suite, production check and cache checks pass. Cache version 55 invalidates
+captures that could omit failing startup commands. The old name-based string
+test is replaced by native class-and-pointer expectations.
+
+Sharkmode now captures unchanged through beat 357 / 138.1935577392578 seconds
+with no runtime errors or dropped events. DeadSync passes 240,340 comparisons
+but fails 18,318 checks in drawable membership, custom draws and mesh matching.
+Its newly captured archive remains unpublished while those gaps are diagnosed.
+The two complete control archives are hash-verified and pass all comparisons.
+Runtime controls, native source hashes, before/after failures and immutable
+executable pins are in runtime-actors-provenance.json.
+
+The previous 17-archive prefix is historical until refreshed on .25/.1864.
+The full scope remains 501 simfiles and 492 archive variants; parity is unfinished.
+
+## Pass 65: match native Sprite loading and retain runtime assets
+
+Compiled ITGmania Sprite userdata confirms that LoadBackground and LoadBanner
+require a string-compatible path, install the image and reset source dimensions.
+Both bindings return the last stack argument, including a trailing nil, because
+LunaSprite returns 1 without pushing self. The native fallback background helper
+ignores that result and returns the actor itself. The runtime controls retain
+the compiled native assertion body unchanged in both implementations.
+
+Harness 5ebb034 handles those native methods and records runtime texture
+requests. Its archive test loads the background through the actual fallback
+helper, unloads it before any projected frame, and still verifies the original
+PNG bytes, dimensions and SHA-256 in the complete archive. The obsolete
+background helper branch is removed. All 146 harness tests pass; two existing
+tests remain ignored.
+
+DeadSync .1865 matches the native return values and argument validation.
+All 674 song-Lua tests pass, along with the production build check and both
+cache checks. Cache version 56 invalidates captures that could continue invalid
+method chains. Native inputs, output, image and verification provenance are in
+sprite-load-provenance.json. The native texture fixture verifies Lua contracts
+and metadata; it does not establish pixel rendering or texture policy parity.
+
+The Sharkmode archive omitted sharkmode-bg.png because the harness did not
+handle LoadBackground. DeadSync already recognizes that filename. A fresh
+.26 capture was required before publication; no comparator has been relaxed.
+The historical 17-archive prefix requires refresh
+on .26/.1865. The full 501-simfile and 492-archive scope remains unfinished.
+
+The complete two-second Sprite control archive passes all 2,695 comparisons
+on .1865, with no native runtime errors or dropped events. The previous .1864
+verifier fails the same unchanged control at LoadBackground's return-value
+assertion. The archive includes the original Lua, image and complete trace;
+sprite-load-provenance.json records both immutable binaries and results.
+
+Sharkmode's fresh .26 archive now passes all 304,425 comparisons on .1865,
+including 8,293 custom draw plans, 14,940 mesh bindings, 14,940 mesh poses and
+14,940 mesh color checks. It reaches beat 357 / 138.1935577392578 seconds with
+no native runtime errors or dropped events. The archive includes the original
+1,058,414-byte sharkmode-bg.png and unchanged song Lua. The corrected background
+restores drawable membership and resolves the cascading mesh mapping failures.
+The verified archive replaces the superseded canonical capture, preserving
+its aliases. The full corpus refresh from the top remains pending.
+
+## Pass 66: revalidate the corpus after native Sprite loading
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+## Pass 67: preserve native texture filenames
+
+A compiled native Sprite control confirms that RageTexture:GetPath returns the
+RageTextureID filename, with dot components collapsed by RageUtil::CollapsePath.
+The .26 harness replaced this value with a song:/ archive alias, causing the
+unchanged runtime assertion to fail. The .1865 DeadSync verifier separately
+fails the native dot-component assertion. The checked-out reference tree and
+compiled vendor sources agree on both contracts.
+
+Harness 68605b3 uses its compiled RageTextureID normalization helper for the
+getter. The unchanged native assertion body passes actual Sprite userdata and
+the headless runtime; all 146 harness tests pass with two existing skips.
+DeadSync .1866 reuses its existing native filename-collapse implementation
+when installing texture getters. Cache version 57 invalidates captures that
+could branch on the old filename. Sprite runtime tests now cover both loading
+and filename controls through the same test path.
+
+The .26/.1865 refresh completed and committed five archives with 1,027,953
+passing comparisons before its source guard stopped for this independently
+proven gap. Both 100 Bad Days archives are oversized and remain local with
+explicit ignore rules. The historical prefix must be refreshed on the corrected
+binaries. The full 501-simfile and 492-archive scope remains unfinished.
+
+The full archive reader additionally exposed absolute Sprite.Load references
+from the capture machine. Harness .28 records these image arguments as portable
+song:/ asset references while preserving the filenames used inside Lua.
+The native assertion body remains unchanged; only its fixture-path setup removes
+the Windows verbatim prefix introduced by canonicalized temporary directories.
+The complete two-second control now passes all 2,696 comparisons on .1866.
+The previous .1865 binary fails the same native dot-component assertion.
+All 674 song-Lua tests, the production build check and both cache checks pass.
+The earlier Sprite loading control also retains all 2,695 passing comparisons.
+Native source hashes, unchanged controls, complete archive and before/after
+receipts are in texture-path-provenance.json. The comparator remains unchanged.
+
+## Pass 68: revalidate the corpus after native texture filenames
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
+
+Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+Archive 18: 280-MODS-[MASTER] Sharkmode/Sharkmode.ssc passes all 304425 comparisons. The verified prefix is now 18/492 archives; full-corpus parity remains unfinished.
+
+Archive 19: 303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc passes all 2274690 comparisons. The verified prefix is now 19/492 archives; full-corpus parity remains unfinished.
+
+Archive 20: 303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc passes all 2274713 comparisons. The verified prefix is now 20/492 archives; full-corpus parity remains unfinished.
+
+Archive 21: 307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 21/492 archives; full-corpus parity remains unfinished.
+
+Archive 22: 307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 22/492 archives; full-corpus parity remains unfinished.
+
+Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 23/492 archives; full-corpus parity remains unfinished.
+
+Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 24/492 archives; full-corpus parity remains unfinished.
+
+Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
+
+Archive 26: 666/666.ssc passes all 552285 comparisons. The verified prefix is now 26/492 archives; full-corpus parity remains unfinished.
+
+## Pass 69: compare column splines on the native music clock
+
+The complete `7th Gear/7th Gear.ssc` capture failed 300 of 881665 checks.
+Its native trace timestamps are relative to beat zero, while the compiled
+column windows and spline tracks use raw music time. Native `TimingData` and
+`SongPosition` restore the simfile offset before timing lookup; the column
+comparison omitted that conversion. Restore the same origin before querying
+both types of track. Comparison counts and tolerances remain unchanged.
+
+Compiled ITGmania controls with offsets +0.125 and -0.125 seconds, and a BPM
+change from 120 to 150, verify the native music timestamp and spline writes.
+The positive control fails before the fix; both controls and the existing
+native spline curve and track tests pass afterwards. The unchanged complete
+7th Gear capture now passes all 881665 checks, including all 2304 spline
+checks, with no runtime errors or dropped events. Its obsolete archive is
+replaced; aliases and superseded bytes are retained. Production code, version
+0.5.1866, and song cache version 57 are unchanged in this pass.
+
+An optimized build of the unchanged harness 0.1.28 passes 146 tests, with two
+existing ignored tests. All 63 native actor controls match the debug build
+byte for byte. This build is being used to retry the six historical timeouts.
+The first ArrowQuest retry reached the original 2013-second endpoint with no
+dropped events, but reported Lua runtime errors and remains pending. No
+diagnostic archive is published as a complete fixture.
+
+The older Igaku whole-song audit retains all 331752 observations: all 680
+spline checks pass, while 16 confusion-offset modifier values still differ.
+Its reference must be checked against a fresh capture with current native
+song timing before changing the implementation. The full scope remains 501
+simfiles, including 18 unindexed sources, and 492 existing archive cases.
+Revalidation from the top with the corrected comparator remains unfinished.
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 70: restore native actor definition concatenation
+
+Both adapters discarded the base command when Lua concatenated definitions. ArrowQuest therefore lost map InitCommands and finished both full native captures with 51 runtime errors. The unmodified native fallback ActorDef.lua, executed in the compiled native oracle, proves that MergeTables creates a fresh definition, overrides numeric keys, combines all function collisions in left-to-right order, forwards arguments and trailing nil values, returns the second function result, and stops on a first-function error. The checked-in control fails on both old adapters and passes after the repairs. DeadSync rebinds methods to the new table and replaces the old mutation and numeric append paths; compiled song cache version is now 58.
+
+Validation: 148 harness unit tests pass with two existing ignored; actor, chart and diff integrations pass. The unrelated outro integration input called ActorFrame-only SetUpdateFunction on Quad; the old .28 executable reproduces that failure. Its callback now lives on an ActorFrame and the unchanged endpoint checks pass. DeadSync passes 675 song-Lua tests with three existing GPU tests ignored. Pass 69 stopped at its source guard after 13 committed verified archives. Its prefix is historical after this production change. Original Mr. Sandman capture is ready in ignored staging and awaits full DeadSync verification; both ArrowQuest inputs require fresh full native captures. Scope remains 501 original simfiles and 492 archive variants until publication. Full-corpus parity remains unfinished.
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
+
+Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+## Pass 71: revalidate the corpus after native value iterator lookups
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+
+## Pass 72: require the raw native song endpoint
+
+ITGmania retains the raw Song::GetLastSecond value for its end timing. The harness beat/time roundtrip could stop below LASTSECONDHINT, and its selected chart could end before another chart in the song. Five compiled native controls cover fractional hints, both offset signs, a non-dyadic offset and a later chart. Four controls miss the native end callback on harness .30; all five reach it on .31.
+
+DeadSync .1869 requires native endpoint metadata, the final native music timestamp and the last update frame to cover that endpoint. A native positive control and six mutations verify rejection of missing, short or nonfinite endpoints. The old clean Igaku capture, which passed 514,954 comparisons, is now rejected because that agreement did not prove complete coverage. Its .31 recapture reaches the original raw hint with zero runtime errors and no dropped events; all 514,954 full-archive comparisons pass.
+
+The corrected Bank Account archive passes all 116,603 comparisons. Its previous bytes and aliases are preserved. Scope remains 501 original simfiles, 483 canonical archives, nine historical variants and 18 unindexed sources. The old pass 71 stopped at 12 archives when the necessary harness source change activated its guard. The full corpus must still be revalidated under the corrected endpoint contract.
+
+Archive 1: (R10) Warp Zone/warp zone.ssc passes all 212220 comparisons. The verified prefix is now 1/492 archives; full-corpus parity remains unfinished.
+
+Archive 2: (R5) Let Me Hear That/let me hear that.sm passes all 205071 comparisons. The verified prefix is now 2/492 archives; full-corpus parity remains unfinished.
+
+Archive 3: (R6) Waltz Capriccio/waltz_capriccio.ssc passes all 260300 comparisons. The verified prefix is now 3/492 archives; full-corpus parity remains unfinished.
+
+Archive 4: 100 Bad Days/100 Bad Days.sm passes all 175181 comparisons. The verified prefix is now 4/492 archives; full-corpus parity remains unfinished.
+
+Archive 5: 100 Bad Days/100 Bad Days.ssc passes all 175181 comparisons. The verified prefix is now 5/492 archives; full-corpus parity remains unfinished.
+
+Archive 6: 1035/1035.sm passes all 248156 comparisons. The verified prefix is now 6/492 archives; full-corpus parity remains unfinished.
+
+Archive 7: 188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc passes all 345742 comparisons. The verified prefix is now 7/492 archives; full-corpus parity remains unfinished.
+
+Archive 8: 242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc passes all 328107 comparisons. The verified prefix is now 8/492 archives; full-corpus parity remains unfinished.
+
+Archive 9: 271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc passes all 157678 comparisons. The verified prefix is now 9/492 archives; full-corpus parity remains unfinished.
+
+Archive 10: 272-MODS-[lv.02] Riddle/Riddle.ssc passes all 201471 comparisons. The verified prefix is now 10/492 archives; full-corpus parity remains unfinished.
+
+## Igaku: recover the complete native reference
+
+The canonical archive and focused whole-song reference now use the same complete harness .31 capture of the unmodified original sources. The focused comparison retains all 358,379 native observations, increasing coverage from the old synthetic-clock reference's 331,752. It requires native song timing, the native public music clock, zero runtime errors, zero dropped events and the raw native endpoint. The missing-column-rotation negative control remains. Previous synthetic-clock micro captures retain explicit legacy aliases, and the previous canonical archive is retained locally with its aliases mapped to the corrected archive. The original 501-simfile scope and remaining work are unchanged.
+
+Archive 11: 273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc passes all 194374 comparisons. The verified prefix is now 11/492 archives; full-corpus parity remains unfinished.
+
+Archive 12: 274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc passes all 208584 comparisons. The verified prefix is now 12/492 archives; full-corpus parity remains unfinished.
+
+Archive 13: 275-MODS-[lv.05] BroGamer/BroGamer.ssc passes all 198090 comparisons. The verified prefix is now 13/492 archives; full-corpus parity remains unfinished.
+
+Archive 14: 276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc passes all 167442 comparisons. The verified prefix is now 14/492 archives; full-corpus parity remains unfinished.
+
+Archive 15: 277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc passes all 199543 comparisons. The verified prefix is now 15/492 archives; full-corpus parity remains unfinished.
+
+Archive 16: 278-MODS-[lv.08] And Drugs/and drugs.ssc passes all 182791 comparisons. The verified prefix is now 16/492 archives; full-corpus parity remains unfinished.
+
+Archive 17: 279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc passes all 206323 comparisons. The verified prefix is now 17/492 archives; full-corpus parity remains unfinished.
+
+Archive 18: 280-MODS-[MASTER] Sharkmode/Sharkmode.ssc passes all 304425 comparisons. The verified prefix is now 18/492 archives; full-corpus parity remains unfinished.
+
+Archive 19: 303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc passes all 2274713 comparisons. The verified prefix is now 19/492 archives; full-corpus parity remains unfinished.
+
+Archive 20: 303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc passes all 2274713 comparisons. The verified prefix is now 20/492 archives; full-corpus parity remains unfinished.
+
+Archive 21: 307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 21/492 archives; full-corpus parity remains unfinished.
+
+Archive 22: 307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc passes all 179179 comparisons. The verified prefix is now 22/492 archives; full-corpus parity remains unfinished.
+
+Archive 23: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 23/492 archives; full-corpus parity remains unfinished.
+
+Archive 24: 319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc passes all 363873 comparisons. The verified prefix is now 24/492 archives; full-corpus parity remains unfinished.
+
+Archive 25: 321STARS/321STARS.ssc passes all 372891 comparisons. The verified prefix is now 25/492 archives; full-corpus parity remains unfinished.
+
+## Pass 74: compare endpoint coverage at native clock precision
+
+ITGmania SongPosition stores float music seconds and the native bridge converts Lua frame seconds to float before updating it. The archive guard compared a JSON double frame timestamp with a widened float endpoint, falsely rejecting the complete original 666.ssc capture by one double rounding step. Compare the frame clock at native float precision; retain strict raw music endpoint coverage and reject nonfinite frames.
+
+The complete unchanged native 0.1.31 capture passes all 552285 comparisons. The positive round-trip control, eight incomplete-replay mutations, focused Igaku reference (358379 comparisons and its rotation omission probe), and archive integrity guards pass. The original song and native capture were reused without modification.
+
+The verified prefix is 26/492 archives. The remaining canonical sources, nine historical contexts and 18 unindexed simfiles still require review; full-corpus parity is unfinished.
+
+Archive 27: 7th Gear/7th Gear.ssc passes all 881665 comparisons. The verified prefix is now 27/492 archives; full-corpus parity remains unfinished.
+
+## Pass 75: follow native Zigzag and camera projection branches
+
+ArrowEffects::GetXPos uses the same RageTriangle phase as GetZPos before
+Tiny spacing and MoveX. Add Zigzag, ZigzagOffset and ZigzagPeriod throughout
+modifier parsing, approach, easing, active targets and note/receptor/feedback
+geometry. Native travel vectors cover cached and uncached X paths and reject
+static caching while Zigzag is active. Increment the compiled-song cache to 60.
+
+ActorFrame::LoadFromNode reads the case-sensitive FOV attribute. Its BeginDraw
+pushes a camera even for zero, and RageDisplay::LoadMenuPerspective selects
+orthographic projection before clamping nonzero FOV. The old harness incorrectly
+accepted Fov and clamped zero; DeadSync incorrectly inherited a parent camera
+through explicit zero. Harness commit f5e0dc9 corrects its trace generation;
+DeadSync now resets zero FOV to the native identity view and depth projection.
+
+The new 0.1.32 micro reference invokes the actual linked native matrix function
+for zero, inherited, negative, small and wrong-case FOV. All 131 observations
+pass through production compilation and composition; an omitted zero camera
+reset fails the comparison. The dependency hashes match DeadSync's noteskin
+context. Gameplay has 794 passing tests, note-field 450, and playback 183 with
+three existing ignored tests. The harness has 190 passing tests and five
+existing ignored tests. Original song, theme and ITGmania sources are unchanged.
+
+The previous verifier reached 27/492 archives. Fresh native 99+ capture is
+complete, but its comparison with the new verifier and revalidation from the
+top remain pending. The scope is still 501 original simfiles, 483 indexed
+sources, 18 unindexed sources, and nine historical archive variants. Full
+corpus parity remains unfinished.
+
+The complete unchanged 99+ reference on native harness 0.1.32 now passes all
+1,339,513 observations with DeadSync 0.5.1870. The previous comparison had
+26,417 failures. Publish the verified canonical archive and preserve its
+superseded source bytes locally, retaining historical aliases. The preceding
+27 cases were verified on 0.5.1869; revalidation from the top on 0.5.1870
+remains pending. No tolerance, event limit, original source or archive scope
+was reduced. Full-corpus parity remains unfinished.
+
+The from-top revalidation on the committed 0.5.1870 verifier now passes
+all 12,752,563 comparisons across the first 28/492 archive cases.
+Reuse the preceding 27 complete native captures only after inspecting
+their original Lua for affected FOV declarations and camera operations;
+none reaches the corrected native branch. Case 28 uses the fresh 0.1.32
+99+ reference and its completed receipt from this same verifier. Preserve
+each capture's actual version, source revision and executable hash.
+The next case is [07] 7th Gear - (No CMOD); its native capture is ready,
+and its DeadSync comparison is pending. Full-corpus parity remains
+unfinished; the original 501 simfiles and all 492 archive cases remain
+in scope.
+
+## Pass 76: shared startup state and complete model dependencies
+
+The complete original [07] 7th Gear - (No CMOD) reference from
+native harness 0.1.32 passes all 881,665 comparisons with the immutable
+DeadSync 0.5.1870 verifier. The verified prefix on that verifier is
+29/492 archive cases; full-corpus parity remains unfinished. Retain
+the superseded archive locally and preserve all reference aliases.
+
+Mawaru9 exhausted Lua's reference stack while copying the same startup globals
+and reachable locals separately for each command callback. The diagnostic
+capture failed after 616 snapshots, each containing about 837 table entries.
+The source-preserving candidate captured all 4,915 command functions in one
+graph: 1,977 distinct tables, 10,638 entries and 746 upvalue cells. It passed
+the startup stage and exposed the separate missing-model dependency gap.
+
+Actor::UpdateTweening requires positive delta time before dispatching queued
+commands. Bundled Lua 5.1's luaE_newthread shares the global table, as used by
+ITGmania's LuaManager. Retain one shared pre-probe graph across every startup
+command, including distinct function environments, aliases, cycles and upvalue
+cells; restore it once before chronological replay. Remove the duplicate
+per-callback snapshots and the redundant C-function fast path; the graph
+traversal still excludes host closures. No commands or state are omitted.
+
+The 1,024-actor regression retains 512 aliases to cyclic shared state, verifies
+the untouched zero-delta state and checks queued counters in chronological
+updates. The previous implementation fails this same regression with the
+original stack error. Production has 492 passing core tests, two overlay tests
+and 184 playback tests, with three existing ignored playback tests. Bump
+DeadSync to 0.5.1871 and invalidate compiled song data with cache version 61.
+Diagnostic hooks and logging are absent from production.
+
+Harness commit 71b414f archives native Model text files, material textures and
+animated INI frames using the local Model.cpp and ModelTypes.cpp directory
+rules. Its 191 tests pass with five existing ignored tests. Fresh complete
+Mawaru9 capture on that committed 0.1.33 build is still running; full Mawaru9
+parity has not passed. The completed 29-case prefix belongs to 0.5.1870 and
+must be revalidated on the new verifier. Preserve all 501 original simfiles,
+483 originally indexed sources, 18 unindexed sources and 492 archive cases.
+The full parity goal remains unfinished.
+
+## Pass 77: verify native Spooky and audit Model coverage
+
+The complete unchanged [07] Spooky reference from native harness
+0.1.33 passes all 157,678 strict comparisons with DeadSync 0.5.1871.
+Retain the previous archive locally and preserve reference aliases.
+This independently verified case is index 29; revalidation of the
+preceding 29 cases is still running on this verifier.
+
+Fresh Mawaru9 capture contains all 325 required archive members,
+including 58 recovered model dependencies. It remains private:
+the current song Lua reference excludes Model projected geometry.
+An isolated native Model probe executes the actual ITGmania loader
+and draw path, verifies its Y flip, normalized normals, material
+diffuse and separate glow pass; the prior harness rejects this
+actor type. Production song traces still need Model coverage.
+The original 501 simfiles and all 492 archive cases remain in
+scope; full-corpus parity is unfinished.
+
+The committed 0.5.1871 verifier finishes all 13,634,228 recorded
+comparisons across the first 29 archive cases. Together with the
+independently committed Spooky result, the first 30 cases have passing
+comparison receipts. Retain each capture's actual executable, version
+and source provenance; none is relabeled as a later capture.
+
+The archive definition audit finds instantiated Cyber noteskin Models
+at zero-based indices 18, 19 and 24 (the two KABOOOOOM contexts and
+321STARS). They have no projected Model mesh observations. The original
+song Lua scan misses these definitions because noteskin loading supplies
+them. Passing recorded comparisons therefore do not establish complete
+visual parity for these cases. Keep the evidence and all corpus cases;
+resume from the first Model coverage gap at index 18 before extending
+the corpus verification. The tracked model-coverage-audit.json retains
+the archive hashes, definition IDs and original Lua hashes.
+
+Harness b144c3a (0.1.34) now executes the actual native Model loader
+and draw passes in its conformance oracle; all 192 tests pass with
+five existing ignored tests. Song-level Model traces and mesh comparison
+still require implementation. Mawaru9 remains private. Full parity for
+the original 501 simfiles and 492 archive cases is unfinished.
+
+## Pass 78: reject incomplete Model references before comparison
+
+Whole-song archive validation now rejects instantiated Model actors
+because the current song trace and comparator omit their meshes.
+The linked native conformance oracle is ready, but its availability
+does not make the old song reference complete. Keep the rejection
+until native song meshes are captured and compared.
+
+The complete Spooky archive passes the positive reference control.
+The original KABOOOOOM archive fails with the explicit missing-Model
+geometry reason before compilation. Both focused archive guard tests
+pass, including the existing obsolete-replay mutation controls.
+No observations, tolerances or original sources were reduced.
+Previously recorded passing receipts retain their actual verifier
+provenance and the newly documented Model coverage limitation.
+
+## Pass 80: preserve native unlit Model materials
+
+Harness e8b6048 (0.1.35) captures real native Model draw observations in
+song traces. A private four-second Cyber control matches the independent
+0.1.34 native Model runner across 6,517,845 scalar comparisons and 241
+samples. This is an actor control, not a complete simfile reference.
+
+DeadSync discarded MilkShape material colors and rendered white vertices
+with only the actor tint. It now preserves ambient, diffuse, specular,
+emissive, shininess and transparency data. Unlit song and noteskin draws
+use Model::DrawPrimitives tinting and RageDisplay_Legacy::SetMaterial's
+diffuse-plus-emissive-plus-ambient RGB calculation. Final color is clamped
+before texture modulation; alpha comes from diffuse, not the separate
+MilkShape transparency field. Meshes with material index -1 use the native
+untinted fixed material. Glow retains its independent color.
+
+The committed model-material micro control records 12 actual native
+material passes for tinted and dark Cyber models, a translucent triangle,
+and an unassigned-material triangle. Its portable request reproduces the
+captured material values. The production compositor checks 8,256 vertex
+color components through both Def.Model and NoteskinActor rendering.
+The four affected crates and playback integrations pass 1,536 tests with
+three existing ignores. Original Cyber source hashes remain unchanged.
+
+This comparison covers unlit draw colors and shader inputs. It does not
+prove framebuffer pixels, lighting, mesh transforms, draw-pass ordering,
+skeletal animation or the complete song. Keep the whole-song Model
+coverage rejection until actual geometry and render-state comparisons
+exist. Resume at original case 18; all 501 simfiles and 492 archive
+contexts remain in scope, and full-corpus parity is unfinished.
+
+The private four-second song trace is 109,940,785 bytes and stays under
+the ignored target directory. Longer Model captures need lossless sharing
+of repeated observations to avoid excessive memory and trace size; no
+frames, vertices, original scripts or comparison tolerances may be omitted
+to fit the GitHub upload limit.
+
+## Pass 82: capture every Model update and preserve native pass order
+
+Harness 7ba1318 (0.1.37) records ordinary Model geometry on every native
+update. ITGmania's Model::Update advances animation and texture clocks
+each frame; sparse beat sampling was omitting intermediate observations.
+The independent native control verifies 61 observations for visible and
+invisible Models with sparse beat sampling, including midpoint geometry.
+All 195 harness tests pass with five existing ignores.
+
+The fresh private case 18 KABOOOOOM archive reaches the native chart end
+at beat 645.75 and 199.4571533203125 seconds with no runtime errors or
+dropped events. Each of its eight Models now has all 11,969 update-frame
+observations, replacing the previous 2,328 sampled observations. The audit
+checks 95,752 Model samples, 2,712 primitives, 29,832 shared columns and
+all 26 archive members. The bounded sharing index saturates without
+discarding observations. The archive is 41,948,792 bytes; its 164,570,710
+byte raw trace stays in the ignored harness target directory. Original
+song and Cyber noteskin source hashes remain unchanged.
+
+DeadSync interleaved each mesh's diffuse and glow passes. Native
+Model::DrawPrimitives draws every diffuse mesh before every glow mesh.
+The production song Model and NoteskinActor paths now preserve that
+sequence in a shared composition z bucket. The portable native material
+control checks the ordered 24 draws and 8,256 vertex color components
+across both paths. Prewarmed geometry identity checks remain in place.
+
+These fixes establish complete native Model update observations and the
+controlled production pass order. They do not establish full-song Model
+geometry, render states, lighting or framebuffer parity. Keep the whole-song
+Model rejection and the new archive private until real mesh comparisons
+are wired into the production verifier. All 501 original simfiles and
+492 archive contexts remain in scope; full-corpus parity is unfinished.
+
+## Pass 83: compare native Model observations through production draws
+
+The semantic verifier now decodes the harness's column-buffer-v1 Model
+observations. It checks actor identities, ordered triangle passes, all
+column references and widths, ordinary update clocks, and manual draw
+clocks. Missing observations, duplicated actors, obsolete sparse clocks,
+invalid pixel dimensions, and malformed manual references are rejected.
+Native null numeric values remain undefined and cannot pass as zero.
+
+The comparison renders each observation through WholeSongComposer and
+checks production vertex positions, clip/NDC/screen coordinates, normals,
+raw and transformed UVs, texture scales, colors, diffuse/glow pass order,
+depth testing, backface culling and blending. It processes one update at
+a time rather than retaining the entire composed song. The test adapter
+now installs its logical presentation bounds before rendering; default
+thread-local bounds of 2 by 2 were corrupting the first comparison.
+Physical pixel dimensions are configured independently from those bounds.
+Manual draw composition also supports Model and noteskin Model actors.
+
+The two focused reader tests and two archive rejection tests pass. All
+185 playback integration tests pass with three existing ignores. The
+original KABOOOOOM reader validates eight tracks, 11,969 update frames,
+95,752 samples and 13,466 shared columns against the private 0.1.37 capture.
+
+The selected original KABOOOOOM renderer diagnostic runs 9,450,796 checks:
+6,083,754 pass and 3,367,042 fail. Its first failures concern native Model
+depth testing, perspective projection and animated texture phase boundaries.
+The diagnostic remains failing and requires an explicitly selected trace
+and original simfile. No failed result is counted as archive acceptance.
+
+This is a partial Model comparison, not complete archive acceptance.
+World/view transforms, texture identity, native lighting and independent
+depth write/test states still need complete production comparisons. The
+whole-song Model rejection remains in place, and the new KABOOOOOM archive
+stays private. Original sources and comparison tolerances remain unchanged.
+
+## Pass 84: preserve Model cameras and depth placement
+
+Native Model::Model enables the Z buffer. DeadSync now starts Model actors
+with that default while preserving an explicit Lua override. The fast
+multi-output Model builders now receive the same inherited ActorFrame
+camera as the single-output builder. Both ordinary and noteskin Models
+retain actor Z in their mesh placement. Noteskin Models use affine geometry
+under that camera, replacing a notefield perspective approximation that
+projected them before the actual inherited camera was applied.
+
+The flat compositor reuses adjacent identical camera matrices. A control
+with 300 repeated scopes verifies that Models under one camera retain its
+camera ID instead of exhausting the eight-bit camera index. Prewarmed
+geometry identities and native diffuse/glow pass ordering remain checked.
+
+The new model-camera micro fixture records eight actual native draws from
+harness 0.1.37. It covers an off-center perspective camera, inheritance
+through a frame without a camera setting, an explicit zero-FOV reset,
+actor Z, and rotation under ancestor Y scaling. The production song Model
+and noteskin Model paths match all 16 draws and 672 local/clip/NDC/screen
+coordinate checks at the existing 0.002 tolerance. All 492 song Lua library,
+186 playback integration and 177 presentation tests pass; the playback
+suite retains its three existing ignores. The two reader tests and two
+archive rejection controls pass as well.
+
+The unchanged original KABOOOOOM trace still supplies all 95,752 Model
+observations. Its fresh production diagnostic runs the same 9,450,796
+comparisons: 7,465,778 pass and 1,985,018 fail. This removes 1,382,024
+failures from pass 83, including every depth-test mismatch. The remaining
+reported gaps concern clip/NDC/screen transforms and animated texture
+phase boundaries. Original source hashes and tolerances are unchanged.
+
+The controlled camera fix does not establish complete Model or song
+parity. World/view transforms, texture identity, lighting and independent
+depth states still need complete comparisons. Keep the whole-song Model
+acceptance guard and the private KABOOOOOM archive pending. All 501
+original simfiles and 492 archive contexts remain in scope.
+
+## Pass 85: reject Model references that omit base rotation
+
+The first-visible-frame diagnostic identified an error in the harness oracle.
+The original KABOOOOOM script calls baserotationz with the lane orientation,
+then rotationz with ArrowEffects' additional rotation. Actor::BeginDraw adds
+those independent values. DeadSync's composed Models retained the lane
+rotation; the harness's song world matrices omitted it. The old case 18
+capture therefore cannot identify those orientation differences as DeadSync
+bugs. Its previous failure counts remain historical diagnostic results.
+
+An independent native actor tree reproduces the harness error: a world
+coordinate at time zero was 74.5958023071289 instead of -1.6716537475585938.
+The new model-base-rotation fixture covers all three base axes on parent and
+Model actors, immediate changes while a tween is queued, replacement base
+values, and ordinary rotation tweening. The harness now adds immediate base
+rotation after effect application, following the native source rule.
+
+DeadSync rejects Model traces without the new actor_base_rotation capability.
+Removing or disabling that capability is a negative reader control. The
+first-visible-frame test is an explicitly selected partial diagnostic; it
+prints the production state and transforms to identify gaps and cannot
+establish complete song parity. The whole-song Model guard remains closed.
+
+The earlier independent camera and material controls remain valid native
+actor captures. The fresh private 0.1.38 KABOOOOOM capture retains all
+95,752 Model observations, reaches the chart endpoint and passes archive
+integrity checks. Original song and Cyber source hashes remain unchanged.
+The production diagnostic passes 9,449,740 of 9,450,796 comparisons, with
+1,056 transformed-UV failures on four actors at 68 and 146 seconds. The
+orientation differences in the obsolete 0.1.37 capture are harness errors.
+These results still do not establish complete Model archive acceptance.
+
+Keep the original sources, all update observations and tolerances intact,
+and keep every incomplete archive private. The full 501-simfile/492-context
+scope remains unfinished.
+
+## Pass 86: preserve independent signed Model scales
+
+Native Actor::BeginDraw scales X, Y and Z independently, preserving negative
+values. Ordinary song Models used absolute Y scale for Z. Their production
+builder now carries the complete local three-axis scale, separately from
+the ancestor scale. The noteskin Model affine transform also preserves
+signed draw zoom instead of clamping mirrored geometry to zero.
+
+The new model-signed-scale fixture captures ten actual native draws from
+harness 0.1.38. Its five actors cover independent Z, negative X/Y/Z, rotation
+on all axes, and inherited signed scaling. Before the fixes, the ordinary
+Model control fails on IndependentZ; after correcting Z, the noteskin control
+fails on MirrorX. Both production paths use the same retained native draws
+and unchanged camera comparison tolerance. This is a controlled geometry
+fix; it does not resolve the original chart's texture-clock failures.
+Both paths pass all twenty native draws and 840 coordinate checks. The
+complete playback suite passes 187 tests with three existing ignores, and
+all 450 notefield library tests pass.
+
+ITGmania AnimatedTexture::Update adds the frame delta and advances one state
+only when seconds into the frame is strictly greater than the delay. It
+subtracts that delay once, even after a large update. DeadSync's elapsed-time
+modulo cannot represent that update history. Preserve this distinction from
+NoteDisplay's SetSecondsIntoAnimation seek when resolving the remaining UV
+differences; integer UV shifts or relaxed tolerances do not establish parity.
+
+World/view transforms, texture identity, lighting and independent depth
+states remain incomplete comparisons. The whole-song Model guard stays
+closed and the fresh original KABOOOOOM archive remains private. All 501
+original simfiles and 492 archive contexts remain in scope.

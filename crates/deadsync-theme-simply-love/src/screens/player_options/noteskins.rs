@@ -1,32 +1,19 @@
 use super::*;
+use crate::screens::components::shared::noteskin_draw::preview_note_slots;
 use deadsync_profile as profile_data;
-
-pub(super) fn preview_note_slots(
-    skin: &Noteskin,
-    part: NoteAnimPart,
-    index: usize,
-) -> &[SpriteSlot] {
-    let layers = if part == NoteAnimPart::Lift {
-        skin.lift_note_layers.get(index)
-    } else {
-        None
-    };
-    layers
-        .or_else(|| skin.note_layers.get(index))
-        .map(AsRef::as_ref)
-        .or_else(|| skin.notes.get(index).map(std::slice::from_ref))
-        .unwrap_or_default()
-}
 
 pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
     let mut add = |slot: &SpriteSlot| {
         for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
-            let key = texture_slot.texture_key_shared();
-            if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
-                *model |= slot.model.is_some();
-            } else {
-                textures.push((key, slot.model.is_some()));
+            for key in std::iter::once(texture_slot.texture_key_shared())
+                .chain(texture_slot.model_texture_keys.iter().cloned())
+            {
+                if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
+                    *model |= slot.model.is_some();
+                } else {
+                    textures.push((key, slot.model.is_some()));
+                }
             }
         }
     };

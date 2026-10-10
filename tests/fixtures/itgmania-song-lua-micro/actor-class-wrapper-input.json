@@ -1,0 +1,3 @@
+{
+  "aft_creation": "frozen:AddWrapperState()\nlocal wrapper=frozen:GetWrapperState(1)\nassert(type(wrapper.GetX)==\"function\")\nassert(type(wrapper.SetUpdateFunction)==\"function\" and type(wrapper.SetDrawFunction)==\"function\" and type(wrapper.GetDrawFunction)==\"function\")\nlocal callback=function() end\nassert(wrapper:SetUpdateFunction(callback)==wrapper)\nassert(wrapper:SetDrawFunction(callback)==wrapper and wrapper:GetDrawFunction()==callback)\n"
+}

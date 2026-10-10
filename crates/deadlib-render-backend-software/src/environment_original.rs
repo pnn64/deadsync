@@ -1,4 +1,4 @@
-// Starting main 6324bcb62 and the intermediate mapper-only path.
+// Unoptimized and mapper-only paths, retaining current-main culling and sampler behavior.
 use super::*;
 
 #[path = "../../deadlib-render-core/tests/support/uv_mapper_original.rs"]
@@ -10,6 +10,7 @@ pub(super) fn original(
     instance: deadlib_render_core::TexturedMeshInstanceRaw,
     blend: BlendMode,
     primary: &Texture,
+    primary_sampler: SamplerDesc,
     additive: Option<&Texture>,
     width: usize,
     height: usize,
@@ -36,7 +37,7 @@ pub(super) fn original(
             &first,
             width,
             height,
-            instance.cull_back > 0.5,
+            instance.cull_mode,
         ) else {
             continue;
         };
@@ -49,7 +50,7 @@ pub(super) fn original(
             &second,
             width,
             height,
-            instance.cull_back > 0.5,
+            instance.cull_mode,
         ) else {
             continue;
         };
@@ -65,11 +66,7 @@ pub(super) fn original(
             else {
                 continue;
             };
-            let sample = |texture: &Texture, uv: [f32; 2]| {
-                let sampler = SamplerDesc {
-                    wrap: SamplerWrap::Repeat,
-                    ..texture.sampler
-                };
+            let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
                 let image = texture.texels();
                 if sampler.filter == SamplerFilter::Linear {
                     sample_tex_linear::<false>(
@@ -120,7 +117,7 @@ pub(super) fn original(
                             w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
                         ]
                     };
-                    let texel = sample(primary, uv(&p));
+                    let texel = sample(primary, primary_sampler, uv(&p));
                     let tint: [f32; 4] = std::array::from_fn(|i| {
                         w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
                     });
@@ -128,7 +125,14 @@ pub(super) fn original(
                     if instance.texture_mask > 0.5 {
                         color[..3].copy_from_slice(&tint[..3]);
                     } else if triangle[0].normal[3] as u8 & 4 != 0 {
-                        let reflection = sample(additive.unwrap_or(primary), uv(&q));
+                        let reflection = sample(
+                            additive.unwrap_or(primary),
+                            SamplerDesc {
+                                wrap: SamplerWrap::Repeat,
+                                ..additive.unwrap_or(primary).sampler
+                            },
+                            uv(&q),
+                        );
                         for i in 0..3 {
                             color[i] = (color[i] + reflection[i]).min(1.0);
                         }
@@ -155,6 +159,7 @@ pub(super) fn hoisted_only(
     instance: deadlib_render_core::TexturedMeshInstanceRaw,
     blend: BlendMode,
     primary: &Texture,
+    primary_sampler: SamplerDesc,
     additive: Option<&Texture>,
     width: usize,
     height: usize,
@@ -182,7 +187,7 @@ pub(super) fn hoisted_only(
             &first,
             width,
             height,
-            instance.cull_back > 0.5,
+            instance.cull_mode,
         ) else {
             continue;
         };
@@ -195,7 +200,7 @@ pub(super) fn hoisted_only(
             &second,
             width,
             height,
-            instance.cull_back > 0.5,
+            instance.cull_mode,
         ) else {
             continue;
         };
@@ -211,11 +216,7 @@ pub(super) fn hoisted_only(
             else {
                 continue;
             };
-            let sample = |texture: &Texture, uv: [f32; 2]| {
-                let sampler = SamplerDesc {
-                    wrap: SamplerWrap::Repeat,
-                    ..texture.sampler
-                };
+            let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
                 let image = texture.texels();
                 if sampler.filter == SamplerFilter::Linear {
                     sample_tex_linear::<false>(
@@ -266,7 +267,7 @@ pub(super) fn hoisted_only(
                             w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
                         ]
                     };
-                    let texel = sample(primary, uv(&p));
+                    let texel = sample(primary, primary_sampler, uv(&p));
                     let tint: [f32; 4] = std::array::from_fn(|i| {
                         w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
                     });
@@ -274,7 +275,14 @@ pub(super) fn hoisted_only(
                     if instance.texture_mask > 0.5 {
                         color[..3].copy_from_slice(&tint[..3]);
                     } else if triangle[0].normal[3] as u8 & 4 != 0 {
-                        let reflection = sample(additive.unwrap_or(primary), uv(&q));
+                        let reflection = sample(
+                            additive.unwrap_or(primary),
+                            SamplerDesc {
+                                wrap: SamplerWrap::Repeat,
+                                ..additive.unwrap_or(primary).sampler
+                            },
+                            uv(&q),
+                        );
                         for i in 0..3 {
                             color[i] = (color[i] + reflection[i]).min(1.0);
                         }

@@ -1,0 +1,130 @@
+{
+  "problem": "After Dark writes Bounce, BouncePeriod and TornadoPeriod, but DeadSync did not preserve them in gameplay. Lua XMod(0) was rejected by the downstream positive-only gate.",
+  "change": "Carry Bounce amount/period/offset and Tornado period/offset through compilation, constant and eased effects, approach/reset/persistence, and actual note/feedback/judgment positions. Replace the fixed Tornado phase and remove the positive-only Lua XMod gate; CMod/MMod stay positive.",
+  "source_parent_commit": "467f7a511924b9d880b827659a8c58cfb41b345d",
+  "native_harness_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+  "harness_source_changed": false,
+  "original_corpus_or_tolerances_changed": false,
+  "native_option_capture": {
+    "harness_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+    "binary_sha256": "041e2514c2971d6393bc2b3ae1655dec2580f6ae0f05bc276ce42004bfe43d9c",
+    "capture_exit_code": 0,
+    "control_sha256": "144895a55dc831d2390719edaf7c7378bceaa9dd3a1862e91755c6184f34ea63",
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass169-bounce-tornado-control-v2\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "7c268541a17429d3a2ac1b0c79c6b9583c4a104d52e6fed018af832f32a2fadb",
+    "runtime_errors": [],
+    "dropped_events": 0,
+    "reference_source_sha256": {
+      "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+      "ModsGroup.h": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0"
+    },
+    "semantic_loader_used": true,
+    "native_cpp_player_options_methods_used": true
+  },
+  "native_option_archive": {
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass169-bounce-tornado-control-v2\\archives\\3f0e76037b1de7f935ef0db92ae8477eca5c505426839077ebffc1c4087f36bc.tar.zst",
+    "archive_sha256": "3f0e76037b1de7f935ef0db92ae8477eca5c505426839077ebffc1c4087f36bc",
+    "archive_entry": {
+      "title": "Native player options",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.58",
+      "archive": "3f0e76037b1de7f935ef0db92ae8477eca5c505426839077ebffc1c4087f36bc.tar.zst",
+      "sha256": "3f0e76037b1de7f935ef0db92ae8477eca5c505426839077ebffc1c4087f36bc",
+      "compressed_bytes": 12787
+    },
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass169-bounce-tornado-control-v2\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "7c268541a17429d3a2ac1b0c79c6b9583c4a104d52e6fed018af832f32a2fadb",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "update_frames": 241,
+    "harness_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+    "binary_sha256": "041e2514c2971d6393bc2b3ae1655dec2580f6ae0f05bc276ce42004bfe43d9c"
+  },
+  "reference_source_sha256": {
+    "ArrowEffects.cpp": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+    "RageUtil.h": "f92dea02c8d004bff4197fa2e98ffcf16c4b476fc39c331b998a5a8ccb8bf4de"
+  },
+  "source_contract": [
+    "ArrowEffects.cpp:217-239 applies Tornado phase (travel+offset)*(period*frequency+frequency)/screen height",
+    "ArrowEffects.cpp:979-987 uses std::sin, absolute value, a 60-pixel Bounce period and 32-pixel magnitude",
+    "ArrowEffects.cpp:1022-1031 adds column position before Tiny spacing",
+    "PlayerOptions.cpp:2562-2582 accepts zero and negative Lua XMod values; CMod and MMod have separate positive guards",
+    "Themes/_fallback/metrics.ini:220-224 supplies Tornado X frequency 6 and scales -1 to 1"
+  ],
+  "independent_motion_control": "bounce-tornado-motion.json",
+  "independent_motion_control_sha256": "ee7006f04fd0c7ddcf73898008981254fca4e70e94248c72cb7cbd8fca5f61dd",
+  "independent_motion_source": "bounce-tornado-motion.cpp",
+  "independent_motion_source_sha256": "eb8e97e466f04c9a39fc45c859e6ef75112b3200ca50f517b62830c5e7e548a6",
+  "independent_motion_vectors": 108,
+  "motion_control_uses_unchanged_native_function_and_bounce_block_with_isolated_inputs": true,
+  "motion_control_uses_semantic_host_or_deadsync": false,
+  "whole_native_gameplay_or_framebuffer_capture_claimed": false,
+  "before_control": {
+    "frozen_baseline_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass159\\committed-confusion-x-v3-pin.json",
+    "frozen_baseline_pin_sha256": "41fd6b2a58db5cc6ef782ee6acd94ab48c9866fe4ef93db97e782ab32bc093c9",
+    "source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+    "current_worktree_used": false,
+    "binary_sha256": "c5d7e11b8aa693053d339bf1acbb2ab9f7a3cc798fc8cb2e08824ae6df47af64",
+    "archive_sha256": "3f0e76037b1de7f935ef0db92ae8477eca5c505426839077ebffc1c4087f36bc",
+    "exit_code": 1,
+    "comparisons_passed": 5343,
+    "comparisons_failed": 44,
+    "elapsed_seconds": 0.7088105999864638,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass160\\bounce-tornado-before-control-v2.log",
+    "log_sha256": "972dd8073d282f8b0bac4daa64afa4a6f72722f8d56779416de5ad232b6a2681"
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5387,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.3446459001861513,
+    "archive_sha256": "3f0e76037b1de7f935ef0db92ae8477eca5c505426839077ebffc1c4087f36bc",
+    "binary_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+    "source_commit": "467f7a511924b9d880b827659a8c58cfb41b345d",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\bounce-tornado-after-control-v3.log",
+    "log_sha256": "b1ab9e3b9204f25ee61f0db7952c384f52966db759217b49faf6e95d675ac760",
+    "control_complete": true
+  },
+  "notefield_tests": {
+    "binary_sha256": "3b3e6afc61fafeb843b4b8fbc7c63bc38196fb5276d1b0afa9b3c304a08f2903",
+    "source_commit": "467f7a511924b9d880b827659a8c58cfb41b345d",
+    "source_pending_commit": true,
+    "exit_code": 0,
+    "elapsed_seconds": 2.5747940000146627,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass160\\bounce-tornado-notefield-v1.log",
+    "log_sha256": "612c6ac0cca895f2400f262de43ad4f251d59926100415eb056c273720b84741",
+    "result_lines": [
+      "test result: ok. 453 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s"
+    ]
+  },
+  "modifier_regressions": {
+    "source_commit": "467f7a511924b9d880b827659a8c58cfb41b345d",
+    "source_pending_commit": true,
+    "binary_sha256": "e0749990919ef24e6f385def3c6a29d86df4513f45c66b6a6199772b53d1cc95",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers::",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 21.78055389970541,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\bounce-tornado-runtime-regressions-v3.log",
+    "log_sha256": "9a25393a9b39b27e79a5c292f575e1448ab770e5288357b55a7a7c27a1c78545",
+    "result_lines": [
+      "test result: FAILED. 34 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 20.04s"
+    ]
+  },
+  "new_regression_initial_noteskin_matches_native_reference": true,
+  "prior_candidate_diagnostic_retained": "pass114/bounce-tornado-runtime-regressions-v2.json",
+  "existing_failures_retained": [
+    "hidden_actor_tweens_drive_modifiers_without_probe_state",
+    "lane_stealth_survives_lua_writes_and_fresh_options",
+    "motion_suboptions_survive_lua_writes_and_reset"
+  ],
+  "remaining_scope": "All original 501 sources/492 archive contexts, original unindexed charts, Current timeline, dynamic music rate, metadata APIs, rotation splines/column effects and independent framebuffer observations remain active.",
+  "full_corpus_complete": false
+}

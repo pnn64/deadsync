@@ -1,0 +1,133 @@
+{
+  "problem": "PlayerIsUsingModifier matched only the selected X/C/M getter amount, ignoring native time spacing and the other fields changed by FromString.",
+  "change": "Compare the four underlying speed fields written by the parsed modifier string. Remove the active-alias equality shortcut.",
+  "deadsync_source_parent_commit": "825303d7b7c0043e3d725f5846ef823a66c2402f",
+  "tested_source_pending_commit": true,
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/song_tables.rs": "6d69728b4201e6f99acb3244272573fc01106944064dffe2220ccb29ffaf7a9c"
+  },
+  "control": "speed-query-control.json",
+  "control_sha256": "c1286a371b1ad63d306b1e4230ae425c6912bd42fb5626d90daa85b6e1c43349",
+  "native_harness_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+  "native_cli_sha256": "041e2514c2971d6393bc2b3ae1655dec2580f6ae0f05bc276ce42004bfe43d9c",
+  "native_reference": {
+    "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595"
+  },
+  "source_contract": [
+    "PlayerOptions.cpp:818-854 specifies which fields X/C/M FromString writes",
+    "PlayerOptions.cpp:1727-1730 compares TimeSpacing, ScrollSpeed, ScrollBPM and MaxScrollBPM"
+  ],
+  "standalone_cpp_result": {
+    "allocations": [],
+    "diagnostics": [],
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    },
+    "script_errors": []
+  },
+  "standalone_control_uses_semantic_host": false,
+  "standalone_control_uses_deadsync": false,
+  "baseline": {
+    "source_commit": "825303d7b7c0043e3d725f5846ef823a66c2402f",
+    "source_pending_commit": true,
+    "binary_sha256": "82499920af7f45f7f2269b189e68afe488010c68762f39b017fc42353f560347",
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-speed-query-before-v1.exe",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-speed-query-before-v1.exe",
+      "song_tables::tests::current_levels_match_compiled_native_control",
+      "--exact",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 1.7145090997219086,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-speed-query-before-v1.log",
+    "log_sha256": "936881b7303b8e34f59e0d8aab8f74b3424ea27398f4f01658556a395d3d9b1d",
+    "result_lines": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 500 filtered out; finished in 0.07s"
+    ]
+  },
+  "baseline_production_matches_committed_parent": true,
+  "after": {
+    "source_commit": "825303d7b7c0043e3d725f5846ef823a66c2402f",
+    "source_pending_commit": true,
+    "binary_sha256": "af186bfb6e4a6a1f156b14081e8c946ab0e1ed50a7e42143e8e90b1d59a1432a",
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-speed-query-after-v1.exe",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-speed-query-after-v1.exe",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 49.796443100087345,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-speed-query-after-v1.log",
+    "log_sha256": "1f2829d6c7f2503a3b471a44f14e8df5571c6749750bf8f068c67a2146955b5f",
+    "result_lines": [
+      "test result: FAILED. 499 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.10s"
+    ]
+  },
+  "normal_control_full_comparison": {
+    "exit_code": 0,
+    "comparisons_passed": 5310,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 3.171703699976206,
+    "archive_sha256": "4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd",
+    "binary_sha256": "e2a9bfab0e8019ecb5fcf25b844f1459eee6f66c619ec42ca5ddd062f1001f13",
+    "source_commit": "825303d7b7c0043e3d725f5846ef823a66c2402f",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\current-speed-query-full-v1.log",
+    "log_sha256": "cb76f6f17dd6de3923fbac279ce164d956f37338dd83cd5901f9911963034ae0",
+    "control_complete": true
+  },
+  "permanent_semantic_regression": {
+    "source_commit": "825303d7b7c0043e3d725f5846ef823a66c2402f",
+    "source_pending_commit": true,
+    "binary_sha256": "9597669f2c9483773ba048e286c20634d583244363ae116663b2d611f7abf71c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\current-speed-query-v1-song_lua_itgmania_semantic_parity.exe",
+      "native_current_options",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.8497641999274492,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\current-speed-query-semantic-v1.log",
+    "log_sha256": "2142e7dabfd34b2866c5b6ee6c2b9d371e70d48c6f786061a23c8c46a2bac6d5",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 269 filtered out; finished in 0.19s"
+    ]
+  },
+  "modifier_regressions": {
+    "source_commit": "825303d7b7c0043e3d725f5846ef823a66c2402f",
+    "source_pending_commit": true,
+    "binary_sha256": "9597669f2c9483773ba048e286c20634d583244363ae116663b2d611f7abf71c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\current-speed-query-v1-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers::",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 18.5358098000288,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\current-speed-query-modifiers-v1.log",
+    "log_sha256": "0ef650efcb4917254b55ddd60dbd81d6f07e221612497dc9018085841620460c",
+    "result_lines": [
+      "test result: FAILED. 32 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 16.90s"
+    ]
+  },
+  "prior_provenance_retained": "provenance.json",
+  "closed_cases": [
+    "C237.5 is false while native TimeSpacing is still .25",
+    "1x is false when parsing would clear an active MaxScrollBPM",
+    "M0 is true when spacing and MaxScrollBPM already equal zero"
+  ],
+  "original_corpus_or_tolerances_changed": false,
+  "reference_sources_unchanged": true,
+  "scope": "The independently compiled C++ speed-query cases, including partially approached spacing and inactive M0.",
+  "remaining_scope": "Direct Current writes in gameplay rendering, rate-scaled actor deltas, dynamic audio/song-position clocks, broader ArrowEffects/framebuffer parity and all original corpus observations remain open.",
+  "full_current_gameplay_parity_complete": false,
+  "full_corpus_complete": false
+}

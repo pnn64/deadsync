@@ -1,6 +1,6 @@
 use crate::anim;
 use deadlib_render_core::{
-    BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    BlendMode, CullMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
 use glam::Mat4 as Matrix4;
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -464,7 +464,7 @@ pub enum Actor {
         clear_depth: bool,
         /// Clear depth after this actor's last visible pass.
         clear_depth_after: bool,
-        cull_back: bool,
+        cull_mode: CullMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -492,7 +492,7 @@ pub enum Actor {
         clear_depth: bool,
         /// Clear depth after this actor's last visible pass.
         clear_depth_after: bool,
-        cull_back: bool,
+        cull_mode: CullMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -626,6 +626,7 @@ pub enum FlatMeshVertices {
 /// Material texture stages and an affine transform before model projection.
 #[derive(Clone, Debug)]
 pub struct MeshEnvironment {
+    pub sampler: Option<deadlib_render_core::MeshSampler>,
     /// Matching world-to-clip and world-to-eye cameras, before model projection.
     pub camera: Option<(Matrix4, Matrix4)>,
     pub transform: Matrix4,
@@ -652,7 +653,7 @@ pub struct FlatTexturedMesh {
     pub clear_depth: bool,
     /// Clear depth after this draw so subsequent draws cannot inherit it.
     pub clear_depth_after: bool,
-    pub cull_back: bool,
+    pub cull_mode: CullMode,
     pub blend: BlendMode,
     pub z: i16,
 }

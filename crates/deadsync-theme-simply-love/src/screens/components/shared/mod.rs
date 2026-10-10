@@ -9,6 +9,7 @@ pub mod heart_rate;
 pub mod loading_bar;
 pub mod lobby_hud;
 pub mod mode_pads;
+pub mod noteskin_draw;
 pub mod pad_display;
 pub mod profile_boxes;
 pub mod qr_code;

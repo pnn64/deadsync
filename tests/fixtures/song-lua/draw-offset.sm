@@ -1,0 +1,10 @@
+#TITLE:Manual draw clock draw-offset;
+#OFFSET:-1.25;
+#BPMS:0=60;
+#FGCHANGES:-24=draw-offset.lua=1=0=0=1;
+#NOTES:dance-single::Challenge:1:0,0,0,0,0:
+0000
+0000
+0000
+1000
+;

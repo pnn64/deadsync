@@ -1,0 +1,799 @@
+{
+  "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+  "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+  "reference_lines": [
+    607,
+    655
+  ],
+  "native_block_sha256": "5754a078a0de4e8df163acbc5f00b1b6c387d491d4ab7e89b52afe2f0135eebd",
+  "original_native_block_unchanged": true,
+  "theme_metric_file": "Themes/_fallback/metrics.ini",
+  "theme_metric_sha256": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5",
+  "isolated_inputs_used": true,
+  "whole_native_gameplay_used": false,
+  "semantic_host_used": false,
+  "deadsync_used": false,
+  "binary_sha256": "240a38daff9b9d3e22a152e21ffc1b868b9e554d76c452df3999294bf57d4ec4",
+  "vectors": [
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 768
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 32.1875
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 131
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 411
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 876
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 31.8125
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 125
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 357
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 660
+    },
+    {
+      "amount": 9.99999994e-09,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 9.99999994e-09,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 9.99999994e-09,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 9.99999994e-09,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 9.99999994e-09,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 9.99999994e-09,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 768
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0.25,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0.25,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0.25,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 34.8493729
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0.25,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 134.904099
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0.25,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 413.191284
+    },
+    {
+      "amount": 0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0.25,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 879.93927
+    },
+    {
+      "amount": -0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": -0.25,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": -0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": -0.25,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": -0.25,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 25.9993038
+    },
+    {
+      "amount": -0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": -0.25,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 134.5625
+    },
+    {
+      "amount": -0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": -0.25,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 314.248016
+    },
+    {
+      "amount": -0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": -0.25,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 618.20813
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 35.2000046
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 127.806061
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 349.126526
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 735.912354
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 29.876255
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 119.997849
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 344.743988
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": -0.5,
+      "period": 0.5,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 728.033813
+    },
+    {
+      "amount": 0.75,
+      "boost": -0.5,
+      "brake": -0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0.75,
+      "boost": -0.5,
+      "brake": -0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.75,
+      "boost": -0.5,
+      "brake": -0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 28.9874973
+    },
+    {
+      "amount": 0.75,
+      "boost": -0.5,
+      "brake": -0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 131.193939
+    },
+    {
+      "amount": 0.75,
+      "boost": -0.5,
+      "brake": -0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 445.873474
+    },
+    {
+      "amount": 0.75,
+      "boost": -0.5,
+      "brake": -0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 908.087646
+    },
+    {
+      "amount": 0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0.5,
+      "period": 0.25,
+      "boomerang": 1,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0.5,
+      "period": 0.25,
+      "boomerang": 1,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0.5,
+      "period": 0.25,
+      "boomerang": 1,
+      "travel": 32,
+      "y": 58.829422
+    },
+    {
+      "amount": 0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0.5,
+      "period": 0.25,
+      "boomerang": 1,
+      "travel": 128,
+      "y": 164.650635
+    },
+    {
+      "amount": 0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0.5,
+      "period": 0.25,
+      "boomerang": 1,
+      "travel": 384,
+      "y": 268.606506
+    },
+    {
+      "amount": 0.75,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0.5,
+      "period": 0.25,
+      "boomerang": 1,
+      "travel": 768,
+      "y": -208.93811
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": -1,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": -1,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": -1,
+      "travel": 32,
+      "y": 45.6103439
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": -1,
+      "travel": 128,
+      "y": 154.947922
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": -1,
+      "travel": 384,
+      "y": 269.981262
+    },
+    {
+      "amount": -0.75,
+      "boost": 0,
+      "brake": 0,
+      "wave": 0,
+      "period": 0,
+      "boomerang": -1,
+      "travel": 768,
+      "y": 82.5
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 1,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 1,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 1,
+      "travel": 32,
+      "y": 50.2186737
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 1,
+      "travel": 128,
+      "y": 157.679108
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 1,
+      "travel": 384,
+      "y": 269.753723
+    },
+    {
+      "amount": 0,
+      "boost": 0.5,
+      "brake": 0.25,
+      "wave": 0,
+      "period": 0,
+      "boomerang": 1,
+      "travel": 768,
+      "y": -24.3959961
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 9.99999994e-09,
+      "period": 0,
+      "boomerang": 0,
+      "travel": -128,
+      "y": -128
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 9.99999994e-09,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 9.99999994e-09,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 9.99999994e-09,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 9.99999994e-09,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 0,
+      "boost": 0,
+      "brake": 0,
+      "wave": 9.99999994e-09,
+      "period": 0,
+      "boomerang": 0,
+      "travel": 768,
+      "y": 768
+    }
+  ]
+}

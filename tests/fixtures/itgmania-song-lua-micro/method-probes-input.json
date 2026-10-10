@@ -1,0 +1,3 @@
+{
+  "aft_creation": "assert(type(frozen.GetX)==\"function\")\nassert(type(frozen.GetChild)==\"function\")\nassert(frozen.UnknownMethod==nil)\nassert(frozen.GetChildAt==nil)\nassert(ActorFrame.UnknownMethod==nil)\nassert(ActorFrame.GetChildAt==nil)\nassert(frozen.Load==nil)\nassert(type(frozen.GetTexture)==\"function\")\nassert(Actor.SetUpdateFunction == nil)\nassert(Sprite.SetUpdateFunction == nil)\nassert(type(ActorFrame.SetUpdateFunction) == \"function\")\nActorFrame.CustomProbe = function(self) return self:GetNumChildren() end\nassert(frozen:CustomProbe() == 0)\nActorFrame.CustomProbe = nil\n"
+}

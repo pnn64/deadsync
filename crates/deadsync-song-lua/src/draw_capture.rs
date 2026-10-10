@@ -245,7 +245,8 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .unwrap_or_default();
                 let external = actor
                     .raw_get::<Option<String>>("__songlua_top_screen_child_name")?
-                    .is_some();
+                    .is_some()
+                    || actor.raw_get::<Option<String>>("__songlua_player_child_name")?.is_some();
                 if !external
                     && (kind.eq_ignore_ascii_case("ActorFrame")
                         || kind.eq_ignore_ascii_case("ActorFrameTexture"))
