@@ -303,6 +303,11 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             NoteXParams {
                 screen_height: request.geometry.screen_height,
                 tornado: visual.tornado,
+                tornado_period: visual.tornado_period,
+                tornado_offset: visual.tornado_offset,
+                bounce: visual.bounce,
+                bounce_period: visual.bounce_period,
+                bounce_offset: visual.bounce_offset,
                 drunk: visual.drunk,
                 drunk_offset: visual.drunk_offset,
                 drunk_speed: visual.drunk_speed,
@@ -4931,6 +4936,135 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn bounce_tornado_reach_composed_notes() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|index| {
+                TestSlot::new(if index < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/bounce-tornado-motion.json"
+        ))
+        .expect("compiled ArrowEffects control");
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(1).expect("index")],
+        ];
+        for kind in [NoteType::Tap, NoteType::Mine] {
+            let mut notes = [note(0), note(1)];
+            for (index, note) in notes.iter_mut().enumerate() {
+                note.note_type = kind;
+                note.beat = 2.0 + index as f32;
+                note.row_index =
+                    usize::try_from(deadsync_core::timing::beat_to_note_row(note.beat))
+                        .expect("positive fixture beat");
+            }
+            let rows = [96, 144];
+            for direction in [-1.0, 1.0] {
+                for vector in native["vectors"].as_array().expect("native vectors") {
+                    let value = |name: &str| vector[name].as_f64().expect("native float") as f32;
+                    if value("columns") != 2.0 || value("column") != 0.0 || value("travel") != 0.0 {
+                        continue;
+                    }
+                    let mut request =
+                        request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.note_itg_rows = &rows;
+                    request.geometry.column_dirs.fill(direction);
+                    request.visual.visual.bounce = value("bounce");
+                    request.visual.visual.bounce_offset = value("bounce_offset");
+                    request.visual.visual.bounce_period = value("bounce_period");
+                    request.visual.visual.tornado = value("tornado");
+                    request.visual.visual.tornado_offset = value("tornado_offset");
+                    request.visual.visual.tornado_period = value("tornado_period");
+                    request.visual.visual.tiny = 1.0;
+                    request.visual.visual.move_x_cols = [0.5; MAX_COLS];
+                    request.visual.visual.move_y_cols = [0.5; MAX_COLS];
+                    let prepared = prepare_notefield(&request).expect("prepared field");
+                    let frame = NotefieldFieldFrameView {
+                        feedback: spline_feedback(&[]),
+                        completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(),
+                        &mut draws,
+                        &mut Vec::new(),
+                        &mut ModelMeshCache::default(),
+                        &mut HoldMeshScratch::default(),
+                        &mut CapturedActorScratch::with_capacities(32, 0),
+                        &mut NotefieldCameraCache::default(),
+                        &request,
+                        &prepared,
+                        &frame,
+                        &source,
+                    );
+                    let vectors = native["vectors"].as_array().expect("native vectors");
+                    let mut checked = [false; 4];
+                    for draw in &draws {
+                        let FlatDraw::Sprite(sprite) = draw else {
+                            continue;
+                        };
+                        let SpriteSource::TextureHandle { key, .. } = &sprite.source else {
+                            continue;
+                        };
+                        let Some(index) = ["note0", "note1", "target0", "target1"]
+                            .iter()
+                            .position(|name| *name == key.as_ref())
+                        else {
+                            continue;
+                        };
+                        let col = index % 2;
+                        let travel = if index < 2 {
+                            (col as f32 + 1.0) * 64.0
+                        } else {
+                            0.0
+                        };
+                        let sample = vectors
+                            .iter()
+                            .find(|sample| {
+                                sample["case"] == vector["case"]
+                                    && sample["columns"] == 2
+                                    && sample["column"] == col
+                                    && sample["travel"] == travel
+                            })
+                            .expect("independent note/receptor sample");
+                        let native_x = sample["x"].as_f64().expect("native X") as f32;
+                        let expected_x = prepared.field.playfield_center_x + native_x * 0.5 + 32.0;
+                        assert!(
+                            (sprite.center[0] - expected_x).abs() < 0.00005,
+                            "{kind:?}, direction={direction}, {sample}, actual={:?}",
+                            sprite.center
+                        );
+                        if index < 2 {
+                            let expected_y =
+                                prepared.field.column_receptor_ys[col] + 32.0 + direction * travel;
+                            assert!((sprite.center[1] - expected_y).abs() < 0.00005);
+                        }
+                        checked[index] = true;
+                    }
+                    assert_eq!(checked, [true; 4], "notes and receptors must render");
+                }
+            }
+        }
+    }
+
     #[test]
     fn confusion_x_and_roll_match_native() {
         use crate::{

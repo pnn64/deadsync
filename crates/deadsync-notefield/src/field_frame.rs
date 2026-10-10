@@ -281,6 +281,11 @@ fn compose_field_contents<S, F>(
     let note_x_params = NoteXParams {
         screen_height: request.geometry.screen_height,
         tornado: visual.tornado,
+        tornado_period: visual.tornado_period,
+        tornado_offset: visual.tornado_offset,
+        bounce: visual.bounce,
+        bounce_period: visual.bounce_period,
+        bounce_offset: visual.bounce_offset,
         drunk: visual.drunk,
         drunk_offset: visual.drunk_offset,
         drunk_speed: visual.drunk_speed,

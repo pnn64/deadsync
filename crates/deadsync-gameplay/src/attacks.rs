@@ -638,6 +638,11 @@ pub enum SongLuaEaseMaskTarget {
     VisualZigzagPeriod,
     VisualZigzagZPeriod,
     VisualXmode,
+    VisualBounce,
+    VisualBouncePeriod,
+    VisualBounceOffset,
+    VisualTornadoPeriod,
+    VisualTornadoOffset,
     VisualParabolaZ,
     VisualConfusion,
     VisualConfusionOffset,
@@ -1242,7 +1247,7 @@ impl SongLuaNoteHideWindows {
 
     /// Restore the non-looping offset spline used to hide authored note runs.
     /// ITGmania CubicSpline::solve_straight solves for first derivatives, with
-    /// natural end conditions (2, 1 / 1, 2), then evaluates a + bt + ct² + dt³.
+    /// natural end conditions (2, 1 / 1, 2), then evaluates a + bt + ctÂ² + dtÂ³.
     pub fn set_zoom_spline(&mut self, column: usize, beats_per_t: f32, size: usize) {
         if column >= MAX_COLS
             || !(1..=65_536).contains(&size)
@@ -2313,6 +2318,11 @@ fn append_song_lua_ease_targets_key(
         "zigzagperiod" => push(SongLuaEaseMaskTarget::VisualZigzagPeriod, pct_from, pct_to),
         "zigzagzperiod" => push(SongLuaEaseMaskTarget::VisualZigzagZPeriod, pct_from, pct_to),
         "xmode" => push(SongLuaEaseMaskTarget::VisualXmode, pct_from, pct_to),
+        "bounce" => push(SongLuaEaseMaskTarget::VisualBounce, pct_from, pct_to),
+        "bounceperiod" => push(SongLuaEaseMaskTarget::VisualBouncePeriod, pct_from, pct_to),
+        "bounceoffset" => push(SongLuaEaseMaskTarget::VisualBounceOffset, pct_from, pct_to),
+        "tornadoperiod" => push(SongLuaEaseMaskTarget::VisualTornadoPeriod, pct_from, pct_to),
+        "tornadooffset" => push(SongLuaEaseMaskTarget::VisualTornadoOffset, pct_from, pct_to),
         "parabolaz" => push(SongLuaEaseMaskTarget::VisualParabolaZ, pct_from, pct_to),
         "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
         "confusionoffset" => push(
@@ -3013,6 +3023,11 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualZigzagPeriod => visual.zigzag_period = Some(value),
         SongLuaEaseMaskTarget::VisualZigzagZPeriod => visual.zigzag_z_period = Some(value),
         SongLuaEaseMaskTarget::VisualXmode => visual.xmode = Some(value),
+        SongLuaEaseMaskTarget::VisualBounce => visual.bounce = Some(value),
+        SongLuaEaseMaskTarget::VisualBouncePeriod => visual.bounce_period = Some(value),
+        SongLuaEaseMaskTarget::VisualBounceOffset => visual.bounce_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualTornadoPeriod => visual.tornado_period = Some(value),
+        SongLuaEaseMaskTarget::VisualTornadoOffset => visual.tornado_offset = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
@@ -3091,9 +3106,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::PerspectiveTilt => perspective.tilt = Some(value),
         SongLuaEaseMaskTarget::PerspectiveSkew => perspective.skew = Some(value),
         SongLuaEaseMaskTarget::ScrollSpeedX => {
-            if value > 0.0 {
-                *scroll_speed = Some(ScrollSpeedSetting::XMod(value));
-            }
+            *scroll_speed = Some(ScrollSpeedSetting::XMod(value));
         }
         SongLuaEaseMaskTarget::ScrollSpeedC => {
             if value > 0.0 {
@@ -3274,6 +3287,11 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualZigzagPeriod => window.visual.zigzag_period.is_some(),
         SongLuaEaseMaskTarget::VisualZigzagZPeriod => window.visual.zigzag_z_period.is_some(),
         SongLuaEaseMaskTarget::VisualXmode => window.visual.xmode.is_some(),
+        SongLuaEaseMaskTarget::VisualBounce => window.visual.bounce.is_some(),
+        SongLuaEaseMaskTarget::VisualBouncePeriod => window.visual.bounce_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBounceOffset => window.visual.bounce_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualTornadoPeriod => window.visual.tornado_period.is_some(),
+        SongLuaEaseMaskTarget::VisualTornadoOffset => window.visual.tornado_offset.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
@@ -4662,6 +4680,11 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.zigzag_period, visual.zigzag_period);
     mark_active_target(&mut targets.zigzag_z_period, visual.zigzag_z_period);
     mark_active_target(&mut targets.xmode, visual.xmode);
+    mark_active_target(&mut targets.bounce, visual.bounce);
+    mark_active_target(&mut targets.bounce_period, visual.bounce_period);
+    mark_active_target(&mut targets.bounce_offset, visual.bounce_offset);
+    mark_active_target(&mut targets.tornado_period, visual.tornado_period);
+    mark_active_target(&mut targets.tornado_offset, visual.tornado_offset);
     mark_active_target(&mut targets.parabola_z, visual.parabola_z);
     mark_active_target(&mut targets.confusion, visual.confusion);
     mark_active_target(&mut targets.confusion_offset, visual.confusion_offset);
@@ -5576,6 +5599,19 @@ fn apply_song_lua_approach_targets(
                 attack.visual_speed.zigzag_z_period = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualXmode => attack.visual_speed.xmode = Some(speed),
+            SongLuaEaseMaskTarget::VisualBounce => attack.visual_speed.bounce = Some(speed),
+            SongLuaEaseMaskTarget::VisualBouncePeriod => {
+                attack.visual_speed.bounce_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBounceOffset => {
+                attack.visual_speed.bounce_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTornadoPeriod => {
+                attack.visual_speed.tornado_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTornadoOffset => {
+                attack.visual_speed.tornado_offset = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualParabolaZ => attack.visual_speed.parabola_z = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusionOffset => {
@@ -6517,6 +6553,51 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.bounce,
+        &mut values.visual_speed.bounce,
+        window.visual.bounce,
+        window.visual_speed.bounce,
+        active_targets.visual.bounce,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bounce_period,
+        &mut values.visual_speed.bounce_period,
+        window.visual.bounce_period,
+        window.visual_speed.bounce_period,
+        active_targets.visual.bounce_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bounce_offset,
+        &mut values.visual_speed.bounce_offset,
+        window.visual.bounce_offset,
+        window.visual_speed.bounce_offset,
+        active_targets.visual.bounce_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tornado_period,
+        &mut values.visual_speed.tornado_period,
+        window.visual.tornado_period,
+        window.visual_speed.tornado_period,
+        active_targets.visual.tornado_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tornado_offset,
+        &mut values.visual_speed.tornado_offset,
+        window.visual.tornado_offset,
+        window.visual_speed.tornado_offset,
+        active_targets.visual.tornado_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.parabola_z,
         &mut values.visual_speed.parabola_z,
         window.visual.parabola_z,
@@ -6917,7 +6998,7 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
         .strip_suffix('x')
         .or_else(|| trimmed.strip_suffix('X'))
         .and_then(|v| v.trim().parse::<f32>().ok());
-    if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
+    if let Some(v) = value.filter(|v| v.is_finite()) {
         return Some(ScrollSpeedSetting::XMod(v));
     }
     let kind = trimmed.as_bytes().first()?.to_ascii_lowercase();
@@ -6927,7 +7008,7 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
     // An ASCII prefix ends on a UTF-8 boundary. Ordinary modifier names
     // need no floating-point parse or validation of the rest of the token.
     let value = trimmed[1..].trim().parse::<f32>().ok()?;
-    if value <= 0.0 {
+    if !value.is_finite() || (kind != b'x' && value <= 0.0) {
         return None;
     }
     match kind {
@@ -7439,6 +7520,36 @@ fn apply_runtime_mod(
         "xmode" => set_approached_mod(
             &mut out.visual.xmode,
             &mut out.visual_speed.xmode,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bounce" => set_approached_mod(
+            &mut out.visual.bounce,
+            &mut out.visual_speed.bounce,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bounceperiod" => set_approached_mod(
+            &mut out.visual.bounce_period,
+            &mut out.visual_speed.bounce_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bounceoffset" => set_approached_mod(
+            &mut out.visual.bounce_offset,
+            &mut out.visual_speed.bounce_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornadoperiod" => set_approached_mod(
+            &mut out.visual.tornado_period,
+            &mut out.visual_speed.tornado_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornadooffset" => set_approached_mod(
+            &mut out.visual.tornado_offset,
+            &mut out.visual_speed.tornado_offset,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -7978,6 +8089,11 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         zigzag_period: merge_attack_value(base.zigzag_period, attack.zigzag_period),
         zigzag_z_period: merge_attack_value(base.zigzag_z_period, attack.zigzag_z_period),
         xmode: merge_attack_value(base.xmode, attack.xmode),
+        bounce: merge_attack_value(base.bounce, attack.bounce),
+        bounce_period: merge_attack_value(base.bounce_period, attack.bounce_period),
+        bounce_offset: merge_attack_value(base.bounce_offset, attack.bounce_offset),
+        tornado_period: merge_attack_value(base.tornado_period, attack.tornado_period),
+        tornado_offset: merge_attack_value(base.tornado_offset, attack.tornado_offset),
         parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),
         confusion: merge_attack_value(base.confusion, attack.confusion),
         confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),

@@ -206,6 +206,11 @@ pub(crate) struct NoteXParams {
     pub flip: f32,
     pub invert: f32,
     pub tornado: f32,
+    pub tornado_period: f32,
+    pub tornado_offset: f32,
+    pub bounce: f32,
+    pub bounce_period: f32,
+    pub bounce_offset: f32,
     pub drunk: f32,
     pub drunk_offset: f32,
     pub drunk_speed: f32,
@@ -1255,13 +1260,15 @@ pub(crate) fn tornado_x_extra(
     base_x: f32,
     bounds: TornadoBounds,
     screen_height: f32,
-    tornado: f32,
+    [tornado, offset, period]: [f32; 3],
 ) -> f32 {
     if !signed_effect_active(tornado) {
         return 0.0;
     }
     let position_between = sm_scale(base_x, bounds.min_x, bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
-    let radians = position_between.acos() + y * TORNADO_X_OFFSET_FREQUENCY / screen_height;
+    let radians = position_between.acos()
+        + (y + offset) * (period * TORNADO_X_OFFSET_FREQUENCY + TORNADO_X_OFFSET_FREQUENCY)
+            / screen_height;
     let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
     (adjusted - base_x) * tornado
 }
@@ -1272,12 +1279,24 @@ fn tornado_x_extra_cached(
     base_x: f32,
     bounds: TornadoBounds,
     screen_height: f32,
-    tornado: f32,
+    [tornado, offset, period]: [f32; 3],
     cache: TornadoLaneCache,
 ) -> f32 {
-    let radians = cache.base_angle + y * TORNADO_X_OFFSET_FREQUENCY / screen_height;
+    let radians = cache.base_angle
+        + (y + offset) * (period * TORNADO_X_OFFSET_FREQUENCY + TORNADO_X_OFFSET_FREQUENCY)
+            / screen_height;
     let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
     (adjusted - base_x) * tornado
+}
+
+// ArrowEffects::GetXPos uses std::sin (not RageFastSin) and a 60px period.
+// Preserve IEEE behavior when the native period denominator is zero.
+fn bounce_x_extra(y: f32, [amount, offset, period]: [f32; 3]) -> f32 {
+    if amount == 0.0 || !amount.is_finite() {
+        return 0.0;
+    }
+    let wave = ((y + offset) / (60.0 + period * 60.0)).sin().abs();
+    amount * ARROW_EFFECT_PIXEL_SIZE * 0.5 * wave
 }
 
 // ArrowEffects::GetXPos: doubles split at floor(columns / 2); singles
@@ -1312,7 +1331,7 @@ pub(crate) fn note_x_extra(
             base_x,
             tornado.get(local_col).copied().unwrap_or_default(),
             params.screen_height,
-            params.tornado,
+            [params.tornado, params.tornado_offset, params.tornado_period],
         );
     }
     out += bumpy_wave_offset(
@@ -1374,6 +1393,10 @@ pub(crate) fn note_x_extra(
         params.digital_steps,
     );
     out += square_wave_offset(y, params.square, params.square_offset, params.square_period);
+    out += bounce_x_extra(
+        y,
+        [params.bounce, params.bounce_offset, params.bounce_period],
+    );
     out += xmode_x_extra(local_col, y, col_offsets.len(), params);
     out
 }
@@ -1423,14 +1446,22 @@ pub(crate) fn note_x_offset_cached(
     if signed_effect_active(params.tornado) {
         let bounds = tornado.get(local_col).copied().unwrap_or_default();
         extra += tornado_cache.get(local_col).map_or_else(
-            || tornado_x_extra(y, base_x, bounds, params.screen_height, params.tornado),
+            || {
+                tornado_x_extra(
+                    y,
+                    base_x,
+                    bounds,
+                    params.screen_height,
+                    [params.tornado, params.tornado_offset, params.tornado_period],
+                )
+            },
             |&cache| {
                 tornado_x_extra_cached(
                     y,
                     base_x,
                     bounds,
                     params.screen_height,
-                    params.tornado,
+                    [params.tornado, params.tornado_offset, params.tornado_period],
                     cache,
                 )
             },
@@ -1495,6 +1526,10 @@ pub(crate) fn note_x_offset_cached(
         params.digital_steps,
     );
     extra += square_wave_offset(y, params.square, params.square_offset, params.square_period);
+    extra += bounce_x_extra(
+        y,
+        [params.bounce, params.bounce_offset, params.bounce_period],
+    );
     extra += xmode_x_extra(local_col, y, col_offsets.len(), params);
     let base = base_x + extra;
     base * tiny_scale + move_x_cache.get(local_col).copied().unwrap_or(0.0)
@@ -1511,6 +1546,7 @@ pub(crate) fn fill_static_note_x_offsets(
     out: &mut [f32],
 ) -> bool {
     if signed_effect_active(params.tornado)
+        || (params.bounce.is_finite() && params.bounce != 0.0)
         || params.bumpy_x != 0.0
         || params.tan_bumpy_x != 0.0
         || params.drunk != 0.0

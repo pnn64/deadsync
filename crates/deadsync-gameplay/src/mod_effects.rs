@@ -242,6 +242,11 @@ pub struct VisualOverrides {
     pub zigzag_period: Option<f32>,
     pub zigzag_z_period: Option<f32>,
     pub xmode: Option<f32>,
+    pub bounce: Option<f32>,
+    pub bounce_period: Option<f32>,
+    pub bounce_offset: Option<f32>,
+    pub tornado_period: Option<f32>,
+    pub tornado_offset: Option<f32>,
     pub parabola_z: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
@@ -327,6 +332,11 @@ impl Default for VisualOverrides {
             zigzag_period: None,
             zigzag_z_period: None,
             xmode: None,
+            bounce: None,
+            bounce_period: None,
+            bounce_offset: None,
+            tornado_period: None,
+            tornado_offset: None,
             parabola_z: None,
             confusion: None,
             confusion_offset: None,
@@ -414,6 +424,11 @@ impl VisualOverrides {
             || self.zigzag_period.is_some()
             || self.zigzag_z_period.is_some()
             || self.xmode.is_some()
+            || self.bounce.is_some()
+            || self.bounce_period.is_some()
+            || self.bounce_offset.is_some()
+            || self.tornado_period.is_some()
+            || self.tornado_offset.is_some()
             || self.parabola_z.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
@@ -607,6 +622,11 @@ pub struct VisualEffects {
     pub zigzag_period: f32,
     pub zigzag_z_period: f32,
     pub xmode: f32,
+    pub bounce: f32,
+    pub bounce_period: f32,
+    pub bounce_offset: f32,
+    pub tornado_period: f32,
+    pub tornado_offset: f32,
     pub parabola_z: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
@@ -700,6 +720,11 @@ impl VisualEffects {
             zigzag_period: 0.0,
             zigzag_z_period: 0.0,
             xmode: 0.0,
+            bounce: 0.0,
+            bounce_period: 0.0,
+            bounce_offset: 0.0,
+            tornado_period: 0.0,
+            tornado_offset: 0.0,
             parabola_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
@@ -871,6 +896,11 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.zigzag_period, base.zigzag_period, step);
     approach_optional_visual(&mut visual.zigzag_z_period, base.zigzag_z_period, step);
     approach_optional_visual(&mut visual.xmode, base.xmode, step);
+    approach_optional_visual(&mut visual.bounce, base.bounce, step);
+    approach_optional_visual(&mut visual.bounce_period, base.bounce_period, step);
+    approach_optional_visual(&mut visual.bounce_offset, base.bounce_offset, step);
+    approach_optional_visual(&mut visual.tornado_period, base.tornado_period, step);
+    approach_optional_visual(&mut visual.tornado_offset, base.tornado_offset, step);
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
@@ -1328,6 +1358,46 @@ pub fn approach_visual_overrides_to_target(
         target.xmode,
         base.xmode,
         speed.xmode,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce,
+        target.bounce,
+        base.bounce,
+        speed.bounce,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_period,
+        target.bounce_period,
+        base.bounce_period,
+        speed.bounce_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_offset,
+        target.bounce_offset,
+        base.bounce_offset,
+        speed.bounce_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_period,
+        target.tornado_period,
+        base.tornado_period,
+        speed.tornado_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_offset,
+        target.tornado_offset,
+        base.tornado_offset,
+        speed.tornado_offset,
         delta_time,
         1.0,
     );

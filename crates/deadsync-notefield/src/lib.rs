@@ -3263,18 +3263,87 @@ mod tests {
     }
 
     #[test]
+    fn bounce_tornado_match_native_positions() {
+        // Original ArrowEffects C++ bodies, compiled independently of the
+        // Lua semantic host. Samples include receptors and hold-body travel.
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/bounce-tornado-motion.json"
+        ))
+        .expect("native ArrowEffects motion vectors");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 108);
+        for v in vectors {
+            let value = |name: &str| v[name].as_f64().expect("native float") as f32;
+            let num_cols = v["columns"].as_u64().expect("columns") as usize;
+            let col = v["column"].as_u64().expect("column") as usize;
+            let columns = if num_cols == 2 {
+                &[-32.0, 32.0][..]
+            } else {
+                &[-96.0, -32.0, 32.0, 96.0][..]
+            };
+            let params = NoteXParams {
+                bounce: value("bounce"),
+                bounce_period: value("bounce_period"),
+                bounce_offset: value("bounce_offset"),
+                tornado: value("tornado"),
+                tornado_period: value("tornado_period"),
+                tornado_offset: value("tornado_offset"),
+                screen_height: 480.0,
+                ..NoteXParams::default()
+            };
+            let mut bounds = [TornadoBounds::default(); 4];
+            super::compute_tornado_bounds(columns, &mut bounds);
+            let mut caches = [super::TornadoLaneCache::default(); 4];
+            super::compute_tornado_lane_caches(columns, &bounds, params.tornado, &mut caches);
+            let travel = value("travel");
+            // Tiny pulls tracks together, then MoveX translates each lane.
+            let expected = value("x") * 0.5 + 32.0;
+            let direct = note_x_offset(
+                col, travel, 0.0, 0.0, columns, &[0.0; 4], &bounds, &[0.5; 4], params, 1.0,
+            );
+            let cached = super::note_x_offset_cached(
+                col, travel, 0.0, 0.0, columns, &[0.0; 4], &bounds, &caches, &[32.0; 4], params,
+                0.5,
+            );
+            assert!((direct - expected).abs() < 0.00005, "{v}: direct={direct}");
+            assert!((cached - expected).abs() < 0.00005, "{v}: cached={cached}");
+            assert!(
+                !super::fill_static_note_x_offsets(
+                    num_cols,
+                    columns,
+                    &[0.0; 4],
+                    &bounds,
+                    &[32.0; 4],
+                    NoteXParams {
+                        tornado: 0.0,
+                        ..params
+                    },
+                    0.5,
+                    &mut [0.0; 4],
+                ),
+                "Bounce requires travel-dependent offsets even without Tornado"
+            );
+        }
+    }
+
+    #[test]
     fn tornado_x_extra_scales_toward_bound_arc() {
         let bounds = TornadoBounds {
             min_x: -96.0,
             max_x: 96.0,
         };
-        assert_eq!(tornado_x_extra(0.0, 0.0, bounds, 480.0, 0.0), 0.0);
-        assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, 1.0) - 0.0).abs() <= 1e-4);
+        assert_eq!(
+            tornado_x_extra(0.0, 0.0, bounds, 480.0, [0.0, 0.0, 0.0]),
+            0.0
+        );
+        assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, [1.0, 0.0, 0.0]) - 0.0).abs() <= 1e-4);
         let expected = {
             let radians = std::f32::consts::PI + 80.0 * 6.0 / 480.0;
             sm_scale(radians.cos(), -1.0, 1.0, -96.0, 96.0) + 96.0
         };
-        assert!((tornado_x_extra(80.0, -96.0, bounds, 480.0, 1.0) - expected).abs() <= 1e-4);
+        assert!(
+            (tornado_x_extra(80.0, -96.0, bounds, 480.0, [1.0, 0.0, 0.0]) - expected).abs() <= 1e-4
+        );
     }
 
     #[test]

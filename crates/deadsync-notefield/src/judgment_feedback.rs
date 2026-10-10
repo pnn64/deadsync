@@ -303,6 +303,11 @@ fn indicator_x(
         NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,
+            tornado_period: request.visual.tornado_period,
+            tornado_offset: request.visual.tornado_offset,
+            bounce: request.visual.bounce,
+            bounce_period: request.visual.bounce_period,
+            bounce_offset: request.visual.bounce_offset,
             drunk: request.visual.drunk,
             drunk_offset: request.visual.drunk_offset,
             drunk_speed: request.visual.drunk_speed,
@@ -866,6 +871,11 @@ mod tests {
         let params = NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,
+            tornado_period: request.visual.tornado_period,
+            tornado_offset: request.visual.tornado_offset,
+            bounce: request.visual.bounce,
+            bounce_period: request.visual.bounce_period,
+            bounce_offset: request.visual.bounce_offset,
             drunk: request.visual.drunk,
             drunk_offset: request.visual.drunk_offset,
             drunk_speed: request.visual.drunk_speed,

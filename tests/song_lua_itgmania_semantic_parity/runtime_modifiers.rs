@@ -493,6 +493,11 @@ fn runtime_mod_value(
         "squarezoffset" => visual.square_z_offset.unwrap_or(0.0),
         "squarezperiod" => visual.square_z_period.unwrap_or(0.0),
         "xmode" => visual.xmode.unwrap_or(0.0),
+        "bounce" => visual.bounce.unwrap_or(0.0),
+        "bounceperiod" => visual.bounce_period.unwrap_or(0.0),
+        "bounceoffset" => visual.bounce_offset.unwrap_or(0.0),
+        "tornadoperiod" => visual.tornado_period.unwrap_or(0.0),
+        "tornadooffset" => visual.tornado_offset.unwrap_or(0.0),
         "parabolaz" => visual.parabola_z.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
         "confusionoffset" => visual.confusion_offset.unwrap_or(0.0),
@@ -3165,6 +3170,36 @@ fn confusion_x_matches_native_targets() {
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     assert_eq!(parity.checks(), 36);
     parity.assert_complete("confusion X");
+}
+
+#[test]
+fn bounce_tornado_match_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("bounce-tornado.lua");
+    let trace: NativeTrace = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/bounce-tornado-native.json"))
+            .expect("native motion fixture"),
+    )
+    .expect("valid native motion fixture");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native player options");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile motion fixture");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(
+        parity.checks() >= 48,
+        "must compare setters, strings and resets"
+    );
+    parity.assert_complete("Bounce, Tornado suboptions and nonpositive XMod");
 }
 
 #[test]
