@@ -1039,3 +1039,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass144.json`. Position 66 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 145
+
+Position 66, [N]TECH SOUP(MASTER) Flying Castle, passes all
+172,269 comparisons against committed DeadSync
+`6217b2455`. The complete native harness 0.1.54 archive
+contains 7,284 updates over 121.38 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass145.json`. Position 67 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
