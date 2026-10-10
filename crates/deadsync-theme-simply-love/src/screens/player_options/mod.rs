@@ -181,7 +181,7 @@ fn apply_judgment_palette_choices(
     let Some(row) = row_map.get_mut(RowId::JudgmentColors) else {
         return;
     };
-    row.replace_choices(choices.to_vec());
+    row.replace_choices(choices);
     apply_judgment_palette_selection(row_map, choice_ids, selected_ids);
 }
 

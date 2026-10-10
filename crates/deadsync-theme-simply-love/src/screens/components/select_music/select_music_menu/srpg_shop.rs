@@ -82,7 +82,7 @@ pub struct SrpgShopOverlayStateData {
     side: PlayerSide,
     shop_index: usize,
     item_indices: [usize; 4],
-    queued: HashSet<String>,
+    queued: [HashSet<Box<str>>; SHOPS.len()],
     confirm: Option<PurchaseConfirm>,
     local_message: Option<String>,
     presentation_revision: u64,
@@ -151,7 +151,7 @@ pub fn show_srpg_shop_overlay(side: PlayerSide) -> SrpgShopOverlayState {
         side,
         shop_index: 0,
         item_indices: [0; 4],
-        queued: HashSet::new(),
+        queued: std::array::from_fn(|_| HashSet::new()),
         confirm: None,
         local_message: None,
         presentation_revision: 0,
@@ -412,7 +412,7 @@ fn activate_item(
         overlay.local_message = Some("This item is not currently available.".to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     };
-    if !overlay.queued.insert(queue_key(shop.id, item)) {
+    if !overlay.queued[overlay.shop_index].insert(item.item_id.as_str().into()) {
         overlay.local_message = Some("This unlock is already queued.".to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     }
@@ -431,9 +431,8 @@ fn download_all(overlay: &mut SrpgShopOverlayStateData, shop: &SrpgShop) -> Srpg
         .filter(|item| item.owned && !item.downloaded)
         .filter_map(|item| {
             let url = item.download_url.as_ref()?;
-            overlay
-                .queued
-                .insert(queue_key(shop.id, item))
+            overlay.queued[overlay.shop_index]
+                .insert(item.item_id.as_str().into())
                 .then(|| SrpgShopDownload {
                     name: item.name.clone(),
                     url: url.clone(),
@@ -449,10 +448,6 @@ fn download_all(overlay: &mut SrpgShopOverlayStateData, shop: &SrpgShop) -> Srpg
         shop_id: shop.id,
         downloads,
     }
-}
-
-fn queue_key(shop_id: u32, item: &SrpgShopItem) -> String {
-    format!("{shop_id}:{}", item.item_id)
 }
 
 fn active_shop<'a>(
@@ -681,7 +676,7 @@ fn push_catalog(
                 item_row_detail(
                     item,
                     meta.currency,
-                    overlay.queued.contains(&queue_key(shop.id, item)),
+                    overlay.queued[overlay.shop_index].contains(item.item_id.as_str()),
                 ),
             )
         };
@@ -804,7 +799,7 @@ fn push_item_detail(
             item,
             shop.balance,
             meta.currency,
-            overlay.queued.contains(&queue_key(shop.id, item)),
+            overlay.queued[overlay.shop_index].contains(item.item_id.as_str()),
         )
     });
     actors.push(act!(text:
@@ -907,7 +902,7 @@ fn ready_count(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> usize {
             item.owned
                 && item.download_url.is_some()
                 && !item.downloaded
-                && !overlay.queued.contains(&queue_key(shop.id, item))
+                && !overlay.queued[overlay.shop_index].contains(item.item_id.as_str())
         })
         .count()
 }
@@ -1205,3 +1200,10 @@ mod tests {
         assert!(!page_srpg_shop_selection(&mut state, &snapshot, -1));
     }
 }
+
+#[cfg(test)]
+#[path = "srpg_shop_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "srpg_shop_buffers_perf.rs"]
+mod buffers_perf;

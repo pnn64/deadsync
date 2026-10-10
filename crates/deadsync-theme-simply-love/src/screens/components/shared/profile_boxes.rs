@@ -224,7 +224,7 @@ fn preview_noteskin_for_choice(
 }
 
 #[inline(always)]
-fn format_total_songs_played(count: u32) -> String {
+fn format_total_songs_played(count: u32) -> Arc<str> {
     let count_str = count.to_string();
     if count == 1 {
         tr_fmt(
@@ -232,14 +232,12 @@ fn format_total_songs_played(count: u32) -> String {
             "SongPlayedSingular",
             &[("count", &count_str)],
         )
-        .to_string()
     } else {
         tr_fmt(
             "SelectProfile",
             "SongPlayedPlural",
             &[("count", &count_str)],
         )
-        .to_string()
     }
 }
 
@@ -347,7 +345,7 @@ fn build_choices(
             kind: profile_data::ActiveProfile::Local { id: profile.id },
             display_name: profile.display_name.into(),
             avatar_key: profile.avatar_key.map(Arc::from),
-            total_songs: format_total_songs_played(profile.total_songs_played).into(),
+            total_songs: format_total_songs_played(profile.total_songs_played),
             recent_mods: recent_mods.into(),
             noteskin: profile.noteskin,
             judgment: profile.judgment,
@@ -2312,3 +2310,10 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "profile_boxes_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "profile_boxes_buffers_perf.rs"]
+mod buffers_perf;
