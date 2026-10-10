@@ -1597,3 +1597,17 @@ See `native-revalidation-pass184.json`. Position 106 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 185
+
+Position 106, Atmosphere, passes all
+666,848 comparisons against committed DeadSync
+`0e52cbbcf`. The complete native harness 0.1.62 archive
+contains 8,053 updates over 134.19 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass185.json`. Position 107 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
