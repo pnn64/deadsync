@@ -1390,12 +1390,10 @@
     {
       "title": "Apollo",
       "source_simfile": "Apollo/Apollo.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b9f24536e87b75f62a882317c002f3e0cd24a00e78751155b0340f764581831d.tar.zst",
-      "sha256": "b9f24536e87b75f62a882317c002f3e0cd24a00e78751155b0340f764581831d",
-      "compressed_bytes": 490069,
-      "uncompressed_sha256": "f5f7a47448fbdcaec1d8d960bc8797381188ffad237755e84a1505b59d888f28",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "cecb2ec63fc4f9140e774ebd938b0d81734227a96df9babf33fc2ad8e6556a27.tar.zst",
+      "sha256": "cecb2ec63fc4f9140e774ebd938b0d81734227a96df9babf33fc2ad8e6556a27",
+      "compressed_bytes": 210533,
       "aliases": [
         "42c27e6326194b71da0857de36264c6117c7c66b04e4ab707d3ff29b7c8ead82.tar.zst"
       ]
