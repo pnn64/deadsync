@@ -851,12 +851,10 @@
     {
       "title": "[7287] [12] Myths You Forgot",
       "source_simfile": "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot.ssc",
-      "harness_version": "0.1.0",
-      "archive": "c2fced0ab658ce25f0a1a54d722162af378df050d61bcb8e7eade94dd0619e61.tar.zst",
-      "sha256": "c2fced0ab658ce25f0a1a54d722162af378df050d61bcb8e7eade94dd0619e61",
-      "compressed_bytes": 58731,
-      "uncompressed_sha256": "78e73fdaa7bb41c3580625d416f9912caa6b81cf106145d4ebeae8c7ffc30e69",
-      "compression_level": 22,
+      "harness_version": "0.1.53",
+      "archive": "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7.tar.zst",
+      "sha256": "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7",
+      "compressed_bytes": 309259,
       "aliases": [
         "a05fc79390f7dbc8d27ab10f11315da697f21d3bb98ddd8b0e548841fc04e30d.tar.zst"
       ]

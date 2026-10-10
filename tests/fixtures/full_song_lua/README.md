@@ -857,3 +857,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass130.json`. Position 52 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 131
+
+Position 52, [7287] [12] Myths You Forgot, passes all
+560,613 comparisons against committed DeadSync
+`ba99d38a7`. The complete native harness 0.1.53 archive
+contains 7,527 updates over 125.42 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass131.json`. Position 53 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
