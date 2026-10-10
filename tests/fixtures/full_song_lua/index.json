@@ -1551,12 +1551,10 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.ssc",
-      "harness_version": "0.1.0",
-      "archive": "43a8ae83ecfaa854abe00df53c2d6528b760ce58836dd58505325dfb5c73a1b9.tar.zst",
-      "sha256": "43a8ae83ecfaa854abe00df53c2d6528b760ce58836dd58505325dfb5c73a1b9",
-      "compressed_bytes": 95294,
-      "uncompressed_sha256": "cb4db378c1e81b3b13f186b74d837556af39238e9899e5de2b393cf2e5986b3f",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "0211e7ed4192b8c793f8ca9b308da10fd59666ac4c07769ac8e29e21fad42268.tar.zst",
+      "sha256": "0211e7ed4192b8c793f8ca9b308da10fd59666ac4c07769ac8e29e21fad42268",
+      "compressed_bytes": 137431,
       "aliases": [
         "0e911c015a7964ae74c12737103c2b57478545aa98bb84c0c7f5958cd2545b40.tar.zst"
       ]

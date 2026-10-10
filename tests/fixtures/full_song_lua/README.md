@@ -1723,3 +1723,17 @@ See `native-revalidation-pass193.json`. Position 115 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 194
+
+Position 115, Bank Account, passes all
+118,381 comparisons against committed DeadSync
+`68c832d93`. The complete native harness 0.1.64 archive
+contains 5,300 updates over 88.31 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass194.json`. Position 116 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
