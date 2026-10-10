@@ -570,7 +570,11 @@ fn actor_from_vertices<S: NoteskinSlot>(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: slot.model_cull_back(),
+        cull_mode: if slot.model_cull_back() {
+            deadlib_render_core::CullMode::Back
+        } else {
+            deadlib_render_core::CullMode::None
+        },
         visible: true,
         blend,
         z,
@@ -609,7 +613,11 @@ fn flat_from_vertices<S: NoteskinSlot>(
         depth_test: false,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: slot.model_cull_back(),
+        cull_mode: if slot.model_cull_back() {
+            deadlib_render_core::CullMode::Back
+        } else {
+            deadlib_render_core::CullMode::None
+        },
         blend,
         z,
     }
@@ -1237,7 +1245,7 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -1281,7 +1289,7 @@ mod tests {
         assert_eq!(uv_offset, [0.1, 0.2]);
         assert_eq!(uv_tex_shift, [0.125, 0.25]);
         assert!(!depth_test);
-        assert!(cull_back);
+        assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
         assert!(visible);
         assert_eq!(blend, BlendMode::Add);
         assert_eq!(z, 47);

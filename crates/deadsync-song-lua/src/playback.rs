@@ -3488,7 +3488,7 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         depth_test: state.depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         visible: state.draw_visible(),
         blend: song_lua_overlay_blend(state.blend),
         z,
@@ -6430,6 +6430,7 @@ pub fn apply_overlay_update(
     set_value!(MaskSource, Bool, mask_source);
     set_value!(MaskDest, Bool, mask_dest);
     set_value!(DepthTest, Bool, depth_test);
+    set_value!(CullMode, CullMode, cull_mode);
     set_value!(Zoom, F32, zoom);
     set_value!(ZoomX, F32, zoom_x);
     set_value!(ZoomY, F32, zoom_y);
@@ -8134,7 +8135,7 @@ fn append_song_lua_model_actors(
                 depth_test: state.depth_test,
                 clear_depth: false,
                 clear_depth_after: false,
-                cull_back: false,
+                cull_mode: state.cull_mode,
                 visible: true,
                 // Native Model resets blending after each diffuse mesh.
                 blend: if (glow_pass && tint[3] > 0.0) || idx != 0 {
@@ -9671,7 +9672,7 @@ fn song_lua_projected_mesh_actor_from_grid(
             depth_test: params.depth_test,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: params.visible,
             blend: params.blend,
             z: params.z,
@@ -9702,7 +9703,7 @@ fn song_lua_projected_mesh_actor_from_grid(
         depth_test: params.depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         visible: params.visible,
         blend: params.blend,
         z: params.z,
@@ -10644,7 +10645,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         depth_test: state.depth_test,
                         clear_depth: false,
                         clear_depth_after: false,
-                        cull_back: false,
+                        cull_mode: deadlib_render_core::CullMode::None,
                         visible: state.draw_visible(),
                         blend: overlay_blend,
                         z,
@@ -10680,7 +10681,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         depth_test: state.depth_test,
                         clear_depth: false,
                         clear_depth_after: false,
-                        cull_back: false,
+                        cull_mode: deadlib_render_core::CullMode::None,
                         visible: state.draw_visible(),
                         blend: overlay_blend,
                         z,
@@ -11428,7 +11429,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     depth_test: *depth_test,
                     clear_depth: false,
                     clear_depth_after: false,
-                    cull_back: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     visible: *visible,
                     blend: *blend,
                     z: *z,
@@ -11461,7 +11462,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     depth_test: *depth_test,
                     clear_depth: false,
                     clear_depth_after: false,
-                    cull_back: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     visible: *visible,
                     blend: *blend,
                     z: *z,
@@ -11498,7 +11499,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     depth_test: *depth_test,
                     clear_depth: false,
                     clear_depth_after: false,
-                    cull_back: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     visible: *visible,
                     blend: *blend,
                     z: *z,
@@ -11555,7 +11556,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 depth_test: *depth_test,
                 clear_depth: false,
                 clear_depth_after: false,
-                cull_back: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 visible: *visible,
                 blend: *blend,
                 z: *z,

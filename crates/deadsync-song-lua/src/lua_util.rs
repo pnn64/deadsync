@@ -1086,6 +1086,7 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "mask_source" => Target::MaskSource,
         "mask_dest" => Target::MaskDest,
         "depth_test" => Target::DepthTest,
+        "cull_mode" => Target::CullMode,
         "zoom" => Target::Zoom,
         "zoom_x" => Target::ZoomX,
         "zoom_y" => Target::ZoomY,
@@ -4425,6 +4426,7 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "mask_source" => "__songlua_state_mask_source",
         "mask_dest" => "__songlua_state_mask_dest",
         "depth_test" => "__songlua_state_depth_test",
+        "cull_mode" => "__songlua_state_cull_mode",
         "zoom" => "__songlua_state_zoom",
         "zoom_x" => "__songlua_state_zoom_x",
         "zoom_y" => "__songlua_state_zoom_y",
@@ -8793,11 +8795,9 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "SetSpecularLightColor",
         "SortByDrawOrder",
         "fardistz",
-        "backfacecull",
         "StartTransitioningScreen",
         "stop",
         "volume",
-        "cullmode",
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
@@ -9030,6 +9030,60 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             }
         })?,
     )?;
+    for name in ["backfacecull", "cullmode"] {
+        actor.set(
+            name,
+            lua.create_function({
+                let actor = actor.clone();
+                move |lua, args: MultiValue| {
+                    use deadlib_render_core::CullMode;
+                    let mode = if name == "backfacecull" {
+                        // Actor::backfacecull uses BIArg, including numeric
+                        // truncation and strict boolean/number type checks.
+                        let enabled = match method_arg(&args, 0) {
+                            Some(Value::Boolean(value)) => *value,
+                            Some(Value::Integer(value)) => *value != 0,
+                            Some(Value::Number(value)) => value.trunc() != 0.0,
+                            _ => return Err(mlua::Error::runtime("backfacecull expects a boolean or number")),
+                        };
+                        if enabled {
+                            CullMode::Back
+                        } else {
+                            CullMode::None
+                        }
+                    } else {
+                        match method_arg(&args, 0) {
+                            Some(Value::Integer(0)) | Some(Value::Number(0.0)) => CullMode::Back,
+                            Some(Value::Integer(1)) | Some(Value::Number(1.0)) => CullMode::Front,
+                            Some(Value::Integer(2)) | Some(Value::Number(2.0)) => CullMode::None,
+                            Some(Value::String(value)) => match value.to_str()?.as_ref() {
+                                "CullMode_Back" => CullMode::Back,
+                                "CullMode_Front" => CullMode::Front,
+                                "CullMode_None" => CullMode::None,
+                                legacy if legacy.eq_ignore_ascii_case("back") => CullMode::Back,
+                                legacy if legacy.eq_ignore_ascii_case("front") => CullMode::Front,
+                                legacy if legacy.eq_ignore_ascii_case("none") => CullMode::None,
+                                _ => return Err(mlua::Error::runtime("invalid CullMode")),
+                            },
+                            _ => return Err(mlua::Error::runtime("invalid CullMode")),
+                        }
+                    };
+                    if !record_overlay_update_capture_immediate(
+                        lua,
+                        &actor,
+                        "cull_mode",
+                        SongLuaOverlayUpdateValue::CullMode(mode),
+                    ) {
+                        let block = actor_immediate_capture_block(lua, &actor)?;
+                        block.set("cull_mode", mode as u8)?;
+                        block.set("__songlua_has_changes", true)?;
+                    }
+                    set_actor_capture_state(&actor, "cull_mode", mode as u8)?;
+                    Ok(actor.clone())
+                }
+            })?,
+        )?;
+    }
     for name in ["zbuffer", "ztest", "zwrite"] {
         actor.set(
             name,
@@ -16545,6 +16599,14 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                 mask_dest: block
                     .get::<Option<bool>>("mask_dest")
                     .map_err(|err| err.to_string())?,
+                cull_mode: block
+                    .get::<Option<u8>>("cull_mode")
+                    .map_err(|err| err.to_string())?
+                    .map(|mode| match mode {
+                        1 => deadlib_render_core::CullMode::Back,
+                        2 => deadlib_render_core::CullMode::Front,
+                        _ => deadlib_render_core::CullMode::None,
+                    }),
                 depth_test: block
                     .get::<Option<bool>>("depth_test")
                     .map_err(|err| err.to_string())?,
@@ -16736,6 +16798,21 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
         .map_err(|err| err.to_string())?
         .is_some_and(|kind| kind.eq_ignore_ascii_case("Model"));
     state.texture_wrapping = state.depth_test;
+    state.cull_mode = if state.depth_test {
+        deadlib_render_core::CullMode::Back
+    } else {
+        deadlib_render_core::CullMode::None
+    };
+    if let Some(mode) = actor
+        .raw_get::<Option<u8>>("__songlua_state_cull_mode")
+        .map_err(|err| err.to_string())?
+    {
+        state.cull_mode = match mode {
+            1 => deadlib_render_core::CullMode::Back,
+            2 => deadlib_render_core::CullMode::Front,
+            _ => deadlib_render_core::CullMode::None,
+        };
+    }
     state.hibernating = actor
         .raw_get::<Option<f32>>("__songlua_hibernate_seconds")
         .map_err(|err| err.to_string())?

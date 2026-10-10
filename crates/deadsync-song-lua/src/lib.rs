@@ -2721,6 +2721,7 @@ pub struct SongLuaOverlayState {
     pub mask_source: bool,
     pub mask_dest: bool,
     pub depth_test: bool,
+    pub cull_mode: deadlib_render_core::CullMode,
     pub zoom: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
@@ -2829,6 +2830,7 @@ impl Default for SongLuaOverlayState {
             mask_source: false,
             mask_dest: false,
             depth_test: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             zoom: 1.0,
             zoom_x: 1.0,
             zoom_y: 1.0,
@@ -2982,6 +2984,7 @@ pub struct SongLuaOverlayStateDelta {
     pub mask_source: Option<bool>,
     pub mask_dest: Option<bool>,
     pub depth_test: Option<bool>,
+    pub cull_mode: Option<deadlib_render_core::CullMode>,
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
@@ -3074,6 +3077,7 @@ impl SongLuaOverlayStateDelta {
             Target::MaskSource => self.mask_source.is_some(),
             Target::MaskDest => self.mask_dest.is_some(),
             Target::DepthTest => self.depth_test.is_some(),
+            Target::CullMode => self.cull_mode.is_some(),
             Target::Zoom => self.zoom.is_some(),
             Target::ZoomX => self.zoom_x.is_some(),
             Target::ZoomY => self.zoom_y.is_some(),
@@ -3467,6 +3471,9 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.depth_test {
         state.depth_test = value;
+    }
+    if let Some(value) = delta.cull_mode {
+        state.cull_mode = value;
     }
     if let Some(value) = delta.zoom {
         state.zoom = value;
@@ -4005,6 +4012,9 @@ pub fn overlay_state_lerp(
     {
         from.texture_filtering = to;
     }
+    if let Some(to) = delta.cull_mode {
+        from.cull_mode = to;
+    }
     if let Some(to) = delta.depth_test
         && t >= 1.0 - f32::EPSILON
     {
@@ -4046,6 +4056,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.mask_source.is_none()
         && delta.mask_dest.is_none()
         && delta.depth_test.is_none()
+        && delta.cull_mode.is_none()
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
         && delta.zoom_y.is_none()
@@ -4196,6 +4207,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.depth_test.is_some() {
         into.depth_test = from.depth_test;
+    }
+    if from.cull_mode.is_some() {
+        into.cull_mode = from.cull_mode;
     }
     if from.halign.is_some() {
         into.halign = from.halign;
@@ -4435,6 +4449,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(mask_source);
     copy_pair!(mask_dest);
     copy_pair!(depth_test);
+    copy_pair!(cull_mode);
     copy_pair!(zoom);
     copy_pair!(zoom_x);
     copy_pair!(zoom_y);
@@ -4822,6 +4837,7 @@ pub enum SongLuaOverlayUpdateTarget {
     MaskSource,
     MaskDest,
     DepthTest,
+    CullMode,
     Zoom,
     ZoomX,
     ZoomY,
@@ -4886,6 +4902,7 @@ pub enum SongLuaOverlayUpdateValue {
     I32(i32),
     U32(u32),
     Bool(bool),
+    CullMode(deadlib_render_core::CullMode),
     Vec2([f32; 2]),
     Vec3([f32; 3]),
     Vec4([f32; 4]),

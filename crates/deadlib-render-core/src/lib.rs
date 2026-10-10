@@ -408,6 +408,16 @@ pub struct SpriteInstanceRaw {
     pub texture_mask: f32,
 }
 
+/// Which winding to discard. Encoded identically in every mesh shader.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[repr(u8)]
+pub enum CullMode {
+    #[default]
+    None = 0,
+    Back = 1,
+    Front = 2,
+}
+
 #[repr(C)]
 #[derive(
     Clone,
@@ -429,9 +439,9 @@ pub struct TexturedMeshInstanceRaw {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub texture_mask: f32,
-    /// Cull clockwise faces in clip space, independently of depth testing.
+    /// CullMode encoded as a float: none=0, back=1, front=2.
     #[serde(default)]
-    pub cull_back: f32,
+    pub cull_mode: f32,
     /// Affine object-to-eye transform, stored as rows for vertex attributes.
     #[serde(default)]
     pub sphere_rows: [[f32; 4]; 3],
@@ -483,7 +493,7 @@ impl TexturedMeshInstanceRaw {
             uv_offset,
             uv_tex_shift,
             texture_mask: f32::from(u8::from(texture_mask)),
-            cull_back: 0.0,
+            cull_mode: 0.0,
             sphere_rows: [[0.0; 4]; 3],
             additive_uv: [1.0, 1.0, 0.0, 0.0],
             additive_texture: 0,

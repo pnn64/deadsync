@@ -2087,7 +2087,7 @@ pub(crate) const fn hold_strip_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend,
         z,
     })
@@ -2115,7 +2115,7 @@ pub(crate) const fn hold_strip_glow_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend: BlendMode::Alpha,
         z,
     })
@@ -2144,7 +2144,7 @@ const fn hold_reusable_strip_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend,
         z,
     })
@@ -2172,7 +2172,7 @@ const fn hold_reusable_strip_glow_draw(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         blend: BlendMode::Alpha,
         z,
     })
@@ -3143,7 +3143,7 @@ mod tests {
                     depth_test: true,
                     clear_depth: false,
                     clear_depth_after: false,
-                    cull_back: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     vertices: FlatMeshVertices::Reusable(vertices),
                     ..
                 }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))

@@ -6089,7 +6089,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             depth_test: mesh.depth_test,
                             clear_depth: mesh.clear_depth,
                             clear_depth_after: mesh.clear_depth_after,
-                            cull_back: mesh.cull_back,
+                            cull_mode: mesh.cull_mode,
                             visible: true,
                             blend: mesh.blend,
                             z: mesh.z,
@@ -6469,7 +6469,7 @@ struct TexturedMeshActorView<'a> {
     depth_test: bool,
     clear_depth: bool,
     clear_depth_after: bool,
-    cull_back: bool,
+    cull_mode: deadlib_render_core::CullMode,
     visible: bool,
     blend: BlendMode,
     z: i16,
@@ -6518,7 +6518,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         depth_test,
         clear_depth,
         clear_depth_after,
-        cull_back,
+        cull_mode,
         visible,
         blend,
         z,
@@ -6539,7 +6539,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             depth_test,
             clear_depth,
             clear_depth_after,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -6561,7 +6561,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             depth_test,
             clear_depth,
             clear_depth_after,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -6582,7 +6582,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             *depth_test,
             *clear_depth,
             *clear_depth_after,
-            *cull_back,
+            *cull_mode,
             *visible,
             *blend,
             *z,
@@ -6619,7 +6619,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         depth_test,
         clear_depth,
         clear_depth_after,
-        cull_back,
+        cull_mode,
         visible,
         blend,
         z,
@@ -6730,7 +6730,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                     sphere_rows,
                     additive_texture,
                     additive_uv,
-                    cull_back: f32::from(mesh.cull_back),
+                    cull_mode: mesh.cull_mode as u8 as f32,
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
                         mul_rgba(mesh.tint, style.tint),
@@ -6760,7 +6760,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             camera,
             TexturedMeshPayload {
                 instance: renderer::TexturedMeshInstanceRaw {
-                    cull_back: f32::from(mesh.cull_back),
+                    cull_mode: mesh.cull_mode as u8 as f32,
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
                         mul_rgba(mesh.glow, style.tint),
@@ -10688,7 +10688,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             blend: BlendMode::Add,
             z: 9,
         };
@@ -10750,7 +10750,7 @@ mod tests {
             depth_test: mesh.depth_test,
             clear_depth: mesh.clear_depth,
             clear_depth_after: mesh.clear_depth_after,
-            cull_back: mesh.cull_back,
+            cull_mode: mesh.cull_mode,
             visible: true,
             blend: mesh.blend,
             z: mesh.z,
@@ -10822,7 +10822,7 @@ mod tests {
                 assert_ne!(instance.additive_texture, 0);
             }
         }
-        assert!(actual.tmesh_instances.iter().all(|i| i.cull_back == 1.0));
+        assert!(actual.tmesh_instances.iter().all(|i| i.cull_mode == 1.0));
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
         let tint = [0.7, 0.8, 0.9, 0.6];
@@ -13824,7 +13824,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: true,
             blend: BlendMode::Alpha,
             z: 5,
@@ -14026,7 +14026,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: true,
                 clear_depth_after: true,
-                cull_back: true,
+                cull_mode: deadlib_render_core::CullMode::Back,
                 visible: true,
                 blend: BlendMode::Alpha,
                 z: 0,
@@ -14283,7 +14283,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -14297,7 +14297,7 @@ mod tests {
         );
 
         let (_, instance, geometry) = tmesh_draw(&render, 0);
-        assert_eq!(instance.cull_back, 1.0);
+        assert_eq!(instance.cull_mode, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14331,7 +14331,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             blend: BlendMode::Alpha,
             z: 0,
         })];
@@ -14352,7 +14352,7 @@ mod tests {
             );
 
         let (_, instance, geometry) = tmesh_draw(&render, 0);
-        assert_eq!(instance.cull_back, 1.0);
+        assert_eq!(instance.cull_mode, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14853,7 +14853,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             blend: BlendMode::Alpha,
             z: 10,
         };
@@ -14964,7 +14964,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,

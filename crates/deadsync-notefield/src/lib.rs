@@ -5314,7 +5314,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: false,
                 clear_depth_after: false,
-                cull_back: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 ..
             })
         ));
@@ -5332,7 +5332,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: false,
                 clear_depth_after: false,
-                cull_back: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 ..
             })
         ));

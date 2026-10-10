@@ -5571,7 +5571,7 @@ fn song_lua_capture_style_tints_textured_mesh() {
         depth_test: false,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: false,
+        cull_mode: deadlib_render_core::CullMode::None,
         visible: true,
         blend: BlendMode::Alpha,
         z: 3,
