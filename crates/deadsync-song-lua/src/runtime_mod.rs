@@ -971,6 +971,8 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "confusion"
         | "confusionoffset"
         | "confusionxoffset"
+        | "confusionx"
+        | "confusiony"
         | "flip"
         | "invert"
         | "tornado"

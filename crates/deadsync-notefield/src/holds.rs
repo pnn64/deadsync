@@ -881,8 +881,7 @@ where
     F: Fn(&S) -> SpriteSource,
     P: Fn(f32) -> HoldPathSample,
 {
-    let use_mesh =
-        !is_model && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
+    let use_mesh = !is_model;
     let mut pooled_pair = None;
     let mut owned_diffuse = Vec::new();
     let mut owned_glow = Vec::new();
@@ -1364,9 +1363,7 @@ fn compose_top_cap<S, F, P>(
     let mut top = sample_path(cap_top);
     top.cap_step = 0.0;
     let bottom = sample_path(cap_bottom);
-    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
-        && !is_model
-        && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
+    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites) && !is_model;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
@@ -1694,9 +1691,7 @@ fn compose_bottom_cap<S, F, P>(
     let mut top = sample_path(draw_top);
     top.cap_step = 0.0;
     let bottom = sample_path(draw_bottom);
-    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites)
-        && !is_model
-        && (request.twirl != 0.0 || request.rotation_y_deg.abs() <= f32::EPSILON);
+    let use_mesh = (request.twirl != 0.0 || !request.use_legacy_sprites) && !is_model;
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
@@ -4532,5 +4527,40 @@ mod tests {
         assert_eq!(offscreen.head_slot.copied(), Some(10));
         assert_eq!(offscreen.top_cap_slot.copied(), Some(30));
         assert_eq!(offscreen.bottom_cap_slot.copied(), Some(40));
+    }
+}
+
+#[cfg(test)]
+mod confusion_strip_tests {
+    use super::*;
+    #[test]
+    fn confusion_strip_matches_native_widths() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/confusion-spin-strip.json"
+        ))
+        .expect("unchanged native NoteDisplay and quaternion blocks");
+        let vectors = native["vectors"].as_array().expect("native strip rows");
+        assert_eq!(vectors.len(), 672);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let cache = crate::lane_note_transform_cache(
+                value("beat"),
+                crate::VisualEffectParams {
+                    confusion_y: value("strength_y"),
+                    confusion_y_offset: value("offset_y"),
+                    ..Default::default()
+                },
+            );
+            let rotation = cache.confusion_rotation_y_deg
+                + visual_note_rotation_y(value("travel"), value("twirl"));
+            let row = hold_strip_row_3d([0.0; 3], 32.0, rotation, 0.0, 1.0, 0.0, [1.0; 4]);
+            for (axis, key) in ["dx", "dy", "dz"].into_iter().enumerate() {
+                let actual = row[0].pos[axis];
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+        }
     }
 }

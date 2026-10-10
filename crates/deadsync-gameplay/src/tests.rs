@@ -8106,7 +8106,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_ease_targets_convert_confusion_y_offset() {
+    fn song_lua_ease_targets_keep_confusion_y_radians() {
         let mut windows = Vec::new();
 
         assert!(append_song_lua_ease_targets(
@@ -8122,9 +8122,12 @@ mod tests {
             None,
         ));
 
-        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ConfusionYOffsetY);
-        assert_near(windows[0].from, 90.0);
-        assert_near(windows[0].to, 180.0);
+        assert_eq!(
+            windows[0].target,
+            SongLuaEaseMaskTarget::VisualConfusionYOffset
+        );
+        assert_near(windows[0].from, std::f32::consts::FRAC_PI_2);
+        assert_near(windows[0].to, std::f32::consts::PI);
     }
 
     #[test]
@@ -8783,7 +8786,6 @@ mod tests {
             zoom_x: None,
             zoom_y: Some(1.5),
             zoom_z: Some(f32::NAN),
-            confusion_y_offset: Some(9.0),
         }
         .resolve();
 
@@ -8798,7 +8800,6 @@ mod tests {
         assert_near(resolved.zoom_x, 1.0);
         assert_near(resolved.zoom_y, 1.5);
         assert_near(resolved.zoom_z, 1.0);
-        assert_near(resolved.confusion_y_offset, 9.0);
     }
 
     #[test]
@@ -8817,7 +8818,6 @@ mod tests {
             assert_near(transform.zoom_x, 1.0);
             assert_near(transform.zoom_y, 1.0);
             assert_near(transform.zoom_z, 1.0);
-            assert_near(transform.confusion_y_offset, 0.0);
         }
     }
 

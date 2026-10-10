@@ -671,6 +671,9 @@ pub enum SongLuaEaseMaskTarget {
     VisualPulseOuter,
     VisualPulsePeriod,
     VisualBeatPeriod,
+    VisualConfusionX,
+    VisualConfusionY,
+    VisualConfusionYOffset,
     VisualBeatOffset,
     VisualBeatMult,
     VisualBeatY,
@@ -721,7 +724,6 @@ pub enum SongLuaEaseMaskTarget {
     PlayerZoomX,
     PlayerZoomY,
     PlayerZoomZ,
-    ConfusionYOffsetY,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2368,6 +2370,13 @@ fn append_song_lua_ease_targets_key(
         "pulseouter" => push(SongLuaEaseMaskTarget::VisualPulseOuter, pct_from, pct_to),
         "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
         "beatperiod" => push(SongLuaEaseMaskTarget::VisualBeatPeriod, pct_from, pct_to),
+        "confusionx" => push(SongLuaEaseMaskTarget::VisualConfusionX, pct_from, pct_to),
+        "confusiony" => push(SongLuaEaseMaskTarget::VisualConfusionY, pct_from, pct_to),
+        "confusionyoffset" => push(
+            SongLuaEaseMaskTarget::VisualConfusionYOffset,
+            pct_from,
+            pct_to,
+        ),
         "beatoffset" => push(SongLuaEaseMaskTarget::VisualBeatOffset, pct_from, pct_to),
         "beatmult" => push(SongLuaEaseMaskTarget::VisualBeatMult, pct_from, pct_to),
         "beaty" => push(SongLuaEaseMaskTarget::VisualBeatY, pct_from, pct_to),
@@ -2447,11 +2456,6 @@ fn append_song_lua_ease_targets_key(
         "mini" => push(SongLuaEaseMaskTarget::MiniPercent, from, to),
         "skewx" => push(SongLuaEaseMaskTarget::PlayerSkewX, pct_from, pct_to),
         "skewy" => push(SongLuaEaseMaskTarget::PlayerSkewY, pct_from, pct_to),
-        "confusionyoffset" => push(
-            SongLuaEaseMaskTarget::ConfusionYOffsetY,
-            pct_from * (180.0 / std::f32::consts::PI),
-            pct_to * (180.0 / std::f32::consts::PI),
-        ),
         _ => return false,
     }
     true
@@ -2856,7 +2860,6 @@ pub struct SongLuaPlayerTransformValues {
     pub zoom_x: Option<f32>,
     pub zoom_y: Option<f32>,
     pub zoom_z: Option<f32>,
-    pub confusion_y_offset: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2872,7 +2875,6 @@ pub struct SongLuaPlayerTransform {
     pub zoom_x: f32,
     pub zoom_y: f32,
     pub zoom_z: f32,
-    pub confusion_y_offset: f32,
 }
 
 impl Default for SongLuaPlayerTransform {
@@ -2889,7 +2891,6 @@ impl Default for SongLuaPlayerTransform {
             zoom_x: 1.0,
             zoom_y: 1.0,
             zoom_z: 1.0,
-            confusion_y_offset: 0.0,
         }
     }
 }
@@ -2911,7 +2912,6 @@ pub const fn song_lua_player_transforms_default() -> SongLuaPlayerTransforms {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
-        confusion_y_offset: 0.0,
     }; MAX_PLAYERS]
 }
 
@@ -2940,7 +2940,6 @@ impl SongLuaPlayerTransformValues {
             zoom_x: finite_transform_or(self.zoom_x, 1.0),
             zoom_y: finite_transform_or(self.zoom_y, 1.0),
             zoom_z: finite_transform_or(self.zoom_z, 1.0),
-            confusion_y_offset: finite_transform_or(self.confusion_y_offset, 0.0),
         }
     }
 }
@@ -2970,7 +2969,6 @@ pub const fn song_lua_apply_player_transform_target(
         SongLuaEaseMaskTarget::PlayerZoomX => player.zoom_x = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomY => player.zoom_y = Some(value),
         SongLuaEaseMaskTarget::PlayerZoomZ => player.zoom_z = Some(value),
-        SongLuaEaseMaskTarget::ConfusionYOffsetY => player.confusion_y_offset = Some(value),
         _ => {}
     }
 }
@@ -3106,6 +3104,9 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
         SongLuaEaseMaskTarget::VisualBeatPeriod => visual.beat_period = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionX => visual.confusion_x = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionY => visual.confusion_y = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionYOffset => visual.confusion_y_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBeatOffset => visual.beat_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBeatMult => visual.beat_mult = Some(value),
         SongLuaEaseMaskTarget::VisualBeatY => visual.beat_y = Some(value),
@@ -3175,8 +3176,7 @@ pub fn song_lua_apply_eased_target(
         | SongLuaEaseMaskTarget::PlayerZoom
         | SongLuaEaseMaskTarget::PlayerZoomX
         | SongLuaEaseMaskTarget::PlayerZoomY
-        | SongLuaEaseMaskTarget::PlayerZoomZ
-        | SongLuaEaseMaskTarget::ConfusionYOffsetY => {
+        | SongLuaEaseMaskTarget::PlayerZoomZ => {
             song_lua_apply_player_transform_target(target, value, player);
         }
     }
@@ -3263,7 +3263,6 @@ pub const fn song_lua_player_transform_target(target: SongLuaEaseMaskTarget) -> 
             | SongLuaEaseMaskTarget::PlayerZoomX
             | SongLuaEaseMaskTarget::PlayerZoomY
             | SongLuaEaseMaskTarget::PlayerZoomZ
-            | SongLuaEaseMaskTarget::ConfusionYOffsetY
     )
 }
 
@@ -3385,6 +3384,9 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
         SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
         SongLuaEaseMaskTarget::VisualBeatPeriod => window.visual.beat_period.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionX => window.visual.confusion_x.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionY => window.visual.confusion_y.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionYOffset => window.visual.confusion_y_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBeatOffset => window.visual.beat_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBeatMult => window.visual.beat_mult.is_some(),
         SongLuaEaseMaskTarget::VisualBeatY => window.visual.beat_y.is_some(),
@@ -3444,8 +3446,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         | SongLuaEaseMaskTarget::PlayerZoom
         | SongLuaEaseMaskTarget::PlayerZoomX
         | SongLuaEaseMaskTarget::PlayerZoomY
-        | SongLuaEaseMaskTarget::PlayerZoomZ
-        | SongLuaEaseMaskTarget::ConfusionYOffsetY => false,
+        | SongLuaEaseMaskTarget::PlayerZoomZ => false,
     }
 }
 
@@ -4789,6 +4790,9 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
     mark_active_target(&mut targets.beat_period, visual.beat_period);
+    mark_active_target(&mut targets.confusion_x, visual.confusion_x);
+    mark_active_target(&mut targets.confusion_y, visual.confusion_y);
+    mark_active_target(&mut targets.confusion_y_offset, visual.confusion_y_offset);
     mark_active_target(&mut targets.beat_offset, visual.beat_offset);
     mark_active_target(&mut targets.beat_mult, visual.beat_mult);
     mark_active_target(&mut targets.beat_y, visual.beat_y);
@@ -5752,6 +5756,15 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualBeatPeriod => {
                 attack.visual_speed.beat_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualConfusionX => {
+                attack.visual_speed.confusion_x = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualConfusionY => {
+                attack.visual_speed.confusion_y = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualConfusionYOffset => {
+                attack.visual_speed.confusion_y_offset = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualBeatOffset => {
                 attack.visual_speed.beat_offset = Some(speed)
@@ -6971,6 +6984,33 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.confusion_x,
+        &mut values.visual_speed.confusion_x,
+        window.visual.confusion_x,
+        window.visual_speed.confusion_x,
+        active_targets.visual.confusion_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.confusion_y,
+        &mut values.visual_speed.confusion_y,
+        window.visual.confusion_y,
+        window.visual_speed.confusion_y,
+        active_targets.visual.confusion_y,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.confusion_y_offset,
+        &mut values.visual_speed.confusion_y_offset,
+        window.visual.confusion_y_offset,
+        window.visual_speed.confusion_y_offset,
+        active_targets.visual.confusion_y_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.beat_offset,
         &mut values.visual_speed.beat_offset,
         window.visual.beat_offset,
@@ -7936,6 +7976,24 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "confusionx" => set_approached_mod(
+            &mut out.visual.confusion_x,
+            &mut out.visual_speed.confusion_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "confusiony" => set_approached_mod(
+            &mut out.visual.confusion_y,
+            &mut out.visual_speed.confusion_y,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "confusionyoffset" => set_approached_mod(
+            &mut out.visual.confusion_y_offset,
+            &mut out.visual_speed.confusion_y_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "beatoffset" => set_approached_mod(
             &mut out.visual.beat_offset,
             &mut out.visual_speed.beat_offset,
@@ -8467,6 +8525,9 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
         beat_period: merge_attack_value(base.beat_period, attack.beat_period),
+        confusion_x: merge_attack_value(base.confusion_x, attack.confusion_x),
+        confusion_y: merge_attack_value(base.confusion_y, attack.confusion_y),
+        confusion_y_offset: merge_attack_value(base.confusion_y_offset, attack.confusion_y_offset),
         beat_offset: merge_attack_value(base.beat_offset, attack.beat_offset),
         beat_mult: merge_attack_value(base.beat_mult, attack.beat_mult),
         beat_y: merge_attack_value(base.beat_y, attack.beat_y),

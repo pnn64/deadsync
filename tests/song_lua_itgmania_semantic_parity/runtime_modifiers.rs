@@ -530,6 +530,9 @@ fn runtime_mod_value(
         "pulseouter" => visual.pulse_outer.unwrap_or(0.0),
         "pulseperiod" => visual.pulse_period.unwrap_or(0.0),
         "beatperiod" => visual.beat_period.unwrap_or(0.0),
+        "confusionx" => visual.confusion_x.unwrap_or(0.0),
+        "confusiony" => visual.confusion_y.unwrap_or(0.0),
+        "confusionyoffset" => visual.confusion_y_offset.unwrap_or(0.0),
         "beatoffset" => visual.beat_offset.unwrap_or(0.0),
         "beatmult" => visual.beat_mult.unwrap_or(0.0),
         "beaty" => visual.beat_y.unwrap_or(0.0),
@@ -3232,12 +3235,6 @@ pub(super) fn compare_runtime_modifiers(
                             .total_cmp(&(b.0 - b.1.unwrap_or(f32::NAN)).abs())
                     })
                     .expect("two perspective angles")
-            } else if write.key == "confusionyoffset" {
-                // PlayerOptions stores radians; the notefield consumes degrees.
-                (
-                    expected,
-                    Some(transforms[write.player].confusion_y_offset.to_radians()),
-                )
             } else {
                 (
                     expected,
@@ -3765,6 +3762,106 @@ fn beat_family_current_matches_native_frames() {
         prior = now;
     }
     assert_eq!(checked, 432);
+}
+
+#[test]
+fn confusion_spin_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/confusion-spin-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Confusion spin control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("confusion-spin.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Confusion spin, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Confusion spin targets and resets");
+}
+
+#[test]
+fn confusion_spin_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/confusion-spin-native.json"),
+    );
+    let mut context =
+        SongLuaCompileContext::new(&song_dir, "Native Confusion spin Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("confusion-spin.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Confusion spin Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (group, keys) in [
+                ["confusionx", "confusiony", "confusionyoffset"],
+                ["confusionxoffset", "roll", "twirl"],
+            ]
+            .iter()
+            .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name
+                                == Some(format!("ConfusionCurrentP{}G{}", player + 1, group + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual = runtime_mod_value(&runtime, player, key)
+                            .expect("runtime Confusion spin");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 216);
 }
 
 #[test]

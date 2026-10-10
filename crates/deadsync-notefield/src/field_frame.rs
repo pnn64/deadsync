@@ -1,6 +1,5 @@
 use crate::transforms::{
-    attenuate_offset, beat_wave_offset, visual_confusion_x_deg, visual_note_rotation_x,
-    visual_note_rotation_y,
+    attenuate_offset, beat_wave_offset, visual_note_rotation_x, visual_note_rotation_y,
 };
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
@@ -659,13 +658,14 @@ fn compose_field_contents<S, F>(
             tail_adjusted_travel,
         );
         let hold_parts = hold_plan.parts;
-        let note_rotation_x = visual_confusion_x_deg(visual.confusion_x_offset);
-        let note_rotation_y = visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl);
+        let transform_cache = lane_transform_caches[local_col];
+        let note_rotation_x = transform_cache.confusion_rotation_x_deg;
+        let note_rotation_y = transform_cache.confusion_rotation_y_deg
+            + visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl);
         let flat_tap_face_rotation_y = note_rotation_y;
         let head_layers = hold_plan.head_layers;
         let head_slot = hold_plan.head_slot;
 
-        let transform_cache = lane_transform_caches[local_col];
         let note_hides = request.song_lua.note_hides;
         let has_zoom_spline = note_hides.has_column_hides(local_col);
         // NoteDisplay interpolates the beat along the body's original endpoints,
@@ -794,7 +794,7 @@ fn compose_field_contents<S, F>(
                     appearance: alpha_params[local_col],
                     appearance_cache: appearance_caches[local_col],
                     use_legacy_sprites: use_legacy_hold_sprites,
-                    rotation_y_deg: 0.0,
+                    rotation_y_deg: transform_cache.confusion_rotation_y_deg,
                     twirl: visual.twirl,
                     depth_test: hold_depth_test,
                     draw_bounds,
@@ -1242,9 +1242,10 @@ fn compose_visible_notes<S, F>(
                     let scale = effect_zoom * request.options.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
-                let note_rotation_x = visual_confusion_x_deg(visual.confusion_x_offset)
+                let note_rotation_x = transform_cache.confusion_rotation_x_deg
                     + visual_note_rotation_x(adjusted_travel, visual.roll);
-                let note_rotation_y = visual_note_rotation_y(adjusted_travel, visual.twirl);
+                let note_rotation_y = transform_cache.confusion_rotation_y_deg
+                    + visual_note_rotation_y(adjusted_travel, visual.twirl);
                 let flat_tap_face_rotation_y = note_rotation_y;
                 let note_rotation_z = prepared.column_rotations_deg[local_col]
                     + calc_note_rotation_z(note.beat, transform_cache);
@@ -1793,6 +1794,8 @@ fn hold_lane_frame(
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
         use_legacy_sprites: !visual.z_buffer
             && visual.twirl == 0.0
+            && visual.confusion_y == 0.0
+            && visual.confusion_y_offset == 0.0
             && visual.parabola_x == 0.0
             && visual.attenuate_x == 0.0
             && visual.attenuate_y == 0.0

@@ -55,6 +55,10 @@ pub(crate) struct VisualEffectParams {
     pub pulse_period: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
+    pub confusion_x: f32,
+    pub confusion_y: f32,
+    pub confusion_x_offset: f32,
+    pub confusion_y_offset: f32,
     pub dizzy: f32,
     pub dizzy_holds: bool,
     pub twirl: f32,
@@ -104,6 +108,8 @@ pub(crate) struct LaneNoteTransformCache {
     identity_rotation: bool,
     static_rotation_z: Option<f32>,
     rotation_base_z: f32,
+    pub(crate) confusion_rotation_x_deg: f32,
+    pub(crate) confusion_rotation_y_deg: f32,
     song_beat: f32,
     dizzy: f32,
     dizzy_holds: bool,
@@ -690,13 +696,19 @@ pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
     -deg
 }
 
-// ArrowEffects::ReceptorGetRotationX adds the global offset in radians.
-pub(crate) fn visual_confusion_x_deg(offset: f32) -> f32 {
-    if offset.is_finite() {
-        offset * (180.0 / std::f32::consts::PI)
+// Native receptor rotation adds the radian offset, then the visible-beat spin.
+fn confusion_rotation_deg(beat: f32, strength: f32, offset: f32) -> f32 {
+    let base = if offset.is_finite() {
+        offset * 180.0 / std::f32::consts::PI
     } else {
         0.0
-    }
+    };
+    let spin = if beat.is_finite() && strength.is_finite() {
+        (beat * strength) % std::f32::consts::TAU
+    } else {
+        0.0
+    };
+    base + spin * (-180.0 / std::f32::consts::PI)
 }
 
 // Roll uses travel before Reverse, Tipsy, and MoveY and excludes hold caps.
@@ -880,6 +892,16 @@ pub(crate) fn lane_note_transform_cache(
         identity_rotation,
         static_rotation_z,
         rotation_base_z,
+        confusion_rotation_x_deg: confusion_rotation_deg(
+            song_beat,
+            params.confusion_x,
+            params.confusion_x_offset,
+        ),
+        confusion_rotation_y_deg: confusion_rotation_deg(
+            song_beat,
+            params.confusion_y,
+            params.confusion_y_offset,
+        ),
         song_beat,
         dizzy: params.dizzy,
         dizzy_holds: params.dizzy_holds,
@@ -989,6 +1011,10 @@ pub(crate) fn gameplay_visual_effect_params(
             pulse_offset: visual.pulse_offset,
             pulse_period: visual.pulse_period,
             confusion: visual.confusion,
+            confusion_x: visual.confusion_x,
+            confusion_y: visual.confusion_y,
+            confusion_x_offset: visual.confusion_x_offset,
+            confusion_y_offset: visual.confusion_y_offset,
             confusion_offset: visual.confusion_offset,
             dizzy: visual.dizzy,
             dizzy_holds: visual.dizzy_holds,
@@ -2176,6 +2202,48 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn confusion_spin_matches_native_rotations() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/confusion-spin-rotation.json"
+        ))
+        .expect("independently compiled native X/Y rotation functions");
+        let vectors = native["vectors"].as_array().expect("native rotations");
+        assert_eq!(vectors.len(), 672);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let cache = lane_note_transform_cache(
+                value("beat"),
+                VisualEffectParams {
+                    confusion_x: value("strength_x"),
+                    confusion_y: value("strength_y"),
+                    confusion_x_offset: value("offset_x"),
+                    confusion_y_offset: value("offset_y"),
+                    ..Default::default()
+                },
+            );
+            let x = cache.confusion_rotation_x_deg
+                + if vector["hold_cap"].as_bool().expect("cap gate") {
+                    0.0
+                } else {
+                    visual_note_rotation_x(value("travel"), value("roll"))
+                };
+            let y = cache.confusion_rotation_y_deg
+                + visual_note_rotation_y(value("travel"), value("twirl"));
+            for (actual, key) in [
+                (cache.confusion_rotation_x_deg, "receptor_x"),
+                (cache.confusion_rotation_y_deg, "receptor_y"),
+                (x, "note_x"),
+                (y, "note_y"),
+            ] {
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn attenuation_matches_native_vectors() {
