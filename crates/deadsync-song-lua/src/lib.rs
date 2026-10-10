@@ -10411,6 +10411,39 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn startup_self_queue_moves() {
+        let song_dir = test_dir("self-queued-startup-move");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+return Def.Quad{
+    Name="Ball",
+    InitCommand=function(self) self:x(0) end,
+    OnCommand=function(self) self:playcommand("Move") end,
+    MoveCommand=function(self)
+        self:x(self:GetX() + 1)
+        if self:GetX() < 6 then self:sleep(0.007):queuecommand("Move") end
+    end,
+}
+"#).expect("write queued movement control");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Self-queued Startup Move");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 0.25;
+        let compiled = test_compile_song_lua(&entry, &context).expect("compile queued movement");
+        let index = compiled.overlays.iter().position(|o| o.name.as_deref() == Some("Ball"))
+            .expect("movement actor");
+        assert_eq!(compiled.overlays[index].initial_state.x, 1.0);
+        let track = compiled.overlay_updates.iter().find(|track|
+            track.overlay_index == index && track.target == SongLuaOverlayUpdateTarget::X)
+            .expect("the startup queue must continue moving its own actor");
+        for (time, expected) in [(1.0 / 60.0, 3.0), (2.0 / 60.0, 5.0), (0.05, 6.0), (0.25, 6.0)] {
+            let value = track.samples.iter().rev().find(|sample| sample.time <= time + 0.000_001)
+                .expect("queued movement sample");
+            assert!(matches!(value.value, SongLuaOverlayUpdateValue::F32(x) if x == expected),
+                "movement at {time} must be {expected}, got {:?}", value.value);
+        }
+    }
+
+    #[test]
     fn compile_song_lua_runs_pool_actions_in_order() {
         for scope in ["", "local "] {
             let song_dir = test_dir(if scope.is_empty() {

@@ -1,0 +1,109 @@
+{
+  "problem": "Startup playcommand bodies lost their self-queued command behind a sleep when tween replay took ownership.",
+  "change": "Retain native command queue entries during Init/On instead of replacing startup self-queues with recurrence metadata.",
+  "tested_source_parent_commit": "a9e3f71fd45f02cfe9e38d500e0cfd60f7172f5b",
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/lib.rs": "b5da86407c2f5e6d255a4ffe1fa97b403f01dda42755222db90dbf967655e351",
+    "crates/deadsync-song-lua/src/lua_util.rs": "8e429a054e92435c694c4902511659ea293ded7b8faf233573b5f32e79d942ad"
+  },
+  "executables": {
+    "song_lua_itgmania_semantic_parity": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\startup-self-queue-v1-song_lua_itgmania_semantic_parity.exe",
+      "sha256": "f6750d19454370fd1784723ee67982a9af7116c98519115269a0f5fbe32b9842"
+    },
+    "full_song_lua": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\startup-self-queue-v1-full_song_lua.exe",
+      "sha256": "29a6566dd48c07e7c8dc31cef5d70923004f1d39ae9934d488a57b1c913e2fc2"
+    },
+    "units": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-self-queue-v1-units.exe",
+      "sha256": "6ca9f0f93a1a0ad65db167d9c6eb8c1574943f99aed8a113483e371fe59eeb30"
+    }
+  },
+  "pre_fix_regression": {
+    "source_parent_commit": "a9e3f71fd45f02cfe9e38d500e0cfd60f7172f5b",
+    "regression_source_sha256": "6edd39c574e53271afa7cf22a0828c252e21569d116ea576da43779fa228839d",
+    "lua_util_sha256": "a92234e22291c409164c0adba2b6a4c37fcf1ca275b9056bdc23ac7919576f57",
+    "binary_path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\queued-startup-baseline.exe",
+    "binary_sha256": "72989e3e1b2c3b5abfdf2c4b6b1bd922692ea13b26f26a0fb06fdaf1188bfe12",
+    "exit_code": 101,
+    "tests_failed": 1,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\queued-startup-baseline.log",
+    "log_sha256": "34c3218063cbede4ffde108f81799f486ff42feb9ce3560fc37ee3be9143486d",
+    "note": "Frozen pre-fix binary; startup self-queue emits no movement track."
+  },
+  "tests": [
+    {
+      "source_commit": "a9e3f71fd45f02cfe9e38d500e0cfd60f7172f5b",
+      "source_pending_commit": true,
+      "binary_sha256": "6ca9f0f93a1a0ad65db167d9c6eb8c1574943f99aed8a113483e371fe59eeb30",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-self-queue-v1-units.exe",
+        "tests::startup_self_queue_moves",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.6388209001161158,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\startup-self-queue-v1-new.log",
+      "log_sha256": "3e4da17c0ddabe6f61a2bf47cacc4f3aa69529bea19b0f45c07c7fe39d36a98f",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 497 filtered out; finished in 0.12s"
+      ]
+    },
+    {
+      "source_commit": "a9e3f71fd45f02cfe9e38d500e0cfd60f7172f5b",
+      "source_pending_commit": true,
+      "binary_sha256": "6ca9f0f93a1a0ad65db167d9c6eb8c1574943f99aed8a113483e371fe59eeb30",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-self-queue-v1-units.exe",
+        "queue",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.48289390001446,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\startup-self-queue-v1-queues.log",
+      "log_sha256": "04330103ea56de0c0928a97f54efdf8d5e2d9f769766ad7ad75aec606c64809d",
+      "result_lines": [
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 476 filtered out; finished in 9.93s"
+      ]
+    }
+  ],
+  "queue_regressions_passed": 22,
+  "native_actor_control": "../itgmania-song-lua-micro/startup-self-queue/provenance.json",
+  "native_actor_control_uses_semantic_host": false,
+  "native_reference_sources": {
+    "Actor.cpp": {
+      "latest_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "compiled_vendor_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "identical": true
+    },
+    "Actor.h": {
+      "latest_sha256": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+      "compiled_vendor_sha256": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+      "identical": true
+    }
+  },
+  "native_alpha_control_before_failed": 13,
+  "native_alpha_control_after": {
+    "exit_code": 1,
+    "comparisons_passed": 26893,
+    "comparisons_failed": 1,
+    "elapsed_seconds": 2.5753061999566853,
+    "archive_sha256": "a1224e50d064dade6421a84ca7e8a05089ec18e999af9912907eaec3d0e8d08e",
+    "binary_sha256": "29a6566dd48c07e7c8dc31cef5d70923004f1d39ae9934d488a57b1c913e2fc2",
+    "source_commit": "a9e3f71fd45f02cfe9e38d500e0cfd60f7172f5b",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\startup-self-queue-v1-alpha.log",
+    "log_sha256": "4f8726d6e10a73a713f2d509150b521cfc1d31d9b0edf8cd3afec4cc283d2af6",
+    "control_complete": true
+  },
+  "native_alpha_control_movement_and_visibility_passed": true,
+  "remaining_native_alpha_control": "One independent Model pass-count mismatch at the 3-second fade endpoint remains pending.",
+  "fixture_76_comparison": null,
+  "fixture_76_compare_running": true,
+  "fixture_76_accepted": false,
+  "original_inputs_unchanged": true,
+  "original_tolerances_retained": true,
+  "full_corpus_complete": false
+}

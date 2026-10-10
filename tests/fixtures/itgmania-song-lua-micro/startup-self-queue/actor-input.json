@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "name": "startup-self-queue",
+  "samples": [
+    0,
+    0.016666666666666666,
+    0.03333333333333333,
+    0.05,
+    0.25
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "SelfQueue",
+        "size": [
+          32,
+          32
+        ],
+        "state": {
+          "position": [
+            1,
+            0,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 0.007,
+            "curve": "sleep"
+          },
+          {
+            "queuecommand": "Move"
+          }
+        ],
+        "commands": {
+          "Move": {
+            "tweens": [
+              {
+                "duration": 0.007,
+                "curve": "sleep"
+              },
+              {
+                "queuecommand": "Move"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "FiniteMove",
+        "size": [
+          32,
+          32
+        ],
+        "state": {
+          "position": [
+            1,
+            0,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 0.007,
+            "curve": "sleep"
+          },
+          {
+            "queuecommand": "Move1"
+          }
+        ],
+        "commands": {
+          "Move1": {
+            "state": {
+              "position": [
+                2,
+                0,
+                0
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 0.007,
+                "curve": "sleep"
+              },
+              {
+                "queuecommand": "Move2"
+              }
+            ]
+          },
+          "Move2": {
+            "state": {
+              "position": [
+                3,
+                0,
+                0
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 0.007,
+                "curve": "sleep"
+              },
+              {
+                "queuecommand": "Move3"
+              }
+            ]
+          },
+          "Move3": {
+            "state": {
+              "position": [
+                4,
+                0,
+                0
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 0.007,
+                "curve": "sleep"
+              },
+              {
+                "queuecommand": "Move4"
+              }
+            ]
+          },
+          "Move4": {
+            "state": {
+              "position": [
+                5,
+                0,
+                0
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 0.007,
+                "curve": "sleep"
+              },
+              {
+                "queuecommand": "Move5"
+              }
+            ]
+          },
+          "Move5": {
+            "state": {
+              "position": [
+                6,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

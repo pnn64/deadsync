@@ -6334,7 +6334,12 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 prepare_capture_scope_actor(lua, &actor)?;
-                if has_tween_replay(lua, &actor) {
+                // Init/On queues become native tween replay steps. Preserve a
+                // self-queue there too; an interval alone loses its command
+                // when replay takes ownership of the preceding sleep.
+                if has_tween_replay(lua, &actor)
+                    || lua.app_data_ref::<SongLuaStartupQueues>().is_some()
+                {
                     enqueue_actor_command(lua, &actor, &name)?;
                     return Ok(actor.clone());
                 }
