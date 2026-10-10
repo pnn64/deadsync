@@ -873,12 +873,10 @@
     {
       "title": "[12] Tacos",
       "source_simfile": "[12] Tacos [DX]/Tacos.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d4489b565e4307f1426cea08dcbe180cc2af95b6f8eb3b2145623c3a02f54563.tar.zst",
-      "sha256": "d4489b565e4307f1426cea08dcbe180cc2af95b6f8eb3b2145623c3a02f54563",
-      "compressed_bytes": 43456,
-      "uncompressed_sha256": "e4d7e44540ddcb87c1951e17db022d3752ddd4665e238fe2944881170d87fe75",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4.tar.zst",
+      "sha256": "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4",
+      "compressed_bytes": 60060,
       "aliases": [
         "0453922cd48384732dccc26d3f9d600775bc5af356437e243355e41fcee04fac.tar.zst"
       ]

@@ -883,3 +883,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass132.json`. Position 54 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 133
+
+Position 54, [12] Tacos, passes all
+88,204 comparisons against committed DeadSync
+`6217b2455`. The complete native harness 0.1.54 archive
+contains 8,015 updates over 133.57 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass133.json`. Position 55 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
