@@ -1753,6 +1753,20 @@ pub struct SongLuaBoolWrite {
     pub chained: bool,
 }
 
+/// Native speed fields in TimeSpacing, ScrollSpeed, ScrollBPM, MaxScrollBPM order.
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaSpeedWrite {
+    pub player: usize,
+    pub key: String,
+    pub beat: f64,
+    pub second: f64,
+    pub previous: [[f32; 2]; 4],
+    pub current: [[f32; 2]; 4],
+    pub failed: bool,
+    pub chained: bool,
+}
+
 #[cfg(feature = "test-support")]
 #[derive(Debug, Clone)]
 pub struct SongLuaSkinWrite {
@@ -1790,6 +1804,8 @@ pub struct CompiledSongLua<OverlayActor> {
     #[cfg(feature = "test-support")]
     pub boolean_writes: Vec<SongLuaBoolWrite>,
     #[cfg(feature = "test-support")]
+    pub speed_writes: Vec<SongLuaSpeedWrite>,
+    #[cfg(feature = "test-support")]
     pub noteskin_writes: Vec<SongLuaSkinWrite>,
     pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
@@ -1826,6 +1842,8 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             overlay_writes: Vec::new(),
             #[cfg(feature = "test-support")]
             boolean_writes: Vec::new(),
+            #[cfg(feature = "test-support")]
+            speed_writes: Vec::new(),
             #[cfg(feature = "test-support")]
             noteskin_writes: Vec::new(),
             stateful_message_captures: Vec::new(),

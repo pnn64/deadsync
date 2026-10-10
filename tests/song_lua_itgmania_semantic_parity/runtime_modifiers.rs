@@ -68,6 +68,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
     let mut unsupported = BTreeMap::<String, usize>::new();
     let mut rejected = Vec::new();
     let mut assignments = Vec::new();
+    let mut speed_resets = std::collections::BTreeSet::new();
     for track in &trace.timeline_tracks {
         let state_setter = track.operation == "PlayerState.SetPlayerOptions";
         let Some(player) = (0..2).find(|player| {
@@ -115,6 +116,13 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             {
                 continue;
             }
+            let speed_observed = detail.as_ref().is_some_and(|detail| detail["speed_option"].is_object());
+            if speed_observed && matches!(operation, "TimeSpacing" | "ScrollSpeed" | "ScrollBPM" | "MaxScrollBPM" | "XMod" | "CMod" | "MMod") {
+                // All shared fields and every call are checked against native
+                // getters below, followed by the actual final playback mode.
+                continue;
+            }
+            if speed_observed { speed_resets.insert(*sequence); }
             let mut push = |key: String, value: f32| {
                 writes.push(ModWrite {
                     sequence: *sequence,
@@ -138,6 +146,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             }
             // FromString Overhead always resets perspective, even at level zero.
             let mut set_option = |key: String, value: f32| match key.as_str() {
+                "xmod" | "cmod" | "mmod" if speed_observed => {},
                 "modtimergame" => push("modtimersetting".into(), 0.0),
                 "modtimerbeat" => push("modtimersetting".into(), 1.0),
                 "modtimersong" => push("modtimersetting".into(), 2.0),
@@ -377,6 +386,10 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             }
             keys[write.player]
                 .iter()
+                // Native reset getter snapshots replace synthetic alias defaults;
+                // the reset call and its fields remain in the speed API audit.
+                .filter(|key| !speed_resets.contains(&write.sequence)
+                    || !matches!(key.as_str(), "xmod" | "cmod" | "mmod"))
                 .map(|key| ModWrite {
                     sequence: write.sequence,
                     second: write.second,
@@ -2906,6 +2919,98 @@ fn compare_noteskin_options(trace: &NativeTrace, compiled: &[CompiledSongLua], p
     }
 }
 
+fn native_speed_fields(value: &Value) -> Option<[[f32; 2]; 4]> {
+    let rows = value.as_array().filter(|rows| rows.len() == 4)?;
+    let mut out = [[0.0; 2]; 4];
+    for (row, values) in rows.iter().zip(&mut out) {
+        let row = row.as_array().filter(|row| row.len() == 2)?;
+        for (field, value) in row.iter().zip(values) {
+            *value = value_f32(Some(field)).filter(|value| value.is_finite())?;
+        }
+    }
+    Some(out)
+}
+
+fn compare_speed_options(trace: &NativeTrace, compiled: &[CompiledSongLua], context: &SongLuaCompileContext, parity: &mut Parity) {
+    let mut expected = BTreeMap::<(usize, String), Vec<(u64, f32, f32, &Value)>>::new();
+    let mut playback = Vec::new();
+    for track in &trace.timeline_tracks {
+        let Some(player) = (0..2).find(|player| track.actor.as_deref()
+            == Some(format!("player-state:PLAYER_{}/options:ModsLevel_Song", player + 1).as_str())) else { continue; };
+        if !trace.enabled_players.unwrap_or([true; 2])[player] { continue; }
+        let Some(key) = track.operation.strip_prefix("PlayerOptions.") else { continue; };
+        for (sequence, beat, second, _, detail) in &track.samples {
+            let Some(state) = detail.as_ref().and_then(|detail| detail.get("speed_option")) else { continue; };
+            parity.check(beat.is_some() && second.is_some(), || format!("P{} {key} speed call lacks its native clock", player + 1));
+            if let (Some(beat), Some(second)) = (beat, second) {
+                expected.entry((player, key.to_ascii_lowercase())).or_default().push((*sequence, *beat, *second, state));
+                playback.push((*sequence, *second, player, state));
+            }
+        }
+    }
+    if expected.is_empty() { return; }
+    parity.section("speed option API");
+    for ((player, key), mut expected) in expected {
+        expected.sort_by_key(|sample| sample.0);
+        let actual = compiled.iter().flat_map(|layer| &layer.speed_writes)
+            .filter(|write| write.player == player && write.key == key).collect::<Vec<_>>();
+        parity.check(actual.len() == expected.len(), || format!("P{} {key} speed call count: native {}, DeadSync {}", player + 1, expected.len(), actual.len()));
+        for (index, (_, beat, second, state)) in expected.iter().enumerate() {
+            let before = native_speed_fields(&state["previous"]);
+            let after = native_speed_fields(&state["current"]);
+            parity.check(actual.get(index).is_some_and(|write| {
+                let fields_match = |native: Option<[[f32; 2]; 4]>, actual: [[f32; 2]; 4]| native.is_some_and(|native|
+                    native.iter().flatten().zip(actual.iter().flatten()).all(|(expected, actual)| (expected - actual).abs() <= EPSILON));
+                (write.beat - f64::from(*beat)).abs() <= f64::from(EPSILON)
+                    && (write.second - f64::from(*second)).abs() <= f64::from(EPSILON)
+                    && fields_match(before, write.previous) && fields_match(after, write.current)
+                    && state["failed"].as_bool() == Some(write.failed)
+                    && state["chained"].as_bool() == Some(write.chained)
+            }), || format!("P{} {key} speed fields at beat {beat}: native {state}, DeadSync {:?}", player + 1, actual.get(index)));
+        }
+    }
+    compare_speed_playback(compiled, context, playback, parity);
+}
+
+fn compare_speed_playback(compiled: &[CompiledSongLua], context: &SongLuaCompileContext, mut observations: Vec<(u64, f32, usize, &Value)>, parity: &mut Parity) {
+    use deadsync_rules::scroll::ScrollSpeedSetting;
+    parity.section("speed playback targets");
+    observations.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+    let (mut runtime, unsupported) = modifier_runtime(compiled, context);
+    parity.check(unsupported == 0, || format!("{unsupported} unsupported speed playback ease targets"));
+    let origin = context.song_timing.as_ref().map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
+    let mut cursor = 0;
+    while cursor < observations.len() {
+        let second = observations[cursor].1;
+        let mut final_fields = [None; 2];
+        while cursor < observations.len() && observations[cursor].1 == second {
+            let (_, _, player, state) = observations[cursor];
+            final_fields[player] = Some(&state["current"]);
+            cursor += 1;
+        }
+        for (player, fields) in final_fields.into_iter().enumerate() {
+            let Some(fields) = fields else { continue; };
+            runtime.refresh_player(player, second + origin, 1_000_000.0, Default::default(), AttackBaseEffects::default, Default::default());
+            let mut targets = ActiveAttackMaskValues { scroll_speed: runtime.scroll_speed[player], ..ActiveAttackMaskValues::new(Default::default()) };
+            deadsync_gameplay::apply_song_lua_attack_eases(&mut targets, &mut Default::default(), &mut Default::default(), &runtime.song_lua_ease_windows[player], second + origin, 0.0);
+            let expected = native_speed_fields(fields).and_then(|fields| match fields[0][0] {
+                0.0 if fields[3][0] == 0.0 => Some(ScrollSpeedSetting::XMod(fields[1][0])),
+                0.0 => Some(ScrollSpeedSetting::MMod(fields[3][0])),
+                1.0 if fields[1][0] == 1.0 && fields[3][0] == 0.0 => Some(ScrollSpeedSetting::CMod(fields[2][0])),
+                _ => None,
+            });
+            // Fractional spacing and mixed CMod/raw multipliers require actual
+            // note-travel support. Keep them failing rather than forcing a mode.
+            parity.check(expected.is_some() && targets.scroll_speed.is_some_and(|actual| expected.is_some_and(|expected| match (actual, expected) {
+                (ScrollSpeedSetting::XMod(a), ScrollSpeedSetting::XMod(b))
+                | (ScrollSpeedSetting::CMod(a), ScrollSpeedSetting::CMod(b))
+                | (ScrollSpeedSetting::MMod(a), ScrollSpeedSetting::MMod(b)) => (a - b).abs() <= EPSILON,
+                _ => false,
+            })), || format!("P{} native speed fields {fields} at {second}s: playback {:?}, expected {expected:?}", player + 1, targets.scroll_speed));
+        }
+    }
+}
+
 /// One check per recorded player/option target at each native timestamp.
 pub(super) fn compare_runtime_modifiers(
     trace: &NativeTrace,
@@ -2915,6 +3020,7 @@ pub(super) fn compare_runtime_modifiers(
 ) {
     compare_boolean_options(trace, compiled, parity);
     compare_noteskin_options(trace, compiled, parity);
+    compare_speed_options(trace, compiled, context, parity);
     parity.section("runtime modifiers");
     let (writes, unsupported) = option_writes(trace);
     for (part, count) in unsupported {
@@ -3274,6 +3380,49 @@ fn native_speed_fields_drive_playback() {
             assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
         }
     }
+}
+
+#[test]
+fn speed_field_audit_keeps_failed_and_startup_writes() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/speed-fields-audit-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native speed-fields control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("speed-fields.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile native shared speed-field control");
+    let writes = &compiled[0].speed_writes;
+    assert_eq!(writes.len(), 20, "retain ten speed setters per player");
+    assert_eq!(writes.iter().filter(|write| write.failed).count(), 2);
+    assert_eq!(writes.iter().filter(|write| write.second == 0.0).count(), 6);
+    for write in writes.iter().filter(|write| write.failed) {
+        assert_eq!(write.current[1], [2.0, 0.0], "failed approach retains its amount write");
+    }
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native shared speed-field API and playback targets");
+    for field in 0..4 {
+        let mut altered = compiled.clone();
+        altered[0].speed_writes[0].current[field][0] += 1.0;
+        let mut rejected = Parity::default();
+        compare_runtime_modifiers(&trace, &altered, &context, &mut rejected);
+        assert!(!rejected.gaps.is_empty(), "changing speed field {field} must fail");
+    }
+    let mut missing = compiled.clone();
+    missing[0].speed_writes.remove(0);
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "losing a startup setter must fail");
 }
 
 #[test]

@@ -835,7 +835,11 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
                 if let Some(text) = method_arg(&args, 0).cloned().and_then(read_string) {
                     #[cfg(feature = "test-support")]
                     let previous = player_noteskin(&table)?;
+                    #[cfg(feature = "test-support")]
+                    let speed_before = speed_audit_before(lua, &table, &args)?;
                     apply_player_options_string(lua, &table, &text)?;
+                    #[cfg(feature = "test-support")]
+                    capture_speed_write(lua, &table, "fromstring", speed_before, false, true)?;
                     #[cfg(feature = "test-support")]
                     capture_skin_write(lua, &table, "fromstring", previous)?;
                 }
@@ -1292,6 +1296,61 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
     })
 }
 
+// A reference-only capture owned by the compiler's worker Lua VM. It lasts
+// for chronological replay, retains at most two million calls, and fails the
+// audit on overflow. No recording or allocation exists in shipping builds.
+#[cfg(feature = "test-support")]
+#[derive(Default)]
+pub(crate) struct SongLuaSpeedWrites(pub Vec<SongLuaSpeedWrite>);
+
+#[cfg(feature = "test-support")]
+fn speed_fields(lua: &Lua, owner: &Table) -> mlua::Result<[[f32; 2]; 4]> {
+    let speeds = player_option_speeds(lua, owner)?;
+    let mut fields = [[0.0; 2]; 4];
+    for (index, (field, key, default)) in [
+        ("__songlua_time_spacing", "_spacing", 0.0),
+        ("__songlua_speedmod_xmod", "xmod", 1.0),
+        ("__songlua_speedmod_cmod", "cmod", 200.0),
+        ("__songlua_speedmod_mmod", "mmod", 0.0),
+    ].into_iter().enumerate() {
+        fields[index] = [owner.raw_get::<Option<f32>>(field)?.unwrap_or(default),
+            speeds.raw_get::<Option<f32>>(key)?.unwrap_or(1.0)];
+    }
+    Ok(fields)
+}
+
+#[cfg(feature = "test-support")]
+fn speed_audit_before(lua: &Lua, owner: &Table, args: &MultiValue) -> mlua::Result<Option<(usize, [[f32; 2]; 4])>> {
+    if lua.app_data_ref::<SongLuaSpeedWrites>().is_none()
+        || (method_arg(args, 0).is_none_or(|value| matches!(value, Value::Nil))
+            && method_arg(args, 1).cloned().and_then(read_f32).is_none()) {
+        return Ok(None);
+    }
+    let globals = lua.globals();
+    for (player, key) in SONG_LUA_PLAYER_OPTIONS_KEYS.iter().enumerate() {
+        if globals.get::<Option<Table>>(*key)?.is_some_and(|table| table.to_pointer() == owner.to_pointer()) {
+            return Ok(Some((player, speed_fields(lua, owner)?)));
+        }
+    }
+    Ok(None)
+}
+
+#[cfg(feature = "test-support")]
+fn capture_speed_write(lua: &Lua, owner: &Table, key: &str, before: Option<(usize, [[f32; 2]; 4])>, failed: bool, chained: bool) -> mlua::Result<()> {
+    let Some((player, previous)) = before else { return Ok(()) };
+    let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+    let write = SongLuaSpeedWrite { player, key: key.to_owned(),
+        beat: runtime.get(SONG_LUA_RUNTIME_BEAT_KEY)?, second: runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?,
+        previous, current: speed_fields(lua, owner)?, failed, chained };
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaSpeedWrites>() {
+        if capture.0.len() >= 2_000_000 {
+            return Err(mlua::Error::runtime("speed option audit exceeded two million calls"));
+        }
+        capture.0.push(write);
+    }
+    Ok(())
+}
+
 fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     let (field, approach, default) = match key.as_str() {
         "timespacing" => ("__songlua_time_spacing", "_spacing", 0.0),
@@ -1302,6 +1361,8 @@ fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Fun
     };
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
+        #[cfg(feature = "test-support")]
+        let speed_before = speed_audit_before(lua, &owner, &args)?;
         let speeds = player_option_speeds(lua, &owner)?;
         let previous = owner.raw_get::<Option<f32>>(field)?.unwrap_or(default);
         let previous_speed = speeds.raw_get::<Option<f32>>(approach)?.unwrap_or(1.0);
@@ -1321,10 +1382,14 @@ fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Fun
         }
         if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
             if speed < 0.0 {
+                #[cfg(feature = "test-support")]
+                capture_speed_write(lua, &owner, &key, speed_before, true, matches!(args.back(), Some(Value::Boolean(true))))?;
                 return Err(mlua::Error::runtime("Arg must be greater than or equal to zero."));
             }
             speeds.raw_set(approach, speed)?;
         }
+        #[cfg(feature = "test-support")]
+        capture_speed_write(lua, &owner, &key, speed_before, false, matches!(args.back(), Some(Value::Boolean(true))))?;
         Ok(if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
             MultiValue::from_iter([Value::Table(owner.clone())])
         } else {
@@ -1724,6 +1789,8 @@ fn install_speedmod_state_method(
 fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
     let owner = owner.clone();
     lua.create_function(move |lua, args: MultiValue| {
+        #[cfg(feature = "test-support")]
+        let speed_before = speed_audit_before(lua, &owner, &args)?;
         let spacing = owner
             .raw_get::<Option<f32>>("__songlua_time_spacing")?
             .unwrap_or(0.0);
@@ -1751,6 +1818,8 @@ fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result
         };
         if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
             if key != "xmod" && (!value.is_finite() || value <= 0.0) {
+                #[cfg(feature = "test-support")]
+                capture_speed_write(lua, &owner, &key, speed_before, true, matches!(args.back(), Some(Value::Boolean(true))))?;
                 return Err(mlua::Error::runtime(
                     "speed mod must be finite and greater than zero",
                 ));
@@ -1759,10 +1828,14 @@ fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result
         }
         if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
             if speed < 0.0 {
+                #[cfg(feature = "test-support")]
+                capture_speed_write(lua, &owner, &key, speed_before, true, matches!(args.back(), Some(Value::Boolean(true))))?;
                 return Err(mlua::Error::runtime("negative option speed"));
             }
             set_player_speed_approaches(lua, &owner, Some(speed))?;
         }
+        #[cfg(feature = "test-support")]
+        capture_speed_write(lua, &owner, &key, speed_before, false, matches!(args.back(), Some(Value::Boolean(true))))?;
         Ok(
             if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
                 MultiValue::from_iter([Value::Table(owner.clone())])
