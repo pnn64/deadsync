@@ -961,12 +961,10 @@
     {
       "title": "[FULL SONG] ChikuTaku",
       "source_simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fb774a03318543e9d9a06853ebfac4355dca010496be83c5f655583ebfdcbedf.tar.zst",
-      "sha256": "fb774a03318543e9d9a06853ebfac4355dca010496be83c5f655583ebfdcbedf",
-      "compressed_bytes": 148926,
-      "uncompressed_sha256": "dfc99eccfd08de925770a2d87980b55f250bf093c595378715d394eaf72f5f2b",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019.tar.zst",
+      "sha256": "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019",
+      "compressed_bytes": 68425601,
       "aliases": [
         "ab847a9c934b10f2b6426d8353c3f158ba444f6dbc08d32f14573529343a6aef.tar.zst"
       ]
