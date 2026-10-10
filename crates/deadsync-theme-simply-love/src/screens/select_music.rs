@@ -5255,7 +5255,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
 fn rebuild_select_music_menu(state: &mut State) {
     let lists = build_select_music_menu(state);
     if let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu {
-        menu_state.rebuild_entries(&lists);
+        menu_state.rebuild_entries(lists);
     }
 }
 
@@ -9754,7 +9754,7 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEf
         select_music_menu::InputOutcome::ToggleCategory(toggled_cat) => {
             let lists = build_select_music_menu(state);
             if let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu {
-                menu_state.rebuild_entries(&lists);
+                menu_state.rebuild_entries(lists);
                 let toggled_idx = menu_state
                     .cached_entries
                     .iter()
