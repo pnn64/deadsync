@@ -4,9 +4,7 @@ mod original {
     use super::*;
     include!("scan_original.rs");
 }
-mod allocations {
-    include!("scan_perf_alloc.rs");
-}
+use crate::metadata_perf as allocations;
 mod paired {
     include!("scan_paired_bench.rs");
 }
