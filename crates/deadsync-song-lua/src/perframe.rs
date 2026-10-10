@@ -1919,11 +1919,11 @@ fn append_scheduled_overlay_updates(
     if scheduled.is_empty() {
         return;
     }
-    // Targets are contiguous enum discriminants through StretchRect.
+    // Include immediate AFT/hibernate properties after the tween pose targets.
     // Borrow prior writes; only emitted samples need owned values.
     let mut scheduled_values: [Option<&SongLuaOverlayUpdateValue>;
-        SongLuaOverlayUpdateTarget::StretchRect as usize + 1] =
-        [None; SongLuaOverlayUpdateTarget::StretchRect as usize + 1];
+        SongLuaOverlayUpdateTarget::Hibernating as usize + 1] =
+        [None; SongLuaOverlayUpdateTarget::Hibernating as usize + 1];
     let mut previous_times: Option<((u32, u32), (f32, f32))> = None;
     let reuse_times = scheduled.len() > 1;
     for update in scheduled {
@@ -2018,7 +2018,7 @@ fn apply_captured_final_values(
         }
         return;
     }
-    const _: () = assert!((SongLuaOverlayUpdateTarget::StretchRect as usize) < 128);
+    const _: () = assert!((SongLuaOverlayUpdateTarget::Hibernating as usize) < 128);
     let scheduled_targets = scheduled.iter().fold(0_u128, |mask, update| {
         mask | (1_u128 << update.target as usize)
     });
