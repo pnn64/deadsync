@@ -242,6 +242,9 @@ pub(super) struct RowTween {
     pub(super) to_y: f32,
     pub(super) from_a: f32,
     pub(super) to_a: f32,
+    /// Horizontal content offset for inline-choice rows wider than the row frame.
+    pub(super) from_scroll: f32,
+    pub(super) to_scroll: f32,
     pub(super) t: f32,
 }
 
@@ -254,6 +257,20 @@ impl RowTween {
     #[inline(always)]
     pub(super) fn a(&self) -> f32 {
         (self.to_a - self.from_a).mul_add(self.t, self.from_a)
+    }
+
+    #[inline(always)]
+    pub(super) fn scroll(&self) -> f32 {
+        (self.to_scroll - self.from_scroll).mul_add(self.t, self.from_scroll)
+    }
+
+    /// Restart the shared tween from the current interpolated values.
+    #[inline(always)]
+    pub(super) fn restart_from_current(&mut self) {
+        self.from_y = self.y();
+        self.from_a = self.a();
+        self.from_scroll = self.scroll();
+        self.t = 0.0;
     }
 }
 
