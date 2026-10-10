@@ -1502,12 +1502,10 @@
     {
       "title": "Bad Trails",
       "source_simfile": "Bad Trails/Maybe it was fated.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf.tar.zst",
-      "sha256": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf",
-      "compressed_bytes": 856986,
-      "uncompressed_sha256": "d9ed3d4456d6c60dfc0d854e14bad77b7b796120a64ddcb19ad47bddbeda39e7",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "44585ae90fcee44eb839e0c618dd81e0a90eaf95eacf3d9ed531cb1826170375.tar.zst",
+      "sha256": "44585ae90fcee44eb839e0c618dd81e0a90eaf95eacf3d9ed531cb1826170375",
+      "compressed_bytes": 844446,
       "aliases": [
         "6db2792d099d9c1ee3170705d4bd77cb8199427dbe8ebd4c1a34d0bb0a37ba83.tar.zst"
       ]

@@ -1667,3 +1667,17 @@ See `native-revalidation-pass189.json`. Position 111 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 190
+
+Position 111, Bad Trails, passes all
+227,372 comparisons against committed DeadSync
+`d240231aa`. The complete native harness 0.1.64 archive
+contains 9,549 updates over 159.12 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass190.json`. Position 112 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
