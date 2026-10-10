@@ -1214,12 +1214,10 @@
     {
       "title": "Aegleseeker",
       "source_simfile": "Aegleseeker/Aegleseeker.ssc",
-      "harness_version": "0.1.0",
-      "archive": "aae1d802a0ed0130e995886a5b3c2986399986693a049fb54db6564d6ff46e07.tar.zst",
-      "sha256": "aae1d802a0ed0130e995886a5b3c2986399986693a049fb54db6564d6ff46e07",
-      "compressed_bytes": 980034,
-      "uncompressed_sha256": "01b0a75c91bd80fc5b55f9e3140184c9b11de472afcd356c5b2f90c16cccb74f",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4.tar.zst",
+      "sha256": "ae0045afb14bddb8dfea095780934e9ee19155d2db73c8c05316be61d84b29f4",
+      "compressed_bytes": 996791,
       "aliases": [
         "5e44ae793b37b0be2ec56cad29fc3d6f21d7b2ae4d3b19266341071504debe11.tar.zst"
       ]
