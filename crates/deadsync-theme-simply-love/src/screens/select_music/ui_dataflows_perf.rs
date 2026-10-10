@@ -239,30 +239,16 @@ fn benchmark_grade_headings() {
             side.map_or("both", |side| if side == 0 { "p1" } else { "p2" })
         );
         println!("{label} churn: original {old_churn:?}, current {new_churn:?}");
-        crate::paired_bench::compare(
-            &label,
-            10,
-            || {
-                black_box(group(
-                    black_box(&ranking),
-                    &mut old,
-                    black_box(&history),
-                    side,
-                    "dance-single",
-                    false,
-                ));
-            },
-            || {
-                black_box(group(
-                    black_box(&ranking),
-                    &mut new,
-                    black_box(&history),
-                    side,
-                    "dance-single",
-                    true,
-                ));
-            },
-        );
+        crate::paired_bench::compare(&label, 10, |current| {
+            black_box(group(
+                black_box(&ranking),
+                if current { &mut new } else { &mut old },
+                black_box(&history),
+                side,
+                "dance-single",
+                current,
+            ));
+        });
     }
 }
 
@@ -442,15 +428,12 @@ fn benchmark_lobby_status() {
             before.as_ref().map_or(0, String::capacity),
             after.as_ref().map_or(0, String::capacity)
         );
-        crate::paired_bench::compare(
-            &label,
-            100,
-            || {
-                black_box(original::select_music_lobby_status_text(black_box(&state)));
-            },
-            || {
+        crate::paired_bench::compare(&label, 100, |current| {
+            if current {
                 black_box(select_music_lobby_status_text(black_box(&state)));
-            },
-        );
+            } else {
+                black_box(original::select_music_lobby_status_text(black_box(&state)));
+            }
+        });
     }
 }

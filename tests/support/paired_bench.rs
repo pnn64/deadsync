@@ -1,25 +1,32 @@
+use std::hint::black_box;
 use std::time::Instant;
 
 /// Alternate original and current implementations, then report paired medians.
-pub fn compare(
+pub fn compare(label: &str, iterations: usize, mut work: impl FnMut(bool)) {
+    compare_prepared(label, iterations, || (), |(), current| work(current));
+}
+
+/// Prepare consumed inputs outside the timed region, preserving their capacities.
+pub fn compare_prepared<T>(
     label: &str,
     iterations: usize,
-    mut original: impl FnMut(),
-    mut current: impl FnMut(),
+    mut prepare: impl FnMut() -> T,
+    mut work: impl FnMut(T, bool),
 ) {
     let mut elapsed = [Vec::with_capacity(9), Vec::with_capacity(9)];
     let mut counts = [iterations; 2];
     for sample in 0..10 {
         for variant in [sample % 2, 1 - sample % 2] {
             let count = counts[variant];
-            let nanos = if variant == 0 {
-                batch(count, &mut original)
-            } else {
-                batch(count, &mut current)
-            };
+            let inputs: Vec<_> = (0..count).map(|_| prepare()).collect();
+            let start = Instant::now();
+            for input in inputs {
+                work(input, black_box(variant == 1));
+            }
+            let nanos = start.elapsed().as_nanos().max(1);
             if sample == 0 {
                 // Give fast paths roughly two milliseconds per measured batch.
-                // Bound iteration counts even for an unusually fast warmup.
+                // Bound prepared input memory even for an unusually fast warmup.
                 let batches = 2_000_000_u128.div_ceil(nanos).clamp(1, 1000) as usize;
                 counts[variant] = count.saturating_mul(batches).min(1_000_000);
             } else {
@@ -36,12 +43,4 @@ pub fn compare(
         "{label}: original {original:.2} ns/op, current {current:.2} ns/op, {:.2}x throughput",
         original / current
     );
-}
-
-fn batch(count: usize, work: &mut impl FnMut()) -> u128 {
-    let start = Instant::now();
-    for _ in 0..count {
-        work();
-    }
-    start.elapsed().as_nanos().max(1)
 }

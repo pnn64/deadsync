@@ -18,8 +18,10 @@ pub struct SongLuaModelTextureUv {
     pub shift: [f32; 2],
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SongLuaModelTextureFrame {
+    /// Prewarmed image for this state; None retains the layer's static source.
+    pub texture_key: Option<Arc<str>>,
     pub delay: f32,
     pub diffuse: SongLuaModelTextureUv,
     pub glow: SongLuaModelTextureUv,
@@ -28,46 +30,37 @@ pub struct SongLuaModelTextureFrame {
 #[derive(Debug, Clone, Copy)]
 pub struct SongLuaTextureSample {
     pub second: f32,
+    /// Native material state indices; image identities live once in the layer.
+    pub diffuse_state: u16,
+    pub additive_state: Option<u16>,
     pub diffuse: SongLuaModelTextureUv,
     pub glow: SongLuaModelTextureUv,
+    /// Independent secondary frame, with the native diffuse translation.
+    pub additive: Option<SongLuaModelTextureUv>,
 }
 
-pub(crate) struct Clock {
+struct MaterialClock {
     frames: Arc<[SongLuaModelTextureFrame]>,
     velocity: [f32; 2],
     cycle: f32,
     frame: usize,
     seconds: f32,
-    delta: Option<f32>,
-    samples: Vec<SongLuaTextureSample>,
 }
 
-impl Clock {
-    pub(crate) fn new<V>(layer: &SongLuaOverlayModelLayer<V>) -> Option<Self> {
-        let frames = &layer.texture_frames;
-        if frames.is_empty()
-            || (frames.len() == 1
-                && layer.uv_velocity == [0.0; 2]
-                && frames[0].diffuse == frames[0].glow)
-        {
-            return None;
-        }
-        let mut clock = Self {
-            frames: Arc::clone(frames),
-            velocity: layer.uv_velocity,
+impl MaterialClock {
+    fn new(frames: Arc<[SongLuaModelTextureFrame]>, velocity: [f32; 2]) -> Self {
+        Self {
+            velocity,
             cycle: frames
                 .iter()
                 .fold(0.0_f32, |total, frame| total + frame.delay),
             frame: 0,
             seconds: 0.0,
-            delta: None,
-            samples: Vec::new(),
-        };
-        clock.sample(0.0);
-        Some(clock)
+            frames,
+        }
     }
 
-    pub(crate) fn update(&mut self, delta: f32) {
+    fn update(&mut self, delta: f32) {
         // ModelTypes.cpp AnimatedTexture::Update uses strict > and advances
         // once, including zero-delta updates when an earlier jump left excess.
         self.seconds += delta;
@@ -77,23 +70,103 @@ impl Clock {
         }
     }
 
-    fn sample(&mut self, second: f32) {
+    fn uv(&self) -> (SongLuaModelTextureUv, SongLuaModelTextureUv) {
         let mut seconds = 0.0_f32;
         for frame in &self.frames[..self.frame] {
             seconds += frame.delay;
         }
         seconds += self.seconds;
-        let frame = self.frames[self.frame];
+        let frame = &self.frames[self.frame];
         let mut diffuse = frame.diffuse;
         for axis in 0..2 {
             let shift = self.velocity[axis] * (seconds / self.cycle) * diffuse.scale[axis];
             diffuse.offset[axis] += shift;
             diffuse.shift[axis] += shift;
         }
+        (diffuse, frame.glow)
+    }
+
+    fn set_state(&mut self, state: i32) {
+        // AnimatedTexture::SetState clamps the index without resetting age.
+        self.frame = state.clamp(0, self.frames.len() as i32 - 1) as usize;
+    }
+}
+
+pub(crate) struct Clock {
+    diffuse: MaterialClock,
+    additive: Option<MaterialClock>,
+    delta: Option<f32>,
+    samples: Vec<SongLuaTextureSample>,
+}
+
+impl Clock {
+    pub(crate) fn new<V>(layer: &SongLuaOverlayModelLayer<V>) -> Option<Self> {
+        let frames = &layer.texture_frames;
+        if layer.additive_frames.len() <= 1
+            && (frames.is_empty()
+                || (frames.len() == 1
+                    && layer.uv_velocity == [0.0; 2]
+                    && frames[0].diffuse == frames[0].glow))
+        {
+            return None;
+        }
+        let frames = if frames.is_empty() {
+            let uv = SongLuaModelTextureUv {
+                scale: layer.uv_scale,
+                offset: layer.uv_offset,
+                shift: layer.uv_tex_shift,
+            };
+            Arc::from([SongLuaModelTextureFrame {
+                texture_key: None,
+                delay: 1.0,
+                diffuse: uv,
+                glow: uv,
+            }])
+        } else {
+            Arc::clone(frames)
+        };
+        let mut clock = Self {
+            diffuse: MaterialClock::new(frames, layer.uv_velocity),
+            additive: (!layer.additive_frames.is_empty())
+                .then(|| MaterialClock::new(Arc::clone(&layer.additive_frames), [0.0; 2])),
+            delta: None,
+            samples: Vec::new(),
+        };
+        clock.sample(0.0);
+        Some(clock)
+    }
+
+    pub(crate) fn update(&mut self, delta: f32) {
+        self.diffuse.update(delta);
+        if let Some(additive) = &mut self.additive { additive.update(delta); }
+    }
+
+    fn set_state(&mut self, state: i32) {
+        self.diffuse.set_state(state);
+        if let Some(additive) = &mut self.additive { additive.set_state(state); }
+    }
+
+    fn sample(&mut self, second: f32) {
+        let (diffuse, glow) = self.diffuse.uv();
+        let additive = self.additive.as_ref().map(|clock| {
+            let mut uv = clock.frames[clock.frame].glow;
+            // Model::DrawPrimitives shares the diffuse texture matrix. The
+            // secondary material's own offsets and velocity are not applied.
+            for axis in 0..2 {
+                let shift =
+                    (diffuse.offset[axis] - glow.offset[axis]) / glow.scale[axis] * uv.scale[axis];
+                uv.offset[axis] += shift;
+                uv.shift[axis] += shift;
+            }
+            uv
+        });
         self.samples.push(SongLuaTextureSample {
             second,
             diffuse,
-            glow: frame.glow,
+            glow,
+            additive,
+            diffuse_state: self.diffuse.frame as u16,
+            additive_state: self.additive.as_ref().map(|clock| clock.frame as u16),
         });
     }
 
@@ -125,7 +198,7 @@ pub(crate) fn install<S, V, A>(
             let mut clocks = clocks;
             if let Some(state) = overlay.actor.initial_state.sprite_state_index {
                 for clock in clocks.iter_mut().flatten() {
-                    clock.frame = (state as usize).min(clock.frames.len() - 1);
+                    clock.set_state(state as i32);
                     clock.samples.clear();
                     clock.sample(0.0);
                 }
@@ -176,9 +249,8 @@ pub(crate) fn set_state(lua: &Lua, actor: &Table, state: i32) {
     if let Some(mut capture) = lua.app_data_mut::<Capture>()
         && let Some(clocks) = capture.0.get_mut(&(actor.to_pointer() as usize))
     {
-        // AnimatedTexture::SetState clamps the index without resetting age.
         for clock in clocks.iter_mut().flatten() {
-            clock.frame = state.clamp(0, clock.frames.len() as i32 - 1) as usize;
+            clock.set_state(state);
         }
     }
 }

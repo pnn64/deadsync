@@ -1,0 +1,104 @@
+{
+  "pass": 166,
+  "previous_record": "native-revalidation-pass165.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+  "comparator_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    87
+  ],
+  "next_position": 88,
+  "comparisons_passed": 645515,
+  "charts": [
+    {
+      "position": 87,
+      "entry": {
+        "title": "Afterburn",
+        "source_simfile": "Afterburn/Afterburn.ssc",
+        "harness_version": "0.1.58",
+        "archive": "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e.tar.zst",
+        "sha256": "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e",
+        "compressed_bytes": 369515,
+        "aliases": [
+          "7066806db98b5d07d25b911d38f06063a85927ae1097137100ec245948e55f12.tar.zst"
+        ]
+      },
+      "original_archive_retained": "8fa43e91d314aaa0fda600fac96603d577d449c8f974b6eac5cbf692dbe4646f.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "60a55135e9a1cb06fac9be75eab35f21e3f72899989f10299433ddf0e61235e8",
+      "original_source_sha256": {
+        "Afterburn/Afterburn.ogg": "ca69c4515688b65b674f207a076df4c38184dc1cba004ad5acb57d253c517854",
+        "Afterburn/Afterburn.ssc": "87d3efd304c1b88ca9f283fba226a0a7c0110f9d4380eaabe74b9b48fbba10de",
+        "Afterburn/banner.png": "31728925af092de4fdb8db2c5e5b140abc92d84a09be05829cd346ad44468f22",
+        "Afterburn/data.sme": "1b719cbb3d9ef79d751284e28140e5e293d6f73f2079fe6b59115b7eab0bd1e6",
+        "Afterburn/snapmed.png": "4583a64fe314b0b97bb2f80783f31ebb04c0119da2f1948163c0f408a95c6c51",
+        "Afterburn/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Afterburn/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Afterburn/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Afterburn/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Afterburn/lua/_script.lua": "7a093db409c83b397cad5cb0ce4d8ee4704681c32ad606dbdcf091fc87d0bf42"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8950,
+      "duration_seconds": 149.13792419433594,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 87,
+      "source_simfile": "Afterburn/Afterburn.ssc",
+      "archive": "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e.tar.zst",
+      "archive_sha256": "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e",
+      "harness_version": "0.1.58",
+      "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+      "source_pending_commit": false,
+      "binary_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-full_song_lua.exe",
+        "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 15.190997399855405,
+      "comparisons_passed": 645515,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-087-bounce-tornado-v3.log",
+      "log_sha256": "cb46786f4b0019f7c144e9f8cc224c274b6b27ff54156c10c216da6f696d397f",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass167-top-087-confusion-x-v1.json",
+      "native_receipt_sha256": "95b7134ed7a57920bd832adb4468693e1f817798d0f6b0650295c3628b866873",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+    "source_pending_commit": false,
+    "binary_sha256": "e0749990919ef24e6f385def3c6a29d86df4513f45c66b6a6199772b53d1cc95",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.4408917003311217,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-087-native-pass166.log",
+    "log_sha256": "815e4d880d8d4e2cf608f111b53f8cbe12827aec1721004266520bbcf8ae11b2",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 271 filtered out; finished in 1.06s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

@@ -1,0 +1,348 @@
+{
+  "problem": "Fourteen BounceZ, DigitalZ, TornadoZ and Sawtooth keys lacked runtime values and rendered geometry; hold heads discarded subpixel X modulation near receptors",
+  "change": "Preserve signed strengths, offsets, periods, steps, approaches and resets; compose native-ordered Z effects and Sawtooth X for notes, hold paths, receptors and ghosts",
+  "deleted_behavior": "Replace the X-only bounce helper with one shared by both axes. Remove the half-pixel hold-head snap and its unused cached receptor-X field and computation",
+  "source_parent": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+  "reference_sources": {
+    "src/ArrowEffects.cpp": {
+      "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+      "lines": [
+        [
+          217,
+          258
+        ],
+        [
+          355,
+          378
+        ],
+        [
+          919,
+          929
+        ],
+        [
+          1022,
+          1031
+        ],
+        [
+          1371,
+          1568
+        ]
+      ]
+    },
+    "src/PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "lines": [
+        [
+          1045,
+          1050
+        ],
+        [
+          1220,
+          1226
+        ],
+        [
+          2179,
+          2345
+        ]
+      ]
+    },
+    "src/NoteDisplay.cpp": {
+      "sha256": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+      "lines": [
+        [
+          364,
+          381
+        ],
+        [
+          923,
+          1037
+        ],
+        [
+          1251,
+          1264
+        ],
+        [
+          1413,
+          1415
+        ]
+      ]
+    },
+    "Themes/_fallback/metrics.ini": {
+      "sha256": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5",
+      "lines": [
+        [
+          220,
+          234
+        ]
+      ]
+    }
+  },
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass199-native-z-wave-family-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "cb0b898c7d3210f5577eeda7fae1835745559a0b6011ea377dbeaffc3f4df34d",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "f2d35d9e03accd675c85340afdb1ac9029314f77540f002739f7174c1d0cf037",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass199-native-z-wave-family-v1\\archives\\d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f.tar.zst",
+    "archive_sha256": "d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f",
+    "archive_entry": {
+      "title": "Native z-wave-family control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f.tar.zst",
+      "sha256": "d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f",
+      "compressed_bytes": 19530
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 7860,
+    "comparisons_failed": 112,
+    "elapsed_seconds": 1.393146499991417,
+    "archive_sha256": "d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f",
+    "binary_sha256": "6a560fc90e7b1efbfdac72d6915f97b19177e7bf5a21ddc498c6bc92d017e039",
+    "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-before-v1.log",
+    "log_sha256": "e1788863720f460fbe3fd084852adce3912011cec824882763e56dff6a4c309d",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 7972,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 1.4948221002705395,
+    "archive_sha256": "d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f",
+    "binary_sha256": "1b3d448b879591fd3716af6960e7259cc04cd90d12583ad2958d50c9758a1633",
+    "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-control.log",
+    "log_sha256": "8ef5c3b5706e3671389e83f9d1162ba722cbb6ba358cc6321531a5c311bb7841",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "native_current_values_compared": 540,
+  "consecutive_native_update_frames": 241,
+  "native_motion": {
+    "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+    "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "native_blocks_sha256": {
+      "GetZPos": "00d44b1645ce1295c6591abf28ec926231f96f35c4081a975cca613ef84ec45b",
+      "NeedZBuffer": "41e46061aa7e07cea75f3b9da1f55cf2632ae326c2c080289200078e21072026",
+      "Tornado": "9809b7a492077056a8c25d2971334e6167108bd39f1df56256981d19989e1d37",
+      "Digital": "a7349d67c7dbe3acf1d1fb7a29c216199cc9eb0781ed2855fde73c5d9505ad53",
+      "Bumpy": "5cb8bad6ef5186967e77ecd71e25167f2ef94b96a0041189cd57903b500a83a4",
+      "Drunk": "9bc099534774b70a77060202ac54fc62bebd2a4c20c6ec6b6be8961343a3f31a",
+      "Tan": "3756b017f6861a4b64b15d33286af0d6713932c70bd46b74a672a40dd03a954a",
+      "Tiny": "d610bbfdb996d78e91594bf04ad5b89f5f6e1d5d426326418cf5ee0e87959a46",
+      "SawtoothX": "2f1b93f741561a5e5a298ce5eeb770ea8ac825c10946869498b068d0ccc597fd",
+      "InitBounds": "626a12f3991724e0a556f1093797ec7d4e0363bb4637d3e1d27be75c0e0e3b7f",
+      "SCALE": "6c0f5cf15158b1987fcf76bd20b7d0be9ef9b04668a3c0b0a1d2aea229060fcc"
+    },
+    "original_native_blocks_unchanged": true,
+    "isolated_inputs_used": true,
+    "whole_native_gameplay_used": false,
+    "semantic_host_used": false,
+    "deadsync_used": false,
+    "scope": "GetZPos/NeedZBuffer and Sawtooth X/Tiny blocks; native tornado bounds and fallback metrics; all other effects disabled; 1/2/4/8 columns, 3 field zooms, signed strengths, negative travel, Tiny and mixed effects",
+    "binary_sha256": "208371d3ec048cbb554c5d37fb3d6d3c526dcee8995f3c3df0e4bead7b084d1b"
+  },
+  "native_motion_fixture_sha256": "aac7e1113d78c9aeef4d838768c65d47cd1196d4f8e79442a99a017b4acc3491",
+  "native_vectors": 9720,
+  "composed_note_cases": 1152,
+  "composed_hold_body_cases": 504,
+  "native_depth_gate": "BounceZ, DigitalZ and SawtoothZ request depth testing for any nonzero strength. TornadoZ is omitted by native NeedZBuffer, including in doubles",
+  "native_bounds": "Z uses three neighboring columns on each side in all layouts and native FLT_MIN initialization; X retains its existing narrower doubles bounds",
+  "native_order": "TornadoZ before Bumpy; SawtoothZ before ParabolaZ; DigitalZ after BeatZ; BounceZ last. Z is independent of Tiny; Sawtooth X precedes Tiny",
+  "subpixel_hold_head": "The original composed test failed at travel 0.25px: native X shifted 0.125px while DeadSync forced zero. NoteDisplay always samples GetXYZPos at that offset; the shortcut was deleted without changing expected values or tolerances",
+  "regression_results": {
+    "gameplay-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "4617829095e37e05c0429f135d9a8f962fcd937b9d172808783ee4802ae36973",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-deadsync_gameplay.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.088669900316745,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-gameplay-tests.log",
+      "log_sha256": "28974a1dbbc316eb7f5f38addbf0bb34225347d249e2c0c6f5cc1f655422ac14",
+      "result_lines": [
+        "test result: ok. 794 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+      ]
+    },
+    "notefield-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "fe61be5f2c6aba61397a6d6abf2e21797a747da29c8d90eb4aa90f80e0946957",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-deadsync_notefield.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 17.666371600236744,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-notefield-tests.log",
+      "log_sha256": "a8abafe2bb1413e4aea5bc6e49b76f9fd28f8097f2348436dacacf4d27251158",
+      "result_lines": [
+        "test result: ok. 465 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.13s"
+      ]
+    },
+    "runtime-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "24cc6dbb069353cc6d1662628be4499195718a32b71470d8b74a87522a8edb8e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 12.321677300147712,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-runtime-tests.log",
+      "log_sha256": "392bf7df2c7eff23904d834d5e045d5ee4199683be7559929bf5bd127472b1e2",
+      "result_lines": [
+        "test result: FAILED. 49 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 10.27s"
+      ]
+    },
+    "song-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "7eb1d4cf2d0c757a554669a1ebb2604c624009c3c36cc4a18be053bcc794d248",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 23.48693919973448,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-song-tests.log",
+      "log_sha256": "6e90313d6cd3ae09037e55b96507d84027b9ecd0407ab30e84bbe83af196d5e9",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.77s"
+      ]
+    },
+    "theme-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "00c2105d3793dbdb9e715ebf3af588652825fa7be7627707462be2202bb14c5c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 7.192949099931866,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-theme-tests.log",
+      "log_sha256": "fa53a095c36c4a1586c20cc1b6b8a7f4431a2293e490d4a2a2ecd8b18556e81f",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 3.26s"
+      ]
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "00c2105d3793dbdb9e715ebf3af588652825fa7be7627707462be2202bb14c5c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-deadsync_theme_simply_love.exe",
+        "--exact",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.337977800052613,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-technique-arrow.log",
+      "log_sha256": "d58b5fdb1194b4389e4b725865408600013e02459d691000ca1bb1fae6ddd9ad",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 6.55s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 7972,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 1.4948221002705395,
+      "archive_sha256": "d680ac827bf871271b9f5b347c9d446e0572957e3a911024449c7eeb26f64d6f",
+      "binary_sha256": "1b3d448b879591fd3716af6960e7259cc04cd90d12583ad2958d50c9758a1633",
+      "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\z-wave-family-v3-control.log",
+      "log_sha256": "8ef5c3b5706e3671389e83f9d1162ba722cbb6ba358cc6321531a5c311bb7841",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    }
+  },
+  "existing_failures_retained": {
+    "runtime-tests": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "song-tests": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "theme-tests": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "original_position90_before": {
+    "exit_code": 1,
+    "comparisons_passed": 207824,
+    "comparisons_failed": 38,
+    "elapsed_seconds": 25.041745299939066,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "6a560fc90e7b1efbfdac72d6915f97b19177e7bf5a21ddc498c6bc92d017e039",
+    "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-confusion-spin-v7.log",
+    "log_sha256": "60a630b4d5b5ee2436c7f2a8e4bd2bca5819721ddf10d70c63d038c43abe6869",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_after": {
+    "exit_code": 1,
+    "comparisons_passed": 207852,
+    "comparisons_failed": 10,
+    "elapsed_seconds": 22.47245280025527,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "1b3d448b879591fd3716af6960e7259cc04cd90d12583ad2958d50c9758a1633",
+    "source_commit": "3247f86dd880daafeee1368c083d72be3ac1b82d",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-z-wave-family-v3.log",
+    "log_sha256": "8fb84299057d8d4e635b7f450d3eb3ef42e76d37c9bd1f76ae86c4add9d02b0c",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_accepted": false,
+  "original_tolerances_retained": true,
+  "original_corpus_scope_unchanged": true,
+  "geometry_scope": "Native source functions with isolated inputs, checked against composed sprites and actual hold-body vertex centers. Whole native gameplay, broader model/rotation spline/framebuffer cases remain pending",
+  "harness_arroweffects_helper_is_full_native_gameplay": false,
+  "semantic_host_geometry_used": false,
+  "build_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass168\\z-wave-family-v3-pin.json",
+  "build_pin_sha256": "8afaf6c07ab7d6a754888f275b7b77989e2264fa2b51ccd6e1a7d06075cf0c66"
+}

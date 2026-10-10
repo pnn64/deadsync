@@ -1,0 +1,165 @@
+{
+  "pass": 104,
+  "previous_record": "native-revalidation-pass103.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "20e14e048e01c2735a48107a131cb4b88d1009e9",
+  "test_repository_commit": "20e14e048e01c2735a48107a131cb4b88d1009e9",
+  "comparator": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass104-current-sprite-comparators-v1-full_song_lua.exe",
+    "sha256": "f0b55eb061ec611b5c6c3c87eedf498ff04c68d6edfaa79d4789a8310d54589b"
+  },
+  "harness_source_commit": "f4977d649a57873aa2aab4e41289311ff6f787e8",
+  "native_cli_sha256": "03843e44680e6fc9b5620c4b209ea517293de45c248a4e476b75d6ee3f5aaff9",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 9,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "7e73aaa02c615547366bfc6300f335702d8d8885bfea9a0858e4e6ab929dcad0.tar.zst",
+      "archive_sha256": "7e73aaa02c615547366bfc6300f335702d8d8885bfea9a0858e4e6ab929dcad0",
+      "archive_bytes": 158051,
+      "compression_level": 22,
+      "uncompressed_sha256": "e7e949322d1e800e450023e74c0aca7df67fafd1e92ac8bb9648b88b70f6b977",
+      "native_trace_sha256": "d919c25db091384d14d4914aa61d2a4709b62f9af57ce12204c3eedf48acbebe",
+      "harness_version": "0.1.50",
+      "native_capture_log_sha256": "2c91207eab3860e1888432f9f465df7482f27653f84dc3458e70937574be2587",
+      "native_archive_log_sha256": "a224491266e992f34a15e1feb8f49074dd3ec219b89cd101668bdc299ace7385",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 118.00892639160156,
+      "update_frames": 7082,
+      "original_source_unchanged": true,
+      "source_simfile_sha256": "bf36c389f2577a7ca097ca5d273ab5281d57dcc4018a644aa48db52ee2965bc2",
+      "comparisons_passed": 157678,
+      "comparisons_failed": 0,
+      "test_log_sha256": "cff3a4f566843fa2bb249e95232539a3e526dfdfa2085f8bcda406aa050c6100",
+      "original_archive_retained": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "historical_aliases_retained": true,
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass104-top-009-spooky-v1.json",
+      "native_receipt_sha256": "7855b25979f39494a6432a0a2de75beaecf998424936aaf20bd4320b7e83fa17"
+    }
+  ],
+  "current_source_prefix": {
+    "positions": 9,
+    "comparisons_passed": 2107636,
+    "comparisons_failed": 0,
+    "rows": [
+      {
+        "position": 1,
+        "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+        "archive": "ded0f7ff19513e30119e0d6f65b57a661f1683872fc9ffced27737db06c49993.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-001-after-v1.log",
+        "log_sha256": "dcc57d670da72d723a42814eed0075a5a20db03c8a1b501b51882689765df53f",
+        "checks_passed": 212220,
+        "checks_failed": 0
+      },
+      {
+        "position": 2,
+        "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+        "archive": "2a77063dd2ab8c43bbdbb9e101be7fcf73156302e21e9771c88797218317d327.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-002-after-v1.log",
+        "log_sha256": "952cd597d2e0cd9e0205efcfd2892f73594c93921dc49c4f5792846a18592b2e",
+        "checks_passed": 205071,
+        "checks_failed": 0
+      },
+      {
+        "position": 3,
+        "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+        "archive": "2397fdbd00edd8679ca0a5d184b696deb32951fdfef2aa02bf9e15f17a9ac2cb.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-003-after-v1.log",
+        "log_sha256": "2fa5635ea50e7ba78f666263c6272a5009704844b66b711618dba08ffa1d4358",
+        "checks_passed": 260300,
+        "checks_failed": 0
+      },
+      {
+        "position": 4,
+        "source_simfile": "100 Bad Days/100 Bad Days.sm",
+        "archive": "8194e7406862c5d2992eb78613dba5a1afaf55656b3a50a1d4f1972da7739a5e.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-004-after-v1.log",
+        "log_sha256": "04086094a3857420cd725992f9a85f672f6dc571ab6583983c0255c1d37c0426",
+        "checks_passed": 175181,
+        "checks_failed": 0
+      },
+      {
+        "position": 5,
+        "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+        "archive": "56a576184203e1fc7cb3585c884b3289b0026769cf4833b7735516763c260fcc.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-005-after-v1.log",
+        "log_sha256": "adad7302033d708493520ef3a9be496236a43a50c1d63bf6bfe14595fc8279a2",
+        "checks_passed": 175181,
+        "checks_failed": 0
+      },
+      {
+        "position": 6,
+        "source_simfile": "1035/1035.sm",
+        "archive": "4131f2a7a418e19205e0e1f3c2e23cc78334699d2db3049e949a1b65ef356054.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-006-after-v1.log",
+        "log_sha256": "80d784d4b0d71f63943239830b812e6316effc7bc87a346444c9f9c3122451b8",
+        "checks_passed": 248156,
+        "checks_failed": 0
+      },
+      {
+        "position": 7,
+        "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+        "archive": "b2737bf93ef8331b18b58ef7e3732042e5d680454c7910ca62130c511b8cdc8a.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-007-after-v1.log",
+        "log_sha256": "dae1eaa2268f7af01eb07e47cc859d2fb7b7b1089b5784b7e90db0f415dd55fc",
+        "checks_passed": 345742,
+        "checks_failed": 0
+      },
+      {
+        "position": 8,
+        "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+        "archive": "733a636d41eaa4f2add786f07e40a02f94dbddd2937b777b19231594486f16c7.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-008-after-v1.log",
+        "log_sha256": "e67ac8c609470160b7d8189385137b01bea7a8e0a7cf59e0c6c7a644bcc9c0e8",
+        "checks_passed": 328107,
+        "checks_failed": 0
+      },
+      {
+        "position": 9,
+        "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+        "archive": "7e73aaa02c615547366bfc6300f335702d8d8885bfea9a0858e4e6ab929dcad0.tar.zst",
+        "exit_code": 0,
+        "log": "pass104-prefix-position-009-after-v1.log",
+        "log_sha256": "cff3a4f566843fa2bb249e95232539a3e526dfdfa2085f8bcda406aa050c6100",
+        "checks_passed": 157678,
+        "checks_failed": 0
+      }
+    ],
+    "guarded_test_log_sha256": "dfe936a32eb1171195d744577db4c21b60742646b95c68bede00e516b3f04534"
+  },
+  "sprite_preparation": {
+    "source_commit": "20e14e048e01c2735a48107a131cb4b88d1009e9",
+    "domain_tests_passed": 1437,
+    "test_log_sha256": "24fdd16c0bc392dc5c451721a1d33bdd3c77239d90d93ae62cfa00f4efb83483",
+    "native_high_resolution_controls": 9,
+    "native_rgba_cases_compared": 8,
+    "native_rgba_bytes_compared": 68352,
+    "native_fixture": "../itgmania-song-lua-micro/texture-sprite-preparation",
+    "actual_software_upload_readback_verified": true,
+    "logical_source_and_replacement_verified": true,
+    "tiny_image_offsets_verified": true,
+    "low_resolution_profile_proven": false,
+    "complete_npot_coordinate_and_sampling_parity_proven": false,
+    "native_gpu_framebuffer_parity_proven": false
+  },
+  "next_position": 10,
+  "checks": "Archive/member integrity, native endpoint and frame coverage, complete Lua runtime and every-frame composition, semantic geometry, commands, modifiers and player transforms"
+}

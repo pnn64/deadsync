@@ -1,0 +1,104 @@
+{
+  "pass": 128,
+  "previous_record": "native-revalidation-pass127.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+  "comparator_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    49
+  ],
+  "next_position": 50,
+  "comparisons_passed": 158515,
+  "charts": [
+    {
+      "position": 49,
+      "entry": {
+        "title": "[7086] [12] Blacksphere",
+        "source_simfile": "[12] Blacksphere (SX) [Exschwasion]/music.ssc",
+        "harness_version": "0.1.52",
+        "archive": "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e.tar.zst",
+        "sha256": "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e",
+        "compressed_bytes": 109136,
+        "aliases": [
+          "34945c6e8b017a883429c1aa53ba49c9a37bcd85e6054ad7c22003fdf13df4d0.tar.zst"
+        ]
+      },
+      "original_archive_retained": "beea2deb43135a974029410cdf0b1c343d2c9b2601ab567e77a3e56ba560e3f5.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "7cf4050ae370ce897caa63a84b329a1d2cd8271730c16c7e89e0030da62cf53c",
+      "original_source_sha256": {
+        "[12] Blacksphere (SX) [Exschwasion]/blacksphere-bg.png": "90cd50890b4fbc893545b4a9cfb5a7d53f45ac7c041627c9504268360cf43329",
+        "[12] Blacksphere (SX) [Exschwasion]/blacksphere-bn.png": "1e98d55fcf1576ccd42d9ce026d8b6c6e914fae8b24c3a966801ad8509838aea",
+        "[12] Blacksphere (SX) [Exschwasion]/music.ogg": "20787069856ff1c3568dc918a283bcd61267a30ac89cba927406126600f5f9e2",
+        "[12] Blacksphere (SX) [Exschwasion]/music.ssc": "8d3d48234107384388c2d3b4a6f0231ad9d4c48bc04eb13a5d3eaab9b4d9a155",
+        "[12] Blacksphere (SX) [Exschwasion]/music.ssc.old": "024f0819890c619150ccf71aa8287d3a244d749f23296bd1bf0a52abc4196fdc",
+        "[12] Blacksphere (SX) [Exschwasion]/lua/default.lua": "8dd20660270fcb867157401afb43da664b0393a7fc125527daa392ebef2fc197",
+        "[12] Blacksphere (SX) [Exschwasion]/lua/default_mbc.lua": "adeb607f1685232902d9ede5a81587a7cc848e8725627a84c458e07a6731330f",
+        "[12] Blacksphere (SX) [Exschwasion]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[12] Blacksphere (SX) [Exschwasion]/lua/mods-taro.lua": "3fb33886d9087becc42fdc02ae3ad040d7f4723034d3d154670b89b193e7b661",
+        "[12] Blacksphere (SX) [Exschwasion]/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7178,
+      "duration_seconds": 119.60784912109376,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 49,
+      "source_simfile": "[12] Blacksphere (SX) [Exschwasion]/music.ssc",
+      "archive": "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e.tar.zst",
+      "archive_sha256": "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e",
+      "harness_version": "0.1.52",
+      "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+      "source_pending_commit": false,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.706271800212562,
+      "comparisons_passed": 158515,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-049-native-field-v4.log",
+      "log_sha256": "aed30d70219994c303a97f74b3d49ba45f0344017438645d64edeb5fbfe0ba58",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass128-top-049-native-v1.json",
+      "native_receipt_sha256": "3af4265db57c0bfad7e94e08b702ab98d851adc10fa8cf110bccfd10f9f91e50",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+    "source_pending_commit": false,
+    "binary_sha256": "edae09b5a33001563f1ffd578ff31e75abfab8c9f50dcdb3b3cfd4b9794bfc3c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.7170783001929522,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-049-native-pass128.log",
+    "log_sha256": "a9c10c5ec78ce17b99d07e238e33a532a13c0c126696bdf20361e862e014b9b1",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.35s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

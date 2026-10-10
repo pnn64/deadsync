@@ -121,16 +121,13 @@ fn bench<T: ChoiceText + AsRef<str> + PartialEq + std::fmt::Debug>(label: &str, 
     let (after, new) = measure(|| choice_texts::<T>(values));
     assert_eq!(after, before);
     println!("{label} churn: original {old:?}, current {new:?}");
-    crate::paired_bench::compare(
-        label,
-        100,
-        || {
-            black_box(original::choice_texts::<T>(black_box(values)));
-        },
-        || {
+    crate::paired_bench::compare(label, 100, |current| {
+        if current {
             black_box(choice_texts::<T>(black_box(values)));
-        },
-    );
+        } else {
+            black_box(original::choice_texts::<T>(black_box(values)));
+        }
+    });
 }
 
 #[test]

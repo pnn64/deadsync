@@ -42,6 +42,7 @@ fn render_fixture() -> RenderFrame {
                 camera: 0,
             }),
             DrawOp::TexturedMesh(TexturedMeshRun {
+                sampler: None,
                 additive_texture: 0,
                 geometry: 0,
                 instance_start: 0,
@@ -76,6 +77,29 @@ fn cloned_frame_matches() {
     let expected = render_fixture();
     let actual = expected.clone();
     assert_eq!(compare_render_frames(&expected, &actual), Ok(()));
+}
+
+#[test]
+fn model_sampler_changes_are_compared() {
+    let expected = render_fixture();
+    let mut actual = expected.clone();
+    let run = actual
+        .ops
+        .iter_mut()
+        .find_map(|op| {
+            if let DrawOp::TexturedMesh(run) = op {
+                Some(run)
+            } else {
+                None
+            }
+        })
+        .expect("fixture contains a Model draw");
+    run.sampler = Some(deadlib_render_core::MeshSampler {
+        filter: deadlib_render_core::SamplerFilter::Nearest,
+        wrap: deadlib_render_core::SamplerWrap::Clamp,
+    });
+    assert!(compare_render_frames(&expected, &actual).is_err());
+    assert!(compare_render_frames_semantic(&expected, &actual).is_err());
 }
 
 #[test]
@@ -192,6 +216,7 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
         true,
     ));
     split.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+        sampler: None,
         additive_texture: 0,
         geometry: 0,
         instance_start: 1,
