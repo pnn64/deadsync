@@ -519,17 +519,18 @@ pub fn arrowcloud_user_id(raw: &str) -> Option<&str> {
 }
 
 #[must_use]
-pub fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> HashSet<String> {
+/// Borrow the identities whose scores are still needed during pagination.
+pub fn arrowcloud_target_user_ids(context: Option<&ArrowCloudUserContext>) -> HashSet<&str> {
     let Some(context) = context else {
         return HashSet::new();
     };
     let mut out = HashSet::with_capacity(
         usize::from(context.self_user_id.is_some()) + context.rival_user_ids.len(),
     );
-    if let Some(self_user_id) = context.self_user_id.as_ref() {
-        out.insert(self_user_id.clone());
+    if let Some(self_user_id) = context.self_user_id.as_deref() {
+        out.insert(self_user_id);
     }
-    out.extend(context.rival_user_ids.iter().cloned());
+    out.extend(context.rival_user_ids.iter().map(String::as_str));
     out
 }
 
