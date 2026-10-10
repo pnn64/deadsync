@@ -35,19 +35,9 @@ pub fn install_stdlib_compat(
     song_dir: &Path,
     callbacks: SongLuaCompatCallbacks,
 ) -> mlua::Result<()> {
-    crate::syntax::install_concat(lua)?;
     install_random_compat(lua)?;
     let globals = lua.globals();
     let table: Table = globals.get("table")?;
-    table.set(
-        "getn",
-        lua.create_function(|_, value: Value| {
-            Ok(match value {
-                Value::Table(table) => table.raw_len() as i64,
-                _ => 0,
-            })
-        })?,
-    )?;
     table.set(
         "rotate_right",
         lua.create_function(|lua, args: MultiValue| rotate_lua_table(lua, &args, false))?,
@@ -119,7 +109,6 @@ pub fn install_stdlib_compat(
             })?,
         )?;
     }
-    globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
@@ -520,7 +509,7 @@ end
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
-            let code = crate::syntax::preprocess_source(&code).map_err(mlua::Error::external)?;
+            let code = crate::preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
             let mut chunk = lua.load(&code);
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);

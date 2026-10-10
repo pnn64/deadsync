@@ -28,7 +28,7 @@ use crate::song::{
 
 // Recompile song Lua after matching native value iterator lookups;
 // older captures ignore table metamethods during iteration.
-pub const SONG_CACHE_VERSION: u8 = 59;
+pub const SONG_CACHE_VERSION: u8 = 61;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;

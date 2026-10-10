@@ -893,19 +893,19 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
     {
         return Some(SongLuaEaseTarget::Mod(original.to_string()));
     }
+    // Actor transforms are owned by the authored node function. In Xero they
+    // can target Player, NoteField, or a wrapper; they are not PlayerOptions.
     Some(match key {
-        "z" => SongLuaEaseTarget::PlayerZ,
-        "rotationx" => SongLuaEaseTarget::PlayerRotationX,
-        "rotationy" => SongLuaEaseTarget::PlayerRotationY,
-        "rotationz" => SongLuaEaseTarget::PlayerRotationZ,
-        "zoom" => SongLuaEaseTarget::PlayerZoom,
-        "zoomx" => SongLuaEaseTarget::PlayerZoomX,
-        "zoomy" => SongLuaEaseTarget::PlayerZoomY,
-        "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
         "boost"
         | "brake"
         | "wave"
+        | "waveperiod"
         | "expand"
+        | "expandperiod"
+        | "noattack"
+        | "randattack"
+        | "noattacks"
+        | "randomattacks"
         | "boomerang"
         | "drunk"
         | "drunkoffset"
@@ -920,6 +920,9 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "modtimermult"
         | "modtimeroffset"
         | "parabolax"
+        | "attenuatex"
+        | "parabolay"
+        | "attenuatey"
         | "bumpyx"
         | "bumpyxoffset"
         | "bumpyxperiod"
@@ -950,8 +953,11 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "digitalsteps"
         | "digitaloffset"
         | "digitalperiod"
+        | "zigzag"
         | "zigzagz"
+        | "zigzagoffset"
         | "zigzagzoffset"
+        | "zigzagperiod"
         | "zigzagzperiod"
         | "square"
         | "squareoffset"
@@ -960,9 +966,18 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "squarezoffset"
         | "squarezperiod"
         | "xmode"
+        | "bounce"
+        | "bounceperiod"
+        | "bounceoffset"
+        | "tornadoperiod"
+        | "tornadooffset"
         | "parabolaz"
+        | "attenuatez"
         | "confusion"
         | "confusionoffset"
+        | "confusionxoffset"
+        | "confusionx"
+        | "confusiony"
         | "flip"
         | "invert"
         | "tornado"
@@ -976,6 +991,32 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "pulseoffset"
         | "beat"
         | "beatperiod"
+        | "shrinklinear"
+        | "shrinkmult"
+        | "bouncez"
+        | "bouncezoffset"
+        | "bouncezperiod"
+        | "digitalz"
+        | "digitalzoffset"
+        | "digitalzperiod"
+        | "digitalzsteps"
+        | "tornadoz"
+        | "tornadozoffset"
+        | "tornadozperiod"
+        | "sawtooth"
+        | "sawtoothperiod"
+        | "sawtoothz"
+        | "sawtoothzperiod"
+        | "beatoffset"
+        | "beatmult"
+        | "beaty"
+        | "beatyoffset"
+        | "beatymult"
+        | "beatyperiod"
+        | "beatz"
+        | "beatzoffset"
+        | "beatzmult"
+        | "beatzperiod"
         | "randomspeed"
         | "hidden"
         | "hiddenoffset"
@@ -1008,9 +1049,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "mmod"
         | "tiny"
         | "mini"
-        | "confusionyoffset"
-        | "skewx"
-        | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
+        | "confusionyoffset" => SongLuaEaseTarget::Mod(original.to_string()),
         _ => return None,
     })
 }

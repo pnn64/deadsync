@@ -1,0 +1,264 @@
+{
+  "pass": 122,
+  "source_parent_commit": "9e6cc37875119bb575dbd1d5cb8dca9db5828500",
+  "changed_source_sha256": {
+    "crates/deadsync-notefield/src/compose.rs": "1d207b7e4fb5bc7e835daea522bfbf44e8aad681ca9b5d65f99b0f8e0e5b1291",
+    "crates/deadsync-notefield/src/field_frame.rs": "672912f2811f7bab96067e4adbdd10d4e59bf264123463535d9abe368e0b7672",
+    "crates/deadsync-notefield/src/frame_feedback.rs": "85cf39fa7dcf9f743c9fa8a0e6b14955ff15eaa44308b994d8ed97a235fb3231",
+    "crates/deadsync-notefield/src/lib.rs": "613deb3e9c2844ea15db3cb3b787f0189a125954b85ef2c8ef59388e62fd00a3",
+    "crates/deadsync-notefield/src/placement.rs": "cc42c5f18219ac49d1c68a43ad54d545d61cf04c89ce15657aaf53d1205732e1",
+    "crates/deadsync-song-lua/src/lib.rs": "f2096b46d61b654703faa3af4d087519d37607e110191bde65a7e2ca612f7df1",
+    "crates/deadsync-song-lua/src/lua_util.rs": "b7226c9280699601f230ede292f502215bb56226db503896d43ad36e147282e0",
+    "crates/deadsync-song-lua/src/perframe.rs": "520525def70acce8a7547ab3090fa4bcabe35161bb6b179f829bd2e70a95f231",
+    "crates/deadsync-song-lua/src/playback.rs": "c9cf7b84407e22add92ae80912c903b1b22184add72c4d97244980ea80dd02f6",
+    "crates/deadsync-song-lua/src/runtime_mod.rs": "67fbada96cc43f79febae9e431914be2d543968dfb8cfff62ba636dd9b0162b7",
+    "crates/deadsync-song-lua/tests/playback/cases.rs": "c27343bc3be44874174cfb81563ab9ecac45720fca6ab921b9934309efd48fa7",
+    "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs": "c393ea4d2a9dc8b09d82ed1b084b0f165da4adf8eae45cc7a32ce84731e54cea",
+    "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "4e86ab1fa63909ac6297f6e0ae5a0354c80aefb1d5471a3bcd24e5cd746f3184"
+  },
+  "finding": "Xero skew, rotation and zoom nodes can target a NoteField wrapper. Treating them as PlayerOptions fabricated whole-Player transforms and lost child wrapper geometry.",
+  "correction": "Remove actor properties from the PlayerOptions classifier; bake NoteField wrapper poses separately on the song-loading worker, compose them before native field tilt, and preserve their local geometry through ActorProxy. Keep wrapper visibility and camera generation changes.",
+  "deleted_behavior": "Fabricated Xero whole-Player options for z, rotation, zoom and skew actor properties.",
+  "before": {
+    "position": 43,
+    "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+    "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+    "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+    "harness_version": "0.1.52",
+    "source_commit": "22f6635382ba4f23738ef48f80b4796d35b4a014",
+    "source_pending_commit": true,
+    "binary_sha256": "c6966e13cc52ce29052010f208835fd89db97f9c81b938d60e94fe80ed65deef",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-overlay-bounds-v1-full_song_lua.exe",
+      "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 9.365515199955553,
+    "comparisons_passed": 101544,
+    "comparisons_failed": 534,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-043-overlay-bounds-v1.log",
+    "log_sha256": "c7fa4d0d34cec9e8a40fc39fbbf3b983feb60b873523a8a914969fa5107fd2fb",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+    "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+    "full_corpus_complete": false
+  },
+  "intermediate": {
+    "position": 43,
+    "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+    "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+    "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+    "harness_version": "0.1.52",
+    "source_commit": "9e6cc37875119bb575dbd1d5cb8dca9db5828500",
+    "source_pending_commit": true,
+    "binary_sha256": "4d7961b97e4b667e1f45324b40bef0fad6b3c247df94e1329c0964125435a679",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v1-full_song_lua.exe",
+      "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 11.537794699892402,
+    "comparisons_passed": 101821,
+    "comparisons_failed": 257,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-field-wrappers-v1.log",
+    "log_sha256": "d3322d6daada8cdf25d4fd657be6db1fa3301fa9c5aa78299b2b61e72ede6dc5",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+    "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+    "full_corpus_complete": false
+  },
+  "after": {
+    "position": 43,
+    "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+    "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+    "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+    "harness_version": "0.1.52",
+    "source_commit": "9e6cc37875119bb575dbd1d5cb8dca9db5828500",
+    "source_pending_commit": true,
+    "binary_sha256": "0649cea0c53ef69887c1bf7e4b1d2616ac57445507c6f0b9aa3b660c5f91891b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v2-full_song_lua.exe",
+      "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 12.007098900154233,
+    "comparisons_passed": 102078,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-field-wrappers-v2.log",
+    "log_sha256": "883b1799648c600dab103b771e8014801dcf9422751fab22ca30d96bec9c927c",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+    "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+    "full_corpus_complete": false
+  },
+  "regression_fixture42": {
+    "position": 42,
+    "source_simfile": "[11] Gemini in Clockland/Gemini in Clockland.ssc",
+    "archive": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619.tar.zst",
+    "archive_sha256": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619",
+    "harness_version": "0.1.52",
+    "source_commit": "9e6cc37875119bb575dbd1d5cb8dca9db5828500",
+    "source_pending_commit": true,
+    "binary_sha256": "0649cea0c53ef69887c1bf7e4b1d2616ac57445507c6f0b9aa3b660c5f91891b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v2-full_song_lua.exe",
+      "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 17.136628999840468,
+    "comparisons_passed": 193408,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-field-wrappers-v2-fixture42.log",
+    "log_sha256": "afffbb4f3751b301e9c9f0923b0b7b751e41011b3ea5b0aacd5857164f8c415e",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass121-top-042-native-v1.json",
+    "native_receipt_sha256": "b4406ad26c7416f61a5156c9e75926b28eeb97496dd882797930f6c5337bbd01",
+    "full_corpus_complete": false
+  },
+  "focused_tests": {
+    "source_commit": "9e6cc37875119bb575dbd1d5cb8dca9db5828500",
+    "source_pending_commit": true,
+    "binaries": {
+      "unit": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-unit.exe",
+        "sha256": "5c12293e08b94dc8db256368367e6eae117a36d7e3198a0c8467efc98923baaf"
+      },
+      "playback": {
+        "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-playback.exe",
+        "sha256": "114918a0297949b5ab2f983064d5fbc39566db4b10d39293366400d4d91382e9"
+      }
+    },
+    "tests_passed": 5,
+    "results": [
+      {
+        "test": "tests::compile_song_lua_keeps_notefield_wrapper_skew_on_child",
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-unit.exe",
+          "tests::compile_song_lua_keeps_notefield_wrapper_skew_on_child",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.6903085997328162,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-test1.log",
+        "log_sha256": "47a7da86f7aa43155299256d6550691d06a211f571ba0bf3af925a68f3ebb2b3"
+      },
+      {
+        "test": "playback::tests::song_lua_field_wrappers_match_native_geometry",
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-playback.exe",
+          "playback::tests::song_lua_field_wrappers_match_native_geometry",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 3.038373699877411,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-test2.log",
+        "log_sha256": "f971491f8a6ac4698acaa5ddea480a0c5ce865293bed121467a14421803c0e62"
+      },
+      {
+        "test": "playback::tests::song_lua_kenpo_nested_rotation_matches_native_motion",
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-playback.exe",
+          "playback::tests::song_lua_kenpo_nested_rotation_matches_native_motion",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.4752595000900328,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-test3.log",
+        "log_sha256": "c6b2e4460aedcd74679ad79236bcf2c86a379c7eaad6bed6718d761fd9e5d693"
+      },
+      {
+        "test": "playback::tests::song_lua_wrappers_preserve_owner_draw_order",
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-playback.exe",
+          "playback::tests::song_lua_wrappers_preserve_owner_draw_order",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.4021041998639703,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-test4.log",
+        "log_sha256": "5ece5fb83664f1ba89d98db4657b13e22897843d1c7914eb094fbda39151d1d6"
+      },
+      {
+        "test": "playback::tests::song_lua_proxy_preserves_target_wrappers",
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-playback.exe",
+          "playback::tests::song_lua_proxy_preserves_target_wrappers",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.5308202998712659,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-test5.log",
+        "log_sha256": "274302b6145c05622827555002bb4f2c5d4c70124b07eb7ea0a7e60e1b068f83"
+      }
+    ],
+    "native_fixture_sha256": "85893e6bf088bec6149b2a43c1a822af1177e8d628a571db00f203b5e8303fec"
+  },
+  "cache_tests": {
+    "binary_sha256": "5ee4ffc1e3901fc7d9ea2aef56ab4e9eb5d6e0e82fa35d2d8cff3d68f0a7e53b",
+    "tests_passed": 4,
+    "results": [
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-notefield.exe",
+          "placement::tests::field_camera_cache_reuses_exact_inputs",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-cache1.log",
+        "log_sha256": "d1b5fd78d657fe9e7556d7b8ac4445ac214354456dc7ea82857dd0ce90b6dccb"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-notefield.exe",
+          "placement::tests::field_camera_cache_rebuilds_for_every_source_change",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-cache2.log",
+        "log_sha256": "cae2b5eb323b109a8ac1032d2757ebab775ddeeb6da186203ec8eb7d34869576"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-notefield.exe",
+          "placement::tests::field_camera_cache_retains_invalid_result_until_inputs_change",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-cache3.log",
+        "log_sha256": "063e2a25b6421d71e78fc16e6b38c07612bd923db8162261118afad64080b61f"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-notefield.exe",
+          "placement::tests::field_camera_cache_tracks_wrapper_pose",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\field-wrapper-v2-cache4.log",
+        "log_sha256": "66c0a807f9acb63f65e927d2dce1160d2162fac4855ac11af899a2f9196562f3"
+      }
+    ]
+  },
+  "native_geometry": {
+    "fixture": "tests/fixtures/itgmania-actors/kenpo-notefield-wrapper-skew.json",
+    "fixture_sha256": "85893e6bf088bec6149b2a43c1a822af1177e8d628a571db00f203b5e8303fec",
+    "samples": 17,
+    "notes_per_sample": 3,
+    "vertices_per_note": 4,
+    "clip_components_per_vertex": 4,
+    "clip_tolerance": 2e-05,
+    "includes": "actual native Actor wrappers, skew on both axes, nested translation/rotation, tweened X rotation, outer proxy wag and projected vertices; owner and parent skew stay zero",
+    "actor_cpp_identical_to_latest_reference": true,
+    "actor_cpp_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+  },
+  "canonical_archive_promoted": false,
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining": "Promote the complete original fixture 43 after its focused index check. Original 501 sources, 492 contexts, independent timing/geometry observations and missing source material remain in scope."
+}

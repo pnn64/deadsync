@@ -172,12 +172,7 @@ fn fetch_all() -> Result<Vec<PopularPack>, String> {
 
         let count = parsed.data.len();
         for entry in parsed.data {
-            packs.push(PopularPack {
-                name: entry.name.clone(),
-                popularity: entry.popularity,
-                simfile_count: entry.simfile_count,
-                banner_url: entry.best_banner(),
-            });
+            packs.push(entry.into_pack());
         }
         // An out-of-range page answers 200 with an empty array rather than an
         // error, so the walk has to stop on content, not on status.
@@ -237,18 +232,23 @@ struct Entry {
 }
 
 impl Entry {
-    /// The smallest banner this pack actually serves.
+    /// The pack and the smallest banner it actually serves.
     ///
     /// Only the flat fields. `bannerVariants` advertises much smaller JPEGs
     /// but points them at an older upload folder that answers 403, so reading
     /// it produced cards that spun forever -- see the note at the top of this
     /// file. When the small and medium fields are null, as they are for most
     /// entries, the full-size PNG is the one that exists.
-    fn best_banner(&self) -> Option<String> {
-        self.sm_banner_url
-            .clone()
-            .or_else(|| self.md_banner_url.clone())
-            .or_else(|| self.banner_url.clone())
+    fn into_pack(self) -> PopularPack {
+        PopularPack {
+            name: self.name,
+            popularity: self.popularity,
+            simfile_count: self.simfile_count,
+            banner_url: self
+                .sm_banner_url
+                .or(self.md_banner_url)
+                .or(self.banner_url),
+        }
     }
 }
 
@@ -302,12 +302,12 @@ mod tests {
     /// twenty-four.
     #[test]
     fn the_smallest_banner_that_actually_serves_is_preferred() {
-        let parsed = parse(PAGE);
+        let packs: Vec<_> = parse(PAGE).data.into_iter().map(Entry::into_pack).collect();
 
         // small and medium are null, so the full-size PNG is the one that
         // exists -- NOT the small jpeg the variants advertise
         assert_eq!(
-            parsed.data[1].best_banner().as_deref(),
+            packs[1].banner_url.as_deref(),
             Some("https://a.test/full.png"),
             "a stale variant must never be chosen over a live full-size url"
         );
@@ -315,17 +315,17 @@ mod tests {
         // where the flat small field is populated it is genuinely smaller and
         // genuinely there, so it leads
         assert_eq!(
-            parsed.data[2].best_banner().as_deref(),
+            packs[2].banner_url.as_deref(),
             Some("https://a.test/sm2.jpeg")
         );
 
         // no variants at all: the flat chain still answers
         assert_eq!(
-            parsed.data[0].best_banner().as_deref(),
+            packs[0].banner_url.as_deref(),
             Some("https://a.test/big.png")
         );
         // and a pack with no artwork anywhere says so rather than guessing
-        assert_eq!(parsed.data[3].best_banner(), None);
+        assert_eq!(packs[3].banner_url.as_deref(), None);
     }
 
     /// The page number is the whole query, and getting it wrong would silently
@@ -351,3 +351,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "popular_packs_perf.rs"]
+mod perf_tests;

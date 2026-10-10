@@ -267,42 +267,25 @@ impl PanelAnim {
 
 // GIF decoding
 
-struct DecodedGif {
-    images: Vec<RgbaImage>,
-    durations: Vec<f32>,
-}
-
-/// Decode GIF bytes into RGBA frames with per-frame durations. Mirrors the
-/// SDK: a delay of 0 or anything in 28..=42ms snaps to exactly 1/30s, else
-/// the GIF's own delay is kept.
-fn decode_gif(data: &[u8]) -> Result<DecodedGif, &'static str> {
+/// Decode one composited frame at a time; callers retain only LED samples.
+fn decode_gif(data: &[u8]) -> Result<impl Iterator<Item = image::Frame> + '_, &'static str> {
     let decoder = GifDecoder::new(Cursor::new(data)).map_err(|_| "the GIF couldn't be read")?;
-    let mut images = Vec::new();
-    let mut durations = Vec::new();
-    for frame in decoder.into_frames().filter_map(std::result::Result::ok) {
-        let (numer, denom) = frame.delay().numer_denom_ms();
-        let ms = numer as f32 / denom as f32;
-        durations.push(if ms <= 0.0 || (28.0..=42.0).contains(&ms) {
-            1.0 / 30.0
-        } else {
-            ms / 1000.0
-        });
-        images.push(frame.into_buffer());
-    }
-    if images.is_empty() {
-        return Err("the GIF has no frames");
-    }
-    Ok(DecodedGif { images, durations })
+    Ok(decoder.into_frames().filter_map(std::result::Result::ok))
 }
 
-/// First frame whose marker pixel at `(x, marker_y)` is white-ish (alpha 255,
-/// R >= 128). The marker row carries one flag pixel per column: x 0 is the
-/// loop start, x 1 the loop end.
-fn marked_frame(images: &[RgbaImage], x: u32, marker_y: u32) -> Option<usize> {
-    images.iter().position(|img| {
-        let px = img.get_pixel(x, marker_y);
-        px[3] == 255 && px[0] >= 128
-    })
+fn frame_duration(frame: &image::Frame) -> f32 {
+    let (numer, denom) = frame.delay().numer_denom_ms();
+    let ms = numer as f32 / denom as f32;
+    if ms <= 0.0 || (28.0..=42.0).contains(&ms) {
+        1.0 / 30.0
+    } else {
+        ms / 1000.0
+    }
+}
+
+fn is_marked(img: &RgbaImage, x: u32, marker_y: u32) -> bool {
+    let px = img.get_pixel(x, marker_y);
+    px[3] == 255 && px[0] >= 128
 }
 
 // LED sampling
@@ -377,23 +360,32 @@ const fn panel_canvas(w: u32, h: u32) -> Option<(PadSize, bool)> {
 /// and the size implied by its dimensions. `beats_per_loop` is left `None`;
 /// the registry fills it from the filename.
 pub fn decode_full_pad(data: &[u8]) -> Result<(FullPadAnim, PadSize), &'static str> {
-    let gif = decode_gif(data)?;
-    let first = &gif.images[0];
-    let (w, h) = (first.width(), first.height());
+    let mut frames = decode_gif(data)?;
+    let first = frames.next().ok_or("the GIF has no frames")?;
+    let (w, h) = first.buffer().dimensions();
     let size = full_pad_size(w, h).ok_or("a full-pad GIF must be 23x24 or 14x15")?;
-    let loop_frame = marked_frame(&gif.images, 0, h - 1).unwrap_or(0);
-    let mut panels: [Vec<PanelFrame>; PANELS] =
-        std::array::from_fn(|_| Vec::with_capacity(gif.images.len()));
-    for img in &gif.images {
-        for (panel, frames) in panels.iter_mut().enumerate() {
-            frames.push(sample_full_pad_panel(img, panel, size));
+    let mut loop_frame = None;
+    let mut panels: [Vec<PanelFrame>; PANELS] = std::array::from_fn(|_| Vec::new());
+    let mut durations = Vec::new();
+    for frame in std::iter::once(first).chain(frames) {
+        let img = frame.buffer();
+        if loop_frame.is_none() && is_marked(img, 0, h - 1) {
+            loop_frame = Some(durations.len());
         }
+        for (panel, samples) in panels.iter_mut().enumerate() {
+            samples.push(sample_full_pad_panel(img, panel, size));
+        }
+        durations.push(frame_duration(&frame));
     }
+    for samples in &mut panels {
+        samples.shrink_to_fit();
+    }
+    durations.shrink_to_fit();
     Ok((
         FullPadAnim {
             panels,
-            durations: gif.durations,
-            loop_frame,
+            durations,
+            loop_frame: loop_frame.unwrap_or(0),
             beats_per_loop: None,
         },
         size,
@@ -403,33 +395,42 @@ pub fn decode_full_pad(data: &[u8]) -> Result<(FullPadAnim, PadSize), &'static s
 /// Decode a per-panel judgement GIF (7x8, 7x7, 4x5, or 4x4). Bare 7x7 / 4x4
 /// canvases have no marker row, so they loop from frame 0 with no outro.
 pub fn decode_panel(data: &[u8]) -> Result<(PanelAnim, PadSize), &'static str> {
-    let gif = decode_gif(data)?;
-    let first = &gif.images[0];
-    let (w, h) = (first.width(), first.height());
+    let mut frames = decode_gif(data)?;
+    let first = frames.next().ok_or("the GIF has no frames")?;
+    let (w, h) = first.buffer().dimensions();
     let (size, has_marker_row) =
         panel_canvas(w, h).ok_or("a per-panel GIF must be 7x8, 7x7, 4x5, or 4x4")?;
-    let (loop_frame, loop_end) = if has_marker_row {
-        let loop_frame = marked_frame(&gif.images, 0, h - 1).unwrap_or(0);
-        // A loop end marked before the loop start is author error; ignore it.
-        let loop_end = marked_frame(&gif.images, 1, h - 1)
-            .filter(|&end| end >= loop_frame)
-            .unwrap_or(gif.images.len() - 1);
-        (loop_frame, loop_end)
-    } else {
-        (0, gif.images.len() - 1)
-    };
-    let frames = gif
-        .images
-        .iter()
-        .map(|img| match size {
+    let mut loop_frame = None;
+    let mut loop_end = None;
+    let mut samples = Vec::new();
+    let mut durations = Vec::new();
+    for frame in std::iter::once(first).chain(frames) {
+        let img = frame.buffer();
+        if has_marker_row {
+            if loop_frame.is_none() && is_marked(img, 0, h - 1) {
+                loop_frame = Some(samples.len());
+            }
+            if loop_end.is_none() && is_marked(img, 1, h - 1) {
+                loop_end = Some(samples.len());
+            }
+        }
+        samples.push(match size {
             PadSize::Leds16 => sample_block_16(img, 0, 0),
             PadSize::Leds25 => sample_block_25(img, 0, 0),
-        })
-        .collect();
+        });
+        durations.push(frame_duration(&frame));
+    }
+    samples.shrink_to_fit();
+    durations.shrink_to_fit();
+    let loop_frame = loop_frame.unwrap_or(0);
+    // Ignore the first end marker if it precedes the start, as the SDK does.
+    let loop_end = loop_end
+        .filter(|&end| end >= loop_frame)
+        .unwrap_or(samples.len() - 1);
     Ok((
         PanelAnim {
-            frames,
-            durations: gif.durations,
+            frames: samples,
+            durations,
             loop_frame,
             loop_end,
         },
@@ -2267,3 +2268,7 @@ mod tests {
         assert!(Arc::ptr_eq(&got, &bg_fallback));
     }
 }
+
+#[cfg(test)]
+#[path = "gifs_perf.rs"]
+mod perf_tests;

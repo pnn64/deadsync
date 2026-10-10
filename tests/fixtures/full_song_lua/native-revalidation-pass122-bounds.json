@@ -1,0 +1,131 @@
+{
+  "pass": 122,
+  "source_parent_commit": "22f6635382ba4f23738ef48f80b4796d35b4a014",
+  "changed_source_sha256": {
+    "crates/deadsync-song-lua/src/perframe.rs": "a940991ceb69bd65aa941985b693a3dbd08da0a5446a072cb6b8cad3fb40a8bc"
+  },
+  "finding": "Scheduled overlay values allocated through StretchRect but AftCreated, AftPreserve and Hibernating follow it. Original KENPO SAITO writes AftPreserve and panics before comparison.",
+  "correction": "Include all supported targets through Hibernating in the dense storage and assert the same upper bound for the membership bitset.",
+  "before": {
+    "position": 43,
+    "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+    "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+    "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+    "harness_version": "0.1.52",
+    "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+    "source_pending_commit": false,
+    "binary_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-full_song_lua.exe",
+      "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 1.3185179000720382,
+    "comparisons_passed": 0,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-043-native-current-v1.log",
+    "log_sha256": "a4ac264e88d8bd38ec103541f99c72a01327829e983af0a078d2d755ad952b7c",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+    "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+    "full_corpus_complete": false
+  },
+  "after": {
+    "position": 43,
+    "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+    "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+    "archive_sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+    "harness_version": "0.1.52",
+    "source_commit": "22f6635382ba4f23738ef48f80b4796d35b4a014",
+    "source_pending_commit": true,
+    "binary_sha256": "c6966e13cc52ce29052010f208835fd89db97f9c81b938d60e94fe80ed65deef",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-overlay-bounds-v1-full_song_lua.exe",
+      "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 9.365515199955553,
+    "comparisons_passed": 101544,
+    "comparisons_failed": 534,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-043-overlay-bounds-v1.log",
+    "log_sha256": "c7fa4d0d34cec9e8a40fc39fbbf3b983feb60b873523a8a914969fa5107fd2fb",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass122-top-043-native-v1.json",
+    "native_receipt_sha256": "bd942652c7da2652ef0279af9a095c0e06250a4c0bd0fcaa3f4b2b866e9ed67f",
+    "full_corpus_complete": false
+  },
+  "focused_tests": {
+    "source_commit": "22f6635382ba4f23738ef48f80b4796d35b4a014",
+    "source_pending_commit": true,
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-song-lua-unit.exe",
+    "binary_sha256": "81ce840cd5a88106792457be9bcb7aa936a76aafb7616142a9116aba1dd9ce01",
+    "tests_passed": 4,
+    "results": [
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-song-lua-unit.exe",
+          "tests::compile_song_lua_freezes_aft_creation_and_captures_late_creation",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 2.8161452999338508,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-test1.log",
+        "log_sha256": "a8da0906790be0e7a7f8ec86b6640509b4da11fc6591b27455c1529255285195"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-song-lua-unit.exe",
+          "tests::hibernate_active_tween",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.4710622997954488,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-test2.log",
+        "log_sha256": "20dd459cfe55c870e1c85668a9fcf5b51e11cb1697269cbbcda8ee0cdcd2cc5a"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-song-lua-unit.exe",
+          "tests::hibernate_startup_tweens",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.4225667002610862,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-test3.log",
+        "log_sha256": "641c6e691476d497ed146c1f0969c011ec0547c353505b7f15e2e9b5a03fd1e5"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-song-lua-unit.exe",
+          "tests::compile_song_lua_accepts_actorframetexture_draw_call",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.38557659974321723,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass122\\native-overlay-bounds-v1-test4.log",
+        "log_sha256": "e776b26987b7ce3a72227c5b17370e052c0726107d62b674de3e7fe73b57e531"
+      }
+    ],
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-song-lua",
+      "--lib",
+      "--target-dir",
+      "target/song-lua-pass95-build",
+      "--config",
+      "profile.dev.debug=0",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_log_sha256": "9e073aa049086e42f91d5c49e230d5d6971cf99d1bbdce1fa35c015461b6f917"
+  },
+  "canonical_archive_promoted": false,
+  "full_corpus_complete": false,
+  "original_tolerances_retained": true,
+  "remaining": "534 player-skew comparisons on this chart remain unresolved; inspect actual NoteField wrapper ownership against ITGmania. Original scope and other observations remain open."
+}

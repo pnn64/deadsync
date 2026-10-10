@@ -1,0 +1,499 @@
+{
+  "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+  "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+  "reference_lines": [
+    629,
+    636
+  ],
+  "native_block_sha256": "58163073e9c0a75e3ca6d2f942424bb1f8e85e9b9ebf05da8a6594ca6213c9d1",
+  "original_wave_block_unchanged": true,
+  "theme_metric_file": "Themes/_fallback/metrics.ini",
+  "theme_metric_sha256": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5",
+  "isolated_inputs_used": true,
+  "whole_native_gameplay_used": false,
+  "semantic_host_used": false,
+  "deadsync_used": false,
+  "binary_sha256": "3fa5fa4fe26c31d1711c56205cc6296b9529b5f43471a488e7e031c3a5413df0",
+  "vectors": [
+    {
+      "amount": 0,
+      "period": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "period": 0,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 0,
+      "period": 0,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 0,
+      "period": 0,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 0,
+      "period": 0,
+      "travel": 768,
+      "y": 768
+    },
+    {
+      "amount": 0,
+      "period": 0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "period": 0.5,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 0,
+      "period": 0.5,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 0,
+      "period": 0.5,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 0,
+      "period": 0.5,
+      "travel": 768,
+      "y": 768
+    },
+    {
+      "amount": 0,
+      "period": -0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "period": -0.5,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 0,
+      "period": -0.5,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 0,
+      "period": -0.5,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 0,
+      "period": -0.5,
+      "travel": 768,
+      "y": 768
+    },
+    {
+      "amount": 0,
+      "period": 2,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0,
+      "period": 2,
+      "travel": 32,
+      "y": 32
+    },
+    {
+      "amount": 0,
+      "period": 2,
+      "travel": 128,
+      "y": 128
+    },
+    {
+      "amount": 0,
+      "period": 2,
+      "travel": 384,
+      "y": 384
+    },
+    {
+      "amount": 0,
+      "period": 2,
+      "travel": 768,
+      "y": 768
+    },
+    {
+      "amount": 1,
+      "period": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 1,
+      "period": 0,
+      "travel": 32,
+      "y": 46.9209328
+    },
+    {
+      "amount": 1,
+      "period": 0,
+      "travel": 128,
+      "y": 123.502235
+    },
+    {
+      "amount": 1,
+      "period": 0,
+      "travel": 384,
+      "y": 371.416595
+    },
+    {
+      "amount": 1,
+      "period": 0,
+      "travel": 768,
+      "y": 787.56134
+    },
+    {
+      "amount": 1,
+      "period": 0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 1,
+      "period": 0.5,
+      "travel": 32,
+      "y": 42.6474953
+    },
+    {
+      "amount": 1,
+      "period": 0.5,
+      "travel": 128,
+      "y": 143.616425
+    },
+    {
+      "amount": 1,
+      "period": 0.5,
+      "travel": 384,
+      "y": 392.765106
+    },
+    {
+      "amount": 1,
+      "period": 0.5,
+      "travel": 768,
+      "y": 783.757019
+    },
+    {
+      "amount": 1,
+      "period": -0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 1,
+      "period": -0.5,
+      "travel": 32,
+      "y": 51.8715096
+    },
+    {
+      "amount": 1,
+      "period": -0.5,
+      "travel": 128,
+      "y": 136.765106
+    },
+    {
+      "amount": 1,
+      "period": -0.5,
+      "travel": 384,
+      "y": 403.56134
+    },
+    {
+      "amount": 1,
+      "period": -0.5,
+      "travel": 768,
+      "y": 776.148865
+    },
+    {
+      "amount": 1,
+      "period": 2,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 1,
+      "period": 2,
+      "travel": 32,
+      "y": 37.5405998
+    },
+    {
+      "amount": 1,
+      "period": 2,
+      "travel": 128,
+      "y": 146.026398
+    },
+    {
+      "amount": 1,
+      "period": 2,
+      "travel": 384,
+      "y": 379.502228
+    },
+    {
+      "amount": 1,
+      "period": 2,
+      "travel": 768,
+      "y": 776.765137
+    },
+    {
+      "amount": -0.75,
+      "period": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "period": 0,
+      "travel": 32,
+      "y": 20.8092995
+    },
+    {
+      "amount": -0.75,
+      "period": 0,
+      "travel": 128,
+      "y": 131.373322
+    },
+    {
+      "amount": -0.75,
+      "period": 0,
+      "travel": 384,
+      "y": 393.437561
+    },
+    {
+      "amount": -0.75,
+      "period": 0,
+      "travel": 768,
+      "y": 753.328979
+    },
+    {
+      "amount": -0.75,
+      "period": 0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "period": 0.5,
+      "travel": 32,
+      "y": 24.0143776
+    },
+    {
+      "amount": -0.75,
+      "period": 0.5,
+      "travel": 128,
+      "y": 116.287689
+    },
+    {
+      "amount": -0.75,
+      "period": 0.5,
+      "travel": 384,
+      "y": 377.426178
+    },
+    {
+      "amount": -0.75,
+      "period": 0.5,
+      "travel": 768,
+      "y": 756.18219
+    },
+    {
+      "amount": -0.75,
+      "period": -0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "period": -0.5,
+      "travel": 32,
+      "y": 17.0963669
+    },
+    {
+      "amount": -0.75,
+      "period": -0.5,
+      "travel": 128,
+      "y": 121.42617
+    },
+    {
+      "amount": -0.75,
+      "period": -0.5,
+      "travel": 384,
+      "y": 369.328979
+    },
+    {
+      "amount": -0.75,
+      "period": -0.5,
+      "travel": 768,
+      "y": 761.888367
+    },
+    {
+      "amount": -0.75,
+      "period": 2,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": -0.75,
+      "period": 2,
+      "travel": 32,
+      "y": 27.8445492
+    },
+    {
+      "amount": -0.75,
+      "period": 2,
+      "travel": 128,
+      "y": 114.480202
+    },
+    {
+      "amount": -0.75,
+      "period": 2,
+      "travel": 384,
+      "y": 387.373322
+    },
+    {
+      "amount": -0.75,
+      "period": 2,
+      "travel": 768,
+      "y": 761.426147
+    },
+    {
+      "amount": 0.25,
+      "period": 0,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.25,
+      "period": 0,
+      "travel": 32,
+      "y": 35.7302322
+    },
+    {
+      "amount": 0.25,
+      "period": 0,
+      "travel": 128,
+      "y": 126.875557
+    },
+    {
+      "amount": 0.25,
+      "period": 0,
+      "travel": 384,
+      "y": 380.854156
+    },
+    {
+      "amount": 0.25,
+      "period": 0,
+      "travel": 768,
+      "y": 772.89032
+    },
+    {
+      "amount": 0.25,
+      "period": 0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.25,
+      "period": 0.5,
+      "travel": 32,
+      "y": 34.6618729
+    },
+    {
+      "amount": 0.25,
+      "period": 0.5,
+      "travel": 128,
+      "y": 131.904099
+    },
+    {
+      "amount": 0.25,
+      "period": 0.5,
+      "travel": 384,
+      "y": 386.191284
+    },
+    {
+      "amount": 0.25,
+      "period": 0.5,
+      "travel": 768,
+      "y": 771.93927
+    },
+    {
+      "amount": 0.25,
+      "period": -0.5,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.25,
+      "period": -0.5,
+      "travel": 32,
+      "y": 36.9678764
+    },
+    {
+      "amount": 0.25,
+      "period": -0.5,
+      "travel": 128,
+      "y": 130.191284
+    },
+    {
+      "amount": 0.25,
+      "period": -0.5,
+      "travel": 384,
+      "y": 388.89032
+    },
+    {
+      "amount": 0.25,
+      "period": -0.5,
+      "travel": 768,
+      "y": 770.037231
+    },
+    {
+      "amount": 0.25,
+      "period": 2,
+      "travel": 0,
+      "y": 0
+    },
+    {
+      "amount": 0.25,
+      "period": 2,
+      "travel": 32,
+      "y": 33.3851509
+    },
+    {
+      "amount": 0.25,
+      "period": 2,
+      "travel": 128,
+      "y": 132.506592
+    },
+    {
+      "amount": 0.25,
+      "period": 2,
+      "travel": 384,
+      "y": 382.875549
+    },
+    {
+      "amount": 0.25,
+      "period": 2,
+      "travel": 768,
+      "y": 770.191284
+    }
+  ]
+}
