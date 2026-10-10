@@ -216,7 +216,11 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 &fallback_offsets[..num_cols],
                 &fallback_invert[..num_cols],
                 &fallback_tornado[..num_cols],
-                beat_factor(request.current_beat),
+                beat_factor(
+                    request.current_beat,
+                    request.visual.beat_offset,
+                    request.visual.beat_mult,
+                ),
             )
         };
 
@@ -303,6 +307,11 @@ fn indicator_x(
         NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,
+            tornado_period: request.visual.tornado_period,
+            tornado_offset: request.visual.tornado_offset,
+            bounce: request.visual.bounce,
+            bounce_period: request.visual.bounce_period,
+            bounce_offset: request.visual.bounce_offset,
             drunk: request.visual.drunk,
             drunk_offset: request.visual.drunk_offset,
             drunk_speed: request.visual.drunk_speed,
@@ -325,6 +334,9 @@ fn indicator_x(
             parabola_x: request.visual.parabola_x,
             square: request.visual.square,
             digital: request.visual.digital,
+            zigzag: request.visual.zigzag,
+            zigzag_offset: request.visual.zigzag_offset,
+            zigzag_period: request.visual.zigzag_period,
             square_offset: request.visual.square_offset,
             digital_offset: request.visual.digital_offset,
             digital_steps: request.visual.digital_steps,
@@ -812,7 +824,11 @@ mod tests {
                             col_offsets: &offsets[..num_cols],
                             invert: &invert[..num_cols],
                             tornado: &tornado[..num_cols],
-                            beat_factor: beat_factor(request.current_beat),
+                            beat_factor: beat_factor(
+                                request.current_beat,
+                                request.visual.beat_offset,
+                                request.visual.beat_mult,
+                            ),
                         });
                         // Prepared geometry must bypass all fallback calculations.
                         request.spacing_multiplier = f32::NAN;
@@ -863,6 +879,11 @@ mod tests {
         let params = NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,
+            tornado_period: request.visual.tornado_period,
+            tornado_offset: request.visual.tornado_offset,
+            bounce: request.visual.bounce,
+            bounce_period: request.visual.bounce_period,
+            bounce_offset: request.visual.bounce_offset,
             drunk: request.visual.drunk,
             drunk_offset: request.visual.drunk_offset,
             drunk_speed: request.visual.drunk_speed,

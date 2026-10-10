@@ -1,0 +1,311 @@
+{
+  "harness_source_commit": "e5ee5826a0cf4024301c969087b1ee3b863e4242",
+  "native_cli_sha256": "be7d5ffa45f5cf75220e21921625d94a278a7c96dd595135e90330437ad8157d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "command": [
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass100-native-header-cli-v1.exe",
+    "actor-conformance",
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-native-image-getters-v1\\control.json",
+    "--out",
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-native-image-getters-v1\\native.json"
+  ],
+  "control_sha256": "66ee0761002e338aa2dbdb5ff206473ed80d9edd055adc745671f46e1f3f2f70",
+  "native_sha256": "e0aacddd794398900f1836b64e0dcba37f8ab6559eca80a36b5b3727787f6235",
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "directory": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-native-image-getters-v1",
+  "summaries": [
+    {
+      "name": "tiny",
+      "file": "tiny.png",
+      "dimensions": {
+        "image": [
+          8,
+          8
+        ],
+        "source": [
+          3,
+          2
+        ],
+        "texture": [
+          8,
+          8
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "tiny-wide",
+      "file": "tiny-wide.png",
+      "dimensions": {
+        "image": [
+          16,
+          8
+        ],
+        "source": [
+          9,
+          3
+        ],
+        "texture": [
+          16,
+          8
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "tiny-tall",
+      "file": "tiny-tall.png",
+      "dimensions": {
+        "image": [
+          8,
+          16
+        ],
+        "source": [
+          3,
+          9
+        ],
+        "texture": [
+          8,
+          16
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "padded",
+      "file": "padded.png",
+      "dimensions": {
+        "image": [
+          7,
+          9
+        ],
+        "source": [
+          7,
+          9
+        ],
+        "texture": [
+          8,
+          16
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          0.875,
+          0.5625
+        ]
+      ]
+    },
+    {
+      "name": "stretch",
+      "file": "panel (stretch).png",
+      "dimensions": {
+        "image": [
+          8,
+          16
+        ],
+        "source": [
+          5,
+          9
+        ],
+        "texture": [
+          8,
+          16
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "doubleres",
+      "file": "hires (doubleres).png",
+      "dimensions": {
+        "image": [
+          10,
+          18
+        ],
+        "source": [
+          5,
+          9
+        ],
+        "texture": [
+          16,
+          32
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          0.625,
+          0.5625
+        ]
+      ]
+    },
+    {
+      "name": "resolution",
+      "file": "source (res 53x12).png",
+      "dimensions": {
+        "image": [
+          8,
+          8
+        ],
+        "source": [
+          53,
+          12
+        ],
+        "texture": [
+          8,
+          8
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "capped",
+      "file": "capped.png",
+      "dimensions": {
+        "image": [
+          2048,
+          9
+        ],
+        "source": [
+          2049,
+          9
+        ],
+        "texture": [
+          2048,
+          16
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.5625
+        ]
+      ]
+    },
+    {
+      "name": "capped-tiny",
+      "file": "capped-tiny.png",
+      "dimensions": {
+        "image": [
+          2048,
+          8
+        ],
+        "source": [
+          2049,
+          3
+        ],
+        "texture": [
+          2048,
+          8
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "name": "sheet",
+      "file": "sheet 2x1.png",
+      "dimensions": {
+        "image": [
+          16,
+          8
+        ],
+        "source": [
+          16,
+          8
+        ],
+        "texture": [
+          16,
+          8
+        ]
+      },
+      "frame_rects": [
+        [
+          0.0,
+          0.0,
+          0.5,
+          1.0
+        ],
+        [
+          0.5,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "input_sha256": {
+    "tiny.png": "bf7daa751a24f17e85c50e7fc3e7f2b7b6a25906785e35b7f0c7fc3f646bc97d",
+    "tiny-wide.png": "3a31428e0ac338ab5f7c9722ca225717a39cca1e88d1c9d40caea695744af846",
+    "tiny-tall.png": "93c3cb51c51df97c925646ca2195ae9a33efe8df049979220e7b5a09a9332822",
+    "padded.png": "4aa8ac8bff8c5be601c5a775b8886cf9191c5a3dc670c129c88e66c5e3ac1d3c",
+    "panel (stretch).png": "0aa312618494416079d15dc509b87a5b0e6e903fe18232ce945d64ccfd187569",
+    "hires (doubleres).png": "f099f3265e4958af9dc6402ee25e0fd64979f98de9794b7e2014846f572eaed2",
+    "source (res 53x12).png": "bf7daa751a24f17e85c50e7fc3e7f2b7b6a25906785e35b7f0c7fc3f646bc97d",
+    "capped.png": "5721025fdd232696f1a30e2f8c3d3ed782d32d3dff594cf1d6be6fc211665c23",
+    "capped-tiny.png": "5a2904b21119e7ca3d6403e610dc3d7d130097c79427c073f214da708f50e991",
+    "sheet 2x1.png": "7fdc0cb9b287f9d2290431ec4391aee8855a1834638a2c96352304b0582de2b0"
+  },
+  "native_source_unchanged": true,
+  "framebuffer_pixel_parity_proven": false,
+  "scope": "Lua source/image/allocation getters and retained texture handle metadata; Sprite upload preparation and framebuffer output remain open",
+  "profile": {
+    "color_depth": 32,
+    "max_size": 2048,
+    "high_resolution": true
+  },
+  "local_reference_sources": [
+    "src/RageTexture.cpp",
+    "src/RageTexture.h",
+    "src/RageBitmapTexture.cpp",
+    "src/PrefsManager.cpp",
+    "src/StepMania.cpp"
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "pass": 177,
+  "previous_record": "native-revalidation-pass176.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+  "comparator_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    98
+  ],
+  "next_position": 99,
+  "comparisons_passed": 628260,
+  "charts": [
+    {
+      "position": 98,
+      "entry": {
+        "title": "ao no lie",
+        "source_simfile": "ao no lie/ae no lie.sm",
+        "harness_version": "0.1.61",
+        "archive": "b29d6101f5630bba2d7cbe68a37dc8bcf8eeae6c9d7ddc146acc01b0eb4187d5.tar.zst",
+        "sha256": "b29d6101f5630bba2d7cbe68a37dc8bcf8eeae6c9d7ddc146acc01b0eb4187d5",
+        "compressed_bytes": 248831,
+        "aliases": [
+          "f4dd5db462a3cfaf4d26c5d078d411f32fbf86c98fb0f173106ad366f29c5a41.tar.zst"
+        ]
+      },
+      "original_archive_retained": "1fa8866daa83cf0006e441d0efd9f8b773683cad0ff746757c6401e56175a64d.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "4bc7d2be1206034e73440be7e3863cb7c6b5c14f3288058cd7342a4af7641d27",
+      "original_source_sha256": {
+        "ao no lie/ae no lie.ogg": "ca7957b07ef7daaede4a2f467a2a77a14327e54c6a4194fb471f3f9056e52495",
+        "ao no lie/ae no lie.sm": "2a585d17720023e8cdef55ccd1bf2c39359eabd46119921106b4467fb4af3ad1",
+        "ao no lie/ae no lie.ssc": "56cb0ae2cf3b3a87235f338c3149e07033359ce25e41613cd2b22faa32ec2d4b",
+        "ao no lie/banner.png": "704d04f362b17e4e570a313e5c890305d618079037e0a374130d52553d65f681",
+        "ao no lie/data.sme": "5fe6bbfbf593d856c40b26f75145c309ad990ceee48cfe4f62a5e7ff1c86860e",
+        "ao no lie/snapmed.png": "4583a64fe314b0b97bb2f80783f31ebb04c0119da2f1948163c0f408a95c6c51",
+        "ao no lie/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "ao no lie/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "ao no lie/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "ao no lie/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "ao no lie/lua/_script.lua": "485e6e420fe23085ea295d7f761b80e46877603f236e313545875f96ccc29b18"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7642,
+      "duration_seconds": 127.33333587646484,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 98,
+      "source_simfile": "ao no lie/ae no lie.sm",
+      "archive": "b29d6101f5630bba2d7cbe68a37dc8bcf8eeae6c9d7ddc146acc01b0eb4187d5.tar.zst",
+      "archive_sha256": "b29d6101f5630bba2d7cbe68a37dc8bcf8eeae6c9d7ddc146acc01b0eb4187d5",
+      "harness_version": "0.1.61",
+      "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+      "source_pending_commit": false,
+      "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-full_song_lua.exe",
+        "b29d6101f5630bba2d7cbe68a37dc8bcf8eeae6c9d7ddc146acc01b0eb4187d5.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 15.912045000120997,
+      "comparisons_passed": 628260,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-098-screen-parent-committed-v4.log",
+      "log_sha256": "faf9f86fe3b88f87c57688271365a5c410da41b2bda585fa9bff2e2dd7daae57",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass210-top-098-current-main-v1.json",
+      "native_receipt_sha256": "00737beecc568253c7f10961a52d4e50b425c37f92c1508661a0261d7e9cae23",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+    "source_pending_commit": false,
+    "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.1906949998810887,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-098-native-pass177.log",
+    "log_sha256": "33d336ac4e5d8009ec40bd19dbe9b56eb6eb45e22b8cbdc5a1c845568c152e89",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 1.63s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

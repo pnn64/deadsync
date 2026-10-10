@@ -4,12 +4,13 @@ mod encoder_cache;
 
 use core_graphics_types::geometry::CGSize;
 use deadlib_render_core::{
-    BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame, SamplerCache, SamplerDesc,
-    SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
-    TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads, TexturedMeshVertex,
-    Yuv420Upload, draw_storage_stats, is_render_target_texture, render_target_base_handle,
-    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
+    BlendMode, ClockDomainTrace, DrawOp, DrawStats, FastU64Map, MeshSampler, MeshVertex,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderFrame, RenderTargetFrame,
+    SamplerCache, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey,
+    TextureHandle, TexturedMeshBufferCache, TexturedMeshInstanceRaw, TexturedMeshUploads,
+    TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, resolve_textured_mesh_geometries,
+    resolve_textured_meshes, texture_sampler_desc, texture_sampler_variants,
 };
 use foreign_types::ForeignType;
 use glam::Mat4 as Matrix4;
@@ -46,10 +47,8 @@ const _: () = assert!(mem::size_of::<TexturedMeshInstanceRaw>() == 184);
 pub struct Texture {
     id: u64,
     images: TextureImages,
-    sampler: SamplerState,
-    repeat_sampler: SamplerState,
-    nearest_sampler: Option<SamplerState>,
-    nearest_repeat_sampler: Option<SamplerState>,
+    sampler_desc: SamplerDesc,
+    samplers: SamplerCache<SamplerState>,
     mipmaps: bool,
 }
 
@@ -414,24 +413,14 @@ pub fn create_texture(
         image,
         sampler_desc.mipmaps,
     );
-    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
-    let repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
+    let samplers = create_texture_samplers(state, sampler_desc);
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     Ok(Texture {
         id,
         images: TextureImages::Rgba(raw),
-        sampler,
-        repeat_sampler,
-        nearest_sampler: None,
-        nearest_repeat_sampler: None,
+        sampler_desc,
+        samplers,
         mipmaps: sampler_desc.mipmaps,
     })
 }
@@ -498,15 +487,7 @@ pub fn create_yuv420_texture(
             plane_height,
         );
     }
-    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
-    let repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
+    let samplers = create_texture_samplers(state, sampler_desc);
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     Ok(Texture {
@@ -516,10 +497,8 @@ pub fn create_yuv420_texture(
             levels: upload.levels,
             coeffs: upload.coeffs,
         },
-        sampler,
-        repeat_sampler,
-        nearest_sampler: None,
-        nearest_repeat_sampler: None,
+        sampler_desc,
+        samplers,
         mipmaps: false,
     })
 }
@@ -805,7 +784,7 @@ fn draw_inner(
                         }
                     }
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, false);
+                let sampler = texture_sampler(texture, run.texture_handle, false, None);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
@@ -908,7 +887,7 @@ fn draw_inner(
                 if cache.texture_changed(texture.id) {
                     encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, true);
+                let sampler = texture_sampler(texture, run.texture_handle, true, run.sampler);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
@@ -917,7 +896,7 @@ fn draw_inner(
                 encoder.set_fragment_texture(1, Some(additive.images.primary()));
                 encoder.set_fragment_sampler_state(
                     1,
-                    Some(texture_sampler(additive, run.additive_texture, true)),
+                    Some(texture_sampler(additive, run.additive_texture, true, None)),
                 );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
@@ -1292,33 +1271,7 @@ fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> Offsc
         wrap: SamplerWrap::Clamp,
         mipmaps: false,
     };
-    let sampler = get_sampler(&state.device, &mut state.samplers, sampler_desc);
-    let repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
-    let nearest_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-    );
-    let nearest_repeat_sampler = get_sampler(
-        &state.device,
-        &mut state.samplers,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Repeat,
-            mipmaps: false,
-        },
-    );
+    let samplers = create_texture_samplers(state, sampler_desc);
     let id = state.next_texture_id;
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     let depth = create_depth_target(&state.device, width, height);
@@ -1333,10 +1286,8 @@ fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> Offsc
         texture: Texture {
             id,
             images: TextureImages::Rgba(raw),
-            sampler,
-            repeat_sampler,
-            nearest_sampler: Some(nearest_sampler),
-            nearest_repeat_sampler: Some(nearest_repeat_sampler),
+            sampler_desc,
+            samplers,
             mipmaps: false,
         },
         _depth: depth,
@@ -1390,16 +1341,28 @@ fn resolved_texture<'a>(
 }
 
 #[inline(always)]
-fn texture_sampler(texture: &Texture, handle: TextureHandle, repeat: bool) -> &SamplerState {
-    match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture.nearest_sampler.as_ref().unwrap_or(&texture.sampler),
-        (true, true) => texture
-            .nearest_repeat_sampler
-            .as_ref()
-            .unwrap_or(&texture.repeat_sampler),
-        (false, false) => &texture.sampler,
-        (false, true) => &texture.repeat_sampler,
+fn texture_sampler(
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) -> &SamplerState {
+    let desc = texture_sampler_desc(texture.sampler_desc, handle, repeat, sampler);
+    texture
+        .samplers
+        .get(desc)
+        .expect("texture creation prewarms every sampler binding")
+}
+
+fn create_texture_samplers(state: &mut State, desc: SamplerDesc) -> SamplerCache<SamplerState> {
+    let mut samplers = SamplerCache::default();
+    for choice in texture_sampler_variants(desc) {
+        if samplers.get(choice).is_none() {
+            let sampler = get_sampler(&state.device, &mut state.samplers, choice);
+            samplers.insert(choice, sampler);
+        }
     }
+    samplers
 }
 
 fn record_offscreen_pass(
@@ -1502,7 +1465,7 @@ fn record_offscreen_pass(
                         }
                     }
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, false);
+                let sampler = texture_sampler(texture, run.texture_handle, false, None);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
@@ -1603,7 +1566,7 @@ fn record_offscreen_pass(
                 if cache.texture_changed(texture.id) {
                     encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
-                let sampler = texture_sampler(texture, run.texture_handle, true);
+                let sampler = texture_sampler(texture, run.texture_handle, true, run.sampler);
                 if cache.sampler_changed(sampler.as_ptr() as usize) {
                     encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
@@ -1612,7 +1575,7 @@ fn record_offscreen_pass(
                 encoder.set_fragment_texture(1, Some(additive.images.primary()));
                 encoder.set_fragment_sampler_state(
                     1,
-                    Some(texture_sampler(additive, run.additive_texture, true)),
+                    Some(texture_sampler(additive, run.additive_texture, true, None)),
                 );
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {

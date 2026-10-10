@@ -2,7 +2,7 @@ use hashbrown::{Equivalent, HashMap as BorrowMap};
 use log::warn;
 use smallvec::SmallVec;
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -101,11 +101,62 @@ impl Equivalent<NoteskinDataCacheKey> for NoteskinDataCacheKeyRef<'_> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItgSkinCacheKey {
     num_cols: usize,
     num_players: usize,
     skin: String,
+}
+
+struct ItgSkinCacheKeyRef<'a> {
+    num_cols: usize,
+    num_players: usize,
+    skin: &'a str,
+}
+
+impl<'a> ItgSkinCacheKeyRef<'a> {
+    fn new(style: &Style, skin: &'a str) -> Self {
+        Self {
+            num_cols: style.num_cols,
+            num_players: style.num_players,
+            skin: normalized_skin_ref(skin),
+        }
+    }
+}
+
+impl Hash for ItgSkinCacheKeyRef<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.num_cols.hash(state);
+        self.num_players.hash(state);
+        // Hash folded blocks without allocating a normalized query string.
+        // Keep the same block boundaries for owned and borrowed keys.
+        for chunk in self.skin.as_bytes().chunks(32) {
+            let mut folded = [0; 32];
+            folded[..chunk.len()].copy_from_slice(chunk);
+            folded[..chunk.len()].make_ascii_lowercase();
+            state.write(&folded[..chunk.len()]);
+        }
+        state.write_u8(0xff);
+    }
+}
+
+impl Hash for ItgSkinCacheKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ItgSkinCacheKeyRef {
+            num_cols: self.num_cols,
+            num_players: self.num_players,
+            skin: &self.skin,
+        }
+        .hash(state);
+    }
+}
+
+impl Equivalent<ItgSkinCacheKey> for ItgSkinCacheKeyRef<'_> {
+    fn equivalent(&self, key: &ItgSkinCacheKey) -> bool {
+        self.num_cols == key.num_cols
+            && self.num_players == key.num_players
+            && self.skin.eq_ignore_ascii_case(&key.skin)
+    }
 }
 
 /// Process-wide lookup index for caller-owned noteskin runtimes.
@@ -120,7 +171,7 @@ pub struct ItgSkinCacheKey {
 /// Existing loader warnings provide miss-failure instrumentation; a hit is one
 /// bounded hash lookup plus `Weak::upgrade`.
 pub struct ItgSkinRuntimeCache<T> {
-    entries: Mutex<HashMap<ItgSkinCacheKey, Weak<T>>>,
+    entries: Mutex<BorrowMap<ItgSkinCacheKey, Weak<T>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,7 +184,7 @@ pub struct LoadedItgSkin<T> {
 impl<T> Default for ItgSkinRuntimeCache<T> {
     fn default() -> Self {
         Self {
-            entries: Mutex::new(HashMap::new()),
+            entries: Mutex::new(BorrowMap::new()),
         }
     }
 }
@@ -144,7 +195,7 @@ impl<T> ItgSkinRuntimeCache<T> {
         self.entries
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&itg_skin_cache_key(style, skin))
+            .get(&ItgSkinCacheKeyRef::new(style, skin))
             .and_then(Weak::upgrade)
     }
 
@@ -159,7 +210,7 @@ impl<T> ItgSkinRuntimeCache<T> {
     where
         F: FnOnce() -> Result<T, String>,
     {
-        let key = itg_skin_cache_key(style, skin);
+        let key = ItgSkinCacheKeyRef::new(style, skin);
         if let Some(cached) = self
             .entries
             .lock()
@@ -178,7 +229,7 @@ impl<T> ItgSkinRuntimeCache<T> {
         if let Some(cached) = guard.get(&key).and_then(Weak::upgrade) {
             return Ok(cached);
         }
-        guard.insert(key, Arc::downgrade(&loaded));
+        guard.insert(itg_skin_cache_key(style, skin), Arc::downgrade(&loaded));
         Ok(loaded)
     }
 }
@@ -354,8 +405,7 @@ impl IniData {
 
     fn parse(content: &str) -> Self {
         let mut out = Self::default();
-        let mut section = IniKey::new("");
-        let mut section_present = false;
+        let mut section = None;
 
         for raw_line in content.lines() {
             let line = raw_line.trim();
@@ -363,9 +413,11 @@ impl IniData {
                 continue;
             }
             if line.starts_with('[') && line.ends_with(']') && line.len() > 2 {
-                section = IniKey::new(line[1..line.len() - 1].trim());
-                out.sections.entry(section.clone()).or_default();
-                section_present = true;
+                section = Some(
+                    out.sections
+                        .entry(IniKey::new(line[1..line.len() - 1].trim()))
+                        .or_default(),
+                );
                 continue;
             }
             let Some((key_raw, value_raw)) = line.split_once('=') else {
@@ -375,13 +427,12 @@ impl IniData {
             if key.is_empty() {
                 continue;
             }
-            if !section_present {
-                out.sections.entry(section.clone()).or_default();
-                section_present = true;
+            if section.is_none() {
+                section = Some(out.sections.entry(IniKey::new("")).or_default());
             }
             let value = value_raw.trim().to_string();
-            out.sections
-                .get_mut(&IniKeyRef(&section.0))
+            section
+                .as_mut()
                 .expect("current INI section must exist")
                 .insert(IniKey::new(key), value);
         }
@@ -401,6 +452,26 @@ impl IniData {
             .entry(IniKey::new(section))
             .or_default()
             .insert(IniKey::new(key), value.to_owned());
+    }
+
+    pub(crate) fn merge_missing_owned(&mut self, other: Self) {
+        if self.sections.is_empty() {
+            *self = other;
+            return;
+        }
+        for (section, values) in other.sections {
+            match self.sections.entry(section) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(values);
+                }
+                hashbrown::hash_map::Entry::Occupied(mut entry) => {
+                    let dst = entry.get_mut();
+                    for (key, value) in values {
+                        dst.entry(key).or_insert(value);
+                    }
+                }
+            }
+        }
     }
 
     pub fn merge_missing_from(&mut self, other: &Self) {
@@ -791,7 +862,6 @@ fn load_skin_data(
         };
 
         let ini = IniData::parse_file(&dir.join("metrics.ini"))?;
-        metrics.merge_missing_from(&ini);
         search_dirs.push(dir);
 
         if current.eq_ignore_ascii_case("default") {
@@ -807,6 +877,8 @@ fn load_skin_data(
             _ if !loaded_common => Some("common".to_string()),
             _ => None,
         };
+
+        metrics.merge_missing_owned(ini);
 
         let Some(next_skin) = next else {
             return Ok(NoteskinData {
@@ -2170,3 +2242,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "perf_tests.rs"]
+mod perf_tests;

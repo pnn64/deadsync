@@ -99,13 +99,10 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/support/perf.rs"]
-#[allow(
-    dead_code,
-    reason = "shared test allocator includes helpers used by other crates"
-)]
-mod perf;
-
-#[cfg(test)]
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod perf;

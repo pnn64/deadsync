@@ -1,0 +1,483 @@
+{
+  "schema_version": 1,
+  "native_pin": {
+    "sha256": "07d99c1ddf1eeeea4eea036ff67d396d380f41b21ebf97a606289fa51964b933",
+    "version": "0.1.35",
+    "source_commit": "e8b6048518322ef4220c41c28a073270b5025ac8",
+    "vendor_commit": "5c737928d93778c2c9f68e276052b220b43a468f"
+  },
+  "native_output_sha256": "2ce8d1c9a219548af484739222bba86d2c3db1c6ecd10a378bbf69774ea073de",
+  "color_source": "ITGmania Model.cpp::DrawPrimitives; RageDisplay_OGL.cpp::RageDisplay_Legacy::SetMaterial",
+  "scope": "Unlit material colors and glow only; does not establish whole-song geometry parity.",
+  "source_sha256": {
+    "tests/fixtures/itgmania-song-lua-micro/model-material/triangle.txt": "492b0ed2328ade4b8543b7e1252566920262993a2e9c82875078bb8264e00ebc",
+    "tests/fixtures/itgmania-song-lua-micro/model-material/unassigned.txt": "e87718b2bdac523e5c2e682af657c47103a9dc56a9ff8da94770d7d5807bf6bc",
+    "assets/noteskins/dance/cyber/_down tap note model.txt": "a656456344bc7d90a551d888b82483bdbfb44771cd3c972f7bf8081c3d1a0a55"
+  },
+  "actors": {
+    "Triangle": [
+      {
+        "mesh_name": "Triangle",
+        "vertex_count": 3,
+        "material": {
+          "ambient": [
+            0.10000000149011612,
+            0.22500000894069672,
+            0.4000000059604645,
+            0.6000000238418579
+          ],
+          "diffuse": [
+            0.4000000059604645,
+            0.5249999761581421,
+            0.6000000238418579,
+            0.24000000953674316
+          ],
+          "emissive": [
+            0.02500000037252903,
+            0.07500000298023224,
+            0.20000000298023224,
+            0.6000000238418579
+          ],
+          "shininess": 4.0,
+          "specular": [
+            0.30000001192092896,
+            0.20000000298023224,
+            0.10000000149011612,
+            1.0
+          ]
+        },
+        "texture_mode": "modulate",
+        "unlit_color": [
+          0.5250000078231096,
+          0.824999988079071,
+          1,
+          0.24000000953674316
+        ]
+      },
+      {
+        "mesh_name": "Triangle",
+        "vertex_count": 3,
+        "material": {
+          "ambient": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diffuse": [
+            1.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "texture_mode": "glow",
+        "unlit_color": [
+          1,
+          0,
+          0,
+          0.25
+        ]
+      }
+    ],
+    "Unassigned": [
+      {
+        "mesh_name": "Triangle",
+        "vertex_count": 3,
+        "material": {
+          "ambient": [
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224,
+            1.0
+          ],
+          "diffuse": [
+            0.699999988079071,
+            0.699999988079071,
+            0.699999988079071,
+            1.0
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.20000000298023224,
+            0.20000000298023224,
+            0.20000000298023224,
+            1.0
+          ]
+        },
+        "texture_mode": "modulate",
+        "unlit_color": [
+          0.8999999910593033,
+          0.8999999910593033,
+          0.8999999910593033,
+          1
+        ]
+      },
+      {
+        "mesh_name": "Triangle",
+        "vertex_count": 3,
+        "material": {
+          "ambient": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diffuse": [
+            1.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "texture_mode": "glow",
+        "unlit_color": [
+          1,
+          0,
+          0,
+          0.25
+        ]
+      }
+    ],
+    "Cyber": [
+      {
+        "mesh_name": "scroller",
+        "vertex_count": 48,
+        "material": {
+          "ambient": [
+            0.2941175103187561,
+            0.44117626547813416,
+            0.5882350206375122,
+            0.6000000238418579
+          ],
+          "diffuse": [
+            0.2941175103187561,
+            0.44117626547813416,
+            0.5882350206375122,
+            0.6000000238418579
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.6000000238418579
+          ],
+          "shininess": 12.799999237060549,
+          "specular": [
+            0.8980389833450316,
+            0.8980389833450316,
+            0.8980389833450316,
+            1.0
+          ]
+        },
+        "texture_mode": "modulate",
+        "unlit_color": [
+          0.5882350206375122,
+          0.8823525309562683,
+          1,
+          0.6000000238418579
+        ]
+      },
+      {
+        "mesh_name": "shell",
+        "vertex_count": 207,
+        "material": {
+          "ambient": [
+            0.2941175103187561,
+            0.44117626547813416,
+            0.5882350206375122,
+            0.6000000238418579
+          ],
+          "diffuse": [
+            0.2941175103187561,
+            0.44117626547813416,
+            0.5882350206375122,
+            0.6000000238418579
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.6000000238418579
+          ],
+          "shininess": 12.799999237060549,
+          "specular": [
+            0.8980389833450316,
+            0.8980389833450316,
+            0.8980389833450316,
+            1.0
+          ]
+        },
+        "texture_mode": "modulate",
+        "unlit_color": [
+          0.5882350206375122,
+          0.8823525309562683,
+          1,
+          0.6000000238418579
+        ]
+      },
+      {
+        "mesh_name": "scroller",
+        "vertex_count": 48,
+        "material": {
+          "ambient": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diffuse": [
+            1.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "texture_mode": "glow",
+        "unlit_color": [
+          1,
+          0,
+          0,
+          0.25
+        ]
+      },
+      {
+        "mesh_name": "shell",
+        "vertex_count": 207,
+        "material": {
+          "ambient": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diffuse": [
+            1.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "texture_mode": "glow",
+        "unlit_color": [
+          1,
+          0,
+          0,
+          0.25
+        ]
+      }
+    ],
+    "DarkCyber": [
+      {
+        "mesh_name": "scroller",
+        "vertex_count": 48,
+        "material": {
+          "ambient": [
+            0.14705875515937805,
+            0.14705875515937805,
+            0.14705875515937805,
+            0.25
+          ],
+          "diffuse": [
+            0.14705875515937805,
+            0.14705875515937805,
+            0.14705875515937805,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "shininess": 12.799999237060549,
+          "specular": [
+            0.8980389833450316,
+            0.8980389833450316,
+            0.8980389833450316,
+            1.0
+          ]
+        },
+        "texture_mode": "modulate",
+        "unlit_color": [
+          0.2941175103187561,
+          0.2941175103187561,
+          0.2941175103187561,
+          0.25
+        ]
+      },
+      {
+        "mesh_name": "shell",
+        "vertex_count": 207,
+        "material": {
+          "ambient": [
+            0.14705875515937805,
+            0.14705875515937805,
+            0.14705875515937805,
+            0.25
+          ],
+          "diffuse": [
+            0.14705875515937805,
+            0.14705875515937805,
+            0.14705875515937805,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "shininess": 12.799999237060549,
+          "specular": [
+            0.8980389833450316,
+            0.8980389833450316,
+            0.8980389833450316,
+            1.0
+          ]
+        },
+        "texture_mode": "modulate",
+        "unlit_color": [
+          0.2941175103187561,
+          0.2941175103187561,
+          0.2941175103187561,
+          0.25
+        ]
+      },
+      {
+        "mesh_name": "scroller",
+        "vertex_count": 48,
+        "material": {
+          "ambient": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diffuse": [
+            1.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "texture_mode": "glow",
+        "unlit_color": [
+          1,
+          0,
+          0,
+          0.25
+        ]
+      },
+      {
+        "mesh_name": "shell",
+        "vertex_count": 207,
+        "material": {
+          "ambient": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "diffuse": [
+            1.0,
+            0.0,
+            0.0,
+            0.25
+          ],
+          "emissive": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "shininess": 1.0,
+          "specular": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "texture_mode": "glow",
+        "unlit_color": [
+          1,
+          0,
+          0,
+          0.25
+        ]
+      }
+    ]
+  }
+}

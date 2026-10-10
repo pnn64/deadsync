@@ -436,6 +436,12 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
             .all(|definition| definition.properties.get("NoteSkinElement").is_none()),
         "placeholder noteskin actors invalidate the reference; recapture with native noteskin resources",
     );
+    // Require complete native observations before compiling. The production
+    // Model comparator checks every update's geometry, transforms, bindings
+    // and render state; unsupported states remain failed comparisons.
+    if let Err(error) = models::validate_models(trace) {
+        panic!("native Model mesh geometry is not captured and compared: {error}; this archive cannot establish full-song parity");
+    }
     assert!(
         trace
             .update_frames
@@ -586,7 +592,7 @@ fn validate_native_trace(trace: &NativeTrace, manifest: &ArchiveManifest) {
     );
 }
 
-fn validate_native_endpoint(trace: &NativeTrace) {
+pub(super) fn validate_native_endpoint(trace: &NativeTrace) {
     let endpoint = trace
         .native_song_end
         .as_ref()
@@ -602,7 +608,12 @@ fn validate_native_endpoint(trace: &NativeTrace) {
     );
     assert!(
         trace.end_position.seconds >= endpoint.seconds && music_seconds >= endpoint.music_seconds
-            && trace.update_frames.last().is_some_and(|frame| frame.1 >= f64::from(endpoint.seconds)),
+            && trace.update_frames.last().is_some_and(|frame| {
+                // Native SongPosition consumes float seconds. JSON's f64 frame
+                // timestamp can round below the same native float endpoint.
+                let seconds = frame.1 as f32;
+                seconds.is_finite() && seconds >= endpoint.seconds
+            }),
         "native replay must reach the raw Song::GetLastSecond endpoint"
     );
 }
@@ -613,7 +624,7 @@ fn native_song_endpoint_rejects_incomplete_replays() {
         .join("tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst");
     let control = read_trace_file(&path);
     validate_native_endpoint(&control);
-    for mutation in ["missing endpoint", "missing music", "short clock", "short frame", "short music", "nonfinite endpoint"] {
+    for mutation in ["missing endpoint", "missing music", "short clock", "short frame", "short music", "nonfinite endpoint", "one native tick short", "nonfinite frame"] {
         let mut trace = read_trace_file(&path);
         let endpoint = trace.native_song_end.as_ref().expect("native endpoint");
         match mutation {
@@ -621,12 +632,27 @@ fn native_song_endpoint_rejects_incomplete_replays() {
             "missing music" => trace.end_position.music_seconds = None,
             "short clock" => trace.end_position.seconds = endpoint.seconds - 0.125,
             "short frame" => trace.update_frames.last_mut().expect("last frame").1 = f64::from(endpoint.seconds) - 0.125,
+            "one native tick short" => trace.update_frames.last_mut().expect("last frame").1 = f64::from(endpoint.seconds.next_down()),
+            "nonfinite frame" => trace.update_frames.last_mut().expect("last frame").1 = f64::INFINITY,
             "short music" => trace.end_position.music_seconds = Some(endpoint.music_seconds - 0.125),
             "nonfinite endpoint" => trace.native_song_end.as_mut().expect("native endpoint").music_seconds = f32::NAN,
             _ => unreachable!("listed replay mutation"),
         }
         assert!(std::panic::catch_unwind(|| validate_native_endpoint(&trace)).is_err(), "{mutation}");
     }
+}
+
+#[test]
+fn native_song_endpoint_uses_native_float_clock() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/native-song-end.json.zst");
+    let mut trace = read_trace_file(&path);
+    let seconds = trace.native_song_end.as_ref().expect("native endpoint").seconds;
+    let frame = trace.update_frames.last_mut().expect("last frame");
+    frame.1 = f64::from(seconds).next_down();
+    assert!(frame.1 < f64::from(seconds));
+    assert_eq!(frame.1 as f32, seconds);
+    validate_native_endpoint(&trace);
 }
 
 fn compose_entire_song_with_progress(
@@ -874,7 +900,7 @@ fn empty_song_layers_match_native_archive() {
     assert!(trace.roots.is_empty());
     let mut parity = compare_semantics(&trace, &compiled, primary, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
     parity.assert_complete("song without Lua layers");
     // Missing compiled roots must still fail instead of skipping native actors.
     trace.roots.push("missing-layer".into());
@@ -883,6 +909,34 @@ fn empty_song_layers_match_native_archive() {
         !rejected.gaps.is_empty(),
         "uncompiled native layers must fail"
     );
+}
+
+#[test]
+fn archive_reference_rejects_missing_model_meshes() {
+    crate::paths::init();
+    let index = archive_index();
+    let control = index.archives.iter().find(|entry| {
+        entry.source_simfile == "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc"
+    }).expect("complete native non-Model reference");
+    let archive = extract_archive(control);
+    let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    validate_native_trace(&trace, &archive.manifest);
+
+    let model = index.archives.iter().find(|entry| {
+        entry.archive == "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst"
+    }).expect("complete native KABOOOOOM Model reference");
+    let archive = extract_archive(model);
+    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
+    assert!(trace.actor_definitions.iter().any(|definition| {
+        definition.class == "Model" && !definition.runtime_actors.is_empty()
+    }));
+    validate_native_trace(&trace, &archive.manifest);
+    trace.model_geometry_tracks.clear();
+    let error = std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest))
+        .expect_err("an omitted native Model mesh must invalidate the reference");
+    let message = error.downcast_ref::<String>().map(String::as_str)
+        .or_else(|| error.downcast_ref::<&str>().copied()).unwrap_or_default();
+    assert!(message.contains("native Model mesh geometry is not captured and compared"), "{message}");
 }
 
 #[test]
@@ -1230,9 +1284,9 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             if trace
                 .player_render_tracks
                 .iter()
-                .all(|track| !track.transform_samples.is_empty())
+                .any(|track| !track.transform_samples.is_empty())
             {
-                runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+                runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
             }
             assert_eq!(
                 progress.checks.load(Ordering::Relaxed),
