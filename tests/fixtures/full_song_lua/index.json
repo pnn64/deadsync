@@ -1038,12 +1038,10 @@
     {
       "title": "[T04] Palette Lab (Hard)",
       "source_simfile": "[T04] Palette Lab (SH)/palette lab.ssc",
-      "harness_version": "0.1.0",
-      "archive": "7eeed9c8196eeab88adaacecae9d598a81271694f77ee75e962063a2aefb73ab.tar.zst",
-      "sha256": "7eeed9c8196eeab88adaacecae9d598a81271694f77ee75e962063a2aefb73ab",
-      "compressed_bytes": 80636,
-      "uncompressed_sha256": "497ef275a44eb9d61af07ebe6408274f4cc8408b747ced45c6b6ba46ec7d30b7",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "740abcc8be464307496a9f9fc8b5a6eea8db38c3395facce4690473479fa3e7c.tar.zst",
+      "sha256": "740abcc8be464307496a9f9fc8b5a6eea8db38c3395facce4690473479fa3e7c",
+      "compressed_bytes": 110257,
       "aliases": [
         "fa13b60bef393ce1ac16a30433cca44be3b1ff912a920ca1ef893422cc3ac8b5.tar.zst"
       ]

@@ -1078,3 +1078,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass147.json`. Position 69 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 148
+
+Position 69, [T04] Palette Lab (Hard), passes all
+183,127 comparisons against committed DeadSync
+`6217b2455`. The complete native harness 0.1.54 archive
+contains 8,198 updates over 136.62 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass148.json`. Position 70 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
