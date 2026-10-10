@@ -1562,12 +1562,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKBBKK/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6b6d748837ab1854de17f43ac475e52d3cd52506bb9fb02265e432a2a70ab95b.tar.zst",
-      "sha256": "6b6d748837ab1854de17f43ac475e52d3cd52506bb9fb02265e432a2a70ab95b",
-      "compressed_bytes": 493031,
-      "uncompressed_sha256": "73422bea00a084b6478245d0fac24b6e093dd74ca832b6c6e40f2a231e327630",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "c523758b4a8df0e732831730fb9a8413c5d2ac7f95db5006dcbad26c4343e4a4.tar.zst",
+      "sha256": "c523758b4a8df0e732831730fb9a8413c5d2ac7f95db5006dcbad26c4343e4a4",
+      "compressed_bytes": 532271,
       "aliases": [
         "ce6bb44d3a5cb3ed2c35b72677ea79cb6243040b1a332dbd1bb8f539b9aed9eb.tar.zst"
       ]
