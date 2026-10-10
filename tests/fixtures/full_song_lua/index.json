@@ -1247,12 +1247,10 @@
     {
       "title": "合縁事変",
       "source_simfile": "Aien-Jihen [Gpop]/Aien-Jihen.ssc",
-      "harness_version": "0.1.0",
-      "archive": "505c7044020696f14a35476d87aeff802e82bee098745834a567cd1dbc9bf285.tar.zst",
-      "sha256": "505c7044020696f14a35476d87aeff802e82bee098745834a567cd1dbc9bf285",
-      "compressed_bytes": 369036,
-      "uncompressed_sha256": "66d42f04382eed070579370dce0fe171cd11120ee5c24299aa92bbef23b5ac10",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a.tar.zst",
+      "sha256": "8f2f41131a2cfaf8495ad34ca3555b244027542bea2dafcb373391b3696a8e8a",
+      "compressed_bytes": 579828,
       "aliases": [
         "b4e13c9848ac2690e6b6d4ad6c55f49a2c0945f997ce870b3e62d9543b5e6473.tar.zst"
       ]
