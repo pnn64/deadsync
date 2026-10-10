@@ -807,12 +807,10 @@
     {
       "title": "[12] And Drugs↑↑",
       "source_simfile": "[12] And Drugs (No CMOD) [SX]/and drugs.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4a5da65d0da95cc9b429b0d0a9a46065d8e676ca7b614221e9291aa9f884ccde.tar.zst",
-      "sha256": "4a5da65d0da95cc9b429b0d0a9a46065d8e676ca7b614221e9291aa9f884ccde",
-      "compressed_bytes": 238455,
-      "uncompressed_sha256": "ffe48191a2d9b39d41b467d2934b4b21d8357fd59aa64226923796645c5e2a85",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "f0fc0902a47fbe480747be0bb20c55788883e2bad110d825897e881bcb6f5d69.tar.zst",
+      "sha256": "f0fc0902a47fbe480747be0bb20c55788883e2bad110d825897e881bcb6f5d69",
+      "compressed_bytes": 255527,
       "aliases": [
         "17f352d7abce23e9a04dc062c7de76b83c3210d255bc2f73c895fa1ead83e3e2.tar.zst"
       ]
