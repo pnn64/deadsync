@@ -1236,12 +1236,10 @@
     {
       "title": "Afterburn",
       "source_simfile": "Afterburn/Afterburn.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8fa43e91d314aaa0fda600fac96603d577d449c8f974b6eac5cbf692dbe4646f.tar.zst",
-      "sha256": "8fa43e91d314aaa0fda600fac96603d577d449c8f974b6eac5cbf692dbe4646f",
-      "compressed_bytes": 79269,
-      "uncompressed_sha256": "5f8de551235e27ff3aa44c5cb42389bb75fa3a3977c44c6259b6369f27023b4f",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e.tar.zst",
+      "sha256": "d4eefbf6894bf6c346637b3c3a1e0a91c350a6187e5a768f65949d4de19d610e",
+      "compressed_bytes": 369515,
       "aliases": [
         "7066806db98b5d07d25b911d38f06063a85927ae1097137100ec245948e55f12.tar.zst"
       ]
