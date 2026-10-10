@@ -1425,12 +1425,10 @@
     {
       "title": "Astrogirl",
       "source_simfile": "Astrogirl [wrsw]/Astrogirl.ssc",
-      "harness_version": "0.1.0",
-      "archive": "019a21797c929c64cc3d9f121f507ae14d11308d8e625dd86ee955e5f67b6528.tar.zst",
-      "sha256": "019a21797c929c64cc3d9f121f507ae14d11308d8e625dd86ee955e5f67b6528",
-      "compressed_bytes": 133137,
-      "uncompressed_sha256": "3bd73315766bfa739fbb5511451e3469096880034ba4579c4a9b7538262e94eb",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b.tar.zst",
+      "sha256": "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b",
+      "compressed_bytes": 167284,
       "aliases": [
         "b6609b0a46eb83f47476b267100075797dc9c5f831ddedbe60e7f1afe73a3e4a.tar.zst"
       ]
