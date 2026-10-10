@@ -42,3 +42,9 @@ pub(super) fn tenths_from_f64(value: f64) -> i32 {
     let nudge = scaled.signum() * scaled.abs().max(1.0) * f64::EPSILON * 16.0;
     (scaled + nudge).round() as i32
 }
+
+#[inline]
+pub(super) fn inline_or_owned_text(value: &str) -> deadlib_present::actors::TextContent {
+    use deadlib_present::actors::TextContent;
+    TextContent::inline_str(value).unwrap_or_else(|| TextContent::Owned(value.to_owned()))
+}
