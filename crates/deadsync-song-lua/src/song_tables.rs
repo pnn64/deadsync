@@ -1217,6 +1217,9 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
     if key == "modtimersetting" {
         return create_timer_option(lua, owner);
     }
+    if matches!(key.as_str(), "timespacing" | "scrollspeed" | "scrollbpm" | "maxscrollbpm") {
+        return create_speed_field(lua, owner, key);
+    }
     if player_option_uses_bool(&key) && key != "overhead" {
         let owner = owner.clone();
         return lua.create_function(move |lua, mut args: crate::method_args::MethodArgs<3>| {
@@ -1286,6 +1289,47 @@ fn create_native_option(lua: &Lua, owner: &Table, key: String) -> mlua::Result<F
                 .into_iter()
                 .take(if key == "overhead" { 1 } else { 2 }),
         ))
+    })
+}
+
+fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
+    let (field, approach, default) = match key.as_str() {
+        "timespacing" => ("__songlua_time_spacing", "_spacing", 0.0),
+        "scrollspeed" => ("__songlua_speedmod_xmod", "xmod", 1.0),
+        "scrollbpm" => ("__songlua_speedmod_cmod", "cmod", 200.0),
+        "maxscrollbpm" => ("__songlua_speedmod_mmod", "mmod", 0.0),
+        _ => unreachable!("only native speed fields enter this function"),
+    };
+    let owner = owner.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let speeds = player_option_speeds(lua, &owner)?;
+        let previous = owner.raw_get::<Option<f32>>(field)?.unwrap_or(default);
+        let previous_speed = speeds.raw_get::<Option<f32>>(approach)?.unwrap_or(1.0);
+        // FLOAT_INTERFACE writes one underlying field. Unlike X/C/M setters it
+        // neither resets the other fields nor shares their approach speeds.
+        if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+            owner.raw_set(field, value)?;
+            let spacing = owner.raw_get::<Option<f32>>("__songlua_time_spacing")?.unwrap_or(0.0);
+            let max_bpm = owner.raw_get::<Option<f32>>("__songlua_speedmod_mmod")?.unwrap_or(0.0);
+            owner.raw_set("__songlua_speedmod_active", if spacing != 0.0 {
+                "cmod"
+            } else if max_bpm != 0.0 {
+                "mmod"
+            } else {
+                "xmod"
+            })?;
+        }
+        if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
+            if speed < 0.0 {
+                return Err(mlua::Error::runtime("Arg must be greater than or equal to zero."));
+            }
+            speeds.raw_set(approach, speed)?;
+        }
+        Ok(if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
+            MultiValue::from_iter([Value::Table(owner.clone())])
+        } else {
+            MultiValue::from_iter([Value::Number(f64::from(previous)), Value::Number(f64::from(previous_speed))])
+        })
     })
 }
 

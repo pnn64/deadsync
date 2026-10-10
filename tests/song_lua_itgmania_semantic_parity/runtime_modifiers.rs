@@ -3237,6 +3237,45 @@ fn startup_boolean_writes_match_native() {
 }
 
 #[test]
+fn native_speed_fields_drive_playback() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/speed-fields-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native speed-fields control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("speed-fields.lua");
+    // These same Lua getter assertions passed in the linked native capture.
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("native shared speed fields, getters and approach speeds");
+    let (runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.0, deadsync_rules::scroll::ScrollSpeedSetting::XMod(4.0)),
+        (1.1, deadsync_rules::scroll::ScrollSpeedSetting::XMod(-0.5)),
+        (2.1, deadsync_rules::scroll::ScrollSpeedSetting::CMod(480.0)),
+        (3.1, deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0)),
+    ] {
+        for player in 0..2 {
+            let mut targets = ActiveAttackMaskValues::new(Default::default());
+            deadsync_gameplay::apply_song_lua_attack_eases(
+                &mut targets, &mut Default::default(), &mut Default::default(),
+                &runtime.song_lua_ease_windows[player], second, 0.0,
+            );
+            assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
+        }
+    }
+}
+
+#[test]
 fn mod_timer_survives_lua_selectors_approach_and_fresh_options() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create timer fixture");
