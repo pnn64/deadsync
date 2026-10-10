@@ -66,6 +66,7 @@ fn mod_string_level(words: &[&str]) -> Option<f32> {
 fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>) {
     let mut writes = Vec::new();
     let mut unsupported = BTreeMap::<String, usize>::new();
+    let mut rejected = Vec::new();
     for track in &trace.timeline_tracks {
         let state_setter = track.operation == "PlayerState.SetPlayerOptions";
         let Some(player) = (0..2).find(|player| {
@@ -176,6 +177,23 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                         // clearall still needs the numeric reset audit below.
                         continue;
                     }
+                    if let Some(noop) = detail.as_ref()
+                        .and_then(|detail| detail["rejected_parts"].as_array())
+                        .and_then(|parts| parts.iter().find(|noop|
+                            noop["part"].as_str().is_some_and(|raw|
+                                raw.eq_ignore_ascii_case(&part))))
+                    {
+                        // The linked FromOneModString rejected this exact part.
+                        // Keep its observation and audit native live fields at
+                        // this timestamp instead of inventing a numeric target.
+                        if noop["accepted"] != false || noop["unchanged"] != true {
+                            *unsupported.entry(format!("native rejected part changed {part}"))
+                                .or_default() += 1;
+                        } else {
+                            rejected.push((*sequence, *beat, *second, player, noop));
+                        }
+                        continue;
+                    }
                     if let Some(noop) = detail
                         .as_ref()
                         .and_then(|detail| detail.get("indexed_noops"))
@@ -284,11 +302,6 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             }
         }
     }
-    writes.sort_by(|a, b| {
-        a.second
-            .total_cmp(&b.second)
-            .then(a.sequence.cmp(&b.sequence))
-    });
     // clearall invokes PlayerOptions::Init; it has no numeric getter. Observe
     // every numeric option used by this trace at its native reset value, plus
     // the shared speed mode, perspective and timer defaults. Later writes in
@@ -305,6 +318,30 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             )
             .collect()
     });
+    for (sequence, beat, second, player, noop) in rejected {
+        let mut observed = 0;
+        if let Some(values) = noop["values"].as_array() {
+            for value in values {
+                let Some(key) = value[0].as_str().filter(|key| keys[player].contains(*key)) else {
+                    continue;
+                };
+                if let Some(amount) = value_f32(value.get(1)) {
+                    writes.push(ModWrite {
+                        sequence, second, beat, player, key: key.to_owned(), value: amount,
+                    });
+                    observed += 1;
+                } else {
+                    *unsupported.entry(format!("invalid native rejected-part field {key}"))
+                        .or_default() += 1;
+                }
+            }
+        }
+        if observed == 0 {
+            *unsupported.entry(format!("missing native rejected-part fields {}", noop["part"]))
+                .or_default() += 1;
+        }
+    }
+    writes.sort_by(|a, b| a.second.total_cmp(&b.second).then(a.sequence.cmp(&b.sequence)));
     let writes = writes
         .into_iter()
         .flat_map(|write| {
@@ -1680,6 +1717,62 @@ end}
                 "independent P2 at {second}"
             );
         }
+    }
+}
+
+#[test]
+fn rejected_strings_preserve_native_runtime_fields() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace_path = root.join("tests/fixtures/itgmania-song-lua-micro/rejected-option-parts-native.json");
+    let trace = read_trace_file(&trace_path);
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("rejected-option-parts.lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Rejected modifier parts");
+    context.players[0].noteskin_name = "cyber".into();
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile native rejected-part control");
+    let (writes, unsupported) = option_writes(&trace);
+    assert!(unsupported.is_empty());
+    assert!(writes.iter().all(|write| write.key != "bumpperiod" && write.key != "completely_unknown"));
+    assert!(writes.iter().any(|write| write.beat >= 0.5 && write.key == "bumpyperiod"
+        && (write.value + 0.66).abs() < EPSILON), "retain native live fields after rejected text");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(parity.checks() > 6);
+    parity.assert_complete("native parser rejection and unchanged runtime fields");
+
+    // An implementation that aliases the typo must fail at the rejected write,
+    // while the earlier, correctly spelled native setter still matches.
+    let directory = tempfile::tempdir().expect("changed rejected-part control");
+    let wrong_entry = directory.path().join("control.lua");
+    let source = fs::read_to_string(&entry).expect("native control Lua");
+    let wrong_source = source.replace("BumpPeriod", "BumpyPeriod").lines()
+        .filter(|line| !line.trim_start().starts_with("assert("))
+        .collect::<Vec<_>>().join("\n");
+    fs::write(&wrong_entry, wrong_source).expect("write deliberate invalid alias");
+    let wrong = compile_song_lua_layers(&[wrong_entry.as_path()], 0, &context)
+        .expect("compile deliberately changed option");
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &wrong, &context, &mut rejected);
+    assert!(rejected.gaps.iter().any(|gap| gap.contains("bumpyperiod")),
+        "changed BumpyPeriod at the native no-op timestamp must fail");
+    for mutation in 0..4 {
+        let mut altered = read_trace_file(&trace_path);
+        let detail = altered.timeline_tracks.iter_mut().flat_map(|track| &mut track.samples)
+            .find_map(|sample| sample.4.as_mut().filter(|detail| detail["rejected_parts"].is_array()))
+            .expect("native rejected-part detail");
+        match mutation {
+            0 => { detail.as_object_mut().expect("native detail").remove("rejected_parts"); }
+            1 => detail["rejected_parts"][0]["unchanged"] = serde_json::json!(false),
+            2 => detail["rejected_parts"][0]["values"] = serde_json::json!([]),
+            _ => detail["rejected_parts"][0]["part"] = serde_json::json!("unrelated text"),
+        }
+        let mut rejected = Parity::default();
+        compare_runtime_modifiers(&altered, &compiled, &context, &mut rejected);
+        assert!(!rejected.gaps.is_empty(), "missing or altered native rejection evidence {mutation}");
     }
 }
 
