@@ -1821,3 +1821,17 @@ See `native-revalidation-pass200.json`. Position 122 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 201
+
+Position 122, Biggie Boom Boom, passes all
+571,998 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 6,871 updates over 114.49 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass201.json`. Position 123 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.

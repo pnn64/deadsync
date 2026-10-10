@@ -1628,12 +1628,10 @@
     {
       "title": "Biggie Boom Boom",
       "source_simfile": "Biggie Boom Boom/biggie.sm",
-      "harness_version": "0.1.0",
-      "archive": "a49770d0585cdcbba217a3be2cc7ce52adf0c186fc3a666887f89df11645bcb5.tar.zst",
-      "sha256": "a49770d0585cdcbba217a3be2cc7ce52adf0c186fc3a666887f89df11645bcb5",
-      "compressed_bytes": 66265,
-      "uncompressed_sha256": "ba61d5722d36a0c3526a1abcf983385fe4e2fcfc882c3f39cc2a3a95d9f20da5",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "47b009de169f46ad955585dd786c7b49b19764d4c0b9ed5168fc6e2202ae68f4.tar.zst",
+      "sha256": "47b009de169f46ad955585dd786c7b49b19764d4c0b9ed5168fc6e2202ae68f4",
+      "compressed_bytes": 324444,
       "aliases": [
         "c4fa04d60e06c27baf84bda21b22d27825f1b7fd8ac189f948115f92d865ad32.tar.zst"
       ]
