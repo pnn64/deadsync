@@ -999,8 +999,9 @@ impl PlayerLeaderboardCacheState {
         if !request_invalidated {
             match fetched {
                 Ok(fetched) => {
+                    let cached = self.by_key.get_mut(key);
                     if !should_keep_newer_player_leaderboard_entry(
-                        self.by_key.get(key),
+                        cached.as_deref(),
                         request_started_at,
                     ) {
                         let PlayerLeaderboardFetchSuccess {
@@ -1015,15 +1016,17 @@ impl PlayerLeaderboardCacheState {
                         if should_auto_populate && auto_profile_id_exists {
                             fetched_imported_score = imported_score;
                         }
-                        self.by_key.insert(
-                            key.clone(),
-                            PlayerLeaderboardCacheEntry {
-                                value: PlayerLeaderboardCacheValue::Ready(Arc::new(data)),
-                                max_entries: requested_max_entries,
-                                refreshed_at: refresh_finished_at,
-                                retry_after: None,
-                            },
-                        );
+                        let ready = PlayerLeaderboardCacheEntry {
+                            value: PlayerLeaderboardCacheValue::Ready(Arc::new(data)),
+                            max_entries: requested_max_entries,
+                            refreshed_at: refresh_finished_at,
+                            retry_after: None,
+                        };
+                        if let Some(cached) = cached {
+                            *cached = ready;
+                        } else {
+                            self.by_key.insert(key.clone(), ready);
+                        }
                         self.invalidated_after.remove(key);
                     }
                 }
@@ -1071,6 +1074,10 @@ impl PlayerLeaderboardCacheState {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "leaderboard_perf.rs"]
+mod performance_refresh;
 
 static RUNTIME_PLAYER_LEADERBOARD_CACHE: LazyLock<Mutex<PlayerLeaderboardCacheState>> =
     LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
