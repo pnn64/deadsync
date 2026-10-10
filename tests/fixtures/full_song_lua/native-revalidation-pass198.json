@@ -1,0 +1,100 @@
+{
+  "pass": 198,
+  "previous_record": "native-revalidation-pass197.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "68c832d93a15125d16638568ab0f85ecbbb394bd",
+  "comparator_sha256": "b12f3942a8f890fe8c35c6f3d1b78910a90b05dffd4769541d3102850a6ba639",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    119
+  ],
+  "next_position": 120,
+  "comparisons_passed": 167783,
+  "charts": [
+    {
+      "position": 119,
+      "entry": {
+        "title": "B.B.K.K.B.K.K.",
+        "source_simfile": "BBKKBKK [UPS5 SM5]/BBKKBKK.ssc",
+        "harness_version": "0.1.64",
+        "archive": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865.tar.zst",
+        "sha256": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865",
+        "compressed_bytes": 5565370,
+        "aliases": [
+          "c32851a88cb19777b759b4d5a154a8cb686c6a240ca5031d37f228d45da4077e.tar.zst"
+        ]
+      },
+      "original_archive_retained": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6.tar.zst",
+      "native_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+      "native_trace_sha256": "07875f674510eff7e73e66b2cf65ef0bf015c44b791cc51a136e41a8c8d21ef0",
+      "original_source_sha256": {
+        "BBKKBKK [UPS5 SM5]/banner.png": "39ad53e54a044d570c6225910107bce4326ecbaa1ca917ebb8a7fc71885d81ac",
+        "BBKKBKK [UPS5 SM5]/bbkkbkk.ogg": "68e9aa61bfb19b0ba9d779e1c5a85bac0099a20564ce691c1432449554b07b62",
+        "BBKKBKK [UPS5 SM5]/BBKKBKK.ssc": "82537a67a895b2d25751b866912365de5ada2fc57074fd20b9c5d9977f360646",
+        "BBKKBKK [UPS5 SM5]/black.png": "6df2d2572ed15b8d1eb7a7afd2fd95e0013f786d6ff78f6b30f16d0d7ae41819",
+        "BBKKBKK [UPS5 SM5]/video/bbkkbkk.mp4": "d05edfec5b395c3bc259b4524d194fcae4affcf547cd7bb179c1f600aff787c3",
+        "BBKKBKK [UPS5 SM5]/video/Default.lua": "2957951d9e42bdc3f26869539d1e2d27c1074fbc3ac7487014de1d0b5b2e5251"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7625,
+      "duration_seconds": 127.0588150024414,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 4,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 119,
+      "source_simfile": "BBKKBKK [UPS5 SM5]/BBKKBKK.ssc",
+      "archive": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865.tar.zst",
+      "archive_sha256": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865",
+      "harness_version": "0.1.64",
+      "source_commit": "68c832d93a15125d16638568ab0f85ecbbb394bd",
+      "source_pending_commit": false,
+      "binary_sha256": "b12f3942a8f890fe8c35c6f3d1b78910a90b05dffd4769541d3102850a6ba639",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\message-matching-v2-full_song_lua.exe",
+        "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.6543819000944495,
+      "comparisons_passed": 167783,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-119-committed-message-matching-v2.log",
+      "log_sha256": "af1204a54368d880fe5239ced07a809302a558f8340e6ddfe2c8c79ece10e25c",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass246-top-119-rage-file-v1.json",
+      "native_receipt_sha256": "d7d5456eaf104ac1ffe85e84f2089c629b6a13090df5e2e3463aa2b954e15f44",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "68c832d93a15125d16638568ab0f85ecbbb394bd",
+    "source_pending_commit": false,
+    "binary_sha256": "23b38955c0fd796b61a85d2301328fc3bed183588eaf3b72934049e9efc78417",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass179\\message-matching-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1330697000958025,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-119-native-pass198.log",
+    "log_sha256": "5c5af6452be04f6297713dcc6ba0e38d47e92a57b79ac880cf565c1ed508f129",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 297 filtered out; finished in 0.57s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

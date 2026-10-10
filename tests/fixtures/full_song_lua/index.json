@@ -1595,12 +1595,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS5 SM5]/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6.tar.zst",
-      "sha256": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6",
-      "compressed_bytes": 38347,
-      "uncompressed_sha256": "574c34af1bfcb5be2ff4bb05bffd3666649654a4d8ec314af189eccdcc65f05e",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865.tar.zst",
+      "sha256": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865",
+      "compressed_bytes": 5565370,
       "aliases": [
         "c32851a88cb19777b759b4d5a154a8cb686c6a240ca5031d37f228d45da4077e.tar.zst"
       ]
