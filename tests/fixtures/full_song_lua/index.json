@@ -1524,12 +1524,10 @@
     {
       "title": "竹",
       "source_simfile": "Bamboo/Take.ssc",
-      "harness_version": "0.1.0",
-      "archive": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e.tar.zst",
-      "sha256": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e",
-      "compressed_bytes": 143451,
-      "uncompressed_sha256": "7d65dbbd405f3b015b0896a18b943d84c645af44e3c8fcd385c0d8a15f93f3d5",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30.tar.zst",
+      "sha256": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30",
+      "compressed_bytes": 182679,
       "aliases": [
         "63e2807eff0d0b636961542419dbd314a930ef9fd6883aa340f2b998c96961ce.tar.zst"
       ]
