@@ -1259,3 +1259,17 @@ See `native-revalidation-pass160.json`. Position 82 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 161
+
+Position 82, Accendio, passes all
+492,633 comparisons against committed DeadSync
+`f9e210bf0`. The complete native harness 0.1.58 archive
+contains 6,829 updates over 113.79 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass161.json`. Position 83 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
