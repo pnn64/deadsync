@@ -14,15 +14,23 @@ pub fn compare_prepared<T>(
     mut work: impl FnMut(T, bool),
 ) {
     let mut elapsed = [Vec::with_capacity(9), Vec::with_capacity(9)];
+    let mut counts = [iterations; 2];
     for sample in 0..10 {
         for variant in [sample % 2, 1 - sample % 2] {
-            let inputs: Vec<_> = (0..iterations).map(|_| prepare()).collect();
+            let count = counts[variant];
+            let inputs: Vec<_> = (0..count).map(|_| prepare()).collect();
             let start = Instant::now();
             for input in inputs {
                 work(input, black_box(variant == 1));
             }
-            if sample > 0 {
-                elapsed[variant].push(start.elapsed().as_nanos() as f64 / iterations as f64);
+            let nanos = start.elapsed().as_nanos().max(1);
+            if sample == 0 {
+                // Give fast paths roughly two milliseconds per measured batch.
+                // Bound prepared input memory even for an unusually fast warmup.
+                let batches = 2_000_000_u128.div_ceil(nanos).clamp(1, 1000) as usize;
+                counts[variant] = count.saturating_mul(batches).min(1_000_000);
+            } else {
+                elapsed[variant].push(nanos as f64 / count as f64);
             }
         }
     }

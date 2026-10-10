@@ -61,13 +61,11 @@ impl SongRow {
     /// ordered. This is what a beginner would actually be playing.
     #[must_use]
     pub fn low_meter(&self) -> Option<u32> {
-        let digits: String = self
-            .meters
-            .trim_start()
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        digits.parse().ok()
+        let meters = self.meters.trim_start();
+        let end = meters
+            .find(|ch: char| !ch.is_ascii_digit())
+            .unwrap_or(meters.len());
+        meters[..end].parse().ok()
     }
 
     /// The hardest meter in the row, which is what tints the meter string.
@@ -872,6 +870,10 @@ mod tests {
         assert_eq!(page.difficulty_span(), None);
     }
 }
+
+#[cfg(test)]
+#[path = "pack_meter_perf.rs"]
+mod meter_perf_tests;
 
 #[cfg(test)]
 #[path = "pack_page_perf.rs"]
