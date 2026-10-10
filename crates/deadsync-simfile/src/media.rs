@@ -466,7 +466,7 @@ pub fn is_song_art_image(path: &Path) -> bool {
 #[must_use]
 pub fn is_mac_resource_fork(path: &Path) -> bool {
     path.file_name()
-        .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+        .is_some_and(|name| name.as_encoded_bytes().starts_with(b"._"))
 }
 
 #[must_use]
@@ -812,3 +812,7 @@ second.ogv=1
         }
     }
 }
+
+#[cfg(test)]
+#[path = "media_perf.rs"]
+mod perf;
