@@ -3084,25 +3084,32 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut overlay_ms = 0.0;
     let mut spline_capture = ColumnSplineCapture::default();
     spline_capture.capture(lua, 0.0)?;
-    if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
-        && !crate::model_texture::active(lua)
-    {
-        spline_capture.finish(column_splines);
-        return Ok((
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ));
-    }
     let start = song_beat_at_elapsed_seconds(0.0, context);
     let end = update_function_end_beat(context);
-    if end <= start {
+    if (!actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
+        && !crate::model_texture::active(lua)) || end <= start
+    {
+        // Native Song options persist even when the foreground never updates.
+        // Bake the startup targets using the same approach speeds and clock as
+        // chronological capture, without replaying a static tree every frame.
+        let tables = update_player_option_tables(lua)?;
+        let mut scratch = ModSnapshotScratch::default();
+        let states = scratch.states(&tables)?;
+        let speeds = scratch.player_speeds(lua, &tables)?;
+        let origin = context.song_timing.as_ref()
+            .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
+        let limit = origin + song_elapsed_seconds_at(end, context) * song_music_rate(context);
+        let mut eases = Vec::new();
+        push_update_mod_targets_with_key(&mut eases, origin, limit.max(origin.next_up()),
+            &states, &states, &states, &speeds, &mut BTreeMap::new(),
+            &mut (0, String::new()), if context.song_timing.is_some() {
+                SongLuaTimeUnit::Second
+            } else {
+                SongLuaTimeUnit::BeatClock
+            });
         spline_capture.finish(column_splines);
         return Ok((
-            Vec::new(),
+            eases,
             Vec::new(),
             Vec::new(),
             Vec::new(),

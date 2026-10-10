@@ -1100,12 +1100,136 @@
   },
   "original_78_acceptance": "pending; 2 current-options branch mismatches remain",
   "verified_noteskin_api_checks": 16,
-  "numeric_playback_parity_complete": false,
+  "numeric_playback_parity_complete": true,
   "full_corpus_complete": false,
   "pending_findings": [
-    "Harness GetCurrentPlayerOptions returns a PlayerState placeholder; implement distinct native Current options and approach semantics, not a Song alias",
-    "perframe.rs 3087-3098 skips startup numeric option targets without actor updates or active models",
-    "runtime_modifiers.rs option_writes treats SetPlayerOptions as additive FromString, so later fresh assignments do not reset earlier numeric expectations"
+    "Harness GetCurrentPlayerOptions returns a PlayerState placeholder; implement distinct native Current options and approach semantics, not a Song alias"
   ],
-  "independence_limit": "The control uses compiled native PlayerOptions bindings, parsing and ModsGroup assignment through the harness adapter. The semantic loader runs the authored Lua; this is not an independent C++ whole-song loader or framebuffer test."
+  "independence_limit": "The control uses compiled native PlayerOptions bindings, parsing and ModsGroup assignment through the harness adapter. The semantic loader runs the authored Lua; this is not an independent C++ whole-song loader or framebuffer test.",
+  "numeric_followup": {
+    "problem": "Static foregrounds dropped startup option targets; the comparator treated fresh option assignment as additive parsing and missed omitted resets.",
+    "change": "Retain static startup targets on the normal playback clock with authored approach speeds. Audit fresh numeric defaults before replacement tokens, and consume compiled getter snapshots when present.",
+    "source_parent_commit": "3e5237db7096f7ffc72ad5338f09a7bf3dd5ce8c",
+    "changed_source_sha256": {
+      "crates/deadsync-song-lua/src/perframe.rs": "872e6cafc23a10494ad5fc3af5761f80e2069a97c42765e11c25f18dfa4e5d0f",
+      "tests/song_lua_itgmania_semantic_parity.rs": "bb0f03794f13c1fb3f6c9dc72474a2a9fed74f65714da36abdd03c37fc13b767",
+      "tests/song_lua_itgmania_semantic_parity/runtime_modifiers.rs": "9b331d7c363e7d067ba2a3573bb2222aa698ee267253ad7ac6d6757ac062ea84"
+    },
+    "source_contract": [
+      "PlayerState.cpp:240-244 constructs fresh PlayerOptions and assigns them",
+      "PlayerOptions.cpp:90-174 resets numeric fields, with 1x/200 CMod/Default timer exceptions",
+      "ModsGroup.h:79-85 retains Song targets independently of foreground callbacks"
+    ],
+    "full_control_result": {
+      "exit_code": 0,
+      "comparisons_passed": 5333,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 8.819930500350893,
+      "archive_sha256": "b62bc00a1c7756b51edfbdd5eb8ec3d316787dd59c43ecf525e239d2bbd6e511",
+      "binary_sha256": "e2bb48fe0781b79b1f0442a356c1dfd4b7258877dd14c8dfae4ad557d3070f1f",
+      "source_commit": "3e5237db7096f7ffc72ad5338f09a7bf3dd5ce8c",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\preserve-options-startup-full-v1.log",
+      "log_sha256": "0233590b0a7323e02bdd97002270e15bb13ceaa4e91dec190f5a79b496abd4df",
+      "control_complete": true
+    },
+    "semantic_regression": {
+      "source_commit": "3e5237db7096f7ffc72ad5338f09a7bf3dd5ce8c",
+      "source_pending_commit": true,
+      "binary_sha256": "663e2bfced0e49943ef8ba3c8871b99b315ca4d92d384c472c88564aa37861d7",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-startup-options-v1-song_lua_itgmania_semantic_parity.exe",
+        "native_option_assignment",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.349472399801016,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-startup-assignment-v1.log",
+      "log_sha256": "56b7430b33062d1fd2b69f5f8ccfab2724954ee73311754de4ca4251e4b253e2",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 267 filtered out; finished in 0.28s"
+      ]
+    },
+    "unit_tests": {
+      "source_commit": "3e5237db7096f7ffc72ad5338f09a7bf3dd5ce8c",
+      "source_pending_commit": true,
+      "binary_sha256": "0d643b5c57022e3ff4d058a73bb93d4f22fbffcae6c1edbeed19a8f7186d599f",
+      "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-options-all-v1.exe",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-options-all-v1.exe",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "seconds": 58.16548650013283,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-options-all-v1.log",
+      "log_sha256": "0f260f3700cef0020c0116fb71109cdfa2d38c9e6c238bdd8ad7eabe0b36beb7",
+      "result_lines": [
+        "test result: FAILED. 497 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 56.47s"
+      ]
+    },
+    "runtime_modifier_regressions": {
+      "source_commit": "3e5237db7096f7ffc72ad5338f09a7bf3dd5ce8c",
+      "source_pending_commit": true,
+      "binary_sha256": "663e2bfced0e49943ef8ba3c8871b99b315ca4d92d384c472c88564aa37861d7",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-startup-options-v1-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers::",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 52.76316099986434,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\startup-option-runtime-v1.log",
+      "log_sha256": "5aae63b4b8591e1c82e0b460cb80ce051adceac77828e0fe4615392debc39d3b",
+      "result_lines": [
+        "test result: FAILED. 32 passed; 3 failed; 2 ignored; 0 measured; 231 filtered out; finished in 47.93s"
+      ]
+    },
+    "unchanged_runtime_failures_baseline": {
+      "source_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\committed-options-assignment-v1-pin.json",
+      "source_commit": "3e5237db7096f7ffc72ad5338f09a7bf3dd5ce8c",
+      "binary_sha256": "3ab8c6508281ed9f66df1e80809f8535bed8819e34da513b41c83f408a24fb70",
+      "historical_binary_used": true,
+      "current_sources_unchanged": true,
+      "results": [
+        {
+          "test": "hidden_actor_tweens_drive_modifiers_without_probe_state",
+          "exit_code": 101,
+          "seconds": 0.8495916002430022,
+          "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-numeric-baseline-hidden_actor_tweens_drive_modifiers_without_probe_state.log",
+          "log_sha256": "0ef0962b49af287a5840c85e2a398a1d42046e401a4474477ba96a9036b23456",
+          "result_lines": [
+            "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 267 filtered out; finished in 0.80s"
+          ]
+        },
+        {
+          "test": "lane_stealth_survives_lua_writes_and_fresh_options",
+          "exit_code": 101,
+          "seconds": 0.15461349999532104,
+          "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-numeric-baseline-lane_stealth_survives_lua_writes_and_fresh_options.log",
+          "log_sha256": "bf2790fe8b62300e4c58a748ced428e73ad1a60d5757badfbf96a26502442af4",
+          "result_lines": [
+            "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 267 filtered out; finished in 0.12s"
+          ]
+        },
+        {
+          "test": "motion_suboptions_survive_lua_writes_and_reset",
+          "exit_code": 101,
+          "seconds": 0.15884010028094053,
+          "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\startup-numeric-baseline-motion_suboptions_survive_lua_writes_and_reset.log",
+          "log_sha256": "ffe67ae253320cf1115646ba940898bc800de51efb1703557bad747f8ebf66f5",
+          "result_lines": [
+            "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 267 filtered out; finished in 0.12s"
+          ]
+        }
+      ]
+    },
+    "mutation_regression": "state_option_strings_drive_sampled_targets now deletes the drunk reset window and requires the audit to reject stale playback",
+    "native_trace_unchanged": true,
+    "original_archives_or_tolerances_changed": false,
+    "current_vs_song_options_complete": false
+  },
+  "numeric_playback_parity_scope": "This unchanged 4-second native assignment control only; broader Current/Song progression remains open."
 }

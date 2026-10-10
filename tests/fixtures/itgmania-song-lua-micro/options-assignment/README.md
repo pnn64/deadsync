@@ -1,14 +1,18 @@
 This complete native options control checks empty assignment, numeric-only
 assignment, explicit skin reset, and explicit skin replacement against
-compiled ITGmania PlayerOptions and ModsGroup code. Original reference
-sources are unchanged.
+compiled ITGmania PlayerOptions and ModsGroup code. Reference sources and
+the original native trace are unchanged.
 
-The old DeadSync binary fails the first preserve-skin assertion. The fixed
-Lua runtime passes all assertions, the semantic regression, and all 16
-noteskin API checks in the full comparator. The full control still has two
-numeric playback/comparator failures. Those remain open in provenance.json;
-this control is not claimed to have complete gameplay parity.
+The previous runtime dropped startup numeric targets for a static actor.
+The comparison also missed resets omitted by a replacement options string.
+Both faults are corrected: all 5,333 full-control comparisons pass, including
+eight numeric target checks and all 16 noteskin API checks. The regression
+also rejects deletion of a replacement reset window.
 
-No tolerance, original chart, source Lua, archive index, or prior fixture is
-removed or weakened. See provenance.json for the source contract, exact
-binaries, and the two unchanged pre-existing unit failures.
+The separate Current/Song option progression gap remains open. The broader
+modifier suite has three unchanged failures, reproduced using the previous
+committed binary; the Lua crate has the same two existing unit failures.
+See provenance.json for exact binaries, source contracts, and results.
+
+No original chart, source Lua, tolerance, archive index, or prior archive is
+removed or weakened. This control does not establish whole-corpus parity.

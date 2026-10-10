@@ -959,9 +959,10 @@ fn native_option_assignment() {
         .join("tests/fixtures/itgmania-song-lua-micro/options-assignment");
     let trace = read_trace_file(&root.join("native.json"));
     let (compiled, primary, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
-    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     eprintln!("{}", parity.summary(&trace.title));
-    parity.assert_complete("native options assignment preserves prior noteskin");
+    parity.assert_complete("native options assignment preserves skin and replaces numeric targets");
     assert!(parity.checks() > 0);
 }
 

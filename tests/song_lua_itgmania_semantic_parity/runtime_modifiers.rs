@@ -67,6 +67,7 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
     let mut writes = Vec::new();
     let mut unsupported = BTreeMap::<String, usize>::new();
     let mut rejected = Vec::new();
+    let mut assignments = Vec::new();
     for track in &trace.timeline_tracks {
         let state_setter = track.operation == "PlayerState.SetPlayerOptions";
         let Some(player) = (0..2).find(|player| {
@@ -124,6 +125,17 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     value,
                 })
             };
+            if state_setter {
+                // PlayerState.cpp constructs fresh PlayerOptions, then Assigns
+                // them. Omitted numeric fields return to PlayerOptions::Init
+                // defaults before the replacement string's targets are applied.
+                push("__assignment_reset".into(), 0.0);
+                if let Some(snapshot) = detail.as_ref()
+                    .and_then(|detail| detail["numeric_options"].as_array())
+                {
+                    assignments.push((*sequence, *beat, *second, player, snapshot));
+                }
+            }
             // FromString Overhead always resets perspective, even at level zero.
             let mut set_option = |key: String, value: f32| match key.as_str() {
                 "modtimergame" => push("modtimersetting".into(), 0.0),
@@ -309,7 +321,8 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
     let keys: [std::collections::BTreeSet<String>; 2] = std::array::from_fn(|player| {
         writes
             .iter()
-            .filter(|write| write.player == player && write.key != "clearall")
+            .filter(|write| write.player == player
+                && !matches!(write.key.as_str(), "clearall" | "__assignment_reset"))
             .map(|write| write.key.clone())
             .chain(
                 ["cmod", "mmod", "xmod", "tilt", "skew", "modtimersetting"]
@@ -341,11 +354,25 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                 .or_default() += 1;
         }
     }
+    // New captures also record compiled native getters after assignment. Keep
+    // those final fields after the text audit, including resets omitted by text.
+    for (sequence, beat, second, player, snapshot) in assignments {
+        for field in snapshot {
+            let Some(key) = field[0].as_str().filter(|key| keys[player].contains(*key)
+                && !matches!(*key, "xmod" | "cmod" | "mmod")) else { continue; };
+            if let Some(value) = value_f32(field.get(1)) {
+                writes.push(ModWrite { sequence, second, beat, player, key: key.into(), value });
+            } else {
+                *unsupported.entry(format!("invalid native assignment field {key}"))
+                    .or_default() += 1;
+            }
+        }
+    }
     writes.sort_by(|a, b| a.second.total_cmp(&b.second).then(a.sequence.cmp(&b.sequence)));
     let writes = writes
         .into_iter()
         .flat_map(|write| {
-            if write.key != "clearall" {
+            if !matches!(write.key.as_str(), "clearall" | "__assignment_reset") {
                 return vec![write];
             }
             keys[write.player]
@@ -937,8 +964,14 @@ end}
     }];
     let mut parity = Parity::default();
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    assert_eq!(parity.checks(), 3, "audit state-level string writes");
+    assert!(parity.checks() >= 5, "audit replacement strings and omitted numeric resets");
     parity.assert_complete("state option string targets");
+    let mut stale = compiled.clone();
+    stale[0].eases.retain(|window| !matches!(&window.target,
+        deadsync_song_lua::SongLuaEaseTarget::Mod(key) if key == "drunk" && window.to == 0.0));
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &stale, &context, &mut parity);
+    assert!(!parity.gaps.is_empty(), "the audit rejects an omitted replacement reset");
     let mut missing = compiled;
     missing[0].eases.clear();
     let mut parity = Parity::default();
