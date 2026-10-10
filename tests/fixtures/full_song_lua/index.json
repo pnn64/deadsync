@@ -1049,12 +1049,10 @@
     {
       "title": "[T08] CO5M1C R4ILR0AD (No CMOD)",
       "source_simfile": "[T08] CO5M1C R4ILR0AD (No CMOD)/CO5M1C R4ILR0AD-chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ea0ed31813534d266fb032d0b41367ec9ce22e175a3cb7e2007132ea1a5b8ec6.tar.zst",
-      "sha256": "ea0ed31813534d266fb032d0b41367ec9ce22e175a3cb7e2007132ea1a5b8ec6",
-      "compressed_bytes": 1692053,
-      "uncompressed_sha256": "02cdebdc4f88d8dedd4949007c666e1130eb4a9aeaf200c063ec006aaa7a1fcc",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "8ff00b6b4adf50dd064fabfb49505b904853557b7213d82931d51f509e601cfd.tar.zst",
+      "sha256": "8ff00b6b4adf50dd064fabfb49505b904853557b7213d82931d51f509e601cfd",
+      "compressed_bytes": 1296565,
       "aliases": [
         "4e703bca08ac38010100ffd3142d1399ea15031275f02ee42b162811f1717fda.tar.zst"
       ]
