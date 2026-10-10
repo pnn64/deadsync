@@ -3015,21 +3015,26 @@ fn build_top_grades_grouped_entries(
 
     let mut entries: Vec<MusicWheelEntry> =
         Vec::with_capacity(workspace.top_grades().len().saturating_add(20));
-    let mut current_group: Option<String> = None;
+    let mut current_group: Option<Arc<str>> = None;
     let mut current_header_index: Option<usize> = None;
     let mut current_count = 0usize;
     let mut header_idx = 0usize;
     let songs = ranking.songs();
 
     for (song_ix, best) in workspace.drain_top_grades() {
+        let unplayed;
         let group_name = match best {
-            Some(g) => score_data::grade_group_name(g).to_string(),
-            None => tr("SelectMusic", "Unplayed").to_string(),
+            Some(g) => score_data::grade_group_name(g),
+            None => {
+                unplayed = tr("SelectMusic", "Unplayed");
+                unplayed.as_ref()
+            }
         };
-        if current_group.as_deref() != Some(group_name.as_str()) {
+        if current_group.as_deref() != Some(group_name) {
             write_header_song_count(&mut entries, current_header_index, current_count);
+            let name = Arc::from(group_name);
             entries.push(MusicWheelEntry::PackHeader {
-                name: Arc::from(group_name.as_str()),
+                name: Arc::clone(&name),
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
@@ -3037,7 +3042,7 @@ fn build_top_grades_grouped_entries(
                 parent_series: None,
             });
             current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
+            current_group = Some(name);
             current_count = 0;
             header_idx += 1;
         }
@@ -3113,21 +3118,26 @@ fn build_top_grades_grouped_entries_for_side(
 
     let mut entries: Vec<MusicWheelEntry> =
         Vec::with_capacity(workspace.top_grades().len().saturating_add(20));
-    let mut current_group: Option<String> = None;
+    let mut current_group: Option<Arc<str>> = None;
     let mut current_header_index: Option<usize> = None;
     let mut current_count = 0usize;
     let mut header_idx = 0usize;
     let songs = ranking.songs();
 
     for (song_ix, best) in workspace.drain_top_grades() {
+        let unplayed;
         let group_name = match best {
-            Some(g) => score_data::grade_group_name(g).to_string(),
-            None => tr("SelectMusic", "Unplayed").to_string(),
+            Some(g) => score_data::grade_group_name(g),
+            None => {
+                unplayed = tr("SelectMusic", "Unplayed");
+                unplayed.as_ref()
+            }
         };
-        if current_group.as_deref() != Some(group_name.as_str()) {
+        if current_group.as_deref() != Some(group_name) {
             write_header_song_count(&mut entries, current_header_index, current_count);
+            let name = Arc::from(group_name);
             entries.push(MusicWheelEntry::PackHeader {
-                name: Arc::from(group_name.as_str()),
+                name: Arc::clone(&name),
                 original_index: header_idx,
                 banner_path: None,
                 song_count: 0,
@@ -3135,7 +3145,7 @@ fn build_top_grades_grouped_entries_for_side(
                 parent_series: None,
             });
             current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
+            current_group = Some(name);
             current_count = 0;
             header_idx += 1;
         }
@@ -7984,23 +7994,22 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
         return Some(text);
     }
     let mut text = select_music_lobby_lock_text(state)?;
-    let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+    text.push('\n');
+    if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
         let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
-        tr_fmt(
+        i18n::tr_fmt_into(
+            &mut text,
             "Lobby",
             "DisconnectHoldingFormat",
             &[
                 ("remaining", &remaining.to_string()),
                 ("s", if remaining == 1 { "" } else { "s" }),
             ],
-        )
-        .to_string()
+        );
     } else {
-        tr("Lobby", "DisconnectBasicPrompt").to_string()
-    };
-    text.push('\n');
-    text.push_str(prompt.as_str());
+        text.push_str(&tr("Lobby", "DisconnectBasicPrompt"));
+    }
     Some(text)
 }
 
@@ -20549,3 +20558,11 @@ mod tests {
         assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
     }
 }
+
+#[cfg(test)]
+#[path = "select_music/ui_dataflows_original.rs"]
+mod ui_dataflows_original;
+
+#[cfg(test)]
+#[path = "select_music/ui_dataflows_perf.rs"]
+mod ui_dataflows_perf_tests;

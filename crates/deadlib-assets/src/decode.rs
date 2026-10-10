@@ -641,6 +641,10 @@ pub(crate) fn decode_texture_jobs_with<E>(
         return Ok(());
     }
 
+    // A worker claims a whole batch, so additional workers cannot do any work.
+    // Keep one worker even for a single batch to overlap decoding with uploads.
+    let worker_count = worker_count.min(job_count.div_ceil(DECODE_JOB_BATCH_SIZE));
+
     let jobs = Mutex::new(jobs.into_iter());
     let slot = DecodeSlot::new(worker_count);
     std::thread::scope(|scope| {
@@ -682,6 +686,10 @@ pub(crate) fn decode_texture_jobs_with<E>(
         result
     })
 }
+
+#[cfg(test)]
+#[path = "decode_perf.rs"]
+mod perf_tests;
 
 #[cfg(test)]
 mod tests {

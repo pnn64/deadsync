@@ -46,7 +46,7 @@ fn ascii_case_insensitive_find(haystack: &[u8], needle: &[u8]) -> Option<usize> 
         .position(|window| window.eq_ignore_ascii_case(needle))
 }
 
-fn itl_event_intro_name(pack_group: &str) -> Option<String> {
+fn itl_event_intro_name(pack_group: &str) -> Option<&str> {
     let name = pack_group.trim();
     let bytes = name.as_bytes();
     if !is_itl_event_group(name) {
@@ -61,29 +61,33 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
         Some(idx) => &name[..idx],
         None => name,
     };
-    Some(name.trim().to_string())
+    Some(name.trim())
 }
 
 #[must_use]
 pub fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
+    event_intro_name(pack_group).map(str::to_owned)
+}
+
+fn event_intro_name(pack_group: &str) -> Option<&str> {
     let name = pack_group.trim();
     let bytes = name.as_bytes();
     if ascii_case_insensitive_find(bytes, b"stamina rpg 10").is_some()
         || ascii_case_insensitive_find(bytes, b"srpg10").is_some()
     {
-        return Some("Stamina RPG 10".to_string());
+        return Some("Stamina RPG 10");
     }
     if ascii_case_insensitive_find(bytes, b"stamina rpg 9").is_some()
         || ascii_case_insensitive_find(bytes, b"srpg9").is_some()
     {
-        return Some("Stamina RPG 9".to_string());
+        return Some("Stamina RPG 9");
     }
     itl_event_intro_name(name)
 }
 
 pub fn gameplay_event_intro_text(song: &SongData) -> Arc<str> {
     song_pack_group(song)
-        .and_then(event_intro_name_for_pack)
+        .and_then(event_intro_name)
         .map(Arc::from)
         .unwrap_or_else(|| Arc::from("EVENT"))
 }
@@ -261,5 +265,9 @@ mod tests {
     fn gameplay_event_intro_keeps_default_for_normal_pack() {
         let song = test_song("Songs/Test/Example/song.ssc", ["hard", "medium"]);
         assert_eq!(gameplay_event_intro_text(&song).as_ref(), "EVENT");
+    }
+
+    mod ownership_perf {
+        include!("event_intro_ownership_perf.rs");
     }
 }

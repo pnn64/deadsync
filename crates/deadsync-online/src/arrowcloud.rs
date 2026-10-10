@@ -1690,13 +1690,13 @@ pub struct ArrowCloudUserApiUser {
     pub rival_user_ids: Vec<String>,
 }
 
-pub fn user_context_from_api(user: ArrowCloudUserApiUser) -> ArrowCloudUserContext {
-    let self_user_id = arrowcloud_user_id(user.id.as_str()).map(str::to_string);
+pub fn user_context_from_api(mut user: ArrowCloudUserApiUser) -> ArrowCloudUserContext {
+    let self_user_id = (!user.id.trim().is_empty()).then(|| take_trimmed_user_id(&mut user.id));
     let rival_user_ids = user
         .rival_user_ids
         .into_iter()
-        .map(|user_id| user_id.trim().to_string())
-        .filter(|user_id| !user_id.is_empty())
+        .filter(|user_id| !user_id.trim().is_empty())
+        .map(|mut user_id| take_trimmed_user_id(&mut user_id))
         .collect();
     ArrowCloudUserContext {
         self_user_id,
@@ -1739,7 +1739,7 @@ pub fn hard_ex_pane_from_response(
 pub fn update_remaining_targets(
     scores: &[ArrowCloudLeaderboardEntry],
     context: Option<&ArrowCloudUserContext>,
-    remaining: &mut HashSet<String>,
+    remaining: &mut HashSet<&str>,
 ) {
     if remaining.is_empty() {
         return;
@@ -4660,3 +4660,11 @@ mod tests {
         assert!(result_dialog_urls_from_body(&oversized).is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "user_context_perf.rs"]
+mod user_context_perf;
+
+#[cfg(test)]
+#[path = "arrowcloud/pagination_tests.rs"]
+mod pagination_tests;

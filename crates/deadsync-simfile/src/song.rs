@@ -3,7 +3,7 @@ use crate::cache::{
     CachedChartPayloadIndex, CachedParsedNote, CachedTimingSegments, SerializableChartData,
     SerializableSongBackgroundChange, SerializableSongBackgroundLuaChange, SerializableSongData,
     SerializableSongForegroundChange, SerializableSongForegroundLuaChange, build_song_meta,
-    parse_chart_display_bpm, update_precise_song_bounds,
+    cache_background_changes, parse_chart_display_bpm, update_precise_song_bounds,
 };
 use crate::changes::{
     extract_background_lua_change_set, extract_foreground_change_sets,
@@ -348,25 +348,20 @@ impl SongFolderMedia {
             extract_background_lua_change_set(simfile_dir, simfile_data, &summary.background_path);
         let foreground_changes = extract_foreground_change_sets(simfile_dir, simfile_data);
         let has_lua = background_lua_changes.uses_lua || foreground_changes.uses_lua;
-        let background_changes = resolve_background_changes_from_roots(
+        let background_changes = cache_background_changes(resolve_background_changes_from_roots(
             simfile_dir,
             simfile_data,
             &options.song_movie_roots,
             &options.random_movie_roots,
-        )
-        .iter()
-        .map(SerializableSongBackgroundChange::from)
-        .collect();
-        let background_layer2_changes = resolve_background_layer2_changes_from_roots(
-            simfile_dir,
-            simfile_data,
-            &options.song_movie_roots,
-            &options.random_movie_roots,
-            &options.bg_animation_roots,
-        )
-        .iter()
-        .map(SerializableSongBackgroundChange::from)
-        .collect();
+        ));
+        let background_layer2_changes =
+            cache_background_changes(resolve_background_layer2_changes_from_roots(
+                simfile_dir,
+                simfile_data,
+                &options.song_movie_roots,
+                &options.random_movie_roots,
+                &options.bg_animation_roots,
+            ));
         Self {
             artwork,
             background_changes,
@@ -522,8 +517,7 @@ fn build_charts(
             let meter = chart.rating_str.parse().unwrap_or(0);
             let music_path =
                 media_dir.and_then(|dir| chart_music_path(dir, song_music_path, &chart.music_path));
-            let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
-            let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
+            let (min_bpm, max_bpm) = chart_bpm_bounds(&chart.timing_segments.bpms);
             let timing_segments = CachedTimingSegments::from_rssp_owned(
                 chart.timing_segments,
                 parse_cached_time_signatures(time_signature_tag),
@@ -723,19 +717,15 @@ fn final_music_len(summary: &SimfileSummary, decoded_len: f32) -> f32 {
     }
 }
 
-fn min_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
-    bpms.iter()
+fn chart_bpm_bounds(bpms: &[(f32, f32)]) -> (f64, f64) {
+    let (lo, hi) = bpms
+        .iter()
         .map(|&(_, bpm)| f64::from(bpm))
         .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-        .fold(f64::INFINITY, f64::min)
-        .min(f64::MAX)
-}
-
-fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
-    bpms.iter()
-        .map(|&(_, bpm)| f64::from(bpm))
-        .filter(|bpm| bpm.is_finite() && *bpm > 0.0)
-        .fold(0.0_f64, f64::max)
+        .fold((f64::INFINITY, 0.0_f64), |(lo, hi), bpm| {
+            (lo.min(bpm), hi.max(bpm))
+        });
+    (lo.min(f64::MAX), hi)
 }
 
 #[cfg(test)]
@@ -1285,5 +1275,9 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    mod library_perf {
+        include!("song_library_perf.rs");
     }
 }

@@ -103,7 +103,7 @@ struct TexturedMeshInstanceRaw {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     texture_mask: f32,
-    cull_back: f32,
+    cull_mode: f32,
     sphere_rows: [[f32; 4]; 3],
     additive_uv: [f32; 4],
     additive_texture: TextureHandle,
@@ -3953,7 +3953,7 @@ mod tests {
                     let mut instance = TexturedMeshInstanceRaw::new(
                         transform, [1.0; 4], [1.0; 2], [0.0; 2], [0.0; 2], false,
                     );
-                    instance.cull_back = f32::from(cull);
+                    instance.cull_mode = f32::from(cull);
                     frame.tmesh_instances[0] = instance;
                     request_screenshot(&mut state);
                     draw(&mut state, &frame, &textures, false).expect("render fixture");

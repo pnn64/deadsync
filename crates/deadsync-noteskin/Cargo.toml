@@ -10,7 +10,7 @@ bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-
 hashbrown = "0.17.1"
 image = "0.25.10"
 log = "0.4.34"
-mlua = { version = "0.12.2", features = ["lua54", "vendored"] }
+mlua = { version = "0.12.2", features = ["lua51", "vendored"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
 smallvec = "1.16.1"

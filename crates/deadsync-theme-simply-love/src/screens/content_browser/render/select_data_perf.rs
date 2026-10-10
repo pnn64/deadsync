@@ -83,7 +83,7 @@ fn metadata_avoids_field_vector_and_explanation_copy() {
     assert!(after.reallocs <= before.reallocs);
     assert!(after.allocs < before.allocs);
     assert!(after.allocated_bytes < before.allocated_bytes);
-    assert!(after.peak_added_bytes < before.peak_added_bytes);
+    assert!(after.peak_bytes < before.peak_bytes);
 }
 
 fn badge_actors(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, original: bool) {

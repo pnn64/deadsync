@@ -12,6 +12,16 @@ pub mod registry;
 pub mod texture_store;
 pub mod upload;
 
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+#[cfg(test)]
+mod perf_fixture;
+
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,

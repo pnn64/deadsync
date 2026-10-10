@@ -1,0 +1,120 @@
+{
+  "pass": 116,
+  "previous_record": "native-revalidation-pass115.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+  "comparator_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    37
+  ],
+  "next_position": 38,
+  "comparisons_passed": 323368,
+  "charts": [
+    {
+      "position": 37,
+      "entry": {
+        "title": "[5811] [10] Lake of Lost Nostalgia",
+        "source_simfile": "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc",
+        "harness_version": "0.1.52",
+        "archive": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst",
+        "sha256": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663",
+        "compressed_bytes": 476971,
+        "aliases": [
+          "b3a17af45c06d437e7bddadefea47158249aa568906f1b057108a29f92f56c52.tar.zst"
+        ]
+      },
+      "original_archive_retained": "0d8d6fc8d0be410f146f2b6c775180aa5bc71e35380ca93c25df1fcfda584d61.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "d3a0772fea486fa8d30074fc88a54303e9c51d06a119709c1c7fe0bf2ed49921",
+      "original_source_sha256": {
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/.DS_Store": "54b87dd93c050df84a063bdccabc0e368b87fb1f16c4c513902ad5f9575d37d5",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/default.lua": "59bab542d4892f50a10f423fc1965924f206fb5f9a12838485b8d3780865f9bf",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ogg": "4982e13595e8b9237b124ebb39dc49374854cdfb9bdd01c51fb8ce75411e76d4",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc": "31b7bed06f286d86bf5d1ea001fd6aecc46b11ae25a5e7fbb14fdabb84acb136",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc.old": "e53d44aaa07e38136e01ad20d57e01fe6ee1e54117da3269d60edd5a83a0847c",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/nostalgia-bg.png": "d54ac076217579281a392ad5fe82dd92ff26445b6af4da017bc3e7cf4987790d",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/nostalgia-bn.png": "ecaf8bbb69ca2ca18132b7b9a21365582033a6531167beef6c4ae65743580e05",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/code/draw.lua": "10e781e5f12e2e35974930b1e7fc4a9b7a04cde2c7716401131d91f4eb36d141",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/code/update.lua": "8cf49bb9edf3d35d95a5e03ff7fa2b4a36c3451aa3dfdd43ea5b9976b70be5ff",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/core/constants.lua": "208fa6b73e12a121010067e9901b3447364545cfbc7b3bef10b509ac99b56d52",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/core/jazz.jpg": "b0f9d9ad7f979f17254655a5c13ac49c0a81584ccc55ae02dd411c21a74233c7",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/core/main.lua": "e0ff7ba0ee4c33a685a92a802b3237e48f942c4ee810ccc7cfffcad16a773703",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/core/modparser.lua": "032ff3742b37a584de39e3ffc9d85d0445929d7f5f14d43fbae0f9caf64b7d96",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/core/players.lua": "9a222b2250c2f408f74e57270e2b191212f5fe6fc219dc5a55d1f29df17ad3ce",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/conversions.lua": "4bcdb1b4a175d07a5eb403c27bca0c8b0a0f1a77f4c5b7616bccbb73083ac17c",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/fakemods.lua": "3d30a573d1fe4e1d5236ad0482ec8728a1cfb3bfe60cd5be06add9487d03e22b",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/helpers.lua": "860e4358298857d074b29e803dde52fc4e3305c9e6aa8d4591f2a61ad21146bf",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf",
+        "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/sm5/modules/speedmods.lua": "3038b831549aeb5dfd5c13664941337406cf621a85774b663dc543057da9f79c"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7801,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 16,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 37,
+      "source_simfile": "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc",
+      "archive": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst",
+      "archive_sha256": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663",
+      "harness_version": "0.1.52",
+      "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+      "source_pending_commit": false,
+      "binary_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-full_song_lua.exe",
+        "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 64.19928750023246,
+      "comparisons_passed": 323368,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-037-judgment-draw-v1.log",
+      "log_sha256": "a2930bfe2092a5b7580387af90119d722685a9bf03ccf5fb64a7349b5f26305b",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass116-top-037-native-v1.json",
+      "native_receipt_sha256": "1f20465badc2cd3911cba70c38d5e24227ac5e326fadda3fa3f14c28ca0b1df3",
+      "full_corpus_complete": false,
+      "original_result_sha256": "63a583b81193247671e9f3f9564507c2125e2960ad223dd50e1cbe5706bf0cfd",
+      "source_binding": "Identical compared source and executable verified after commit",
+      "committed_pin_sha256": "d9ea5c1cf732c14d10be19580d366879293a3e6cc7cd4b9e91e2f88267a2f552"
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+    "source_pending_commit": false,
+    "binary_sha256": "621d453087787275bc808d379bdedd51c57d2c211682bb96bd3121183027dd6c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 6.076381700113416,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-037-judgment-draw-v1.log",
+    "log_sha256": "99b26aeddd66069ed3c09dc97ac43c58d797fb801749fb4386dd3365a12451e1",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 4.40s"
+    ]
+  },
+  "source_fix_record": "native-revalidation-pass116-draw.json",
+  "custom_draw_frames_passed": 7801,
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

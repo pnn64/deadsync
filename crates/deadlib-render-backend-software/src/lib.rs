@@ -726,7 +726,8 @@ fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) 
         return;
     }
 
-    if !PRESERVE_ALPHA {
+    // A full viewport writes every alpha byte below; padding still needs filling.
+    if !PRESERVE_ALPHA && target.viewport != [target.width, target.height] {
         for rgba in target.texture.image.as_mut().as_chunks_mut::<4>().0 {
             rgba[3] = 255;
         }
@@ -1179,7 +1180,7 @@ fn prepare_objects(
                             geometry.vertices.as_ref(),
                             width,
                             height,
-                            instance.cull_back > 0.5,
+                            instance.cull_mode,
                         )
                     else {
                         continue;
@@ -1511,7 +1512,7 @@ fn draw_prepared<'a>(
                 stripe_y_start,
                 stripe_y_end,
                 buffer,
-                instance.cull_back > 0.5,
+                instance.cull_mode,
                 if *depth_test { depth } else { &mut no_depth },
             )
         }
@@ -1924,7 +1925,7 @@ fn project_tmesh_polygon(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
-    cull_back: bool,
+    cull_mode: f32,
 ) -> Option<([ScreenVertexTexColor; 4], usize)> {
     debug_assert_eq!(vertices.len(), 3);
     let mut triangle = [ClipVertexTexColor {
@@ -1989,10 +1990,11 @@ fn project_tmesh_polygon(
             color: vertex.color,
         };
     }
-    if cull_back && polygon.len() >= 3 {
+    if cull_mode > 0.5 && polygon.len() >= 3 {
         let [a, b, c] = [projected[0], projected[1], projected[2]];
         // Screen Y points down, so a CCW clip-space face has negative area.
-        if (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x) >= 0.0 {
+        let area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        if (cull_mode < 1.5 && area >= 0.0) || (cull_mode > 1.5 && area <= 0.0) {
             return None;
         }
     }
@@ -2011,7 +2013,7 @@ fn prepare_tmesh_triangles(
     vertices: &[deadlib_render_core::TexturedMeshVertex],
     width: usize,
     height: usize,
-    cull_back: bool,
+    cull_mode: f32,
 ) -> Option<(u32, u32, u32, ScreenRows)> {
     if vertices.is_empty() || width == 0 || height == 0 {
         return None;
@@ -2030,7 +2032,7 @@ fn prepare_tmesh_triangles(
             chunk,
             width,
             height,
-            cull_back,
+            cull_mode,
         ) else {
             continue;
         };
@@ -2263,12 +2265,13 @@ fn rasterize_environment(
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     depth: &mut DepthRows<'_>,
 ) -> u32 {
+    let texture_uvs = deadlib_render_core::textured_mesh_uv_mapper(instance);
     let mut count = 0;
     for triangle in vertices.as_chunks::<3>().0 {
         let mut first = *triangle;
         let mut second = *triangle;
         for i in 0..3 {
-            let uv = deadlib_render_core::textured_mesh_uvs(triangle[i], instance);
+            let uv = texture_uvs(triangle[i]);
             first[i].uv = uv[0];
             second[i].uv = uv[1];
         }
@@ -2281,22 +2284,29 @@ fn rasterize_environment(
             &first,
             width,
             height,
-            instance.cull_back > 0.5,
+            instance.cull_mode,
         ) else {
             continue;
         };
-        let Some((q, _)) = project_tmesh_polygon(
-            mvp,
-            instance.tint,
-            [1.0; 2],
-            [0.0; 2],
-            [0.0; 2],
-            &second,
-            width,
-            height,
-            instance.cull_back > 0.5,
-        ) else {
-            continue;
+        // Projection and rejection depend only on positions, which are equal
+        // for both stages. Materials without reflection never consume q's UVs.
+        let (q, _) = if !(instance.texture_mask > 0.5) && triangle[0].normal[3] as u8 & 4 != 0 {
+            let Some(projected) = project_tmesh_polygon(
+                mvp,
+                instance.tint,
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                &second,
+                width,
+                height,
+                instance.cull_mode,
+            ) else {
+                continue;
+            };
+            projected
+        } else {
+            (p, len)
         };
         count += 3;
         for i in 1..len.saturating_sub(1) {
@@ -2414,7 +2424,7 @@ fn rasterize_textured_mesh_triangles(
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
-    cull_back: bool,
+    cull_mode: f32,
 
     depth: &mut DepthRows<'_>,
 ) -> u32 {
@@ -2433,7 +2443,7 @@ fn rasterize_textured_mesh_triangles(
             chunk,
             width,
             height,
-            cull_back,
+            cull_mode,
         ) else {
             continue;
         };
@@ -5215,7 +5225,7 @@ mod tests {
     }
 
     #[test]
-    fn backfaces_do_not_cover_textured_front() {
+    fn face_culling_preserves_selected_winding() {
         // A green front and a white rear, authored last, reproduce a closed
         // model without depending on any installed noteskin or its texture.
         let mut vertices = Vec::new();
@@ -5259,7 +5269,7 @@ mod tests {
             ),
             (Matrix4::from_rotation_y(std::f32::consts::PI), 0xffffff),
         ] {
-            for cull in [false, true] {
+            for cull in [0.0, 1.0, 2.0] {
                 let mut direct = vec![0; WIDTH * HEIGHT];
                 rasterize_textured_mesh_triangles(
                     &mvp,
@@ -5319,9 +5329,17 @@ mod tests {
                 assert_eq!(retained, direct, "staged and direct culling must agree");
                 assert_eq!(
                     direct[HEIGHT / 2 * WIDTH + WIDTH / 2] & 0xffffff,
-                    if cull { expected } else { 0xffffff }
+                    if cull == 0.0 {
+                        0xffffff
+                    } else if cull == 1.0 {
+                        expected
+                    } else if expected == 0x00ff00 {
+                        0xffffff
+                    } else {
+                        0x00ff00
+                    }
                 );
-                assert_eq!(prepared.len(), if cull { 1 } else { 2 });
+                assert_eq!(prepared.len(), if cull > 0.0 { 1 } else { 2 });
             }
         }
         // Clipping preserves the facing test; it must not depend on any
@@ -5337,7 +5355,7 @@ mod tests {
                 &vertices[..3],
                 WIDTH,
                 HEIGHT,
-                true
+                1.0
             )
             .is_some()
         );
@@ -5359,7 +5377,7 @@ mod tests {
             &vertices,
             WIDTH,
             HEIGHT,
-            false,
+            0.0,
         )
         .expect("fully visible triangle projects");
 
@@ -5403,7 +5421,7 @@ mod tests {
             &vertices,
             WIDTH,
             HEIGHT,
-            false,
+            0.0,
         )
         .expect("crossing triangle projects after clipping");
         assert_eq!(start, 0);
@@ -5450,7 +5468,7 @@ mod tests {
                 0,
                 HEIGHT,
                 &mut byte_writer(&mut direct),
-                false,
+                0.0,
                 &mut DepthRows {
                     pixels: &mut [],
                     unorm16: false
@@ -5912,3 +5930,10 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod offscreen_perf_tests;
+
+#[cfg(test)]
+#[path = "environment_performance.rs"]
+mod environment_performance;

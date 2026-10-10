@@ -1,0 +1,200 @@
+{
+  "problem": "Requested option levels and GetCurrentPlayerOptions shared Song storage. Current did not follow native approaches or assignment propagation.",
+  "change": "Keep all four PlayerOptions and SongOptions levels distinct, advance Current before callbacks with an injected integer microsecond clock, and follow native propagation, parsing and speed fields. Delete the replaced speed-parser helper and aliases.",
+  "deadsync_source_parent_commit": "37b94e1416b49bfea3d1875e12f719e147bb0ab3",
+  "tested_source_pending_commit": true,
+  "tested_changed_source_sha256": {
+    "crates/deadsync-song-lua/src/host.rs": "3766600efd19228844e50a5802ffed7ed431ce836d8fc2aafa8e812324408e8a",
+    "crates/deadsync-song-lua/src/lib.rs": "f9a5c7b605cf69a25fa179a63341b7569aec864c05ebcf383ff4f69cce46d0ef",
+    "crates/deadsync-song-lua/src/lua_util.rs": "447e26ff2b3cc8e94e7ef9046cdb4f9766c43595b6de4d4f7a0a96f583f7f585",
+    "crates/deadsync-song-lua/src/perframe.rs": "0324c9644d7560a5ce7996f2a1209ab8a940c936ec60ba27d72b1e9d03a2b7ee",
+    "crates/deadsync-song-lua/src/song_tables.rs": "b9e077963ddd468407b70642835c92e340dfdc1f8e2270a308628bbf9cc299a3",
+    "crates/deadsync-song-lua/src/tables.rs": "096943c8d837ada269c244c7f2a72d12f54ac52ae8bb613640ed52affef13329",
+    "crates/deadsync-song-lua/src/timing.rs": "7214b3e15bb908fe3a5ab0f18df37aa3cd63137a0f8ae9b2b103d3558feafaad",
+    "tests/song_lua_itgmania_semantic_parity.rs": "191602721448aceffcd0fff1f68a910c9d3e72e12f4c634826ff54ebd2817cae"
+  },
+  "fixture_sha256": {
+    "control.lua": "fd3fec4d1d52dc5a81d96be2f806d38cfc7b9801160f092d4e579f533129bd74",
+    "control.ssc": "41c95f58787348dba932a370558dfe7721386db3c18dadf29cc361dd03337123",
+    "default.lua": "fd3fec4d1d52dc5a81d96be2f806d38cfc7b9801160f092d4e579f533129bd74",
+    "native-control.json": "2ea95d0aed23a9c4dcf21697050bb4674f6206fb42d47b40979dbb678e7f27d4",
+    "native.json": "24169ef95801c880c85d216c4b2ac77fcd4f2cedb7ca0cf5292dbb12d0a7c553",
+    "README.md": "37a22fdb0301a17a2dd2e11d39367fb7c9ed6073c093cbcd57a50f379ed6ce41",
+    "window-control.json": "6838830cb7d8a758d91abeca9f7790be64af7ce2877a91062fe6de752aeec493"
+  },
+  "native_reference_sha256": {
+    "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+    "PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+    "SongOptions.cpp": "7d8205c988751ef656f5c195ea1e33b38de42ff235659e6e2651f209d7c11386",
+    "ModsGroup.h": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0",
+    "ModsGroup.cpp": "cf9a0c326513ecd9f6b4dc308437e9e7cf16c443650dabd71f7e452e3baa5248",
+    "GameState.cpp": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+    "RageTimer.cpp": "2542029c6c12fbd560a3b65808a5bdccb14756350331bbe276ae79e2326cf553",
+    "PrefsManager.cpp": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+    "EnumHelper.cpp": "3f4b9f2049a7b5f0d5c1c46d41186dda482bf0afc2749b5ce813640aebd4635c",
+    "RageUtil.cpp": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012",
+    "GameConstantsAndTypes.h": "fc8fa11e346b42cab44f53bc86583f7140b9b33a1fd33e545e3315ccee244879",
+    "EnumHelper.h": "325e35b185836926c00803cf9f29bf8f241273c01094b2e1af7d2f470812ce79"
+  },
+  "simply_love_reference": {
+    "file": "C:\\GitHub\\rework\\itgmania\\Themes\\Simply-Love-SM5\\Scripts\\SL-Helpers.lua",
+    "sha256": "3896aa23cbb8dfe07372566053adc7eb961f3b1bb1d076ddbd8757b13d0c45cf",
+    "contract": "SL-Helpers.lua:912-915 defaults GetPlayerOptionsString to Preferred"
+  },
+  "source_contract": [
+    "PlayerState.cpp:240-267 selects requested ModsLevel or Current and assigns freshly parsed options",
+    "ModsGroup.h:50-54 uses RageTimer delta; 79-85 propagates assignments except Song-to-Current",
+    "GameState.cpp:1148-1152 advances SongOptions before players; 2605-2613 queries Current",
+    "PlayerOptions.cpp:177-279 approaches float targets and copies discrete fields",
+    "RageTimer.cpp:34-78 reads ArchHooks integer microseconds",
+    "PrefsManager.cpp:191 defaults RateModsAffectFGChanges to false",
+    "SongOptions.cpp:200-201 parses haste as an on/off token",
+    "PlayerOptions.cpp:818-854 FromString X/C/M writes differ from direct Lua speed setters",
+    "PlayerOptions.cpp:2526-2607 X/C/M getters and setters use four independent speed fields",
+    "PlayerOptions.cpp:2471-2499 implements timing-window chaining and lists W1..W5",
+    "GameConstantsAndTypes.h:308-320 defines zero-based TimingWindow enums",
+    "PlayerOptions::Init and native fresh assignment reset disabled timing-window bits",
+    "RageUtil.cpp:48-59 preserves native fapproach float operations"
+  ],
+  "standalone_native_controls": {
+    "harness_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+    "binary_sha256": "041e2514c2971d6393bc2b3ae1655dec2580f6ae0f05bc276ce42004bfe43d9c",
+    "current_options": "native-control.json",
+    "timing_windows": "window-control.json",
+    "uses_semantic_host": false,
+    "uses_deadsync": false,
+    "timing_window_native_result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    }
+  },
+  "healthy_normal_lua_capture": {
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass159-current-options-control-v1\\archives\\4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd.tar.zst",
+    "archive_sha256": "4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd",
+    "archive_entry": {
+      "title": "Native player options",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.58",
+      "archive": "4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd.tar.zst",
+      "sha256": "4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd",
+      "compressed_bytes": 13974
+    },
+    "harness_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+    "binary_sha256": "041e2514c2971d6393bc2b3ae1655dec2580f6ae0f05bc276ce42004bfe43d9c",
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass159-current-options-control-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "24169ef95801c880c85d216c4b2ac77fcd4f2cedb7ca0cf5292dbb12d0a7c553",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "update_frames": 241,
+    "semantic_loader_under_test": true,
+    "native_cpp_loader_used": false
+  },
+  "deadsync_normal_control_full_comparison": {
+    "exit_code": 0,
+    "comparisons_passed": 5310,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.1790081998333335,
+    "archive_sha256": "4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd",
+    "binary_sha256": "66ae4f070823956b2030faffff9e893389dd084cf7f65e1fa0f4c61d2939d52e",
+    "source_commit": "37b94e1416b49bfea3d1875e12f719e147bb0ab3",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\current-options-after-v3.log",
+    "log_sha256": "cb76f6f17dd6de3923fbac279ce164d956f37338dd83cd5901f9911963034ae0",
+    "control_complete": true
+  },
+  "deadsync_permanent_semantic_regression": {
+    "source_commit": "37b94e1416b49bfea3d1875e12f719e147bb0ab3",
+    "source_pending_commit": true,
+    "binary_sha256": "760defe7289ffa92f49ffe64e993b4e32bb51b331a665d8cd7c3d94b6e94408a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\current-options-v3-song_lua_itgmania_semantic_parity.exe",
+      "native_current_options",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.878124199807644,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\current-options-semantic-v3.log",
+    "log_sha256": "2142e7dabfd34b2866c5b6ee6c2b9d371e70d48c6f786061a23c8c46a2bac6d5",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 269 filtered out; finished in 0.19s"
+    ]
+  },
+  "deadsync_full_units": {
+    "source_commit": "37b94e1416b49bfea3d1875e12f719e147bb0ab3",
+    "source_pending_commit": true,
+    "binary_sha256": "23409b09b5e4227f3ab656449c27933621a5b1622f061128c8029506b86bfa1a",
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-options-units-v6.exe",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-options-units-v6.exe",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 47.88808420021087,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\current-options-units-v6.log",
+    "log_sha256": "4d81f0122f617df806cae46c781a8b253b5f456021c3110149ad46b01ae8862f",
+    "result_lines": [
+      "test result: FAILED. 499 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 46.33s"
+    ]
+  },
+  "deadsync_modifier_regressions": {
+    "source_commit": "37b94e1416b49bfea3d1875e12f719e147bb0ab3",
+    "source_pending_commit": true,
+    "binary_sha256": "760defe7289ffa92f49ffe64e993b4e32bb51b331a665d8cd7c3d94b6e94408a",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\current-options-v3-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers::",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 19.293525999877602,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\current-options-modifiers-v3.log",
+    "log_sha256": "461e0ccfa9d94acfcd7185d354be02dba13eccffe267aac4483a9a4f00a8d92b",
+    "result_lines": [
+      "test result: FAILED. 32 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 17.64s"
+    ]
+  },
+  "harness_full_units": {
+    "binary": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass159-current-options-v7.exe",
+    "binary_sha256": "63fe395c68dba09ad0f81a75d2cf8bec911e10ca2eb8acb1b9aeece202c44f77",
+    "exit_code": 0,
+    "seconds": 190.0100523000583,
+    "log": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass159-current-options-all-units-v2.log",
+    "log_sha256": "321c3f3c24ebe967ef8d9ea1b32c8970c1203deb94a5239db07b73ad7edd447e",
+    "result_lines": [
+      "test result: ok. 177 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 189.69s"
+    ]
+  },
+  "baseline_current_control": "The prior committed DeadSync binary failed the distinct Current/Song Lua assertion at compilation; the unchanged control now compiles and passes.",
+  "known_unit_failures": [
+    "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+    "tests::compile_song_lua_accepts_skewy_probe_calls"
+  ],
+  "known_modifier_failures": [
+    "hidden_actor_tweens_drive_modifiers_without_probe_state",
+    "lane_stealth_survives_lua_writes_and_fresh_options",
+    "motion_suboptions_survive_lua_writes_and_reset"
+  ],
+  "scope": "Option levels, Lua queries, approaches and assignments exercised by these controls. Song captures still use the semantic Lua loader with compiled native option methods.",
+  "open_checks": [
+    "Direct Current option writes in actual gameplay rendering and the compiled modifier timeline",
+    "Partially approached speed fields in PlayerIsUsingModifier equality",
+    "RateModsAffectFGChanges actor-delta scaling and dynamic music-rate audio/song-position clocks",
+    "Broader ArrowEffects and framebuffer parity",
+    "All original 501 sources and 492 archive contexts, including unindexed failures and prior independent observations"
+  ],
+  "reference_sources_unchanged": true,
+  "authored_current_control_unchanged": true,
+  "original_corpus_or_tolerances_changed": false,
+  "full_current_gameplay_parity_complete": false,
+  "full_corpus_complete": false
+}
