@@ -97,3 +97,11 @@ mod tests {
 
 #[cfg(test)]
 mod gameplay_regression_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_alloc.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
