@@ -1401,12 +1401,10 @@
     {
       "title": "ASGORE",
       "source_simfile": "assgore/goatdad.sm",
-      "harness_version": "0.1.6",
-      "archive": "27e2c9e2dce21a88566df0de99a47dc5ef9a98fbf931abf2bd02d13be7619855.tar.zst",
-      "sha256": "27e2c9e2dce21a88566df0de99a47dc5ef9a98fbf931abf2bd02d13be7619855",
-      "compressed_bytes": 95613,
-      "uncompressed_sha256": "4baaebf033139565e74f17ec7a882c85eb551bf3b825dd66b2359c9994c5f25c",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "89fcdb0694fea759e6eafe141f9f5dce2306a600268b284a2b294967c6d8ae86.tar.zst",
+      "sha256": "89fcdb0694fea759e6eafe141f9f5dce2306a600268b284a2b294967c6d8ae86",
+      "compressed_bytes": 115754,
       "aliases": [
         "dc71aec3763dfe6d9305654a193f38e8424c09db8788543b42aec21c71e5e7ba.tar.zst",
         "71826b8e5f96f3556e573cda01b2fec78bfaa85ac0caf580ae17799342e6add4.tar.zst",
