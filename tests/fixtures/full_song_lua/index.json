@@ -1705,12 +1705,10 @@
     {
       "title": "Brain Power",
       "source_simfile": "Brain Power (Cranky Remix)/Brain Power (Cranky Remix).ssc",
-      "harness_version": "0.1.0",
-      "archive": "ae81c86ba98d58f56c507975948a9b6e5b872cce3cf83a3d85e4713e7828275b.tar.zst",
-      "sha256": "ae81c86ba98d58f56c507975948a9b6e5b872cce3cf83a3d85e4713e7828275b",
-      "compressed_bytes": 71943,
-      "uncompressed_sha256": "bff8c30ce8bc8fd2ec73d9eab59da986f539ead3d3d884d90b9d54b4d5208e0d",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664.tar.zst",
+      "sha256": "6596d65f5ac9532232cba995e4ce8d55451d586c1b9d624a4505e1c4edd1c664",
+      "compressed_bytes": 413229,
       "aliases": [
         "cc42443db195e7c1a1d89a88bde0d3d1d7cb20624413cb7b887fc655c0c6bf27.tar.zst"
       ]
