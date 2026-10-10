@@ -1,0 +1,128 @@
+{
+  "harness_commit": "17e23b4a925b69d455be5e5bff6052d2a99d03e9",
+  "harness_version": "0.1.46",
+  "source_pending_commit": false,
+  "harness_executable_sha256": "e5d4e1f1886d0f5e15a6d97ab7fe53b5856f3c349ee3d9fbbe62411d6cfef917",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "codec_commits": {
+    "libpng": "ea127968204cc5d10f3fc9250c306b9e8cbd9b80",
+    "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+    "libjpeg-turbo": "20ade4dea9589515a69793e447a6c6220b464535"
+  },
+  "oracle": "actual native file decoder and bitmap upload preparation",
+  "framebuffer_verified": false,
+  "source_audit": {
+    "ModelTypes.cpp": {
+      "pinned_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+      "local_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+      "equal_after_lf_normalization": true
+    },
+    "RageTextureManager.cpp": {
+      "pinned_sha256": "bd7665ebe12533a5e7ce3ed45a8a71bcc25d0a602dd316a9bd601e8e67bdda50",
+      "local_sha256": "bd7665ebe12533a5e7ce3ed45a8a71bcc25d0a602dd316a9bd601e8e67bdda50",
+      "equal_after_lf_normalization": true
+    },
+    "RageTextureID.cpp": {
+      "pinned_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+      "local_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+      "equal_after_lf_normalization": true
+    },
+    "RageBitmapTexture.cpp": {
+      "pinned_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+      "local_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load.cpp": {
+      "pinned_sha256": "360a998709a2bf9878f22740db865c0774917cd56fa992d4cde17be236bf4b03",
+      "local_sha256": "360a998709a2bf9878f22740db865c0774917cd56fa992d4cde17be236bf4b03",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_PNG.cpp": {
+      "pinned_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+      "local_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_GIF.cpp": {
+      "pinned_sha256": "1cb385d61e88a80a08198d96a094b98c2c1838c5a8905e1549add5124c06cd0b",
+      "local_sha256": "1cb385d61e88a80a08198d96a094b98c2c1838c5a8905e1549add5124c06cd0b",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_BMP.cpp": {
+      "pinned_sha256": "9dd70d9cd6890765ea8d47a9e6b0fdfa6142a3960acb7c4d8b38a8ab156bb17a",
+      "local_sha256": "9dd70d9cd6890765ea8d47a9e6b0fdfa6142a3960acb7c4d8b38a8ab156bb17a",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurface_Load_JPEG.cpp": {
+      "pinned_sha256": "4fc5a2b6ad119b7cb6c76d10a3facf9e6dc055202e39378c2fed12a634124da3",
+      "local_sha256": "4fc5a2b6ad119b7cb6c76d10a3facf9e6dc055202e39378c2fed12a634124da3",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurfaceUtils.cpp": {
+      "pinned_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+      "local_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurfaceUtils_Zoom.cpp": {
+      "pinned_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+      "local_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+      "equal_after_lf_normalization": true
+    },
+    "RageSurfaceUtils_Dither.cpp": {
+      "pinned_sha256": "c5aed43838d79b4e264a716141e3c3c0348e6acb5641c4fb8e7f0b40e0c89d9e",
+      "local_sha256": "c5aed43838d79b4e264a716141e3c3c0348e6acb5641c4fb8e7f0b40e0c89d9e",
+      "equal_after_lf_normalization": true
+    },
+    "RageDisplay_OGL.cpp": {
+      "pinned_sha256": "06300e9bbb3ccdc31707084ea6f0f57144f485db4387e38b0163856baab45758",
+      "local_sha256": "06300e9bbb3ccdc31707084ea6f0f57144f485db4387e38b0163856baab45758",
+      "equal_after_lf_normalization": true
+    },
+    "PrefsManager.cpp": {
+      "pinned_sha256": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+      "local_sha256": "a522c490a5db7ebc994fdcf918c5eed729c7821322c55f7528e85ff25d25285b",
+      "equal_after_lf_normalization": true
+    }
+  },
+  "files": {
+    "rgb16-strip": {
+      "source_sha256": "5a0874e5435d72d1ca6ab5229410f0ea0f8182c5ae803b148a9a5447da9eb294",
+      "rgba_sha256": "cea5a6e0f9188ef22fde30c8e20709c80cd2e377505aad1d5858f54a8f2fc20a",
+      "rgba_bytes": 24,
+      "dimensions": [
+        3,
+        2
+      ]
+    },
+    "rgba16-strip": {
+      "source_sha256": "85efe20ae6177e6a61c0878e68733d0a64ee70a316dec8ce3e51a5e2058d249e",
+      "rgba_sha256": "cea5a6e0f9188ef22fde30c8e20709c80cd2e377505aad1d5858f54a8f2fc20a",
+      "rgba_bytes": 24,
+      "dimensions": [
+        3,
+        2
+      ]
+    },
+    "gray16-strip": {
+      "source_sha256": "038c7a7d19d20ff23497a3c85fe83f2ba71e9df452a31f559c055bfcff07c928",
+      "rgba_sha256": "43648b966be017341b1460850f4de2bfb5713c432b2f1d7a59255ce61db401bd",
+      "rgba_bytes": 256,
+      "dimensions": [
+        8,
+        8
+      ]
+    },
+    "gray-alpha16-strip": {
+      "source_sha256": "8fe090e29d3f7b3885e0c1350611f5ade0a4dee26cd2209d07ceb042de9efd71",
+      "rgba_sha256": "1a31f67cf1e79993a12cebae6bb17ee9f8ae4d338049bffb87325f88c6cec6b3",
+      "rgba_bytes": 256,
+      "dimensions": [
+        8,
+        8
+      ]
+    }
+  },
+  "native_json_sha256": "447a5597f34bc0962d242c4beca64904e864a2c77de60d2727b479f3510c40b0",
+  "control_json_sha256": "b32926b0295bceaaa67669facef5a8e12cd5bcf653de2cb6b55b4bccf8773676",
+  "compared_png_rgba_bytes": 560,
+  "sprite_upload_pixels_captured": false
+}

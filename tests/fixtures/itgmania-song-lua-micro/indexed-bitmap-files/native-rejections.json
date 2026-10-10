@@ -1,0 +1,22 @@
+[
+  {
+    "name": "misnamed-bmp-model",
+    "file": "misnamed.png",
+    "kind": "model",
+    "color_depth": 32,
+    "max_size": 2048,
+    "exit_code": 1,
+    "error": "error: ITGmania actor fixture failed: native bitmap header: Unknown file format",
+    "source_sha256": "2f44c91ecd69db5f1ff1de0f71462e7afc1f9d042715cd4d6dc92c757a10cc34"
+  },
+  {
+    "name": "misnamed-bmp-sprite",
+    "file": "misnamed.png",
+    "kind": "sprite",
+    "color_depth": 32,
+    "max_size": 2048,
+    "exit_code": 1,
+    "error": "error: ITGmania actor fixture failed: native bitmap header: Unknown file format",
+    "source_sha256": "2f44c91ecd69db5f1ff1de0f71462e7afc1f9d042715cd4d6dc92c757a10cc34"
+  }
+]

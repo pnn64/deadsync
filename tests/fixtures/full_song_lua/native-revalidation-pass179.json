@@ -1,0 +1,104 @@
+{
+  "pass": 179,
+  "previous_record": "native-revalidation-pass178.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+  "comparator_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    100
+  ],
+  "next_position": 101,
+  "comparisons_passed": 208388,
+  "charts": [
+    {
+      "position": 100,
+      "entry": {
+        "title": "Apollo",
+        "source_simfile": "Apollo/Apollo.sm",
+        "harness_version": "0.1.61",
+        "archive": "830650734bc8dd390075773519b00d92d225ce12f935c22698954fb02736b063.tar.zst",
+        "sha256": "830650734bc8dd390075773519b00d92d225ce12f935c22698954fb02736b063",
+        "compressed_bytes": 210427,
+        "aliases": [
+          "5d03acb216a8917238b057d2ee38614e3f2e3aee8d10d25eec39d7a9aabf56ea.tar.zst"
+        ]
+      },
+      "original_archive_retained": "6aa7a235e8678caa459399893e7c0e828d80843574fe3231966bf704cf26a0f0.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "a5de92fec4daf33990ef58d448d9697b6e06e8b2b2e6285e6d0cb14e7e068eaf",
+      "original_source_sha256": {
+        "Apollo/Apollo.ogg": "433ea1ca3d1114adf065378fb6e435a2b4101aac24b7123921262f681db74181",
+        "Apollo/Apollo.sm": "415084485199d886c19862c31e59f0331e3e03b5dd2816c9f8e9b02a984ca828",
+        "Apollo/Apollo.ssc": "dc4b926e7a0687cf4a7576292592ae518dba636cabba234c8c95fb502f0a4e5f",
+        "Apollo/bg.png": "030f87a38972a48f3bef6ac4e9c289bcad0d7b7b5e69a37b627d11a5a24bc0e8",
+        "Apollo/bn.png": "1594b1f5a16b484c5ba47b367a5766ee06ca77a48a8cde64547f5f17aa635629",
+        "Apollo/lua/default.lua": "05650b50ec86df0181cb4f967eb2658d28863a6df00eaa7e8c9021a44af41348",
+        "Apollo/lua/default.xml": "32da95142ee3788ff4e89f0cf55341606fb28ac2d7f723a046407a4c7e1f807f",
+        "Apollo/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "Apollo/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+        "Apollo/lua/mods.lua": "89732b26e007e879d5166a9cc68fa1d9aaad5b5d8fcc556c2acea2a2785a0ba5"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 9207,
+      "duration_seconds": 153.42715454101562,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 5,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 100,
+      "source_simfile": "Apollo/Apollo.sm",
+      "archive": "830650734bc8dd390075773519b00d92d225ce12f935c22698954fb02736b063.tar.zst",
+      "archive_sha256": "830650734bc8dd390075773519b00d92d225ce12f935c22698954fb02736b063",
+      "harness_version": "0.1.61",
+      "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+      "source_pending_commit": false,
+      "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-full_song_lua.exe",
+        "830650734bc8dd390075773519b00d92d225ce12f935c22698954fb02736b063.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 29.717875900212675,
+      "comparisons_passed": 208388,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-100-screen-parent-committed-v4.log",
+      "log_sha256": "e6800986d3ffd5082069197de31577d36917e44558328a47578836db7a19b442",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass212-top-100-current-main-v1.json",
+      "native_receipt_sha256": "c79aa7fa9f3a52a37d1fc530e198cc015579ba3a0c69a17077be26a300539d7b",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+    "source_pending_commit": false,
+    "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.110867999959737,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-100-native-pass179.log",
+    "log_sha256": "88140caf84fce430f9bfa8649d18e00098747e0df4ff7b50d1902d1879a8081a",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 0.55s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

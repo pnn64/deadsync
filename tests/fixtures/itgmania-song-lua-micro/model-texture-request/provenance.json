@@ -1,0 +1,24 @@
+{
+  "harness_commit": "32b73981c2208039df05a51ebdd2b3d1479d1213",
+  "harness_version": "0.1.43",
+  "harness_executable_sha256": "49f2da28c5ac26a2fea3d4637060cc7a13c928d829958e9a7103c4f59de92602",
+  "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "input_sha256": {
+    "control.json": "0398c1b8f97ce788b64bba423f2585980d4c6dcff17590ea8c87f5d1d7995093",
+    "default.lua": "adf729420bb76ef890d081372bf074e76c6a968037cd1750df47ac8e2255d54c",
+    "model.txt": "a7c7a147238ee8df839a3d3795e8853430c3840d15ea38cb71c4435c69aaacce",
+    "npot.png": "da19383146fbe80dd5df8542a46cdaebd280969d11c3748379f4394680b923ae"
+  },
+  "native_sha256": "b38c8abf82c9d5f7139bbcdde6be94e757231272298d23e74109ac16be73854c",
+  "native_draws": 3,
+  "requested_flags_and_headless_dimensions_only": true,
+  "framebuffer_verified": false,
+  "native_surface_pixels": {
+    "harness_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+    "harness_version": "0.1.44",
+    "native_control": "texture-surface/native.json model-pink-npot",
+    "native_control_sha256": "f0d8ba5b28e6b3c132063953ae7c3f0d675aedd219c5be59fb5c004de1c5ae04",
+    "native_rgba_sha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+    "scope": "Compiled CPU color-key/resize/cleanup bytes for the matching 5x9 RGBA source; no GPU mip or framebuffer proof"
+  }
+}

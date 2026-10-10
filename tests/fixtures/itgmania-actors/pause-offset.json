@@ -1,0 +1,245 @@
+{
+  "harness_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+  "native_executable_sha256": "c1d933d3be6205de6362e0df77fa8110cc1ba1a9821c9e63eff4cca9b8137d61",
+  "native_pin_sha256": "178a1263ccb1e7dabbb5b228ab2d1b416328cebef1e6cb8c9f555d9b83f16809",
+  "reference": "ITGmania ArrowEffects.cpp:540 uses displayed music seconds in GetDisplayedSpeedPercent, and TimingData.cpp:1028",
+  "scope": "Native TimingData/SongPosition and native Actor setters; default 1x beat spacing; no modifier or GPU claim",
+  "maps": [
+    {
+      "name": "stop",
+      "offset": -0.125,
+      "bpms": "0=120",
+      "stops": "4=1",
+      "delays": "",
+      "speeds": "0=0.5=0=0,4=2=2=1",
+      "simfile_sha256": "c946377559f2287d82a6bb0fb72b4439d955c9e8548b86a849243211d77e1115",
+      "lua_sha256": "d78540569223f8360a3bbf381be074ad569923eaeb669a3c66d277850feae5b0",
+      "trace_sha256": "f804dcd72268ffdc6fdfa34565ae5a8b99735da550926a2d2cd5a8b2c30abe77",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-native-timingdata-v2.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-pause-offset-native-v1\\stop",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-pause-offset-native-v1\\stop\\traces",
+        "--until-beat",
+        "1",
+        "--max-events",
+        "500000"
+      ],
+      "elapsed_seconds": null,
+      "capture_reused": true,
+      "runtime_errors": [],
+      "dropped_events": 0,
+      "samples": [
+        {
+          "elapsed": 0.0,
+          "beat": 0,
+          "note": 8,
+          "offset": 256
+        },
+        {
+          "elapsed": 1.5,
+          "beat": 3,
+          "note": 8,
+          "offset": 160
+        },
+        {
+          "elapsed": 1.9900000095367432,
+          "beat": 3.9800000190734863,
+          "note": 8,
+          "offset": 128.63999938964844
+        },
+        {
+          "elapsed": 2.0,
+          "beat": 4,
+          "note": 8,
+          "offset": 128
+        },
+        {
+          "elapsed": 2.125,
+          "beat": 4,
+          "note": 8,
+          "offset": 152
+        },
+        {
+          "elapsed": 2.25,
+          "beat": 4,
+          "note": 8,
+          "offset": 176
+        },
+        {
+          "elapsed": 2.5,
+          "beat": 4,
+          "note": 8,
+          "offset": 224
+        },
+        {
+          "elapsed": 2.75,
+          "beat": 4,
+          "note": 8,
+          "offset": 272
+        },
+        {
+          "elapsed": 2.990000009536743,
+          "beat": 4,
+          "note": 8,
+          "offset": 318.08001708984375
+        },
+        {
+          "elapsed": 3.0,
+          "beat": 4,
+          "note": 8,
+          "offset": 320
+        },
+        {
+          "elapsed": 3.009999990463257,
+          "beat": 4.019999980926514,
+          "note": 8,
+          "offset": 320.3103942871094
+        },
+        {
+          "elapsed": 3.25,
+          "beat": 4.5,
+          "note": 8,
+          "offset": 322
+        },
+        {
+          "elapsed": 3.5,
+          "beat": 5,
+          "note": 8,
+          "offset": 312
+        },
+        {
+          "elapsed": 4.0,
+          "beat": 6,
+          "note": 8,
+          "offset": 256
+        },
+        {
+          "elapsed": 4.5,
+          "beat": 7,
+          "note": 8,
+          "offset": 128
+        }
+      ]
+    },
+    {
+      "name": "delay",
+      "offset": -0.125,
+      "bpms": "0=120",
+      "stops": "",
+      "delays": "4=1",
+      "speeds": "0=0.5=0=0,4=2=2=1",
+      "simfile_sha256": "8a3d9eab2d8fed879f1e8fe3db1c7e71ebe7a2f4a2aaea19ec1c090f26f0e293",
+      "lua_sha256": "d78540569223f8360a3bbf381be074ad569923eaeb669a3c66d277850feae5b0",
+      "trace_sha256": "5940191894b6d29fe5d58d45f28f3fb54af1b0f144bbc065de23795055f356e1",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-native-timingdata-v2.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-pause-offset-native-v1\\delay",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-pause-offset-native-v1\\delay\\traces",
+        "--until-beat",
+        "1",
+        "--max-events",
+        "500000"
+      ],
+      "elapsed_seconds": 1.7047280999831855,
+      "capture_reused": false,
+      "runtime_errors": [],
+      "dropped_events": 0,
+      "samples": [
+        {
+          "elapsed": 0.0,
+          "beat": 0,
+          "note": 8,
+          "offset": 256
+        },
+        {
+          "elapsed": 1.5,
+          "beat": 3,
+          "note": 8,
+          "offset": 160
+        },
+        {
+          "elapsed": 1.9900000095367432,
+          "beat": 3.9800000190734863,
+          "note": 8,
+          "offset": 128.63999938964844
+        },
+        {
+          "elapsed": 2.0,
+          "beat": 4,
+          "note": 8,
+          "offset": 128
+        },
+        {
+          "elapsed": 2.125,
+          "beat": 4,
+          "note": 8,
+          "offset": 152
+        },
+        {
+          "elapsed": 2.25,
+          "beat": 4,
+          "note": 8,
+          "offset": 176
+        },
+        {
+          "elapsed": 2.5,
+          "beat": 4,
+          "note": 8,
+          "offset": 224
+        },
+        {
+          "elapsed": 2.75,
+          "beat": 4,
+          "note": 8,
+          "offset": 272
+        },
+        {
+          "elapsed": 2.990000009536743,
+          "beat": 4,
+          "note": 8,
+          "offset": 318.08001708984375
+        },
+        {
+          "elapsed": 3.0,
+          "beat": 4,
+          "note": 8,
+          "offset": 320
+        },
+        {
+          "elapsed": 3.009999990463257,
+          "beat": 4.019999980926514,
+          "note": 8,
+          "offset": 320.3103942871094
+        },
+        {
+          "elapsed": 3.25,
+          "beat": 4.5,
+          "note": 8,
+          "offset": 322
+        },
+        {
+          "elapsed": 3.5,
+          "beat": 5,
+          "note": 8,
+          "offset": 312
+        },
+        {
+          "elapsed": 4.0,
+          "beat": 6,
+          "note": 8,
+          "offset": 256
+        },
+        {
+          "elapsed": 4.5,
+          "beat": 7,
+          "note": 8,
+          "offset": 128
+        }
+      ]
+    }
+  ]
+}

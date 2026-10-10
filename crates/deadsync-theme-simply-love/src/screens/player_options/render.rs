@@ -1617,6 +1617,7 @@ mod tests {
 
         let mut slot = test_model_slot();
         slot.model = Some(Arc::new(ModelMesh {
+            material: None,
             vertices: Arc::from(
                 [[-24.0, -12.0, 0.0], [24.0, -12.0, 0.0], [0.0, 30.0, 90.0]].map(|pos| {
                     ModelVertex {

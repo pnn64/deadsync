@@ -10,6 +10,7 @@ pub struct Churn {
     pub frees: usize,
     pub allocated_bytes: usize,
     pub freed_bytes: usize,
+    pub peak_bytes: usize,
 }
 
 thread_local! {
@@ -27,6 +28,9 @@ fn record(update: impl FnOnce(&mut Churn)) {
     let _ = COUNTS.try_with(|counts| {
         if let Some(mut current) = counts.get() {
             update(&mut current);
+            current.peak_bytes = current
+                .peak_bytes
+                .max(current.allocated_bytes.saturating_sub(current.freed_bytes));
             counts.set(Some(current));
         }
     });

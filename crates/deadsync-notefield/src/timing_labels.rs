@@ -40,7 +40,7 @@ pub(crate) fn compose_timing_labels<S>(
         crate::gameplay_visual_effect_params(&request.visual.visual, 0),
     );
     let width = (max_x - min_x + ScrollSpeedSetting::ARROW_SPACING * field_zoom)
-        * crate::visual_arrow_effect_zoom_cached(0.0, transform);
+        * crate::visual_arrow_effect_zoom_cached(0.0, transform, 1.0);
     let glow_alpha = timing_label_glow_alpha(request.visual.elapsed_screen_s);
 
     // PARITY[ITGmania NoteField::draw_timing_segment_text]: annotations use
@@ -62,7 +62,8 @@ pub(crate) fn compose_timing_labels<S>(
         if !y.is_finite() || y < -margin || y > request.geometry.screen_height + margin {
             continue;
         }
-        let zoom = field_zoom * crate::visual_arrow_effect_zoom_cached(travel, transform);
+        let zoom = crate::visual_arrow_effect_zoom_cached(travel / field_zoom, transform, 1.0)
+            * field_zoom;
         let x = timing_label_x(prepared.field.playfield_center_x, width, zoom, label.style);
         let mut text = TextBuilder::new();
         text.font(request.hud_style.edit_measure_number_font);

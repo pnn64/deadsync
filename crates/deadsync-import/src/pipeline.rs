@@ -81,9 +81,19 @@ pub fn prepare_import(
     base_doubles: &PlayerOptionsData,
     packs: &[SongPack],
 ) -> PreparedImport {
+    let profile_guid = profile_guid_from_itgmania_guid(&source.guid).unwrap_or_default();
+    prepare_import_with_guid(source, base_singles, base_doubles, packs, profile_guid)
+}
+
+fn prepare_import_with_guid(
+    source: &ItgSource,
+    base_singles: &PlayerOptionsData,
+    base_doubles: &PlayerOptionsData,
+    packs: &[SongPack],
+    profile_guid: String,
+) -> PreparedImport {
     let options_singles = translate_player_options(&source.simply_love, base_singles);
     let options_doubles = translate_player_options(&source.simply_love, base_doubles);
-    let profile_guid = profile_guid_from_itgmania_guid(&source.guid).unwrap_or_default();
     let initials = import_initials(source);
     let mut summary = ImportSummary {
         display_name: source.editable.display_name.clone(),
@@ -141,10 +151,9 @@ where
     WriteStats: FnMut(&str, u32),
     ImportItl: FnMut(&str, &str) -> usize,
 {
-    let mut prepared = prepare_import(source, base_singles, base_doubles, packs);
-
-    if !prepared.profile_guid.is_empty()
-        && let Some(existing) = existing_profile_name(&prepared.profile_guid)
+    let profile_guid = profile_guid_from_itgmania_guid(&source.guid).unwrap_or_default();
+    if !profile_guid.is_empty()
+        && let Some(existing) = existing_profile_name(&profile_guid)
     {
         return Ok(ImportSummary {
             display_name: source.editable.display_name.clone(),
@@ -153,6 +162,8 @@ where
         });
     }
 
+    let mut prepared =
+        prepare_import_with_guid(source, base_singles, base_doubles, packs, profile_guid);
     let data = ImportProfileData {
         display_name: &source.editable.display_name,
         weight_pounds: source.editable.weight_pounds,

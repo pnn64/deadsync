@@ -1,0 +1,105 @@
+{
+  "pass": 183,
+  "previous_record": "native-revalidation-pass182.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+  "comparator_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    104
+  ],
+  "next_position": 105,
+  "comparisons_passed": 171965,
+  "charts": [
+    {
+      "position": 104,
+      "entry": {
+        "title": "Astrogirl",
+        "source_simfile": "Astrogirl [wrsw]/Astrogirl.ssc",
+        "harness_version": "0.1.61",
+        "archive": "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b.tar.zst",
+        "sha256": "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b",
+        "compressed_bytes": 167284,
+        "aliases": [
+          "b6609b0a46eb83f47476b267100075797dc9c5f831ddedbe60e7f1afe73a3e4a.tar.zst"
+        ]
+      },
+      "original_archive_retained": "019a21797c929c64cc3d9f121f507ae14d11308d8e625dd86ee955e5f67b6528.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "92cee13e0725b01443c5814cb0ae0acc181c821ce0bd7f49817b872e02a770a1",
+      "original_source_sha256": {
+        "Astrogirl [wrsw]/Astrogirl-bg.png": "fad45eed49ebcb299009dd18e49de8fb761b5124c4a2b0d4d697a720e487aa8c",
+        "Astrogirl [wrsw]/Astrogirl-bn.png": "a32e42e2e97c8d9c0177cfb94809b5ac4455998945ee19a8accbfafba5cc6b72",
+        "Astrogirl [wrsw]/Astrogirl-jacket.png": "cc8f42a7abd1617446a376adbb1d93e0e4e9324543b4d8c6fd918f80099cd566",
+        "Astrogirl [wrsw]/Astrogirl.avi": "ae4245b5f50eb8142feb976b0a509374963d9f6fb9e4b714f592ebbc96034d0a",
+        "Astrogirl [wrsw]/Astrogirl.ogg": "3fbe6c8c9d76d9e17c9de01ed4eb7e3f5083575fcb0dbeaebb341e424a32e6c2",
+        "Astrogirl [wrsw]/Astrogirl.ssc": "ba54acb0ba32cdca916705883de1499d3b3a8c5fa8bac8879759e2c921a09233",
+        "Astrogirl [wrsw]/CDTitleWrsw.png": "f323c8b7025f4ced1bae12af6549aa98eb957ec6af99d2676b86399d19f64f6b",
+        "Astrogirl [wrsw]/lua/default.lua": "9f08b082bcbdd8202181f3a82978041f3e05e5bd31f10c703ed0eba185b4f428",
+        "Astrogirl [wrsw]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Astrogirl [wrsw]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Astrogirl [wrsw]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6897,
+      "duration_seconds": 114.91803741455078,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 104,
+      "source_simfile": "Astrogirl [wrsw]/Astrogirl.ssc",
+      "archive": "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b.tar.zst",
+      "archive_sha256": "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b",
+      "harness_version": "0.1.61",
+      "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+      "source_pending_commit": false,
+      "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-full_song_lua.exe",
+        "deedb50a6e8e4670da077ab55db4abbb5bd80f0c64b679c3666db8cd3283f28b.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 20.820671999827027,
+      "comparisons_passed": 171965,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-104-screen-parent-committed-v4.log",
+      "log_sha256": "f37d1058593a1129cbaffa18fafee9b45de15543c7e378ec335918721cb54da6",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass219-top-104-current-main-v1.json",
+      "native_receipt_sha256": "877c9b5edb2448c76fc2db9ea1f5e9d1e9f1d8c3b5fe0e929214faa2b9b0f713",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+    "source_pending_commit": false,
+    "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.1647553001530468,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-104-native-pass183.log",
+    "log_sha256": "89b429c14cc4bf35c7e440983a5089fa5a693c77708a0c3daa121e4fe9624ec6",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 0.56s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
