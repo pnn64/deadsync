@@ -3130,20 +3130,33 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         let origin = context.song_timing.as_ref()
             .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
         let limit = origin + song_elapsed_seconds_at(end, context) * song_music_rate(context);
+        let unit = if context.song_timing.is_some() {
+            SongLuaTimeUnit::Second
+        } else {
+            SongLuaTimeUnit::BeatClock
+        };
         let mut eases = Vec::new();
         push_update_mod_targets_with_key(&mut eases, origin, limit.max(origin.next_up()),
             &states, &states, &states, &speeds, &mut BTreeMap::new(),
-            &mut (0, String::new()), if context.song_timing.is_some() {
-                SongLuaTimeUnit::Second
-            } else {
-                SongLuaTimeUnit::BeatClock
-            });
+            &mut (0, String::new()), unit);
+        // Column handlers retain startup writes too. A one-knot native
+        // rotation spline needs neither Solve nor an update callback.
+        let columns = read_note_column_transform_samples(lua)?;
+        let mut column_transforms = Vec::new();
+        append_column_transform_windows_from_samples(
+            &mut column_transforms, &columns, &columns,
+            SongLuaColumnOffsetBuildParams {
+                unit, start: origin, limit: limit.max(origin).next_up() - origin,
+                span_mode: SongLuaSpanMode::Len, easing: None, sustain: None,
+                opt1: None, opt2: None,
+            },
+        );
         spline_capture.finish(column_splines);
         return Ok((
             eases,
             Vec::new(),
             Vec::new(),
-            Vec::new(),
+            column_transforms,
             Vec::new(),
             Vec::new(),
         ));

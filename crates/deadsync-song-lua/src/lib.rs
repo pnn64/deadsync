@@ -9780,6 +9780,36 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_static_column_rotation() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song-lua");
+        let mut context = SongLuaCompileContext::new(&dir, "Static column rotation");
+        context.music_length_seconds = 4.0;
+        context.song_timing_bpms = vec![(0.0, 60.0)];
+        let compiled = test_compile_song_lua(&dir.join("static-column-rotation.lua"), &context)
+            .expect("static rotation control");
+        let timing = deadsync_rules::timing::TimingData::from_segments(
+            0.0, 0.0, &deadsync_rules::timing::TimingSegments {
+                bpms: vec![(0.0, 60.0)], ..Default::default()
+            }, &[],
+        );
+        for player in 0..2 {
+            let windows = crate::gameplay::build_song_lua_column_offset_windows_for_player(
+                &compiled, &timing, player, 0.0,
+            );
+            for second in [0.0, 0.5, 2.0, 4.0] {
+                let (transforms, _) = deadsync_gameplay::song_lua_column_transforms(
+                    &windows, 4, second,
+                );
+                for rotation in &transforms[3][..4] {
+                    assert!((*rotation - 180.0).abs() < 1e-5,
+                        "player {player} at {second}: {transforms:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn compile_song_lua_keeps_position_splines_separate_from_reverse() {
         let song_dir = test_dir("update-position-spline-reverse");
         let entry = song_dir.join("default.lua");
