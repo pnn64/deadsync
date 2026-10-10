@@ -171,3 +171,15 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_alloc.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/profile_dataflow_support.rs"]
+mod dataflow_perf;
+
+#[cfg(test)]
+#[global_allocator]
+static PROFILE_DATAFLOW_ALLOC: perf::CountedSystem = perf::CountedSystem;

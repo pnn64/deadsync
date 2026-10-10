@@ -133,11 +133,11 @@ pub(super) fn dispatch_behavior_delta(
 
     if outcome.persisted {
         if (
-            state.player_options[player_idx].clone(),
-            state.judgment_palette_ids[player_idx].clone(),
-            state.heart_rate_device_ids[player_idx].clone(),
+            &state.player_options[player_idx],
+            &state.judgment_palette_ids[player_idx],
+            &state.heart_rate_device_ids[player_idx],
             state.max_heart_rate[player_idx],
-        ) != before
+        ) != (&before.0, &before.1, &before.2, before.3)
         {
             queue_profile_update(state, player_idx);
         }
@@ -187,11 +187,6 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
         }
         _ => return false,
     };
-    let before = (
-        state.player_options[idx].clone(),
-        state.heart_rate_device_ids[idx].clone(),
-    );
-
     let row = state.pane().row_map.row(id);
     let choice_index = row.selected_choice_index[idx];
     let bit = match writeback.bit_mapping.bit_for_choice(choice_index) {
@@ -199,6 +194,7 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
         _ => return false,
     };
 
+    let before = state.player_options[idx].clone();
     let cur = (init.get_active)(&state.option_masks[idx]);
     let new_bits = cur ^ bit;
     (init.set_active)(&mut state.option_masks[idx], new_bits);
@@ -210,11 +206,7 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
         stored,
     );
 
-    if (
-        state.player_options[idx].clone(),
-        state.heart_rate_device_ids[idx].clone(),
-    ) != before
-    {
+    if state.player_options[idx] != before {
         queue_profile_update(state, idx);
     }
 
@@ -410,3 +402,7 @@ pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         },
     };
 }
+
+#[cfg(test)]
+#[path = "../../../../../tests/perf/player_option_originals.rs"]
+pub(super) mod dataflow_originals;
