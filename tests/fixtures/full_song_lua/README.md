@@ -727,3 +727,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass120.json`. Position 42 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 121
+
+Position 42, [11] 時計の国のジェミニ, passes all
+193,408 comparisons against committed DeadSync
+`207e17110`. The complete native harness 0.1.52 archive
+contains 8,421 updates over 140.33 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass121.json`. Position 43 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.

@@ -741,12 +741,10 @@
     {
       "title": "[11] 時計の国のジェミニ",
       "source_simfile": "[11] Gemini in Clockland/Gemini in Clockland.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8d1fa22c047c19ab654d1f2cb84f4e67f4eb60b4403f5cb4e3550ee8f484a72f.tar.zst",
-      "sha256": "8d1fa22c047c19ab654d1f2cb84f4e67f4eb60b4403f5cb4e3550ee8f484a72f",
-      "compressed_bytes": 108886,
-      "uncompressed_sha256": "c0bc08fba01cebf377316390b89feabb000e833bbe8753614d6a2f5727777102",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619.tar.zst",
+      "sha256": "f6b960e1fa42f107c25c2549c82af09a2dbb72a8b61ae667ecc98e5adce44619",
+      "compressed_bytes": 143963,
       "aliases": [
         "8c1b261a63b0301f768bf03a2fd953dfa358f5e55ccb6cfd312c76944109f573.tar.zst"
       ]
