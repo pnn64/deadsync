@@ -8792,7 +8792,10 @@ pub fn apply_sync_analysis_events(
                 crate::screens::pack_sync::apply_event(&mut state.pack_sync_overlay, event);
             }
         }
-        crate::SimplyLoveSyncOwner::OptionsPack => events.clear(),
+        crate::SimplyLoveSyncOwner::OptionsPack
+        | crate::SimplyLoveSyncOwner::ContentBrowserPack => {
+            events.clear();
+        }
     }
 }
 

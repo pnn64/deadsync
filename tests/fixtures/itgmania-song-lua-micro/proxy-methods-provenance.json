@@ -1,0 +1,496 @@
+{
+  "pass_number": 58,
+  "status": "native ActorProxy repair and final complete archive controls verified; full corpus unfinished",
+  "deadsync_version": "0.5.1862",
+  "cache_version": 53,
+  "harness_version": "0.1.22",
+  "harness_commit": "7abb249b183a6ef884ee3bc280273383edce9ba6",
+  "native_control_commit": "050a8d3f993ac12bdd2c0e45e58ff03403d2f2f8",
+  "native_source": {
+    "files": {
+      "src/ActorProxy.cpp": "88361635de14dd7777a4c004432b3fe7da171d403d080a5544fda8c2e9f008c4",
+      "src/ActorProxy.h": "a2484891b4c0bbfec2938c95eb0da67eaf6c9d1e2654b0504322fe4cf496ee67"
+    },
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "git_dirty": "false",
+    "contract": "LunaActorProxy owns SetTarget and GetTarget and derives from Actor; GetTarget pushes nil until assigned and then the same Actor. SetTarget checks Luna<Actor> before changing the pointer."
+  },
+  "native_assertion_input": {
+    "file": "proxy-methods-input.json",
+    "sha256": "b85fc04a0c9f35a90c882b33d2a93f7def2cdfb50b3bbce869a39d065b01b0fd"
+  },
+  "native_assertion_output": {
+    "file": "proxy-methods-native.json",
+    "sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    }
+  },
+  "harness_before": {
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass53-method-probes-v1.exe",
+      "song-lua-semantic-baseline",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-class-before\\corpus",
+      "--simfile",
+      "probe/probe.sm",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-class-before\\traces",
+      "--beat-step",
+      "0.25",
+      "--max-events",
+      "1500000",
+      "--random-seed",
+      "1"
+    ],
+    "cli_exit_code": 0,
+    "result": {
+      "simfile": "probe/probe.sm",
+      "fixture": "probe/probe.sm.semantic.json",
+      "title": "Native proxy class lookup",
+      "lua_entries": 1,
+      "status": "partial",
+      "runtime_errors": 1
+    },
+    "log_sha256": "42c002b037827643d08e0fa0b2a042921b5733e3ab38761af1182e849ded3712",
+    "lua_sha256": "f7e3cfbc12f83e9311a482f2a52660a9b4189c2c5014e80d3243a733f9e4cbcb",
+    "purpose": "Independent source-backed ActorProxy class feature control; not a corpus fixture or a complete archive."
+  },
+  "harness_after": {
+    "command": [
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass58-proxy-v1.exe",
+      "song-lua-semantic-baseline",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-class-before\\corpus",
+      "--simfile",
+      "probe/probe.sm",
+      "--out",
+      "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-class-noteskin-after\\traces",
+      "--beat-step",
+      "0.25",
+      "--max-events",
+      "1500000",
+      "--random-seed",
+      "1"
+    ],
+    "environment": {
+      "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:/GitHub/deadsync/assets/noteskins"
+    },
+    "entry": {
+      "simfile": "probe/probe.sm",
+      "fixture": "probe/probe.sm.semantic.json",
+      "title": "Native proxy class lookup",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    "end_position": {
+      "beat": 4,
+      "seconds": 2
+    },
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "lua_sha256": "f7e3cfbc12f83e9311a482f2a52660a9b4189c2c5014e80d3243a733f9e4cbcb",
+    "cli_sha256": "5b431d3dd63f6e0707515adcaf06817f712f21e6023f7ac816d9d007460d265a",
+    "harness_commit": "7abb249b183a6ef884ee3bc280273383edce9ba6"
+  },
+  "harness_tests": {
+    "exit_code": 0,
+    "seconds": 153.39732766151428,
+    "summary": [
+      "test result: ok. 138 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 153.15s"
+    ],
+    "executable_sha256": "079e2b5f8b5d4b5ca0f5ec3d26061c0525e3a5630151057735b8a575a05de91c",
+    "log_sha256": "e99a2a1b3d20f66570f8837194fbb276b170632b6b25f406e0ba82cf5f019891"
+  },
+  "deadsync_before": {
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "test-support",
+      "proxy_methods_match_native",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 101.9568874835968,
+    "log_sha256": "ea1b12e6f32407852e74926ceaf4be67860dfa9e364000996d6c22a60d6ea432",
+    "summaries": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 485 filtered out; finished in 0.07s"
+    ]
+  },
+  "core_initial_serial_validation": [
+    {
+      "job": "isolated-sprite",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support",
+        "--test",
+        "playback",
+        "playback::tests::song_lua_bound_sprite_draw_refreshes_identity_size_and_uv",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 2.311657667160034,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 185 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "aa3c8d739f3158b4ffdf03945dec1005164360055a90c73333496b8f5776a1c9"
+    },
+    {
+      "job": "core-serial",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 76.83334040641785,
+      "summaries": [
+        "test result: ok. 486 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 41.28s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 31.03s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "a375cd88983d679b2bc2aafab05e3cb9f95430e525cb791c1a7a057541ffd004"
+    },
+    {
+      "job": "production",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 12.442297458648682,
+      "summaries": [],
+      "log_sha256": "dd5aaa9a68ccc0e5eed7ec306498e511148ef6df14c938a73c970ae4a7f5b452"
+    },
+    {
+      "job": "cache-clock",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 26.76265048980713,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "93a2fda5c2a7a121d935e8a1094de091bdbcf585045b8a2e48c359680c0d9bfa"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.7391772270202637,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "8b5627da2b8427cf640f032df897454f9441cc8fe21aa1471e2b34563ec7084e"
+    }
+  ],
+  "core_parallel_run": [
+    {
+      "job": "core",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support"
+      ],
+      "exit_code": 101,
+      "seconds": 16.349477767944336,
+      "summaries": [
+        "test result: ok. 486 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: FAILED. 182 passed; 1 failed; 3 ignored; 0 measured; 0 filtered out; finished in 10.82s"
+      ],
+      "log_sha256": "6ef9042dadecba7e3d4a50942c6ec9edc4b90efb802c701e3409b73803999246"
+    }
+  ],
+  "parallel_run_followup": "The sprite generation equality assertion failed with concurrent global texture metadata changes. The isolated test and complete serial suite passed without changing this test or its numeric assertions.",
+  "complete_archive_controls": [
+    {
+      "archive": {
+        "title": "Native proxy class lookup",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.22",
+        "archive": "06dd6f6bf662849485525d205bda860549e5f2233a0a98fd9fda8cad8c0a165f.tar.zst",
+        "sha256": "06dd6f6bf662849485525d205bda860549e5f2233a0a98fd9fda8cad8c0a165f",
+        "compressed_bytes": 11355
+      },
+      "capture": {
+        "command": [
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass58-proxy-v1.exe",
+          "song-lua-semantic-baseline",
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-class-before\\corpus",
+          "--simfile",
+          "probe/probe.sm",
+          "--out",
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-class-noteskin-after\\traces",
+          "--beat-step",
+          "0.25",
+          "--max-events",
+          "1500000",
+          "--random-seed",
+          "1"
+        ],
+        "environment": {
+          "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:/GitHub/deadsync/assets/noteskins"
+        },
+        "entry": {
+          "simfile": "probe/probe.sm",
+          "fixture": "probe/probe.sm.semantic.json",
+          "title": "Native proxy class lookup",
+          "lua_entries": 1,
+          "status": "ok"
+        },
+        "end_position": {
+          "beat": 4,
+          "seconds": 2
+        },
+        "runtime_errors": 0,
+        "dropped_events": 0,
+        "lua_sha256": "f7e3cfbc12f83e9311a482f2a52660a9b4189c2c5014e80d3243a733f9e4cbcb",
+        "cli_sha256": "5b431d3dd63f6e0707515adcaf06817f712f21e6023f7ac816d9d007460d265a",
+        "harness_commit": "7abb249b183a6ef884ee3bc280273383edce9ba6"
+      },
+      "deadsync_before": {
+        "archive": "06dd6f6bf662849485525d205bda860549e5f2233a0a98fd9fda8cad8c0a165f.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 1,
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4",
+        "log_sha256": "3f43fdfeaeb3ee18da648e99a2d343474db1422cd818c8b9afb61b6dd09808f3",
+        "summary": [
+          "result: FAILED",
+          "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.12s"
+        ],
+        "expected_failure": "ActorProxy does not inherit ActorFrame.GetChild"
+      }
+    },
+    {
+      "archive": {
+        "title": "Native proxy class lookup",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.22",
+        "archive": "6386f0576530f32e0529e7bc00b62db3d8780487b025435fb23b4b64ab9d3318.tar.zst",
+        "sha256": "6386f0576530f32e0529e7bc00b62db3d8780487b025435fb23b4b64ab9d3318",
+        "compressed_bytes": 11994
+      },
+      "capture": {
+        "command": [
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass58-proxy-v1.exe",
+          "song-lua-semantic-baseline",
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-methods-after\\corpus",
+          "--simfile",
+          "probe/probe.sm",
+          "--out",
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass58-proxy-methods-noteskin-after\\traces",
+          "--beat-step",
+          "0.25",
+          "--max-events",
+          "1500000",
+          "--random-seed",
+          "1"
+        ],
+        "environment": {
+          "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:/GitHub/deadsync/assets/noteskins"
+        },
+        "entry": {
+          "simfile": "probe/probe.sm",
+          "fixture": "probe/probe.sm.semantic.json",
+          "title": "Native proxy class lookup",
+          "lua_entries": 1,
+          "status": "ok"
+        },
+        "end_position": {
+          "beat": 4,
+          "seconds": 2
+        },
+        "runtime_errors": 0,
+        "dropped_events": 0,
+        "lua_sha256": "170e00501fc2922e406564b8412ae1185d2e4aa00a004be44d4d3edb08a215b6",
+        "cli_sha256": "5b431d3dd63f6e0707515adcaf06817f712f21e6023f7ac816d9d007460d265a",
+        "harness_commit": "7abb249b183a6ef884ee3bc280273383edce9ba6"
+      },
+      "deadsync_before": {
+        "archive": "6386f0576530f32e0529e7bc00b62db3d8780487b025435fb23b4b64ab9d3318.tar.zst",
+        "version": "0.5.1861",
+        "exit_code": 1,
+        "expected_failure": "ActorProxy public class exists",
+        "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4",
+        "log_sha256": "ebb113fcf0727ec2218f529d45d66669eebaf9c8fca9b64c10b130178c844393",
+        "summary": [
+          "result: FAILED",
+          "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.13s"
+        ]
+      }
+    }
+  ],
+  "intermediate_archive_validation": [
+    {
+      "archive": "06dd6f6bf662849485525d205bda860549e5f2233a0a98fd9fda8cad8c0a165f.tar.zst",
+      "version": "0.5.1862",
+      "exit_code": 0,
+      "executable_sha256": "c635f401cbf41aa06e434db88a9bd1113a33db0faade51702c6b0aac00df41b5",
+      "source_state": "before final restriction of GetTarget adapter to ActorProxy only",
+      "log_sha256": "2f823b50f2b90d8ab978a2a6bd92262a27fe02bbaff1746eb7837a214508b7e0",
+      "summary": [
+        "result: ok",
+        "result: ok; 1/1 fixtures passed; 2671 comparisons passed, 0 failed (2671 total); elapsed 0.18s"
+      ]
+    },
+    {
+      "archive": "6386f0576530f32e0529e7bc00b62db3d8780487b025435fb23b4b64ab9d3318.tar.zst",
+      "version": "0.5.1862",
+      "exit_code": 0,
+      "executable_sha256": "c635f401cbf41aa06e434db88a9bd1113a33db0faade51702c6b0aac00df41b5",
+      "source_state": "before final restriction of GetTarget adapter to ActorProxy only",
+      "log_sha256": "a694cef46a9dcfcb3437340de89a500b202386a0ee396eaee312da31bf9f149b",
+      "summary": [
+        "result: ok",
+        "result: ok; 1/1 fixtures passed; 2671 comparisons passed, 0 failed (2671 total); elapsed 0.14s"
+      ]
+    }
+  ],
+  "limits": [
+    "These are synthetic two-second controls, not additional corpus songs.",
+    "Every ActorProxy rendering and argument-type case is not claimed to be audited.",
+    "Other unlinked public classes and Simply Love screen context remain to be audited.",
+    "The pass-57 prefix was 17 archives with 3666254 passing comparisons on harness .21 / DeadSync .1861. It must be refreshed on .22 / .1862.",
+    "Full scope remains 501 simfiles (483 indexed, 18 unindexed) and 492 historical archive variants; no full-corpus parity claim."
+  ],
+  "final_source_validation": [
+    {
+      "job": "core-final",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "seconds": 189.98342609405518,
+      "summaries": [
+        "test result: ok. 486 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.82s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 27.21s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "38f7a4e606404da16609f208d665ca6f0a8cf6512678c2f61d242d61773f260d"
+    },
+    {
+      "job": "production-final",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 7.655928611755371,
+      "summaries": [],
+      "log_sha256": "07a64e9d878f78065b8d2dc45b665104a179294fea28b642f98f06ad245c4222"
+    }
+  ],
+  "tested_source_sha256": {
+    "Cargo.toml": "30c0ab9163296a1326e26c47a26f1e266afa9dd3bffe5b8f6fb97bbb4f1d3328",
+    "Cargo.lock": "b9986e89feb6530499368b45a6397503319452a9907c2c94734124a7cac70ed7",
+    "crates/deadsync-song-lua/src/actor_classes.rs": "953f9edad8553a37e09eb5103397e7871e5724fbeca908bc4e729fdc918eb46f",
+    "crates/deadsync-song-lua/src/lua_util.rs": "b08f0a28975d0895115abda6715a5ca81ed98d453f0d39fc80a3ebb24dde321c",
+    "crates/deadsync-song-lua/src/lib.rs": "bbb50d5f9bbc854528fcfc17591479b9ae5ee025390fa9129573a9d8bcf82dad",
+    "crates/deadsync-simfile/src/cache.rs": "05f15d32f557c3c16f1361f81f68168f007bdf26e7c281405c6c3d1ed8f08d35"
+  },
+  "final_archive_validation": [
+    {
+      "archive": "06dd6f6bf662849485525d205bda860549e5f2233a0a98fd9fda8cad8c0a165f.tar.zst",
+      "version": "0.5.1862",
+      "exit_code": 0,
+      "executable_sha256": "4972c43ffc6c2a0d003556fd462bc2ce2a5386b55bf321a2b293fbc0ef25b390",
+      "log_sha256": "c769f6f72ed51765b57984353b373b942d0e5f099f5a7cfda638719d4d83ed5e",
+      "summary": [
+        "result: ok",
+        "result: ok; 1/1 fixtures passed; 2671 comparisons passed, 0 failed (2671 total); elapsed 0.13s"
+      ]
+    },
+    {
+      "archive": "6386f0576530f32e0529e7bc00b62db3d8780487b025435fb23b4b64ab9d3318.tar.zst",
+      "version": "0.5.1862",
+      "exit_code": 0,
+      "executable_sha256": "4972c43ffc6c2a0d003556fd462bc2ce2a5386b55bf321a2b293fbc0ef25b390",
+      "log_sha256": "9c6c611433f0b9b69d17e68d49f1026582af399216236e4159abb16d25cfff83",
+      "summary": [
+        "result: ok",
+        "result: ok; 1/1 fixtures passed; 2671 comparisons passed, 0 failed (2671 total); elapsed 0.13s"
+      ]
+    }
+  ],
+  "final_verifier": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass58-proxy-full-song-v3.exe",
+    "sha256": "4972c43ffc6c2a0d003556fd462bc2ce2a5386b55bf321a2b293fbc0ef25b390",
+    "version": "0.5.1862",
+    "command": [
+      "cargo",
+      "rustc",
+      "-p",
+      "deadsync",
+      "--test",
+      "full_song_lua",
+      "--features",
+      "deadsync-theme-simply-love/test-support",
+      "--message-format=json"
+    ],
+    "tested_source_sha256": {
+      "Cargo.toml": "30c0ab9163296a1326e26c47a26f1e266afa9dd3bffe5b8f6fb97bbb4f1d3328",
+      "Cargo.lock": "b9986e89feb6530499368b45a6397503319452a9907c2c94734124a7cac70ed7",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "953f9edad8553a37e09eb5103397e7871e5724fbeca908bc4e729fdc918eb46f",
+      "crates/deadsync-song-lua/src/lua_util.rs": "b08f0a28975d0895115abda6715a5ca81ed98d453f0d39fc80a3ebb24dde321c",
+      "crates/deadsync-song-lua/src/lib.rs": "bbb50d5f9bbc854528fcfc17591479b9ae5ee025390fa9129573a9d8bcf82dad",
+      "crates/deadsync-simfile/src/cache.rs": "05f15d32f557c3c16f1361f81f68168f007bdf26e7c281405c6c3d1ed8f08d35"
+    }
+  }
+}

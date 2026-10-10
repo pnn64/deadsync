@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "name": "native inherited public class values",
+  "lua_assertions": "for _, value in ipairs({false, 0, \"class value\", {}}) do\n Actor.NativeBaseValue=value\n assert(BitmapText.NativeBaseValue==value, \"inherited public class value\")\n Actor.NativeBaseValue=nil\nend\n"
+}

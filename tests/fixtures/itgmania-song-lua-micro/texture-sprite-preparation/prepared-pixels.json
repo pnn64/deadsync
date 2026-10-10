@@ -1,0 +1,59 @@
+{
+  "native_sha256": "2ed66f850f7c6ad2a6e7939e57cc53b8463fe4e276c454f3cb284eb239d23aca",
+  "images": [
+    {
+      "name": "tiny",
+      "file": "tiny.rgba",
+      "bytes": 256,
+      "sha256": "9d7adf9c2654bba914374edbaf999f536522b2a25fc17fa75420a9322e155f53"
+    },
+    {
+      "name": "tiny-wide",
+      "file": "tiny-wide.rgba",
+      "bytes": 512,
+      "sha256": "a10710e8cca9f3d7a4c6e0e12bd42fc95eb11c3daeb38ebcef386569196e252c"
+    },
+    {
+      "name": "tiny-tall",
+      "file": "tiny-tall.rgba",
+      "bytes": 512,
+      "sha256": "18a38098a4a622c0d0180f6b64dad0b80c49897d340d92ed35f30bf82fc8bf6e"
+    },
+    {
+      "name": "unit",
+      "file": "unit.rgba",
+      "bytes": 256,
+      "sha256": "ed476d0e347082708ceefe747fc955f067313c187689d60dde45f3b87558a84e"
+    },
+    {
+      "name": "stretch",
+      "file": "stretch.rgba",
+      "bytes": 512,
+      "sha256": "0991e3555cebecfa853a8fb927fca335bc8916d21e554c704f0fef040d345319"
+    },
+    {
+      "name": "hires-off",
+      "file": "hires-off.rgba",
+      "bytes": 256,
+      "sha256": "00ff01ff6f23cced481c5d7ea8a40a395e3c73ed0ff4006534c0f14b28d396cf"
+    },
+    {
+      "name": "capped-tiny",
+      "file": "capped-tiny.rgba",
+      "bytes": 65536,
+      "sha256": "409e7c237c029dd3374894c559d094a998e75100bc37f4d4558d1ed12d47f199"
+    },
+    {
+      "name": "sheet",
+      "file": "sheet.rgba",
+      "bytes": 512,
+      "sha256": "281ad0d857f270c17515691a411ad7d1ed40ba45c677e3a346fd37c9ca10a54c"
+    },
+    {
+      "name": "resolution",
+      "file": "resolution.rgba",
+      "bytes": 256,
+      "sha256": "9d7adf9c2654bba914374edbaf999f536522b2a25fc17fa75420a9322e155f53"
+    }
+  ]
+}

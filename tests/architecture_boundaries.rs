@@ -10748,8 +10748,8 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
             "noteskin_model_actor_from_draw",
         ),
         (
-            "crates/deadsync-theme-simply-love/src/screens/player_options/mod.rs",
-            "noteskin_model_actor",
+            "crates/deadsync-theme-simply-love/src/screens/components/shared/noteskin_draw.rs",
+            "noteskin_model_actor_from_draw",
         ),
     ];
     for (path, symbol) in call_sites {

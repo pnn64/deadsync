@@ -2462,6 +2462,8 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
+                base_attack_flags: AttackFlags::default(),
                 now: 1.0,
                 delta_time: 0.5,
                 attacks_cleared_for_outro: false,
@@ -2473,6 +2475,8 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2515,6 +2519,8 @@ mod tests {
 
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
+                base_accel: AccelEffects::default(),
+                base_attack_flags: AttackFlags::default(),
                 now: 1.0,
                 delta_time: 1.0,
                 attacks_cleared_for_outro: true,
@@ -2526,6 +2532,8 @@ mod tests {
                 song_lua_ease_windows: &lua_windows,
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: visibility,
@@ -2569,6 +2577,8 @@ mod tests {
         active_visual.move_y_cols[7] = Some(0.25);
         let states = [
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects::default(),
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
@@ -2577,6 +2587,8 @@ mod tests {
                 outro_attack_visual: VisualOverrides::default(),
             },
             ActiveAttackRefreshState {
+                active_attack_accel: AccelOverrides::default(),
+                active_attack_flags: AttackFlagOverrides::default(),
                 attack_current_appearance: AppearanceEffects {
                     hidden: 0.9,
                     sudden: 0.8,
@@ -2604,6 +2616,8 @@ mod tests {
         for state in states {
             for delta_time in [0.0, 1.0 / 120.0, 0.25, 2.0] {
                 let input = ActiveAttackRefreshInput {
+                    base_accel: AccelEffects::default(),
+                    base_attack_flags: AttackFlags::default(),
                     now: 42.0,
                     delta_time,
                     attacks_cleared_for_outro: false,
@@ -2624,7 +2638,7 @@ mod tests {
                 };
                 assert_eq!(
                     refresh_active_attack_player(input, state),
-                    refresh_active_attack_player_full(input, state, None, None),
+                    refresh_active_attack_player_full(input, state, None, None, (input.now, None)),
                 );
             }
         }
@@ -3714,7 +3728,8 @@ mod tests {
         let mods = parse_attack_mods(
             "*2 50% digital,*4 300% digitalsteps,\
             *6 3200% digitaloffset,*8 -100% digitalperiod,*10 300% zigzagz,\
-            *12 -75% zigzagzoffset,*14 150% zigzagzperiod",
+            *12 -75% zigzagzoffset,*14 150% zigzagzperiod,\
+            *16 300% zigzag,*18 -75% zigzagoffset,*20 150% zigzagperiod",
         );
         assert_eq!(
             [
@@ -3724,13 +3739,19 @@ mod tests {
                 mods.visual.digital_period,
                 mods.visual.zigzag_z,
                 mods.visual.zigzag_z_offset,
-                mods.visual.zigzag_z_period
+                mods.visual.zigzag_z_period,
+                mods.visual.zigzag,
+                mods.visual.zigzag_offset,
+                mods.visual.zigzag_period
             ],
             [
                 Some(0.5),
                 Some(3.0),
                 Some(32.0),
                 Some(-1.0),
+                Some(3.0),
+                Some(-0.75),
+                Some(1.5),
                 Some(3.0),
                 Some(-0.75),
                 Some(1.5)
@@ -3753,15 +3774,19 @@ mod tests {
                 merged.digital_period,
                 merged.zigzag_z,
                 merged.zigzag_z_offset,
-                merged.zigzag_z_period
+                merged.zigzag_z_period,
+                merged.zigzag,
+                merged.zigzag_offset,
+                merged.zigzag_period
             ],
-            [0.5, 1.0, 1.5, -1.0, 2.5, -0.75, 1.5]
+            [0.5, 1.0, 1.5, -1.0, 2.5, -0.75, 1.5, 3.0, -0.75, 1.5]
         );
         approach_visual_overrides_to_base(&mut current, VisualEffects::default(), 3.0);
         assert!(!current.any());
         let cleared = parse_attack_mods(
             "no digital,no digitalsteps,no digitaloffset,\
-            no digitalperiod,no zigzagz,no zigzagzoffset,no zigzagzperiod",
+            no digitalperiod,no zigzagz,no zigzagzoffset,no zigzagzperiod,\
+            no zigzag,no zigzagoffset,no zigzagperiod",
         );
         assert_eq!(
             [
@@ -3771,9 +3796,12 @@ mod tests {
                 cleared.visual.digital_period,
                 cleared.visual.zigzag_z,
                 cleared.visual.zigzag_z_offset,
-                cleared.visual.zigzag_z_period
+                cleared.visual.zigzag_z_period,
+                cleared.visual.zigzag,
+                cleared.visual.zigzag_offset,
+                cleared.visual.zigzag_period
             ],
-            [Some(0.0); 7]
+            [Some(0.0); 10]
         );
     }
 
@@ -8092,7 +8120,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_ease_targets_convert_confusion_y_offset() {
+    fn song_lua_ease_targets_keep_confusion_y_radians() {
         let mut windows = Vec::new();
 
         assert!(append_song_lua_ease_targets(
@@ -8108,9 +8136,12 @@ mod tests {
             None,
         ));
 
-        assert_eq!(windows[0].target, SongLuaEaseMaskTarget::ConfusionYOffsetY);
-        assert_near(windows[0].from, 90.0);
-        assert_near(windows[0].to, 180.0);
+        assert_eq!(
+            windows[0].target,
+            SongLuaEaseMaskTarget::VisualConfusionYOffset
+        );
+        assert_near(windows[0].from, std::f32::consts::FRAC_PI_2);
+        assert_near(windows[0].to, std::f32::consts::PI);
     }
 
     #[test]
@@ -8769,7 +8800,6 @@ mod tests {
             zoom_x: None,
             zoom_y: Some(1.5),
             zoom_z: Some(f32::NAN),
-            confusion_y_offset: Some(9.0),
         }
         .resolve();
 
@@ -8784,7 +8814,6 @@ mod tests {
         assert_near(resolved.zoom_x, 1.0);
         assert_near(resolved.zoom_y, 1.5);
         assert_near(resolved.zoom_z, 1.0);
-        assert_near(resolved.confusion_y_offset, 9.0);
     }
 
     #[test]
@@ -8803,7 +8832,6 @@ mod tests {
             assert_near(transform.zoom_x, 1.0);
             assert_near(transform.zoom_y, 1.0);
             assert_near(transform.zoom_z, 1.0);
-            assert_near(transform.confusion_y_offset, 0.0);
         }
     }
 
@@ -8823,6 +8851,7 @@ mod tests {
             SongLuaEaseMaskTarget::AccelBoost,
             0.75,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8836,6 +8865,7 @@ mod tests {
             SongLuaEaseMaskTarget::VisualBumpyColumn(2),
             1.5,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8849,6 +8879,7 @@ mod tests {
             SongLuaEaseMaskTarget::AppearanceStealth,
             0.25,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8862,6 +8893,7 @@ mod tests {
             SongLuaEaseMaskTarget::VisibilityDark,
             1.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8875,6 +8907,7 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollReverse,
             0.5,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8888,6 +8921,7 @@ mod tests {
             SongLuaEaseMaskTarget::PerspectiveTilt,
             -1.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8901,6 +8935,7 @@ mod tests {
             SongLuaEaseMaskTarget::MiniPercent,
             30.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8936,6 +8971,7 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollSpeedC,
             -100.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8951,6 +8987,7 @@ mod tests {
             SongLuaEaseMaskTarget::ScrollSpeedC,
             650.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,
@@ -8969,6 +9006,7 @@ mod tests {
             SongLuaEaseMaskTarget::PlayerRotationZ,
             45.0,
             &mut accel,
+            &mut AttackFlagOverrides::default(),
             &mut visual,
             &mut appearance,
             &mut visibility,

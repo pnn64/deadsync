@@ -1,0 +1,49 @@
+{
+  "oracle": "itgmania_native_actor_conformance",
+  "samples": [
+    {
+      "seconds": 0.0,
+      "commands": 0,
+      "finite_x": 1.0
+    },
+    {
+      "seconds": 0.01666666753590107,
+      "commands": 2,
+      "finite_x": 3.0
+    },
+    {
+      "seconds": 0.03333333507180214,
+      "commands": 4,
+      "finite_x": 5.0
+    },
+    {
+      "seconds": 0.05000000074505806,
+      "commands": 7,
+      "finite_x": 6.0
+    },
+    {
+      "seconds": 0.25,
+      "commands": 35,
+      "finite_x": 6.0
+    }
+  ],
+  "binary_sha256": "cbd9ab9b64070f68ce44156aa3c4247b184ae5eed10bc5ee29f7887d6288b4f6",
+  "harness_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+  "input": "actor-input.json",
+  "input_sha256": "d884b16721fbf49eb92cf5f7e2a149404fc6c436d761c860f8768b80a01cb035",
+  "native": "native.json",
+  "native_sha256": "d3ec0f8dcb521f7ac780aeefeea6df9a80fb8e6356c1d481f0190fed8e25cd95",
+  "reference_sources": {
+    "Actor.cpp": {
+      "latest_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "compiled_vendor_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "identical": true
+    },
+    "Actor.h": {
+      "latest_sha256": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+      "compiled_vendor_sha256": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+      "identical": true
+    }
+  },
+  "semantic_host_used": false
+}

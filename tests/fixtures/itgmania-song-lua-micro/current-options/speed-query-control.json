@@ -1,0 +1,4 @@
+{
+  "option_control": true,
+  "lua_assertions": "local function p(level, name, ...) return _ITG_OPTIONS_AT(0, 'ModsLevel_' .. level, name, ...) end\n_ITG_OPTIONS_ADVANCE(1.375)\np('Stage', 'SetPlayerOptions', '')\np('Song', 'CMod', 400, 2)\n_ITG_OPTIONS_ADVANCE(1.5)\nassert(p('Current', 'CMod') == 237.5)\nassert(not _ITG_USING_MODIFIER(0, 'C237.5'), 'the partially approached spacing field still differs')\np('Stage', 'SetPlayerOptions', '')\np('Current', 'MMod', 700)\nassert(p('Current', 'XMod') == 1)\nassert(not _ITG_USING_MODIFIER(0, '1x'), 'X FromString would clear MaxScrollBPM')\nassert(_ITG_USING_MODIFIER(0, 'm700'))\np('Stage', 'SetPlayerOptions', '')\nassert(_ITG_USING_MODIFIER(0, 'm0'), 'inactive M0 leaves the underlying fields unchanged')\n"
+}

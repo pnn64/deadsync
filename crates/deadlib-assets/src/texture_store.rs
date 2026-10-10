@@ -42,6 +42,10 @@ pub struct BoundTexture {
 pub struct TextureStore<T> {
     textures: TextureHandleMap<T>,
     uploaded_texture_dims: TextureHandleMap<TexMeta>,
+    // Original decoded dimensions for prepared file textures, owned at load
+    // boundaries. Reserved with uploads and removed on replacement/release;
+    // draw-time reads do no I/O or allocation.
+    source_texture_dims: TextureHandleMap<TexMeta>,
     texture_handles: FxHashMap<Arc<str>, TextureHandle>,
     texture_keys: TextureHandleMap<Arc<str>>,
     next_texture_handle: TextureHandle,
@@ -58,6 +62,7 @@ impl<T> TextureStore<T> {
         Self {
             textures: TextureHandleMap::default(),
             uploaded_texture_dims: TextureHandleMap::default(),
+            source_texture_dims: TextureHandleMap::default(),
             texture_handles: FxHashMap::default(),
             texture_keys: TextureHandleMap::default(),
             next_texture_handle: 1,
@@ -120,7 +125,8 @@ impl<T> TextureStore<T> {
         Some(BoundTexture {
             handle,
             dimensions: self
-                .dimensions(handle)
+                .source_texture_dims.get(&handle).copied()
+                .or_else(|| self.dimensions(handle))
                 .or_else(|| texture_dims(key))
                 .map(|meta| {
                     let (w, h) = texture_source_dims_from_real(key, meta.w, meta.h);
@@ -172,6 +178,7 @@ impl<T> TextureStore<T> {
         self.pending_texture_uploads = TextureUploadQueue::default();
         self.revision.set(next_texture_revision());
         self.uploaded_texture_dims.clear();
+        self.source_texture_dims.clear();
         std::mem::take(&mut self.textures)
     }
 
@@ -179,6 +186,7 @@ impl<T> TextureStore<T> {
         let dense_additional = additional.saturating_add(1);
         self.textures.reserve(dense_additional);
         self.uploaded_texture_dims.reserve(dense_additional);
+        self.source_texture_dims.reserve(dense_additional);
         self.texture_handles.reserve(additional);
         self.texture_keys.reserve(dense_additional);
         self.texture_aliases.reserve(additional);
@@ -212,6 +220,7 @@ impl<T> TextureStore<T> {
         height: u32,
     ) -> Option<T> {
         let handle = self.reserve_texture_handle(key);
+        self.clear_source_dims(handle);
         if !self
             .uploaded_texture_dims
             .insert(
@@ -236,6 +245,7 @@ impl<T> TextureStore<T> {
         self.sheets.remove(&handle);
         self.revision.set(next_texture_revision());
         self.uploaded_texture_dims.remove(&handle);
+        self.source_texture_dims.remove(&handle);
         self.textures
             .remove(&handle)
             .map(|texture| (handle, texture))
@@ -249,6 +259,7 @@ impl<T> TextureStore<T> {
         height: u32,
     ) -> (TextureHandle, Option<T>) {
         let handle = self.reserve_texture_handle(key);
+        self.clear_source_dims(handle);
         let uploaded_dims = self.uploaded_texture_dims.insert(
             handle,
             TexMeta {
@@ -276,6 +287,20 @@ impl<T> TextureStore<T> {
             self.textures.get_mut(&handle)
         } else {
             None
+        }
+    }
+
+    pub(crate) fn set_source_dims(&mut self, handle: TextureHandle, size: [u32; 2]) {
+        let meta = TexMeta { w: size[0], h: size[1] };
+        if !self.source_texture_dims.insert(handle, meta)
+            .is_some_and(|old| old.w == meta.w && old.h == meta.h) {
+            self.revision.set(next_texture_revision());
+        }
+    }
+
+    pub(crate) fn clear_source_dims(&mut self, handle: TextureHandle) {
+        if self.source_texture_dims.remove(&handle).is_some() {
+            self.revision.set(next_texture_revision());
         }
     }
 
@@ -322,6 +347,7 @@ impl<T> TextureStore<T> {
 
     fn upload_handle(&mut self, key: String, width: u32, height: u32) -> TextureHandle {
         if let Some(&handle) = self.texture_handles.get(key.as_str()) {
+            self.clear_source_dims(handle);
             if !self.upload_dims_match(handle, width, height) {
                 self.revision.set(next_texture_revision());
                 register_texture_dims(&key, width, height);
@@ -356,6 +382,7 @@ impl<T> TextureStore<T> {
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
+        self.clear_source_dims(handle);
         let dimensions_match = self.upload_dims_match(handle, image.width(), image.height());
         if !dimensions_match {
             self.revision.set(next_texture_revision());
@@ -375,6 +402,7 @@ impl<T> TextureStore<T> {
         image: Yuv420Image,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
+        self.clear_source_dims(handle);
         let dimensions_match = self.upload_dims_match(handle, image.width(), image.height());
         if !dimensions_match {
             self.revision.set(next_texture_revision());
@@ -454,6 +482,7 @@ impl<T> TextureStore<T> {
         width: u32,
         height: u32,
     ) -> Option<T> {
+        self.clear_source_dims(handle);
         if !self
             .uploaded_texture_dims
             .insert(
@@ -482,7 +511,8 @@ impl<T> TextureContext for TextureStore<T> {
 
     fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
         let handle = self.texture_handle(key);
-        self.dimensions(handle)
+        self.source_texture_dims.get(&handle).copied()
+            .or_else(|| self.dimensions(handle))
             .or_else(|| {
                 texture_dims(if handle == INVALID_TEXTURE_HANDLE {
                     key
@@ -585,6 +615,35 @@ mod tests {
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
         RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
+    }
+
+    #[test]
+    fn prepared_sources_survive_uploads_and_reset_on_replacement() {
+        for mode in 0..3 {
+            let mut store = TextureStore::<()>::new();
+            let key = format!("prepared-source-{mode}.png");
+            let (handle, _) = store.set_texture_for_key(key.clone(), (), 8, 8);
+            store.set_source_dims(handle, [3, 2]);
+            let source = store.bind_texture(&key).expect("source binding").dimensions.expect("dimensions");
+            assert_eq!((source.w, source.h), (3, 2));
+            assert!(store.uploaded_texture_dims_match(&key, 8, 8));
+            match mode {
+                0 => { store.set_texture_for_handle(handle, (), 8, 8); }
+                1 => { store.insert_texture(key.clone(), (), 8, 8); }
+                _ => { store.queue_texture_upload(key.clone(), RgbaImage::new(8, 8)); }
+            }
+            let source = store.bind_texture(&key).expect("replacement binding").dimensions.expect("replacement dimensions");
+            assert_eq!((source.w, source.h), (8, 8));
+            store.set_source_dims(handle, [3, 2]);
+            store.remove_texture(&key);
+            assert!(store.bind_texture(&key).is_none());
+            let fresh = store.reserve_texture_handle(key.clone());
+            assert_ne!(fresh, handle);
+            let source = store.bind_texture(&key).expect("fresh binding").dimensions;
+            assert!(source.is_none_or(|source| (source.w, source.h) != (3, 2)));
+            store.take_textures();
+            assert!(store.bind_texture(&key).is_none());
+        }
     }
 
     #[test]

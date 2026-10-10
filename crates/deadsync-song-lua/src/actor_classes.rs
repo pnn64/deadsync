@@ -288,6 +288,28 @@ const AMV: &[&str] = &[
     "LoadTexture",
 ];
 
+const BITMAP: &[&str] = &[
+    "wrapwidthpixels",
+    "maxwidth",
+    "maxheight",
+    "max_dimension_use_zoom",
+    "vertspacing",
+    "settext",
+    "rainbowscroll",
+    "jitter",
+    "distort",
+    "undistort",
+    "GetText",
+    "AddAttribute",
+    "ClearAttributes",
+    "strokecolor",
+    "getstrokecolor",
+    "uppercase",
+    "textglowmode",
+    "get_mult_attrs_with_diffuse",
+    "set_mult_attrs_with_diffuse",
+];
+
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     install_native(lua)?;
     let globals = lua.globals();
@@ -362,6 +384,33 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     ] {
         forward(lua, &class, method)?;
     }
+    // _fallback/Scripts/02 Actor.lua defines these in native actor primitives.
+    lua.load(
+        r#"
+function BitmapText:PixelFont()
+    self:SetTextureFiltering(false)
+    return self
+end
+function BitmapText:Stroke(c)
+    self:strokecolor(c)
+    return self
+end
+function BitmapText:NoStroke()
+    self:strokecolor(color("0,0,0,0"))
+    return self
+end
+function BitmapText:settextf(...)
+    self:settext(string.format(...))
+    return self
+end
+function BitmapText:DiffuseAndStroke(diffuseC, strokeC)
+    self:diffuse(diffuseC)
+    self:strokecolor(strokeC)
+    return self
+end
+"#,
+    )
+    .exec()?;
     Ok(())
 }
 
@@ -373,6 +422,8 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
         ("Sprite", Some("Actor"), SPRITE),
         ("ActorFrameTexture", Some("ActorFrame"), AFT),
         ("ActorMultiVertex", Some("Actor"), AMV),
+        ("ActorProxy", Some("Actor"), &["SetTarget", "GetTarget"][..]),
+        ("BitmapText", Some("Actor"), BITMAP),
     ] {
         let class = lua.create_table()?;
         for method in methods {
@@ -418,6 +469,8 @@ fn class_name(kind: &str) -> &'static str {
         "Banner" => "Banner",
         "ActorFrameTexture" => "ActorFrameTexture",
         "ActorMultiVertex" => "ActorMultiVertex",
+        "ActorProxy" => "ActorProxy",
+        "BitmapText" => "BitmapText",
         "Player" => "Player",
         "NoteField" => "NoteField",
         kind if is_frame(kind) => "ActorFrame",
@@ -452,6 +505,8 @@ fn is_core(kind: &str) -> bool {
             | "Banner"
             | "ActorFrameTexture"
             | "ActorMultiVertex"
+            | "ActorProxy"
+            | "BitmapText"
             | "WrapperState"
     )
 }

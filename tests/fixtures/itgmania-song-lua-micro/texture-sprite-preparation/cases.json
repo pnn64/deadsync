@@ -1,0 +1,268 @@
+[
+  {
+    "name": "tiny",
+    "dimensions": {
+      "image": [
+        8,
+        8
+      ],
+      "source": [
+        3,
+        2
+      ],
+      "texture": [
+        8,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "tiny-wide",
+    "dimensions": {
+      "image": [
+        16,
+        8
+      ],
+      "source": [
+        9,
+        3
+      ],
+      "texture": [
+        16,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "tiny-tall",
+    "dimensions": {
+      "image": [
+        8,
+        16
+      ],
+      "source": [
+        3,
+        9
+      ],
+      "texture": [
+        8,
+        16
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "unit",
+    "dimensions": {
+      "image": [
+        8,
+        8
+      ],
+      "source": [
+        1,
+        1
+      ],
+      "texture": [
+        8,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "stretch",
+    "dimensions": {
+      "image": [
+        8,
+        16
+      ],
+      "source": [
+        5,
+        9
+      ],
+      "texture": [
+        8,
+        16
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "padded",
+    "dimensions": {
+      "image": [
+        7,
+        9
+      ],
+      "source": [
+        7,
+        9
+      ],
+      "texture": [
+        8,
+        16
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        0.875,
+        0.5625
+      ]
+    ],
+    "pixels_captured": false
+  },
+  {
+    "name": "hires-off",
+    "dimensions": {
+      "image": [
+        8,
+        8
+      ],
+      "source": [
+        5,
+        3
+      ],
+      "texture": [
+        8,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "capped-tiny",
+    "dimensions": {
+      "image": [
+        2048,
+        8
+      ],
+      "source": [
+        2049,
+        3
+      ],
+      "texture": [
+        2048,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "sheet",
+    "dimensions": {
+      "image": [
+        16,
+        8
+      ],
+      "source": [
+        16,
+        8
+      ],
+      "texture": [
+        16,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        0.5,
+        1.0
+      ],
+      [
+        0.5,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  },
+  {
+    "name": "resolution",
+    "dimensions": {
+      "image": [
+        8,
+        8
+      ],
+      "source": [
+        53,
+        12
+      ],
+      "texture": [
+        8,
+        8
+      ]
+    },
+    "frame_rects": [
+      [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    ],
+    "pixels_captured": true
+  }
+]

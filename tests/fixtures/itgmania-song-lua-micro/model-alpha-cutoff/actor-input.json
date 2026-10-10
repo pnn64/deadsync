@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "name": "model-alpha-cutoff",
+  "samples": [
+    0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "model",
+        "name": "Zero",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "Below",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.0009999
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "Equal",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.001
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "Above",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.0010001
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "BothBelow",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.0005
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.0005
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "GlowBelow",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.0009999
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "GlowEqual",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.001
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "GlowAbove",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.0010001
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "DiffuseBelowGlowEqual",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.0005
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.001
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "DiffuseEqualGlowBelow",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.001
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.0005
+          ]
+        }
+      },
+      {
+        "kind": "model",
+        "name": "TinyDiffuseGlowEqual",
+        "model_paths": [
+          "model.txt",
+          "model.txt",
+          "model.txt"
+        ],
+        "state": {
+          "position": [
+            400,
+            240,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            5e-07
+          ],
+          "glow": [
+            1,
+            0.2,
+            0.4,
+            0.001
+          ]
+        }
+      }
+    ]
+  }
+}

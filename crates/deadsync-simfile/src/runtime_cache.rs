@@ -71,6 +71,36 @@ fn remove_song_from_packs(cache: &mut Vec<SongPack>, simfile_path: &Path) -> boo
     cache.iter().map(|pack| pack.songs.len()).sum::<usize>() < old_song_count
 }
 
+/// Records a pack's new `Pack.ini` sync in the live catalog, after the file
+/// itself has been rewritten, so it is in effect without rescanning the pack.
+/// The pack is found by group name, ignoring case, as `Pack.ini` writers name
+/// it. Returns whether anything changed; a change moves the cache generation
+/// so every view of the catalog rebuilds.
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
+pub fn set_pack_sync_pref(group_name: &str, sync_pref: SyncPref) -> bool {
+    let mut cache = SONG_CACHE.lock().unwrap();
+    let changed = set_sync_pref_in_packs(&mut cache, group_name, sync_pref);
+    if changed {
+        SONG_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
+    }
+    changed
+}
+
+fn set_sync_pref_in_packs(packs: &mut [SongPack], group_name: &str, sync_pref: SyncPref) -> bool {
+    let wanted = group_name.to_lowercase();
+    let mut changed = false;
+    for pack in packs
+        .iter_mut()
+        .filter(|pack| pack.group_name.to_lowercase() == wanted)
+    {
+        changed |= pack.sync_pref != sync_pref;
+        pack.sync_pref = sync_pref;
+    }
+    changed
+}
+
 #[must_use]
 pub fn song_pack_group_for_simfile_path<'a>(
     packs: &'a [SongPack],
@@ -263,6 +293,34 @@ mod tests {
             last_second_hint: 0.0,
             charts: Vec::<ChartData>::new(),
         })
+    }
+
+    #[test]
+    fn a_packs_sync_pref_is_set_in_place_by_group_name() {
+        let mut packs = vec![
+            pack("Old Pack", SyncPref::Itg, Vec::new()),
+            pack("Other", SyncPref::Default, Vec::new()),
+        ];
+        assert!(set_sync_pref_in_packs(
+            &mut packs,
+            "old pack",
+            SyncPref::Null
+        ));
+        assert_eq!(packs[0].sync_pref, SyncPref::Null);
+        assert_eq!(
+            packs[1].sync_pref,
+            SyncPref::Default,
+            "other packs untouched"
+        );
+        assert!(
+            !set_sync_pref_in_packs(&mut packs, "Old Pack", SyncPref::Null),
+            "already so"
+        );
+        assert!(!set_sync_pref_in_packs(
+            &mut packs,
+            "Missing",
+            SyncPref::Itg
+        ));
     }
 
     fn pack(group_name: &str, sync_pref: SyncPref, songs: Vec<Arc<SongData>>) -> SongPack {
