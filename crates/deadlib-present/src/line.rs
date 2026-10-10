@@ -326,7 +326,7 @@ pub fn update_line_mesh(
     let mut verts = vec![MeshVertex::default(); len];
     let written = fill_line_vertices(&mut verts, points, window, half, feather, color);
     debug_assert_eq!(written, len);
-    *mesh = Some(Arc::from(verts.into_boxed_slice()));
+    *mesh = Some(Arc::from(verts));
 }
 
 /// Update a clipped polyline while retaining its growable vertex allocation.

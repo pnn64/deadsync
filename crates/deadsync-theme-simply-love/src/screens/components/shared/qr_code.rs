@@ -191,7 +191,7 @@ fn build_qr_mesh(content: &str, size: f32) -> Option<QrMeshData> {
 
     Some(QrMeshData {
         module_px,
-        vertices: Arc::from(vertices.into_boxed_slice()),
+        vertices: Arc::from(vertices),
     })
 }
 

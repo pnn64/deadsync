@@ -1,3 +1,4 @@
+// Frozen from 0530013f08d5b481d29533127de2dc41033f63be; test-only behavioral and benchmark oracle.
 //! Independent stretching and sample-rate conversion on the music decoder worker.
 
 use super::stretch::SolaStretcher;
@@ -11,6 +12,7 @@ use rubato::{Adjustable, Async, ResampleError, Resampler, ResamplerConstructionE
 struct RateConverter {
     resampler: Async<f32>,
     input: PlanarAccum,
+    padded: Vec<Vec<f32>>,
     output: Vec<Vec<f32>>,
     ratio: f64,
     lead_frames: usize,
@@ -21,6 +23,7 @@ impl RateConverter {
     fn new(channels: usize, ratio: f64) -> Result<Self, ResamplerConstructionError> {
         let resampler = new_resampler(ratio, RESAMPLE_MAX_RELATIVE_RATIO, channels)?;
         Ok(Self {
+            padded: vec![vec![0.0; resampler.input_frames_max()]; channels],
             output: vec![vec![0.0; resampler.output_frames_max()]; channels],
             input: PlanarAccum::new(channels, PLANAR_INPUT_CAP_FRAMES),
             resampler,
@@ -182,26 +185,29 @@ impl MusicStages {
             return Ok(None);
         }
         let consumed = available.min(need);
-        let start = converter.input.start_frame;
-        if consumed < need {
+        let frames = if consumed == need {
+            process_resampler(
+                &mut converter.resampler,
+                &converter.input.channels,
+                converter.input.start_frame,
+                &mut converter.output,
+            )?
+            .1
+        } else {
+            let start = converter.input.start_frame;
+            for (dst, source) in converter.padded.iter_mut().zip(&converter.input.channels) {
+                dst[consumed..need].fill(0.0);
+                dst[..consumed].copy_from_slice(&source[start..start + consumed]);
+            }
             converter.drained = consumed == 0;
-            for channel in &mut converter.input.channels {
-                channel.resize(start + need, 0.0);
-            }
-        }
-        let result = process_resampler(
-            &mut converter.resampler,
-            &converter.input.channels,
-            start,
-            &mut converter.output,
-        );
-        // Padding is temporary: retain only real input, including after errors.
-        if consumed < need {
-            for channel in &mut converter.input.channels {
-                channel.truncate(start + consumed);
-            }
-        }
-        let frames = result?.1;
+            process_resampler(
+                &mut converter.resampler,
+                &converter.padded,
+                0,
+                &mut converter.output,
+            )?
+            .1
+        };
         converter.input.consume_frames(consumed);
         write_resampler_output(&converter.output, frames, channels, output);
         trim_resampler_lead(output, channels, &mut converter.lead_frames);
@@ -211,163 +217,5 @@ impl MusicStages {
             consumed as f64 / f64::from(self.input_hz.max(1)) / frames as f64
         };
         Ok(Some(step))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn sine(hz: f32, sample_rate: u32, frames: usize) -> Vec<i16> {
-        (0..frames)
-            .map(|i| {
-                (12_000.0 * (i as f32 * hz * std::f32::consts::TAU / sample_rate as f32).sin())
-                    as i16
-            })
-            .collect()
-    }
-
-    fn drain(stages: &mut MusicStages, output: &mut Vec<i16>) {
-        let mut chunk = Vec::new();
-        while let Some(step) = stages.pull(&mut chunk, 1).unwrap() {
-            assert!(step.is_finite() && step > 0.0);
-            output.extend_from_slice(&chunk);
-        }
-    }
-
-    fn run(stages: &mut MusicStages, input: &[i16], packet_frames: usize) -> Vec<i16> {
-        let mut output = Vec::new();
-        for packet in input.chunks(packet_frames) {
-            stages.push(packet);
-            drain(stages, &mut output);
-        }
-        stages.finish();
-        drain(stages, &mut output);
-        output
-    }
-
-    fn pitch(samples: &[i16], hz: u32) -> f64 {
-        let crossings: Vec<_> = samples
-            .windows(2)
-            .enumerate()
-            .filter_map(|(i, pair)| (pair[0] <= 0 && pair[1] > 0).then_some(i))
-            .collect();
-        (crossings.len() - 1) as f64 * f64::from(hz)
-            / (crossings.last().unwrap() - crossings[0]) as f64
-    }
-
-    #[test]
-    fn stretch_keeps_onset_pitch_and_duration_without_a_converter() {
-        let input = sine(440.0, 48_000, 48_000);
-        for rate in [0.5, 0.8, 1.2, 2.0] {
-            let mut stages = MusicStages::new(1, 48_000, 48_000);
-            stages.set_rate(rate, true).unwrap();
-            let output = run(&mut stages, &input, 997);
-            assert!(stages.converter.is_none());
-            // SOLA's first window starts at the source onset without sinc delay.
-            assert_eq!(&output[..256], &input[..256]);
-            let expected = input.len() as f64 / f64::from(rate);
-            // SOLA's initial/final search windows bound duration rounding;
-            // the bound grows in output frames when slowing playback.
-            let slack = 2.0 * stages.stretch.as_ref().unwrap().window_frames() as f64
-                / f64::from(rate.min(1.0));
-            assert!(
-                (output.len() as f64 - expected).abs() < slack,
-                "rate {rate}: got {}, expected {expected}",
-                output.len()
-            );
-            assert!((pitch(&output[4_000..output.len() - 4_000], 48_000) - 440.0).abs() < 4.0);
-        }
-    }
-
-    #[test]
-    fn short_stretched_stream_has_no_filtering_or_padded_tail() {
-        // Above the old unity sinc cutoff: bypass intentionally preserves these
-        // samples. The short source also needs SOLA's final partial-window drain.
-        let input: Vec<i16> = (0..731)
-            .map(|i| if i % 2 == 0 { 12_000 } else { -12_000 })
-            .collect();
-        let mut stages = MusicStages::new(1, 48_000, 48_000);
-        stages.set_rate(1.2, true).unwrap();
-        let output = run(&mut stages, &input, 137);
-        assert_eq!(output, input);
-        assert_eq!(stages.pull(&mut Vec::new(), 1).unwrap(), None);
-    }
-
-    #[test]
-    fn real_conversion_and_pitch_changing_rates_still_resample() {
-        let input = sine(440.0, 44_100, 44_100);
-        for (output_hz, rate, preserve_pitch) in [
-            (48_000, 1.2, true),
-            (48_000, 0.5, true),
-            (48_000, 1.0, true),
-            (44_100, 1.2, false),
-            (48_000, 1.2, false),
-        ] {
-            let mut stages = MusicStages::new(1, 44_100, output_hz);
-            stages.set_rate(rate, preserve_pitch).unwrap();
-            assert!(stages.converter.is_some());
-            let output = run(&mut stages, &input, 10_007);
-            let expected_len = f64::from(output_hz) / f64::from(rate);
-            assert!((output.len() as f64 - expected_len).abs() < 2_880.0);
-            let expected_pitch = 440.0 * if preserve_pitch { 1.0 } else { f64::from(rate) };
-            assert!(
-                (pitch(&output[4_000..output.len() - 4_000], output_hz) - expected_pitch).abs()
-                    < 4.0
-            );
-        }
-    }
-
-    #[test]
-    fn live_stretch_changes_keep_buffered_audio_and_rate_timestamps() {
-        let input = sine(440.0, 48_000, 24_000);
-        let mut stages = MusicStages::new(1, 48_000, 48_000);
-        let mut reference = SolaStretcher::new(1, 48_000);
-        let mut actual = Vec::new();
-        let mut expected = Vec::new();
-        for (packet, rate) in input.chunks(6_000).zip([1.2, 0.8, 1.5, 0.5]) {
-            stages.set_rate(rate, true).unwrap();
-            reference.set_speed_ratio(rate);
-            stages.push(packet);
-            reference.push_interleaved_i16(packet);
-            loop {
-                let step = stages.pull(&mut actual, 1).unwrap();
-                let mut planar = vec![Vec::new()];
-                let frames = reference.pull(&mut planar, OUT_FRAMES_PER_CALL);
-                write_resampler_output(&planar, frames, 1, &mut expected);
-                assert_eq!(actual, expected);
-                if frames == 0 {
-                    assert_eq!(step, None);
-                    break;
-                }
-                assert_eq!(step, Some(f64::from(rate) / 48_000.0));
-            }
-        }
-    }
-
-    #[test]
-    fn stage_switches_and_loop_resets_keep_current_ratio() {
-        let input = sine(440.0, 48_000, 24_000);
-        let mut stages = MusicStages::new(1, 48_000, 48_000);
-        for (rate, preserve_pitch) in [(1.2, true), (1.2, false), (0.8, false), (0.8, true)] {
-            stages.set_rate(rate, preserve_pitch).unwrap();
-            stages.reset();
-            let first = run(&mut stages, &input, 997);
-            stages.reset();
-            let second = run(&mut stages, &input, 997);
-            assert_eq!(first, second);
-            let expected_pitch = 440.0 * if preserve_pitch { 1.0 } else { f64::from(rate) };
-            assert!(
-                (pitch(&first[4_000..first.len() - 4_000], 48_000) - expected_pitch).abs() < 4.0
-            );
-        }
-        stages.set_rate(1.0, true).unwrap();
-        assert!(stages.is_direct());
-        stages.set_rate(1.0001, false).unwrap();
-        assert!(stages.is_direct());
-        stages.set_rate(1.2, true).unwrap();
-        stages.reset();
-        let replay = run(&mut stages, &input, 997);
-        assert_eq!(&replay[..256], &input[..256]);
     }
 }
