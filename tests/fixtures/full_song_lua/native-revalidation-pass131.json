@@ -1,0 +1,105 @@
+{
+  "pass": 131,
+  "previous_record": "native-revalidation-pass130.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba99d38a7db8aa1a7265e9592889d9e6a08887a7",
+  "comparator_sha256": "e77e627b9ad31619be80a3e132b1846ed78a8de4849273b755281e28db25e63c",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    52
+  ],
+  "next_position": 53,
+  "comparisons_passed": 560613,
+  "charts": [
+    {
+      "position": 52,
+      "entry": {
+        "title": "[7287] [12] Myths You Forgot",
+        "source_simfile": "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot.ssc",
+        "harness_version": "0.1.53",
+        "archive": "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7.tar.zst",
+        "sha256": "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7",
+        "compressed_bytes": 309259,
+        "aliases": [
+          "a05fc79390f7dbc8d27ab10f11315da697f21d3bb98ddd8b0e548841fc04e30d.tar.zst"
+        ]
+      },
+      "original_archive_retained": "c2fced0ab658ce25f0a1a54d722162af378df050d61bcb8e7eade94dd0619e61.tar.zst",
+      "native_source_commit": "d58f2cb385888d36c5c93f2dc1221f75187a8e18",
+      "native_trace_sha256": "1697ae68b6f66632e95196dac3f2179f4ea116bc98c826a4482b62ab556e76af",
+      "original_source_sha256": {
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/bz-cd.png": "ae1e9d86c93698e5291dec76b5d68ee6f06881c6b0b6fbe70ad4448b21919fbd",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot-bg.png": "db57a9d5462f4a8f9bb941a3d52a23f10ef79fc91b67194db89fbecf0a074d54",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot-bn.png": "ad24a633b668ec6d42440f9d5aa02bb343d12afc14edaf2d769012797bdd4288",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot-jacket.png": "76bdb5fdff12fd1a1b97a954427fcb01a4a67c22e343c0e9b8b39d1f1fdb38f2",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot.ogg": "1709ac4c8f2de75a5020dbf19986fa64ac9f3bc363685fe3bbf3d5915b387c5e",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot.ssc": "58719994d7bc8f2abcd1bb7b1d5a0cf6d40248e03a9e16433ceeca5093fe38d0",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/lua/default.lua": "4c55de30736374b160b0b266c489a1c6f04812e8ea8c30b212fd8d22799af19a",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "[12] Myths You Forgot (SX) [Benpai & Zaia]/lua/_script.lua": "29f0e4c2d40ad00311c5604affd97fede64fd4459671a1f23f09fa4a1adbe734"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7527,
+      "duration_seconds": 125.41962432861328,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 52,
+      "source_simfile": "[12] Myths You Forgot (SX) [Benpai & Zaia]/Myths You Forgot.ssc",
+      "archive": "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7.tar.zst",
+      "archive_sha256": "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7",
+      "harness_version": "0.1.53",
+      "source_commit": "ba99d38a7db8aa1a7265e9592889d9e6a08887a7",
+      "source_pending_commit": false,
+      "binary_sha256": "e77e627b9ad31619be80a3e132b1846ed78a8de4849273b755281e28db25e63c",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-rejected-options-v3-full_song_lua.exe",
+        "54df234afd64c1b60238c765f43c27534c6306de6fe89690204315f4e73ba6a7.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.504914400167763,
+      "comparisons_passed": 560613,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-052-rejected-committed-v3.log",
+      "log_sha256": "c31f8d94cbce8ff164f64c6a0057ff8f4ff24e23ace51287af43799826af5287",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass131-top-052-native-v2.json",
+      "native_receipt_sha256": "07484491127657ac0fe7d0ba2e88b1e0e761dbe193f6f57d0d12fa8bf3af4233",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba99d38a7db8aa1a7265e9592889d9e6a08887a7",
+    "source_pending_commit": false,
+    "binary_sha256": "7a79a7f55c1822d618d4f7c7e30848dd3f6b13add51745c9768844e4f2430205",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-rejected-options-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.0783290998078883,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-052-native-pass131.log",
+    "log_sha256": "2f656b21cc9444f3c82922f0de6c2b5c44e71f521b9a0687acca25787cc76406",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 261 filtered out; finished in 1.70s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

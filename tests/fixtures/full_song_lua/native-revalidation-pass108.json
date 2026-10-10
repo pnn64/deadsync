@@ -1,0 +1,165 @@
+{
+  "pass": 108,
+  "previous_record": "native-revalidation-pass106.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+  "comparator_sha256": "7300bb972cd5c8b5cc918a9bc5c7f384f0b38d738ec6a48de28013a44990d5e6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 25,
+      "entry": {
+        "title": "321STARS",
+        "source_simfile": "321STARS/321STARS.ssc",
+        "harness_version": "0.1.51",
+        "archive": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373.tar.zst",
+        "sha256": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373",
+        "compressed_bytes": 25750477,
+        "aliases": [
+          "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
+          "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+          "5ef2ed0eb6d5aa2a30772eaae8fe48f823ca8cac99e8da2e66d68b1ecfd5bed8.tar.zst",
+          "1e21887539e377f2b89ad77dd20adcbc22abb4ed3062dfc0f311948198f99942.tar.zst"
+        ]
+      },
+      "original_archive_retained": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "ff9f994b3ef901469f9ea953a9ffab41649d27b5cfc183decbc3d10a3b2787df",
+      "native_receipt_sha256": "e09a4ee5ec123fa08b1072c280ceb19f3cad3609ea42d0a911a5f6a41878546a",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 79.88282012939453,
+      "update_frames": 4794,
+      "source_simfile_sha256": "28beaf91a86481c043e5eb717658cfa61736f5fa723dd9e5f8ae2649775c3d2c",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+      "comparisons_passed": 51262467
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 25,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373.tar.zst",
+      "archive_sha256": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373",
+      "harness_version": "0.1.51",
+      "source_commit": "3b0f61b73348db057f8d2a189ac86d46da9b6513",
+      "binary_sha256": "7300bb972cd5c8b5cc918a9bc5c7f384f0b38d738ec6a48de28013a44990d5e6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-full_song_lua.exe",
+        "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 136.1167982998304,
+      "comparisons_passed": 51262467,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fresh-025-after-v1.log",
+      "log_sha256": "735e8519577ed16afc47cdbdca7125ad4a58023090b15ed2be79c2a8acac33af",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass107-top-025-321stars-v1.json",
+      "native_receipt_sha256": "e09a4ee5ec123fa08b1072c280ceb19f3cad3609ea42d0a911a5f6a41878546a",
+      "full_corpus_complete": false,
+      "validated_source_commit": "e645dfdda90cbec49c1f26279c5218f337e91c71",
+      "source_pending_commit_at_test": true
+    }
+  ],
+  "baseline_archive_result": {
+    "position": 25,
+    "source_simfile": "321STARS/321STARS.ssc",
+    "archive": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373.tar.zst",
+    "archive_sha256": "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373",
+    "harness_version": "0.1.51",
+    "source_commit": "fb9d04ed4ebde55f6f04f3cc03b645ff820825ee",
+    "binary_sha256": "c2181eb172a2df82530bb502f411751114bdea9dbe2b22efc78b5932ce7c24a5",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+      "d49e4aa4116708c56babc8c460cdbb0be632b01c2257278affd9a538bf6a8373.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 137.12204439984635,
+    "comparisons_passed": 50997699,
+    "comparisons_failed": 264768,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass107\\fresh-025-v1.log",
+    "log_sha256": "1c7782d5fdd73c6c3cfedcc2c1faa42fd078f8b2e40df6e97b0fb58d4bb848d3",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass107-top-025-321stars-v1.json",
+    "native_receipt_sha256": "e09a4ee5ec123fa08b1072c280ceb19f3cad3609ea42d0a911a5f6a41878546a",
+    "full_corpus_complete": false
+  },
+  "regression": {
+    "native_control": {
+      "native_song_host_checks_passed": 122,
+      "music_origin": -0.01,
+      "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "harness_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "independent_native_sha256": "e4bb83e0756e335c471ed20db69bde81a542d0a81d9b6ff367ef5451a847c8f1",
+      "first_uv": [
+        0.12137199938297272,
+        0.3940809965133667
+      ],
+      "last_uv": [
+        0.12137199938297272,
+        -0.6059190034866333
+      ],
+      "conclusion": "Primary foreground material updates use elapsed seconds relative to beat zero; simfile offset changes BGM position, not texture delta."
+    },
+    "before": {
+      "source_commit": "3b0f61b73348db057f8d2a189ac86d46da9b6513",
+      "source_pending_commit": true,
+      "binary_sha256": "9e583cc91c33f98086938f96f5f608d5a28342d61327eb35f0b8b250c6863cd7",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\baseline-v1-song_lua_itgmania_semantic_parity.exe",
+        "models::native_model_elapsed_clock_ignores_simfile_offset",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 0.7773894001729786,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\offset-before-v3.log",
+      "log_sha256": "4f43a62344e95e86bf896659d97048b4065d57f3e0a2b3fc2c0de1bca37fee4a",
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 258 filtered out; finished in 0.41s"
+      ]
+    },
+    "after": {
+      "source_commit": "3b0f61b73348db057f8d2a189ac86d46da9b6513",
+      "source_pending_commit": true,
+      "binary_sha256": "cb3697af1350d3b3638a0c49367dd166b0d67fcce0ee7fcc29caa05479cf7499",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\fixed-v2-song_lua_itgmania_semantic_parity.exe",
+        "models::",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.0493020000867546,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass108\\model-controls-after-v2.log",
+      "log_sha256": "41f05f9c617b97defde087afa58197ca075bedea443763cd3e8ba44ae0038685",
+      "result_lines": [
+        "test result: ok. 4 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.31s"
+      ]
+    },
+    "regression_comparisons_passed": 561139,
+    "regression_comparisons_failed_before_fix": 2928,
+    "models_source_sha256": "e2b2ac04760e125ff1eb8a00d08018476205be0b91e9c4cac0ff7871878d0be1"
+  },
+  "canonical_positions_passed": [
+    25
+  ],
+  "comparisons_passed": 51262467,
+  "next_position": 26,
+  "fix": "Actor-state lookup retains music time; automatic Model material lookup uses trace elapsed seconds, matching native Foreground and AnimatedTexture deltas.",
+  "additional_pending_observations": [
+    "Explicit Def.Model default backface culling differs from native Model constructor; noteskin Models use a separate correct path.",
+    "The multitap boundary unit test fails at beat 0.001 before and after this comparator correction.",
+    "Manual-draw material timing, unsupported rendering profiles and GPU framebuffer parity still require native verification."
+  ]
+}

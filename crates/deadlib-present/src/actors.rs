@@ -1,6 +1,6 @@
 use crate::anim;
 use deadlib_render_core::{
-    BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    BlendMode, CullMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
 };
 use glam::Mat4 as Matrix4;
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -464,7 +464,7 @@ pub enum Actor {
         clear_depth: bool,
         /// Clear depth after this actor's last visible pass.
         clear_depth_after: bool,
-        cull_back: bool,
+        cull_mode: CullMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -492,7 +492,7 @@ pub enum Actor {
         clear_depth: bool,
         /// Clear depth after this actor's last visible pass.
         clear_depth_after: bool,
-        cull_back: bool,
+        cull_mode: CullMode,
         visible: bool,
         blend: BlendMode,
         z: i16,
@@ -554,6 +554,13 @@ pub enum Actor {
     Camera {
         view_proj: Matrix4,
         children: Vec<Self>,
+    },
+
+    /// Replays a retained draw in its recorded absolute coordinate space.
+    /// Parent layout and camera remapping do not alter the recorded matrices.
+    SharedCamera {
+        view_proj: Matrix4,
+        children: Arc<[Self]>,
     },
 
     /// Begin a flat camera scope for subsequent sibling actors.
@@ -626,6 +633,7 @@ pub enum FlatMeshVertices {
 /// Material texture stages and an affine transform before model projection.
 #[derive(Clone, Debug)]
 pub struct MeshEnvironment {
+    pub sampler: Option<deadlib_render_core::MeshSampler>,
     /// Matching world-to-clip and world-to-eye cameras, before model projection.
     pub camera: Option<(Matrix4, Matrix4)>,
     pub transform: Matrix4,
@@ -652,7 +660,7 @@ pub struct FlatTexturedMesh {
     pub clear_depth: bool,
     /// Clear depth after this draw so subsequent draws cannot inherit it.
     pub clear_depth_after: bool,
-    pub cull_back: bool,
+    pub cull_mode: CullMode,
     pub blend: BlendMode,
     pub z: i16,
 }
@@ -855,7 +863,8 @@ impl Actor {
             Self::Frame { children, .. } | Self::Camera { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
-            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. } => {
+            Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. }
+            | Self::SharedCamera { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
             Self::Shadow { child, .. } => child.retained_static(),
@@ -920,6 +929,11 @@ impl Actor {
             Self::SharedTransform { tint, .. } => tint[3] *= alpha,
             Self::Camera { children, .. } => {
                 for child in children {
+                    child.mul_alpha(alpha);
+                }
+            }
+            Self::SharedCamera { children, .. } => {
+                for child in Arc::make_mut(children) {
                     child.mul_alpha(alpha);
                 }
             }
@@ -1002,6 +1016,12 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::Camera { children, .. } => {
                 stats.cameras = stats.cameras.saturating_add(1);
                 for child in children {
+                    visit(stats, child);
+                }
+            }
+            Actor::SharedCamera { children, .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+                for child in children.iter() {
                     visit(stats, child);
                 }
             }

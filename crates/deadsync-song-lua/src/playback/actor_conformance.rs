@@ -164,6 +164,11 @@ pub fn project_world(view_projection: [[f32; 4]; 4], world: [f32; 4]) -> [f32; 4
 }
 
 #[must_use]
+pub fn screen_matrix(state: SongLuaOverlayState, clock: [f32; 2]) -> [[f32; 4]; 4] {
+    matrix_rows(song_lua_draw_matrix(state, clock).0)
+}
+
+#[must_use]
 pub fn crop_fade_vertices(state: SongLuaOverlayState, size: [f32; 2]) -> Vec<SpriteVertex> {
     let (center, cropped_size) =
         song_lua_overlay_rect(state, size, 1.0, 1.0, 1.0, 1.0).expect("visible sprite");
@@ -289,6 +294,29 @@ pub struct WholeSongComposer {
 }
 
 impl WholeSongComposer {
+    /// Read the actual resource identity bound by production composition.
+    #[must_use]
+    pub fn texture_key(&self, handle: deadlib_render_core::TextureHandle) -> &str {
+        self.assets.texture_context().texture_key(handle)
+    }
+
+    /// Read the world-space basis and camera view used by the production Model
+    /// builder. The actor instance supplies its own local-to-world transform.
+    #[must_use]
+    pub fn model_matrices(
+        &self,
+        states: &[SongLuaOverlayState],
+        index: usize,
+        screen: [f32; 2],
+    ) -> [[[f32; 4]; 4]; 2] {
+        let [_, view, space] = song_lua_model_camera(
+            self.topology.camera_state(states, index),
+            screen_width() / screen[0].max(1.0),
+            screen_height() / screen[1].max(1.0),
+        );
+        [matrix_rows(space), matrix_rows(view)]
+    }
+
     /// Stable resource identity allocated by the production song topology.
     #[must_use]
     pub fn capture_handle(&self, index: usize) -> Option<deadlib_render_core::TextureHandle> {
@@ -319,14 +347,35 @@ impl WholeSongComposer {
                     texture_key: Some(texture_key),
                     ..
                 } => queue_texture(&mut assets, texture_key),
-                SongLuaOverlayKind::NoteskinActor { slots } => {
+                SongLuaOverlayKind::NoteskinActor { slots, .. } => {
                     for slot in slots.iter() {
                         queue_texture(&mut assets, slot.texture_key_shared().as_ref());
+                        if let Some((key, _)) = slot.model_additive(0.0) {
+                            queue_texture(&mut assets, &key);
+                        }
+                        for key in slot
+                            .model_texture_keys()
+                            .iter()
+                            .chain(slot.model_additive_keys())
+                        {
+                            queue_texture(&mut assets, key);
+                        }
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
                         queue_texture(&mut assets, &layer.texture_key);
+                        if let Some(key) = &layer.additive {
+                            queue_texture(&mut assets, key);
+                        }
+                        for key in layer
+                            .texture_frames
+                            .iter()
+                            .chain(layer.additive_frames.iter())
+                            .filter_map(|frame| frame.texture_key.as_ref())
+                        {
+                            queue_texture(&mut assets, key);
+                        }
                     }
                 }
                 _ => {}
@@ -351,6 +400,8 @@ impl WholeSongComposer {
 
     /// Materialize every pass together before inspecting leaves. Repeated RGB
     /// draws therefore cannot pass by mutating one shared geometry buffer.
+    /// Each result retains the world basis and view from its compiled draw
+    /// camera, which may differ from the actor's automatic ancestor camera.
     #[must_use]
     pub fn render_manual_frame<S: NoteskinSlot + Clone>(
         &mut self,
@@ -359,7 +410,7 @@ impl WholeSongComposer {
         screen: [f32; 2],
         seconds: f32,
         beat: f32,
-    ) -> Vec<(usize, deadlib_render_core::RenderFrame)> {
+    ) -> Vec<(usize, deadlib_render_core::RenderFrame, [[[f32; 4]; 4]; 2])> {
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
         ));
@@ -395,6 +446,7 @@ impl WholeSongComposer {
             .filter_map(|(op, draw)| {
                 let SongLuaDrawOp::Draw {
                     source: SongLuaDrawSource::Overlay(overlay),
+                    camera,
                     ..
                 } = draw
                 else {
@@ -408,6 +460,11 @@ impl WholeSongComposer {
                 ) {
                     return None;
                 }
+                let [_, view, space] = song_lua_model_camera(
+                    *camera,
+                    screen_width() / screen[0].max(1.0),
+                    screen_height() / screen[1].max(1.0),
+                );
                 Some((
                     *overlay,
                     deadlib_present::compose::build_screen_with_texture_context(
@@ -418,6 +475,7 @@ impl WholeSongComposer {
                         seconds,
                         self.assets.texture_context(),
                     ),
+                    [matrix_rows(space), matrix_rows(view)],
                 ))
             })
             .collect()
@@ -434,6 +492,21 @@ impl WholeSongComposer {
         screen: [f32; 2],
         seconds: f32,
         beat: f32,
+    ) -> deadlib_render_core::RenderFrame {
+        self.render_screen_overlay(overlays, states, index, screen, seconds, beat, None)
+    }
+
+    /// Include the same screen projection applied to gameplay fragments.
+    #[must_use]
+    pub fn render_screen_overlay<S: NoteskinSlot + Clone>(
+        &mut self,
+        overlays: &[SongLuaOverlayActor<S>],
+        states: &[SongLuaOverlayState],
+        index: usize,
+        screen: [f32; 2],
+        seconds: f32,
+        beat: f32,
+        screen_state: Option<SongLuaOverlayState>,
     ) -> deadlib_render_core::RenderFrame {
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
@@ -461,7 +534,8 @@ impl WholeSongComposer {
             &mut actors,
             &overlays[index],
             states[index],
-            song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index),
+            song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index)
+                .or(screen_state.filter(|state| state.fov.is_some())),
             &self.assets,
             0,
             screen[0],
@@ -475,7 +549,8 @@ impl WholeSongComposer {
             && let Some(built) = build_song_lua_overlay_actor_with_scratch(
                 &overlays[index],
                 states[index],
-                song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index),
+                song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index)
+                    .or(screen_state.filter(|state| state.fov.is_some())),
                 &self.assets,
                 0,
                 screen[0],
@@ -489,13 +564,20 @@ impl WholeSongComposer {
         {
             actors.extend(built);
         }
-        deadlib_present::compose::build_screen_with_texture_context(
-            &actors,
+        let projection = screen_state.map_or(Matrix4::IDENTITY, |state| {
+            song_lua_screen_projection(state, screen, [seconds, beat])
+        });
+        deadlib_present::compose::build_passes(
+            std::iter::once(ActorSegment::new(&actors).with_projection(&projection)),
+            &[],
             [0.0; 4],
             &deadlib_present::space::Metrics::centered(screen[0], screen[1]),
             &font::FontMap::default(),
             seconds,
+            &mut TextLayoutCache::default(),
+            &mut deadlib_present::compose::ComposeScratch::default(),
             self.assets.texture_context(),
+            None,
         )
     }
 

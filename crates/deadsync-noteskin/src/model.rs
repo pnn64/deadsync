@@ -310,7 +310,7 @@ fn itg_resolve_animated_texture_ini(
             }
         }
         // Path equality also accepts aliases such as ./frames/a.png. Preserve
-        // those spellings in stored frames without creating a duplicate atlas.
+        // those spellings in stored frames while keeping their actual image identity.
         has_distinct_image = has_distinct_image || frame_path.as_ref() != texture_path;
         if !frames.is_empty() {
             frames.push(ItgTextureFrame {
@@ -322,8 +322,8 @@ fn itg_resolve_animated_texture_ini(
     }
     Some(ItgResolvedModelTexture {
         sphere_mapped: path.to_string_lossy().contains("sphere"),
-        // Repeated references to one image need no atlas. Keep its full UV
-        // domain for scrolling materials instead of adding duplicate tiles.
+        // Repeated references to one image need no binding table. Keep its full UV
+        // domain while retaining each state's delay and translation.
         animation: (has_distinct_image
             && cycle_seconds > f32::EPSILON
             && cycle_seconds.is_finite())
@@ -370,6 +370,7 @@ pub struct ItgResolvedModelLayer {
 
 #[derive(Debug)]
 struct ItgSharedMilkshapeMeshLayer {
+    name: String,
     material_index: i32,
     bone_index: Option<u8>,
     vertices: Arc<[ModelVertex]>,
@@ -781,6 +782,7 @@ pub fn itg_parse_milkshape_model_layers(
     let mut triangles = Vec::new();
     for _ in 0..mesh_count {
         let mesh_header = lines.next()?;
+        let name = mesh_header.strip_prefix('"')?.split_once('"')?.0;
         let material_index = itg_parse_milkshape_mesh_material_index(mesh_header);
         let vertex_count = lines.next()?.trim().parse::<usize>().ok()?;
         mesh_vertices.clear();
@@ -878,6 +880,7 @@ pub fn itg_parse_milkshape_model_layers(
             model_bounds[4] = model_bounds[4].max(bounds[4]);
             model_bounds[5] = model_bounds[5].max(bounds[5]);
             meshes.push(ItgSharedMilkshapeMeshLayer {
+                name: name.to_owned(),
                 material_index,
                 bone_index,
                 vertices: tri_vertices,
@@ -887,6 +890,22 @@ pub fn itg_parse_milkshape_model_layers(
     }
 
     drop((mesh_vertices, normals, triangles));
+
+    // The rendering path supports per-vertex texture matrix scaling. Native
+    // RageModelGeometry::MergeMeshes appends mesh 1 to mesh 0 without removing
+    // mesh 1 or replacing mesh 0's material/bone binding.
+    if mesh_count == 2 && meshes.len() == 2 && meshes[0].name == meshes[1].name {
+        meshes[0].vertices = meshes[0]
+            .vertices
+            .iter()
+            .chain(meshes[1].vertices.iter())
+            .copied()
+            .collect();
+        for axis in 0..3 {
+            meshes[0].bounds[axis] = meshes[0].bounds[axis].min(meshes[1].bounds[axis]);
+            meshes[0].bounds[axis + 3] = meshes[0].bounds[axis + 3].max(meshes[1].bounds[axis + 3]);
+        }
+    }
 
     if meshes.is_empty() {
         return None;
@@ -1120,6 +1139,64 @@ mod tests {
             }]),
             bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
         })
+    }
+
+    #[test]
+    fn equal_mesh_names_preserve_native_merged_draws() {
+        let root = temp_model_root("merged-meshes");
+        let path = root.join("model.txt");
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/model-merged-meshes.txt"
+        ));
+        let data = noteskin_itg::NoteskinData {
+            name: "fixture".into(),
+            overrides: vec![],
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        for (name, expected) in [
+            ("joined mesh", [6, 3]),
+            ("Joined mesh", [3, 3]),
+            ("other mesh", [3, 3]),
+        ] {
+            fs::write(
+                &path,
+                source.replacen("\"joined mesh\"", &format!("\"{name}\""), 1),
+            )
+            .unwrap();
+            let layers = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+            assert_eq!(layers.len(), 2);
+            assert_eq!(
+                layers
+                    .iter()
+                    .map(|layer| layer.mesh.vertices.len())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            if expected[0] == 6 {
+                assert_eq!(
+                    layers[0].mesh.vertices[3].pos,
+                    layers[1].mesh.vertices[0].pos
+                );
+            }
+        }
+        // A third empty mesh still counts in the native geometry list, so the
+        // two drawable meshes must not trigger the two-mesh merge condition.
+        let three = source
+            .replace("Meshes: 2", "Meshes: 3")
+            .replace("Materials: 1", "\"joined mesh\" 0 0\n0\n0\n0\nMaterials: 1");
+        fs::write(&path, three).unwrap();
+        let layers = itg_parse_milkshape_model_layers(&data, &path, &path).unwrap();
+        assert_eq!(
+            layers
+                .iter()
+                .map(|layer| layer.mesh.vertices.len())
+                .collect::<Vec<_>>(),
+            [3, 3]
+        );
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(&root).unwrap();
     }
 
     #[test]
@@ -1627,3 +1704,7 @@ fn expand_mesh_vertices(
     }
     (vertices, bounds)
 }
+
+#[cfg(test)]
+#[path = "model_merge_perf.rs"]
+mod resource_perf;

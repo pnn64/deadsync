@@ -124,7 +124,6 @@ struct RuntimeState {
     workers: usize,
     /// Lookups that failed, and when they may be asked again.
     retry_at: HashMap<u64, Instant>,
-    view_rows: HashMap<u64, PackDetails>,
     stamina: ViewPhase,
     all_around: ViewPhase,
     stamina_failed_at: Option<Instant>,
@@ -159,7 +158,7 @@ pub fn runtime_want(wanted: &[(u64, &str)]) {
     let now = Instant::now();
     let worth = |runtime: &RuntimeState, id: u64| {
         !runtime.by_id.contains_key(&id)
-            && !runtime.view_rows.contains_key(&id)
+            && !runtime.snapshot.view_rows.contains_key(&id)
             && !runtime.missing.contains(&id)
             && !runtime.in_flight.contains(&id)
             && runtime.retry_at.get(&id).is_none_or(|at| now >= *at)
@@ -247,7 +246,7 @@ pub fn runtime_refresh() {
     runtime.missing.clear();
     runtime.queue.clear();
     runtime.retry_at.clear();
-    runtime.view_rows.clear();
+    Arc::make_mut(&mut runtime.snapshot).view_rows = Arc::default();
     runtime.stamina = ViewPhase::Idle;
     runtime.all_around = ViewPhase::Idle;
     runtime.stamina_failed_at = None;
@@ -284,7 +283,7 @@ const fn shown_phase(phase: ViewPhase, retrying: bool) -> ViewPhase {
     }
 }
 
-/// Publish what is known. The view rows are only copied when they changed.
+/// Publish lookup answers and phases; view rows live in the shared snapshot.
 fn publish(runtime: &mut RuntimeState, views_moved: bool) {
     let pending: HashSet<u64> = runtime
         .queue
@@ -292,9 +291,8 @@ fn publish(runtime: &mut RuntimeState, views_moved: bool) {
         .map(|(id, _)| *id)
         .chain(runtime.in_flight.iter().copied())
         .collect();
-    let mut snapshot = (*runtime.snapshot).clone();
+    let snapshot = Arc::make_mut(&mut runtime.snapshot);
     if views_moved {
-        snapshot.view_rows = Arc::new(runtime.view_rows.clone());
         snapshot.stamina = shown_phase(runtime.stamina, runtime.stamina_retrying);
         snapshot.all_around = shown_phase(runtime.all_around, runtime.all_around_retrying);
         snapshot.views_revision = snapshot.views_revision.wrapping_add(1);
@@ -307,7 +305,6 @@ fn publish(runtime: &mut RuntimeState, views_moved: bool) {
     }
     snapshot.pending = Arc::new(pending);
     snapshot.revision = snapshot.revision.wrapping_add(1);
-    runtime.snapshot = Arc::new(snapshot);
 }
 
 /// One worker: take the next lookup, answer it, until there are none.
@@ -416,8 +413,12 @@ fn finish_view(generation: u64, view: View, result: Result<Vec<(u64, PackDetails
     }
     match result {
         Ok(rows) => {
-            for (id, details) in rows {
-                runtime.view_rows.insert(id, details);
+            if !rows.is_empty() {
+                let snapshot = Arc::make_mut(&mut runtime.snapshot);
+                let view_rows = Arc::make_mut(&mut snapshot.view_rows);
+                for (id, details) in rows {
+                    view_rows.insert(id, details);
+                }
             }
             set_view_phase(&mut runtime, view, ViewPhase::Ready);
         }
@@ -502,3 +503,7 @@ mod tests {
         assert!(snapshot.get(3).is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "smo_describe_perf.rs"]
+mod perf_tests;
