@@ -10065,9 +10065,6 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
     // Def tables are constructed children first. Native actors subscribe as
     // the definition tree loads, with parents before their children.
     register_song_lua_actor(lua, actor)?;
-    // Native QueueCommand appends a tween; Init does not advance its queue.
-    // Leave queued work until all actors have received OnCommand.
-    run_actor_named_command_with_drain(lua, actor, "InitCommand", false)?;
     for (index, child) in actor.sequence_values::<Value>().enumerate() {
         let Value::Table(child) = child? else {
             continue;
@@ -10080,6 +10077,9 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         let _ = index;
         run_actor_init_commands_for_table(lua, &child)?;
     }
+    // ActorFrame::LoadFromNode initializes its children before Actor runs Init.
+    // Native QueueCommand appends a tween; Init does not advance its queue.
+    run_actor_named_command_with_drain(lua, actor, "InitCommand", false)?;
     run_song_meter_stream_init_command(lua, actor)?;
     actor.set("__songlua_init_commands_ran", true)?;
     Ok(())
@@ -10126,12 +10126,9 @@ pub fn run_added_actor_child_commands(
     parent: &Table,
     child: &Table,
 ) -> mlua::Result<()> {
-    if parent
-        .get::<Option<bool>>("__songlua_init_commands_ran")?
-        .unwrap_or(false)
-    {
-        run_actor_init_commands_for_table(lua, child)?;
-    }
+    // AddChildFromPath's MakeActor initializes the loaded child immediately,
+    // including when it is called from the parent's own InitCommand.
+    run_actor_init_commands_for_table(lua, child)?;
     let startup_already_needs_child = parent
         .get::<Option<bool>>("__songlua_startup_commands_ran")?
         .unwrap_or(false)

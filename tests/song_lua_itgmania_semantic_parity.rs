@@ -691,14 +691,24 @@ fn native_message_order(trace: &NativeTrace) -> Vec<(String, usize)> {
         definition.runtime_actors.iter().map(move |actor| (actor.as_str(), definition.id.as_str()))
     }).collect::<HashMap<_, _>>();
     let mut children = HashMap::<(&str, &str), std::collections::VecDeque<&NativeActor>>::new();
+    let mut roots = HashMap::<&str, std::collections::VecDeque<&NativeActor>>::new();
     for actor in &trace.runtime_actors {
         let definition = actor_definitions[actor.id.as_str()];
-        children.entry((actor.parent_id.as_deref().unwrap_or(""), definition))
-            .or_default().push_back(actor);
+        if let Some(parent) = actor.parent_id.as_deref()
+            && actor_definitions.contains_key(parent)
+        {
+            children.entry((parent, definition)).or_default().push_back(actor);
+        } else {
+            if let Some(parent) = actor.parent_id.as_deref() {
+                assert!(trace.external_actors.iter().any(|actor| actor.id == parent),
+                    "native root parent must have a captured external identity");
+            }
+            roots.entry(definition).or_default().push_back(actor);
+        }
     }
     let mut paths = HashMap::new();
     for (layer, root) in trace.roots.iter().enumerate() {
-        let root_actor = children.get_mut(&("", root.as_str()))
+        let root_actor = roots.get_mut(root.as_str())
             .and_then(|actors| actors.pop_front()).expect("native root instance");
         let mut pending = std::collections::VecDeque::from([
             (root.as_str(), root_actor.id.as_str(), (layer + 1).to_string()),
@@ -940,6 +950,19 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::GraphDisplay { .. } => "GraphDisplay",
         SongLuaOverlayKind::Quad => "Quad",
     }
+}
+
+#[test]
+fn native_load_order() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/foreground-load-order");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("source-backed foreground loading order");
+    assert!(parity.checks() > 0);
 }
 
 #[test]

@@ -6053,6 +6053,37 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn frame_init_follows_child() {
+        let song_dir = test_dir("frame-init-order");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local order = 0
+return Def.ActorFrame{
+    InitCommand=function(self)
+        assert(order == 2, 'frame Init must follow both child Init commands')
+        self:GetChild('First'):x(10)
+    end,
+    Def.Quad{
+        Name='First',
+        InitCommand=function(self) order = order + 1; self:x(order) end
+    },
+    Def.Quad{
+        Name='Second',
+        InitCommand=function(self) order = order + 1; self:x(order) end
+    }
+}
+"#).expect("write frame Init control");
+        let compiled = test_compile_song_lua(
+            &entry, &SongLuaCompileContext::new(&song_dir, "Frame Init Order"),
+        ).expect("compile frame Init control");
+        for (name, x) in [("First", 10.0), ("Second", 2.0)] {
+            let actor = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some(name))
+                .expect("initialized child");
+            assert_eq!(actor.initial_state.x, x, "{name} Init order");
+        }
+    }
+
+    #[test]
     fn compile_song_lua_runs_actor_init_commands() {
         let song_dir = test_dir("init-command");
         let entry = song_dir.join("default.lua");
@@ -17676,6 +17707,8 @@ return Def.ActorFrame {{
     Name="{name}",
     InitCommand=function(self)
         assert(self:GetParent():GetName() == "{parent}")
+        assert(self:GetParent():GetChildren()[self:GetName()] == nil,
+            "layer must attach the root after Init")
     end,
     OnCommand=function(self)
         local screen = SCREENMAN:GetTopScreen()

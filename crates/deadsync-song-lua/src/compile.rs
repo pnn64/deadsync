@@ -247,7 +247,7 @@ where
     for (index, entry_path) in entry_paths.iter().enumerate() {
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
-        if let Value::Table(actor) = &root {
+        let parent = if let Value::Table(actor) = &root {
             #[cfg(feature = "test-support")]
             actor.raw_set("__songlua_message_path", (index + 1).to_string())
                 .map_err(|err| err.to_string())?;
@@ -265,9 +265,10 @@ where
             actor
                 .set("__songlua_parent", parent.clone())
                 .map_err(|err| err.to_string())?;
-            crate::lua_util::push_sequence_child_once(&parent, actor.clone())
-                .map_err(|err| err.to_string())?;
-        }
+            Some(parent)
+        } else {
+            None
+        };
         crate::lua_util::collect_initial_states(&root, &mut initial_actor_states)
             .map_err(|err| err.to_string())?;
         run_actor_init_commands(&lua, &root).map_err(|err| {
@@ -276,6 +277,12 @@ where
                 entry_path.display()
             )
         })?;
+        // MakeActor runs Init with the parent set; Foreground::LoadFromSong
+        // adds the initialized actor to its children afterward.
+        if let (Value::Table(actor), Some(parent)) = (&root, parent) {
+            crate::lua_util::push_sequence_child_once(&parent, actor.clone())
+                .map_err(|err| err.to_string())?;
+        }
         roots
             .raw_set(index + 1, root)
             .map_err(|err| err.to_string())?;
