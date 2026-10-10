@@ -10493,7 +10493,6 @@ fn queued_render_advance(
 }
 
 pub struct SongLuaStartupState {
-    actor: Table,
     pub initial: SongLuaOverlayState,
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
     steps: Vec<f32>,
@@ -10593,8 +10592,10 @@ pub(crate) fn begin_tween_replay<Kind>(
     let mut replays = FxHashMap::default();
     // A queue can belong to a callback-only ActorFrame which has no drawable
     // overlay. Its commands still own native time and must dispatch normally.
-    for startup in states.values().filter(|state| !state.steps.is_empty()) {
-        let pointer = startup.actor.to_pointer() as usize;
+    // The Lua actor registry owns the live actors. Startup states need only
+    // their existing identity keys and baked replay data; retaining fresh Rust
+    // Table handles in each capture map exhausts Lua 5.1's auxiliary stack.
+    for (&pointer, startup) in states.iter().filter(|(_, state)| !state.steps.is_empty()) {
         let current = overlays
             .iter()
             .find(|overlay| overlay.table.to_pointer() as usize == pointer)
@@ -11299,7 +11300,6 @@ pub(crate) fn capture_startup_states(
             Ok((
                 pointer,
                 SongLuaStartupState {
-                    actor: actor.clone(),
                     initial,
                     blocks,
                     steps,
@@ -11545,7 +11545,6 @@ pub(crate) fn run_actor_startup_commands(
             states.insert(
                 pointer,
                 SongLuaStartupState {
-                    actor: actor.clone(),
                     initial,
                     blocks,
                     steps: Vec::new(),
