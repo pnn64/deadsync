@@ -818,3 +818,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass127.json`. Position 49 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 128
+
+Position 49, [7086] [12] Blacksphere, passes all
+158,515 comparisons against committed DeadSync
+`ba32031b5`. The complete native harness 0.1.52 archive
+contains 7,178 updates over 119.61 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass128.json`. Position 50 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.

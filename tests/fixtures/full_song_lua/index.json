@@ -818,12 +818,10 @@
     {
       "title": "[7086] [12] Blacksphere",
       "source_simfile": "[12] Blacksphere (SX) [Exschwasion]/music.ssc",
-      "harness_version": "0.1.0",
-      "archive": "beea2deb43135a974029410cdf0b1c343d2c9b2601ab567e77a3e56ba560e3f5.tar.zst",
-      "sha256": "beea2deb43135a974029410cdf0b1c343d2c9b2601ab567e77a3e56ba560e3f5",
-      "compressed_bytes": 78479,
-      "uncompressed_sha256": "26c1c166b03a4e942d9feca903ef07ffda87070c73a80b890d526e71650dd877",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e.tar.zst",
+      "sha256": "693d9951db33ee0769d0ca11a4c252212675b4c280bfa17b391a448b88926c2e",
+      "compressed_bytes": 109136,
       "aliases": [
         "34945c6e8b017a883429c1aa53ba49c9a37bcd85e6054ad7c22003fdf13df4d0.tar.zst"
       ]
