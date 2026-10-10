@@ -71,9 +71,17 @@ impl ItgdbSnapshot {
 /// keeps letters and digits and throws the rest away.
 pub fn normalize_name(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
-    for ch in raw.chars() {
-        if ch.is_alphanumeric() {
-            out.extend(ch.to_lowercase());
+    if raw.is_ascii() {
+        out.extend(
+            raw.bytes()
+                .filter(u8::is_ascii_alphanumeric)
+                .map(|byte| char::from(byte.to_ascii_lowercase())),
+        );
+    } else {
+        for ch in raw.chars() {
+            if ch.is_alphanumeric() {
+                out.extend(ch.to_lowercase());
+            }
         }
     }
     out
@@ -304,3 +312,11 @@ mod tests {
         assert!(parse_dedicated("<html><body>nothing</body></html>").is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "itgdb_names_original.rs"]
+mod names_original;
+
+#[cfg(test)]
+#[path = "itgdb_names_perf.rs"]
+mod names_perf_tests;

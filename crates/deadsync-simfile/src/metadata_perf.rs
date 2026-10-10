@@ -150,3 +150,42 @@ fn batch(count: usize, work: &mut impl FnMut()) -> u128 {
     }
     start.elapsed().as_nanos().max(1)
 }
+
+/// Prepare owned inputs outside timing; consume inputs and outputs inside it.
+pub fn compare_owned<T: Clone>(
+    label: &str,
+    iterations: usize,
+    input: &T,
+    mut original: impl FnMut(T),
+    mut current: impl FnMut(T),
+) {
+    let mut elapsed = [Vec::with_capacity(9), Vec::with_capacity(9)];
+    for sample in 0..10 {
+        for variant in [sample % 2, 1 - sample % 2] {
+            let inputs = vec![input.clone(); iterations];
+            let start = Instant::now();
+            if variant == 0 {
+                for input in inputs {
+                    original(input);
+                }
+            } else {
+                for input in inputs {
+                    current(input);
+                }
+            }
+            let nanos = start.elapsed().as_nanos() as f64 / iterations as f64;
+            if sample > 0 {
+                elapsed[variant].push(nanos);
+            }
+        }
+    }
+    for samples in &mut elapsed {
+        samples.sort_by(f64::total_cmp);
+    }
+    println!(
+        "{label}: original {:.2} ns/op, current {:.2} ns/op, {:.3}x throughput",
+        elapsed[0][4],
+        elapsed[1][4],
+        elapsed[0][4] / elapsed[1][4]
+    );
+}
