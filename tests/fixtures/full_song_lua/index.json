@@ -1368,12 +1368,10 @@
     {
       "title": "ao no lie",
       "source_simfile": "ao no lie/ae no lie.ssc",
-      "harness_version": "0.1.0",
-      "archive": "aad6154697a456fc7e44f4c43468a90a5d0ccebc138e8db8f02f050539a6d504.tar.zst",
-      "sha256": "aad6154697a456fc7e44f4c43468a90a5d0ccebc138e8db8f02f050539a6d504",
-      "compressed_bytes": 56130,
-      "uncompressed_sha256": "7b93a3b72ce67bc3dd8a1154898fe03b902b6711a5759f98ce619de2fde41d2d",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "741ff327dc3ddd19210a2959d45f1d032a583f56d6431b8a2d218e0447ee302e.tar.zst",
+      "sha256": "741ff327dc3ddd19210a2959d45f1d032a583f56d6431b8a2d218e0447ee302e",
+      "compressed_bytes": 248746,
       "aliases": [
         "b930974ec3f2603dd0f117cb3d66aa8c58a0a33f956efcd5fc5f1256ae25c0de.tar.zst"
       ]
