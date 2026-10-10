@@ -1694,12 +1694,10 @@
     {
       "title": "Brain Implosion Energy Drink (Null)",
       "source_simfile": "Brain Implosion Energy Drink/Brain Implosion Energy Drink.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1839cd0ea609440b738da54e895e57c17cb8fec51036a80348826f0980387e28.tar.zst",
-      "sha256": "1839cd0ea609440b738da54e895e57c17cb8fec51036a80348826f0980387e28",
-      "compressed_bytes": 2171751,
-      "uncompressed_sha256": "32dd8c235bde1fd96f14fc78f2c95d0a864105c9245543d3e89a9d40696618c8",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d.tar.zst",
+      "sha256": "d59a4f7e545dc6bc1ac3f83653c035cdecbac50e2d98d4fae4f831ec1925e70d",
+      "compressed_bytes": 2192191,
       "aliases": [
         "9975443f5dcfc7a5403aeff2fac03c7aac8ecc4da92e65e5a6e6a6cdb9b5af84.tar.zst"
       ]
