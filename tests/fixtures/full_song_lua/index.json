@@ -1137,12 +1137,10 @@
     {
       "title": "Abraham's OP",
       "source_simfile": "Abraham's OP/Abraham's OP.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6a6cc679a4810a89d98f3932944f98d639d66e1a0e36f0ca70669dda7c09f450.tar.zst",
-      "sha256": "6a6cc679a4810a89d98f3932944f98d639d66e1a0e36f0ca70669dda7c09f450",
-      "compressed_bytes": 100534,
-      "uncompressed_sha256": "ad258e13c1f95c6b366894d08b6b8f015a57bb8002e923311d3d9084f9f6a857",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1.tar.zst",
+      "sha256": "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1",
+      "compressed_bytes": 115691,
       "aliases": [
         "3c1edbe75f2517df8501a5b3a77a44140b3dfc911ceeb637a473668467f58711.tar.zst"
       ]

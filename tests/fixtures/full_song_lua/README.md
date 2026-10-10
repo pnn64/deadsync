@@ -1197,3 +1197,23 @@ See `native-revalidation-pass156.json`. Position 78 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 157
+
+Position 78, Abraham's OP, passes all
+238,881 comparisons against committed DeadSync
+`466815487`. The complete native harness 0.1.58 archive
+contains 10,857 updates over 180.93 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass157.json`. Position 79 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+The standalone compiled ITGmania Current/Song control also passes. Its
+normal Lua capture has 241 frames with no errors or dropped events.
+DeadSync still fails that control at the distinct-level identity assertion;
+this chart result does not close general Current/Song option parity.
+The pending control is recorded in the pass JSON.
