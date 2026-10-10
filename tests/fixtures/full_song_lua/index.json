@@ -994,12 +994,10 @@
     {
       "title": "[FULL SONG] Stuck in the Abyss",
       "source_simfile": "[FULL SONG] Stuck in the Abyss [DDDAAA]/stuckintheabyss.ssc",
-      "harness_version": "0.1.0",
-      "archive": "5b717410c59dc966a671f037adabe5f78d6c9c21ce8edbda72ed12bccefe42cd.tar.zst",
-      "sha256": "5b717410c59dc966a671f037adabe5f78d6c9c21ce8edbda72ed12bccefe42cd",
-      "compressed_bytes": 1203288,
-      "uncompressed_sha256": "b56a2e3e01a1681d62628d696c11c32049cffe595b94779938536d6a7f327d98",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f.tar.zst",
+      "sha256": "3bda43053994422dd86bd0b17f53da5a197c39e35c16b028dc8330292190018f",
+      "compressed_bytes": 1239297,
       "aliases": [
         "b72c93dfd0376212bc5499ecb1a9ac51f0f727ce3a2cb36ef69479a333381826.tar.zst"
       ]
