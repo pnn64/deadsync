@@ -3116,8 +3116,9 @@ fn borrowed_row_layout_does_not_clone_shared_geometry() {
     let asset_manager = AssetManager::new();
     let row_idx = row_position(MACHINE_OPTIONS_ROWS, SubRowId::VisualStyle)
         .expect("machine options should contain visual style");
-    let owned = submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
-        .expect("visual style should have a row layout");
+    let owned = borrow_submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
+        .expect("visual style should have a row layout")
+        .clone();
     let strong_count = Arc::strong_count(&owned.texts);
 
     let borrowed = borrow_submenu_row_layout(&state, &asset_manager, SubmenuKind::Machine, row_idx)
@@ -3839,3 +3840,6 @@ fn graphics_refresh_change_emits_request_on_exit() {
         )]
     ));
 }
+
+#[path = "ui_pipelines_perf.rs"]
+mod pipelines_perf;

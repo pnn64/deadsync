@@ -1133,14 +1133,11 @@ fn select_profile_row(state: &mut State, profile_id: &str) {
 
 fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> ImportMessageState {
     let mut lines = Vec::new();
-    lines.push(MessageLine::plain(
-        tr_fmt(
-            "Profiles",
-            "ImportSummaryName",
-            &[("name", &summary.display_name)],
-        )
-        .to_string(),
-    ));
+    lines.push(MessageLine::plain(tr_fmt(
+        "Profiles",
+        "ImportSummaryName",
+        &[("name", &summary.display_name)],
+    )));
 
     // Scores: imported/total, amber when some were skipped.
     let scores_skipped =
@@ -1148,7 +1145,7 @@ fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> Import
     lines.push(if summary.scores_total == 0 {
         section_row(
             "ImportRowScores",
-            tr("Profiles", "ImportStatNoneFound").to_string(),
+            tr("Profiles", "ImportStatNoneFound"),
             SectionStatus::Skipped,
         )
     } else {
@@ -1168,7 +1165,7 @@ fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> Import
     lines.push(if summary.favorites_total == 0 {
         section_row(
             "ImportRowFavorites",
-            tr("Profiles", "ImportStatNoneFound").to_string(),
+            tr("Profiles", "ImportStatNoneFound"),
             SectionStatus::Skipped,
         )
     } else {
@@ -1212,13 +1209,12 @@ fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> Import
             "Profiles",
             "ImportStatItlScores",
             &[("count", &fmt_count(summary.itl_entries_imported))],
-        )
-        .to_string();
+        );
         section_row("ImportRowItl", status, SectionStatus::Imported)
     } else {
         section_row(
             "ImportRowItl",
-            tr("Profiles", "ImportStatNoneFound").to_string(),
+            tr("Profiles", "ImportStatNoneFound"),
             SectionStatus::Skipped,
         )
     });
@@ -1232,13 +1228,12 @@ fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> Import
     ));
 
     if summary.online_keys_imported() {
-        lines.push(MessageLine::note(
-            tr("Profiles", "ImportSummaryOnlineNudge").to_string(),
-        ));
+        lines.push(MessageLine::note(tr(
+            "Profiles",
+            "ImportSummaryOnlineNudge",
+        )));
     }
-    lines.push(MessageLine::note(
-        tr("Profiles", "ImportSummaryExNote").to_string(),
-    ));
+    lines.push(MessageLine::note(tr("Profiles", "ImportSummaryExNote")));
     ImportMessageState::new(tr("Profiles", "ImportSummaryTitle"), lines)
 }
 
@@ -1251,23 +1246,15 @@ fn section_row(label_key: &str, status: impl Into<Arc<str>>, kind: SectionStatus
 /// otherwise skipped (gray, `none_key` status).
 fn bool_row(label_key: &str, on: bool, done_key: &str, none_key: &str) -> MessageLine {
     if on {
-        section_row(
-            label_key,
-            tr("Profiles", done_key).to_string(),
-            SectionStatus::Imported,
-        )
+        section_row(label_key, tr("Profiles", done_key), SectionStatus::Imported)
     } else {
-        section_row(
-            label_key,
-            tr("Profiles", none_key).to_string(),
-            SectionStatus::Skipped,
-        )
+        section_row(label_key, tr("Profiles", none_key), SectionStatus::Skipped)
     }
 }
 
 /// Formats the shared `{done} / {total}` status string.
-fn ratio_status(args: &[(&str, &str)]) -> String {
-    tr_fmt("Profiles", "ImportStatRatio", args).to_string()
+fn ratio_status(args: &[(&str, &str)]) -> Arc<str> {
+    tr_fmt("Profiles", "ImportStatRatio", args)
 }
 
 /// Formats a count with thousands separators (e.g. `1,234`) for readability in
@@ -3522,3 +3509,10 @@ mod tests {
         assert!(!state.import_browse_pending);
     }
 }
+
+#[cfg(test)]
+#[path = "manage_local_profiles_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "manage_local_profiles_pipelines_perf.rs"]
+mod pipelines_perf;
