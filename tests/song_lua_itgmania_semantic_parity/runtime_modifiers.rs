@@ -3203,6 +3203,40 @@ fn bounce_tornado_match_native_targets() {
 }
 
 #[test]
+fn startup_boolean_writes_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/startup-booleans-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Startup boolean options");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("startup-booleans.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile startup boolean options");
+    let writes = &compiled[0].boolean_writes;
+    assert_eq!(writes.len(), 8, "retain Init, On, repeated false and queued writes");
+    assert!(writes[..6].iter().all(|write| write.second == 0.0));
+    assert!(writes[6..].iter().all(|write| write.second >= 0.5));
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 12, "retain every native boolean call");
+    parity.assert_complete("startup and queued boolean writes");
+    let mut missing = compiled.clone();
+    missing[0].boolean_writes.remove(0);
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "losing an Init write must fail");
+}
+
+#[test]
 fn mod_timer_survives_lua_selectors_approach_and_fresh_options() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create timer fixture");

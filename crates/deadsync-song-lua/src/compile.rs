@@ -244,6 +244,8 @@ where
     let mut initial_actor_states = std::collections::HashMap::new();
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
+    #[cfg(feature = "test-support")]
+    lua.set_app_data(crate::song_tables::SongLuaBoolWrites::default());
     for (index, entry_path) in entry_paths.iter().enumerate() {
         let root = execute_script_file(&lua, entry_path, context.song_dir.as_path())
             .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
@@ -318,6 +320,9 @@ where
     #[cfg(feature = "test-support")]
     let startup_skin_writes = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>()
         .map(|capture| capture.writes).unwrap_or_default();
+    #[cfg(feature = "test-support")]
+    let startup_bool_writes = lua.remove_app_data::<crate::song_tables::SongLuaBoolWrites>()
+        .map(|capture| capture.0).unwrap_or_default();
     let startup = captured_startup.options;
     let startup_states = captured_startup.queued;
     let mut startup_tweens = captured_startup.tweens;
@@ -372,7 +377,10 @@ where
         ..CompiledSongLua::default()
     };
     #[cfg(feature = "test-support")]
-    { out.noteskin_writes = startup_skin_writes; }
+    {
+        out.noteskin_writes = startup_skin_writes;
+        out.boolean_writes = startup_bool_writes;
+    }
     // Real frame-zero broadcasts survive separately from discovery events.
     // Only the latter are replaced by their chronological queue dispatch.
     merge_runtime_messages(&mut out.messages, 0, &initial_broadcasts);
@@ -719,7 +727,7 @@ where
     out.overlay_updates.extend(update_overlay_tracks);
     #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaBoolWrites>() {
-        out.boolean_writes = writes.0;
+        out.boolean_writes.extend(writes.0);
     }
     #[cfg(feature = "test-support")]
     if let Some(writes) = lua.remove_app_data::<crate::song_tables::SongLuaSkinWrites>() {
