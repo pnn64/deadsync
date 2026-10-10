@@ -950,12 +950,10 @@
     {
       "title": "[F]FS+BR(lv.9) Bunny House",
       "source_simfile": "[F]FS+BR(lv.9) Bunny House/steps.ssc",
-      "harness_version": "0.1.0",
-      "archive": "70e03d62dfa31a8768b31a31026e2cb1aeb20d021ca72d32f49e72d7268aa931.tar.zst",
-      "sha256": "70e03d62dfa31a8768b31a31026e2cb1aeb20d021ca72d32f49e72d7268aa931",
-      "compressed_bytes": 1046950,
-      "uncompressed_sha256": "593be6cb2798c6804f9158b12935103c2fbd8d0e2286fa10d84594ad52dcbefc",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "7553210da951acb389edf4364b1f9d339661effa41980f3db95ae3df0bd2c831.tar.zst",
+      "sha256": "7553210da951acb389edf4364b1f9d339661effa41980f3db95ae3df0bd2c831",
+      "compressed_bytes": 1260043,
       "aliases": [
         "964e77d97b043696b7e891c6eda46d3774ba78d98ceecc00b25c0a7597ce82fd.tar.zst"
       ]

@@ -974,3 +974,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass139.json`. Position 61 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 140
+
+Position 61, [F]FS+BR(lv.9) Bunny House, passes all
+421,837 comparisons against committed DeadSync
+`6217b2455`. The complete native harness 0.1.54 archive
+contains 9,158 updates over 152.61 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass140.json`. Position 62 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
