@@ -1469,12 +1469,10 @@
     {
       "title": "Bad Apple!!",
       "source_simfile": "Bad Apple!!/Bad Apple!!.sm",
-      "harness_version": "0.1.0",
-      "archive": "567fb2b0b26c6b2ada4947da7416ff433a902544373888d5b035b637a5b7dd37.tar.zst",
-      "sha256": "567fb2b0b26c6b2ada4947da7416ff433a902544373888d5b035b637a5b7dd37",
-      "compressed_bytes": 19840,
-      "uncompressed_sha256": "b7c942e024fcaf7ea0c6fec66e27b4ab09ad03ccc0007fcc723d208ebe3a877a",
-      "compression_level": 22,
+      "harness_version": "0.1.63",
+      "archive": "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333.tar.zst",
+      "sha256": "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333",
+      "compressed_bytes": 11819827,
       "aliases": [
         "e865f9fc0069e591d8985a618abca0b64cd1d06031a119c22a6f6853c71b8784.tar.zst"
       ]

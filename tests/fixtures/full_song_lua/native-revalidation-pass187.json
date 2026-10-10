@@ -1,0 +1,104 @@
+{
+  "pass": 187,
+  "previous_record": "native-revalidation-pass186.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "61d3d16fbec67ac90381aaeb4922a78329b77159",
+  "comparator_sha256": "c4055dff39f57ad0ceea37f2a5faab73975c74ca35d5deb9d29f98854740ace1",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    108
+  ],
+  "next_position": 109,
+  "comparisons_passed": 275847,
+  "charts": [
+    {
+      "position": 108,
+      "entry": {
+        "title": "Bad Apple!!",
+        "source_simfile": "Bad Apple!!/Bad Apple!!.sm",
+        "harness_version": "0.1.63",
+        "archive": "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333.tar.zst",
+        "sha256": "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333",
+        "compressed_bytes": 11819827,
+        "aliases": [
+          "e865f9fc0069e591d8985a618abca0b64cd1d06031a119c22a6f6853c71b8784.tar.zst"
+        ]
+      },
+      "original_archive_retained": "567fb2b0b26c6b2ada4947da7416ff433a902544373888d5b035b637a5b7dd37.tar.zst",
+      "native_source_commit": "7d01b8d27dddc821b508231c663978bcdd274626",
+      "native_trace_sha256": "e258dbe2230d262afaa982975b091ff1fe1d8493c21de331033d53c0760f7adf",
+      "original_source_sha256": {
+        "Bad Apple!!/Bad Apple!!-bg.png": "19c169dea509e266edc08aa04fa50026326aca1ed86b1abcea5b5f25042d56c0",
+        "Bad Apple!!/Bad Apple!!-bn.png": "12b80f3786a0f303b6d7fedf114d9f40f98efcdef428ebadafb702c631c7c76d",
+        "Bad Apple!!/Bad Apple!!.dwi": "2a50d5e45aee69ef7b7b0669af247a9dc0ea9b9e50def288a2eda945a50ec0b9",
+        "Bad Apple!!/Bad Apple!!.ogg": "8e7067184dea082e00983a2d823a177c949ee903a1f4f155381b2c1d66bc6b72",
+        "Bad Apple!!/Bad Apple!!.sm": "311cfaad74397daad087798b7222bd32a641a8f3e242662911a3b77d681b7ae6",
+        "Bad Apple!!/Bad Apple!!.sm.old": "b28ba61dec29ea2ae42a031e47e3231fd1746d9dbf18dd06b73804e04a494166",
+        "Bad Apple!!/_black.png": "e19ed71b0f073cc20815a41884cfc3e9935ed5d6c6dd2c28e7b8ac758e545685",
+        "Bad Apple!!/animations/badapple.avi": "fa94e8e497e66484d091e6504a87f47711c9f20a5a619661ed5a0b42ae7b44de",
+        "Bad Apple!!/animations/Default.lua": "97d6382dc5f4206b5bc142d70c27f143fce7e7ff6cada7558c16d56d6c2df06f",
+        "Bad Apple!!/animations/Default.xml": "fac8e26de0ce7db8229677610c5123b41381c8a83f374b4ea0df36133d59e014"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 12523,
+      "duration_seconds": 208.69525146484375,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 4,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 108,
+      "source_simfile": "Bad Apple!!/Bad Apple!!.sm",
+      "archive": "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333.tar.zst",
+      "archive_sha256": "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333",
+      "harness_version": "0.1.63",
+      "source_commit": "61d3d16fbec67ac90381aaeb4922a78329b77159",
+      "source_pending_commit": false,
+      "binary_sha256": "c4055dff39f57ad0ceea37f2a5faab73975c74ca35d5deb9d29f98854740ace1",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\combo-child-v2-full_song_lua.exe",
+        "fb466d41aaf6c15fff9b1e0a0908d572f20636a67af06f2bdbc9c92f42c56333.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 17.317507800180465,
+      "comparisons_passed": 275847,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-108-combo-child-committed-v2.log",
+      "log_sha256": "372c3ffff6466264960adbf3b4cf3f7fa722ac998f4cf3f3e5f1382b6861ed3a",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass232-top-108-combo-child-v1.json",
+      "native_receipt_sha256": "28605e5b3af98e16520560d79e48b170144427dd5a15f1e3dd8ec3523540c228",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "61d3d16fbec67ac90381aaeb4922a78329b77159",
+    "source_pending_commit": false,
+    "binary_sha256": "184f2ed1f769f3b4ae80f35caa08f13ffb798c02f299812ff6c93a289ca189c5",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass178\\combo-child-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.397336000110954,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-108-native-pass187.log",
+    "log_sha256": "710a2f909f6a4dde0ae587173f31094a4f2fd6de34b7bc3d48b36934bd2528ff",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 296 filtered out; finished in 0.80s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
