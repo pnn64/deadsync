@@ -1170,12 +1170,10 @@
     {
       "title": "Accendio",
       "source_simfile": "ACCENDIO/aCCENDIO.sm",
-      "harness_version": "0.1.0",
-      "archive": "a7533b69615805cdf933c9443cf3a30e5cd1bb1d667a96a448dc163aaeeb63ad.tar.zst",
-      "sha256": "a7533b69615805cdf933c9443cf3a30e5cd1bb1d667a96a448dc163aaeeb63ad",
-      "compressed_bytes": 54882,
-      "uncompressed_sha256": "1f0d8323af8fb3aafa22d431fc8e6dc6fb684e1818996d2e00680aa8d4a14ab5",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6.tar.zst",
+      "sha256": "dbfe59eadc5d35ec4c9396c222cc7201c065c3b97964298b7e6b36e6bfb305a6",
+      "compressed_bytes": 194994,
       "aliases": [
         "9d238478b3a441998f728df5bb134c66d87a2b44ed819fcb2c5a88b64dc175fa.tar.zst"
       ]
