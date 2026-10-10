@@ -1126,12 +1126,10 @@
     {
       "title": "A Op.01",
       "source_simfile": "A Op.01/A Op.01.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0f09956bc2c88edd7edb073794a0ea4d89d30b8d7f7ed5bc5c3078fc6cf358d6.tar.zst",
-      "sha256": "0f09956bc2c88edd7edb073794a0ea4d89d30b8d7f7ed5bc5c3078fc6cf358d6",
-      "compressed_bytes": 40241,
-      "uncompressed_sha256": "792b9fed746e3a0aebff32f5f3a22f8ca134efdcb8a0ed2a383d50396fd9cbc4",
-      "compression_level": 22,
+      "harness_version": "0.1.56",
+      "archive": "8eb0584e8b672f4eec0d9de495dfb18101d816b3e751b4423c6576fb29f0dd87.tar.zst",
+      "sha256": "8eb0584e8b672f4eec0d9de495dfb18101d816b3e751b4423c6576fb29f0dd87",
+      "compressed_bytes": 53142,
       "aliases": [
         "76f34b2587aa2b47f03fef3a8b35d26f5a7441f62ea2b0c73d0abbaed69eabca.tar.zst"
       ]
