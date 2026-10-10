@@ -1082,12 +1082,10 @@
     {
       "title": "LALA",
       "source_simfile": "[TPE2] LALA/lala.ssc",
-      "harness_version": "0.1.0",
-      "archive": "fa46a880b50e602e5dc83a722daa0a08540c0c37970db2c1f339d764778ed824.tar.zst",
-      "sha256": "fa46a880b50e602e5dc83a722daa0a08540c0c37970db2c1f339d764778ed824",
-      "compressed_bytes": 191007,
-      "uncompressed_sha256": "6eb86f5234c3a275ac271ded0476feaba0247011a1eede9771d1be0323863c66",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "79579dd20ffa91782bfe9f8b40d9c66a7a3166cd894c4528898a1bd922370267.tar.zst",
+      "sha256": "79579dd20ffa91782bfe9f8b40d9c66a7a3166cd894c4528898a1bd922370267",
+      "compressed_bytes": 243468,
       "aliases": [
         "66b937a07920535b66d51f437d5f57b75b38974e8866d022a2d1fc4adb28a687.tar.zst"
       ]
