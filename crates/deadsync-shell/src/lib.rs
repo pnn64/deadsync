@@ -97,3 +97,10 @@ mod tests {
 
 #[cfg(test)]
 mod gameplay_regression_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_alloc.rs"]
+mod perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
