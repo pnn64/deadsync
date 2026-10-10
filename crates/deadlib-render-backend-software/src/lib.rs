@@ -726,7 +726,8 @@ fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) 
         return;
     }
 
-    if !PRESERVE_ALPHA {
+    // A full viewport writes every alpha byte below; padding still needs filling.
+    if !PRESERVE_ALPHA && target.viewport != [target.width, target.height] {
         for rgba in target.texture.image.as_mut().as_chunks_mut::<4>().0 {
             rgba[3] = 255;
         }
@@ -5929,6 +5930,9 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod offscreen_perf_tests;
 
 #[cfg(test)]
 #[path = "environment_performance.rs"]

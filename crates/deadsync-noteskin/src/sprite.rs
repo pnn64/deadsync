@@ -582,7 +582,7 @@ pub fn itg_sprite_animation_slot_plan(
         SpriteAnimationCommandPlan::StateProperties(plan) => itg_state_properties_slot_plan(
             slot,
             plan.frame_count,
-            &plan.frame_delays,
+            plan.frame_delays,
             beat_based,
             &mut sprite_sheet_dims,
             &mut source_frame_dims,
@@ -596,7 +596,7 @@ pub fn itg_sprite_animation_slot_plan(
 fn itg_state_properties_slot_plan(
     slot: SpriteSlotPlan,
     frame_count: usize,
-    frame_delays: &[f32],
+    frame_delays: Vec<f32>,
     beat_based: bool,
     sprite_sheet_dims: &mut impl FnMut(&str) -> (u32, u32),
     source_frame_dims: &mut impl FnMut(&str, u32, u32) -> (u32, u32),
@@ -607,7 +607,7 @@ fn itg_state_properties_slot_plan(
         note_color_translate,
         ..
     } = slot;
-    let (texture_key, tex_dims) = match &source {
+    let (texture_key, tex_dims) = match source {
         SpriteSourcePlan::Atlas {
             texture_key,
             tex_dims,
@@ -616,10 +616,10 @@ fn itg_state_properties_slot_plan(
             texture_key,
             tex_dims,
             ..
-        } => (texture_key.clone(), *tex_dims),
+        } => (texture_key, tex_dims),
     };
     let (grid_x, grid_y) = sprite_sheet_dims(&texture_key);
-    let animation = sprite_state_properties_animation(
+    let animation = sprite_state_properties_animation_owned(
         [tex_dims.0, tex_dims.1],
         [grid_x as usize, grid_y as usize],
         def.src,
@@ -1889,3 +1889,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "sprite_perf_tests.rs"]
+mod sprite_perf_tests;
