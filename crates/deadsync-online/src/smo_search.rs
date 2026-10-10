@@ -182,6 +182,27 @@ struct Accumulator {
 }
 
 impl Accumulator {
+    /// Seed the name pass from the catalogue, whose parser rejects duplicate IDs.
+    fn from_catalog(catalog: &[stepmaniaonline::PackInfo], needle: &str) -> Self {
+        let mut acc = Self::default();
+        for pack in catalog.iter() {
+            let name = pack.name.to_lowercase();
+            let points = if name.starts_with(needle) {
+                score::NAME_PREFIX
+            } else if name.contains(needle) {
+                score::NAME_MATCH
+            } else {
+                continue;
+            };
+            acc.hits.push(SearchHit {
+                pack_id: pack.id,
+                score: points,
+                why: "pack name".to_owned(),
+            });
+        }
+        acc
+    }
+
     /// Add a match, or improve one already found.
     ///
     /// A pack matched more than one way keeps the better reason and gets a
@@ -226,22 +247,9 @@ impl Accumulator {
 
 fn run(generation: u64, query: String) {
     let needle = query.to_lowercase();
-    let mut acc = Accumulator::default();
-
-    // Pass one: the catalogue's own names. No request, so it is on screen
-    // before the network has been asked anything.
+    // Pass one: local names, before asking the network.
     let catalog = stepmaniaonline::runtime_snapshot();
-    for pack in catalog.catalog.iter() {
-        let name = pack.name.to_lowercase();
-        let points = if name.starts_with(needle.as_str()) {
-            score::NAME_PREFIX
-        } else if name.contains(needle.as_str()) {
-            score::NAME_MATCH
-        } else {
-            continue;
-        };
-        acc.add(pack.id, points, "pack name".to_owned());
-    }
+    let mut acc = Accumulator::from_catalog(&catalog.catalog, &needle);
     if !publish_pass(generation, &mut acc, SearchPhase::Loading) {
         return;
     }
@@ -499,6 +507,10 @@ mod tests {
         assert_eq!(parsed.results[0].matching_songs.len(), 2);
     }
 }
+
+#[cfg(test)]
+#[path = "smo_catalog_perf.rs"]
+mod catalog_perf_tests;
 
 #[cfg(test)]
 #[path = "smo_search_perf.rs"]
