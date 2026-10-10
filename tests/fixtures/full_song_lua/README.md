@@ -605,3 +605,33 @@ historical aliases are retained.
 See `native-revalidation-pass113.json`. Position 35 is next. The original
 501-source/492-context scope and additional pending observations remain
 active. Full corpus and framebuffer parity are still open.
+
+## Ordered fixture validation, pass 114
+
+Position 35, [3752] [09] Who the Hell Is Edgar?, passes 228,297,347 comparisons
+against committed DeadSync `d7cff0db6`. The complete
+harness 0.1.51 native capture records 9,197 updates
+over 153.26 seconds, with no native runtime errors
+or dropped events. Original chart and Lua bytes, the prior archive, and
+historical aliases are retained.
+
+The callback fix retains hit commands when native material clocks
+require chronological replay. The 75 native explosion comparisons, all
+40 player/lane/grade command checks, and 29 texture samples pass. The
+material control uses its native 120 Hz deltas, including partial updates;
+all original expected values and tolerances are retained.
+
+Native TimingData uses separate float multiplication and addition for
+scroll prefixes and displayed-beat queries. DeadSync now does the same;
+its prior fused arithmetic shifted arrow offsets by 1/512px, magnified
+by Model projection. Six exact native golden offsets cover ordinary
+and cached queries, and all 45 timing tests pass.
+
+Lossless recompression keeps the complete native tar stream identical
+while bringing this archive below 100 MB. The separate authored-onset
+test still requires correction of its instantaneous-update assumption;
+its onset, position and countdown assertions remain active.
+
+See `native-revalidation-pass114.json`. Position 36 is next. The original
+501-source/492-context scope and additional pending observations remain
+active. Full corpus and framebuffer parity are still open.

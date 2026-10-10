@@ -664,12 +664,10 @@
     {
       "title": "[3752] [09] Who the Hell Is Edgar?",
       "source_simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d23beb53ddd55aec57ebb37566545a86aaeecc1136c274cd17687481cc6abf2d.tar.zst",
-      "sha256": "d23beb53ddd55aec57ebb37566545a86aaeecc1136c274cd17687481cc6abf2d",
-      "compressed_bytes": 938768,
-      "uncompressed_sha256": "066b564dbced751a91781c5b3b5477a022bc164152facd3aeb99973ce0975d37",
-      "compression_level": 22,
+      "harness_version": "0.1.51",
+      "archive": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst",
+      "sha256": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55",
+      "compressed_bytes": 92846934,
       "aliases": [
         "f20b506e3b76f09ca751496823707e1f423ff50eb65bd1ef64697e5c6f07aebb.tar.zst"
       ]
