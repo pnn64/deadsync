@@ -1,0 +1,153 @@
+{
+  "problem": "Bad Trails calls RageFile.GetLine while loading saved data; missing files incorrectly opened successfully and every read was empty.",
+  "change": "Replace file stubs with handles retaining open mode, bytes, position, delayed EOF, errors and destruction. Read original files; keep closed writes within a single compile rather than overwriting future song state on disk.",
+  "source_parent_commit": "d385c3c2cc681a6ff63d7419b2b223fa70f1f85c",
+  "harness_source_commit": "cc0ea0c0ab70e962785eff8681a6867a3f8689ee",
+  "harness_version": "0.1.64",
+  "native_provenance_sha256": "e35d5f779034c6e692dbd515444d27cd65d1708d2ae0cfa2412a156c05dba9c4",
+  "reference_sources": {
+    "RageFile.cpp": {
+      "workspace_sha256": "41aae2a713b2765938eb0e70a3a9bb9b299f38b28df2e3d713f4c6e8aabf5b44",
+      "native_source_sha256": "41aae2a713b2765938eb0e70a3a9bb9b299f38b28df2e3d713f4c6e8aabf5b44",
+      "lines": [
+        [
+          51,
+          91
+        ],
+        [
+          138,
+          158
+        ],
+        [
+          199,
+          206
+        ],
+        [
+          323,
+          470
+        ]
+      ]
+    },
+    "RageFileBasic.cpp": {
+      "workspace_sha256": "86b1a70ac0dcf67b41d441d6f47480d4ae1e6b0bdc26d93ca28d0421b722e8a8",
+      "native_source_sha256": "86b1a70ac0dcf67b41d441d6f47480d4ae1e6b0bdc26d93ca28d0421b722e8a8",
+      "lines": [
+        [
+          65,
+          88
+        ],
+        [
+          100,
+          189
+        ],
+        [
+          324,
+          421
+        ]
+      ]
+    },
+    "LuaBinding.h": {
+      "workspace_sha256": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+      "native_source_sha256": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+      "lines": [
+        [
+          102,
+          109
+        ]
+      ]
+    }
+  },
+  "independent_native_control": {
+    "request_sha256": "46f72904a6d3dab339624b3152a749905fc883e997353d7e345dbaf2db19ca34",
+    "result_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    },
+    "input_bytes_sha256": "48c7c54998864a8f88151c9c4727bb1600a7c55d2768657f8b6194acf970dbf7",
+    "output_bytes_sha256": "f908c6d716117609c77e22b0d65a455b46357b7f58cb06321b5aef2be89ddaeb",
+    "assertions": "Missing and invalid opens; errors and closed Flush; CRLF, empty and NUL-containing lines; cursor and delayed EOF; exact/zero/all reads; wrong-mode reads/writes; self Flush and native no-argument returns; write and reopen byte contents."
+  },
+  "regressions": {
+    "song": {
+      "receipt_sha256": "36b942f5364f511d86d2f8ba0ea93fe1c69376bbcd3f9fc360eb3c9e27654519",
+      "log_sha256": "bfec39b17a5ba3e03abdc1adedb3f09066bd1af7d9e58e5bf87ea8e269234893",
+      "result_lines": [
+        "test result: FAILED. 504 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.62s"
+      ],
+      "baseline_failures": [
+        "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+        "tests::compile_song_lua_accepts_skewy_probe_calls"
+      ]
+    },
+    "runtime": {
+      "receipt_sha256": "2297d60bc4f7bacc05d85522e36e7f28ad720e11006a9f6fbb312da69edf7b7c",
+      "log_sha256": "675b0bc5e7c9d23addeba886453ed2477a8817216acac0c8b70d554e8a51d22b",
+      "result_lines": [
+        "test result: FAILED. 57 passed; 3 failed; 2 ignored; 0 measured; 235 filtered out; finished in 49.61s"
+      ],
+      "baseline_failures": [
+        "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+        "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+        "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+      ]
+    },
+    "theme": {
+      "receipt_sha256": "8d1ecb6e1ee42a1449cfc1d134c22f983d2cc452ea913075ed2b0fb51450f2ab",
+      "log_sha256": "91289bac0f8eb02d96688450c56e640084a9e7d406e0c8e84d6c01977a377892",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 2.01s"
+      ],
+      "baseline_failures": [
+        "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+      ]
+    },
+    "playback": {
+      "receipt_sha256": "7ab8c9a09562cade53dd049f1f1ba066f656db638c62fef48933b2bf463aa2d4",
+      "log_sha256": "62c676b24d80cbb24c7b1ade4eec388a552e2abd96a22d2c8f90b4e996fece0f",
+      "result_lines": [
+        "test result: ok. 195 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 17.25s"
+      ],
+      "baseline_failures": []
+    },
+    "depth": {
+      "receipt_sha256": "f73a62ea386e0de58f6126a87039c4313d1a9179daadec2f3924ee50d81ae6bc",
+      "log_sha256": "8ba3849b05873d9b70e8b503af27b14d9f1af91b76357d56db21f2d8cfbd7b76",
+      "result_lines": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 2.77s"
+      ],
+      "baseline_failures": []
+    },
+    "technique": {
+      "receipt_sha256": "4a9f6752ba9bf6446a69c7b3d578011e63f14627cc1c8977d0783b4536e4e48f",
+      "log_sha256": "f8154ea67f182a8204ff4de2b27b805f3eed9fb0bb8c934e77430cb30a0e71d1",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 7.23s"
+      ],
+      "baseline_failures": []
+    }
+  },
+  "regression_failure_count": 6,
+  "new_regression_failures": 0,
+  "full_song_parity_complete": false,
+  "limits": [
+    "Writes are compile-local; persistent gameplay writes and full FileManager integration remain open.",
+    "Mounted path protection, OS write permissions and STREAMED visibility are not established by this control.",
+    "The native harness still uses the std::fstream driver; gameplay framebuffer parity and the full corpus remain open."
+  ],
+  "source_newline_rebinding": [
+    {
+      "path": "crates/deadsync-song-lua/src/rage_file.rs",
+      "compiler_input_sha256": "6a2d0e81d636d68747a40478ef28eadd731c6e5a0197c3ff78ba9d4530c12480",
+      "current_worktree_sha256": "c8624a12b1147e31c4b6d65d4ffeb7086f082bf332e831c4c8a3b7edc96e75f1",
+      "change": "CRLF conversion only; normalized bytes equal original compiler input"
+    }
+  ]
+}

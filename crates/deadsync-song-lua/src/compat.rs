@@ -524,7 +524,7 @@ end
         "IniFile",
         create_ini_file_table(lua, SONG_LUA_THEME_NAME, SONG_LUA_PRODUCT_VERSION)?,
     )?;
-    globals.set("RageFileUtil", create_rage_file_util_table(lua)?)?;
+    globals.set("RageFileUtil", create_rage_file_util_table(lua, song_dir)?)?;
     globals.set(
         "JsonDecode",
         lua.create_function(|lua, value: Value| match value {

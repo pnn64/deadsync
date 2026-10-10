@@ -38,6 +38,8 @@ mod noteskin;
 mod option_rows;
 mod perframe;
 mod player_options;
+mod rage_file;
+pub use rage_file::create_rage_file_util_table;
 mod runtime;
 mod runtime_mod;
 mod sl;
@@ -263,7 +265,7 @@ pub use tables::{
     create_gameplay_layout, create_hooks_table, create_index_array, create_ini_file_table,
     create_life_record_table, create_memcardman_table, create_network_response_table,
     create_other_player_table, create_player_number_table, create_prefsmgr_table,
-    create_profileman_table, create_radar_values_table, create_rage_file_util_table,
+    create_profileman_table, create_radar_values_table,
     create_range_table, create_screen_system_layer_helpers_table, create_screen_table,
     create_single_value_array, create_song_group_table, create_split_table, create_statsman_table,
     create_string_enum_table, create_style_table, create_theme_table, create_timing_table,
@@ -19957,12 +19959,12 @@ assert(ws:Send(JsonEncode({uuid=CRYPTMAN:GenerateRandomUUID()})) == nil)
 assert(ws:Close() == nil)
 local file = RageFileUtil:CreateRageFile()
 assert(file:Open("Save/Offline.json", 2))
-assert(file:Write(encoded))
-assert(file:Read() == "")
-assert(file:Close() == nil)
-assert(file:destroy() == nil)
+assert(file:Write(encoded) == #encoded)
+assert(not pcall(function() file:Read() end))
+assert(file:Close() == file.Close)
+assert(file:destroy() == file.destroy)
 local dot_file = RageFileUtil.CreateRageFile()
-assert(dot_file:Read() == "")
+assert(not pcall(function() dot_file:Read() end))
 assert(FILEMAN:Unzip("archive.zip", "Songs/Pack") == false)
 assert(GetTimingWindow(2) > GetTimingWindow(1))
 assert(GetWorstJudgment({{0, GetTimingWindow(3)}}) == 3)

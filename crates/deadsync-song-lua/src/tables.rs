@@ -2709,55 +2709,6 @@ pub fn create_ini_file_table(
     Ok(ini)
 }
 
-pub fn create_rage_file_util_table(lua: &Lua) -> mlua::Result<Table> {
-    let util = lua.create_table()?;
-    util.set(
-        "CreateRageFile",
-        lua.create_function(|lua, _args: MultiValue| create_rage_file_table(lua))?,
-    )?;
-    Ok(util)
-}
-
-fn create_rage_file_table(lua: &Lua) -> mlua::Result<Table> {
-    let file = lua.create_table()?;
-    file.set(
-        "Open",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(true)
-        })?,
-    )?;
-    file.set(
-        "Write",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(true)
-        })?,
-    )?;
-    file.set(
-        "PutLine",
-        lua.create_function(|lua, (_file, _line): (Table, String)| {
-            // Compilation records file writes as side effects, like Write.
-            note_song_lua_side_effect(lua)?;
-            Ok(2) // RageFileObj::PutLine returns the CRLF write's byte count.
-        })?,
-    )?;
-    file.set(
-        "Read",
-        lua.create_function(|_, _args: MultiValue| Ok(String::new()))?,
-    )?;
-    for name in ["Close", "destroy"] {
-        file.set(
-            name,
-            lua.create_function(|lua, _args: MultiValue| {
-                note_song_lua_side_effect(lua)?;
-                Ok(())
-            })?,
-        )?;
-    }
-    Ok(file)
-}
-
 fn create_display_specs_table(lua: &Lua, width: i32, height: i32) -> mlua::Result<Table> {
     let specs = lua.create_table()?;
     specs.raw_set(1, create_display_spec_table(lua, width, height)?)?;
