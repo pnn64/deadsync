@@ -11546,6 +11546,7 @@ fn capture_initial_update(
         0.0,
     )?;
     lua.set_app_data(SongLuaZeroUpdate);
+    crate::song_tables::advance_option_levels(lua, 0.0)?;
     let result = run_actor_update_functions_with_delta(lua, &root, 0.0);
     lua.remove_app_data::<SongLuaZeroUpdate>();
     result?;

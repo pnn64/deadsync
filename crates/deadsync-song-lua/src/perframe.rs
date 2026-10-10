@@ -2778,6 +2778,7 @@ pub fn call_update_functions_at(
             .set("__songlua_delay", position.is_in_delay)
             .map_err(|err| err.to_string())?;
     }
+    crate::song_tables::advance_option_levels(lua, seconds).map_err(|err| err.to_string())?;
     let result =
         crate::lua_util::run_actor_compile_update_functions_with_delta(lua, root, delta_seconds)
             .and_then(|()| {

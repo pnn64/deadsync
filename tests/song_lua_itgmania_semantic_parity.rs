@@ -998,6 +998,22 @@ fn native_assignment_snapshots() {
 }
 
 #[test]
+fn native_current_options() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/current-options");
+    let trace = read_trace_file(&root.join("native.json"));
+    assert_eq!(trace.update_frames.len(), 241, "retain the complete control");
+    assert!(trace.runtime_errors.is_empty());
+    assert_eq!(trace.dropped_events, 0);
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Current options remain distinct and approach Song targets");
+    assert!(parity.checks() > 0);
+}
+
+#[test]
 fn native_load_order() {
     paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))

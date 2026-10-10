@@ -6463,7 +6463,7 @@ return Def.ActorFrame{}
         fs::write(
             &entry,
             r#"
-local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Preferred")
+local po = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
 local top = SCREENMAN:GetTopScreen()
 top:SetMinSecondsToMusic(6.01)
 top:GetChild("In"):visible(false)
@@ -12037,7 +12037,8 @@ local ps = GAMESTATE:GetPlayerState(PLAYER_1)
 local po = ps:GetPlayerOptions("ModsLevel_Song")
 po:Mini(0.425, 0.05)
 assert(ps:GetPlayerOptionsString("ModsLevel_Song") == "NoHideLights, 42% Mini, Overhead")
-assert(GetPlayerOptionsString(PLAYER_1) == ps:GetPlayerOptionsString("ModsLevel_Song"))
+assert(GetPlayerOptionsString(PLAYER_1) == ps:GetPlayerOptionsString("ModsLevel_Preferred"))
+assert(GetPlayerOptionsString(PLAYER_1) ~= ps:GetPlayerOptionsString("ModsLevel_Song"))
 ps:SetPlayerOptions("ModsLevel_Song", ps:GetPlayerOptionsString("ModsLevel_Song") .. ", *5 50% Digital")
 assert(math.abs(po:Mini() - 0.42) < 0.00001)
 assert(po:Digital() == 0.5)
@@ -18375,7 +18376,7 @@ return Def.ActorFrame{
             spline:SetPoint(1, {0, 0, 0})
             spline:SetPoint(2, {-1, -1, -1})
             spline:Solve()
-            local po = ps:GetPlayerOptions("ModsLevel_Song")
+            local po = ps:GetCurrentPlayerOptions()
             if po:Mirror() ~= false or po:Left() ~= false or po:Right() ~= false then
                 error("unexpected lane permutation")
             end
@@ -18764,7 +18765,7 @@ return Def.ActorFrame{
         local after_x = string.format("%.2f:%s:%.2f", po:XMod(), tostring(po:Overhead()), po:Mini())
         po:CMod(650, 1)
         local after_c = string.format("%s:%.0f:%s", tostring(po:XMod()), po:CMod(), tostring(po:MMod()))
-        po:CMod(nil, 1):MMod(700, 1)
+        po:CMod(nil, 1, true):MMod(700, 1)
         local after_m = string.format("%s:%s:%.0f", tostring(po:XMod()), tostring(po:CMod()), po:MMod())
         mod_actions = {
             {1, table.concat({initial, after_x, after_c, after_m}, "|"), true},
@@ -18781,7 +18782,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2.25:nil:false|3.50:true:0.15|nil:650:nil|nil:nil:700"
+            "2.25:nil:false|3.50:true:0.15|nil:650:nil|1.0:nil:700"
         );
     }
 
@@ -18954,9 +18955,9 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local ps = GAMESTATE:GetPlayerState(PLAYER_1)
         local po = ps:GetPlayerOptions("ModsLevel_Preferred")
-        po:DisableTimingWindow("TimingWindow_W5")
-            :DisableTimingWindow("W3")
-            :DisableTimingWindow(2)
+        po:DisableTimingWindow("TimingWindow_W5", true)
+            :DisableTimingWindow("W3", true)
+            :DisableTimingWindow(1, true)
             :DisableTimingWindow("TimingWindow_W5")
         local before = po:GetDisabledTimingWindows()
         po:ResetDisabledTimingWindows()
@@ -19021,9 +19022,8 @@ return Def.ActorFrame{
         local current_options = ps:GetCurrentPlayerOptions()
         local requested_options = ps:GetPlayerOptions("ModsLevel_Preferred")
         current_options:NoteSkin("metal")
-        if requested_options:NoteSkin() ~= "metal" then
-            error("expected current and requested player options to share state")
-        end
+        assert(current_options:NoteSkin() == "metal")
+        assert(requested_options:NoteSkin() ~= "metal", "direct Current writes stay independent")
         local life = top:GetLifeMeter(ps:GetPlayerNumber())
         local child_life = top:GetChild("Life"..ToEnumShortString(ps:GetPlayerNumber()))
         local generic_life = top:GetChild("LifeMeter")
@@ -22483,11 +22483,28 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_current_options_distinct() {
+        let song_dir = test_dir("current-options-native");
+        let entry = song_dir.join("default.lua");
+        // Run the unchanged normal-API control also captured with native C++
+        // getters. Its callbacks check approach, freeze and level propagation.
+        fs::write(&entry, include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/current-options/default.lua"
+        )).expect("native control Lua");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Current options");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context)
+            .expect("normal callback option-level assertions");
+        assert!(compiled.info.skipped_message_command_captures.is_empty());
+    }
+
+    #[test]
     fn compile_song_lua_queries_modifiers_without_changing_them() {
         let song_dir = test_dir("modifier-queries");
         let entry = song_dir.join("default.lua");
         fs::write(&entry, r#"
-local p = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+local p = GAMESTATE:GetPlayerState(PLAYER_1):GetCurrentPlayerOptions()
 local function uses(text, player) return GAMESTATE:PlayerIsUsingModifier(player or PLAYER_1, text) end
 assert(uses('1x', 0) and uses('1x', 1))
 assert(not uses('0x') and not uses('2x'))
@@ -22514,7 +22531,7 @@ p:CMod(500)
 assert(uses('C500') and not uses('2x'))
 p:XMod(2)
 assert(uses('2x') and not uses('C500'))
-GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate(1.5)
+GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate(1.5)
 assert(uses('1.5xmusic') and not uses('1xmusic'))
 assert(p:Reverse() == 0.5 and p:XMod() == 2)
 return Def.ActorFrame{}

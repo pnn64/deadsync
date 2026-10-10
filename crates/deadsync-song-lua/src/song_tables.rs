@@ -4,35 +4,482 @@ use mlua::{Function, Lua, MultiValue, Table, Value};
 
 use crate::*;
 
+const MODS_LEVELS: [&str; 4] = [
+    "ModsLevel_Preferred",
+    "ModsLevel_Stage",
+    "ModsLevel_Song",
+    "ModsLevel_Current",
+];
+
+pub(crate) fn options_level(value: Option<&Value>) -> mlua::Result<usize> {
+    option_enum(value, &MODS_LEVELS, "ModsLevel")
+}
+
+pub(crate) fn option_enum(value: Option<&Value>, names: &[&str], kind: &str) -> mlua::Result<usize> {
+    let level = match value {
+        Some(Value::Integer(index)) if *index >= 0 && (*index as usize) < names.len() => {
+            Some(*index as usize)
+        }
+        Some(Value::Number(index))
+            if *index >= 0.0 && *index < names.len() as f64 && index.fract() == 0.0 =>
+        {
+            Some(*index as usize)
+        }
+        Some(Value::String(name)) => {
+            let name = name.to_str()?;
+            names.iter().position(|full| {
+                name == *full
+                    || full
+                        .split_once('_')
+                        .is_some_and(|(_, legacy)| name.eq_ignore_ascii_case(legacy))
+            })
+        }
+        _ => None,
+    };
+    level.ok_or_else(|| mlua::Error::runtime(format!("Expected {kind}")))
+}
+
+// One compiler VM owns these four option levels for each player and the song.
+// Their lifetime is the song compilation; only chronological frame replay
+// advances the injected clock. Direct getters and speculative probes do not.
+pub(crate) struct SongLuaOptionLevels {
+    pub players: [[Table; 4]; LUA_PLAYERS],
+    pub songs: [Table; 4],
+    pub clock_us: i64,
+}
+
+fn option_approach(value: f32, target: f32, amount: f32) -> mlua::Result<f32> {
+    if !(amount >= 0.0) {
+        return Err(mlua::Error::runtime("negative native option approach"));
+    }
+    // RageUtil::fapproach computes the signed movement and then snaps it.
+    // Preserve its float operations, including a target reached by rounding.
+    if value == target {
+        return Ok(value);
+    }
+    let delta = target - value;
+    let mut movement = (delta / delta.abs()) * amount;
+    if movement.abs() > delta.abs() {
+        movement = delta;
+    }
+    Ok(value + movement)
+}
+
+fn copy_option_table(lua: &Lua, source: &Table) -> mlua::Result<Table> {
+    let result = lua.create_table()?;
+    for pair in source.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        result.raw_set(key, value)?;
+    }
+    Ok(result)
+}
+
+fn assign_player_options(lua: &Lua, destination: &Table, source: &Table) -> mlua::Result<()> {
+    let skin = destination.raw_get::<Value>("__songlua_noteskin_name")?;
+    let skin_override = destination.raw_get::<Value>("__songlua_noteskin_override")?;
+    // Native options have fixed fields. Keep observed reset entries explicit
+    // so omitted targets still produce zero writes in the compiled timeline.
+    reset_player_options(lua, destination)?;
+    destination.raw_set("__songlua_noteskin_name", skin)?;
+    destination.raw_set("__songlua_noteskin_override", skin_override)?;
+    for key in [
+        "__songlua_player_option_state",
+        "__songlua_player_option_speeds",
+        "__songlua_disabled_timing_windows",
+    ] {
+        if let Value::Table(value) = source.raw_get::<Value>(key)? {
+            let target = match key {
+                "__songlua_player_option_state" => player_option_state(lua, destination)?,
+                "__songlua_player_option_speeds" => player_option_speeds(lua, destination)?,
+                _ => disabled_timing_windows(lua, destination)?,
+            };
+            for pair in value.pairs::<Value, Value>() {
+                let (key, value) = pair?;
+                target.raw_set(key, value)?;
+            }
+        }
+    }
+    for key in [
+        "__songlua_time_spacing",
+        "__songlua_speedmod_active",
+        "__songlua_speedmod_explicit",
+        "__songlua_speedmod_xmod",
+        "__songlua_speedmod_cmod",
+        "__songlua_speedmod_mmod",
+        "__songlua_speedmod_amod",
+        "__songlua_speedmod_camod",
+    ] {
+        destination.raw_set(key, source.raw_get::<Value>(key)?)?;
+    }
+    // PlayerOptions::operator= keeps the destination skin for an empty source.
+    if source
+        .raw_get::<Option<String>>("__songlua_noteskin_name")?
+        .is_some_and(|s| !s.is_empty())
+    {
+        for key in ["__songlua_noteskin_name", "__songlua_noteskin_override"] {
+            destination.raw_set(key, source.raw_get::<Value>(key)?)?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn advance_option_levels(lua: &Lua, seconds: f64) -> mlua::Result<()> {
+    let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else {
+        return Ok(());
+    };
+    let time = (seconds * 1_000_000.0).round() as i64;
+    if !seconds.is_finite()
+        || seconds < 0.0
+        || seconds >= i64::MAX as f64 / 1_000_000.0
+        || time < levels.clock_us
+    {
+        return Err(mlua::Error::runtime("native option clock moved backwards"));
+    }
+    let delta = ((time - levels.clock_us) as f64 / 1_000_000.0) as f32;
+    levels.clock_us = time;
+    let players = levels.players.clone();
+    let songs = levels.songs.clone();
+    drop(levels);
+    // GameState::Update advances SongOptions before PlayerState::Update.
+    for (field, speed) in [
+        ("__songlua_music_rate", "__songlua_music_rate_speed"),
+        ("__songlua_haste", "__songlua_haste_speed"),
+    ] {
+        let value = songs[3].raw_get::<f32>(field)?;
+        let target = songs[2].raw_get::<f32>(field)?;
+        let amount = delta * songs[2].raw_get::<f32>(speed)?;
+        songs[3].raw_set(field, option_approach(value, target, amount)?)?;
+    }
+    for key in SONG_OPTION_SWITCHES {
+        songs[3].raw_set(key, songs[2].raw_get::<Value>(key)?)?;
+    }
+    let prefs = lua.globals().get::<Table>("PREFSMAN")?;
+    let rate_tweens = prefs
+        .get::<Function>("GetPreference")?
+        .call::<Option<bool>>((prefs, "RateModsAffectFGChanges"))?
+        .unwrap_or(false);
+    let rate = if rate_tweens {
+        songs[3].raw_get::<f32>("__songlua_music_rate")?
+    } else {
+        1.0
+    };
+    for player in players {
+        let current = player_option_state(lua, &player[3])?;
+        let target = player_option_state(lua, &player[2])?;
+        let speeds = player_option_speeds(lua, &player[2])?;
+        let keys = current
+            .pairs::<String, Value>()
+            .chain(target.pairs::<String, Value>())
+            .map(|pair| pair.map(|(key, _)| key))
+            .collect::<mlua::Result<std::collections::BTreeSet<_>>>()?;
+        for key in keys {
+            let value = target.raw_get::<Value>(key.as_str())?;
+            let value = if value == Value::Nil {
+                default_player_option_value(lua, &key)?
+            } else {
+                value
+            };
+            if matches!(value, Value::Boolean(_) | Value::String(_))
+                || matches!(
+                    key.as_str(),
+                    "modtimersetting" | "batterylives" | "visualdelay"
+                )
+            {
+                current.raw_set(key, value)?;
+            } else if let Some(target) = read_f32(value) {
+                let value = current.raw_get::<Option<f32>>(key.as_str())?.unwrap_or(0.0);
+                let speed = speeds.raw_get::<Option<f32>>(key.as_str())?.unwrap_or(1.0);
+                current.raw_set(key, option_approach(value, target, rate * delta * speed)?)?;
+            }
+        }
+        for (field, key, default) in [
+            ("__songlua_time_spacing", "_spacing", 0.0),
+            ("__songlua_speedmod_xmod", "xmod", 1.0),
+            ("__songlua_speedmod_cmod", "cmod", 200.0),
+            ("__songlua_speedmod_mmod", "mmod", 0.0),
+        ] {
+            let value = player[3].raw_get::<Option<f32>>(field)?.unwrap_or(default);
+            let target = player[2].raw_get::<Option<f32>>(field)?.unwrap_or(default);
+            let speed = speeds.raw_get::<Option<f32>>(key)?.unwrap_or(1.0);
+            let amount = if key == "cmod" {
+                delta * speed * 150.0
+            } else {
+                rate * delta * speed
+            };
+            player[3].raw_set(field, option_approach(value, target, amount)?)?;
+        }
+        let mode = if player[3].raw_get::<f32>("__songlua_time_spacing")? != 0.0 {
+            "cmod"
+        } else if player[3].raw_get::<f32>("__songlua_speedmod_mmod")? != 0.0 {
+            "mmod"
+        } else {
+            "xmod"
+        };
+        player[3].raw_set("__songlua_speedmod_active", mode)?;
+        for key in ["__songlua_noteskin_name", "__songlua_noteskin_override"] {
+            player[3].raw_set(key, player[2].raw_get::<Value>(key)?)?;
+        }
+        let windows = match player[2].raw_get::<Value>("__songlua_disabled_timing_windows")? {
+            Value::Table(value) => Value::Table(copy_option_table(lua, &value)?),
+            value => value,
+        };
+        player[3].raw_set("__songlua_disabled_timing_windows", windows)?;
+    }
+    Ok(())
+}
+
+const SONG_OPTION_SWITCHES: [&str; 8] = [
+    "__songlua_assistclap",
+    "__songlua_assistmetronome",
+    "__songlua_staticbackground",
+    "__songlua_randombgonly",
+    "__songlua_savescore",
+    "__songlua_savereplay",
+    "__songlua_autosync",
+    "__songlua_soundeffect",
+];
+const AUTOSYNC_TYPES: [&str; 4] = [
+    "AutosyncType_Off",
+    "AutosyncType_Song",
+    "AutosyncType_Machine",
+    "AutosyncType_Tempo",
+];
+
 pub fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    table.set("__songlua_music_rate", music_rate.max(0.0))?;
+    for (name, field, speed, initial) in [
+        (
+            "MusicRate",
+            "__songlua_music_rate",
+            "__songlua_music_rate_speed",
+            music_rate,
+        ),
+        ("Haste", "__songlua_haste", "__songlua_haste_speed", 0.0),
+    ] {
+        table.raw_set(field, initial)?;
+        table.raw_set(speed, 1.0_f32)?;
+        let owner = table.clone();
+        table.set(
+            name,
+            lua.create_function(move |_, args: MultiValue| {
+                let previous = owner.raw_get::<f32>(field)?;
+                let previous_speed = owner.raw_get::<f32>(speed)?;
+                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    let valid = if name == "MusicRate" {
+                        value > 0.0 && value <= 3.0
+                    } else {
+                        (-1.0..=1.0).contains(&value)
+                    };
+                    if !valid {
+                        return Err(mlua::Error::runtime(format!("Invalid {name}")));
+                    }
+                    owner.raw_set(field, value)?;
+                }
+                if let Some(value) = method_arg(&args, 1).cloned().and_then(read_f32) {
+                    if value < 0.0 {
+                        return Err(mlua::Error::runtime("negative option speed"));
+                    }
+                    owner.raw_set(speed, value)?;
+                }
+                Ok(
+                    if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
+                        MultiValue::from_iter([Value::Table(owner.clone())])
+                    } else {
+                        MultiValue::from_iter([
+                            Value::Number(f64::from(previous)),
+                            Value::Number(f64::from(previous_speed)),
+                        ])
+                    },
+                )
+            })?,
+        )?;
+    }
+    for name in [
+        "AssistClap",
+        "AssistMetronome",
+        "StaticBackground",
+        "RandomBGOnly",
+        "SaveScore",
+        "SaveReplay",
+    ] {
+        let key = format!("__songlua_{}", name.to_ascii_lowercase());
+        table.raw_set(key.as_str(), name == "SaveScore")?;
+        let owner = table.clone();
+        table.set(
+            name,
+            lua.create_function(move |_, args: MultiValue| {
+                let previous = owner.raw_get::<bool>(key.as_str())?;
+                if let Some(Value::Boolean(value)) = method_arg(&args, 0) {
+                    owner.raw_set(key.as_str(), *value)?;
+                }
+                Ok(if matches!(method_arg(&args, 1), Some(Value::Boolean(_))) {
+                    Value::Table(owner.clone())
+                } else {
+                    Value::Boolean(previous)
+                })
+            })?,
+        )?;
+    }
+    table.raw_set("__songlua_autosync", 0)?;
+    table.raw_set("__songlua_soundeffect", 0)?;
+    let owner = table.clone();
     table.set(
-        "MusicRate",
-        lua.create_function(move |_, mut args: crate::method_args::MethodArgs<2>| {
-            if !matches!(args.front(), Some(Value::Table(_))) {
-                return Ok(1.0_f32);
+        "AutosyncSetting",
+        lua.create_function(move |lua, args: MultiValue| {
+            let previous = owner.raw_get::<usize>("__songlua_autosync")?;
+            if let Some(value) = method_arg(&args, 0).filter(|v| **v != Value::Nil) {
+                owner.raw_set(
+                    "__songlua_autosync",
+                    option_enum(Some(value), &AUTOSYNC_TYPES, "AutosyncType")?,
+                )?;
             }
-            let rate = args.take_method_arg(0).and_then(read_f32);
-            let Some(Value::Table(owner)) = args.front() else {
-                return Ok(1.0_f32);
-            };
-            if let Some(rate) = rate {
-                owner.set("__songlua_music_rate", rate.max(0.0))?;
-                return Ok(rate.max(0.0));
-            }
-            Ok(owner
-                .get::<Option<f32>>("__songlua_music_rate")?
-                .unwrap_or(1.0_f32))
+            Ok(
+                if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
+                    Value::Table(owner.clone())
+                } else {
+                    let label = AUTOSYNC_TYPES
+                        .get(previous)
+                        .ok_or_else(|| mlua::Error::runtime("Invalid AutosyncType"))?;
+                    Value::String(lua.create_string(*label)?)
+                },
+            )
         })?,
     )?;
     Ok(table)
+}
+
+pub(crate) fn song_options_text(options: &Table) -> mlua::Result<String> {
+    let mut parts = Vec::new();
+    let rate = options.raw_get::<f32>("__songlua_music_rate")?;
+    if rate != 1.0 {
+        parts.push(format_song_options_text(rate));
+    }
+    option_string_part(&mut parts, "Haste", options.raw_get("__songlua_haste")?);
+    let autosync = options.raw_get::<usize>("__songlua_autosync")?;
+    if let Some(name) = ["", "AutosyncSong", "AutosyncMachine", "AutosyncTempo"]
+        .get(autosync)
+        .filter(|s| !s.is_empty())
+    {
+        parts.push((*name).to_owned());
+    }
+    let effect = options.raw_get::<usize>("__songlua_soundeffect")?;
+    if let Some(name) = ["", "EffectSpeed", "EffectPitch"]
+        .get(effect)
+        .filter(|s| !s.is_empty())
+    {
+        parts.push((*name).to_owned());
+    }
+    for (key, name) in [
+        ("__songlua_assistclap", "Clap"),
+        ("__songlua_assistmetronome", "Metronome"),
+        ("__songlua_staticbackground", "StaticBG"),
+        ("__songlua_randombgonly", "RandomBG"),
+    ] {
+        if options.raw_get::<bool>(key)? {
+            parts.push(name.to_owned());
+        }
+    }
+    Ok(parts.join(", "))
+}
+
+pub(crate) fn assign_song_options(
+    lua: &Lua,
+    levels: &[Table; 4],
+    level: usize,
+    text: &str,
+) -> mlua::Result<()> {
+    let replacement = create_song_options_table(lua, 1.0)?;
+    apply_song_options_string(&replacement, text)?;
+    for index in 0..4 {
+        if (index >= level && index < 3) || (index == 3 && level != 2) {
+            for key in SONG_OPTION_SWITCHES.into_iter().chain([
+                "__songlua_music_rate",
+                "__songlua_music_rate_speed",
+                "__songlua_haste",
+                "__songlua_haste_speed",
+            ]) {
+                levels[index].raw_set(key, replacement.raw_get::<Value>(key)?)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn apply_song_options_string(options: &Table, text: &str) -> mlua::Result<()> {
+    // SongOptions::FromOneModString has a separate, small grammar. In
+    // particular, percentage and approach prefixes do not scale haste.
+    for part in text.split(',') {
+        let lower = part.trim().to_ascii_lowercase();
+        let rate = lower
+            .strip_suffix("xmusic")
+            .filter(|s| {
+                let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+                s.split_once('.')
+                    .map_or_else(|| digits(s), |(whole, frac)| digits(whole) && digits(frac))
+            })
+            .and_then(|s| s.parse::<f32>().ok());
+        if let Some(rate) = rate {
+            options.raw_set("__songlua_music_rate", rate)?;
+            continue;
+        }
+        let words: Vec<_> = lower.split(' ').filter(|s| !s.is_empty()).collect();
+        let on = words.first() != Some(&"no");
+        let name = words.get(1).or(words.first()).copied().unwrap_or_default();
+        let key = match name {
+            "clap" => "__songlua_assistclap",
+            "metronome" => "__songlua_assistmetronome",
+            "staticbg" => "__songlua_staticbackground",
+            "randombg" => "__songlua_randombgonly",
+            "savescore" => "__songlua_savescore",
+            "savereplay" => "__songlua_savereplay",
+            "haste" => {
+                options.raw_set("__songlua_haste", f32::from(on))?;
+                continue;
+            }
+            "autosync" | "autosyncsong" | "autosyncmachine" | "autosynctempo" => {
+                options.raw_set(
+                    "__songlua_autosync",
+                    if !on {
+                        0
+                    } else if name == "autosyncmachine" {
+                        2
+                    } else if name == "autosynctempo" {
+                        3
+                    } else {
+                        1
+                    },
+                )?;
+                continue;
+            }
+            "effect" if !on => {
+                options.raw_set("__songlua_soundeffect", 0)?;
+                continue;
+            }
+            "effectspeed" | "effectpitch" => {
+                options.raw_set(
+                    "__songlua_soundeffect",
+                    if !on {
+                        0
+                    } else if name == "effectspeed" {
+                        1
+                    } else {
+                        2
+                    },
+                )?;
+                continue;
+            }
+            _ => continue,
+        };
+        options.raw_set(key, on)?;
+    }
+    Ok(())
 }
 
 pub struct PlayerLuaTables {
     pub player_states: [Table; LUA_PLAYERS],
     pub player_options: [Table; LUA_PLAYERS],
     pub steps: [Table; LUA_PLAYERS],
+    pub(crate) option_levels: [[Table; 4]; LUA_PLAYERS],
 }
 
 pub fn create_player_tables(
@@ -62,7 +509,8 @@ pub fn create_player_tables(
     ];
     Ok(PlayerLuaTables {
         player_states: [players[0].0.clone(), players[1].0.clone()],
-        player_options: [players[0].1.clone(), players[1].1.clone()],
+        player_options: [players[0].1[2].clone(), players[1].1[2].clone()],
+        option_levels: [players[0].1.clone(), players[1].1.clone()],
         steps,
     })
 }
@@ -88,7 +536,7 @@ fn create_player_state_table(
     player: SongLuaPlayerContext,
     player_index: usize,
     song_runtime: &Table,
-) -> mlua::Result<(Table, Table)> {
+) -> mlua::Result<(Table, [Table; 4])> {
     let controller = if player.enabled {
         "PlayerController_Human"
     } else {
@@ -100,20 +548,27 @@ fn create_player_state_table(
         "HealthState_Dead"
     };
     let player_number = player_number_name(player_index);
-    let options = create_player_options_table(lua, player)?;
+    let options = [
+        create_player_options_table(lua, player.clone())?,
+        create_player_options_table(lua, player.clone())?,
+        create_player_options_table(lua, player.clone())?,
+        create_player_options_table(lua, player)?,
+    ];
     let song_position = create_song_position_table(lua, song_runtime)?;
     let table = lua.create_table()?;
     set_string_method(lua, &table, "GetPlayerController", controller)?;
     set_string_method(lua, &table, "GetHealthState", health_state)?;
     set_string_method(lua, &table, "GetPlayerNumber", player_number)?;
     let options_for_get = options.clone();
-    let options_for_current = options.clone();
+    let options_for_current = options[3].clone();
     let options_for_set = options.clone();
     let options_for_string = options.clone();
     let options_for_array = options.clone();
     table.set(
         "GetPlayerOptions",
-        lua.create_function(move |_, _self: Option<Value>| Ok(options_for_get.clone()))?,
+        lua.create_function(move |_, args: MultiValue| {
+            Ok(options_for_get[options_level(method_arg(&args, 0))?].clone())
+        })?,
     )?;
     table.set(
         "GetCurrentPlayerOptions",
@@ -125,14 +580,21 @@ fn create_player_state_table(
     )?;
     table.set(
         "GetPlayerOptionsString",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(player_options_parts(lua, &options_for_string)?.join(", "))
+        lua.create_function(move |lua, args: MultiValue| {
+            Ok(player_options_parts(
+                lua,
+                &options_for_string[options_level(method_arg(&args, 0))?],
+            )?
+            .join(", "))
         })?,
     )?;
     table.set(
         "GetPlayerOptionsArray",
-        lua.create_function(move |lua, _args: MultiValue| {
-            lua.create_sequence_from(player_options_parts(lua, &options_for_array)?)
+        lua.create_function(move |lua, args: MultiValue| {
+            lua.create_sequence_from(player_options_parts(
+                lua,
+                &options_for_array[options_level(method_arg(&args, 0))?],
+            )?)
         })?,
     )?;
     table.set(
@@ -142,25 +604,25 @@ fn create_player_state_table(
                 let Some(Value::Table(_)) = args.front() else {
                     return Ok(());
                 };
+                let level = options_level(method_arg(&args, 0))?;
                 let options_text = method_arg(&args, 1)
                     .cloned()
                     .and_then(read_string)
                     .unwrap_or_default();
-                // LunaPlayerState::SetPlayerOptions parses a fresh PlayerOptions
-                // and assigns it. Keep the table identity held by Lua readers,
-                // but reset prior targets and approach speeds before parsing.
+                let replacement =
+                    create_player_options_table(lua, SongLuaPlayerContext::default())?;
+                reset_player_options(lua, &replacement)?;
+                apply_player_options_string(lua, &replacement, &options_text)?;
                 #[cfg(feature = "test-support")]
-                let previous = player_noteskin(&options_for_set)?;
-                let skin = options_for_set.raw_get::<Value>("__songlua_noteskin_name")?;
-                let skin_override = options_for_set.raw_get::<Value>("__songlua_noteskin_override")?;
-                reset_player_options(lua, &options_for_set)?;
-                // PlayerOptions::operator= retains the destination skin when the
-                // replacement has no valid skin. Explicit skin tokens still win.
-                options_for_set.raw_set("__songlua_noteskin_name", skin)?;
-                options_for_set.raw_set("__songlua_noteskin_override", skin_override)?;
-                apply_player_options_string(lua, &options_for_set, &options_text)?;
+                let previous = player_noteskin(&options_for_set[level])?;
+                if level != 2 {
+                    assign_player_options(lua, &options_for_set[3], &replacement)?;
+                }
+                for destination in &options_for_set[level..3] {
+                    assign_player_options(lua, destination, &replacement)?;
+                }
                 #[cfg(feature = "test-support")]
-                capture_skin_write(lua, &options_for_set, "setplayeroptions", previous)?;
+                capture_skin_write(lua, &options_for_set[level], "setplayeroptions", previous)?;
                 note_song_lua_side_effect(lua)?;
                 Ok(())
             }
@@ -444,11 +906,17 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
         lua.create_function({
             let table = table.clone();
             move |lua, args: MultiValue| {
-                if let Some(window) = method_arg(&args, 0).cloned().and_then(timing_window_name) {
+                if let Some(value) = method_arg(&args, 0).filter(|v| **v != Value::Nil) {
+                    let window = timing_window_name(value.clone())
+                        .ok_or_else(|| mlua::Error::runtime("Expected TimingWindow"))?;
                     disabled_timing_windows(lua, &table)?.set(window, true)?;
                     note_song_lua_side_effect(lua)?;
                 }
-                Ok(table.clone())
+                Ok(if matches!(args.back(), Some(Value::Boolean(true))) {
+                    Value::Table(table.clone())
+                } else {
+                    method_arg(&args, args.len().saturating_sub(2)).cloned().unwrap_or(Value::Nil)
+                })
             }
         })?,
     )?;
@@ -456,10 +924,14 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
         "ResetDisabledTimingWindows",
         lua.create_function({
             let table = table.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, args: MultiValue| {
                 table.raw_set("__songlua_disabled_timing_windows", lua.create_table()?)?;
                 note_song_lua_side_effect(lua)?;
-                Ok(table.clone())
+                Ok(if matches!(args.back(), Some(Value::Boolean(true))) {
+                    Value::Table(table.clone())
+                } else {
+                    method_arg(&args, args.len().saturating_sub(2)).cloned().unwrap_or(Value::Nil)
+                })
             }
         })?,
     )?;
@@ -493,8 +965,11 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
             };
             let previous = player_noteskin(&owner)?;
             let mut accepted = Value::Nil;
-            if let Some(noteskin_name) = method_arg(&args, 0).cloned()
-                .map(|value| lua.coerce_string(value)).transpose()?.flatten()
+            if let Some(noteskin_name) = method_arg(&args, 0)
+                .cloned()
+                .map(|value| lua.coerce_string(value))
+                .transpose()?
+                .flatten()
             {
                 let noteskin_name = noteskin_name.to_str()?.to_owned();
                 let skins = lua.globals().get::<Table>("NOTESKIN")?;
@@ -841,7 +1316,7 @@ fn set_player_speed_approaches(lua: &Lua, owner: &Table, speed: Option<f32>) -> 
     // PlayerOptions::SetSpeedModApproaches updates all speed modes together.
     // Record these writes like Mini/Flip so sampled XMod targets do not
     // interpolate ahead of the matching size/position changes.
-    for key in ["xmod", "cmod", "mmod"] {
+    for key in ["xmod", "cmod", "mmod", "_spacing"] {
         speeds.raw_set(key, speed)?;
     }
     Ok(())
@@ -864,6 +1339,7 @@ fn reset_player_options(lua: &Lua, owner: &Table) -> mlua::Result<()> {
     owner.raw_set("__songlua_speedmod_explicit", false)?;
     owner.raw_set("__songlua_noteskin_name", "")?;
     owner.raw_set("__songlua_noteskin_override", Value::Nil)?;
+    owner.raw_set("__songlua_disabled_timing_windows", lua.create_table()?)?;
     set_player_speed_approaches(lua, owner, Some(1.0))
 }
 
@@ -883,17 +1359,11 @@ pub(crate) fn player_uses_modifiers(
     // GameState::PlayerIsUsingModifier applies the string to copies and compares
     // the resulting values. Queries must not write to the live options.
     let requested = lua.create_table()?;
-    let mut rate = None;
     let mut skin = None;
     for token in text.split(',') {
         let token = strip_player_option_prefix(token).trim();
         let lower = token.to_ascii_lowercase();
-        if let Some(value) = lower
-            .strip_suffix("xmusic")
-            .and_then(|s| s.parse::<f32>().ok())
-        {
-            rate = Some(value);
-        } else {
+        if !lower.ends_with("xmusic") {
             let skins = lua.globals().get::<Table>("NOTESKIN")?;
             if skins
                 .get::<Function>("DoesNoteSkinExist")?
@@ -905,8 +1375,13 @@ pub(crate) fn player_uses_modifiers(
             }
         }
     }
-    if let Some(rate) = rate {
-        if song_options.raw_get::<f32>("__songlua_music_rate")? != rate {
+    let requested_song = copy_option_table(lua, song_options)?;
+    apply_song_options_string(&requested_song, text)?;
+    for key in SONG_OPTION_SWITCHES
+        .into_iter()
+        .chain(["__songlua_music_rate", "__songlua_haste"])
+    {
+        if song_options.raw_get::<Value>(key)? != requested_song.raw_get::<Value>(key)? {
             return Ok(false);
         }
     }
@@ -974,8 +1449,28 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
     if name.is_empty() {
         return Ok(());
     }
-    if apply_player_speed_option(owner, name)? {
-        set_player_speed_approaches(lua, owner, Some(speed))?;
+    if let Some((key, value)) = parse_player_speed_option(name) {
+        // FromOneModString writes fewer fields than the Lua X/C/M setters.
+        // Preserve unrelated amounts and speeds instead of using those aliases.
+        let speeds = player_option_speeds(lua, owner)?;
+        owner.raw_set("__songlua_speedmod_active", key)?;
+        owner.raw_set("__songlua_speedmod_explicit", Value::Nil)?;
+        owner.raw_set(format!("__songlua_speedmod_{key}"), value)?;
+        match key {
+            "xmod" | "cmod" => {
+                owner.raw_set("__songlua_time_spacing", f32::from(key == "cmod"))?;
+                owner.raw_set("__songlua_speedmod_mmod", 0.0_f32)?;
+                speeds.raw_set(key, speed)?;
+                speeds.raw_set("_spacing", speed)?;
+            }
+            "mmod" => {
+                owner.raw_set("__songlua_time_spacing", 0.0_f32)?;
+                speeds.raw_set(key, speed)?;
+            }
+            _ => {
+                set_player_speedmod(owner, key, Some(value))?;
+            }
+        }
         return Ok(());
     }
     let lower = name.to_ascii_lowercase();
@@ -1002,7 +1497,9 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
             } else if exists.call::<bool>((skins.clone(), "default"))? {
                 "default".to_owned()
             } else {
-                let names = skins.get::<Function>("GetNoteSkinNames")?.call::<Table>(skins)?;
+                let names = skins
+                    .get::<Function>("GetNoteSkinNames")?
+                    .call::<Table>(skins)?;
                 names.raw_get::<Option<String>>(2)?.unwrap_or_default()
             };
             owner.raw_set("__songlua_noteskin_name", name.clone())?;
@@ -1010,7 +1507,10 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
         }
         if key == "noteskin" && amount <= 0.5 {
             owner.raw_set("__songlua_noteskin_name", SONG_LUA_DEFAULT_NOTESKIN_NAME)?;
-            return owner.raw_set("__songlua_noteskin_override", SONG_LUA_DEFAULT_NOTESKIN_NAME);
+            return owner.raw_set(
+                "__songlua_noteskin_override",
+                SONG_LUA_DEFAULT_NOTESKIN_NAME,
+            );
         }
         let state = player_option_state(lua, owner)?;
         let timer = match key {
@@ -1097,14 +1597,6 @@ fn apply_string_skin(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<bool>
     Ok(exists)
 }
 
-fn apply_player_speed_option(owner: &Table, text: &str) -> mlua::Result<bool> {
-    let Some((key, value)) = parse_player_speed_option(text) else {
-        return Ok(false);
-    };
-    set_player_speedmod(owner, key, Some(value))?;
-    Ok(true)
-}
-
 fn install_speedmod_method(
     lua: &Lua,
     table: &Table,
@@ -1122,6 +1614,12 @@ fn install_speedmod_state_method(
     name: &str,
     initial: Value,
 ) -> mlua::Result<()> {
+    if matches!(name, "XMod" | "CMod" | "MMod") {
+        return table.set(
+            name,
+            create_native_speedmod(lua, table, name.to_ascii_lowercase())?,
+        );
+    }
     let owner = table.clone();
     let key = name.to_ascii_lowercase();
     let value_key = format!("__songlua_speedmod_{key}");
@@ -1173,6 +1671,58 @@ fn install_speedmod_state_method(
             Ok(initial.clone())
         })?,
     )
+}
+
+fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Function> {
+    let owner = owner.clone();
+    lua.create_function(move |lua, args: MultiValue| {
+        let spacing = owner
+            .raw_get::<Option<f32>>("__songlua_time_spacing")?
+            .unwrap_or(0.0);
+        let max_bpm = owner
+            .raw_get::<Option<f32>>("__songlua_speedmod_mmod")?
+            .unwrap_or(0.0);
+        let active = match key.as_str() {
+            "cmod" => spacing != 0.0,
+            "mmod" => spacing == 0.0 && max_bpm != 0.0,
+            _ => spacing == 0.0,
+        };
+        let field = format!("__songlua_speedmod_{key}");
+        let speeds = player_option_speeds(lua, &owner)?;
+        let previous = if active {
+            [
+                Value::Number(f64::from(
+                    owner.raw_get::<Option<f32>>(field.as_str())?.unwrap_or(1.0),
+                )),
+                Value::Number(f64::from(
+                    speeds.raw_get::<Option<f32>>(key.as_str())?.unwrap_or(1.0),
+                )),
+            ]
+        } else {
+            [Value::Nil, Value::Nil]
+        };
+        if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+            if key != "xmod" && (!value.is_finite() || value <= 0.0) {
+                return Err(mlua::Error::runtime(
+                    "speed mod must be finite and greater than zero",
+                ));
+            }
+            set_player_speedmod(&owner, &key, Some(value))?;
+        }
+        if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
+            if speed < 0.0 {
+                return Err(mlua::Error::runtime("negative option speed"));
+            }
+            set_player_speed_approaches(lua, &owner, Some(speed))?;
+        }
+        Ok(
+            if args.len() > 1 && matches!(args.back(), Some(Value::Boolean(true))) {
+                MultiValue::from_iter([Value::Table(owner.clone())])
+            } else {
+                MultiValue::from_iter(previous)
+            },
+        )
+    })
 }
 
 // Unknown/coercible values still use FromLua<String>, preserving numeric
@@ -1228,6 +1778,24 @@ fn set_player_speedmod_with_key(
     value: Option<f32>,
 ) -> mlua::Result<()> {
     if let Some(value) = value {
+        match key {
+            "xmod" => {
+                owner.raw_set("__songlua_time_spacing", 0.0_f32)?;
+                owner.raw_set("__songlua_speedmod_cmod", 200.0_f32)?;
+                owner.raw_set("__songlua_speedmod_mmod", 0.0_f32)?;
+            }
+            "cmod" => {
+                owner.raw_set("__songlua_time_spacing", 1.0_f32)?;
+                owner.raw_set("__songlua_speedmod_xmod", 1.0_f32)?;
+                owner.raw_set("__songlua_speedmod_mmod", 0.0_f32)?;
+            }
+            "mmod" => {
+                owner.raw_set("__songlua_time_spacing", 0.0_f32)?;
+                owner.raw_set("__songlua_speedmod_xmod", 1.0_f32)?;
+                owner.raw_set("__songlua_speedmod_cmod", 200.0_f32)?;
+            }
+            _ => (),
+        }
         owner.raw_set("__songlua_speedmod_active", key)?;
         owner.raw_set(value_key, value)?;
         owner.raw_set("__songlua_speedmod_explicit", Value::Nil)?;
@@ -2200,9 +2768,84 @@ assert(options:Reverse() == 0 and options:XMod() == 1)
         )
         .exec()
         .expect("run native-style option assignment");
-        let speeds = player_option_speeds(&lua, &options).expect("read approach speeds");
+        let speeds = player_option_speeds(&lua, &options[2]).expect("read approach speeds");
         for key in ["drunk", "reverse", "xmod", "cmod", "mmod", "tilt", "skew"] {
             assert_eq!(speeds.raw_get::<f32>(key).expect("recorded approach"), 1.0);
+        }
+    }
+
+    #[test]
+    fn current_levels_match_compiled_native_control() {
+        let lua = Lua::new();
+        let context = SongLuaCompileContext::new(Path::new("."), "Native option levels");
+        crate::host::install_basic_globals(&lua, &context, false).expect("basic globals");
+        crate::host::install_manager_globals(&lua, &context).expect("native default preferences");
+        crate::host::install_game_state_globals(&lua, &context).expect("option levels");
+        lua.globals()
+            .set(
+                "NOTESKIN",
+                crate::create_noteskin_table(
+                    &lua,
+                    &context,
+                    SongLuaNoteskinResolver::default(),
+                    |lua, _| lua.create_table(),
+                )
+                .expect("empty numeric-control skin context"),
+            )
+            .expect("noteskin global");
+        lua.globals()
+            .set(
+                "_ITG_OPTIONS_ADVANCE",
+                lua.create_function(|lua, (seconds, _scaled_delta): (f64, Option<f32>)| {
+                    advance_option_levels(lua, seconds)
+                })
+                .expect("inject native time"),
+            )
+            .expect("clock boundary");
+        lua.globals()
+            .set(
+                "_ITG_OPTIONS_LEVEL",
+                lua.create_function(|lua, value: Value| {
+                    lua.create_string(MODS_LEVELS[options_level(Some(&value))?])
+                })
+                .expect("native enum input"),
+            )
+            .expect("level boundary");
+        // Adapt the already-verified C++ control to normal Lua APIs. Its
+        // assertion body is byte-identical to the standalone harness fixture;
+        // no expected numbers or approach arithmetic are generated here.
+        lua.load(
+            r#"
+function _ITG_OPTIONS_AT(player, level, method, ...)
+    if player == -1 then
+        if method == 'SetSongOptions' then return GAMESTATE:SetSongOptions(level, ...) end
+        local options = GAMESTATE:GetSongOptionsObject(level)
+        return options[method](options, ...)
+    end
+    local state = GAMESTATE:GetPlayerState(player)
+    if method == 'SetPlayerOptions' then return state:SetPlayerOptions(level, ...) end
+    local options = state:GetPlayerOptions(level)
+    return options[method](options, ...)
+end
+function _ITG_USING_MODIFIER(player, text) return GAMESTATE:PlayerIsUsingModifier(player, text) end
+function _ITG_OPTIONS_RATE_TWEENS(value)
+    local previous = PREFSMAN:GetPreference('RateModsAffectFGChanges')
+    if type(value) == 'boolean' then PREFSMAN:SetPreference('RateModsAffectFGChanges', value) end
+    return previous
+end
+"#,
+        )
+        .exec()
+        .expect("public option API adapter");
+        for source in [
+            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/window-control.json"),
+            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/native-control.json"),
+        ] {
+            let control: serde_json::Value = serde_json::from_str(source)
+                .expect("standalone compiled-native control");
+            lua.load(control["lua_assertions"].as_str().expect("native assertions"))
+                .exec()
+                .expect("compiled native option level and clock expectations");
         }
     }
 
@@ -2247,19 +2890,24 @@ assert(o:Drunk() == 1)
         let options = create_player_options_table(&lua, SongLuaPlayerContext::default()).unwrap();
         lua.globals().set("options", options.clone()).unwrap();
         for (script, expected) in [
-            ("options:XMod(2.5)", 1.0),
-            ("options:XMod(2.5, 10000)", 10000.0),
-            ("options:CMod(300)", 10000.0),
-            ("options:MMod(400, 0)", 0.0),
-            ("options:XMod(1.5)", 0.0),
-            ("options:FromString('*7 2x')", 7.0),
-            ("options:FromString('C500')", 1.0),
+            ("options:XMod(2.5)", [1.0, 1.0, 1.0, 1.0]),
+            ("options:XMod(2.5, 10000)", [10000.0; 4]),
+            ("options:CMod(300)", [10000.0; 4]),
+            ("options:MMod(400, 0)", [0.0; 4]),
+            ("options:XMod(1.5)", [0.0; 4]),
+            ("options:FromString('*7 2x')", [7.0, 0.0, 0.0, 7.0]),
+            ("options:FromString('C500')", [7.0, 1.0, 0.0, 1.0]),
         ] {
             lua.load(script).exec().unwrap();
             let speeds = player_option_speeds(&lua, &options).unwrap();
-            for key in ["xmod", "cmod", "mmod"] {
+            for (key, expected) in ["xmod", "cmod", "mmod", "_spacing"]
+                .into_iter()
+                .zip(expected)
+            {
                 assert_eq!(
-                    speeds.raw_get::<f32>(key).unwrap(),
+                    // Missing capture metadata is the implicit native Init
+                    // speed of one, not an authored modifier target.
+                    speeds.raw_get::<Option<f32>>(key).unwrap().unwrap_or(1.0),
                     expected,
                     "{script}: {key}"
                 );

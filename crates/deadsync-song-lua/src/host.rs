@@ -26,14 +26,13 @@ use crate::{
     create_style_table, create_theme_prefs_rows_table, create_theme_prefs_table,
     create_theme_table, create_top_screen_table, create_trail_table, create_unlockman_table,
     current_song_lua_style_name, display_bpms_for_args, display_bpms_text,
-    easiest_steps_difficulty, format_number_and_suffix, format_song_options_text,
-    install_def_globals, install_default_stdlib_compat, install_file_loader_globals,
-    is_song_lua_audio_path, lua_values_equal, method_arg, note_song_lua_side_effect,
-    player_index_from_value, player_number_name, read_f32, read_string, record_song_lua_broadcast,
-    resolve_script_path, scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms,
-    seconds_to_mss, seconds_to_mss_ms_ms, song_dir_string, song_display_bps,
-    song_lua_human_player_count, song_lua_runtime_number, song_lua_style_column_x, song_music_rate,
-    theme_string, truthy,
+    easiest_steps_difficulty, format_number_and_suffix, install_def_globals,
+    install_default_stdlib_compat, install_file_loader_globals, is_song_lua_audio_path,
+    lua_values_equal, method_arg, note_song_lua_side_effect, player_index_from_value,
+    player_number_name, read_f32, read_string, record_song_lua_broadcast, resolve_script_path,
+    scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss,
+    seconds_to_mss_ms_ms, song_dir_string, song_display_bps, song_lua_human_player_count,
+    song_lua_runtime_number, song_lua_style_column_x, song_music_rate, theme_string, truthy,
 };
 
 pub const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
@@ -902,7 +901,7 @@ fn arrow_effects_player_options(args: &MultiValue) -> mlua::Result<Option<Table>
     let Some(Value::Table(player_state)) = args.front() else {
         return Ok(None);
     };
-    let Some(method) = player_state.get::<Option<Function>>("GetPlayerOptions")? else {
+    let Some(method) = player_state.get::<Option<Function>>("GetCurrentPlayerOptions")? else {
         return Ok(None);
     };
     method.call::<Table>(player_state.clone()).map(Some)
@@ -1241,7 +1240,17 @@ pub fn install_game_state_globals(
     {
         globals.set(*key, options.clone())?;
     }
-    let song_options = create_song_options_table(lua, context.song_music_rate)?;
+    let song_options = [
+        create_song_options_table(lua, context.song_music_rate)?,
+        create_song_options_table(lua, context.song_music_rate)?,
+        create_song_options_table(lua, context.song_music_rate)?,
+        create_song_options_table(lua, context.song_music_rate)?,
+    ];
+    lua.set_app_data(crate::song_tables::SongLuaOptionLevels {
+        players: players.option_levels.clone(),
+        songs: song_options.clone(),
+        clock_us: 0,
+    });
     let display_bpms = context.song_display_bpms;
     let default_music_rate = song_music_rate(context);
     globals.set(
@@ -1280,8 +1289,11 @@ pub fn install_game_state_globals(
     gamestate.set(
         "PlayerIsUsingModifier",
         lua.create_function({
-            let options = players.player_options.clone();
-            let song_options = song_options.clone();
+            let options = [
+                players.option_levels[0][3].clone(),
+                players.option_levels[1][3].clone(),
+            ];
+            let song_options = song_options[3].clone();
             move |lua, args: MultiValue| {
                 let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
                     return Ok(false);
@@ -1577,20 +1589,41 @@ pub fn install_game_state_globals(
         "GetSongOptionsObject",
         lua.create_function({
             let song_options = song_options.clone();
-            move |_, _args: MultiValue| Ok(song_options.clone())
+            move |_, args: MultiValue| {
+                Ok(song_options[crate::song_tables::options_level(method_arg(&args, 0))?].clone())
+            }
         })?,
     )?;
-    let song_options_text = lua.create_function(move |lua, _args: MultiValue| {
-        let rate = song_options
-            .get::<Option<f32>>("__songlua_music_rate")?
-            .unwrap_or(1.0);
-        Ok(Value::String(
-            lua.create_string(format_song_options_text(rate))?,
-        ))
-    })?;
-    gamestate.set("GetSongOptions", song_options_text.clone())?;
+    let levels = song_options.clone();
+    gamestate.set(
+        "GetSongOptions",
+        lua.create_function(move |lua, args: MultiValue| {
+            let level = crate::song_tables::options_level(method_arg(&args, 0))?;
+            lua.create_string(crate::song_tables::song_options_text(&levels[level])?)
+        })?,
+    )?;
     // GameState exposes the current options string without a ModsLevel argument.
-    gamestate.set("GetSongOptionsString", song_options_text)?;
+    let current = song_options[3].clone();
+    gamestate.set(
+        "GetSongOptionsString",
+        lua.create_function(move |lua, _args: MultiValue| {
+            lua.create_string(crate::song_tables::song_options_text(&current)?)
+        })?,
+    )?;
+    let state = gamestate.clone();
+    gamestate.set(
+        "SetSongOptions",
+        lua.create_function(move |lua, args: MultiValue| {
+            let level = crate::song_tables::options_level(method_arg(&args, 0))?;
+            let text = method_arg(&args, 1)
+                .cloned()
+                .and_then(read_string)
+                .ok_or_else(|| mlua::Error::runtime("Expected song options string"))?;
+            crate::song_tables::assign_song_options(lua, &song_options, level, &text)?;
+            note_song_lua_side_effect(lua)?;
+            Ok(state.clone())
+        })?,
+    )?;
     let master_player = context
         .players
         .iter()
