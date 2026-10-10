@@ -1058,6 +1058,41 @@ fn native_model_cull_modes_match() {
 }
 
 #[test]
+fn model_alpha_cutoff() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-alpha-cutoff");
+    let native: Value = serde_json::from_slice(&fs::read(root.join("native.json"))
+        .expect("native Model alpha observations")).expect("valid native observations");
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let mut context = SongLuaCompileContext::new(&root, "Model Alpha Cutoff");
+    context.music_length_seconds = 0.25;
+    let entry = root.join("control.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Model alpha controls");
+    let c = &compiled[0];
+    let states = compiled_overlay_states_at(c, &context, 0.0, 0.0);
+    let mut composer = WholeSongComposer::new(&c.overlays);
+    let mut cases = 0;
+    for actor in native["samples"][0]["actors"].as_array().expect("native actors") {
+        if actor["kind"] != "model" { continue; }
+        let name = actor["name"].as_str().expect("native Model name");
+        let index = c.overlays.iter().position(|overlay| overlay.name.as_deref() == Some(name))
+            .expect("compiled Model");
+        let frame = composer.render_overlay(&c.overlays, &states, index,
+            [context.screen_width, context.screen_height], 0.0, 0.0);
+        let count = frame.ops.iter().filter_map(|op| match op {
+            DrawOp::TexturedMesh(run) => Some(run.instance_count as usize),
+            _ => None,
+        }).sum::<usize>();
+        assert_eq!(count, actor["draws"].as_array().expect("native Model passes").len(),
+            "native Model passes for {name}");
+        cases += 1;
+    }
+    assert_eq!(cases, 11);
+}
+
+#[test]
 #[ignore = "diagnoses each Model's first visible observation in a selected original trace"]
 fn native_model_initial_frames_match_selected_trace() {
     crate::paths::init();

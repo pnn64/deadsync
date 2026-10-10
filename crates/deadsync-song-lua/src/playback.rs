@@ -8010,6 +8010,10 @@ fn append_song_lua_model_actors(
     total_elapsed: f32,
     prewarmed_passes: Option<&[Option<SongLuaModelGeometry>]>,
 ) -> bool {
+    // Model::DrawPrimitives skips both passes below this joint alpha cutoff.
+    if tint[3] < 0.001 && glow[3] < 0.001 {
+        return false;
+    }
     let mut emitted = false;
     let [projection, view, space] = song_lua_model_camera(camera_state, x_scale, y_scale);
     out.extend([Actor::CameraPush {

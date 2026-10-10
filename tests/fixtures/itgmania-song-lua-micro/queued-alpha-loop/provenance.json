@@ -1,0 +1,28 @@
+{
+  "harness_version": "0.1.54",
+  "harness_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+  "native_sha256": "2a36023412ad2cbc95db19b240cf70429ec7ea53c35291a5cc680d752a11d8e5",
+  "source_sha256": {
+    "control.lua": "342dfcdbbb82b7d00526c7416f2e0872040c88cf9324cdd692da519b16978f7f",
+    "control.ssc": "e1bec8bd648c5b424a3a311deeaba4388196ea6394e286edb94f6f06c60f345a",
+    "model.txt": "dc912e2602feef0ca850486060f5d9d992de7c272d96993294ff660403d32baf"
+  },
+  "update_frames": 241,
+  "duration_seconds": 4,
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "complete_native_capture": true,
+  "verified_full_comparison": {
+    "exit_code": 0,
+    "comparisons_passed": 26894,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.30808740016073,
+    "archive_sha256": "a1224e50d064dade6421a84ca7e8a05089ec18e999af9912907eaec3d0e8d08e",
+    "binary_sha256": "ebe6296dee6045e7c239ae22a0a7316cafc4db89e3c1d74afaa4afcbb58c4ed5",
+    "source_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\model-alpha-cutoff-v1-alpha.log",
+    "log_sha256": "8fa4127f1d89f66727c264cb63449c2be895f64fc79a2968346f29c24ecbcf53",
+    "control_complete": true
+  }
+}
