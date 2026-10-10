@@ -21693,7 +21693,7 @@ return Def.ActorFrame {
         inner=field:GetWrapperState(1)
         field:AddWrapperState()
         outer=field:GetWrapperState(2)
-        outer:x(17)
+        outer:x(17):spin():effectmagnitude(0,0,90)
         self:SetUpdateFunction(function()
             local beat=GAMESTATE:GetSongBeat()
             inner:skewx(beat < 1 and beat*0.03 or 0)
@@ -21710,6 +21710,8 @@ return Def.ActorFrame {
             .expect("native half-second sample");
         assert_eq!(frame.wrappers.len(), 2);
         assert_eq!(frame.wrappers[0].x, 17.0, "outer wrapper draws first");
+        assert!(frame.wrappers[0].spin_baked, "native accumulated spin runs once");
+        assert!((frame.wrappers[0].rot_z_deg - 45.0).abs() < 0.001);
         assert!((frame.wrappers[1].skew_x - 0.015).abs() < 0.0001);
         assert_eq!(compiled.player_actors[0].initial_state.skew_x, 0.0);
         assert!(!compiled.eases.iter().any(|ease| {

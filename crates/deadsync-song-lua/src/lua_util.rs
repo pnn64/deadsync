@@ -11725,6 +11725,13 @@ fn collect_compile_update_jobs(
         child.set("__songlua_parent", actor.clone())?;
         collect_compile_update_jobs(lua, &child, Some(actor), false, jobs, order)?;
     }
+    // Player owns NoteField outside the returned song Lua array. Its wrappers
+    // still receive Actor::Update time, including Player hibernation and rate.
+    if actor_type_is(actor, "PlayerActor")?
+        && let Some(children) = actor.raw_get::<Option<Table>>("__songlua_children")?
+        && let Some(field) = children.raw_get::<Option<Table>>("NoteField")? {
+        collect_compile_update_jobs(lua, &field, Some(actor), false, jobs, order)?;
+    }
     if let Some(stream) = song_meter_stream_child(lua, actor)? {
         collect_compile_update_jobs(lua, &stream, Some(actor), false, jobs, order)?;
     }
@@ -11749,7 +11756,16 @@ fn collect_compile_update_jobs(
 fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Rc<[SongLuaCompileUpdateJob]>> {
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
-        collect_compile_update_jobs(lua, root, None, false, &mut jobs, &mut 0)?;
+        let mut order = 0;
+        for key in ["__songlua_top_screen_player_1", "__songlua_top_screen_player_2"] {
+            if let Some(player) = lua.globals().raw_get::<Option<Table>>(key)?
+                && let Some(children) = player.raw_get::<Option<Table>>("__songlua_children")?
+                && let Some(field) = children.raw_get::<Option<Table>>("NoteField")?
+                && field.raw_get::<Option<Table>>("__songlua_wrappers")?.is_some_and(|wrappers| wrappers.raw_len() > 0) {
+                collect_compile_update_jobs(lua, &player, None, false, &mut jobs, &mut order)?;
+            }
+        }
+        collect_compile_update_jobs(lua, root, None, false, &mut jobs, &mut order)?;
         lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
     }
     Ok(lua

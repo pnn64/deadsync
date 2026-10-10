@@ -3017,6 +3017,7 @@ fn capture_field_wrappers(
                 if let Some(rotation) = crate::lua_util::spin_render_pose(&wrapper)
                     .map_err(|err| err.to_string())? {
                     [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = rotation;
+                    state.spin_baked = true;
                 }
                 if let Some(effect) = crate::lua_util::effect_render_time(&wrapper, clock)
                     .map_err(|err| err.to_string())? {
