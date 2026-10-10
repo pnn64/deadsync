@@ -259,8 +259,8 @@ fn compare_render_pass_semantic(
                     "draw_primitive",
                     index,
                     "tmesh_state",
-                    (a.blend, a.texture_handle, a.camera, a.depth_test),
-                    (b.blend, b.texture_handle, b.camera, b.depth_test),
+                    (a.blend, a.texture_handle, a.camera, a.depth_test, a.sampler),
+                    (b.blend, b.texture_handle, b.camera, b.depth_test, b.sampler),
                 )?;
                 compare_pod_value("tmesh_instance", index, "value", ai, bi)?;
                 compare_value(

@@ -91,7 +91,7 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
     }
 }
 
-fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
+pub fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, 0)
 }
 
@@ -117,30 +117,53 @@ fn model_layer_from_slot_frame(
         song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
     );
     layer.material = model.material;
-    layer.texture_frames = slot.model_texture_states.iter().enumerate()
+    layer.texture_frames = slot
+        .model_texture_states
+        .iter()
+        .enumerate()
         .map(|(index, state)| {
             let base = slot.uv_for_frame(index);
             let (scale, offset, shift) = slot.model_uv_params(base);
-            let glow = deadsync_song_lua::SongLuaModelTextureUv { scale, offset, shift };
+            let glow = deadsync_song_lua::SongLuaModelTextureUv {
+                scale,
+                offset,
+                shift,
+            };
             let mut diffuse = glow;
             for axis in 0..2 {
                 let shift = (slot.uv_offset[axis] + state.translation[axis]) * scale[axis];
                 diffuse.offset[axis] += shift;
                 diffuse.shift[axis] += shift;
             }
-            deadsync_song_lua::SongLuaModelTextureFrame { delay: state.delay, diffuse, glow }
-        }).collect();
+            deadsync_song_lua::SongLuaModelTextureFrame {
+                texture_key: slot.model_texture_keys.get(index).cloned(),
+                delay: state.delay,
+                diffuse,
+                glow,
+            }
+        })
+        .collect();
     if let Some(texture) = &slot.model_additive {
         layer.additive = Some(texture.texture_key_shared());
-        layer.additive_frames = texture.model_texture_states.iter().enumerate()
+        layer.additive_frames = texture
+            .model_texture_states
+            .iter()
+            .enumerate()
             .map(|(index, state)| {
                 let rect = texture.uv_for_frame(index);
                 let uv = deadsync_song_lua::SongLuaModelTextureUv {
                     scale: [rect[2] - rect[0], rect[3] - rect[1]],
-                    offset: [rect[0], rect[1]], shift: [0.0; 2],
+                    offset: [rect[0], rect[1]],
+                    shift: [0.0; 2],
                 };
-                deadsync_song_lua::SongLuaModelTextureFrame { delay: state.delay, diffuse: uv, glow: uv }
-            }).collect();
+                deadsync_song_lua::SongLuaModelTextureFrame {
+                    texture_key: texture.model_texture_keys.get(index).cloned(),
+                    delay: state.delay,
+                    diffuse: uv,
+                    glow: uv,
+                }
+            })
+            .collect();
     }
     Some(layer)
 }

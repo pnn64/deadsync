@@ -1,0 +1,80 @@
+{
+  "build_parent_commit": "58e888a2404a7e7b68e7028b8da444c2784b1032",
+  "native_control": "tests/fixtures/itgmania-actors/pause-offset.json",
+  "native_control_sha256": "f87087d3888f39080c20cca4e698c6f5e0051ee82f8977bf9330e1e3bb010b4c",
+  "native_unique_samples": 30,
+  "exact_unique_before": 18,
+  "exact_unique_after": 30,
+  "before": {
+    "source_commit": "58e888a2404a7e7b68e7028b8da444c2784b1032",
+    "source_pending_commit": true,
+    "binary_sha256": "dcd58705522882604382a6b01131833a785e0bf147850874093e5ed6925ed776",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\pause-offset-before-v1-song-lua-unit.exe",
+      "host::tests::arrow_offset_uses_native_music_clock",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "checks": 90,
+    "exact_checks": 54,
+    "failures": 36,
+    "log_sha256": "c5cb66ddf756b32870f86019c1ed6370fea9139dab7d781b250b0b76627d9ca4"
+  },
+  "after": {
+    "source_commit": "58e888a2404a7e7b68e7028b8da444c2784b1032",
+    "source_pending_commit": true,
+    "binary_sha256": "a895494244d43738b2a5ce86b480611ab708b1fb0a1ef7735864cf2dc0b93b8d",
+    "music_rates": [
+      0.5,
+      0.75,
+      1,
+      1.25,
+      1.5,
+      2
+    ],
+    "states": [
+      "unbound",
+      "P1",
+      "P2"
+    ],
+    "checks": 540,
+    "exact_checks": 540,
+    "failures": 0,
+    "results": [
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\pause-offset-after-v2-song-lua-unit.exe",
+          "host::tests::",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.6398514998145401,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\pause-offset-after-v2-test1.log",
+        "log_sha256": "96ef300c572c7d786639fd1e3a5b9f54747bb10fa17e01c5bf94c0fd0f16ddc6"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\pause-offset-after-v2-song-lua-unit.exe",
+          "runtime::tests::music_seconds_preserves_offset_and_rate",
+          "--nocapture",
+          "--exact"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.3204880999401212,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\pause-offset-after-v2-test2.log",
+        "log_sha256": "ed9d9c8682ed18fb71d1b25b839b9c0142f47a3dd94708b2f8597ae8c5c14d30"
+      }
+    ]
+  },
+  "fix": "Use the shared native float music clock from replay wall time, song origin and music rate. Do not invert a fixed beat during stops or delays. Keep wall time precision until the music clock conversion.",
+  "integer_judgment_timing_changed": false,
+  "tolerances_changed": false,
+  "full_archive_revalidation": "pending with the newly committed comparator",
+  "remaining_gaps": [
+    "Eight Edgar off-grid multitap positions",
+    "DeadSync Song/Steps timing getter placeholders",
+    "Explicit Model culling",
+    "Remaining original archive corpus and framebuffer parity"
+  ]
+}

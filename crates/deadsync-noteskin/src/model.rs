@@ -310,7 +310,7 @@ fn itg_resolve_animated_texture_ini(
             }
         }
         // Path equality also accepts aliases such as ./frames/a.png. Preserve
-        // those spellings in stored frames without creating a duplicate atlas.
+        // those spellings in stored frames while keeping their actual image identity.
         has_distinct_image = has_distinct_image || frame_path.as_ref() != texture_path;
         if !frames.is_empty() {
             frames.push(ItgTextureFrame {
@@ -322,8 +322,8 @@ fn itg_resolve_animated_texture_ini(
     }
     Some(ItgResolvedModelTexture {
         sphere_mapped: path.to_string_lossy().contains("sphere"),
-        // Repeated references to one image need no atlas. Keep its full UV
-        // domain for scrolling materials instead of adding duplicate tiles.
+        // Repeated references to one image need no binding table. Keep its full UV
+        // domain while retaining each state's delay and translation.
         animation: (has_distinct_image
             && cycle_seconds > f32::EPSILON
             && cycle_seconds.is_finite())
@@ -895,10 +895,12 @@ pub fn itg_parse_milkshape_model_layers(
     // RageModelGeometry::MergeMeshes appends mesh 1 to mesh 0 without removing
     // mesh 1 or replacing mesh 0's material/bone binding.
     if mesh_count == 2 && meshes.len() == 2 && meshes[0].name == meshes[1].name {
-        let mut vertices = Vec::with_capacity(meshes[0].vertices.len() + meshes[1].vertices.len());
-        vertices.extend_from_slice(&meshes[0].vertices);
-        vertices.extend_from_slice(&meshes[1].vertices);
-        meshes[0].vertices = vertices.into();
+        meshes[0].vertices = meshes[0]
+            .vertices
+            .iter()
+            .chain(meshes[1].vertices.iter())
+            .copied()
+            .collect();
         for axis in 0..3 {
             meshes[0].bounds[axis] = meshes[0].bounds[axis].min(meshes[1].bounds[axis]);
             meshes[0].bounds[axis + 3] = meshes[0].bounds[axis + 3].max(meshes[1].bounds[axis + 3]);
@@ -1702,3 +1704,7 @@ fn expand_mesh_vertices(
     }
     (vertices, bounds)
 }
+
+#[cfg(test)]
+#[path = "model_merge_perf.rs"]
+mod resource_perf;

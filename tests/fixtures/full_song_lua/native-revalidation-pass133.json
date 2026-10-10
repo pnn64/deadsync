@@ -1,0 +1,100 @@
+{
+  "pass": 133,
+  "previous_record": "native-revalidation-pass132.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    54
+  ],
+  "next_position": 55,
+  "comparisons_passed": 88204,
+  "charts": [
+    {
+      "position": 54,
+      "entry": {
+        "title": "[12] Tacos",
+        "source_simfile": "[12] Tacos [DX]/Tacos.ssc",
+        "harness_version": "0.1.54",
+        "archive": "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4.tar.zst",
+        "sha256": "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4",
+        "compressed_bytes": 60060,
+        "aliases": [
+          "0453922cd48384732dccc26d3f9d600775bc5af356437e243355e41fcee04fac.tar.zst"
+        ]
+      },
+      "original_archive_retained": "d4489b565e4307f1426cea08dcbe180cc2af95b6f8eb3b2145623c3a02f54563.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "1d3e69a8422ee182967c50815d30ef3693e54772592f80f76071bd8cc792e59e",
+      "original_source_sha256": {
+        "[12] Tacos [DX]/tacos bg.png": "c6bed66bb88c88d10e12e6d7999e5d2367a0b50c602028770e494506836eaff7",
+        "[12] Tacos [DX]/tacos bn.png": "77b6f3d1fab6d38a135559bc4ecb55cc271f7896bae85f3241cd14193d3c681e",
+        "[12] Tacos [DX]/tacos-bn.mp4": "6d3ba61f4dec44439fb90ffd86c143ac872664682ff58ae45d476c919f6743ce",
+        "[12] Tacos [DX]/Tacos.ogg": "bd9f7a55131fac00d2efed219978ec13e8c35bb881d39399bb5f46bfb13d7b28",
+        "[12] Tacos [DX]/Tacos.ssc": "5972daa1e084b3984fe960d284217f1f3c40b3b4f7eec27b4edbad1c34e40a8a",
+        "[12] Tacos [DX]/lua/default.lua": "350f689af8fcfc819a146253bbcd0c06f587c754e73fcc9d8ceb71154a7ab362"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8015,
+      "duration_seconds": 133.56521606445312,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 54,
+      "source_simfile": "[12] Tacos [DX]/Tacos.ssc",
+      "archive": "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4.tar.zst",
+      "archive_sha256": "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "bf244ebae2735db4b9fb1a1d8a0d8dedebd0806bbc9776f8073240b4b40499d4.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 4.427920899819583,
+      "comparisons_passed": 88204,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-054-column-xy-committed-v6.log",
+      "log_sha256": "77dcb2c047337d0dd6d2042965b772e3ac3d10300786c5379bf1501ff32f2c90",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass133-top-054-native-v2.json",
+      "native_receipt_sha256": "8d88faeb0ed4076f95f9b9372ad8eddc2a29b9c29d4442c1cebdd99cd1f071f5",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.6910632001236081,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-054-native-pass133.log",
+    "log_sha256": "914a802bc63a927f8de13f4ff8c622c8e93c7394b9924fbd1318b2381420bb79",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.33s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

@@ -31,7 +31,7 @@ fn reserve_map_headroom<K: Eq + Hash, V, S: BuildHasher>(
     values.reserve(target.saturating_sub(values.len()));
 }
 
-/// Detached draw used only while clipping or copying a retained fragment.
+/// Detached draw used while editing geometry.
 /// Live frame composition stays in `FrameBuilder`'s typed arrays.
 #[repr(C)]
 #[derive(Clone)]
@@ -100,6 +100,7 @@ struct TexturedMeshPayload {
     depth_test: bool,
     clear_depth: bool,
     clear_depth_after: bool,
+    sampler: Option<renderer::MeshSampler>,
 }
 
 #[derive(Default)]
@@ -220,6 +221,7 @@ impl FrameBuilder {
         });
     }
 
+    #[cfg(test)]
     #[inline(always)]
     fn push(&mut self, object: EditableDraw) {
         let EditableDraw {
@@ -257,6 +259,7 @@ impl FrameBuilder {
                 depth_test,
                 clear_depth,
                 clear_depth_after,
+                sampler,
             } => self.push_textured_mesh(
                 texture_handle,
                 order,
@@ -270,6 +273,7 @@ impl FrameBuilder {
                     depth_test,
                     clear_depth,
                     clear_depth_after,
+                    sampler,
                 },
             ),
         }
@@ -328,6 +332,7 @@ impl FrameBuilder {
                 depth_test,
                 clear_depth,
                 clear_depth_after,
+                sampler,
             } => {
                 let slot = if old.kind == DrawKind::TexturedMesh {
                     debug_assert!(self.textured_meshes[old.payload_index as usize].is_none());
@@ -344,6 +349,7 @@ impl FrameBuilder {
                     depth_test,
                     clear_depth,
                     clear_depth_after,
+                    sampler,
                 });
                 (DrawKind::TexturedMesh, slot)
             }
@@ -357,49 +363,6 @@ impl FrameBuilder {
             kind,
             payload_index,
         };
-    }
-
-    fn clone_retained_object(&self, index: usize) -> Option<EditableDraw> {
-        let item = self.items[index];
-        let object_type = match item.kind {
-            DrawKind::Sprite => EditablePayload::Sprite(item.payload_index),
-            DrawKind::Mesh => {
-                let payload = self.meshes.get(item.payload_index as usize)?.as_ref()?;
-                EditablePayload::Mesh {
-                    transform: payload.transform,
-                    tint: payload.tint,
-                    vertices: payload.vertices.clone(),
-                }
-            }
-            DrawKind::TexturedMesh => {
-                let payload = self
-                    .textured_meshes
-                    .get(item.payload_index as usize)?
-                    .as_ref()?;
-                if matches!(
-                    payload.vertices,
-                    renderer::TexturedMeshVertices::Transient(_)
-                ) {
-                    return None;
-                }
-                EditablePayload::TexturedMesh {
-                    instance: payload.instance,
-                    vertices: payload.vertices.clone(),
-                    geom_cache_key: payload.geom_cache_key,
-                    depth_test: payload.depth_test,
-                    clear_depth: payload.clear_depth,
-                    clear_depth_after: payload.clear_depth_after,
-                }
-            }
-        };
-        Some(EditableDraw {
-            texture_handle: item.texture_handle,
-            order: item.order,
-            z: item.z,
-            blend: item.blend,
-            camera: item.camera,
-            object_type,
-        })
     }
 
     fn take_payload(&mut self, item: DrawItem) -> EditablePayload {
@@ -426,6 +389,7 @@ impl FrameBuilder {
                     depth_test: payload.depth_test,
                     clear_depth: payload.clear_depth,
                     clear_depth_after: payload.clear_depth_after,
+                    sampler: payload.sampler,
                 }
             }
         }
@@ -447,6 +411,7 @@ enum EditablePayload {
         depth_test: bool,
         clear_depth: bool,
         clear_depth_after: bool,
+        sampler: Option<renderer::MeshSampler>,
     },
 }
 
@@ -674,6 +639,7 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
 pub struct ActorSegment<'a> {
     source: ActorSegmentSource<'a>,
     cameras: [Option<&'a Matrix4>; 3],
+    projection_prefix: Option<&'a Matrix4>,
     z_shift: i16,
     blend: Option<BlendMode>,
     placement: ActorSegmentPlacement,
@@ -818,6 +784,13 @@ impl ActorXFold {
 }
 
 impl<'a> ActorSegment<'a> {
+    /// Applies a clip-space parent transform to every camera in this fragment.
+    #[must_use]
+    pub fn with_projection(mut self, prefix: &'a Matrix4) -> Self {
+        self.projection_prefix = (*prefix != Matrix4::IDENTITY).then_some(prefix);
+        self
+    }
+
     /// Translates this fragment, including its flat draw tail, without cloning actors.
     #[must_use]
     pub fn with_offset(mut self, offset: [f32; 2]) -> Self {
@@ -848,6 +821,7 @@ impl<'a> ActorSegment<'a> {
                 tint: &IDENTITY_TINT,
             },
             cameras: [None; 3],
+            projection_prefix: None,
             z_shift: 0,
             blend: None,
             placement: ActorSegmentPlacement::None,
@@ -863,6 +837,7 @@ impl<'a> ActorSegment<'a> {
                 tint: &IDENTITY_TINT,
             },
             cameras: [None; 3],
+            projection_prefix: None,
             z_shift,
             blend: None,
             placement: ActorSegmentPlacement::None,
@@ -878,6 +853,7 @@ impl<'a> ActorSegment<'a> {
                 tint: &IDENTITY_TINT,
             },
             cameras: [None; 3],
+            projection_prefix: None,
             z_shift,
             blend: None,
             placement: ActorSegmentPlacement::XFold(x_fold),
@@ -901,6 +877,7 @@ impl<'a> ActorSegment<'a> {
                 tint,
             },
             cameras: [Some(root_camera), Some(camera_suffix), None],
+            projection_prefix: None,
             z_shift,
             blend,
             placement: match x_fold {
@@ -983,6 +960,7 @@ impl<'a> ActorSegment<'a> {
                 tint,
             },
             cameras: [enclosing_camera, source_camera, None],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1009,6 +987,7 @@ impl<'a> ActorSegment<'a> {
                 style: proxy_style,
             },
             cameras: [enclosing_camera, source_camera, None],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1037,6 +1016,7 @@ impl<'a> ActorSegment<'a> {
                 tint,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1064,6 +1044,7 @@ impl<'a> ActorSegment<'a> {
                 style: proxy_style,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1257,6 +1238,13 @@ where
 
     let mut sequence = ActorSequenceState::new(camera);
     for segment in actor_segments {
+        let base_camera = sequence.base_camera;
+        if let Some(prefix) = segment.projection_prefix {
+            sequence.base_camera = sequence.camera_id(*prefix * cameras[0], &mut cameras);
+        }
+        if sequence.camera_stack.is_empty() {
+            sequence.active_camera = sequence.base_camera;
+        }
         let offset = match segment.placement {
             ActorSegmentPlacement::Offset(offset)
             | ActorSegmentPlacement::XFoldOffset(_, offset) => offset,
@@ -1317,7 +1305,7 @@ where
             texture_ctx,
             actor_textures.as_deref(),
             total_elapsed,
-            None,
+            segment.projection_prefix.copied(),
         );
         let has_flat_draws = match segment.source {
             ActorSegmentSource::Actors { draws, .. } => !draws.is_empty(),
@@ -1347,6 +1335,7 @@ where
             actor_textures.as_deref(),
             total_elapsed,
         );
+        sequence.base_camera = base_camera;
     }
 
     let sort_fallback = !builder
@@ -1641,7 +1630,6 @@ impl ComposeScratch {
             });
         let attr_capacity = [
             &self.text_attr_scratch.start_order,
-            &self.text_attr_scratch.end_order,
             &self.text_attr_scratch.active,
         ]
         .into_iter()
@@ -1936,6 +1924,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     depth_test,
                     clear_depth,
                     clear_depth_after,
+                    sampler,
                 } = builder.textured_meshes[item.payload_index as usize]
                     .take()
                     .expect("draw item references live textured-mesh payload");
@@ -1982,6 +1971,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                             !payload.clear_depth
                                 && payload.instance.additive_texture == instance.additive_texture
                                 && payload.depth_test == depth_test
+                                && payload.sampler == sampler
                                 && tmesh_identity(&payload.vertices, payload.geom_cache_key)
                                     == identity
                         })
@@ -2003,6 +1993,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     camera,
                     depth_test,
                     clear_depth,
+                    sampler,
                 }));
                 pending_clear |= clear_depth_after;
                 if TRACK_SPRITE_RUNS {
@@ -4353,17 +4344,13 @@ const fn attr_end(attr: &actors::TextAttribute) -> usize {
     attr.start.saturating_add(attr.length)
 }
 
-/// Compose-thread scratch shared by sequential text draws within one pass.
-/// The screen/session owner retains the largest observed attribute working set,
-/// with eight inline indices per buffer for small first-use lists. Larger sets
-/// are warmed during representative screen/song composition. Growing inputs may
-/// allocate; steady-state rebuilds only clear/refill the indices, sort start/end
-/// events, and sweep active attributes. Nothing is cached or pruned. Buffers are
-/// freed with ComposeScratch; storage_stats reports their heap index capacity.
+/// Reused start-order and active indices for sequential text draws. Each
+/// buffer keeps eight indices inline and retains larger working sets for the
+/// screen lifetime. Expired losers can remain until the winning attribute
+/// expires: they cannot change last-matching-attribute precedence.
 #[derive(Default)]
 struct TextAttrScratch {
     start_order: SmallVec<[usize; 8]>,
-    end_order: SmallVec<[usize; 8]>,
     active: SmallVec<[usize; 8]>,
 }
 
@@ -4372,7 +4359,6 @@ struct TextAttrCursor<'a> {
     scratch: &'a mut TextAttrScratch,
     active_max: Option<usize>,
     next_start: usize,
-    next_end: usize,
 }
 
 impl<'a> TextAttrCursor<'a> {
@@ -4383,92 +4369,50 @@ impl<'a> TextAttrCursor<'a> {
         if attributes.is_empty() {
             return None;
         }
-
-        let TextAttrScratch {
-            start_order,
-            end_order,
-            active,
-        } = scratch;
-        start_order.clear();
-        end_order.clear();
-        active.clear();
-        // Moving ranges can increase overlap without increasing their count.
-        active.reserve(attributes.len());
-        start_order.extend(0..attributes.len());
-        end_order.extend(0..attributes.len());
-
-        // Equal-boundary events are consumed together; active_max preserves
-        // original attribute precedence independently of their event order.
-        start_order.sort_unstable_by_key(|&index| attributes[index].start);
-        end_order.sort_unstable_by_key(|&index| attr_end(&attributes[index]));
-
+        scratch.start_order.clear();
+        scratch.active.clear();
+        scratch.active.reserve(attributes.len());
+        scratch.start_order.extend(0..attributes.len());
+        scratch
+            .start_order
+            .sort_unstable_by_key(|&index| attributes[index].start);
         Some(Self {
             attributes,
             scratch,
             active_max: None,
             next_start: 0,
-            next_end: 0,
         })
     }
 
     #[inline(always)]
-    fn push_active(&mut self, attr_index: usize) {
-        self.scratch.active.push(attr_index);
-        self.active_max = Some(
-            self.active_max
-                .map_or(attr_index, |max| max.max(attr_index)),
-        );
-    }
-
-    #[inline(always)]
-    fn remove_active(&mut self, attr_index: usize) {
-        let Some(index) = self
-            .scratch
-            .active
-            .iter()
-            .position(|&index| index == attr_index)
-        else {
-            return;
-        };
-        self.scratch.active.swap_remove(index);
-    }
-
-    #[inline(always)]
     fn colors_for(&mut self, char_index: usize) -> [[f32; 4]; 4] {
-        if self.next_end < self.scratch.end_order.len()
-            && attr_end(&self.attributes[self.scratch.end_order[self.next_end]]) <= char_index
-        {
-            loop {
-                let attr_index = self.scratch.end_order[self.next_end];
-                self.remove_active(attr_index);
-                self.next_end += 1;
-                if self.next_end == self.scratch.end_order.len()
-                    || attr_end(&self.attributes[self.scratch.end_order[self.next_end]])
-                        > char_index
-                {
-                    break;
-                }
-            }
-            // Intermediate winners are never observed while expiring a group.
-            if self
-                .active_max
-                .is_some_and(|index| attr_end(&self.attributes[index]) <= char_index)
-            {
-                self.active_max = self.scratch.active.iter().copied().max();
-            }
-        }
-
         while self.next_start < self.scratch.start_order.len()
             && self.attributes[self.scratch.start_order[self.next_start]].start <= char_index
         {
-            let attr_index = self.scratch.start_order[self.next_start];
-            let attr = &self.attributes[attr_index];
-            if char_index < attr_end(attr) {
-                self.push_active(attr_index);
+            let index = self.scratch.start_order[self.next_start];
+            if char_index < attr_end(&self.attributes[index]) {
+                self.scratch.active.push(index);
+                self.active_max = Some(self.active_max.map_or(index, |max| max.max(index)));
             }
             self.next_start += 1;
         }
-
+        // Glyph indices advance monotonically. Only an expired winner requires
+        // a new maximum; discard other expired attributes in the same scan.
+        if self
+            .active_max
+            .is_some_and(|index| attr_end(&self.attributes[index]) <= char_index)
+        {
+            let mut active_max = None;
+            self.scratch.active.retain(|&mut index| {
+                if char_index < attr_end(&self.attributes[index]) {
+                    active_max = Some(active_max.map_or(index, |max: usize| max.max(index)));
+                    true
+                } else {
+                    false
+                }
+            });
+            self.active_max = active_max;
+        }
         self.active_max
             .map(|index| self.attributes[index].colors())
             .unwrap_or([[1.0; 4]; 4])
@@ -5273,25 +5217,42 @@ fn capture_retained_frame(
     sprite_start: usize,
 ) -> Option<CachedRetainedFrame> {
     let sprite_start_u32 = u32::try_from(sprite_start).ok()?;
-    if object_start > objects.len() {
-        return None;
-    }
+    let items = objects.items.get(object_start..)?;
     let mut cached_builder = FrameBuilder::default();
-    cached_builder.reserve(objects.len().saturating_sub(object_start));
-    for index in object_start..objects.len() {
-        let mut object = objects.clone_retained_object(index)?;
-        match &mut object.object_type {
-            EditablePayload::Sprite(index) => {
-                *index = index.checked_sub(sprite_start_u32)?;
+    cached_builder.reserve(items.len());
+    // Copy the compact headers and typed payloads directly. Capturing never
+    // edits geometry, so it needs no detached EditableDraw representation.
+    for &source in items {
+        let mut item = source;
+        item.payload_index = match source.kind {
+            DrawKind::Sprite => source.payload_index.checked_sub(sprite_start_u32)?,
+            DrawKind::Mesh => {
+                let payload = objects
+                    .meshes
+                    .get(source.payload_index as usize)?
+                    .as_ref()?;
+                let index = saturating_u32(cached_builder.meshes.len());
+                cached_builder.meshes.push(Some(payload.clone()));
+                index
             }
-            EditablePayload::TexturedMesh {
-                vertices: renderer::TexturedMeshVertices::Transient(_),
-                ..
-            } => return None,
-            _ => {}
-        }
-        object.order = 0;
-        cached_builder.push(object);
+            DrawKind::TexturedMesh => {
+                let payload = objects
+                    .textured_meshes
+                    .get(source.payload_index as usize)?
+                    .as_ref()?;
+                if matches!(
+                    payload.vertices,
+                    renderer::TexturedMeshVertices::Transient(_)
+                ) {
+                    return None;
+                }
+                let index = saturating_u32(cached_builder.textured_meshes.len());
+                cached_builder.textured_meshes.push(Some(payload.clone()));
+                index
+            }
+        };
+        item.order = 0;
+        cached_builder.items.push(item);
     }
     Some(CachedRetainedFrame {
         builder: cached_builder,
@@ -5592,6 +5553,7 @@ fn push_shadow_objects_for_range(
                         depth_test: source.depth_test,
                         clear_depth: source.clear_depth,
                         clear_depth_after: source.clear_depth_after,
+                        sampler: None,
                     },
                 );
             }
@@ -5788,7 +5750,8 @@ fn build_actor_sequence_with_state<'a, T, I>(
                     sequence.active_camera =
                         if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
                             *root_camera_id
-                                .get_or_insert_with(|| sequence.camera_id(*root_camera, cameras))
+                                .get_or_insert_with(|| sequence.camera_id(
+                                    camera_prefix.map_or(*root_camera, |prefix| prefix * *root_camera), cameras))
                         } else {
                             sequence.base_camera
                         };
@@ -5979,10 +5942,12 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     if fragments.iter().all(|(draws, _)| draws.is_empty()) {
         return;
     }
+    let projected = |matrix: Matrix4| segment.projection_prefix.map_or(matrix, |prefix| *prefix * matrix);
     let enclosing_camera = enclosing_matrix.map(|matrix| {
-        cameras.push(*matrix);
+        let matrix = projected(*matrix);
+        cameras.push(matrix);
         let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-        sequence.last_root_camera = Some((*matrix, id));
+        sequence.last_root_camera = Some((matrix, id));
         id
     });
     let tints = proxy_style.map_or(
@@ -6020,12 +5985,13 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 // Each source run represents its own nested CameraPush and
                 // therefore keeps a distinct table entry even for equal
                 // matrices. The enclosing scope itself was registered once.
-                cameras.push(*matrix);
+                let matrix = projected(*matrix);
+                cameras.push(matrix);
                 let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-                sequence.last_root_camera = Some((*matrix, id));
+                sequence.last_root_camera = Some((matrix, id));
                 id
             }
-            Some(matrix) => sequence.camera_id(*matrix, cameras),
+            Some(matrix) => sequence.camera_id(projected(*matrix), cameras),
             None => enclosing_camera.unwrap_or(sequence.active_camera),
         };
         let proxy_start = out.len();
@@ -6077,7 +6043,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             depth_test: mesh.depth_test,
                             clear_depth: mesh.clear_depth,
                             clear_depth_after: mesh.clear_depth_after,
-                            cull_back: mesh.cull_back,
+                            cull_mode: mesh.cull_mode,
                             visible: true,
                             blend: mesh.blend,
                             z: mesh.z,
@@ -6457,7 +6423,7 @@ struct TexturedMeshActorView<'a> {
     depth_test: bool,
     clear_depth: bool,
     clear_depth_after: bool,
-    cull_back: bool,
+    cull_mode: deadlib_render_core::CullMode,
     visible: bool,
     blend: BlendMode,
     z: i16,
@@ -6506,7 +6472,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         depth_test,
         clear_depth,
         clear_depth_after,
-        cull_back,
+        cull_mode,
         visible,
         blend,
         z,
@@ -6527,7 +6493,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             depth_test,
             clear_depth,
             clear_depth_after,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -6549,7 +6515,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             depth_test,
             clear_depth,
             clear_depth_after,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -6570,7 +6536,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             *depth_test,
             *clear_depth,
             *clear_depth_after,
-            *cull_back,
+            *cull_mode,
             *visible,
             *blend,
             *z,
@@ -6607,7 +6573,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         depth_test,
         clear_depth,
         clear_depth_after,
-        cull_back,
+        cull_mode,
         visible,
         blend,
         z,
@@ -6718,7 +6684,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                     sphere_rows,
                     additive_texture,
                     additive_uv,
-                    cull_back: f32::from(mesh.cull_back),
+                    cull_mode: mesh.cull_mode as u8 as f32,
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
                         mul_rgba(mesh.tint, style.tint),
@@ -6733,6 +6699,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 depth_test: mesh.depth_test,
                 clear_depth: mesh.clear_depth,
                 clear_depth_after: mesh.clear_depth_after && mesh.glow[3] <= 0.0001,
+                sampler: mesh.environment.and_then(|environment| environment.sampler),
             },
         );
     }
@@ -6747,7 +6714,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             camera,
             TexturedMeshPayload {
                 instance: renderer::TexturedMeshInstanceRaw {
-                    cull_back: f32::from(mesh.cull_back),
+                    cull_mode: mesh.cull_mode as u8 as f32,
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
                         mul_rgba(mesh.glow, style.tint),
@@ -6762,6 +6729,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 depth_test: mesh.depth_test,
                 clear_depth: mesh.clear_depth && mesh.tint[3] <= 0.0,
                 clear_depth_after: mesh.clear_depth_after,
+                sampler: mesh.environment.and_then(|environment| environment.sampler),
             },
         );
     }
@@ -7209,6 +7177,18 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     item.order = first_order.saturating_add(saturating_u32(index));
                 }
             }
+        }
+
+        actors::Actor::SharedCamera { view_proj, children } => {
+            cameras.push(*view_proj);
+            let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+            build_actor_list(
+                children,
+                SmRect { x: 0.0, y: 0.0, w: m.right - m.left, h: m.top - m.bottom },
+                m, fonts, scratch, base_z, id, style, None, cameras, masks,
+                order_counter, out, sprite_instances, text_cache, texture_cache,
+                texture_ctx, actor_textures, total_elapsed, None,
+            );
         }
 
         actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
@@ -8219,6 +8199,7 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                     depth_test: false,
                     clear_depth: false,
                     clear_depth_after: false,
+                    sampler: None,
                 },
             );
             finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
@@ -8500,6 +8481,7 @@ fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         );
     }
@@ -8551,6 +8533,7 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         );
     }
@@ -8605,6 +8588,7 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         );
     }
@@ -8871,21 +8855,61 @@ fn clip_objects_range_to_world_rect(
     let len = objects.len();
     let mut write = start;
     for read in start..len {
-        let mut object = objects.take_object(read);
-        let keep = clip_sprite_object_to_world_rect_with_recycled(
-            &mut object,
-            sprite_instances,
-            clip,
-            Some(&mut *recycled_vertices),
-        );
+        let item = objects.items[read];
+        let keep = match item.kind {
+            DrawKind::Sprite => {
+                // Ordinary clipping changes only the instance. Detach a draw
+                // only when rotation promotes the sprite to a textured mesh.
+                if let Some(clipped) = clipped_sprite_instance_to_world_rect(
+                    item.payload_index,
+                    sprite_instances[item.payload_index as usize],
+                    clip,
+                    Some(&mut *recycled_vertices),
+                ) {
+                    if let EditablePayload::Sprite(_) = clipped.object_type {
+                        if let Some(sprite) = clipped.sprite {
+                            sprite_instances[item.payload_index as usize] = sprite;
+                        }
+                    } else {
+                        objects.replace_object(
+                            read,
+                            EditableDraw {
+                                texture_handle: item.texture_handle,
+                                order: item.order,
+                                z: item.z,
+                                blend: item.blend,
+                                camera: item.camera,
+                                object_type: clipped.object_type,
+                            },
+                        );
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            DrawKind::Mesh => true,
+            DrawKind::TexturedMesh => {
+                let mut object = objects.take_object(read);
+                let keep = clip_sprite_object_to_world_rect_with_recycled(
+                    &mut object,
+                    sprite_instances,
+                    clip,
+                    Some(&mut *recycled_vertices),
+                );
+                if keep {
+                    objects.replace_object(read, object);
+                } else {
+                    recycle_transient_object_vertices(object.object_type, recycled_vertices);
+                }
+                keep
+            }
+        };
         if keep {
-            objects.replace_object(read, object);
             if write != read {
                 objects.swap(write, read);
             }
             write += 1;
-        } else {
-            recycle_transient_object_vertices(object.object_type, recycled_vertices);
         }
     }
     objects.truncate(write);
@@ -8990,6 +9014,113 @@ fn clip_sprite_object_to_world_rect_with_recycled(
 
 // Callers keep unchanged mesh payloads themselves; only partial textured
 // meshes and sprites reach this geometry-producing path.
+fn clipped_sprite_instance_to_world_rect(
+    index: u32,
+    sprite: renderer::SpriteInstanceRaw,
+    clip: WorldRect,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    let eps = 1e-6;
+    let offset_world = [
+        sprite.local_offset_rot_sin_cos[1].mul_add(
+            sprite.local_offset[0],
+            -(sprite.local_offset_rot_sin_cos[0] * sprite.local_offset[1]),
+        ),
+        sprite.local_offset_rot_sin_cos[0].mul_add(
+            sprite.local_offset[0],
+            sprite.local_offset_rot_sin_cos[1] * sprite.local_offset[1],
+        ),
+    ];
+    let world_center = [
+        sprite.center[0] + offset_world[0],
+        sprite.center[1] + offset_world[1],
+    ];
+    if sprite.rot_sin_cos[0].abs() > eps || sprite.rot_sin_cos[1] < 1.0 - eps {
+        return clip_rotated_sprite_to_world_rect(
+            sprite.tint,
+            sprite.center,
+            sprite.size,
+            sprite.rot_sin_cos,
+            sprite.uv_scale,
+            sprite.uv_offset,
+            offset_world,
+            clip,
+            sprite.texture_mask != 0.0,
+            recycled_vertices,
+        );
+    }
+
+    let w = sprite.size[0];
+    let h = sprite.size[1];
+    if w <= eps || h <= eps {
+        return None;
+    }
+
+    let half_w = w * 0.5;
+    let half_h = h * 0.5;
+
+    let left = world_center[0] - half_w;
+    let right = world_center[0] + half_w;
+    let bottom = world_center[1] - half_h;
+    let top = world_center[1] + half_h;
+
+    if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top {
+        return Some(ClippedSpriteObject {
+            object_type: EditablePayload::Sprite(index),
+            sprite: None,
+        });
+    }
+
+    let inter_left = left.max(clip.left);
+    let inter_right = right.min(clip.right);
+    let inter_bottom = bottom.max(clip.bottom);
+    let inter_top = top.min(clip.top);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return None;
+    }
+
+    let inv_w = 1.0 / w;
+    let inv_h = 1.0 / h;
+
+    let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
+    let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
+    let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
+    let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
+
+    let sx_crop = (1.0 - cl - cr).max(0.0);
+    let sy_crop = (1.0 - ct - cb).max(0.0);
+    if sx_crop <= eps || sy_crop <= eps {
+        return None;
+    }
+
+    let uv_offset = [
+        sprite.uv_scale[0].mul_add(cl, sprite.uv_offset[0]),
+        sprite.uv_scale[1].mul_add(ct, sprite.uv_offset[1]),
+    ];
+    let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
+
+    let center_x = ((cl - cr) * w).mul_add(0.5, world_center[0]) - offset_world[0];
+    let center_y = ((cb - ct) * h).mul_add(0.5, world_center[1]) - offset_world[1];
+    let new_w = w * sx_crop;
+    let new_h = h * sy_crop;
+
+    Some(ClippedSpriteObject {
+        object_type: EditablePayload::Sprite(index),
+        sprite: Some(renderer::SpriteInstanceRaw {
+            center: [center_x, center_y, sprite.center[2], sprite.center[3]],
+            size: [new_w, new_h],
+            rot_sin_cos: sprite.rot_sin_cos,
+            tint: sprite.tint,
+            uv_scale,
+            uv_offset,
+            local_offset: sprite.local_offset,
+            local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
+            edge_fade: sprite.edge_fade,
+            texture_mask: sprite.texture_mask,
+        }),
+    })
+}
+
 fn clipped_sprite_object_to_world_rect(
     obj: &EditableDraw,
     sprite_instances: &[renderer::SpriteInstanceRaw],
@@ -9001,111 +9132,15 @@ fn clipped_sprite_object_to_world_rect(
         return None;
     }
     match &obj.object_type {
-        EditablePayload::Sprite(index) => {
-            let sprite = sprite_instances[*index as usize];
-            let eps = 1e-6;
-            let offset_world = [
-                sprite.local_offset_rot_sin_cos[1].mul_add(
-                    sprite.local_offset[0],
-                    -(sprite.local_offset_rot_sin_cos[0] * sprite.local_offset[1]),
-                ),
-                sprite.local_offset_rot_sin_cos[0].mul_add(
-                    sprite.local_offset[0],
-                    sprite.local_offset_rot_sin_cos[1] * sprite.local_offset[1],
-                ),
-            ];
-            let world_center = [
-                sprite.center[0] + offset_world[0],
-                sprite.center[1] + offset_world[1],
-            ];
-            if sprite.rot_sin_cos[0].abs() > eps || sprite.rot_sin_cos[1] < 1.0 - eps {
-                return clip_rotated_sprite_to_world_rect(
-                    sprite.tint,
-                    sprite.center,
-                    sprite.size,
-                    sprite.rot_sin_cos,
-                    sprite.uv_scale,
-                    sprite.uv_offset,
-                    offset_world,
-                    clip,
-                    sprite.texture_mask != 0.0,
-                    recycled_vertices,
-                );
-            }
-
-            let w = sprite.size[0];
-            let h = sprite.size[1];
-            if w <= eps || h <= eps {
-                return None;
-            }
-
-            let half_w = w * 0.5;
-            let half_h = h * 0.5;
-
-            let left = world_center[0] - half_w;
-            let right = world_center[0] + half_w;
-            let bottom = world_center[1] - half_h;
-            let top = world_center[1] + half_h;
-
-            if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top
-            {
-                return Some(ClippedSpriteObject {
-                    object_type: EditablePayload::Sprite(*index),
-                    sprite: None,
-                });
-            }
-
-            let inter_left = left.max(clip.left);
-            let inter_right = right.min(clip.right);
-            let inter_bottom = bottom.max(clip.bottom);
-            let inter_top = top.min(clip.top);
-            if inter_left >= inter_right || inter_bottom >= inter_top {
-                return None;
-            }
-
-            let inv_w = 1.0 / w;
-            let inv_h = 1.0 / h;
-
-            let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
-            let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
-            let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
-            let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
-
-            let sx_crop = (1.0 - cl - cr).max(0.0);
-            let sy_crop = (1.0 - ct - cb).max(0.0);
-            if sx_crop <= eps || sy_crop <= eps {
-                return None;
-            }
-
-            let uv_offset = [
-                sprite.uv_scale[0].mul_add(cl, sprite.uv_offset[0]),
-                sprite.uv_scale[1].mul_add(ct, sprite.uv_offset[1]),
-            ];
-            let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
-
-            let center_x = ((cl - cr) * w).mul_add(0.5, world_center[0]) - offset_world[0];
-            let center_y = ((cb - ct) * h).mul_add(0.5, world_center[1]) - offset_world[1];
-            let new_w = w * sx_crop;
-            let new_h = h * sy_crop;
-
-            Some(ClippedSpriteObject {
-                object_type: EditablePayload::Sprite(*index),
-                sprite: Some(renderer::SpriteInstanceRaw {
-                    center: [center_x, center_y, sprite.center[2], sprite.center[3]],
-                    size: [new_w, new_h],
-                    rot_sin_cos: sprite.rot_sin_cos,
-                    tint: sprite.tint,
-                    uv_scale,
-                    uv_offset,
-                    local_offset: sprite.local_offset,
-                    local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
-                    edge_fade: sprite.edge_fade,
-                    texture_mask: sprite.texture_mask,
-                }),
-            })
-        }
+        EditablePayload::Sprite(index) => clipped_sprite_instance_to_world_rect(
+            *index,
+            sprite_instances[*index as usize],
+            clip,
+            recycled_vertices,
+        ),
         EditablePayload::TexturedMesh {
             instance,
+            sampler,
             vertices: mesh_vertices,
             ..
         } => {
@@ -9122,7 +9157,7 @@ fn clipped_sprite_object_to_world_rect(
             {
                 return None;
             }
-            clip_textured_mesh_to_world_rect(
+            let mut clipped = clip_textured_mesh_to_world_rect(
                 instance.tint,
                 vertices,
                 transform,
@@ -9132,7 +9167,15 @@ fn clipped_sprite_object_to_world_rect(
                 clip,
                 instance.texture_mask != 0.0,
                 recycled_vertices,
-            )
+            )?;
+            if let EditablePayload::TexturedMesh {
+                sampler: clipped_sampler,
+                ..
+            } = &mut clipped.object_type
+            {
+                *clipped_sampler = *sampler;
+            }
+            Some(clipped)
         }
         EditablePayload::Mesh { .. } => unreachable!("callers keep colored meshes unchanged"),
     }
@@ -9485,6 +9528,7 @@ fn clip_textured_mesh_to_world_rect_with(
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
+            sampler: None,
         },
         sprite: None,
     })
@@ -9571,6 +9615,7 @@ fn clip_rotated_sprite_to_world_rect(
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
+            sampler: None,
         },
         sprite: None,
     })
@@ -10212,6 +10257,7 @@ mod tests {
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         };
         let mut builder = FrameBuilder::default();
@@ -10359,7 +10405,12 @@ mod tests {
 
         // Repeated Models under the same frame must reuse its camera rather
         // than exhaust the u8 camera IDs and fall back to the default camera.
-        let repeated = flat.iter().cloned().cycle().take(300 * flat.len()).collect::<Vec<_>>();
+        let repeated = flat
+            .iter()
+            .cloned()
+            .cycle()
+            .take(300 * flat.len())
+            .collect::<Vec<_>>();
         let repeated_render = build_screen(&repeated, [0.0; 4], &metrics, &fonts, 0.0);
         assert_eq!(repeated_render.cameras.len(), 2);
         assert!(repeated_render.ops.iter().all(|op| matches!(op,
@@ -10579,7 +10630,9 @@ mod tests {
     #[test]
     fn actor_segment_keeps_camera_metadata_borrowed() {
         assert!(
-            std::mem::size_of::<ActorSegment<'_>>() <= 96,
+            // The screen transform adds one borrowed pointer, never a matrix.
+            std::mem::size_of::<ActorSegment<'_>>()
+                <= 96 + std::mem::size_of::<&Matrix4>(),
             "actor segments must not embed retained 4x4 camera matrices: {} bytes",
             std::mem::size_of::<ActorSegment<'_>>()
         );
@@ -10590,6 +10643,7 @@ mod tests {
         let view_proj = Matrix4::from_translation(Vector3::new(3.0, 4.0, 5.0));
         let eye = Matrix4::from_rotation_x(0.3) * Matrix4::from_scale(Vector3::new(0.9, -0.9, 1.0));
         let environment = crate::actors::MeshEnvironment {
+            sampler: None,
             camera: Some((view_proj, eye)),
             transform: Matrix4::from_rotation_y(0.7),
             additive_texture: Some(Arc::from("reflection.png")),
@@ -10652,7 +10706,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             blend: BlendMode::Add,
             z: 9,
         };
@@ -10714,7 +10768,7 @@ mod tests {
             depth_test: mesh.depth_test,
             clear_depth: mesh.clear_depth,
             clear_depth_after: mesh.clear_depth_after,
-            cull_back: mesh.cull_back,
+            cull_mode: mesh.cull_mode,
             visible: true,
             blend: mesh.blend,
             z: mesh.z,
@@ -10786,7 +10840,7 @@ mod tests {
                 assert_ne!(instance.additive_texture, 0);
             }
         }
-        assert!(actual.tmesh_instances.iter().all(|i| i.cull_back == 1.0));
+        assert!(actual.tmesh_instances.iter().all(|i| i.cull_mode == 1.0));
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
         let tint = [0.7, 0.8, 0.9, 0.6];
@@ -12139,6 +12193,7 @@ mod tests {
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
             texture_handle: 0,
             blend: BlendMode::Alpha,
@@ -12215,6 +12270,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
             texture_handle: 17,
             blend: BlendMode::Add,
@@ -12248,6 +12304,7 @@ mod tests {
                 depth_test: actual_depth,
                 clear_depth: actual_clear,
                 clear_depth_after: actual_clear_after,
+                sampler: None,
             },
             EditablePayload::TexturedMesh {
                 instance: expected_instance,
@@ -12256,6 +12313,7 @@ mod tests {
                 depth_test: expected_depth,
                 clear_depth: expected_clear,
                 clear_depth_after: expected_clear_after,
+                sampler: None,
             },
         ) = (&actual.object_type, &expected.object_type)
         else {
@@ -13534,6 +13592,7 @@ mod tests {
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
             texture_handle: 9,
             blend: BlendMode::Alpha,
@@ -13783,7 +13842,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: true,
             blend: BlendMode::Alpha,
             z: 5,
@@ -13985,7 +14044,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: true,
                 clear_depth_after: true,
-                cull_back: true,
+                cull_mode: deadlib_render_core::CullMode::Back,
                 visible: true,
                 blend: BlendMode::Alpha,
                 z: 0,
@@ -14020,6 +14079,76 @@ mod tests {
                 assert_eq!(run.instance_count, if i == 0 { 2 * passes } else { passes });
             }
         }
+    }
+
+    #[test]
+    fn mesh_batches_preserve_sampler_changes() {
+        use deadlib_render_core::{MeshSampler, SamplerFilter, SamplerWrap};
+        let nearest = Some(MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+        });
+        let linear = Some(MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Repeat,
+        });
+        let clamp = Some(MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+        });
+        let vertices: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex::default(); 3]);
+        let mut builder = FrameBuilder::default();
+        for (order, sampler) in [nearest, nearest, linear, clamp, linear, None]
+            .into_iter()
+            .enumerate()
+        {
+            builder.push_textured_mesh(
+                1,
+                order as u32,
+                0,
+                BlendMode::Alpha,
+                0,
+                super::TexturedMeshPayload {
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::IDENTITY,
+                        [1.0; 4],
+                        [1.0; 2],
+                        [0.0; 2],
+                        [0.0; 2],
+                        false,
+                    ),
+                    vertices: deadlib_render_core::TexturedMeshVertices::Shared(Arc::clone(
+                        &vertices,
+                    )),
+                    geom_cache_key: 7,
+                    depth_test: false,
+                    clear_depth: false,
+                    clear_depth_after: false,
+                    sampler,
+                },
+            );
+        }
+        let frame = finish_test_builder(builder, Vec::new());
+        let actual = frame
+            .ops
+            .iter()
+            .map(|op| {
+                let DrawOp::TexturedMesh(run) = op else {
+                    panic!("textured mesh run")
+                };
+                (run.sampler, run.instance_count)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            [
+                (nearest, 2),
+                (linear, 1),
+                (clamp, 1),
+                (linear, 1),
+                (None, 1)
+            ]
+        );
     }
 
     #[test]
@@ -14094,6 +14223,7 @@ mod tests {
                         depth_test,
                         clear_depth,
                         clear_depth_after,
+                        sampler: None,
                     };
                     (texture_handle, payload)
                 };
@@ -14171,7 +14301,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -14185,7 +14315,7 @@ mod tests {
         );
 
         let (_, instance, geometry) = tmesh_draw(&render, 0);
-        assert_eq!(instance.cull_back, 1.0);
+        assert_eq!(instance.cull_mode, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14219,7 +14349,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             blend: BlendMode::Alpha,
             z: 0,
         })];
@@ -14240,7 +14370,7 @@ mod tests {
             );
 
         let (_, instance, geometry) = tmesh_draw(&render, 0);
-        assert_eq!(instance.cull_back, 1.0);
+        assert_eq!(instance.cull_mode, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14741,7 +14871,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             blend: BlendMode::Alpha,
             z: 10,
         };
@@ -14852,7 +14982,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -15423,3 +15553,7 @@ mod tests {
         assert_eq!(second.vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
     }
 }
+
+#[cfg(test)]
+#[path = "compose_perf.rs"]
+mod performance;

@@ -1665,7 +1665,7 @@ fn push_doubles(actors: &mut Vec<Actor>, state: &State) {
 
     for column in 0..2usize {
         let x = lo::dbl_x(column);
-        let list: Vec<usize> = doubles_column(state, column).to_vec();
+        let list = doubles_column(state, column);
         let picked = column == state.doubles_column;
 
         // The picker's focus is the whole column lit as one thing, so "you are
@@ -2474,3 +2474,11 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "doubles_render_original.rs"]
+mod doubles_render_original;
+
+#[cfg(test)]
+#[path = "doubles_render_perf.rs"]
+mod doubles_render_perf_tests;

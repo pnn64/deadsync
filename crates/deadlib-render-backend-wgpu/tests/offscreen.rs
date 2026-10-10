@@ -54,6 +54,7 @@ fn quad(bounds: [f32; 4], key: u64) -> TexturedMeshGeometry {
 
 fn mesh_op(geometry: u32, instance: u32, camera: u8) -> DrawOp {
     DrawOp::TexturedMesh(TexturedMeshRun {
+        sampler: None,
         additive_texture: 0,
         geometry,
         instance_start: instance,
@@ -249,6 +250,7 @@ fn rotated_field(angle: f32, offscreen: bool) -> (RenderFrame, Mat4) {
             camera: 0,
         }),
         DrawOp::TexturedMesh(TexturedMeshRun {
+            sampler: None,
             additive_texture: 0,
             geometry: 0,
             instance_start: 0,
@@ -307,6 +309,103 @@ fn check_rotated_field(state: &mut backend::State, textures: &Textures, api: &st
                     pixel(&image, clip.x / clip.w, clip.y / clip.w, color);
                 }
             }
+        }
+    }
+}
+
+fn check_model_samplers(state: &mut backend::State) {
+    use deadlib_render_core::{MeshSampler, SamplerFilter, SamplerWrap};
+    let image = RgbaImage::from_fn(2, 1, |x, _| {
+        if x == 0 {
+            Rgba([255, 0, 0, 255])
+        } else {
+            Rgba([0, 0, 255, 255])
+        }
+    });
+    let textures = Textures(
+        backend::create_texture(state, &image, SamplerDesc::default())
+            .expect("two texel sampler control"),
+    );
+    let choices = [
+        (
+            Some(MeshSampler {
+                filter: SamplerFilter::Nearest,
+                wrap: SamplerWrap::Repeat,
+            }),
+            0.5,
+            [0, 0, 255, 255],
+        ),
+        (
+            Some(MeshSampler {
+                filter: SamplerFilter::Linear,
+                wrap: SamplerWrap::Repeat,
+            }),
+            0.5,
+            [128, 0, 128, 255],
+        ),
+        (
+            Some(MeshSampler {
+                filter: SamplerFilter::Nearest,
+                wrap: SamplerWrap::Repeat,
+            }),
+            0.5,
+            [0, 0, 255, 255],
+        ),
+        (
+            Some(MeshSampler {
+                filter: SamplerFilter::Nearest,
+                wrap: SamplerWrap::Clamp,
+            }),
+            1.25,
+            [0, 0, 255, 255],
+        ),
+        (
+            Some(MeshSampler {
+                filter: SamplerFilter::Nearest,
+                wrap: SamplerWrap::Repeat,
+            }),
+            1.25,
+            [255, 0, 0, 255],
+        ),
+        (None, 0.5, [128, 0, 128, 255]),
+    ];
+    let mut frame = RenderFrame {
+        clear_color: [0.0; 4],
+        render_targets: Vec::new(),
+        cameras: vec![Mat4::IDENTITY],
+        sprite_instances: Vec::new(),
+        mesh_vertices: Vec::new(),
+        tmesh_geometries: vec![quad([-1.0, 1.0, -1.0, 1.0], 0)],
+        tmesh_instances: Vec::new(),
+        ops: Vec::new(),
+    };
+    for (index, (sampler, u, _)) in choices.iter().enumerate() {
+        let x = (index as f32 + 0.5) / 3.0 - 1.0;
+        let mut value = instance(
+            [1.0; 4],
+            Mat4::from_translation(glam::Vec3::new(x, 0.0, 0.0))
+                * Mat4::from_scale(glam::Vec3::new(0.15, 0.5, 1.0)),
+        );
+        value.uv_scale = [0.0; 2];
+        value.uv_offset = [*u, 0.5];
+        frame.tmesh_instances.push(value);
+        let mut op = mesh_op(0, index as u32, 0);
+        let DrawOp::TexturedMesh(run) = &mut op else {
+            unreachable!()
+        };
+        run.sampler = *sampler;
+        run.depth_test = false;
+        frame.ops.push(op);
+    }
+    let capture = capture(state, &frame, &textures);
+    for (index, (_, _, color)) in choices.iter().enumerate() {
+        let x = (((index as f32 + 0.5) / 3.0) * 0.5 * capture.width() as f32) as u32;
+        let actual = capture.get_pixel(x, capture.height() / 2).0;
+        for (actual, expected) in actual.into_iter().zip(*color) {
+            // Half-intensity UNORM results may quantize to 127 or 128;
+            // nearest and endpoint samples still require exact bytes.
+            assert!(actual.abs_diff(expected) <= u8::from(expected == 128),
+                "sampler control {index}: {actual} != {expected}");
         }
     }
 }
@@ -448,6 +547,7 @@ impl ApplicationHandler for CaptureApp {
             pixel(&main, -0.5, -0.5, [0, 255, 255, 255]);
             pixel(&main, 0.0, -0.75, [255, 0, 255, 255]);
             check_rotated_field(&mut state, &textures, api);
+            check_model_samplers(&mut state);
             backend::wait_for_idle(&mut state);
             eprintln!("{api}: offscreen pixel regression passed");
         }

@@ -1,0 +1,345 @@
+{
+  "problem": "Ten Beat axis and waveform suboptions had no DeadSync runtime values; rendering used a fixed X-axis pulse and omitted Y/Z waves",
+  "change": "Carry all twelve native Beat controls through Lua targets, approach speeds, resets, cached axis pulses and notefield rendering",
+  "replaced_behavior": "Replace the X-only wave helper with the shared native waveform; use native multiply-before-divide pulse arithmetic and preserve tiny nonzero amounts",
+  "source_parent": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+  "reference_sources": {
+    "ArrowEffects.cpp": {
+      "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+      "lines": [
+        [
+          260,
+          298
+        ],
+        [
+          497,
+          509
+        ],
+        [
+          762,
+          770
+        ],
+        [
+          778,
+          804
+        ],
+        [
+          897,
+          905
+        ],
+        [
+          1481,
+          1489
+        ],
+        [
+          1549,
+          1549
+        ]
+      ]
+    },
+    "PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "lines": [
+        [
+          1144,
+          1168
+        ],
+        [
+          2300,
+          2315
+        ]
+      ]
+    },
+    "RageUtil.h": {
+      "sha256": "f92dea02c8d004bff4197fa2e98ffcf16c4b476fc39c331b998a5a8ccb8bf4de",
+      "lines": [
+        [
+          61,
+          62
+        ]
+      ]
+    },
+    "NoteDisplay.cpp": {
+      "sha256": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+      "lines": [
+        [
+          1281,
+          1296
+        ],
+        [
+          1334,
+          1348
+        ]
+      ]
+    }
+  },
+  "theme_metrics": {
+    "file": "C:\\GitHub\\rework\\itgmania\\Themes\\_fallback\\metrics.ini",
+    "sha256": "470ae3b31c17ca4e194530b9ca543a15439c134a3aefa47d6d25dd55d1f5bff5",
+    "lines": [
+      241,
+      246
+    ]
+  },
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass197-native-beat-family-v2\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "135fe323351cae24588f1eccdf1ec95b8972a1c0116f7b8f76e8ec7e5748961b",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "1c38a8d3c44cf5c95a1e8d22a3cb6ed013562a42f755929936e44d589ebaef8c",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass197-native-beat-family-v2\\archives\\9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc.tar.zst",
+    "archive_sha256": "9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc",
+    "archive_entry": {
+      "title": "Native beat-family control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc.tar.zst",
+      "sha256": "9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc",
+      "compressed_bytes": 17267
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 6718,
+    "comparisons_failed": 80,
+    "elapsed_seconds": 1.220550199970603,
+    "archive_sha256": "9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc",
+    "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+    "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-before-v1.log",
+    "log_sha256": "e13438c02cb9f0aeb943dedc2d308eac1f1cfc328383d9e65088c9eda3de5209",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 6798,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.922882799990475,
+    "archive_sha256": "9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc",
+    "binary_sha256": "0a64c3ea11cf0f986cc31b8e8e7183d6af8c199b9a9d20d9eb51ead923ecebe2",
+    "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-control.log",
+    "log_sha256": "4336140fcad1624282cc3aaa3f1f604571bdd425fe43b7d93ba1f732b6351ae1",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "consecutive_native_update_frames": 241,
+  "native_current_values_compared": 432,
+  "native_motion": {
+    "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+    "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "rage_util_sha256": "f92dea02c8d004bff4197fa2e98ffcf16c4b476fc39c331b998a5a8ccb8bf4de",
+    "native_blocks_sha256": {
+      "X": "6af978fb0e9c33c7e63ea2dc4b53500f8940f1c3ee018b5e3fe5370ad1b8b14b",
+      "Y": "5f4a0767eb12ea729b0dc2a7304d92755b75dd1a22213cf54a8207cba73a99b6",
+      "Z": "ec94538e91dad0d8171c0537631d5621b5033c60ae2d1cf9550b813165dd2a4a",
+      "UpdateBeat": "8f4dc4d0cb4a6dae85815c60eb4d36cee30fb4299d80af371e2ca43d9c41ec37",
+      "Tiny": "d610bbfdb996d78e91594bf04ad5b89f5f6e1d5d426326418cf5ee0e87959a46",
+      "SCALE": "6c0f5cf15158b1987fcf76bd20b7d0be9ef9b04668a3c0b0a1d2aea229060fcc"
+    },
+    "original_native_blocks_unchanged": true,
+    "isolated_inputs_used": true,
+    "whole_native_gameplay_used": false,
+    "semantic_host_used": false,
+    "deadsync_used": false,
+    "scope": "Unchanged native UpdateBeat, X/Y/Z waveform and Tiny blocks; isolated column offsets, lane offset and Reverse direction; other effects disabled",
+    "binary_sha256": "b7a4e115f207743a1824b61351cbc1f456bd497cd711ac23578bdb64fb7d2522"
+  },
+  "native_motion_fixture_sha256": "e3006f753979a4646f39a8f8bb1116d4b014b60939e568c4390244ed7b599591",
+  "native_motion_vectors": 2400,
+  "composed_tap_mine_hold_roll_cases": 6400,
+  "hold_depth": "BeatZ requests depth for any nonzero amount, including tiny amounts and zero pulse factors",
+  "hold_sampling": "Preserve native GetYOffsetFromYPos: the hold strip inverse omits BeatY, as it omits attenuation",
+  "regression_results": {
+    "gameplay-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "4cc0224194065374a815a1fd6fa30458529fc13d355c802e7a0871295d6c71ca",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-deadsync_gameplay.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.9538898998871446,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-gameplay-tests.log",
+      "log_sha256": "e0307f91728c45915196b074cd5076b24bbbe51ad268164df7d49c95498be0d1",
+      "result_lines": [
+        "test result: ok. 794 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s"
+      ]
+    },
+    "notefield-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "bd4fc7ad7facee097c8fd276f39e2d2447581aeefe3680cad79aa9444614a17e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-deadsync_notefield.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.157159000169486,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-notefield-tests.log",
+      "log_sha256": "9402617e1e830765116fe605fc693667ae35a4064e88d5ee1fae23e0e2d9426f",
+      "result_lines": [
+        "test result: ok. 460 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.89s"
+      ]
+    },
+    "runtime-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "5f23d3376a323e37ba6afd76c83a7773e9823a37c7f4702fd3e6216ba27c6bd0",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 10.8229475999251,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-runtime-tests.log",
+      "log_sha256": "fe6913c66d3e8966565dbe92f666fcd181fe03dcaa3a76d97e748b07d1333754",
+      "result_lines": [
+        "test result: FAILED. 45 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 8.98s"
+      ]
+    },
+    "song-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "4616a21dda069418c0c953eb4d9deca9cf91506967c063b601dc602227d77929",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 21.45969029981643,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-song-tests.log",
+      "log_sha256": "06f1ea834b620288968ea57129ebf06271bd10cea8592252b3a71cf0d1727d13",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.90s"
+      ]
+    },
+    "theme-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "daef95a2a2c7acb3b12627b50d622ce5b7f9752e83e5a2bb4c8114d95dd99ca6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 5.5071291998028755,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-theme-tests.log",
+      "log_sha256": "4372ccebf00a8595978e24dd7c33233929976bc01a318c0599967cc44f0a61e5",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 2.61s"
+      ]
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "daef95a2a2c7acb3b12627b50d622ce5b7f9752e83e5a2bb4c8114d95dd99ca6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-deadsync_theme_simply_love.exe",
+        "--exact",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.775240099988878,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-technique-arrow.log",
+      "log_sha256": "7c18a1fc56853db22b2d8988ae7e5b63e4e81f5ab0a63d9a595da1d85ef7f822",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 6.32s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 6798,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.922882799990475,
+      "archive_sha256": "9e7107948d80fa74ef641a3c2a0cc1a90b1cf74a2134c1edb413f66d020b59dc",
+      "binary_sha256": "0a64c3ea11cf0f986cc31b8e8e7183d6af8c199b9a9d20d9eb51ead923ecebe2",
+      "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\beat-family-v6-control.log",
+      "log_sha256": "4336140fcad1624282cc3aaa3f1f604571bdd425fe43b7d93ba1f732b6351ae1",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    }
+  },
+  "existing_failures_retained": {
+    "runtime-tests": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "song-tests": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "theme-tests": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "original_position90_before": {
+    "exit_code": 1,
+    "comparisons_passed": 207800,
+    "comparisons_failed": 62,
+    "elapsed_seconds": 19.312680800445378,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "d2f3627545349e232651cbc9d50019ee6d44fa422e689c6b69b8949e7a5b5888",
+    "source_commit": "6d4356314016518f4b461289ed74ff492851bd1b",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-attenuation-v8.log",
+    "log_sha256": "d3289f6518a381f3d86ab3b3a46b78c38b9860667a26425a855bbe13feea7150",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_after": {
+    "exit_code": 1,
+    "comparisons_passed": 207820,
+    "comparisons_failed": 42,
+    "elapsed_seconds": 18.29963140003383,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "0a64c3ea11cf0f986cc31b8e8e7183d6af8c199b9a9d20d9eb51ead923ecebe2",
+    "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-beat-family-v6.log",
+    "log_sha256": "06f4f05f317901a045669853bb75036e4b7bb76e833e5ef1ccdf8cfa66c4fcbe",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_accepted": false,
+  "original_tolerances_retained": true,
+  "independent_geometry_scope": "Unchanged native source blocks with isolated inputs, compared to actual DeadSync composition; full native gameplay geometry remains pending",
+  "harness_arroweffects_helper_is_full_native_gameplay": false,
+  "semantic_host_geometry_used": false,
+  "original_corpus_scope_unchanged": true,
+  "build_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass165\\beat-family-v6-pin.json",
+  "build_pin_sha256": "f6437b6f976d4e7e0b625f3990444592951d112ea883949cab4a6fcb82c1c39e"
+}

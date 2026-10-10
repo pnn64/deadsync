@@ -1,0 +1,102 @@
+{
+  "pass": 182,
+  "previous_record": "native-revalidation-pass181.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+  "comparator_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    103
+  ],
+  "next_position": 104,
+  "comparisons_passed": 8692691,
+  "charts": [
+    {
+      "position": 103,
+      "entry": {
+        "title": "ASGORE",
+        "source_simfile": "assgore/goatdad.ssc",
+        "harness_version": "0.1.61",
+        "archive": "8ced242ec60820f7e2fcde967401dbc95d0291b35e150a7d53583db5e93fdb19.tar.zst",
+        "sha256": "8ced242ec60820f7e2fcde967401dbc95d0291b35e150a7d53583db5e93fdb19",
+        "compressed_bytes": 50679950,
+        "aliases": [
+          "4ef24964be937f16546afe4559987e5dce66d6e6cae16f61de246dac9d253011.tar.zst"
+        ]
+      },
+      "original_archive_retained": "e93c968811d66cd38638e8354d58a2c03c2876f01389d3f3605e8e3f6cb1e454.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "14a5ea10a257fc573e0339fda878fd0998e2b14acf8e7b8b28544878643eece4",
+      "original_source_sha256": {
+        "assgore/ASGORE.ogg": "674d7e2882c533921603475c9d321ca8d572c7fd9284b12a1212eaa08ccd71bb",
+        "assgore/goatdad.sm": "c3b2017ebded6fe2c80251abb879575849bef56fa4f5244cca3345f00f161ccd",
+        "assgore/goatdad.ssc": "5e3a15dce2268d2e1a6d4da6989ca971942bd2f6f1e65c78c42d55819d51b9cd",
+        "assgore/goatdad.ssc.oldsync": "f6ee6430a873e7139808273ecd5a173d81310f7a15e2468d52296cbbc541d3fe",
+        "assgore/undertale_spoilers_dont_look/BASKETBALL.png": "4557735c8724a0065ef5af66e4901abe917a0d0efcffcb7c1b82c8a79198c37f",
+        "assgore/undertale_spoilers_dont_look/default.lua": "4f93737f20a19ae38a32077e283715b5a13e0541c9f6760a219ed8ff1334de20",
+        "assgore/undertale_spoilers_dont_look_ITGVERSION/BASKETBALL.png": "4557735c8724a0065ef5af66e4901abe917a0d0efcffcb7c1b82c8a79198c37f",
+        "assgore/undertale_spoilers_dont_look_ITGVERSION/default.xml": "2605204669112923f90561de38afba05fed2322aaea22077f5297d3ad29e6424"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 11396,
+      "duration_seconds": 189.9008026123047,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 4,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 103,
+      "source_simfile": "assgore/goatdad.ssc",
+      "archive": "8ced242ec60820f7e2fcde967401dbc95d0291b35e150a7d53583db5e93fdb19.tar.zst",
+      "archive_sha256": "8ced242ec60820f7e2fcde967401dbc95d0291b35e150a7d53583db5e93fdb19",
+      "harness_version": "0.1.61",
+      "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+      "source_pending_commit": false,
+      "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-full_song_lua.exe",
+        "8ced242ec60820f7e2fcde967401dbc95d0291b35e150a7d53583db5e93fdb19.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 250.29767310013995,
+      "comparisons_passed": 8692691,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-103-screen-parent-committed-v4.log",
+      "log_sha256": "4855517f0a0702d3b1993e7b382ff5acce25bfa6ae080546f1d8d4c5920af3c8",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass217-top-103-current-main-v1.json",
+      "native_receipt_sha256": "82b190f9b184e292d9688786001bd1c5bccfb8d483782d43d9bdb0992db51e35",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+    "source_pending_commit": false,
+    "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 26.446615200024098,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-103-native-pass182.log",
+    "log_sha256": "fdc0e2f6c523ac3c1f36d009980f1ee6bcd27892b4db0b9f289b18350e5eb0b4",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 25.83s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}
