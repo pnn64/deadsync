@@ -1346,12 +1346,10 @@
     {
       "title": "あんずのうた",
       "source_simfile": "Anzu no Uta (U.P.S.)/Anzu no Uta.sm",
-      "harness_version": "0.1.0",
-      "archive": "6be680fedffec89b430e572a9566ab2c0a891c640bc72663e4bde18fb830e350.tar.zst",
-      "sha256": "6be680fedffec89b430e572a9566ab2c0a891c640bc72663e4bde18fb830e350",
-      "compressed_bytes": 995694,
-      "uncompressed_sha256": "29a630b32124e0eb4ab4382e5c71158de1b03b22dce90662204d884a53a2dc7c",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941.tar.zst",
+      "sha256": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941",
+      "compressed_bytes": 928342,
       "aliases": [
         "3342097268a17aaa1164a9ad5f7b550371a4acb1e4e868c7b43024e3ced1755b.tar.zst"
       ]
