@@ -151,7 +151,13 @@ fn create_player_state_table(
                 // but reset prior targets and approach speeds before parsing.
                 #[cfg(feature = "test-support")]
                 let previous = player_noteskin(&options_for_set)?;
+                let skin = options_for_set.raw_get::<Value>("__songlua_noteskin_name")?;
+                let skin_override = options_for_set.raw_get::<Value>("__songlua_noteskin_override")?;
                 reset_player_options(lua, &options_for_set)?;
+                // PlayerOptions::operator= retains the destination skin when the
+                // replacement has no valid skin. Explicit skin tokens still win.
+                options_for_set.raw_set("__songlua_noteskin_name", skin)?;
+                options_for_set.raw_set("__songlua_noteskin_override", skin_override)?;
                 apply_player_options_string(lua, &options_for_set, &options_text)?;
                 #[cfg(feature = "test-support")]
                 capture_skin_write(lua, &options_for_set, "setplayeroptions", previous)?;

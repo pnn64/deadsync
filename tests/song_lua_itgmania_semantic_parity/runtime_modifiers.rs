@@ -2828,7 +2828,9 @@ fn compare_noteskin_options(trace: &NativeTrace, compiled: &[CompiledSongLua], p
                     let target = parts.and_then(|parts| parts.last())
                         .and_then(|part| part["target"].as_str())
                         .map(|target| if target.is_empty() { "cel" } else { target })
-                        .or_else(|| if state_setter { Some("cel") } else { state["previous"].as_str() });
+                        // Native assignment preserves the prior skin when the
+                        // parsed replacement omits a valid noteskin.
+                        .or_else(|| state["previous"].as_str());
                     parity.check(parts.is_some_and(|parts| parts.iter().all(|part|
                         part["target"].is_string() && part["part"].as_str().is_some_and(|part|
                             raw.is_some_and(|raw| raw.split(',').any(|token| token.trim() == part)))))

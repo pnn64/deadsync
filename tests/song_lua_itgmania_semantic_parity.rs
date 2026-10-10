@@ -953,6 +953,19 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
 }
 
 #[test]
+fn native_option_assignment() {
+    paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/options-assignment");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (compiled, primary, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
+    let parity = compare_semantics(&trace, &compiled, primary, &context);
+    eprintln!("{}", parity.summary(&trace.title));
+    parity.assert_complete("native options assignment preserves prior noteskin");
+    assert!(parity.checks() > 0);
+}
+
+#[test]
 fn native_load_order() {
     paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
