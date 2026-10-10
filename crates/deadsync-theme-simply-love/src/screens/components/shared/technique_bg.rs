@@ -454,6 +454,145 @@ mod tests {
     use super::*;
 
     #[test]
+    fn technique_models_use_preloaded_textures() {
+        crate::tests::init_paths();
+        let catalog: Vec<_> = crate::resources::initial_texture_assets().collect();
+        let mut actors = Vec::new();
+        assert!(State::new().push_at_elapsed(&mut actors, 3, [0.0; 4], 1.0, 0.0));
+        let mut models = 0;
+        for actor in &actors {
+            if let Actor::TexturedMesh { texture, .. } = actor {
+                let key = texture.texture_key().expect("Technique model texture");
+                assert!(
+                    catalog.iter().any(|asset| asset.key == key),
+                    "missing startup texture: {key}"
+                );
+                assert!(crate::resources::texture_needs_repeat_sampler(key));
+                models += 1;
+            }
+        }
+        assert!(models > 0);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires an OpenGL display; run alongside Technique's catalog regression"]
+    #[allow(deprecated)] // A hidden window exercises the real startup/upload/draw path.
+    fn technique_arrow_renders_and_rotates() {
+        use deadlib_present::{compose::build_screen_with_texture_context, space};
+        use deadlib_render_core::{BackendType, PresentModePolicy};
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        crate::tests::init_paths();
+        let metrics = space::Metrics::centered(854.0, 480.0);
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(854, 480);
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("test event loop");
+        let window = event_loop
+            .create_window(
+                winit::window::Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(winit::dpi::PhysicalSize::new(854, 480)),
+            )
+            .expect("hidden Technique window");
+        let mut backend = deadlib_render::create_backend(
+            BackendType::OpenGL,
+            Arc::new(window),
+            metrics.projection(),
+            false,
+            PresentModePolicy::Immediate,
+            false,
+            false,
+        )
+        .expect("OpenGL renderer");
+        let mut assets = deadlib_assets::AssetManager::new();
+        deadsync_assets::load_initial_assets(
+            &mut assets,
+            &mut backend,
+            deadsync_theme::ThemeAssetManifest {
+                fonts: &[],
+                textures: crate::resources::initial_texture_assets()
+                    .filter(|asset| asset.path.starts_with("menu_bg_technique/")),
+                texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
+            },
+        )
+        .expect("Technique startup textures");
+
+        let mut images = Vec::new();
+        let mut transforms = Vec::new();
+        for elapsed in [0.0, 2.5] {
+            let mut actors = Vec::new();
+            assert!(State::new().push_at_elapsed(&mut actors, 3, [0.0; 4], 1.0, elapsed));
+            if let Some(dir) = std::env::var_os("DEADSYNC_TECHNIQUE_CAPTURE_DIR") {
+                let frame = build_screen_with_texture_context(
+                    &actors,
+                    [0.0, 0.0, 0.0, 1.0],
+                    &metrics,
+                    assets.fonts(),
+                    elapsed as f32,
+                    assets.texture_context(),
+                );
+                backend.request_screenshot();
+                backend
+                    .draw(&frame, assets.textures(), false)
+                    .expect("draw Technique background");
+                backend
+                    .capture_frame()
+                    .expect("capture Technique background")
+                    .save(std::path::PathBuf::from(dir).join(format!("technique-{elapsed}.png")))
+                    .expect("save Technique capture");
+            }
+            actors.retain(|actor| match actor {
+                Actor::CameraPush { .. } | Actor::CameraPop => true,
+                Actor::TexturedMesh {
+                    texture,
+                    local_transform,
+                    ..
+                } if texture
+                    .texture_key()
+                    .is_some_and(|key| key.contains("arrow_tex")) =>
+                {
+                    transforms.push(local_transform.to_cols_array());
+                    true
+                }
+                _ => false,
+            });
+            let frame = build_screen_with_texture_context(
+                &actors,
+                [0.0, 0.0, 0.0, 1.0],
+                &metrics,
+                assets.fonts(),
+                elapsed as f32,
+                assets.texture_context(),
+            );
+            assert!(
+                !frame.tmesh_instances.is_empty(),
+                "arrow must reach the renderer"
+            );
+            backend.request_screenshot();
+            backend
+                .draw(&frame, assets.textures(), false)
+                .expect("draw isolated arrow");
+            let image = backend.capture_frame().expect("capture isolated arrow");
+            assert!(
+                image
+                    .pixels()
+                    .filter(|pixel| pixel.0[..3] != [0, 0, 0])
+                    .count()
+                    > 1_000,
+                "arrow must produce visible pixels"
+            );
+            images.push(image);
+        }
+        assert_eq!(transforms.len(), 2);
+        assert_ne!(transforms[0], transforms[1], "arrow rotation must advance");
+        assert_ne!(images[0], images[1], "rendered arrow must animate");
+    }
+
+    #[test]
     fn technique_fractional_color_offsets_fall_back_to_white() {
         assert_eq!(technique_front_color(2, -0.75), [1.0, 1.0, 1.0, 1.0]);
         assert_eq!(technique_front_color(2, 0.0), color::decorative_rgba(2));
@@ -478,6 +617,7 @@ mod tests {
 
     #[test]
     fn technique_layers_use_stable_cached_mesh_keys() {
+        crate::tests::init_paths();
         let state = State::new();
         let mut actors = Vec::new();
         assert!(state.push_at_elapsed(&mut actors, 3, [0.0, 0.0, 0.0, 1.0], 1.0, 1_000_000.0,));
@@ -532,6 +672,7 @@ mod tests {
 
     #[test]
     fn technique_arrow_keeps_animated_texture_scroll() {
+        crate::tests::init_paths();
         let state = State::new();
         let mut at_zero = Vec::new();
         let mut later = Vec::new();

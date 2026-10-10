@@ -78,7 +78,7 @@ impl GlowEffect {
             return [0.0, 0.0, 0.0, 0.0];
         }
 
-        let phase = (time / self.period).rem_euclid(1.0);
+        let phase = time / self.period;
         if !phase.is_finite() {
             return [0.0, 0.0, 0.0, 0.0];
         }
@@ -104,6 +104,7 @@ impl GlowEffect {
             return color;
         }
 
+        let phase = phase.rem_euclid(1.0);
         let percent_between = ((phase + 0.25) * std::f32::consts::TAU)
             .sin()
             .mul_add(0.5, 0.5);
@@ -2027,3 +2028,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "explosion_perf_tests.rs"]
+mod explosion_perf_tests;

@@ -39,6 +39,7 @@ fn mesh(vertices: renderer::TexturedMeshVertices, transform: Matrix4) -> Editabl
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
+            sampler: None,
         },
         texture_handle: 17,
         blend: BlendMode::Add,
@@ -104,6 +105,7 @@ fn rotated_clip_keeps_recycled_storage_and_attributes() {
         depth_test,
         clear_depth: _,
         clear_depth_after: _,
+        sampler: _,
     } = &obj.object_type
     else {
         panic!("rotated clipping produces textured triangles");
@@ -185,6 +187,7 @@ fn contained_and_rejected_meshes_keep_source_ownership() {
             depth_test,
             clear_depth: _,
             clear_depth_after: _,
+            sampler: _,
             ..
         } = &obj.object_type
         else {

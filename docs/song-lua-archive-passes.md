@@ -2823,3 +2823,108 @@ World/view transforms, texture identity, native lighting and independent
 depth write/test states still need complete production comparisons. The
 whole-song Model rejection remains in place, and the new KABOOOOOM archive
 stays private. Original sources and comparison tolerances remain unchanged.
+
+## Pass 84: preserve Model cameras and depth placement
+
+Native Model::Model enables the Z buffer. DeadSync now starts Model actors
+with that default while preserving an explicit Lua override. The fast
+multi-output Model builders now receive the same inherited ActorFrame
+camera as the single-output builder. Both ordinary and noteskin Models
+retain actor Z in their mesh placement. Noteskin Models use affine geometry
+under that camera, replacing a notefield perspective approximation that
+projected them before the actual inherited camera was applied.
+
+The flat compositor reuses adjacent identical camera matrices. A control
+with 300 repeated scopes verifies that Models under one camera retain its
+camera ID instead of exhausting the eight-bit camera index. Prewarmed
+geometry identities and native diffuse/glow pass ordering remain checked.
+
+The new model-camera micro fixture records eight actual native draws from
+harness 0.1.37. It covers an off-center perspective camera, inheritance
+through a frame without a camera setting, an explicit zero-FOV reset,
+actor Z, and rotation under ancestor Y scaling. The production song Model
+and noteskin Model paths match all 16 draws and 672 local/clip/NDC/screen
+coordinate checks at the existing 0.002 tolerance. All 492 song Lua library,
+186 playback integration and 177 presentation tests pass; the playback
+suite retains its three existing ignores. The two reader tests and two
+archive rejection controls pass as well.
+
+The unchanged original KABOOOOOM trace still supplies all 95,752 Model
+observations. Its fresh production diagnostic runs the same 9,450,796
+comparisons: 7,465,778 pass and 1,985,018 fail. This removes 1,382,024
+failures from pass 83, including every depth-test mismatch. The remaining
+reported gaps concern clip/NDC/screen transforms and animated texture
+phase boundaries. Original source hashes and tolerances are unchanged.
+
+The controlled camera fix does not establish complete Model or song
+parity. World/view transforms, texture identity, lighting and independent
+depth states still need complete comparisons. Keep the whole-song Model
+acceptance guard and the private KABOOOOOM archive pending. All 501
+original simfiles and 492 archive contexts remain in scope.
+
+## Pass 85: reject Model references that omit base rotation
+
+The first-visible-frame diagnostic identified an error in the harness oracle.
+The original KABOOOOOM script calls baserotationz with the lane orientation,
+then rotationz with ArrowEffects' additional rotation. Actor::BeginDraw adds
+those independent values. DeadSync's composed Models retained the lane
+rotation; the harness's song world matrices omitted it. The old case 18
+capture therefore cannot identify those orientation differences as DeadSync
+bugs. Its previous failure counts remain historical diagnostic results.
+
+An independent native actor tree reproduces the harness error: a world
+coordinate at time zero was 74.5958023071289 instead of -1.6716537475585938.
+The new model-base-rotation fixture covers all three base axes on parent and
+Model actors, immediate changes while a tween is queued, replacement base
+values, and ordinary rotation tweening. The harness now adds immediate base
+rotation after effect application, following the native source rule.
+
+DeadSync rejects Model traces without the new actor_base_rotation capability.
+Removing or disabling that capability is a negative reader control. The
+first-visible-frame test is an explicitly selected partial diagnostic; it
+prints the production state and transforms to identify gaps and cannot
+establish complete song parity. The whole-song Model guard remains closed.
+
+The earlier independent camera and material controls remain valid native
+actor captures. The fresh private 0.1.38 KABOOOOOM capture retains all
+95,752 Model observations, reaches the chart endpoint and passes archive
+integrity checks. Original song and Cyber source hashes remain unchanged.
+The production diagnostic passes 9,449,740 of 9,450,796 comparisons, with
+1,056 transformed-UV failures on four actors at 68 and 146 seconds. The
+orientation differences in the obsolete 0.1.37 capture are harness errors.
+These results still do not establish complete Model archive acceptance.
+
+Keep the original sources, all update observations and tolerances intact,
+and keep every incomplete archive private. The full 501-simfile/492-context
+scope remains unfinished.
+
+## Pass 86: preserve independent signed Model scales
+
+Native Actor::BeginDraw scales X, Y and Z independently, preserving negative
+values. Ordinary song Models used absolute Y scale for Z. Their production
+builder now carries the complete local three-axis scale, separately from
+the ancestor scale. The noteskin Model affine transform also preserves
+signed draw zoom instead of clamping mirrored geometry to zero.
+
+The new model-signed-scale fixture captures ten actual native draws from
+harness 0.1.38. Its five actors cover independent Z, negative X/Y/Z, rotation
+on all axes, and inherited signed scaling. Before the fixes, the ordinary
+Model control fails on IndependentZ; after correcting Z, the noteskin control
+fails on MirrorX. Both production paths use the same retained native draws
+and unchanged camera comparison tolerance. This is a controlled geometry
+fix; it does not resolve the original chart's texture-clock failures.
+Both paths pass all twenty native draws and 840 coordinate checks. The
+complete playback suite passes 187 tests with three existing ignores, and
+all 450 notefield library tests pass.
+
+ITGmania AnimatedTexture::Update adds the frame delta and advances one state
+only when seconds into the frame is strictly greater than the delay. It
+subtracts that delay once, even after a large update. DeadSync's elapsed-time
+modulo cannot represent that update history. Preserve this distinction from
+NoteDisplay's SetSecondsIntoAnimation seek when resolving the remaining UV
+differences; integer UV shifts or relaxed tolerances do not establish parity.
+
+World/view transforms, texture identity, lighting and independent depth
+states remain incomplete comparisons. The whole-song Model guard stays
+closed and the fresh original KABOOOOOM archive remains private. All 501
+original simfiles and 492 archive contexts remain in scope.

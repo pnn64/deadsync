@@ -1,0 +1,281 @@
+{
+  "command": [
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass100-native-header-cli-v1.exe",
+    "song-lua-semantic-baseline",
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-native-image-getter-lua-v1\\corpus",
+    "--simfile",
+    "getters/getters.sm",
+    "--out",
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-native-image-getter-lua-v1\\traces",
+    "--max-events",
+    "1500000"
+  ],
+  "native_lua_source_sha256": "39feabcb62c35e488bc1a04dd0c900494ccc7e6f036a48783232f5d0a49bc74f",
+  "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass102-native-image-getter-lua-v1\\traces\\getters\\getters.sm.semantic.json",
+  "trace_sha256": "0c7851b1065dc0b5eabc1a8070df6f070f9a2b9fbcab642fb51fbb448e94c6dc",
+  "capture_log_sha256": "e4d616b34c71ba81bce47e2da50d93919a5738f45b343de6f7dcc15b9490ac6a",
+  "harness_source_commit": "e5ee5826a0cf4024301c969087b1ee3b863e4242",
+  "native_cli_sha256": "be7d5ffa45f5cf75220e21921625d94a278a7c96dd595135e90330437ad8157d",
+  "native_bitmap_control_sha256": "e0aacddd794398900f1836b64e0dcba37f8ab6559eca80a36b5b3727787f6235",
+  "cases": 10,
+  "named_actors": [
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 14,
+          "line": 4,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0003",
+      "layer_index": 2,
+      "line": 3,
+      "name": "getter-1",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "tiny.png"
+      },
+      "runtime_actors": [
+        "def-0003"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 28,
+          "line": 18,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0005",
+      "layer_index": 4,
+      "line": 17,
+      "name": "getter-2",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "tiny-wide.png"
+      },
+      "runtime_actors": [
+        "def-0005"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 42,
+          "line": 32,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0007",
+      "layer_index": 6,
+      "line": 31,
+      "name": "getter-3",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "tiny-tall.png"
+      },
+      "runtime_actors": [
+        "def-0007"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 56,
+          "line": 46,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0009",
+      "layer_index": 8,
+      "line": 45,
+      "name": "getter-4",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "padded.png"
+      },
+      "runtime_actors": [
+        "def-0009"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 70,
+          "line": 60,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0011",
+      "layer_index": 10,
+      "line": 59,
+      "name": "getter-5",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "panel (stretch).png"
+      },
+      "runtime_actors": [
+        "def-0011"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 84,
+          "line": 74,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0013",
+      "layer_index": 12,
+      "line": 73,
+      "name": "getter-6",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "hires (doubleres).png"
+      },
+      "runtime_actors": [
+        "def-0013"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 98,
+          "line": 88,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0015",
+      "layer_index": 14,
+      "line": 87,
+      "name": "getter-7",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "source (res 53x12).png"
+      },
+      "runtime_actors": [
+        "def-0015"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 112,
+          "line": 102,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0017",
+      "layer_index": 16,
+      "line": 101,
+      "name": "getter-8",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "capped.png"
+      },
+      "runtime_actors": [
+        "def-0017"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 126,
+          "line": 116,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0019",
+      "layer_index": 18,
+      "line": 115,
+      "name": "getter-9",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "capped-tiny.png"
+      },
+      "runtime_actors": [
+        "def-0019"
+      ],
+      "source": "song:/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 140,
+          "line": 130,
+          "name": "OnCommand",
+          "source": "song:/default.lua"
+        }
+      ],
+      "id": "def-0021",
+      "layer_index": 20,
+      "line": 129,
+      "name": "getter-10",
+      "parent_id": "def-0001",
+      "properties": {
+        "Texture": "sheet 2x1.png"
+      },
+      "runtime_actors": [
+        "def-0021"
+      ],
+      "source": "song:/default.lua"
+    }
+  ],
+  "native_runtime_errors": 0,
+  "dropped_events": 0,
+  "retained_texture_lifetime": "A separate Sprite retains the original texture while the owner loads another file",
+  "native_source_unchanged": true,
+  "framebuffer_pixel_parity_proven": false,
+  "assertion_completion_markers": {
+    "getter-1": 101,
+    "getter-2": 102,
+    "getter-3": 103,
+    "getter-4": 104,
+    "getter-5": 105,
+    "getter-6": 106,
+    "getter-7": 107,
+    "getter-8": 108,
+    "getter-9": 109,
+    "getter-10": 110
+  },
+  "assertions_executed": 10
+}

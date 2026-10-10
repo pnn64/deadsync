@@ -888,17 +888,15 @@ fn fetch_exact(
 /// Join ranges no more than `gap` apart, in order.
 fn merge_ranges(mut ranges: Vec<(u64, u64)>, gap: u64) -> Vec<(u64, u64)> {
     ranges.sort_unstable();
-    let mut merged: Vec<(u64, u64)> = Vec::with_capacity(ranges.len());
-    for (start, end) in ranges {
-        if let Some(last) = merged.last_mut()
-            && start <= last.1.saturating_add(gap)
-        {
-            last.1 = last.1.max(end);
-            continue;
+    ranges.dedup_by(|next, previous| {
+        if next.0 <= previous.1.saturating_add(gap) {
+            previous.1 = previous.1.max(next.1);
+            true
+        } else {
+            false
         }
-        merged.push((start, end));
-    }
-    merged
+    });
+    ranges
 }
 
 /// What was asked for, checked against the file and joined where it overlaps:
@@ -3984,3 +3982,7 @@ mod metadata_original;
 #[cfg(test)]
 #[path = "archive_metadata_perf.rs"]
 mod metadata_perf_tests;
+
+#[cfg(test)]
+#[path = "pack_archive_perf.rs"]
+mod perf_tests;

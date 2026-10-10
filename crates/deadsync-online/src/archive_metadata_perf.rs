@@ -129,7 +129,24 @@ fn grouping_preserves_allocation_churn_and_retained_capacities() {
         let (new, after) = measure(|| group_folders(&entries));
         assert_folders(&new, &old);
         assert_eq!(new.capacity(), old.capacity());
-        assert_eq!(before, after);
+        // Classifying while grouping changes allocation lifetimes, so the peak
+        // may differ even though all allocation totals and capacities match.
+        assert_eq!(
+            (
+                before.allocs,
+                before.reallocs,
+                before.frees,
+                before.allocated_bytes,
+                before.freed_bytes,
+            ),
+            (
+                after.allocs,
+                after.reallocs,
+                after.frees,
+                after.allocated_bytes,
+                after.freed_bytes,
+            )
+        );
     }
 }
 
