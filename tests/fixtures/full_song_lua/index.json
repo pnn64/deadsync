@@ -1302,12 +1302,10 @@
     {
       "title": "Answers",
       "source_simfile": "Answers2/Answers.sm",
-      "harness_version": "0.1.0",
-      "archive": "8e4494677b8a4174e4ae41b7de18339142920e2883a1bfdcca7f269cc851aa00.tar.zst",
-      "sha256": "8e4494677b8a4174e4ae41b7de18339142920e2883a1bfdcca7f269cc851aa00",
-      "compressed_bytes": 64743,
-      "uncompressed_sha256": "6285f8cca35fe134c44db67caae8125ba07b17b5a203c587b31fae068460697f",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "ce21b4f91aee1748fd9a389e02647a46a91ba43e3ee6c71c8ce6d0d4617be578.tar.zst",
+      "sha256": "ce21b4f91aee1748fd9a389e02647a46a91ba43e3ee6c71c8ce6d0d4617be578",
+      "compressed_bytes": 400850,
       "aliases": [
         "1d5ec5f073c9b9514b3edaaac505969fc0ef6b8df80abb80b122a6ecb363c55e.tar.zst"
       ]
