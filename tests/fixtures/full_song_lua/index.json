@@ -1313,12 +1313,10 @@
     {
       "title": "Answers",
       "source_simfile": "Answers2/Answers.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6d4b5633b6949f2a0d234faed705c2582750aca3b070a2a26d45d2bcc9fbafa8.tar.zst",
-      "sha256": "6d4b5633b6949f2a0d234faed705c2582750aca3b070a2a26d45d2bcc9fbafa8",
-      "compressed_bytes": 66031,
-      "uncompressed_sha256": "a47b4bc76be006afa068a5e556a670d3a8cde49afb71c278bdb8497a74fc81ec",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "c8ab2c34cec360caeb2d764279291618639a26447d3b30f54a1d6d6f952e65a3.tar.zst",
+      "sha256": "c8ab2c34cec360caeb2d764279291618639a26447d3b30f54a1d6d6f952e65a3",
+      "compressed_bytes": 401264,
       "aliases": [
         "c6dd0efb8defd146e44ef3e79fcc125ed15a61ab9bc2019e15d6d2eeedff2e6b.tar.zst"
       ]
