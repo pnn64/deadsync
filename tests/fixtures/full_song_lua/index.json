@@ -1225,12 +1225,10 @@
     {
       "title": "After Dark",
       "source_simfile": "After Dark/After Dark.ssc",
-      "harness_version": "0.1.0",
-      "archive": "475f5f6ca0aefbbb7d5d4943793b3b51c6401823d470bcc0f4e5345083a88b69.tar.zst",
-      "sha256": "475f5f6ca0aefbbb7d5d4943793b3b51c6401823d470bcc0f4e5345083a88b69",
-      "compressed_bytes": 973239,
-      "uncompressed_sha256": "ccaf1f4ec2dcf6825736a9d2fd3f5d8d206599446d0fb25b3ca45aceeab9c924",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f.tar.zst",
+      "sha256": "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f",
+      "compressed_bytes": 1264099,
       "aliases": [
         "bdb3bb7066e1e85f860dd86349024b61c28df70fb1041bed3fab5fee523bc671.tar.zst"
       ]
