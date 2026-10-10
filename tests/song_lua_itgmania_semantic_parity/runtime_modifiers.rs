@@ -3394,6 +3394,31 @@ fn native_speed_fields_drive_playback() {
 }
 
 #[test]
+fn native_table_order_preserves_shared_speed_fields() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/native-table-order-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native table-order control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("native-table-order.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("native table constructors and iteration of shared speed setters");
+    assert_eq!(compiled[0].speed_writes.len(), 54);
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native table iteration, every speed field and final playback targets");
+}
+
+#[test]
 fn startup_speeds_keep_native_default_approaches() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

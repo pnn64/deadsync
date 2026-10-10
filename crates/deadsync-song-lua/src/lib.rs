@@ -42,7 +42,6 @@ mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
-mod syntax;
 mod tables;
 mod theme_colors;
 mod timing;
@@ -5586,6 +5585,51 @@ mod tests {
     }
 
     #[test]
+    fn native_lua51_runtime_uses_native_bytecode_and_coercion() {
+        let lua = Lua::new();
+        let function = lua.load("return 1").into_function().expect("native chunk");
+        assert_eq!(&function.dump(false)[..5], b"\x1bLua\x51");
+        lua.load(
+            r#"
+            assert(tostring(1.0) == '1')
+            assert(not pcall(string.format, '%s', true))
+            assert(#setmetatable({1}, {__len=function() return 99 end}) == 1)
+        "#,
+        )
+        .exec()
+        .expect("native Lua 5.1 language rules");
+        assert!(lua.load("return 1 | 2").into_function().is_err());
+    }
+
+    #[test]
+    fn native_concat_preserves_numbers_and_expressions() {
+        let lua = Lua::new();
+        let source = r#"
+            local function many() return 5.0, 99 end
+            assert(5.0 .. ' centered' == '5 centered')
+            assert('x' .. -5.0 == 'x-5')
+            assert(1.25 .. 5.0 == '1.255')
+            assert('x' .. 2 + 3 == 'x5')
+            assert('x' .. many() == 'x5')
+            assert('x' .. (function(...) return ... end)(5.0) == 'x5')
+            assert('x' .. -- keep this comment and newline
+                5.0 == 'x5')
+            assert('..' .. [=[...]=] == '.....')
+            local values = {5.0, 'dark'}
+            assert(values[1] .. ' ' .. values[2] == '5 dark')
+            assert('x' .. ({5.0})[1] == 'x5')
+            local object = setmetatable({}, {__concat = function(a,b)
+                return type(a) .. ':' .. type(b)
+            end})
+            assert(5.0 .. object == 'number:table')
+            assert(object .. 5.0 == 'table:number')
+            assert(not pcall(function() return true .. 'x' end))
+            assert(1 .. 2 .. object == '1number:table')
+        "#;
+        lua.load(source).exec().expect("native Lua 5.1 concatenation");
+    }
+
+    #[test]
     fn song_lua_video_paths_filter_and_dedupe_video_sprites() {
         let movie = PathBuf::from("badapple.AVI");
         let overlays = vec![
@@ -7671,6 +7715,14 @@ return Def.ActorFrame{}
             &entry,
             r#"
 local values = {10, 20, 30}
+assert(_VERSION == 'Lua 5.1')
+assert(type(unpack) == 'function' and table.unpack == nil)
+local a, b, c = unpack(values)
+assert(a == 10 and b == 20 and c == 30)
+local first, missing, last = unpack({[1]=10, [3]=30}, 1, 3)
+assert(first == 10 and missing == nil and last == 30)
+assert(select('#', unpack(values, 3, 2)) == 0)
+assert(not pcall(table.getn, false))
 mod_actions = {
     {1, string.format("%d:%d", math.mod(5, 2), table.getn(values)), true},
 }
@@ -15143,7 +15195,7 @@ local function note(name, sprite)
         string.format(
             "%s:%s:%d:%d:%s",
             name,
-            texture:GetPath():match(name == "background" and "background%.png$" or "banner%.png$") ~= nil,
+            tostring(texture:GetPath():match(name == "background" and "background%.png$" or "banner%.png$") ~= nil),
             sprite:GetWidth(),
             sprite:GetHeight(),
             tostring(Banner.LoadFromSong ~= nil and Banner.LoadFromCourse ~= nil and Banner.LoadFromSongGroup ~= nil
@@ -18800,7 +18852,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "2.25:nil:false|3.50:true:0.15|nil:650:nil|1.0:nil:700"
+            "2.25:nil:false|3.50:true:0.15|nil:650:nil|1:nil:700"
         );
     }
 

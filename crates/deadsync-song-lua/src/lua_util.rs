@@ -1401,7 +1401,7 @@ pub(crate) fn load_script_file_with_env(
     environment: Option<Table>,
 ) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
-    let source = crate::syntax::preprocess_source(&source).map_err(mlua::Error::external)?;
+    let source = crate::preprocess_lua_cmd_syntax(&source).map_err(mlua::Error::external)?;
     let environment = match environment {
         Some(environment) => environment,
         None => initial_chunk_environment(lua, path)?,
@@ -2050,7 +2050,6 @@ pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 
 pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let children = lua.create_table()?;
-    let mut names = Vec::new();
     let source = actor_children(lua, actor)?;
     let mut copy = |key: Value, value: Value| -> mlua::Result<()> {
         if value.is_nil() || !children.raw_get::<Value>(key.clone())?.is_nil() {
@@ -2070,9 +2069,6 @@ pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
             }
             value => value,
         };
-        if let Value::String(name) = &key {
-            names.push(name.clone());
-        }
         children.raw_set(key, value)
     };
     if let Some(order) = source
@@ -2108,116 +2104,10 @@ pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
             }
             _ => {
                 children.raw_set(name.as_str(), child)?;
-                names.push(lua.create_string(name.as_str())?);
             }
         }
     }
-    // ITGmania constructs a fresh Lua 5.1 table in actor-vector order. Lua
-    // 5.4 randomizes string hashes, so its pairs order changes custom draws.
-    let order: Vec<_> = lua51_string_order(&names)
-        .into_iter()
-        .map(|index| names[index].clone())
-        .collect();
-    let mt = lua.create_table()?;
-    mt.set(
-        "__pairs",
-        lua.create_function(move |lua, table: Table| {
-            let order = order.clone();
-            let next = lua.create_function(move |_, (table, key): (Table, Value)| {
-                let start = match key {
-                    Value::Nil => 0,
-                    Value::String(key) => order
-                        .iter()
-                        .position(|name| name.as_bytes().as_ref() == key.as_bytes().as_ref())
-                        .map(|index| index + 1)
-                        .ok_or_else(|| mlua::Error::runtime("invalid key to 'next'"))?,
-                    _ => return Err(mlua::Error::runtime("invalid key to 'next'")),
-                };
-                for name in &order[start..] {
-                    let value = table.raw_get::<Value>(name.clone())?;
-                    if !value.is_nil() {
-                        return Ok((Some(name.clone()), value));
-                    }
-                }
-                Ok((None, Value::Nil))
-            })?;
-            Ok((next, table, Value::Nil))
-        })?,
-    )?;
-    children.set_metatable(Some(mt))?;
     Ok(children)
-}
-
-fn lua51_string_hash(bytes: &[u8]) -> u32 {
-    let mut hash = bytes.len() as u32;
-    let step = (bytes.len() >> 5) + 1;
-    let mut left = bytes.len();
-    while left >= step {
-        hash ^= (hash << 5)
-            .wrapping_add(hash >> 2)
-            .wrapping_add(u32::from(bytes[left - 1]));
-        left -= step;
-    }
-    hash
-}
-
-#[derive(Clone, Copy, Default)]
-struct Lua51StringNode {
-    key: Option<usize>,
-    next: Option<usize>,
-}
-
-// This is Lua 5.1's string-only fresh-table insertion, including descending
-// rehash and collision relocation (extern/lua-5.1/src/ltable.c). GetChildren
-// inserts only names; duplicate names replace values without inserting keys.
-fn lua51_string_order(keys: &[mlua::LuaString]) -> Vec<usize> {
-    let hashes: Vec<_> = keys
-        .iter()
-        .map(|key| lua51_string_hash(key.as_bytes().as_ref()))
-        .collect();
-    let mut nodes = Vec::<Lua51StringNode>::new();
-    let mut pending: Vec<_> = (0..keys.len()).rev().collect();
-    let mut last_free = 0;
-    let mut occupied = 0usize;
-    while let Some(key) = pending.pop() {
-        let main = hashes[key] as usize & nodes.len().saturating_sub(1);
-        let mut slot = main;
-        if nodes.is_empty() || nodes[main].key.is_some() {
-            let free = (0..last_free)
-                .rev()
-                .find(|&index| nodes[index].key.is_none());
-            let Some(free) = free else {
-                pending.push(key);
-                // resize reinserts old nodes from highest to lowest index.
-                pending.extend(nodes.iter().filter_map(|node| node.key));
-                nodes = vec![Lua51StringNode::default(); (occupied + 1).next_power_of_two()];
-                last_free = nodes.len();
-                occupied = 0;
-                continue;
-            };
-            last_free = free;
-            let existing = nodes[main].key.expect("occupied hash node has a key");
-            let other_main = hashes[existing] as usize & (nodes.len() - 1);
-            if other_main != main {
-                let mut previous = other_main;
-                while nodes[previous].next != Some(main) {
-                    previous = nodes[previous]
-                        .next
-                        .expect("collision remains in its hash chain");
-                }
-                nodes[previous].next = Some(free);
-                nodes[free] = nodes[main];
-                nodes[main] = Lua51StringNode::default();
-            } else {
-                nodes[free].next = nodes[main].next;
-                nodes[main].next = Some(free);
-                slot = free;
-            }
-        }
-        nodes[slot].key = Some(key);
-        occupied += 1;
-    }
-    nodes.into_iter().filter_map(|node| node.key).collect()
 }
 
 pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
@@ -3471,7 +3361,8 @@ pub fn call_actor_function(
         .app_data_mut::<SongLuaActionCaptureActive>()
         .is_some_and(|mut scope| scope.functions.insert(command.to_pointer() as usize));
     if preserve {
-        let locals = snapshot_function_locals(lua, std::slice::from_ref(command), Vec::new())?;
+        let functions = lua.create_sequence_from([command.clone()])?;
+        let locals = snapshot_function_locals(lua, &functions, Vec::new())?;
         lua.app_data_mut::<SongLuaActionCaptureActive>()
             .expect("capture scope remains active while snapshotting")
             .locals
@@ -3948,7 +3839,9 @@ pub fn capture_actor_command_preserving_state(
     else {
         return Ok(Vec::new());
     };
-    let locals = snapshot_function_action_tables(lua, std::slice::from_ref(&command))
+    let locals = lua
+        .create_sequence_from([command.clone()])
+        .and_then(|functions| snapshot_function_action_tables(lua, &functions))
         .map_err(|err| err.to_string())?;
     let snapshot = snapshot_actor_mutable_state(lua, actor).map_err(|err| err.to_string())?;
     let globals_snapshot = snapshot_scalar_globals(lua).map_err(|err| err.to_string())?;
@@ -11608,7 +11501,8 @@ pub(crate) fn run_actor_startup_commands(
     let locals = if queued.0.is_empty() {
         None
     } else {
-        let mut functions = Vec::new();
+        let functions = lua.create_table()?;
+        let mut function_count = 0;
         let mut seen = HashSet::new();
         for (actor, _) in initial_states.values() {
             actor.for_each::<Value, Value>(|_, value| {
@@ -11616,7 +11510,8 @@ pub(crate) fn run_actor_startup_commands(
                     && function.info().what != "C"
                     && seen.insert(function.to_pointer() as usize)
                 {
-                    functions.push(function);
+                    function_count += 1;
+                    functions.raw_set(function_count, function)?;
                 }
                 Ok(())
             })?;
@@ -15460,20 +15355,22 @@ pub struct SongLuaFunctionActionCapture {
 
 struct FunctionActionTableSnapshot {
     table: Table,
-    entries: Vec<(Value, Value)>,
+    entries: Table,
 }
 
 struct FunctionActionSnapshot {
     tables: Vec<FunctionActionTableSnapshot>,
-    cells: Vec<(Function, usize, Value)>,
+    cells: Table,
 }
 
-fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTableSnapshot> {
-    let mut entries = Vec::new();
+fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<FunctionActionTableSnapshot> {
+    let entries = lua.create_table()?;
+    let mut count = 0;
     // Keep the traversal key on Lua's stack. `pairs` clones it for its Rust
     // cursor, allocating a shared handle for each reference-valued key.
     table.for_each::<Value, Value>(|key, value| {
-        entries.push((key, value));
+        count += 1;
+        entries.raw_set(count, lua.create_sequence_from([key, value])?)?;
         Ok(())
     })?;
     Ok(FunctionActionTableSnapshot { table, entries })
@@ -15481,13 +15378,14 @@ fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTa
 
 fn snapshot_function_action_tables(
     lua: &Lua,
-    functions: &[Function],
+    functions: &Table,
 ) -> mlua::Result<FunctionActionSnapshot> {
     let globals = lua.globals();
     // Resolve environments before capturing their shared pre-probe state.
     let mut targets = Vec::new();
     let mut seen = HashSet::from([globals.to_pointer() as usize]);
-    for function in functions {
+    for function in functions.sequence_values::<Function>() {
+        let function = function?;
         if let Some(environment) = function.environment() {
             let target = environment
                 .raw_get::<Option<Table>>("__songlua_env_target")?
@@ -15498,22 +15396,23 @@ fn snapshot_function_action_tables(
         }
     }
     let mut snapshots = Vec::with_capacity(1 + targets.len());
-    snapshots.push(snapshot_function_action_table(globals)?);
+    snapshots.push(snapshot_function_action_table(lua, globals)?);
     for target in targets {
-        snapshots.push(snapshot_function_action_table(target)?);
+        snapshots.push(snapshot_function_action_table(lua, target)?);
     }
     snapshot_function_locals(lua, functions, snapshots)
 }
 
 fn snapshot_function_locals(
     lua: &Lua,
-    functions: &[Function],
+    functions: &Table,
     mut snapshots: Vec<FunctionActionTableSnapshot>,
 ) -> mlua::Result<FunctionActionSnapshot> {
     // Command probes may edit shared local tables or replace upvalue cells.
     // Preserve their identities, including cycles and aliases. Actor state
     // belongs to the existing action capture scope; C closures own host data.
-    let mut cells = Vec::new();
+    let cells = lua.create_table()?;
+    let mut cell_count = 0;
     let mut seen = HashSet::new();
     // Global bindings are shallow snapshots. Preserve referenced table contents
     // alongside locals without following the entire host environment through _G.
@@ -15521,12 +15420,14 @@ fn snapshot_function_locals(
     for snapshot in &snapshots {
         seen.insert(snapshot.table.to_pointer() as usize);
     }
-    let mut pending = functions
-        .iter()
-        .cloned()
-        .map(Value::Function)
-        .collect::<Vec<_>>();
-    while let Some(value) = pending.pop() {
+    // Lua owns saved references. Keeping thousands of mlua Values in Rust
+    // would consume the auxiliary stack, which Lua 5.1 bounds at 8000 slots.
+    let pending = functions.clone();
+    let mut pending_count = pending.raw_len();
+    while pending_count > 0 {
+        let value = pending.raw_get::<Value>(pending_count)?;
+        pending.raw_set(pending_count, Value::Nil)?;
+        pending_count -= 1;
         match value {
             Value::Function(function)
                 if function.info().what != "C" && seen.insert(function.to_pointer() as usize) =>
@@ -15555,7 +15456,8 @@ fn snapshot_function_locals(
                                     .windows(name.len())
                                     .any(|bytes| bytes == name.as_ref())
                             {
-                                pending.push(value);
+                                pending_count += 1;
+                                pending.raw_set(pending_count, value)?;
                             }
                         }
                         Ok(())
@@ -15566,16 +15468,28 @@ fn snapshot_function_locals(
                     if matches!(&name, Value::String(name) if name.to_str()?.as_ref() == "_ENV") {
                         continue;
                     }
-                    pending.push(value.clone());
-                    cells.push((function.clone(), index as usize, value));
+                    pending_count += 1;
+                    pending.raw_set(pending_count, value.clone())?;
+                    cell_count += 1;
+                    cells.raw_set(
+                        cell_count,
+                        lua.create_sequence_from([
+                            Value::Function(function.clone()),
+                            Value::Integer(index.into()),
+                            value,
+                        ])?,
+                    )?;
                 }
             }
             Value::Table(table)
                 if seen.insert(table.to_pointer() as usize)
                     && table.raw_get::<Value>("__songlua_actor_type")?.is_nil() =>
             {
-                let snapshot = snapshot_function_action_table(table)?;
-                pending.extend(snapshot.entries.iter().map(|(_, value)| value.clone()));
+                let snapshot = snapshot_function_action_table(lua, table)?;
+                for entry in snapshot.entries.sequence_values::<Table>() {
+                    pending_count += 1;
+                    pending.raw_set(pending_count, entry?.raw_get::<Value>(2)?)?;
+                }
                 snapshots.push(snapshot);
             }
             _ => {}
@@ -15612,7 +15526,11 @@ fn read_function_upvalue(
 }
 
 fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
-    for (function, index, value) in snapshot.cells {
+    for cell in snapshot.cells.sequence_values::<Table>() {
+        let cell = cell?;
+        let function = cell.raw_get::<Function>(1)?;
+        let index = cell.raw_get::<i64>(2)?;
+        let value = cell.raw_get::<Value>(3)?;
         // SAFETY: exec_raw owns the function, index and saved value on its
         // stack. lua_setupvalue consumes only the saved value; no Lua stack
         // references escape this call.
@@ -15625,8 +15543,11 @@ fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -
     }
     for snapshot in snapshot.tables {
         snapshot.table.clear()?;
-        for (key, value) in snapshot.entries {
-            snapshot.table.raw_set(key, value)?;
+        for entry in snapshot.entries.sequence_values::<Table>() {
+            let entry = entry?;
+            snapshot
+                .table
+                .raw_set(entry.raw_get::<Value>(1)?, entry.raw_get::<Value>(2)?)?;
         }
     }
     Ok(())
@@ -15651,7 +15572,10 @@ fn capture_function_action_blocks_inner(
     restore_function_tables: bool,
 ) -> Result<SongLuaFunctionActionCapture, String> {
     let table_snapshots = restore_function_tables
-        .then(|| snapshot_function_action_tables(lua, std::slice::from_ref(function)))
+        .then(|| {
+            let functions = lua.create_sequence_from([function.clone()])?;
+            snapshot_function_action_tables(lua, &functions)
+        })
         .transpose()
         .map_err(|err| err.to_string())?;
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
@@ -15822,9 +15746,10 @@ pub(crate) fn capture_deferred_messages<Kind>(
             .actor
             .get::<Function>(deferred.command.as_str())
             .map_err(|err| err.to_string())?;
-        let snapshots =
-            snapshot_function_action_tables(lua, std::slice::from_ref(&command))
-                .map_err(|err| err.to_string())?;
+        let snapshots = lua
+            .create_sequence_from([command.clone()])
+            .and_then(|functions| snapshot_function_action_tables(lua, &functions))
+            .map_err(|err| err.to_string())?;
         let runner = message_capture_runner(lua, &deferred.actor, &deferred.command, &command)
             .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
@@ -15926,9 +15851,10 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
 
     let mut additions = Vec::new();
     for (source_index, source, command_name, message, command) in commands {
-        let table_snapshots =
-            snapshot_function_action_tables(lua, std::slice::from_ref(&command))
-                .map_err(|err| err.to_string())?;
+        let table_snapshots = lua
+            .create_sequence_from([command.clone()])
+            .and_then(|functions| snapshot_function_action_tables(lua, &functions))
+            .map_err(|err| err.to_string())?;
         let runner = message_capture_runner(lua, &source, &command_name, &command)
             .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
