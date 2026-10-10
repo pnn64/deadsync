@@ -280,12 +280,16 @@ fn joined_contains_ignore_ascii_case(left: &str, right: &str, needle: &str) -> b
 }
 
 #[inline]
-fn song_title_contains(song: &SongData, translit: bool, needle: &str) -> bool {
-    joined_contains_ignore_ascii_case(
-        song.display_title(translit),
-        song.display_subtitle(translit),
-        needle,
-    )
+fn song_title_contains(song: &SongData, needle: &str) -> bool {
+    let title = song.display_title(false);
+    let subtitle = song.display_subtitle(false);
+    if joined_contains_ignore_ascii_case(title, subtitle, needle) {
+        return true;
+    }
+    let translit_title = song.display_title(true);
+    let translit_subtitle = song.display_subtitle(true);
+    (title != translit_title || subtitle != translit_subtitle)
+        && joined_contains_ignore_ascii_case(translit_title, translit_subtitle, needle)
 }
 
 // Keep the common title-prefix comparison small; only matching prefixes need
@@ -371,6 +375,7 @@ pub fn build_song_search_candidates<'a>(
     let mut out = Vec::new();
     let mut current_pack_name: Option<&str> = None;
     let mut current_pack_shared: Option<Arc<str>> = None;
+    let mut difficulties = String::new();
 
     for entry in entries {
         match entry {
@@ -403,8 +408,7 @@ pub fn build_song_search_candidates<'a>(
                 }
 
                 if let Some(song_term) = filter.song_term()
-                    && !song_title_contains(song, false, song_term)
-                    && !song_title_contains(song, true, song_term)
+                    && !song_title_contains(song, song_term)
                 {
                     continue;
                 }
@@ -439,6 +443,7 @@ pub fn build_song_search_candidates<'a>(
 
                 if out.is_empty() {
                     out.reserve_exact(entry_count);
+                    difficulties.reserve(32);
                 }
                 let pack_name =
                     Arc::clone(current_pack_shared.get_or_insert_with(|| Arc::from(pack_name)));
@@ -447,7 +452,10 @@ pub fn build_song_search_candidates<'a>(
                     title: Arc::from(song.display_title(false)),
                     subtitle: Arc::from(song.display_subtitle(false)),
                     bpm: Arc::from(song.formatted_chart_display_bpm(None)),
-                    difficulties: Arc::from(song_search_difficulties_text(song, chart_type)),
+                    difficulties: {
+                        song_search_difficulties_text_into(song, chart_type, &mut difficulties);
+                        Arc::from(difficulties.as_str())
+                    },
                     song: Arc::clone(song),
                 });
             }
@@ -460,6 +468,7 @@ pub fn build_song_search_candidates<'a>(
 
 #[cfg(test)]
 mod tests {
+    include!("song_search_selection_perf.rs");
 
     #[test]
     fn title_search_preserves_partial_and_whitespace_transliteration_fallbacks() {
@@ -474,7 +483,7 @@ mod tests {
             ("A", "B", "ab", false),
             ("AB", "CD", "b c", true),
             ("A", "B", "a b extra", false),
-            ("α", "β", "α β", true),
+            ("Î±", "Î²", "Î± Î²", true),
         ] {
             assert_eq!(
                 joined_contains_ignore_ascii_case(left, right, needle),
@@ -700,9 +709,9 @@ mod tests {
         assert_eq!(filter.difficulty, Some(12));
         assert_eq!(filter.bpm_tier, Some(180));
 
-        let malformed = parse_song_search_filter("Pack/[x]ÄBC");
+        let malformed = parse_song_search_filter("Pack/[x]Ã„BC");
         assert_eq!(malformed.pack_term(), Some("pack"));
-        assert_eq!(malformed.song_term(), Some("[x]Äbc"));
+        assert_eq!(malformed.song_term(), Some("[x]Ã„bc"));
         assert_eq!(malformed.difficulty, None);
         assert_eq!(malformed.bpm_tier, None);
 

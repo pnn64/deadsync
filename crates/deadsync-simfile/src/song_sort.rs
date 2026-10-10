@@ -510,11 +510,14 @@ fn grouped_song_runs(
 }
 
 fn alpha_grouped_songs(
-    songs: Vec<Arc<SongData>>,
+    mut songs: Vec<Arc<SongData>>,
     bucket_for: impl Fn(&SongData) -> u8,
     compare: impl Fn(&SongData, &SongData) -> Ordering,
     group_for: impl Fn(u8) -> SongSortGroup,
 ) -> Vec<GroupedSongs> {
+    if songs.len() <= 1 {
+        return grouped_contiguous_songs(songs, |song| group_for(bucket_for(song)));
+    }
     let mut counts = [0usize; ALPHA_GROUP_COUNT];
     // Keep one byte per song so sizing the buckets does not require parsing
     // title/artist prefixes twice. The temporary replaces repeated Vec growth.
@@ -526,8 +529,13 @@ fn alpha_grouped_songs(
             bucket
         })
         .collect();
-    if bucket_indices.len() <= 1 {
-        return grouped_contiguous_songs(songs, |_| group_for(bucket_indices[0]));
+    if counts[usize::from(bucket_indices[0])] == songs.len() {
+        // The input already owns every handle in the only output bucket.
+        let group = group_for(bucket_indices[0]);
+        drop(bucket_indices);
+        songs.sort_by(|left, right| compare(left, right));
+        songs.shrink_to_fit();
+        return vec![GroupedSongs { group, songs }];
     }
     let mut buckets: [Vec<Arc<SongData>>; ALPHA_GROUP_COUNT] =
         std::array::from_fn(|bucket| Vec::with_capacity(counts[bucket]));
@@ -551,6 +559,7 @@ fn alpha_grouped_songs(
 
 #[cfg(test)]
 mod tests {
+    include!("song_sort_selection_perf.rs");
     use super::*;
 
     #[test]
