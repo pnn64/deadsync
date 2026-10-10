@@ -1071,12 +1071,10 @@
     {
       "title": "Palette Lab",
       "source_simfile": "[TLD] Palette Lab/palette lab.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ab653a15cfa4fa5627d7228278cfda6fb0ef336f802fec6f2d075214b78a0825.tar.zst",
-      "sha256": "ab653a15cfa4fa5627d7228278cfda6fb0ef336f802fec6f2d075214b78a0825",
-      "compressed_bytes": 82057,
-      "uncompressed_sha256": "a77a89d95d1b276b99abca36e2b0dad4e77c7ad97d077ca5b6a72e6ab14d4a94",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "7c0b4d7ea85f1de882a9ab9c5eb4951e7ea5c3560d7ef87b8ac518881a9faee0.tar.zst",
+      "sha256": "7c0b4d7ea85f1de882a9ab9c5eb4951e7ea5c3560d7ef87b8ac518881a9faee0",
+      "compressed_bytes": 111677,
       "aliases": [
         "1e0daecb320d3129e36d60485ec7d0c97e2ebe2de727965c8b95160f79e8bfa1.tar.zst"
       ]
