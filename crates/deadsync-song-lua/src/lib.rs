@@ -21309,6 +21309,14 @@ return Def.ActorFrame{
             assert!(state.visible);
             assert_eq!(state.x, 222.0);
         }
+        for frame in &compiled.draw_frames {
+            let sources = frame.ops.iter().filter_map(|op| match op {
+                SongLuaDrawOp::Draw { source, .. } => Some(*source),
+                _ => None,
+            }).collect::<Vec<_>>();
+            assert_eq!(sources, [SongLuaDrawSource::Judgment(0), SongLuaDrawSource::Player(0)],
+                "the theme judgment frame remains a distinct HUD draw source");
+        }
         assert!(compiled.player_actors[0].manual_hud_draw);
     }
 
