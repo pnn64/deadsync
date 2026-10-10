@@ -730,12 +730,10 @@
     {
       "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
       "source_simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6806347d912748a3351032ecdec12caee63ae2af38da2b756cd2dc205b9623c2.tar.zst",
-      "sha256": "6806347d912748a3351032ecdec12caee63ae2af38da2b756cd2dc205b9623c2",
-      "compressed_bytes": 1662921,
-      "uncompressed_sha256": "aa5798c4271eca6f7d745c298d5c4bd23afdf426d98a5441342443b4091543ab",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b.tar.zst",
+      "sha256": "88b8c7f14ed7787714a16083bc9c08acb2abc5927cae947a7862a795f56fab4b",
+      "compressed_bytes": 1296156,
       "aliases": [
         "7d36336e7e91c23183bb6355b8dcc8d23f570617f33316c672b4980fe177513c.tar.zst"
       ]
