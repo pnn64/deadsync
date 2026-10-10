@@ -463,6 +463,7 @@ fn runtime_mod_value(
         "modtimermult" => visual.mod_timer_mult.unwrap_or(0.0),
         "modtimeroffset" => visual.mod_timer_offset.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "parabolay" => visual.parabola_y.unwrap_or(0.0),
         "bumpyx" => visual.bumpy_x.unwrap_or(0.0),
         "bumpyxoffset" => visual.bumpy_x_offset.unwrap_or(0.0),
         "bumpyxperiod" => visual.bumpy_x_period.unwrap_or(0.0),
@@ -2993,6 +2994,16 @@ fn compare_speed_playback(compiled: &[CompiledSongLua], context: &SongLuaCompile
             runtime.refresh_player(player, second + origin, 1_000_000.0, Default::default(), AttackBaseEffects::default, Default::default());
             let mut targets = ActiveAttackMaskValues { scroll_speed: runtime.scroll_speed[player], ..ActiveAttackMaskValues::new(Default::default()) };
             deadsync_gameplay::apply_song_lua_attack_eases(&mut targets, &mut Default::default(), &mut Default::default(), &runtime.song_lua_ease_windows[player], second + origin, 0.0);
+            let base = match context.players[player].speedmod {
+                SongLuaSpeedMod::X(value) => ScrollSpeedSetting::XMod(value),
+                SongLuaSpeedMod::C(value) => ScrollSpeedSetting::CMod(value),
+                SongLuaSpeedMod::M(value) => ScrollSpeedSetting::MMod(value),
+                SongLuaSpeedMod::A(_) => {
+                    parity.check(false, || "AMod has no production scroll-speed setting".into());
+                    continue;
+                }
+            };
+            let actual = deadsync_gameplay::effective_attack_scroll_speed(targets.clear_all, targets.scroll_speed, base);
             let expected = native_speed_fields(fields).and_then(|fields| match fields[0][0] {
                 0.0 if fields[3][0] == 0.0 => Some(ScrollSpeedSetting::XMod(fields[1][0])),
                 0.0 => Some(ScrollSpeedSetting::MMod(fields[3][0])),
@@ -3001,12 +3012,12 @@ fn compare_speed_playback(compiled: &[CompiledSongLua], context: &SongLuaCompile
             });
             // Fractional spacing and mixed CMod/raw multipliers require actual
             // note-travel support. Keep them failing rather than forcing a mode.
-            parity.check(expected.is_some() && targets.scroll_speed.is_some_and(|actual| expected.is_some_and(|expected| match (actual, expected) {
+            parity.check(expected.is_some_and(|expected| match (actual, expected) {
                 (ScrollSpeedSetting::XMod(a), ScrollSpeedSetting::XMod(b))
                 | (ScrollSpeedSetting::CMod(a), ScrollSpeedSetting::CMod(b))
                 | (ScrollSpeedSetting::MMod(a), ScrollSpeedSetting::MMod(b)) => (a - b).abs() <= EPSILON,
                 _ => false,
-            })), || format!("P{} native speed fields {fields} at {second}s: playback {:?}, expected {expected:?}", player + 1, targets.scroll_speed));
+            }), || format!("P{} native speed fields {fields} at {second}s: playback {actual:?}, expected {expected:?}", player + 1));
         }
     }
 }
@@ -3423,6 +3434,30 @@ fn speed_field_audit_keeps_failed_and_startup_writes() {
     let mut rejected = Parity::default();
     compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
     assert!(!rejected.gaps.is_empty(), "losing a startup setter must fail");
+}
+
+#[test]
+fn parabola_y_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/parabola-y-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native parabola-y control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("parabola-y.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed ParabolaY, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native ParabolaY targets and resets");
 }
 
 #[test]

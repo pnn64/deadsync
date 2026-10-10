@@ -4745,6 +4745,74 @@ mod tests {
     }
 
     #[test]
+    fn composed_note_travel_matches_native_acceleration_vectors() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/parabola-y-motion.json"
+        )).expect("independently compiled native travel vectors");
+        let mut ns = noteskin();
+        ns.notes = (0..deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("note0")).collect();
+        ns.mine_layers = vec![vec![TestSlot::new("note0")].into()];
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let lanes = [vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")]];
+        for vector in native["vectors"].as_array().expect("native vectors") {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("travel");
+            if travel < 0.0 { continue; }
+            for kind in [NoteType::Tap, NoteType::Mine] {
+                for direction in [-1.0, 1.0] {
+                    let mut notes = [note(0)];
+                    notes[0].note_type = kind;
+                    notes[0].beat = 1.0 + travel / 64.0;
+                    notes[0].row_index = usize::try_from(deadsync_core::timing::beat_to_note_row(notes[0].beat))
+                        .expect("positive fixture beat");
+                    let rows = [deadsync_core::timing::beat_to_note_row(notes[0].beat)];
+                    let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 1, 1);
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.note_itg_rows = &rows;
+                    request.geometry.column_dirs.fill(direction);
+                    request.geometry.draw_distance_before_targets = 1536.0;
+                    request.geometry.draw_distance_after_targets = 1536.0;
+                    request.visual.visual.parabola_y = value("amount");
+                    request.visual.accel.boost = value("boost");
+                    request.visual.accel.brake = value("brake");
+                    request.visual.accel.wave = value("wave");
+                    request.visual.accel.wave_period = value("period");
+                    request.visual.accel.boomerang = value("boomerang");
+                    let prepared = prepare_notefield(&request).expect("prepared native travel field");
+                    let frame = NotefieldFieldFrameView {
+                        feedback: spline_feedback(&[]), completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(), &mut draws, &mut Vec::new(),
+                        &mut ModelMeshCache::default(), &mut HoldMeshScratch::default(),
+                        &mut CapturedActorScratch::with_capacities(32, 0), &mut NotefieldCameraCache::default(),
+                        &request, &prepared, &frame, &source,
+                    );
+                    let (mut arrow, mut receptor) = (None, None);
+                    for draw in &draws {
+                        let FlatDraw::Sprite(sprite) = draw else { continue; };
+                        let SpriteSource::TextureHandle { key, .. } = &sprite.source else { continue; };
+                        match key.as_ref() {
+                            "note0" => arrow = Some(sprite.center[1]),
+                            "target0" => receptor = Some(sprite.center[1]),
+                            _ => {},
+                        }
+                    }
+                    let actual = (arrow.expect("composed tap or mine") - receptor.expect("composed receptor")) / direction;
+                    assert!((actual - value("y")).abs() < 0.001, "{kind:?}, {direction}, {vector}: composed={actual}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn parabola_bends_composed_taps_and_mines_before_reverse_and_move_y() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,

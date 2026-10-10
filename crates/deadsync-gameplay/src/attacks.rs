@@ -597,6 +597,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualParabolaY,
     VisualModTimerMult,
     VisualModTimerOffset,
     VisualBumpyX,
@@ -2238,6 +2239,7 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "parabolay" => push(SongLuaEaseMaskTarget::VisualParabolaY, pct_from, pct_to),
         "modtimermult" => push(SongLuaEaseMaskTarget::VisualModTimerMult, pct_from, pct_to),
         "modtimeroffset" => push(
             SongLuaEaseMaskTarget::VisualModTimerOffset,
@@ -2984,6 +2986,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualParabolaY => visual.parabola_y = Some(value),
         SongLuaEaseMaskTarget::VisualModTimerMult => visual.mod_timer_mult = Some(value),
         SongLuaEaseMaskTarget::VisualModTimerOffset => visual.mod_timer_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyX => visual.bumpy_x = Some(value),
@@ -3249,6 +3252,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualParabolaY => window.visual.parabola_y.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerMult => window.visual.mod_timer_mult.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerOffset => window.visual.mod_timer_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBumpyX => window.visual.bumpy_x.is_some(),
@@ -4642,6 +4646,7 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.parabola_y, visual.parabola_y);
     mark_active_target(&mut targets.mod_timer_mult, visual.mod_timer_mult);
     mark_active_target(&mut targets.mod_timer_offset, visual.mod_timer_offset);
     mark_active_target(&mut targets.bumpy_x, visual.bumpy_x);
@@ -5503,6 +5508,7 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualParabolaY => attack.visual_speed.parabola_y = Some(speed),
             SongLuaEaseMaskTarget::VisualModTimerMult => {
                 attack.visual_speed.mod_timer_mult = Some(speed)
             }
@@ -6178,6 +6184,15 @@ fn apply_active_visual_window(
         window.visual.parabola_x,
         window.visual_speed.parabola_x,
         active_targets.visual.parabola_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.parabola_y,
+        &mut values.visual_speed.parabola_y,
+        window.visual.parabola_y,
+        window.visual_speed.parabola_y,
+        active_targets.visual.parabola_y,
         active_clear_all,
         persisted,
     );
@@ -7279,6 +7294,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "parabolay" => set_approached_mod(
+            &mut out.visual.parabola_y,
+            &mut out.visual_speed.parabola_y,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "modtimermult" => set_approached_mod(
             &mut out.visual.mod_timer_mult,
             &mut out.visual_speed.mod_timer_mult,
@@ -8056,6 +8077,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        parabola_y: merge_attack_value(base.parabola_y, attack.parabola_y),
         mod_timer_mult: merge_attack_value(base.mod_timer_mult, attack.mod_timer_mult),
         mod_timer_offset: merge_attack_value(base.mod_timer_offset, attack.mod_timer_offset),
         bumpy_x: merge_attack_value(base.bumpy_x, attack.bumpy_x),

@@ -676,6 +676,7 @@ fn prepare_notes<'a, S>(
             brake: request.visual.accel.brake,
             wave: request.visual.accel.wave,
             wave_period: request.visual.accel.wave_period,
+            parabola_y: request.visual.visual.parabola_y,
             boomerang: request.visual.accel.boomerang,
             expand: request.visual.accel.expand,
         },

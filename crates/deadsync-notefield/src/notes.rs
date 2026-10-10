@@ -1016,7 +1016,7 @@ impl ScrollTravel<'_> {
             self.request.search_beat,
             draw_distance_before_targets,
             self.displayed_speed_percent,
-            self.request.accel.boomerang > f32::EPSILON,
+            self.request.accel.boomerang != 0.0,
             |beat| self.adjusted_with_peak(self.raw_beat(beat)),
             stop_at_row_precision,
         )
@@ -2259,6 +2259,7 @@ mod tests {
             brake: 0.45,
             wave: 0.8,
             wave_period: 0.0,
+            parabola_y: 0.0,
             expand: 0.6,
             boomerang: 0.2,
         };
@@ -2300,16 +2301,17 @@ mod tests {
     }
 
     #[test]
-    fn inactive_acceleration_options_select_identity_path() {
+    fn zero_acceleration_options_select_identity_path() {
         let timing = timing();
         let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0);
         travel_request.field_zoom = 0.75;
         travel_request.accel = AccelYParams {
-            boost: f32::NAN,
-            brake: -1.0,
+            boost: 0.0,
+            brake: -0.0,
             wave: 0.0,
             wave_period: 3.0,
-            expand: f32::NEG_INFINITY,
+            parabola_y: 0.0,
+            expand: 0.0,
             boomerang: -0.0,
         };
         let travel = scroll_travel(travel_request);

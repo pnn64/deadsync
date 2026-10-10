@@ -159,6 +159,7 @@ pub(crate) struct AccelYParams {
     pub brake: f32,
     pub wave: f32,
     pub wave_period: f32,
+    pub parabola_y: f32,
     pub expand: f32,
     pub boomerang: f32,
 }
@@ -179,14 +180,12 @@ enum AccelYPath {
     ExpandOnly,
     WaveOnly,
     BoomerangOnly,
-    BoostBrakeOnly,
     BoostBoomerangOnly,
     BrakeBoomerangOnly,
     WaveBoomerangOnly,
     BoostExpandOnly,
     BrakeExpandOnly,
     BoomerangExpandOnly,
-    BoostBrakeExpandOnly,
     BoostBoomerangExpandOnly,
     BrakeBoomerangExpandOnly,
 }
@@ -325,15 +324,16 @@ pub(crate) fn signed_effect_active(value: f32) -> bool {
 }
 
 pub(crate) fn accel_y_is_identity(accel: AccelYParams) -> bool {
-    !(accel.boost > f32::EPSILON
-        || accel.brake > f32::EPSILON
+    !(accel.boost != 0.0
+        || accel.brake != 0.0
         || accel.wave != 0.0
-        || accel.expand > f32::EPSILON
-        || accel.boomerang > f32::EPSILON)
+        || accel.parabola_y != 0.0
+        || accel.expand != 0.0
+        || accel.boomerang != 0.0)
 }
 
 pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParams) -> AccelYCache {
-    let expand_scale = if accel.expand > f32::EPSILON {
+    let expand_scale = if accel.expand != 0.0 {
         let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
         let multiplier = sm_scale(
             (seconds * EXPAND_MULTIPLIER_FREQUENCY).cos(),
@@ -353,27 +353,26 @@ pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParam
         1.0
     };
     let path = match (
-        accel.boost > f32::EPSILON,
-        accel.brake > f32::EPSILON,
+        accel.parabola_y != 0.0,
+        accel.boost != 0.0,
+        accel.brake != 0.0,
         accel.wave != 0.0,
-        accel.expand > f32::EPSILON,
-        accel.boomerang > f32::EPSILON,
+        accel.expand != 0.0,
+        accel.boomerang != 0.0,
     ) {
-        (true, false, false, false, false) => AccelYPath::BoostOnly,
-        (false, true, false, false, false) => AccelYPath::BrakeOnly,
-        (false, false, false, true, false) => AccelYPath::ExpandOnly,
-        (false, false, true, false, false) => AccelYPath::WaveOnly,
-        (false, false, false, false, true) => AccelYPath::BoomerangOnly,
-        (true, true, false, false, false) => AccelYPath::BoostBrakeOnly,
-        (true, false, false, false, true) => AccelYPath::BoostBoomerangOnly,
-        (false, true, false, false, true) => AccelYPath::BrakeBoomerangOnly,
-        (false, false, true, false, true) => AccelYPath::WaveBoomerangOnly,
-        (true, false, false, true, false) => AccelYPath::BoostExpandOnly,
-        (false, true, false, true, false) => AccelYPath::BrakeExpandOnly,
-        (false, false, false, true, true) => AccelYPath::BoomerangExpandOnly,
-        (true, true, false, true, false) => AccelYPath::BoostBrakeExpandOnly,
-        (true, false, false, true, true) => AccelYPath::BoostBoomerangExpandOnly,
-        (false, true, false, true, true) => AccelYPath::BrakeBoomerangExpandOnly,
+        (false, true, false, false, false, false) => AccelYPath::BoostOnly,
+        (false, false, true, false, false, false) => AccelYPath::BrakeOnly,
+        (false, false, false, false, true, false) => AccelYPath::ExpandOnly,
+        (false, false, false, true, false, false) => AccelYPath::WaveOnly,
+        (false, false, false, false, false, true) => AccelYPath::BoomerangOnly,
+        (false, true, false, false, false, true) => AccelYPath::BoostBoomerangOnly,
+        (false, false, true, false, false, true) => AccelYPath::BrakeBoomerangOnly,
+        (false, false, false, true, false, true) => AccelYPath::WaveBoomerangOnly,
+        (false, true, false, false, true, false) => AccelYPath::BoostExpandOnly,
+        (false, false, true, false, true, false) => AccelYPath::BrakeExpandOnly,
+        (false, false, false, false, true, true) => AccelYPath::BoomerangExpandOnly,
+        (false, true, false, false, true, true) => AccelYPath::BoostBoomerangExpandOnly,
+        (false, false, true, false, true, true) => AccelYPath::BrakeBoomerangExpandOnly,
         _ => AccelYPath::General,
     };
     AccelYCache {
@@ -433,17 +432,6 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             let y = 1.5f32.mul_add(raw_y, -raw_y * raw_y / screen_height);
             return (y, before_peak);
         }
-        AccelYPath::BoostBrakeOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
-            let boost_adjust =
-                (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
-            let boosted_y = raw_y + boost_adjust;
-            let scale = sm_scale(boosted_y, 0.0, effect_height, 0.0, 1.0);
-            let braked = boosted_y * scale;
-            let brake_adjust = (accel.brake * (braked - boosted_y))
-                .clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
-            return (boosted_y + brake_adjust, true);
-        }
         AccelYPath::BoostBoomerangOnly => {
             let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
@@ -490,18 +478,6 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             let y = 1.5f32.mul_add(raw_y, -raw_y * raw_y / screen_height) * cache.expand_scale;
             return (y, before_peak);
         }
-        AccelYPath::BoostBrakeExpandOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
-            let boost_adjust =
-                (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
-            let boosted_y = raw_y + boost_adjust;
-            let scale = sm_scale(boosted_y, 0.0, effect_height, 0.0, 1.0);
-            let braked = boosted_y * scale;
-            let brake_adjust = (accel.brake * (braked - boosted_y))
-                .clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
-            let y = (boosted_y + brake_adjust) * cache.expand_scale;
-            return (y, true);
-        }
         AccelYPath::BoostBoomerangExpandOnly => {
             let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
@@ -534,30 +510,33 @@ fn apply_accel_y_general(
     accel: AccelYParams,
     cache: AccelYCache,
 ) -> (f32, bool) {
-    if accel.boost > f32::EPSILON {
-        let new_y = y * 1.5 / ((y + cache.boost_height_offset) / effect_height);
-        let mut adjust = accel.boost * (new_y - y);
-        adjust = adjust.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
-        y += adjust;
+    // Native GetYOffset adds each adjustment from the original travel,
+    // then applies boomerang and speed. Sequential deformation changes the
+    // result when Wave, Boost, Brake or ParabolaY are combined.
+    let raw_y = y;
+    let mut adjust = 0.0;
+    if accel.boost != 0.0 {
+        let new_y = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
+        adjust += (accel.boost * (new_y - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
     }
-    if accel.brake > f32::EPSILON {
-        let scale = sm_scale(y, 0.0, effect_height, 0.0, 1.0);
-        let new_y = y * scale;
-        let mut adjust = accel.brake * (new_y - y);
-        adjust = adjust.clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
-        y += adjust;
+    if accel.brake != 0.0 {
+        let new_y = raw_y * sm_scale(raw_y, 0.0, effect_height, 0.0, 1.0);
+        adjust += (accel.brake * (new_y - raw_y)).clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
     }
     if accel.wave != 0.0 {
-        y = (accel.wave * WAVE_MOD_MAGNITUDE)
-            .mul_add((y / cache.wave_divisor).sin(), y);
+        adjust += accel.wave * WAVE_MOD_MAGNITUDE * (raw_y / cache.wave_divisor).sin();
     }
+    if accel.parabola_y != 0.0 {
+        adjust += accel.parabola_y * (raw_y / ARROW_EFFECT_PIXEL_SIZE) * (raw_y / ARROW_EFFECT_PIXEL_SIZE);
+    }
+    y += adjust;
     let mut before_boomerang_peak = true;
-    if accel.boomerang > f32::EPSILON {
+    if accel.boomerang != 0.0 {
         let peak_at_y = screen_height * 0.75;
         before_boomerang_peak = y < peak_at_y;
         y = 1.5f32.mul_add(y, -y * y / screen_height);
     }
-    if accel.expand > f32::EPSILON {
+    if accel.expand != 0.0 {
         y *= cache.expand_scale;
     }
     (y, before_boomerang_peak)
@@ -2149,6 +2128,32 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parabola_y_and_accels_match_native_travel() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/parabola-y-motion.json"
+        )).expect("independently compiled native additive acceleration vectors");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 78);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let accel = AccelYParams {
+                parabola_y: value("amount"), boost: value("boost"), brake: value("brake"),
+                wave: value("wave"), wave_period: value("period"), boomerang: value("boomerang"),
+                ..AccelYParams::default()
+            };
+            let cache = accel_y_cache(0.0, 480.0, accel);
+            let raw = value("travel");
+            let expected = value("y");
+            let actual = apply_accel_y_cached(raw, 480.0, 480.0, accel, cache);
+            assert!((actual - expected).abs() < 0.0005, "{vector}: actual={actual}");
+            if raw >= 0.0 {
+                let general = apply_accel_y_general(raw, 480.0, 480.0, accel, cache).0;
+                assert!((general - expected).abs() < 0.0005, "{vector}: general={general}");
+            }
+        }
+    }
 
     #[test]
     fn wave_period_matches_native_travel() {
