@@ -8,12 +8,13 @@
 
 use crate::color;
 use deadlib_assets::AssetManager;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadsync_online::itgdb::ItgdbPhase;
 use deadsync_online::pack_page::PagePhase;
 use deadsync_online::popular_packs::PopularPhase;
 use deadsync_online::smo_details::DetailsPhase;
 use deadsync_online::stepmaniaonline::{CatalogPhase, InstallPhase, PackInfo};
+use std::fmt::Write as _;
 
 use super::chart_window;
 use super::detail;
@@ -1499,21 +1500,38 @@ fn push_skeleton_row(
 /// `78 songs  -  640.5 MB  -  added Mar 14, 2026`, with any part absent.
 /// Two spaces, hyphen, two spaces -- the original's separator.
 fn meta_line(state: &State, pack: &PackInfo) -> String {
-    let mut bits: Vec<String> = Vec::with_capacity(4);
+    let bytes = format_bytes(pack.size_bytes);
+    let date = details_for(state, pack)
+        .and_then(|details| details.date_added.as_deref())
+        .map(|date| format_date(date, true));
+    let why = state.search_why.get(&pack.id);
+    let song_len = if pack.song_count > 0 {
+        pack.song_count.ilog10() as usize + 1 + " songs  -  ".len()
+    } else {
+        0
+    };
+    let mut line = String::with_capacity(
+        song_len
+            + bytes.len()
+            + date
+                .as_ref()
+                .map_or(0, |date| date.len() + "  -  added ".len())
+            + why.map_or(0, |why| why.len() + "  -  ".len()),
+    );
     if pack.song_count > 0 {
-        bits.push(format!("{} songs", pack.song_count));
+        write!(line, "{} songs  -  ", pack.song_count).expect("writing to String cannot fail");
     }
-    bits.push(format_bytes(pack.size_bytes));
-    if let Some(date) = details_for(state, pack).and_then(|d| d.date_added.as_deref()) {
-        bits.push(format!("added {}", format_date(date, true)));
+    line.push_str(&bytes);
+    if let Some(date) = date {
+        line.push_str("  -  added ");
+        line.push_str(&date);
     }
-    // Why this row is in a search's answer, last. A result that matched on a
-    // charter's name rather than the pack's looks like a wrong answer until
-    // the row says so.
-    if let Some(why) = state.search_why.get(&pack.id) {
-        bits.push(why.clone());
+    // Keep an empty explanation's separator too, just as the joined fields did.
+    if let Some(why) = why {
+        line.push_str("  -  ");
+        line.push_str(why);
     }
-    bits.join("  -  ")
+    line
 }
 
 /// `2026-03-14` as `March 14, 2026`, or `Mar 14, 2026` in short form.
@@ -1579,31 +1597,21 @@ fn push_type_badge(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, list
     const DDR_INK: [f32; 4] = [1.0, 0.72, 0.35, 1.0];
     const PAD_INK: [f32; 4] = [0.55, 0.55, 0.55, 1.0];
 
-    let kind = pack
-        .pack_type
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| meaningful(value))
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    let (text, rgba) = if state.query.is_empty() {
-        match kind.as_str() {
-            "mixed" => ("PAD+KEY", KEYBOARD_INK),
-            "ddr" => ("DDR", DDR_INK),
-            _ => return,
-        }
+    let kind = pack.pack_type.as_deref().map(str::trim).unwrap_or_default();
+    let (text, rgba) = if kind.eq_ignore_ascii_case("mixed") {
+        ("PAD+KEY", KEYBOARD_INK)
+    } else if kind.eq_ignore_ascii_case("ddr") {
+        ("DDR", DDR_INK)
+    } else if state.query.is_empty() {
+        return;
+    } else if kind.eq_ignore_ascii_case("keyboard") {
+        ("KEY", KEYBOARD_INK)
     } else {
-        match kind.as_str() {
-            "keyboard" => ("KEY", KEYBOARD_INK),
-            "mixed" => ("PAD+KEY", KEYBOARD_INK),
-            "ddr" => ("DDR", DDR_INK),
-            _ => ("PAD", PAD_INK),
-        }
+        ("PAD", PAD_INK)
     };
 
     actors.push(act!(text:
-        font("miso"): settext(text.to_owned()):
+        font("miso"): settext(text):
         align(0.0, 0.5):
         xy(lo::LIST_X + list_w - lo::ROW_TYPE_BADGE_INSET, y + lo::ROW_BADGE_Y):
         zoom(0.5): maxwidth(40.0): horizalign(left):
@@ -1622,21 +1630,25 @@ pub(super) fn push_status_badge(
     let accent = accent(state);
     let (text, rgba) = if let Some(install) = install_for(state, pack) {
         match install.phase {
-            InstallPhase::Queued => ("queued".to_owned(), META_RGBA),
+            InstallPhase::Queued => (TextContent::Static("queued"), META_RGBA),
             InstallPhase::Downloading => {
                 let pct = if install.total_bytes > 0 {
                     (install.downloaded_bytes as f64 / install.total_bytes as f64 * 100.0) as u32
                 } else {
                     0
                 };
-                (format!("{pct}%"), accent)
+                (
+                    TextContent::inline_format(format_args!("{pct}%"))
+                        .expect("a u32 percentage fits inline text"),
+                    accent,
+                )
             }
-            InstallPhase::Extracting => ("Installing".to_owned(), accent),
-            InstallPhase::Installed => ("Installed".to_owned(), INSTALLED_NOW),
-            InstallPhase::Error => ("Error".to_owned(), ERROR_RGBA),
+            InstallPhase::Extracting => (TextContent::Static("Installing"), accent),
+            InstallPhase::Installed => (TextContent::Static("Installed"), INSTALLED_NOW),
+            InstallPhase::Error => (TextContent::Static("Error"), ERROR_RGBA),
         }
     } else if is_installed(state, pack) {
-        ("In Library".to_owned(), IN_LIBRARY)
+        (TextContent::Static("In Library"), IN_LIBRARY)
     } else {
         return;
     };
@@ -2474,3 +2486,11 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "render/select_data_original.rs"]
+mod select_data_original;
+
+#[cfg(test)]
+#[path = "render/select_data_perf.rs"]
+mod select_data_perf;
