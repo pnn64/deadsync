@@ -686,12 +686,10 @@
     {
       "title": "[5811] [10] Lake of Lost Nostalgia",
       "source_simfile": "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0d8d6fc8d0be410f146f2b6c775180aa5bc71e35380ca93c25df1fcfda584d61.tar.zst",
-      "sha256": "0d8d6fc8d0be410f146f2b6c775180aa5bc71e35380ca93c25df1fcfda584d61",
-      "compressed_bytes": 228450,
-      "uncompressed_sha256": "edeafb948309d05eeb9bf3f8fdbdaf4c23155223bb62b8a45c5bd81cc3967041",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst",
+      "sha256": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663",
+      "compressed_bytes": 476971,
       "aliases": [
         "b3a17af45c06d437e7bddadefea47158249aa568906f1b057108a29f92f56c52.tar.zst"
       ]

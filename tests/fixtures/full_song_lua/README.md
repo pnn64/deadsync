@@ -656,3 +656,22 @@ measured off-grid positions remain open at the original tolerance.
 See `native-revalidation-pass115.json`. Position 37 is next. Song/Steps
 timing getter placeholders, explicit Model culling, the original
 501-source/492-context corpus and native framebuffer parity remain open.
+
+## Ordered fixture validation, pass 116
+
+Position 37, [5811] [10] Lake of Lost Nostalgia, passes all 323,368 comparisons against
+committed DeadSync `207e17110`. The complete harness 0.1.52
+native capture records 7,801 updates, with no native runtime errors or
+dropped events. Original chart, Lua, prior archive and aliases remain.
+
+Simply Love uses an ActorFrame as the Judgment root, with an initially
+hidden Sprite child. Draw capture now retains player HUD containers as
+external sources. All 7,801 custom-draw frames match the seven native
+requests; four focused draw tests and the archive integrity check pass.
+No requests were filtered and no tolerances changed. See
+`native-revalidation-pass116-draw.json` for source evidence and
+`native-revalidation-pass116.json` for the complete archive result.
+
+Position 38 is next. Independent Edgar off-grid positions, timing
+getter placeholders, explicit Model culling, remaining original sources
+and contexts, and native framebuffer parity remain open.
