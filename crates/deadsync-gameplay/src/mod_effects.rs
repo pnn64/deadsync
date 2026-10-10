@@ -245,6 +245,7 @@ pub struct VisualOverrides {
     pub parabola_z: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
+    pub confusion_x_offset: Option<f32>,
     pub confusion_offset_cols: [Option<f32>; MAX_COLS],
     pub flip: Option<f32>,
     pub invert: Option<f32>,
@@ -329,6 +330,7 @@ impl Default for VisualOverrides {
             parabola_z: None,
             confusion: None,
             confusion_offset: None,
+            confusion_x_offset: None,
             confusion_offset_cols: [None; MAX_COLS],
             flip: None,
             invert: None,
@@ -415,6 +417,7 @@ impl VisualOverrides {
             || self.parabola_z.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
+            || self.confusion_x_offset.is_some()
             || self.confusion_offset_cols.iter().any(Option::is_some)
             || self.flip.is_some()
             || self.invert.is_some()
@@ -607,6 +610,7 @@ pub struct VisualEffects {
     pub parabola_z: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
+    pub confusion_x_offset: f32,
     pub confusion_offset_cols: [f32; MAX_COLS],
     pub big: f32,
     pub flip: f32,
@@ -699,6 +703,7 @@ impl VisualEffects {
             parabola_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
+            confusion_x_offset: 0.0,
             confusion_offset_cols: [0.0; MAX_COLS],
             big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
             flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
@@ -869,6 +874,11 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
+    approach_optional_visual(
+        &mut visual.confusion_x_offset,
+        base.confusion_x_offset,
+        step,
+    );
     approach_optional_visual_cols(
         &mut visual.confusion_offset_cols,
         base.confusion_offset_cols,
@@ -1342,6 +1352,14 @@ pub fn approach_visual_overrides_to_target(
         target.confusion_offset,
         base.confusion_offset,
         speed.confusion_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_x_offset,
+        target.confusion_x_offset,
+        base.confusion_x_offset,
+        speed.confusion_x_offset,
         delta_time,
         1.0,
     );

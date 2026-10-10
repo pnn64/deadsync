@@ -1,4 +1,4 @@
-use crate::transforms::{visual_note_rotation_x, visual_note_rotation_y};
+use crate::transforms::{visual_confusion_x_deg, visual_note_rotation_x, visual_note_rotation_y};
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
@@ -615,6 +615,7 @@ fn compose_field_contents<S, F>(
             tail_adjusted_travel,
         );
         let hold_parts = hold_plan.parts;
+        let note_rotation_x = visual_confusion_x_deg(visual.confusion_x_offset);
         let note_rotation_y = visual_note_rotation_y(head_anchor_adjusted_travel, visual.twirl);
         let flat_tap_face_rotation_y = note_rotation_y;
         let head_layers = hold_plan.head_layers;
@@ -813,7 +814,7 @@ fn compose_field_contents<S, F>(
         let head_slot = head_slot.and_then(|slot| {
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(slot, elapsed, current_beat),
-                [0.0, note_rotation_y],
+                [note_rotation_x, note_rotation_y],
             );
             if !draw.visible {
                 return None;
@@ -906,7 +907,7 @@ fn compose_field_contents<S, F>(
                     hold_head_translation,
                     elapsed,
                     current_beat,
-                    0.0,
+                    note_rotation_x,
                     note_rotation_y,
                     flat_tap_face_rotation_y,
                     hold_head_rot,
@@ -934,7 +935,7 @@ fn compose_field_contents<S, F>(
             let size = scale_sprite_to_arrow(note_slot.size(), hold_head_target_arrow_px);
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(note_slot, elapsed, current_beat),
-                [0.0, note_rotation_y],
+                [note_rotation_x, note_rotation_y],
             );
             let rotation = -note_slot.sprite_def().rotation_deg as f32;
             compose_flat_note_layer(
@@ -1183,7 +1184,8 @@ fn compose_visible_notes<S, F>(
                     let scale = effect_zoom * request.options.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
-                let note_rotation_x = visual_note_rotation_x(adjusted_travel, visual.roll);
+                let note_rotation_x = visual_confusion_x_deg(visual.confusion_x_offset)
+                    + visual_note_rotation_x(adjusted_travel, visual.roll);
                 let note_rotation_y = visual_note_rotation_y(adjusted_travel, visual.twirl);
                 let flat_tap_face_rotation_y = note_rotation_y;
                 let note_rotation_z = prepared.column_rotations_deg[local_col]

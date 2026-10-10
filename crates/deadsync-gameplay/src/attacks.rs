@@ -641,6 +641,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualParabolaZ,
     VisualConfusion,
     VisualConfusionOffset,
+    VisualConfusionXOffset,
     VisualConfusionOffsetColumn(usize),
     VisualFlip,
     VisualInvert,
@@ -2319,6 +2320,11 @@ fn append_song_lua_ease_targets_key(
             pct_from,
             pct_to,
         ),
+        "confusionxoffset" => push(
+            SongLuaEaseMaskTarget::VisualConfusionXOffset,
+            pct_from,
+            pct_to,
+        ),
         "flip" => push(SongLuaEaseMaskTarget::VisualFlip, pct_from, pct_to),
         "invert" => push(SongLuaEaseMaskTarget::VisualInvert, pct_from, pct_to),
         "tornado" => push(SongLuaEaseMaskTarget::VisualTornado, pct_from, pct_to),
@@ -3010,6 +3016,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualConfusionXOffset => visual.confusion_x_offset = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => {
             if col < MAX_COLS {
                 visual.confusion_offset_cols[col] = Some(value);
@@ -3270,6 +3277,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualConfusionXOffset => window.visual.confusion_x_offset.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => window
             .visual
             .confusion_offset_cols
@@ -4657,6 +4665,10 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.parabola_z, visual.parabola_z);
     mark_active_target(&mut targets.confusion, visual.confusion);
     mark_active_target(&mut targets.confusion_offset, visual.confusion_offset);
+    mark_active_target(
+        &mut targets.confusion_x_offset,
+        visual.confusion_x_offset,
+    );
     for (target, value) in targets
         .confusion_offset_cols
         .iter_mut()
@@ -5568,6 +5580,9 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusionOffset => {
                 attack.visual_speed.confusion_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualConfusionXOffset => {
+                attack.visual_speed.confusion_x_offset = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualFlip => attack.visual_speed.flip = Some(speed),
             SongLuaEaseMaskTarget::VisualInvert => attack.visual_speed.invert = Some(speed),
@@ -6528,6 +6543,15 @@ fn apply_active_visual_window(
         active_clear_all,
         persisted,
     );
+    apply_active_visual_target(
+        &mut values.visual.confusion_x_offset,
+        &mut values.visual_speed.confusion_x_offset,
+        window.visual.confusion_x_offset,
+        window.visual_speed.confusion_x_offset,
+        active_targets.visual.confusion_x_offset,
+        active_clear_all,
+        persisted,
+    );
     apply_active_visual_cols(
         &mut values.visual.confusion_offset_cols,
         &mut values.visual_speed.confusion_offset_cols,
@@ -7436,6 +7460,12 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "confusionxoffset" => set_approached_mod(
+            &mut out.visual.confusion_x_offset,
+            &mut out.visual_speed.confusion_x_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "flip" => set_approached_mod(
             &mut out.visual.flip,
             &mut out.visual_speed.flip,
@@ -7951,6 +7981,10 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),
         confusion: merge_attack_value(base.confusion, attack.confusion),
         confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
+        confusion_x_offset: merge_attack_value(
+            base.confusion_x_offset,
+            attack.confusion_x_offset,
+        ),
         confusion_offset_cols,
         big: base.big,
         flip: merge_attack_value(base.flip, attack.flip),

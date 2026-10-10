@@ -496,6 +496,7 @@ fn runtime_mod_value(
         "parabolaz" => visual.parabola_z.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
         "confusionoffset" => visual.confusion_offset.unwrap_or(0.0),
+        "confusionxoffset" => visual.confusion_x_offset.unwrap_or(0.0),
         "tiny" => visual.tiny.unwrap_or(0.0),
         "flip" => visual.flip.unwrap_or(0.0),
         "invert" => visual.invert.unwrap_or(0.0),
@@ -3141,6 +3142,29 @@ fn confusion_y_matches_native_targets() {
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     assert_eq!(parity.checks(), 260);
     parity.assert_complete("confusion Y");
+}
+
+#[test]
+fn confusion_x_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("confusion-x.lua");
+    let trace: NativeTrace = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/confusion-x-native.json"))
+            .expect("native confusion fixture"),
+    )
+    .expect("valid native confusion fixture");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Confusion X");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile confusion fixture");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 36);
+    parity.assert_complete("confusion X");
 }
 
 #[test]

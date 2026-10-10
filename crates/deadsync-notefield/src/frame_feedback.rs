@@ -1,4 +1,5 @@
 use crate::explosions::{ExplosionComposeRequest, ExplosionRotation, compose_explosion_layers};
+use crate::transforms::visual_confusion_x_deg;
 use crate::{
     ColumnFeedbackRequest, ModelMeshCache, NoteXParams, NotefieldComposeRequest, PreparedNotefield,
     ReceptorDrawRequest, ReceptorPress, compose_column_feedback, compose_receptor_draws,
@@ -430,6 +431,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     press_visual: lane.receptor_press_visual,
                     receptor_alpha,
                     field_zoom,
+                    rotation_x_deg: visual_confusion_x_deg(visual.confusion_x_offset),
                     rotation_y_deg: 0.0,
                     pulse_color,
                     idle_glow: receptor.receptor_idle_glow,
@@ -462,6 +464,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                         center,
                         field_zoom,
                         effect_zoom,
+                        rotation_x_deg: visual_confusion_x_deg(visual.confusion_x_offset),
                         rotation: ExplosionRotation::Tap {
                             rotation_y_deg: 0.0,
                             extra_z_deg: confusion_rotation_deg,
@@ -514,6 +517,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     center,
                     field_zoom,
                     effect_zoom: lane_zooms[local_col],
+                    rotation_x_deg: visual_confusion_x_deg(visual.confusion_x_offset),
                     rotation: ExplosionRotation::Tap {
                         rotation_y_deg: 0.0,
                         extra_z_deg: lane_rotations[local_col],
@@ -554,6 +558,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     center: lane_centers[local_col],
                     field_zoom,
                     effect_zoom: lane_base_zooms[local_col],
+                    rotation_x_deg: visual_confusion_x_deg(visual.confusion_x_offset),
                     rotation: ExplosionRotation::Mine,
                     z: crate::style::MINE_EXPLOSION_Z,
                 },
@@ -2785,6 +2790,11 @@ mod tests {
                     request.chart.note_itg_rows = &[408];
                     request.visual.current_display_beat = beat;
                     request.visual.visual.roll = 15.0;
+                    request.visual.visual.confusion_x_offset = if layered {
+                        std::f32::consts::FRAC_PI_2
+                    } else {
+                        0.0
+                    };
                     let prepared = prepare_notefield(&request).unwrap();
                     let mut active = active_hold(0);
                     active.note_type = note_type;
@@ -2816,7 +2826,11 @@ mod tests {
                     }).collect();
                     assert_eq!(heads.len(), if layered { 2 } else { 1 });
                     for head in heads {
-                        assert_eq!(head.rot_x_deg, 0.0, "Roll must exclude hold heads");
+                        assert_eq!(
+                            head.rot_x_deg,
+                            if layered { 90.0 } else { 0.0 },
+                            "Roll excludes hold heads; ConfusionXOffset still rotates them"
+                        );
                         assert_eq!(
                             head.uv_rect,
                             if mixed && !explicit {
@@ -4918,7 +4932,7 @@ mod tests {
         }
     }
     #[test]
-    fn roll_rotates_composed_taps_and_mines_without_rotating_receptors() {
+    fn confusion_x_and_roll_match_native() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
             compose_notefield_field,
@@ -4937,6 +4951,9 @@ mod tests {
             vec![TestSlot::new("note0")].into(),
             vec![TestSlot::new("note1")].into(),
         ];
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/confusion-x-rotation.json"
+        )).expect("compiled ArrowEffects control");
         let timing = TimingData::default();
         let hides = SongLuaNoteHideWindows::default();
         let lanes = [
@@ -4954,13 +4971,17 @@ mod tests {
             }
             let rows = [96, 144];
             for direction in [-1.0, 1.0] {
-                for roll in [-2.5, 2.5] {
+                for vector in native["vectors"].as_array().expect("native vectors") {
+                    let value = |name: &str| vector[name].as_f64().expect("native float") as f32;
+                    let roll = value("roll");
+                    let receptor_x = value("receptor");
                     let mut request =
                         request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
                     request.chart.lane_note_row_indices = &lanes;
                     request.chart.note_itg_rows = &rows;
                     request.geometry.column_dirs.fill(direction);
                     request.visual.visual.roll = roll;
+                    request.visual.visual.confusion_x_offset = value("offset");
                     request.visual.accel.wave = 0.5;
                     request.visual.visual.move_y_cols = [0.5; MAX_COLS];
                     let prepared = prepare_notefield(&request).expect("prepared field");
@@ -4983,6 +5004,7 @@ mod tests {
                         &source,
                     );
                     let mut checked = [false; 2];
+                    let mut receptors = 0;
                     for draw in &draws {
                         let FlatDraw::Sprite(sprite) = draw else {
                             continue;
@@ -4997,8 +5019,10 @@ mod tests {
                             let y_offset =
                                 (sprite.center[1] - prepared.field.column_receptor_ys[col] - 32.0)
                                     / prepared.field.column_dirs[col];
-                            assert!((sprite.rot_x_deg - roll * y_offset / 2.0).abs() < 0.0001);
-                            assert!(sprite.rot_x_deg.abs() > 1.0);
+                            let expected = receptor_x
+                                + (value("note") - receptor_x) * y_offset / value("travel");
+                            assert!((sprite.rot_x_deg - expected).abs() < 0.0001,
+                                "{kind:?}, native vector {vector}, actual {}", sprite.rot_x_deg);
                             let deadlib_present::actors::Actor::Sprite { rot_x_deg, .. } =
                                 crate::actor_from_flat_draw(draw.clone())
                             else {
@@ -5007,9 +5031,11 @@ mod tests {
                             assert_eq!(rot_x_deg, sprite.rot_x_deg);
                             checked[col] = true;
                         } else if key.starts_with("target") {
-                            assert_eq!(sprite.rot_x_deg, 0.0);
+                            assert!((sprite.rot_x_deg - receptor_x).abs() < 0.0001);
+                            receptors += 1;
                         }
                     }
+                    assert_eq!(receptors, 2, "both receptors must render");
                     assert_eq!(
                         checked, [true; 2],
                         "{kind:?}, direction {direction}, Roll {roll}"
