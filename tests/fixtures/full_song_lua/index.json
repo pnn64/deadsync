@@ -1491,12 +1491,10 @@
     {
       "title": "Bad Trails",
       "source_simfile": "Bad Trails/Maybe it was fated.sm",
-      "harness_version": "0.1.0",
-      "archive": "3002a9f06919773b53a229d53e85ef2b2017b14124e26bffd41ec72cc2dda05d.tar.zst",
-      "sha256": "3002a9f06919773b53a229d53e85ef2b2017b14124e26bffd41ec72cc2dda05d",
-      "compressed_bytes": 857601,
-      "uncompressed_sha256": "7cbada2c84ce7691d69fc56459fd8de59b01901bb128f9a46b1403d64b4c8021",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "91835e16471543e7f6a0ccc1844196ff7ead848826fd43e90f187ff0acbf6c5b.tar.zst",
+      "sha256": "91835e16471543e7f6a0ccc1844196ff7ead848826fd43e90f187ff0acbf6c5b",
+      "compressed_bytes": 844189,
       "aliases": [
         "ba4b660977d769034ed54ff29c55b6578513cdc517fa6bc18c4a2965974decd9.tar.zst"
       ]
@@ -1504,12 +1502,10 @@
     {
       "title": "Bad Trails",
       "source_simfile": "Bad Trails/Maybe it was fated.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf.tar.zst",
-      "sha256": "6ac9011b782bf92191cbce38785af7031dd994d56dd378fe6d40103663ccd1bf",
-      "compressed_bytes": 856986,
-      "uncompressed_sha256": "d9ed3d4456d6c60dfc0d854e14bad77b7b796120a64ddcb19ad47bddbeda39e7",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "44585ae90fcee44eb839e0c618dd81e0a90eaf95eacf3d9ed531cb1826170375.tar.zst",
+      "sha256": "44585ae90fcee44eb839e0c618dd81e0a90eaf95eacf3d9ed531cb1826170375",
+      "compressed_bytes": 844446,
       "aliases": [
         "6db2792d099d9c1ee3170705d4bd77cb8199427dbe8ebd4c1a34d0bb0a37ba83.tar.zst"
       ]
@@ -1517,12 +1513,10 @@
     {
       "title": "Badlands",
       "source_simfile": "Badlands/Badlands.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7.tar.zst",
-      "sha256": "bf8d1d0af6aa596698e8201e78aa44f8522fc99800aca0e9a02b605d3687edb7",
-      "compressed_bytes": 127088,
-      "uncompressed_sha256": "231f769bbf402814243197ebf9463b207df211dae558d6c8c5df842152e6225b",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c.tar.zst",
+      "sha256": "6314bf1abe3c94b05ccabd5787c3ee56cd9380438258801f97ddd9dbc6bbf48c",
+      "compressed_bytes": 480548,
       "aliases": [
         "b416acd5931d9f4a28b44dcd91c77f6008e7cda4699ae6855a6eeb1da4b81e52.tar.zst"
       ]
@@ -1530,12 +1524,10 @@
     {
       "title": "竹",
       "source_simfile": "Bamboo/Take.ssc",
-      "harness_version": "0.1.0",
-      "archive": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e.tar.zst",
-      "sha256": "79d2a2c238331bd8c4fd4a00f96301cdc081165673b459758181af953961c37e",
-      "compressed_bytes": 143451,
-      "uncompressed_sha256": "7d65dbbd405f3b015b0896a18b943d84c645af44e3c8fcd385c0d8a15f93f3d5",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30.tar.zst",
+      "sha256": "d23b4863319782e7b7ad8b8db3872f17a2db463acf379190293f0f5873b70b30",
+      "compressed_bytes": 182679,
       "aliases": [
         "63e2807eff0d0b636961542419dbd314a930ef9fd6883aa340f2b998c96961ce.tar.zst"
       ]
@@ -1543,12 +1535,10 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.sm",
-      "harness_version": "0.1.31",
-      "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
-      "sha256": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f",
-      "compressed_bytes": 55098,
-      "uncompressed_sha256": "a3a7deaa31fd84ab8c8c3593440171184f4aabeff5e70ab1866373c74bed373c",
-      "compression_level": 12,
+      "harness_version": "0.1.64",
+      "archive": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf.tar.zst",
+      "sha256": "89ccfcb83c3fb05f3b48b922272cc115dc5b69ebf345bd179a1e5a15af1d9edf",
+      "compressed_bytes": 55318,
       "aliases": [
         "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
         "3a11347bbb603a5a02eca3de3ddbe5ff45624b040cadec32440c329bfda1736d.tar.zst",
@@ -1561,12 +1551,10 @@
     {
       "title": "Bank Account",
       "source_simfile": "Bank Account/Bank Account.ssc",
-      "harness_version": "0.1.0",
-      "archive": "43a8ae83ecfaa854abe00df53c2d6528b760ce58836dd58505325dfb5c73a1b9.tar.zst",
-      "sha256": "43a8ae83ecfaa854abe00df53c2d6528b760ce58836dd58505325dfb5c73a1b9",
-      "compressed_bytes": 95294,
-      "uncompressed_sha256": "cb4db378c1e81b3b13f186b74d837556af39238e9899e5de2b393cf2e5986b3f",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "0211e7ed4192b8c793f8ca9b308da10fd59666ac4c07769ac8e29e21fad42268.tar.zst",
+      "sha256": "0211e7ed4192b8c793f8ca9b308da10fd59666ac4c07769ac8e29e21fad42268",
+      "compressed_bytes": 137431,
       "aliases": [
         "0e911c015a7964ae74c12737103c2b57478545aa98bb84c0c7f5958cd2545b40.tar.zst"
       ]
@@ -1574,12 +1562,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKBBKK/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6b6d748837ab1854de17f43ac475e52d3cd52506bb9fb02265e432a2a70ab95b.tar.zst",
-      "sha256": "6b6d748837ab1854de17f43ac475e52d3cd52506bb9fb02265e432a2a70ab95b",
-      "compressed_bytes": 493031,
-      "uncompressed_sha256": "73422bea00a084b6478245d0fac24b6e093dd74ca832b6c6e40f2a231e327630",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "c523758b4a8df0e732831730fb9a8413c5d2ac7f95db5006dcbad26c4343e4a4.tar.zst",
+      "sha256": "c523758b4a8df0e732831730fb9a8413c5d2ac7f95db5006dcbad26c4343e4a4",
+      "compressed_bytes": 532271,
       "aliases": [
         "ce6bb44d3a5cb3ed2c35b72677ea79cb6243040b1a332dbd1bb8f539b9aed9eb.tar.zst"
       ]
@@ -1587,12 +1573,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS 3]/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8bf0f42b53dbd38ea4b6ac7445e0c5287242411edf5ece437ac741c15a77810e.tar.zst",
-      "sha256": "8bf0f42b53dbd38ea4b6ac7445e0c5287242411edf5ece437ac741c15a77810e",
-      "compressed_bytes": 37864,
-      "uncompressed_sha256": "6a01d57847394e3109b91c43e922de9c622b5c4af1bcde2e290d09bc24942c3c",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "66138d611a92a6bd3653acda2df933580c82a5eed13c9c5dbfefba64a2ce4117.tar.zst",
+      "sha256": "66138d611a92a6bd3653acda2df933580c82a5eed13c9c5dbfefba64a2ce4117",
+      "compressed_bytes": 13691529,
       "aliases": [
         "3443377862b7918d26aa460e35a4b5b54616fe2ae57082316834545df9045f83.tar.zst"
       ]
@@ -1600,12 +1584,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS 4]/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "40f6ccbdcb2b4ccc34c9ccdcf21d8851e59b452b98d3e3a59029a5ea299d5b58.tar.zst",
-      "sha256": "40f6ccbdcb2b4ccc34c9ccdcf21d8851e59b452b98d3e3a59029a5ea299d5b58",
-      "compressed_bytes": 38136,
-      "uncompressed_sha256": "bd148e936daa3df612272816d85839f11bfd3874de888c1d47674e1e3ac7e070",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "31b6d48d1377c91006340baac97ad428c6e89188e12ab32b2899de445b76b18c.tar.zst",
+      "sha256": "31b6d48d1377c91006340baac97ad428c6e89188e12ab32b2899de445b76b18c",
+      "compressed_bytes": 6834490,
       "aliases": [
         "f4e7134b23a708cf014a6e1f66c13561c3c9b3c667d8e8d17536c65a6839b9fd.tar.zst"
       ]
@@ -1613,12 +1595,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS5 SM5]/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6.tar.zst",
-      "sha256": "0c9ee3186d44b4bff7f9943354af1a3962571b115c69975e61c70417781a99f6",
-      "compressed_bytes": 38347,
-      "uncompressed_sha256": "574c34af1bfcb5be2ff4bb05bffd3666649654a4d8ec314af189eccdcc65f05e",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865.tar.zst",
+      "sha256": "a9e6799f485f3479ce47efc20a9ac89bcd473e4052c4747340514a08ad75a865",
+      "compressed_bytes": 5565370,
       "aliases": [
         "c32851a88cb19777b759b4d5a154a8cb686c6a240ca5031d37f228d45da4077e.tar.zst"
       ]

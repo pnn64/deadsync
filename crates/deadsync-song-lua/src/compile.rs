@@ -461,7 +461,8 @@ where
         );
     }
     compile_timer.push_stage("read_overlays");
-    let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)?;
+    let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)
+        .map_err(|err| format!("failed to read tracked actors: {err}"))?;
     let mut hidden_players = std::array::from_fn(|player| {
         tracked_actors
             .get(player)
@@ -469,19 +470,20 @@ where
     });
     let mut overlay_trigger_counter = 0usize;
     let mut sound_events = startup_sounds;
-    let prefix_is_runtime =
-        update_tree_reads_global(&lua, &root, "prefix_globals").map_err(|err| err.to_string())?;
+    let prefix_is_runtime = update_tree_reads_global(&lua, &root, "prefix_globals")
+        .map_err(|err| format!("failed to inspect prefix update callbacks: {err}"))?;
     let prefix_perframes = globals
         .get::<Option<Table>>("prefix_globals")
-        .map_err(|err| err.to_string())?
+        .map_err(|err| format!("failed to read prefix_globals: {err}"))?
         .and_then(|table| table.get::<Option<Table>>("perframes").ok().flatten());
     let global_perframes = globals
         .get::<Option<Table>>("mod_perframes")
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!("failed to read mod_perframes: {err}"))?;
     let runtime_perframe_tables =
-        read_update_function_tables(&lua, &root, &["mod_perframes", "perframes"])?;
-    let update_reads_global_perframes =
-        update_tree_reads_global(&lua, &root, "mod_perframes").map_err(|err| err.to_string())?;
+        read_update_function_tables(&lua, &root, &["mod_perframes", "perframes"])
+            .map_err(|err| format!("failed to read update callback tables: {err}"))?;
+    let update_reads_global_perframes = update_tree_reads_global(&lua, &root, "mod_perframes")
+        .map_err(|err| format!("failed to inspect global update callbacks: {err}"))?;
     let global_perframes_are_runtime = global_perframes.as_ref().is_some_and(|global| {
         runtime_perframe_tables
             .iter()
