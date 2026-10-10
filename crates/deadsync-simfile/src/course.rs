@@ -253,40 +253,33 @@ where
     report_load_progress(&mut progress, 0, total_courses, "", "");
 
     for course_path in course_paths {
-        let (group_display, course_display) = course_progress_names(&course_path, progress_root);
-        let group_display = group_display.to_owned();
-        let course_display = course_display.to_owned();
-        let mut report_done = || {
-            courses_done = courses_done.saturating_add(1);
-            report_load_progress(
-                &mut progress,
-                courses_done,
-                total_courses,
-                &group_display,
-                &course_display,
-            );
-        };
-
-        let course = match parse_course_file(&course_path) {
-            Ok(course) => course,
+        let result = parse_course_file(&course_path).and_then(|course| {
+            validate_course_refs(&course, song_roots, &mut group_dirs, total_song_count)
+                .map_err(|error| error.message)?;
+            Ok(course)
+        });
+        let report_path = match result {
+            Ok(course) => {
+                courses.push((course_path, course));
+                &courses.last().expect("course was just added").0
+            }
             Err(message) => {
                 failures.push(CourseLoadFailure {
                     path: course_path,
                     message,
                 });
-                report_done();
-                continue;
+                &failures.last().expect("failure was just added").path
             }
         };
-
-        match validate_course_refs(&course, song_roots, &mut group_dirs, total_song_count) {
-            Ok(()) => courses.push((course_path, course)),
-            Err(error) => failures.push(CourseLoadFailure {
-                path: course_path,
-                message: error.message,
-            }),
-        }
-        report_done();
+        let (group_display, course_display) = course_progress_names(report_path, progress_root);
+        courses_done = courses_done.saturating_add(1);
+        report_load_progress(
+            &mut progress,
+            courses_done,
+            total_courses,
+            group_display,
+            course_display,
+        );
     }
 
     CourseLoadReport { courses, failures }
@@ -2190,5 +2183,9 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    mod ownership_perf {
+        include!("course_ownership_perf.rs");
     }
 }

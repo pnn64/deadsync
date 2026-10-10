@@ -1,0 +1,104 @@
+{
+  "pass": 162,
+  "previous_record": "native-revalidation-pass161.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+  "comparator_sha256": "c5d7e11b8aa693053d339bf1acbb2ab9f7a3cc798fc8cb2e08824ae6df47af64",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    83
+  ],
+  "next_position": 84,
+  "comparisons_passed": 442107,
+  "charts": [
+    {
+      "position": 83,
+      "entry": {
+        "title": "Actin' Up",
+        "source_simfile": "Actin Up/actinup-fakemines.sm",
+        "harness_version": "0.1.58",
+        "archive": "0f3ef1883df1f8d1009c98c94ae2b89cde3c82207a510744395ab3c2ee607566.tar.zst",
+        "sha256": "0f3ef1883df1f8d1009c98c94ae2b89cde3c82207a510744395ab3c2ee607566",
+        "compressed_bytes": 203364,
+        "aliases": [
+          "a621670594e1a7296e215a4a6a32f996dde12ac27aeb009019db40b6d12dd338.tar.zst"
+        ]
+      },
+      "original_archive_retained": "898409c37b21205b1ad8ec8e8314f0e70706cebcdf1ea8e84f9731a17e02efa0.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "1591f4fff3ff2b9fa72342e1d311e5e70bf446ad278e113aee787447a50fb22b",
+      "original_source_sha256": {
+        "Actin Up/actinup-fakemines.sm": "b0eb937e15ae5487871d2e39bbabcc57c3431c4d182e835939f9da75cf2fdc07",
+        "Actin Up/actinup-fakemines.ssc": "edcec9e13c0f0fb1def360989dcc2c474069d70b15f13f807d820ddf2d919f87",
+        "Actin Up/actinup.png": "6f2743896aaeb966e943db3491ddb628389602ff7dcdf575ac8bfb9cb2d388ed",
+        "Actin Up/actinup3.ogg": "2643cabfe3b3c82c5ace4a0bee1108bc3a02813442a310b8e5804c7191da8f8f",
+        "Actin Up/cdtitle-y.png": "7d71a934981027933c21d4682b7173b053147df8967a8582630e74830a37aaa4",
+        "Actin Up/lua/default.lua": "8a89fe7559a5b755efdda07bbc971a77e60f2f979e8be1b9563e7df490eca72b",
+        "Actin Up/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "Actin Up/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "Actin Up/lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46",
+        "Actin Up/lua/_script.lua": "1cd2f8decf80b73f1bf562a1a2fb7f46b1693f532891e4e83686e7e5d728be1c"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 5950,
+      "duration_seconds": 99.14061737060547,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 83,
+      "source_simfile": "Actin Up/actinup-fakemines.sm",
+      "archive": "0f3ef1883df1f8d1009c98c94ae2b89cde3c82207a510744395ab3c2ee607566.tar.zst",
+      "archive_sha256": "0f3ef1883df1f8d1009c98c94ae2b89cde3c82207a510744395ab3c2ee607566",
+      "harness_version": "0.1.58",
+      "source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+      "source_pending_commit": false,
+      "binary_sha256": "c5d7e11b8aa693053d339bf1acbb2ab9f7a3cc798fc8cb2e08824ae6df47af64",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\confusion-x-v3-full_song_lua.exe",
+        "0f3ef1883df1f8d1009c98c94ae2b89cde3c82207a510744395ab3c2ee607566.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.651244000066072,
+      "comparisons_passed": 442107,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-083-confusion-x-v3.log",
+      "log_sha256": "19e62fb4879fd444285a446ecd3249acc83eb6c0b1347bf1345b9fc3755624e9",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass162-top-083-current-native-v1.json",
+      "native_receipt_sha256": "78699079021aade9c65098595ec128841368656655e2a87aeb57c9e4c8589ef5",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "73cbeaba14da498d0d1fb73367767082c936c0ea",
+    "source_pending_commit": false,
+    "binary_sha256": "37cf808d5df79f71009e174ec45adcc0f8227c9ed4a4bbf7f3b4368bec0d5a3e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\confusion-x-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.276945499703288,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-083-native-pass162.log",
+    "log_sha256": "c402941118b3f7755beb3749472a293940e623386f5756e9ef945b331d4a0116",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 270 filtered out; finished in 0.87s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

@@ -1,0 +1,59 @@
+{
+  "source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+  "harness_version": "0.1.54",
+  "binary_sha256": "cbd9ab9b64070f68ce44156aa3c4247b184ae5eed10bc5ee29f7887d6288b4f6",
+  "trace_sha256": "f119f61db1195154d21fe1dde887052d7a983028ecb21f394226540356281d42",
+  "fixture_sha256": {
+    "control.lua": "91bce52c0df46957dab0e4977e9887da6320a18fd615f0893076dc0b859ffe07",
+    "control.ssc": "68ea1613997a9427c4b4c690c80db7c9e555b4901080a48a3073698c3873f39e",
+    "native.json": "f119f61db1195154d21fe1dde887052d7a983028ecb21f394226540356281d42"
+  },
+  "native_capture_status": "ok",
+  "update_frames": 241,
+  "end_position": {
+    "beat": 4,
+    "music_seconds": 4,
+    "seconds": 4
+  },
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "messages": [
+    {
+      "actor_ids": [],
+      "beat": 0,
+      "name": "SongOptionsString:",
+      "seconds": 0
+    },
+    {
+      "actor_ids": [],
+      "beat": 0,
+      "name": "SongOptionsString:1.25xMusic",
+      "seconds": 0
+    },
+    {
+      "actor_ids": [],
+      "beat": 0,
+      "name": "SongOptionsString:1.2xMusic",
+      "seconds": 0
+    },
+    {
+      "actor_ids": [],
+      "beat": 0,
+      "name": "SongOptionsString:2.0xMusic",
+      "seconds": 0
+    },
+    {
+      "actor_ids": [],
+      "beat": 0,
+      "name": "SongOptionsString:1.23xMusic",
+      "seconds": 0
+    },
+    {
+      "actor_ids": [],
+      "beat": 0,
+      "name": "SongOptionsString:1.0xMusic",
+      "seconds": 0
+    }
+  ],
+  "coverage": "GetString with Stage and Current music rates synchronized by ApplyStageModifiers; differing ModsLevel state is not proven by this control."
+}

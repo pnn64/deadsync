@@ -1,0 +1,60 @@
+{
+  "contract": "Retain the actual Init, On and queued Song-level boolean API observations in call order",
+  "lua_sha256": "9894a3ee853a1cb31a8440e72e1efc03b18a1de08f9458a71e0474f256e04a2f",
+  "native_trace_sha256": "3d2787a6118ee6bec60489e885ee1da051472b6c45f0be4afa9ce07b56b40885",
+  "native_harness_commit": "72f8c2504f65a7cbc8038c924ee84da1cf93ab40",
+  "native_binary_sha256": "9b7ca8237071cb6989345ea9e21c1b95d6adcca036b2b41473a6d81b484dbe8e",
+  "native_capture_tested_before_commit": true,
+  "capture_complete": true,
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "archive_sha256": "e01a066092fe986a20b8375d489f384a53195f323ac12717717a6f2be752ab81",
+  "update_frames": 241,
+  "before": {
+    "exit_code": 1,
+    "comparisons_passed": 5309,
+    "comparisons_failed": 12,
+    "elapsed_seconds": 0.7339346003718674,
+    "archive_sha256": "e01a066092fe986a20b8375d489f384a53195f323ac12717717a6f2be752ab81",
+    "binary_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+    "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\startup-bools-before-v1.log",
+    "log_sha256": "a92fd2bf8d8055f9e345fd58221d36fa1a0bcad586d5f51d2631537b0df22ba4",
+    "control_complete": true,
+    "current_worktree_used": false
+  },
+  "after": {
+    "exit_code": 0,
+    "comparisons_passed": 5321,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 3.904610900208354,
+    "archive_sha256": "e01a066092fe986a20b8375d489f384a53195f323ac12717717a6f2be752ab81",
+    "binary_sha256": "7e9f7482ce30ee62af5dc457c1fbdbe80d665abb0c222c27d4bfd472bf00ff53",
+    "source_commit": "4e59125883b7cf5331779a0a95627fea47930fd9",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\startup-bools-after-v1.log",
+    "log_sha256": "19780b7781da270c65f702ac08f9ff2d27ad78affc98e50029dbc56bf3fe94fe",
+    "control_complete": true
+  },
+  "native_boolean_checks": 12,
+  "regression": "startup_boolean_writes_match_native also rejects removal of the first Init observation",
+  "runtime_regression": {
+    "exit_code": 101,
+    "result_lines": [
+      "test result: FAILED. 35 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 29.11s"
+    ],
+    "log_sha256": "ed50569ba98af62bb2d3b40ff19218ecfffe5e698f84fa9cb9a68511a2e7b0e1",
+    "binary_sha256": "b2a749585a6e99c23badf91775ff1edf405073b2498787e4edc0d787f8b987e2"
+  },
+  "preexisting_runtime_failures": [
+    "hidden_actor_tweens_drive_modifiers_without_probe_state",
+    "lane_stealth_survives_lua_writes_and_fresh_options",
+    "motion_suboptions_survive_lua_writes_and_reset"
+  ],
+  "original_archive_position": 90,
+  "original_archive_boolean_gaps_closed": 132,
+  "original_archive_still_failing": 82,
+  "original_archive_result_log_sha256": "e75321bfe5c656c5a09c978af1898ba52ace8abc1388b6a43527614b61f1822a",
+  "full_song_parity_complete": false
+}

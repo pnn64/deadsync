@@ -344,12 +344,13 @@ pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchComplet
     // typed, and no ghost can truthfully be drawn over that.
     let accepted = song_search_query_completed_with(&open.query, &label);
     let consumed = fuzzy::folded_prefix_len(&open.query, &accepted)?;
-    let remainder: String = accepted.chars().skip(consumed).collect();
-    if remainder.is_empty() {
-        return None;
-    }
+    let (split, _) = accepted.char_indices().nth(consumed)?;
+    let remainder = &accepted[split..];
+    let mut display = String::with_capacity(open.query.len() + remainder.len());
+    display.push_str(&open.query);
+    display.push_str(remainder);
     Some(SongSearchCompletion {
-        display: format!("{}{remainder}", open.query),
+        display,
         typed: open.query.clone(),
         accepted,
     })
@@ -1339,3 +1340,7 @@ mod tests {
 #[cfg(test)]
 #[path = "song_search/data_paths_perf.rs"]
 mod data_paths_perf;
+
+#[cfg(test)]
+#[path = "song_search/menu_buffers_perf.rs"]
+mod menu_buffers_perf;

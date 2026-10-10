@@ -64,16 +64,14 @@ pub fn approach_attack_value(
         *current = None;
         return;
     };
-    if delta_time <= f32::EPSILON {
-        *current = Some(target);
-        return;
-    }
     let Some(speed) = speed.filter(|value| value.is_finite()) else {
         *current = Some(target);
         return;
     };
     let step = delta_time.max(0.0) * speed.max(0.0) * unit_scale;
     if step <= f32::EPSILON {
+        // PlayerOptions::Approach preserves Current at zero elapsed time.
+        *current = Some(current.filter(|value| value.is_finite()).unwrap_or(base));
         return;
     }
     let mut value = current.filter(|value| value.is_finite()).unwrap_or(base);
@@ -170,7 +168,9 @@ pub struct AccelOverrides {
     pub boost: Option<f32>,
     pub brake: Option<f32>,
     pub wave: Option<f32>,
+    pub wave_period: Option<f32>,
     pub expand: Option<f32>,
+    pub expand_period: Option<f32>,
     pub boomerang: Option<f32>,
 }
 
@@ -181,7 +181,9 @@ impl AccelOverrides {
         self.boost.is_some()
             || self.brake.is_some()
             || self.wave.is_some()
+            || self.wave_period.is_some()
             || self.expand.is_some()
+            || self.expand_period.is_some()
             || self.boomerang.is_some()
     }
 }
@@ -200,6 +202,9 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub attenuate_x: Option<f32>,
+    pub parabola_y: Option<f32>,
+    pub attenuate_y: Option<f32>,
     pub mod_timer_mult: Option<f32>,
     pub mod_timer_offset: Option<f32>,
     pub bumpy_x: Option<f32>,
@@ -242,9 +247,16 @@ pub struct VisualOverrides {
     pub zigzag_period: Option<f32>,
     pub zigzag_z_period: Option<f32>,
     pub xmode: Option<f32>,
+    pub bounce: Option<f32>,
+    pub bounce_period: Option<f32>,
+    pub bounce_offset: Option<f32>,
+    pub tornado_period: Option<f32>,
+    pub tornado_offset: Option<f32>,
     pub parabola_z: Option<f32>,
+    pub attenuate_z: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
+    pub confusion_x_offset: Option<f32>,
     pub confusion_offset_cols: [Option<f32>; MAX_COLS],
     pub flip: Option<f32>,
     pub invert: Option<f32>,
@@ -264,6 +276,35 @@ pub struct VisualOverrides {
     pub pulse_outer: Option<f32>,
     pub pulse_period: Option<f32>,
     pub beat_period: Option<f32>,
+    pub shrink_linear: Option<f32>,
+    pub shrink_mult: Option<f32>,
+    pub bounce_z: Option<f32>,
+    pub bounce_z_offset: Option<f32>,
+    pub bounce_z_period: Option<f32>,
+    pub digital_z: Option<f32>,
+    pub digital_z_offset: Option<f32>,
+    pub digital_z_period: Option<f32>,
+    pub digital_z_steps: Option<f32>,
+    pub tornado_z: Option<f32>,
+    pub tornado_z_offset: Option<f32>,
+    pub tornado_z_period: Option<f32>,
+    pub sawtooth: Option<f32>,
+    pub sawtooth_period: Option<f32>,
+    pub sawtooth_z: Option<f32>,
+    pub sawtooth_z_period: Option<f32>,
+    pub confusion_x: Option<f32>,
+    pub confusion_y: Option<f32>,
+    pub confusion_y_offset: Option<f32>,
+    pub beat_offset: Option<f32>,
+    pub beat_mult: Option<f32>,
+    pub beat_y: Option<f32>,
+    pub beat_y_offset: Option<f32>,
+    pub beat_y_mult: Option<f32>,
+    pub beat_y_period: Option<f32>,
+    pub beat_z: Option<f32>,
+    pub beat_z_offset: Option<f32>,
+    pub beat_z_mult: Option<f32>,
+    pub beat_z_period: Option<f32>,
     pub pulse_offset: Option<f32>,
     pub beat: Option<f32>,
     pub random_speed: Option<f32>,
@@ -284,6 +325,9 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            attenuate_x: None,
+            parabola_y: None,
+            attenuate_y: None,
             mod_timer_mult: None,
             mod_timer_offset: None,
             bumpy_x: None,
@@ -326,9 +370,16 @@ impl Default for VisualOverrides {
             zigzag_period: None,
             zigzag_z_period: None,
             xmode: None,
+            bounce: None,
+            bounce_period: None,
+            bounce_offset: None,
+            tornado_period: None,
+            tornado_offset: None,
             parabola_z: None,
+            attenuate_z: None,
             confusion: None,
             confusion_offset: None,
+            confusion_x_offset: None,
             confusion_offset_cols: [None; MAX_COLS],
             flip: None,
             invert: None,
@@ -348,6 +399,35 @@ impl Default for VisualOverrides {
             pulse_outer: None,
             pulse_period: None,
             beat_period: None,
+            shrink_linear: None,
+            shrink_mult: None,
+            bounce_z: None,
+            bounce_z_offset: None,
+            bounce_z_period: None,
+            digital_z: None,
+            digital_z_offset: None,
+            digital_z_period: None,
+            digital_z_steps: None,
+            tornado_z: None,
+            tornado_z_offset: None,
+            tornado_z_period: None,
+            sawtooth: None,
+            sawtooth_period: None,
+            sawtooth_z: None,
+            sawtooth_z_period: None,
+            confusion_x: None,
+            confusion_y: None,
+            confusion_y_offset: None,
+            beat_offset: None,
+            beat_mult: None,
+            beat_y: None,
+            beat_y_offset: None,
+            beat_y_mult: None,
+            beat_y_period: None,
+            beat_z: None,
+            beat_z_offset: None,
+            beat_z_mult: None,
+            beat_z_period: None,
             pulse_offset: None,
             beat: None,
             random_speed: None,
@@ -370,6 +450,9 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.attenuate_x.is_some()
+            || self.parabola_y.is_some()
+            || self.attenuate_y.is_some()
             || self.mod_timer_mult.is_some()
             || self.mod_timer_offset.is_some()
             || self.bumpy_x.is_some()
@@ -412,9 +495,16 @@ impl VisualOverrides {
             || self.zigzag_period.is_some()
             || self.zigzag_z_period.is_some()
             || self.xmode.is_some()
+            || self.bounce.is_some()
+            || self.bounce_period.is_some()
+            || self.bounce_offset.is_some()
+            || self.tornado_period.is_some()
+            || self.tornado_offset.is_some()
             || self.parabola_z.is_some()
+            || self.attenuate_z.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
+            || self.confusion_x_offset.is_some()
             || self.confusion_offset_cols.iter().any(Option::is_some)
             || self.flip.is_some()
             || self.invert.is_some()
@@ -434,6 +524,35 @@ impl VisualOverrides {
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
             || self.beat_period.is_some()
+            || self.shrink_linear.is_some()
+            || self.shrink_mult.is_some()
+            || self.bounce_z.is_some()
+            || self.bounce_z_offset.is_some()
+            || self.bounce_z_period.is_some()
+            || self.digital_z.is_some()
+            || self.digital_z_offset.is_some()
+            || self.digital_z_period.is_some()
+            || self.digital_z_steps.is_some()
+            || self.tornado_z.is_some()
+            || self.tornado_z_offset.is_some()
+            || self.tornado_z_period.is_some()
+            || self.sawtooth.is_some()
+            || self.sawtooth_period.is_some()
+            || self.sawtooth_z.is_some()
+            || self.sawtooth_z_period.is_some()
+            || self.confusion_x.is_some()
+            || self.confusion_y.is_some()
+            || self.confusion_y_offset.is_some()
+            || self.beat_offset.is_some()
+            || self.beat_mult.is_some()
+            || self.beat_y.is_some()
+            || self.beat_y_offset.is_some()
+            || self.beat_y_mult.is_some()
+            || self.beat_y_period.is_some()
+            || self.beat_z.is_some()
+            || self.beat_z_offset.is_some()
+            || self.beat_z_mult.is_some()
+            || self.beat_z_period.is_some()
             || self.pulse_offset.is_some()
             || self.beat.is_some()
             || self.random_speed.is_some()
@@ -530,7 +649,9 @@ pub struct AccelEffects {
     pub boost: f32,
     pub brake: f32,
     pub wave: f32,
+    pub wave_period: f32,
     pub expand: f32,
+    pub expand_period: f32,
     pub boomerang: f32,
 }
 
@@ -542,7 +663,9 @@ impl AccelEffects {
             boost: f32::from((mask & ACCEL_MASK_BIT_BOOST) != 0),
             brake: f32::from((mask & ACCEL_MASK_BIT_BRAKE) != 0),
             wave: f32::from((mask & ACCEL_MASK_BIT_WAVE) != 0),
+            wave_period: 0.0,
             expand: f32::from((mask & ACCEL_MASK_BIT_EXPAND) != 0),
+            expand_period: 0.0,
             boomerang: f32::from((mask & ACCEL_MASK_BIT_BOOMERANG) != 0),
         }
     }
@@ -562,6 +685,9 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub attenuate_x: f32,
+    pub parabola_y: f32,
+    pub attenuate_y: f32,
     pub mod_timer_mult: f32,
     pub mod_timer_offset: f32,
     pub bumpy_x: f32,
@@ -604,9 +730,16 @@ pub struct VisualEffects {
     pub zigzag_period: f32,
     pub zigzag_z_period: f32,
     pub xmode: f32,
+    pub bounce: f32,
+    pub bounce_period: f32,
+    pub bounce_offset: f32,
+    pub tornado_period: f32,
+    pub tornado_offset: f32,
     pub parabola_z: f32,
+    pub attenuate_z: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
+    pub confusion_x_offset: f32,
     pub confusion_offset_cols: [f32; MAX_COLS],
     pub big: f32,
     pub flip: f32,
@@ -627,6 +760,35 @@ pub struct VisualEffects {
     pub pulse_outer: f32,
     pub pulse_period: f32,
     pub beat_period: f32,
+    pub shrink_linear: f32,
+    pub shrink_mult: f32,
+    pub bounce_z: f32,
+    pub bounce_z_offset: f32,
+    pub bounce_z_period: f32,
+    pub digital_z: f32,
+    pub digital_z_offset: f32,
+    pub digital_z_period: f32,
+    pub digital_z_steps: f32,
+    pub tornado_z: f32,
+    pub tornado_z_offset: f32,
+    pub tornado_z_period: f32,
+    pub sawtooth: f32,
+    pub sawtooth_period: f32,
+    pub sawtooth_z: f32,
+    pub sawtooth_z_period: f32,
+    pub confusion_x: f32,
+    pub confusion_y: f32,
+    pub confusion_y_offset: f32,
+    pub beat_offset: f32,
+    pub beat_mult: f32,
+    pub beat_y: f32,
+    pub beat_y_offset: f32,
+    pub beat_y_mult: f32,
+    pub beat_y_period: f32,
+    pub beat_z: f32,
+    pub beat_z_offset: f32,
+    pub beat_z_mult: f32,
+    pub beat_z_period: f32,
     pub pulse_offset: f32,
     pub beat: f32,
     pub random_speed: f32,
@@ -654,6 +816,9 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            attenuate_x: 0.0,
+            parabola_y: 0.0,
+            attenuate_y: 0.0,
             mod_timer_mult: 0.0,
             mod_timer_offset: 0.0,
             bumpy_x: 0.0,
@@ -696,9 +861,16 @@ impl VisualEffects {
             zigzag_period: 0.0,
             zigzag_z_period: 0.0,
             xmode: 0.0,
+            bounce: 0.0,
+            bounce_period: 0.0,
+            bounce_offset: 0.0,
+            tornado_period: 0.0,
+            tornado_offset: 0.0,
             parabola_z: 0.0,
+            attenuate_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
+            confusion_x_offset: 0.0,
             confusion_offset_cols: [0.0; MAX_COLS],
             big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
             flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
@@ -719,6 +891,35 @@ impl VisualEffects {
             pulse_outer: 0.0,
             pulse_period: 0.0,
             beat_period: 0.0,
+            shrink_linear: 0.0,
+            shrink_mult: 0.0,
+            bounce_z: 0.0,
+            bounce_z_offset: 0.0,
+            bounce_z_period: 0.0,
+            digital_z: 0.0,
+            digital_z_offset: 0.0,
+            digital_z_period: 0.0,
+            digital_z_steps: 0.0,
+            tornado_z: 0.0,
+            tornado_z_offset: 0.0,
+            tornado_z_period: 0.0,
+            sawtooth: 0.0,
+            sawtooth_period: 0.0,
+            sawtooth_z: 0.0,
+            sawtooth_z_period: 0.0,
+            confusion_x: 0.0,
+            confusion_y: 0.0,
+            confusion_y_offset: 0.0,
+            beat_offset: 0.0,
+            beat_mult: 0.0,
+            beat_y: 0.0,
+            beat_y_offset: 0.0,
+            beat_y_mult: 0.0,
+            beat_y_period: 0.0,
+            beat_z: 0.0,
+            beat_z_offset: 0.0,
+            beat_z_mult: 0.0,
+            beat_z_period: 0.0,
             pulse_offset: 0.0,
             beat: f32::from((mask & VISUAL_MASK_BIT_BEAT) != 0),
             random_speed: 0.0,
@@ -808,6 +1009,9 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.attenuate_x, base.attenuate_x, step);
+    approach_optional_visual(&mut visual.parabola_y, base.parabola_y, step);
+    approach_optional_visual(&mut visual.attenuate_y, base.attenuate_y, step);
     approach_optional_visual(&mut visual.mod_timer_mult, base.mod_timer_mult, step);
     approach_optional_visual(&mut visual.mod_timer_offset, base.mod_timer_offset, step);
     approach_optional_visual(&mut visual.bumpy_x, base.bumpy_x, step);
@@ -866,9 +1070,20 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.zigzag_period, base.zigzag_period, step);
     approach_optional_visual(&mut visual.zigzag_z_period, base.zigzag_z_period, step);
     approach_optional_visual(&mut visual.xmode, base.xmode, step);
+    approach_optional_visual(&mut visual.bounce, base.bounce, step);
+    approach_optional_visual(&mut visual.bounce_period, base.bounce_period, step);
+    approach_optional_visual(&mut visual.bounce_offset, base.bounce_offset, step);
+    approach_optional_visual(&mut visual.tornado_period, base.tornado_period, step);
+    approach_optional_visual(&mut visual.tornado_offset, base.tornado_offset, step);
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
+    approach_optional_visual(&mut visual.attenuate_z, base.attenuate_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
+    approach_optional_visual(
+        &mut visual.confusion_x_offset,
+        base.confusion_x_offset,
+        step,
+    );
     approach_optional_visual_cols(
         &mut visual.confusion_offset_cols,
         base.confusion_offset_cols,
@@ -892,6 +1107,39 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
     approach_optional_visual(&mut visual.beat_period, base.beat_period, step);
+    approach_optional_visual(&mut visual.shrink_linear, base.shrink_linear, step);
+    approach_optional_visual(&mut visual.shrink_mult, base.shrink_mult, step);
+    approach_optional_visual(&mut visual.bounce_z, base.bounce_z, step);
+    approach_optional_visual(&mut visual.bounce_z_offset, base.bounce_z_offset, step);
+    approach_optional_visual(&mut visual.bounce_z_period, base.bounce_z_period, step);
+    approach_optional_visual(&mut visual.digital_z, base.digital_z, step);
+    approach_optional_visual(&mut visual.digital_z_offset, base.digital_z_offset, step);
+    approach_optional_visual(&mut visual.digital_z_period, base.digital_z_period, step);
+    approach_optional_visual(&mut visual.digital_z_steps, base.digital_z_steps, step);
+    approach_optional_visual(&mut visual.tornado_z, base.tornado_z, step);
+    approach_optional_visual(&mut visual.tornado_z_offset, base.tornado_z_offset, step);
+    approach_optional_visual(&mut visual.tornado_z_period, base.tornado_z_period, step);
+    approach_optional_visual(&mut visual.sawtooth, base.sawtooth, step);
+    approach_optional_visual(&mut visual.sawtooth_period, base.sawtooth_period, step);
+    approach_optional_visual(&mut visual.sawtooth_z, base.sawtooth_z, step);
+    approach_optional_visual(&mut visual.sawtooth_z_period, base.sawtooth_z_period, step);
+    approach_optional_visual(&mut visual.confusion_x, base.confusion_x, step);
+    approach_optional_visual(&mut visual.confusion_y, base.confusion_y, step);
+    approach_optional_visual(
+        &mut visual.confusion_y_offset,
+        base.confusion_y_offset,
+        step,
+    );
+    approach_optional_visual(&mut visual.beat_offset, base.beat_offset, step);
+    approach_optional_visual(&mut visual.beat_mult, base.beat_mult, step);
+    approach_optional_visual(&mut visual.beat_y, base.beat_y, step);
+    approach_optional_visual(&mut visual.beat_y_offset, base.beat_y_offset, step);
+    approach_optional_visual(&mut visual.beat_y_mult, base.beat_y_mult, step);
+    approach_optional_visual(&mut visual.beat_y_period, base.beat_y_period, step);
+    approach_optional_visual(&mut visual.beat_z, base.beat_z, step);
+    approach_optional_visual(&mut visual.beat_z_offset, base.beat_z_offset, step);
+    approach_optional_visual(&mut visual.beat_z_mult, base.beat_z_mult, step);
+    approach_optional_visual(&mut visual.beat_z_period, base.beat_z_period, step);
     approach_optional_visual(&mut visual.pulse_offset, base.pulse_offset, step);
     approach_optional_visual(&mut visual.beat, base.beat, step);
     approach_optional_visual(&mut visual.random_speed, base.random_speed, step);
@@ -982,6 +1230,30 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_x,
         base.parabola_x,
         speed.parabola_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.attenuate_x,
+        target.attenuate_x,
+        base.attenuate_x,
+        speed.attenuate_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.parabola_y,
+        target.parabola_y,
+        base.parabola_y,
+        speed.parabola_y,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.attenuate_y,
+        target.attenuate_y,
+        base.attenuate_y,
+        speed.attenuate_y,
         delta_time,
         1.0,
     );
@@ -1322,10 +1594,58 @@ pub fn approach_visual_overrides_to_target(
         1.0,
     );
     approach_attack_value(
+        &mut current.bounce,
+        target.bounce,
+        base.bounce,
+        speed.bounce,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_period,
+        target.bounce_period,
+        base.bounce_period,
+        speed.bounce_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_offset,
+        target.bounce_offset,
+        base.bounce_offset,
+        speed.bounce_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_period,
+        target.tornado_period,
+        base.tornado_period,
+        speed.tornado_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_offset,
+        target.tornado_offset,
+        base.tornado_offset,
+        speed.tornado_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
         &mut current.parabola_z,
         target.parabola_z,
         base.parabola_z,
         speed.parabola_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.attenuate_z,
+        target.attenuate_z,
+        base.attenuate_z,
+        speed.attenuate_z,
         delta_time,
         1.0,
     );
@@ -1342,6 +1662,14 @@ pub fn approach_visual_overrides_to_target(
         target.confusion_offset,
         base.confusion_offset,
         speed.confusion_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_x_offset,
+        target.confusion_x_offset,
+        base.confusion_x_offset,
+        speed.confusion_x_offset,
         delta_time,
         1.0,
     );
@@ -1489,6 +1817,238 @@ pub fn approach_visual_overrides_to_target(
         target.beat_period,
         base.beat_period,
         speed.beat_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.shrink_linear,
+        target.shrink_linear,
+        base.shrink_linear,
+        speed.shrink_linear,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.shrink_mult,
+        target.shrink_mult,
+        base.shrink_mult,
+        speed.shrink_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_z,
+        target.bounce_z,
+        base.bounce_z,
+        speed.bounce_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_z_offset,
+        target.bounce_z_offset,
+        base.bounce_z_offset,
+        speed.bounce_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_z_period,
+        target.bounce_z_period,
+        base.bounce_z_period,
+        speed.bounce_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z,
+        target.digital_z,
+        base.digital_z,
+        speed.digital_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z_offset,
+        target.digital_z_offset,
+        base.digital_z_offset,
+        speed.digital_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z_period,
+        target.digital_z_period,
+        base.digital_z_period,
+        speed.digital_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z_steps,
+        target.digital_z_steps,
+        base.digital_z_steps,
+        speed.digital_z_steps,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_z,
+        target.tornado_z,
+        base.tornado_z,
+        speed.tornado_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_z_offset,
+        target.tornado_z_offset,
+        base.tornado_z_offset,
+        speed.tornado_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_z_period,
+        target.tornado_z_period,
+        base.tornado_z_period,
+        speed.tornado_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth,
+        target.sawtooth,
+        base.sawtooth,
+        speed.sawtooth,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth_period,
+        target.sawtooth_period,
+        base.sawtooth_period,
+        speed.sawtooth_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth_z,
+        target.sawtooth_z,
+        base.sawtooth_z,
+        speed.sawtooth_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth_z_period,
+        target.sawtooth_z_period,
+        base.sawtooth_z_period,
+        speed.sawtooth_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_x,
+        target.confusion_x,
+        base.confusion_x,
+        speed.confusion_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_y,
+        target.confusion_y,
+        base.confusion_y,
+        speed.confusion_y,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.confusion_y_offset,
+        target.confusion_y_offset,
+        base.confusion_y_offset,
+        speed.confusion_y_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_offset,
+        target.beat_offset,
+        base.beat_offset,
+        speed.beat_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_mult,
+        target.beat_mult,
+        base.beat_mult,
+        speed.beat_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y,
+        target.beat_y,
+        base.beat_y,
+        speed.beat_y,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y_offset,
+        target.beat_y_offset,
+        base.beat_y_offset,
+        speed.beat_y_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y_mult,
+        target.beat_y_mult,
+        base.beat_y_mult,
+        speed.beat_y_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_y_period,
+        target.beat_y_period,
+        base.beat_y_period,
+        speed.beat_y_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z,
+        target.beat_z,
+        base.beat_z,
+        speed.beat_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z_offset,
+        target.beat_z_offset,
+        base.beat_z_offset,
+        speed.beat_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z_mult,
+        target.beat_z_mult,
+        base.beat_z_mult,
+        speed.beat_z_mult,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.beat_z_period,
+        target.beat_z_period,
+        base.beat_z_period,
+        speed.beat_z_period,
         delta_time,
         1.0,
     );
@@ -1691,5 +2251,61 @@ impl ChartAttackEffects {
     #[must_use]
     pub const fn has_note_masks(self) -> bool {
         self.insert_mask != 0 || self.remove_mask != 0 || self.holds_mask != 0
+    }
+}
+
+// ArrowEffects::Update deliberately uses OR: a freeze alone or delay alone
+// continues Expand. The accumulator uses wall delta, not song/mod-timer time.
+pub fn advance_expand_phase(
+    seconds: f32,
+    delta: f32,
+    period: f32,
+    freeze: bool,
+    delay: bool,
+) -> f32 {
+    if !freeze || !delay {
+        (seconds + delta) % (std::f32::consts::TAU / (period + 1.0))
+    } else {
+        seconds
+    }
+}
+
+fn approach_accel_overrides(
+    current: &mut AccelOverrides,
+    target: AccelOverrides,
+    speed: AccelOverrides,
+    base: AccelEffects,
+    delta: f32,
+) {
+    for (current, target, speed, base) in [
+        (&mut current.boost, target.boost, speed.boost, base.boost),
+        (&mut current.brake, target.brake, speed.brake, base.brake),
+        (&mut current.wave, target.wave, speed.wave, base.wave),
+        (
+            &mut current.wave_period,
+            target.wave_period,
+            speed.wave_period,
+            base.wave_period,
+        ),
+        (
+            &mut current.expand,
+            target.expand,
+            speed.expand,
+            base.expand,
+        ),
+        (
+            &mut current.expand_period,
+            target.expand_period,
+            speed.expand_period,
+            base.expand_period,
+        ),
+        (
+            &mut current.boomerang,
+            target.boomerang,
+            speed.boomerang,
+            base.boomerang,
+        ),
+    ] {
+        approach_attack_value(current, target, base, speed, delta, 1.0);
     }
 }

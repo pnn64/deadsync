@@ -1,0 +1,4 @@
+{
+  "name": "static-column-rotation",
+  "lua_assertions": "local spline = create_spline():set_dimension(3):set_loop(true):set_size(1):set_point(1, {0, 0, math.pi})\nfor _, time in ipairs({-0.5, 0, 0.5, 2, 4, 200}) do\n local rotation = spline:evaluate(time)\n assert(rotation[1] == 0 and rotation[2] == 0 and math.abs(rotation[3] - math.pi) < 1e-6, 'unsolved single-knot rotation')\nend\nspline:destroy()"
+}

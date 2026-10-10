@@ -710,6 +710,9 @@ fn has_child_path_ci(parent: &Path, name: &str) -> bool {
 }
 
 fn sort_pack_paths(paths: &mut [PathBuf]) {
+    if paths.len() < 2 {
+        return;
+    }
     struct PackPathKey {
         key_start: u32,
         key_end: u32,
@@ -730,8 +733,7 @@ fn sort_pack_paths(paths: &mut [PathBuf]) {
         return;
     }
 
-    let permutation_bytes = paths.len() * std::mem::size_of::<usize>();
-    let mut keys = Vec::with_capacity(key_bytes.max(permutation_bytes));
+    let mut keys = Vec::with_capacity(key_bytes);
     let mut path_keys = Vec::with_capacity(paths.len());
     for (original_index, path) in paths.iter().enumerate() {
         let key_start = keys.len();
@@ -752,39 +754,19 @@ fn sort_pack_paths(paths: &mut [PathBuf]) {
             .then_with(|| left.original_index.cmp(&right.original_index))
     });
 
-    keys.clear();
-    keys.resize(permutation_bytes, 0);
-    for (destination_index, path_key) in path_keys.iter().enumerate() {
-        set_permutation_value(&mut keys, path_key.original_index, destination_index);
-    }
-    for original_index in 0..paths.len() {
+    // The sorted keys already map each destination to its original source.
+    // Follow each cycle once, marking it complete in that same index field.
+    for start in 0..paths.len() {
+        let mut current = start;
         loop {
-            let destination_index = permutation_value(&keys, original_index);
-            if destination_index == original_index {
+            let next = path_keys[current].original_index;
+            path_keys[current].original_index = current;
+            if next == start {
                 break;
             }
-            paths.swap(original_index, destination_index);
-            swap_permutation_values(&mut keys, original_index, destination_index);
+            paths.swap(current, next);
+            current = next;
         }
-    }
-}
-
-fn permutation_value(bytes: &[u8], index: usize) -> usize {
-    const WIDTH: usize = std::mem::size_of::<usize>();
-    let start = index * WIDTH;
-    usize::from_ne_bytes(bytes[start..start + WIDTH].try_into().expect("usize width"))
-}
-
-fn set_permutation_value(bytes: &mut [u8], index: usize, value: usize) {
-    const WIDTH: usize = std::mem::size_of::<usize>();
-    let start = index * WIDTH;
-    bytes[start..start + WIDTH].copy_from_slice(&value.to_ne_bytes());
-}
-
-fn swap_permutation_values(bytes: &mut [u8], left: usize, right: usize) {
-    const WIDTH: usize = std::mem::size_of::<usize>();
-    for offset in 0..WIDTH {
-        bytes.swap(left * WIDTH + offset, right * WIDTH + offset);
     }
 }
 
@@ -1753,3 +1735,11 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "download_sort_original.rs"]
+mod download_sort_original;
+
+#[cfg(test)]
+#[path = "download_sort_perf.rs"]
+mod download_sort_perf_tests;

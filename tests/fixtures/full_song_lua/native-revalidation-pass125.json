@@ -1,0 +1,102 @@
+{
+  "pass": 125,
+  "previous_record": "native-revalidation-pass124.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+  "comparator_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    46
+  ],
+  "next_position": 47,
+  "comparisons_passed": 183127,
+  "charts": [
+    {
+      "position": 46,
+      "entry": {
+        "title": "[5408] [11] Palette Lab (Hard)",
+        "source_simfile": "[11] Palette Lab (SH) [Exschwasion]/palette lab.ssc",
+        "harness_version": "0.1.52",
+        "archive": "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d.tar.zst",
+        "sha256": "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d",
+        "compressed_bytes": 110231,
+        "aliases": [
+          "ac7b027afbdf566bd8941594e65a7cb55feaef00975b7d9e1c653813236173c8.tar.zst"
+        ]
+      },
+      "original_archive_retained": "a11bca34fbf709dccf0c7e28fe3bc498dc37e843dd24a89ef0e27202820c4edd.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "2ff1b37dfb64de9c0c90df6c07731a981b24babe0631bc7871ad3ef90af6c802",
+      "original_source_sha256": {
+        "[11] Palette Lab (SH) [Exschwasion]/palette lab.ogg": "5d1efc75a9113fb73c48525ca4ed32630c6cd9137ee747a962371fcfe592053f",
+        "[11] Palette Lab (SH) [Exschwasion]/palette lab.ssc": "f49af9664ecf40d4bf5199d3d31b68382b6c81a970f7565b1852af60bff53e2e",
+        "[11] Palette Lab (SH) [Exschwasion]/pl-bg.png": "24ee7c618317c0296856cdca5a269f2ea0ef9fbaea2482d7948ba540b07396b8",
+        "[11] Palette Lab (SH) [Exschwasion]/pl-bn.png": "de5dba22244923af2c6d2d12b7a08eefdf26871ead9aae179ae17956bad47397",
+        "[11] Palette Lab (SH) [Exschwasion]/lua/default.lua": "9e698f90cfe8544872c4e638e9f2a602d7b20e5bfa68c6e7733b211df0f79ac7",
+        "[11] Palette Lab (SH) [Exschwasion]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[11] Palette Lab (SH) [Exschwasion]/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "[11] Palette Lab (SH) [Exschwasion]/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8198,
+      "duration_seconds": 136.61538696289062,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 46,
+      "source_simfile": "[11] Palette Lab (SH) [Exschwasion]/palette lab.ssc",
+      "archive": "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d.tar.zst",
+      "archive_sha256": "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d",
+      "harness_version": "0.1.52",
+      "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+      "source_pending_commit": false,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.627385800238699,
+      "comparisons_passed": 183127,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-046-native-field-v4.log",
+      "log_sha256": "329185498f626cef845d1a2cc649f1bc3dfcc745d26c6d7bb0a95e15c56b6961",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass125-top-046-native-v1.json",
+      "native_receipt_sha256": "0bd027385ccf54629a0d6b6dc92df851d06e20a2f3144b262055f20daa440e62",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+    "source_pending_commit": false,
+    "binary_sha256": "edae09b5a33001563f1ffd578ff31e75abfab8c9f50dcdb3b3cfd4b9794bfc3c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.7234004000201821,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-046-native-pass125.log",
+    "log_sha256": "2267533d573b5a5f5b4fd67516eaca0bdfb48802fc3c526198b9fcbed51790b1",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.36s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}
