@@ -972,12 +972,10 @@
     {
       "title": "[FULL SONG] 花月ノ夢",
       "source_simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b2442d671f5092fce6f8b59ed6fc0e52983d2f79a8027fad0a02a1e79d0dd883.tar.zst",
-      "sha256": "b2442d671f5092fce6f8b59ed6fc0e52983d2f79a8027fad0a02a1e79d0dd883",
-      "compressed_bytes": 185680,
-      "uncompressed_sha256": "e2b5876f3ca1d587e670eb70aef6cf841f3e3cf5d05853ddd1aa8cf8836e953c",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5.tar.zst",
+      "sha256": "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5",
+      "compressed_bytes": 234813,
       "aliases": [
         "a6be8446f7ba457d2af3ed2281f47aced570087d170726d53e77ee5be1625dbe.tar.zst"
       ]
