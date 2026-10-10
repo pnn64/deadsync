@@ -1281,6 +1281,44 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn attack_flags_use_gameplay_wall_delta() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(
+                0.0,
+                1000.0,
+                "*1.25 75% NoAttacks,*0.5 -50% RandomAttacks",
+            )
+            .expect("native attack flags"),
+        );
+        // Native PlayerOptions Current probes at 0, .25, .5 and .75 seconds.
+        // Keep music time fixed to exercise the actual gameplay wall-delta path.
+        for (delta, no_attack, rand_attack) in [
+            (0.0, 0.0, 0.0),
+            (0.25, 0.3125, -0.125),
+            (0.25, 0.625, -0.25),
+            (0.25, 0.75, -0.375),
+        ] {
+            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            let flags = state.mods.attacks.attack_flags[0];
+            assert!((flags.no_attack.expect("Current NoAttack") - no_attack).abs() < 0.0001);
+            assert!((flags.rand_attack.expect("Current RandAttack") - rand_attack).abs() < 0.0001);
+        }
+    }
+
+    #[test]
+    fn attack_flags_approach_from_profile_base() {
+        let mut state = regression_state();
+        state.profiles_runtime.profiles[0].attack_mode = GameplayAttackMode::Off;
+        state.mods.attacks.mask_windows[0].push(
+            build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*0.5 no NoAttacks")
+                .expect("clear profile NoAttack gradually"),
+        );
+        state.run_pre_notes_phase(0, 0, 0, 0.25, 1.0, 0, "unused");
+        assert_eq!(state.mods.attacks.attack_flags[0].no_attack, Some(0.875));
+    }
+
+    #[test]
     fn expand_phase_uses_gameplay_wall_delta() {
         let mut state = regression_state();
         state.mods.attacks.mask_windows[0].push(

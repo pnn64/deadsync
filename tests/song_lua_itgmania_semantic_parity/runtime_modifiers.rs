@@ -567,7 +567,15 @@ fn runtime_mod_value(
         "waveperiod" => runtime.accel[player].wave_period.unwrap_or(0.0),
         "expand" => runtime.accel[player].expand.unwrap_or(0.0),
         "expandperiod" => runtime.accel[player].expand_period.unwrap_or(0.0),
+        "noattack" | "noattacks" => runtime.attack_flags[player].no_attack.unwrap_or(0.0),
+        "randattack" | "randomattacks" => runtime.attack_flags[player].rand_attack.unwrap_or(0.0),
         "boomerang" => runtime.accel[player].boomerang.unwrap_or(0.0),
+        "stepattacks" => {
+            let flags = runtime.attack_flags[player];
+            f32::from(
+                flags.no_attack.unwrap_or(0.0) <= 0.0 && flags.rand_attack.unwrap_or(0.0) <= 0.0,
+            )
+        }
         "hidden" => appearance.hidden,
         "hiddenoffset" => appearance.hidden_offset,
         "stealth" => appearance.stealth,
@@ -4267,6 +4275,101 @@ fn expand_family_current_matches_native_frames() {
                         let expected = sample.3[0].as_f64().expect("native Current value") as f32;
                         let actual =
                             runtime_mod_value(&runtime, player, key).expect("runtime Expand");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
+}
+
+#[test]
+fn attack_flags_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/attack-flags-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attack flags control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("attack-flags.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed attack flags, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native attack flags targets and resets");
+}
+
+#[test]
+fn attack_flags_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/attack-flags-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attack flags Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("attack-flags.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile attack flags Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (_group, keys) in [["noattack", "randattack", "stepattacks"]]
+                .iter()
+                .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name == Some(format!("AttackCurrentP{}", player + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime attack flags");
                         assert!(
                             (actual - expected).abs() <= EPSILON,
                             "P{} {key} at {now}: native={expected}, DeadSync={actual}",

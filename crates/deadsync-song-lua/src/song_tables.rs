@@ -1611,6 +1611,12 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
         return Ok(());
     }
     crate::player_options::with_normalized_player_option_key(name, |key| {
+        // Native FromString names and Lua methods address the same float fields.
+        let key = match key {
+            "noattacks" => "noattack",
+            "randomattacks" => "randattack",
+            _ => key,
+        };
         if key.is_empty() {
             return Ok(());
         }

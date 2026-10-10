@@ -1062,6 +1062,7 @@ where
             base_appearance_effects(profile),
             || AttackBaseEffects {
                 accel: AccelEffects::from_mask_bits(profile.accel_mask_bits()),
+                attack_flags: AttackFlags::from_mode(profile.attack_mode()),
                 visual: base_visual_effects(profile),
                 scroll: profile.scroll_effects(),
                 mini_percent: profile.mini_percent(),
