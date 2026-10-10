@@ -1033,9 +1033,6 @@ fn list_texture_pages(font_dir: &Path, prefix: &str) -> std::io::Result<Vec<Path
     for entry in fs::read_dir(font_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
         if !has_png_suffix(name) {
             continue;
@@ -1046,7 +1043,15 @@ fn list_texture_pages(font_dir: &Path, prefix: &str) -> std::io::Result<Vec<Path
         if name.contains("-stroke") {
             continue;
         }
-        v.push(path);
+        // Directory entries already carry file type on supported filesystems.
+        // Follow symlinks (and retry type errors) just as Path::is_file does.
+        let is_file = match entry.file_type() {
+            Ok(kind) if !kind.is_symlink() => kind.is_file(),
+            _ => path.is_file(),
+        };
+        if is_file {
+            v.push(path);
+        }
     }
     v.sort_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()));
     Ok(v)
@@ -3416,3 +3421,7 @@ mod tests {
         assert_eq!(parse_range_spec("unicode #zz-ff"), None);
     }
 }
+
+#[cfg(test)]
+#[path = "font_discovery_perf.rs"]
+mod discovery_perf;

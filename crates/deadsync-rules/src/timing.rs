@@ -396,6 +396,7 @@ pub struct TimingData {
     scroll_prefix: Arc<[ScrollPrefix]>,
     pause_rows_sorted: [bool; 2],
     scroll_prefix_sorted: bool,
+    bpms_strictly_sorted: bool,
     global_offset_sec: f32,
     global_offset_ns: TimingNs,
     beat0_offset_ns: TimingNs,
@@ -693,6 +694,7 @@ impl TimingData {
             delays.len() > 8 && delays.iter().all(|segment| !segment.beat.is_nan()),
         ];
         let scroll_prefix_sorted = scrolls.windows(2).all(|pair| pair[0].beat <= pair[1].beat);
+        let bpms_strictly_sorted = bpms.windows(2).all(|pair| pair[0].beat < pair[1].beat);
         let mut timing_with_stops = Self {
             row_to_beat: if row_to_beat.is_empty() {
                 Arc::default()
@@ -710,6 +712,7 @@ impl TimingData {
             scroll_prefix: Arc::default(),
             pause_rows_sorted,
             scroll_prefix_sorted,
+            bpms_strictly_sorted,
             global_offset_sec,
             global_offset_ns,
             beat0_offset_ns,
@@ -1189,6 +1192,27 @@ impl TimingData {
         }
     }
 
+    // The event cursor already identifies the active BPM in ordinary playback.
+    // Quantization can put a fractional event on the other side of last_row;
+    // verify the interval, and retain binary search for duplicates/NaN tables.
+    #[inline]
+    fn bpm_at_start(&self, start: &GetBeatStarts) -> f32 {
+        if self.bpms.len() <= 1 {
+            return self.first_bpm();
+        }
+        let beat = note_row_to_beat(start.last_row);
+        if self.bpms_strictly_sorted {
+            let index = start.bpm_idx.saturating_sub(1);
+            if let Some(point) = self.bpms.get(index)
+                && point.beat <= beat
+                && self.bpms.get(index + 1).is_none_or(|next| beat < next.beat)
+            {
+                return point.bpm;
+            }
+        }
+        self.get_bpm_for_beat(beat)
+    }
+
     #[inline(always)]
     #[must_use]
     pub fn first_bpm(&self) -> f32 {
@@ -1375,7 +1399,7 @@ impl TimingData {
         let delays = &self.delays;
 
         let mut curr_segment = start.bpm_idx + start.warp_idx + start.stop_idx + start.delay_idx;
-        let mut bpm = self.get_bpm_for_beat(note_row_to_beat(start.last_row));
+        let mut bpm = self.bpm_at_start(start);
         let mut bps = bpm / 60.0;
         while curr_segment < max_segment {
             let mut event_row = i32::MAX;
@@ -1486,7 +1510,7 @@ impl TimingData {
         let delays = &self.delays;
 
         let mut curr_segment = start.bpm_idx + start.warp_idx + start.stop_idx + start.delay_idx;
-        let mut bps = self.get_bpm_for_beat(note_row_to_beat(start.last_row)) / 60.0;
+        let mut bps = self.bpm_at_start(start) / 60.0;
         let find_marker = beat < f32::MAX;
         let marker_beat = if continuous && beat.is_finite() {
             (beat * ROWS_PER_BEAT as f32).ceil() / ROWS_PER_BEAT as f32
@@ -1671,10 +1695,15 @@ impl TimingData {
             return 1.0;
         };
         let seg = self.speeds[i];
+        // Instantaneous changes need neither a time conversion nor runtime data.
+        if seg.delay <= 0.0 {
+            return seg.ratio;
+        }
+        let time_ns = time_ns();
         // Construction and every offset update build one runtime per speed.
         let rt = self.speed_runtime[i];
 
-        if time_ns >= rt.end_time_ns || seg.delay <= 0.0 {
+        if time_ns >= rt.end_time_ns {
             return seg.ratio;
         }
         if time_ns < rt.start_time_ns {
@@ -4324,3 +4353,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "timing_lookup_perf.rs"]
+mod lookup_perf;
