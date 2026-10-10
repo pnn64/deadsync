@@ -150,10 +150,11 @@ pub(super) fn build_playlist_library(
         })
         .collect();
 
-    playlists.sort_by_cached_key(|playlist| {
-        (
-            playlist.menu_entry.top_label.to_ascii_lowercase(),
-            playlist.menu_entry.bottom_label.to_ascii_lowercase(),
+    playlists.sort_by(|a, b| {
+        let a = &a.menu_entry;
+        let b = &b.menu_entry;
+        deadsync_simfile::song_sort::cmp_ignore_ascii_case(&a.top_label, &b.top_label).then_with(
+            || deadsync_simfile::song_sort::cmp_ignore_ascii_case(&a.bottom_label, &b.bottom_label),
         )
     });
     playlists
@@ -163,3 +164,10 @@ pub(super) fn lobby_song_path(song: &SongData, _song_scan_roots: &[PathBuf]) -> 
     let (pack, song) = song_pack_and_dir_name(song)?;
     Some(format!("{pack}/{song}"))
 }
+
+#[cfg(test)]
+#[path = "playlists_buffers_original.rs"]
+mod buffers_original;
+#[cfg(test)]
+#[path = "playlists_buffers_perf.rs"]
+mod buffers_perf;
