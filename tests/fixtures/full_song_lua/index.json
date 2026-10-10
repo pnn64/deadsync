@@ -752,12 +752,10 @@
     {
       "title": "[5800] [11] KENPO SAITO",
       "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "bd7cd2a1266a6882f7329ec2ec01ce7856112d489155cb0e0a61114aee948339.tar.zst",
-      "sha256": "bd7cd2a1266a6882f7329ec2ec01ce7856112d489155cb0e0a61114aee948339",
-      "compressed_bytes": 31265,
-      "uncompressed_sha256": "549cbfff5aab8ab17ed0b9163be44b2b0ae645d62a220f2e168a9cfd695b9c68",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c.tar.zst",
+      "sha256": "0fce279451ee016948df2d5f96f9105d0be1c541ec33361b222c207c4f59ec8c",
+      "compressed_bytes": 119593,
       "aliases": [
         "76c0cbd6277e55cee63451b1b79fe6472f96af8dc383c9158eb2b1fee6a733d1.tar.zst"
       ]

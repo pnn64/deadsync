@@ -740,3 +740,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass121.json`. Position 43 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 122
+
+Position 43, [5800] [11] KENPO SAITO, passes all
+102,078 comparisons against committed DeadSync
+`32216ad9e`. The complete native harness 0.1.52 archive
+contains 9,165 updates over 152.73 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass122.json`. Position 44 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
