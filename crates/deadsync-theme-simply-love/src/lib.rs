@@ -171,3 +171,11 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_alloc.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;
