@@ -1,0 +1,222 @@
+{
+  "harness": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass68-release-cli-v1.exe",
+    "sha256": "2d1a94523555ebc1881f11725ff65bb4c93b7002337dac3ee47d0587afc4676b",
+    "version": "0.1.28",
+    "source_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+    "source_pending_commit": false,
+    "vendor_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "profile": "release",
+    "semantic_host_sha256": "86f3755c01af48cdb8a876d3711b6e553a2f821d5928a228da9ab6a23e88ccc4",
+    "command": [
+      "cargo",
+      "build",
+      "--release",
+      "--bin",
+      "itgmania-harness-rs",
+      "--message-format=json"
+    ],
+    "build_seconds": 47.912578199990094
+  },
+  "native_sources": {
+    "src/TimingData.cpp": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+    "src/SongPosition.cpp": "d1b5b42d441c830c96029118d7736217134c66fb2087931e056a69814852ee78",
+    "src/NoteDisplay.cpp": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+    "src/CubicSpline.cpp": "93f6dcdd083f6da7a311449d89cf2f29be219590718e4e978e70c365f842eac3"
+  },
+  "workspace_sources": {
+    "src/TimingData.cpp": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+    "src/SongPosition.cpp": "d1b5b42d441c830c96029118d7736217134c66fb2087931e056a69814852ee78",
+    "src/NoteDisplay.cpp": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+    "src/CubicSpline.cpp": "93f6dcdd083f6da7a311449d89cf2f29be219590718e4e978e70c365f842eac3"
+  },
+  "controls": [
+    {
+      "name": "positive",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass68-release-cli-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\spline-clock",
+        "--simfile",
+        "positive.sm",
+        "--out",
+        "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass69-clock-controls\\positive",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "10000",
+        "--random-seed",
+        "1"
+      ],
+      "native_entry": {
+        "simfile": "positive.sm",
+        "fixture": "positive.sm.semantic.json",
+        "title": "Positive spline clock offset",
+        "lua_entries": 1,
+        "status": "ok"
+      },
+      "origin": -0.125,
+      "end_position": {
+        "beat": 4,
+        "seconds": 1.7
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "seconds": 1.256087599787861,
+      "native_trace_sha256": "12dfe383d368b6625bac5c218c66671c192bbe85ee4cabc0bd1b313bad5c0e8e",
+      "compressed_trace_sha256": "a7be11a00e15550dc7839dcfe2569c2c257873cefc957041b1594256a85f9fd2",
+      "input_sha256": {
+        "positive.sm": "d632b87aebbb2fce0d08a27f1b2d798818635d99247e96984961c12e3873f1d6",
+        "clock.lua": "e6d9857b486205764d9806d186419ffbed3f9b568d30f5fa5419ad461375ebf4"
+      },
+      "capture_log_sha256": "ef729f0401ef206456a32cd43ae5bd45fa35b12ad0406ba824bce12e6b043565"
+    },
+    {
+      "name": "negative",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass68-release-cli-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\spline-clock",
+        "--simfile",
+        "negative.sm",
+        "--out",
+        "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass69-clock-controls\\negative",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "10000",
+        "--random-seed",
+        "1"
+      ],
+      "native_entry": {
+        "simfile": "negative.sm",
+        "fixture": "negative.sm.semantic.json",
+        "title": "Negative spline clock offset",
+        "lua_entries": 1,
+        "status": "ok"
+      },
+      "origin": 0.125,
+      "end_position": {
+        "beat": 4,
+        "seconds": 1.7
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "seconds": 1.0750297997146845,
+      "native_trace_sha256": "9f8a2436a581676d8a191bb947b03bfeab5108b14d7a9c8cb95ec1f632af64f4",
+      "compressed_trace_sha256": "73b5aa9d15f41342a250b08cd99c71e755e83def1cf411a90fc24031dd828367",
+      "input_sha256": {
+        "negative.sm": "1ba243a6fa529ad2abd19a9e33fec1145150665f31d1e39ce474c6cf0f8e5d87",
+        "clock.lua": "e6d9857b486205764d9806d186419ffbed3f9b568d30f5fa5419ad461375ebf4"
+      },
+      "capture_log_sha256": "62e4769a16caf6d1dfc8c9cc252e9829fe712f205eb85d5db88516b7af3719b9"
+    }
+  ],
+  "purpose": "Check native music timestamps and Position/Offset spline writes with positive and negative simfile offsets across a BPM change. All native comparisons retain their existing tolerances.",
+  "validation": {
+    "before": {
+      "pin": {
+        "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass69-clock-before-tests.exe",
+        "sha256": "c842a2a743ecbf037f3e7c8dbb44e867b6f782a2b8a10618d7964b06874e8b89",
+        "source_commit": "99a4e81feb74ff3c5dffae8e102c9d71c8c40a8e",
+        "source_pending_commit": true,
+        "test_source_sha256": "e4706827a6b3dd9de5382ab510b6393b33396d61b25ff11ade772a479903898f",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "deadsync",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--features",
+          "deadsync-theme-simply-love/test-support",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "build_seconds": 72.6520430999808
+      },
+      "exit_code": 101,
+      "seconds": 1.6743446001783013,
+      "log_sha256": "731318e1082afa1a9c22392932ee702809cef33c261e5d2c796f99fcafcbca7a"
+    },
+    "after": {
+      "pin": {
+        "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass69-clock-after-tests.exe",
+        "sha256": "610ae532e8bf510e36dc68ba18c80ff70eac1aaf1242e92b5384a18a8bfa41fa",
+        "source_commit": "99a4e81feb74ff3c5dffae8e102c9d71c8c40a8e",
+        "source_pending_commit": true,
+        "test_source_sha256": "051fc945c9c65382c1001a5579bac3c0e2e29bf9fd800cd9db45c7ddfd1caf18",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "deadsync",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--features",
+          "deadsync-theme-simply-love/test-support",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "build_seconds": 29.5989274000749
+      },
+      "exit_code": 0,
+      "seconds": 2.4545415001921356,
+      "log_sha256": "612541c5822d45434284f2883f6cc00e5a3bb51658bd206c6d89466baa35d85a"
+    },
+    "existing_spline_tests": [
+      {
+        "test": "position_spline_curves_match_native_cpp",
+        "exit_code": 0,
+        "seconds": 0.07038860023021698,
+        "log_sha256": "b40544f7e575addacaef50b185083d3fa6b3554a44851088ac6b0656f89c1049",
+        "executable_sha256": "610ae532e8bf510e36dc68ba18c80ff70eac1aaf1242e92b5384a18a8bfa41fa"
+      },
+      {
+        "test": "position_spline_tracks_keep_native_clock_and_modifier_state",
+        "exit_code": 0,
+        "seconds": 1.5363147999159992,
+        "log_sha256": "add8beab541ff37026df73253d97e33eec7205963a24eeceb8e083f24c6f3b7d",
+        "executable_sha256": "610ae532e8bf510e36dc68ba18c80ff70eac1aaf1242e92b5384a18a8bfa41fa"
+      }
+    ],
+    "seven_gear_before": {
+      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "version": "0.5.1866",
+      "exit_code": 1,
+      "seconds": 179.5719871520996,
+      "result": "result: FAILED; 0/1 fixtures passed; 881365 comparisons passed, 300 failed (881665 total); elapsed 179.41s",
+      "log_sha256": "a705f39e1721aa7ab35d44e19819c819906d36d560a335b2c29180291dd864ac",
+      "executable_sha256": "34508997f48a22b350bab0fd900c7001d022fac5d60ad864e57376491dc94d12"
+    },
+    "seven_gear_after": {
+      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "version": "0.5.1866",
+      "exit_code": 0,
+      "seconds": 182.3934621810913,
+      "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 180.88s",
+      "log_sha256": "2eab5af8dc57cb5790dba5b3c0f2fd06fd2068249d89f9e5a0306854939acdd7",
+      "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+    },
+    "comparisons_and_tolerances_unchanged": true,
+    "production_source_changed": false,
+    "older_igaku_audit": {
+      "receipt": {
+        "test": "igaku_whole_song_matches_native",
+        "exit_code": 101,
+        "seconds": 220.38478930015117,
+        "executable_sha256": "610ae532e8bf510e36dc68ba18c80ff70eac1aaf1242e92b5384a18a8bfa41fa",
+        "log_sha256": "dc9c4f6286afed2db8c686a597029fa9a9487c6a6ad698df809edf2b4b822264",
+        "environment": {
+          "ITGMANIA_SONG_LUA_WORKSPACE": "C:/GitHub/rework"
+        },
+        "prior_unset_workspace_error": "Before and after binaries both failed to locate C:/GitHub/lua-songs. The corpus remains C:/GitHub/rework/lua-songs; use the existing workspace override."
+      },
+      "comparisons": 331752,
+      "failed_modifier_values": 16,
+      "spline_comparisons": 680,
+      "failed_spline_values": 0,
+      "next_action": "Capture the original context with current native song timing before changing implementation or the retained baseline."
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "harness_version": "0.1.16",
+  "harness_commit": "bc1604f292658277dd449a33e48687dc959c1969",
+  "native_executable_sha256": "ae9292f776d3de2ac5609cb842ae904527a20836f6524cee2ebee7f846397f41",
+  "source_sha256": "e9e8f09c62c622d08f283c61eb241001b8b8ad72c620508bf15bf276b156b8ef",
+  "native_trace_sha256": "dd6c21cee8ca52717033deb0bf801ec39e872eb4ace91721f8950cf017106913",
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "update_frames": 241,
+  "end_position": {
+    "beat": 4,
+    "seconds": 4
+  },
+  "queue_offsets": "own pending queue and hibernation; ActorFrame child queues excluded",
+  "independent_native_test": "song_lua_headless::tests::message_queue_offsets_match_native",
+  "independent_fixture_sha256": "39311161e46a684261c6c62bb978914fae97314743366ee3691b91274358d495",
+  "native_actor_source_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+  "expected_checks": 792,
+  "negative_control": "change final Y setter delay from 2.51 to 1.75; only one of two message target checks passes"
+}

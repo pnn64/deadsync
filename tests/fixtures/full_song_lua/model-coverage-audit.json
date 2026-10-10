@@ -1,0 +1,2041 @@
+{
+  "rows": [
+    {
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "53748e13d827eacc8cf2667f631335d4a02241e5e18c9d0b9a5c156dfa2771c1",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "e9188a0432656f0014b4da18112d8a21995741e495adb89dab0bd21b3580677e"
+    },
+    {
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "fa9078d5f971fb4eddb38a98db91b74dfe9f14a74dbd0df86ddf75eb28f59e79",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "77b7a0e6b020d6d13b39f1c9ed35c85c9bd2edb2b02055ee7df288016e9ba2f7"
+    },
+    {
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "original_lua_sha256": {
+        "bg/default.lua": "d5d1bddadde5ef0ca64e58002fa88e91317d770f1ad18a6e791a8aa325e67753",
+        "lua/default.lua": "0566eb420edee299ae7d8172eceb2bee8382e79c4fb4478f47d1ee19b5bec41e",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "3cfa9489d4ff586f21a7d28fa6accbdb7a2c4891e2a6617fc310c5aef850a1ff",
+        "lua/mods.lua": "95c4fa4ae31002e4d8cd4d2d838eb174fff6a8932ccc404267c9f3bc33cbec5e"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "af1dcee50a9f0643bac2fcce307710f768044fca43fd615a6a53fa2b6619fe36"
+    },
+    {
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "fb2e36e6b95440dc0b97a7fe25c0ba0a64863da166e42b482887d913aaab06ab"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "257ca11d46511a42d60ed21efc45f75a30a929b2a68aebf2671177a75a830145"
+    },
+    {
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "fb2e36e6b95440dc0b97a7fe25c0ba0a64863da166e42b482887d913aaab06ab"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "83919202c4e93de193c440ca08009e16d93ef45e49cae8a7240dec3aefeddf3c"
+    },
+    {
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "original_lua_sha256": {
+        "bg/Default.lua": "54d2db583d6f78d307d334e171ee6c3b0a3a6963a012c1500ca8952d91fa1f8c"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "82351538dc48c2c845ea98d772ffc5d3c4be50a4d3bccbb4389de10b39d69026"
+    },
+    {
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "ee17880c0e21b794fd7d12188c12c2d08c4586b74fc9746b787b785514a2ebf7",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "242c6a0a31cf82c6e06eb0ea80446e33497b8e53fd322941e66ed2e58a79f8f9"
+    },
+    {
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "c3468e26403da99e85c4cc8170b38139c1e01505a9f911a400289969194b4947",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "7862a474eb8baea8a144e8aadb12af7543d67a5164225af8dc22b0f14f1b4c81"
+    },
+    {
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "9c70b3d3b1f7392eadd7d37143d8875da541f3420bedbda663c5bcb4464c5d29",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "50503adf228f5b3a200be92674e36a87e3494a5ba0d681b123a4c989f6c5fa45",
+        "lua/mods.lua": "cddc8734f41e533cd05152a26dce036dfe62edde4babdd57672adc9ba7f8ddb5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "c250f7df4fa32b57a6fcf9c00661719fe204509b359f1950143dd239092b741f"
+    },
+    {
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "b46efc54c91080640db483376c77bca84cb319bf1f8a1f6c1c9a3c245bc2f3db",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "8c505d5167579ec7c16cb97dd459e0a4aa27737e6a3826b3d2a60294054335d3"
+    },
+    {
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "581bf87e6813fb6f944b87f1d0dd106954d41130641741274310ff27c2e1df13",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "95137697735498b5573a064ded1a6300d27fc1abe51b6cfc75ec932175ea30e2",
+        "lua/mods.lua": "fd99a26cd06f7dbf8fe3a36c858c31c01e4a64ad773c1dfdbd7f19eea149c7c2"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "e8eb21c82df717523b0bac5a7dcf817b22d617c4baa216943701b2abad781da8"
+    },
+    {
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "original_lua_sha256": {
+        "bg/default.lua": "53c5083e9e9d17747be6360b3fe427f3a5010512f76af956f12ff6e9491c26cc",
+        "lua/default.lua": "e0488f92c451d15ba2583bf4644480186a9fe93f18cbfdeb7f10c4b4f951eb75",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "daa0ba3c016219d428ec4ba0909c74074deb7862cc43b27298353bc1c634f902"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "4eb6e270e0bd1521a7ffc73aec8eab1954ca47705c601be045f336a2d5a68562"
+    },
+    {
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "3504a61d91ba08d07c59473ee4a7c02a60162b74c857ff257c9dec5ca4c38100",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "282cf636085dc0978d086356f01a23fd943ddcc8add1219045d86bd7aae563e1"
+    },
+    {
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "1882efb996ce4a6c57ff895232ca2ec8e1bedf9ca27606a8f964961648ba1ea1",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "9952d5447277b6db1794b3a93ca2f9b7debd313b377e90d9f3034f437d1ef87a"
+    },
+    {
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "4dbc8fc17aeac419a81be1c48dc04be98e1113aa86928350c9408ef9e0af0ae1",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "2a06c17d624747fb189f678a9342b4cb3358f05f622104c3757ccd84764fc5e1"
+    },
+    {
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "ace0f23d5e92fa5dcfcdafede9c66bacd22322e4ea6bfd114abfb1eb13d03f3d",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "8a702c9f534b550dfb3ce9fcc5b3ce030ae68f8c9b5cbe4debd89b25649e5ef3"
+    },
+    {
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "0d1b0d15aab096b281be07b56cc5814e611125b3172faa8ce3d8275c596a3f13",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "280c72c9bba483ec10ad92bc080386b74871a8e7814f4dbbfb7660e7768e399b"
+    },
+    {
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "original_lua_sha256": {
+        "code/draw.lua": "5fb737b2b13ade1449550490d1ba53db328cae96226772db7e88eedc102c9ef6",
+        "code/update.lua": "45f61ecb879e762a92131234f910d03c793b3d791cf0cf01580b579a1b684984",
+        "default.lua": "500fc3f94b28c76d96ebba3e6c660ab78cce538d2bc650adeb0f6563f9daf26d",
+        "sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+        "sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "sm5/core/main.lua": "e0ff7ba0ee4c33a685a92a802b3237e48f942c4ee810ccc7cfffcad16a773703",
+        "sm5/core/modparser.lua": "032ff3742b37a584de39e3ffc9d85d0445929d7f5f14d43fbae0f9caf64b7d96",
+        "sm5/core/players.lua": "fad50389bdced4f8312542b4d03ca002514e6a55925af071474c68969fd70b1d",
+        "sm5/modules/conversions.lua": "4bcdb1b4a175d07a5eb403c27bca0c8b0a0f1a77f4c5b7616bccbb73083ac17c",
+        "sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "sm5/modules/fakemods.lua": "3d30a573d1fe4e1d5236ad0482ec8728a1cfb3bfe60cd5be06add9487d03e22b",
+        "sm5/modules/grabactors.lua": "0294e1a4e0ad38f36fbb23bd8db1f30b1993d9667f47a32e6a33def8029d56ba",
+        "sm5/modules/helpers.lua": "40d8883835415e589cf27cc534d857ccf63f264191cc94d848551efcc8625f97",
+        "sm5/modules/multipliers.lua": "35d698a0f8211d148b39046701f97a2063575152aa56f99db2381236f3601ec9",
+        "sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf",
+        "sm5/modules/speedmods.lua": "3038b831549aeb5dfd5c13664941337406cf621a85774b663dc543057da9f79c"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "6047e0702c0403227912375633a79262394a1e1ff1f7b0312d498c6ad63f88d4"
+    },
+    {
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "79286b8847168e68a45d23e33cd9c4f06ebc442f567f7018de8248a0e1ebbe73",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/multitap_data.lua": "0a52f0b651abd01d0472d5fd606afb37b51eca13ce75e1da93c8e8c6038252de"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [
+        "def-0220",
+        "def-0223",
+        "def-0226",
+        "def-0229",
+        "def-0310",
+        "def-0313",
+        "def-0316",
+        "def-0319"
+      ],
+      "trace_sha256": "a5b780833cd24b11428cce9561c9ce67129957cce4c93bf50e582b3b36cb9b87"
+    },
+    {
+      "index": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "79286b8847168e68a45d23e33cd9c4f06ebc442f567f7018de8248a0e1ebbe73",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/multitap_data.lua": "0a52f0b651abd01d0472d5fd606afb37b51eca13ce75e1da93c8e8c6038252de"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [
+        "def-0220",
+        "def-0223",
+        "def-0226",
+        "def-0229",
+        "def-0310",
+        "def-0313",
+        "def-0316",
+        "def-0319"
+      ],
+      "trace_sha256": "ccda92923b51652895b37305089761d0e994151506811ab03671711db7595a0d"
+    },
+    {
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "original_lua_sha256": {
+        "code/draw.lua": "90c9c40d853c19502e17828532e52ab9a67debfe44be2521fb4d313fbbe70177",
+        "code/update.lua": "2c6d1d5d1b646670afb6a994835086bee8e0d12696f32db70cf456638cbfecfb",
+        "default.lua": "4eaa2adacd6c1984c8defda75d22d858d28102900a4134cc8dcb01e5b586e1d1",
+        "sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+        "sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "sm5/core/main.lua": "f1e18ebd1b631f064bd3f51a72716f73d17539b29e5218f83dd75b672b282ba7",
+        "sm5/core/players.lua": "d4818d02998ac85ab84bac691b3264ff685e1aed5ddd7ab21a83c72d96c3fe91",
+        "sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "sm5/modules/helpers.lua": "9fe855ccc4327e9bfae9fcd0ff1875273d003cb6f56c3e30c5175ee0a4a2ba12",
+        "sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "e10cdcf05e0c5ffea394f01a678b89a4b498fa9ed4422a4bbe85b954dedd2cc9"
+    },
+    {
+      "index": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "original_lua_sha256": {
+        "code/draw.lua": "90c9c40d853c19502e17828532e52ab9a67debfe44be2521fb4d313fbbe70177",
+        "code/update.lua": "2c6d1d5d1b646670afb6a994835086bee8e0d12696f32db70cf456638cbfecfb",
+        "default.lua": "4eaa2adacd6c1984c8defda75d22d858d28102900a4134cc8dcb01e5b586e1d1",
+        "sm5/core/constants.lua": "5b8ed06b8bae9aa96fef017df30a83d6b89a8da723af8738bf8517e3ab63aaeb",
+        "sm5/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "sm5/core/main.lua": "f1e18ebd1b631f064bd3f51a72716f73d17539b29e5218f83dd75b672b282ba7",
+        "sm5/core/players.lua": "d4818d02998ac85ab84bac691b3264ff685e1aed5ddd7ab21a83c72d96c3fe91",
+        "sm5/modules/draw.lua": "a184ba8e4a579b6ba14d830e512903cb64f19de5e2c622d7cab5aa47258fd16c",
+        "sm5/modules/eases.lua": "dedc578c70a28db2d910328a99b6f85fe2f95060046c49512e7377297e248068",
+        "sm5/modules/helpers.lua": "9fe855ccc4327e9bfae9fcd0ff1875273d003cb6f56c3e30c5175ee0a4a2ba12",
+        "sm5/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "42d9b412f7e97b0265fe9a7f51698ed0fa0b4b684a6c17a974219aa3039b280d"
+    },
+    {
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "original_lua_sha256": {
+        "lalalalalalala/default.lua": "34c4945a54b9d322f894e02f6c683caba66501201323475ce4966f748e6385f5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "4d04f75db522186322b300eef17c04241106004c7e49b5a6c966ef78b671de6c"
+    },
+    {
+      "index": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "original_lua_sha256": {
+        "lalalalalalala/default.lua": "34c4945a54b9d322f894e02f6c683caba66501201323475ce4966f748e6385f5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "fe556b82e1116cbaf6dd4db2b011808121852abc978803f49c66aa0790d6684b"
+    },
+    {
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "original_lua_sha256": {
+        "multitap/Default.lua": "98bc769d417aeda0a9f51dc5ae7d1018a14f36092054d8a8f10e4b64f0b4bc32",
+        "multitap/multitap_data.lua": "abfc2ff2b54b3db875a00afa6538c825bbd2ba244d35d7aeef144a2aca9820a8"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [
+        "def-0081",
+        "def-0084",
+        "def-0087",
+        "def-0090",
+        "def-0093",
+        "def-0096",
+        "def-0099",
+        "def-0102",
+        "def-0105",
+        "def-0108",
+        "def-0111",
+        "def-0114",
+        "def-0117",
+        "def-0120",
+        "def-0123",
+        "def-0126",
+        "def-0207",
+        "def-0210",
+        "def-0213",
+        "def-0216",
+        "def-0219",
+        "def-0222",
+        "def-0225",
+        "def-0228",
+        "def-0231",
+        "def-0234",
+        "def-0237",
+        "def-0240",
+        "def-0243",
+        "def-0246",
+        "def-0249",
+        "def-0252"
+      ],
+      "trace_sha256": "bd591a1941f607680a3118b9aef0398c1021749c67f07de61900bd7f3db6fc9a"
+    },
+    {
+      "index": 25,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "original_lua_sha256": {
+        "lua/_script.lua": "b70666ee31676dd1ff507bc84258c1d3be72d80a4a4c6105a6b198dadf8b7c39",
+        "lua/default.lua": "eb3917ac0f3c70d298a58a3dee6f848160e96b209cd91630b9de8706c261c8db",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/gfx/_gfx.lua": "ea1af4637c42c59cc9dd727b6254701006d35c1fb0161323ac5fe15a06eb607d",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "4857318a04b2fa1f8befeed98a285780c973149c7947fb0989425b5d2e653b46"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "79ccf1e9ff897fbbc3df317dbb53448adb5b758fc1eaed13b57bca9ee13d651c"
+    },
+    {
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "358f2a5f3770c74c031e2ac8febd577836b5cea24c229a567e2242f42fff927e"
+    },
+    {
+      "index": 27,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "original_lua_sha256": {
+        "background/default.lua": "db5e2c8873c9432bb83ac2c5715d877bd57fffe4912ab6d337aebd51a6be10d2",
+        "lua/default.lua": "a0f7f1a0728558bd3444c3e17875509a25fc3025b6389fd8bc08589c3486dc73",
+        "lua/goodies/actors.lua": "97638c21c85e7e613b58c8ed19d8967ad776a7007bb176a9426915529c1715aa",
+        "lua/goodies/mods.lua": "275cbfb72f9728418530ece11127c5aa5445b5bdfea6658b890fde859ac048cb",
+        "lua/helpers/modhelpers.lua": "1a588a693b31c9011f216448beef4caa055d909323b02328e0d55e921bdd01d5",
+        "lua/helpers/modreaders.lua": "8cf6c35b5f2072e89fe23d1553c25c5be230ea021af23c765732cab2c2a047fb",
+        "lua/helpers/tweens.lua": "21ef67f5ee74cab728f393cee02e56006aabcd6b3ea34d9b48953ed838ff7570"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "a273167da75dba780c055a8e0847a76713229ffefcea25cfcd89950b9f4d5c56"
+    },
+    {
+      "index": 28,
+      "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "b0cfa917944bcdc2ccd31ed9d53b4ae800b168029ab045e387057d1554ec3eab",
+        "lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "53642c2ed453196d7c462537a46898eba7fb994aba22c51916362f5e49a74ebb"
+    },
+    {
+      "index": 29,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "original_lua_sha256": {
+        "lua/default.lua": "9c70b3d3b1f7392eadd7d37143d8875da541f3420bedbda663c5bcb4464c5d29",
+        "lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "lua/modhelpers.lua": "50503adf228f5b3a200be92674e36a87e3494a5ba0d681b123a4c989f6c5fa45",
+        "lua/mods.lua": "cddc8734f41e533cd05152a26dce036dfe62edde4babdd57672adc9ba7f8ddb5"
+      },
+      "model_declarations_or_calls": [],
+      "captured_model_definitions": [],
+      "trace_sha256": "1d8c88e2536fbd387ff8e9cf889a291e53c9d6c9f35aa753c08bbf192f6878f3"
+    }
+  ],
+  "model_cases": [],
+  "captured_model_cases": [
+    18,
+    19,
+    24
+  ],
+  "scope": "first30 cases; original Lua source scan and archived definition classes",
+  "full_corpus_complete": false,
+  "diagnostic_revalidations": [
+    {
+      "date": "2026-10-09",
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "deadsync_commit": "6ef81312c6559cb65ef60050615bf0456a527897",
+      "comparator_sha256": "cb72f21346644b255b1ba8b6679756bb8a2f0c5a815610f92158e91424f306da",
+      "harness_commit": "1ceab4b7a6842e254212ad92b2afb8b05da816ca",
+      "harness_version": "0.1.39",
+      "native_executable_sha256": "258ec1b69e3f1067158457477192013288dc79387640d4f3554aa22aa2431e87",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "private_archive_sha256": "1810d49373a136e018bf9b96baa47e7b42bb111b8e3d818621045911f3eecfae",
+      "private_archive_bytes": 42067298,
+      "trace_sha256": "62dc997837b9de9f7aec0d5a41b636251f127e94b9cd97cad985281470e967fa",
+      "trace_bytes": 164400315,
+      "original_sources_unchanged": true,
+      "archive_members_verified": 26,
+      "endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "comparisons_passed": 9450796,
+      "comparisons_failed": 0,
+      "compared_vertex_fields": [
+        "local",
+        "clip",
+        "ndc",
+        "screen",
+        "normal",
+        "uv",
+        "transformed_uv",
+        "texture_scale",
+        "color"
+      ],
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 11.614876300096512,
+          "log_sha256": "6ca02390172b5b3468260e355ac5fa05230e99fdd6ebc197498d8e6332bff980"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 0,
+          "seconds": 280.3813831000589,
+          "log_sha256": "6de89a2edc567197f90a3ed4dc3fc260f6203f046f20d9bac10cbae5ed3274c7"
+        }
+      ],
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "world and view coordinates",
+        "texture identity and secondary material animation",
+        "lighting and unrepresented depth, cull and render target states",
+        "queued SetState ordering, hibernation and update rate controls",
+        "native hardware mesh merging and framebuffer validation"
+      ],
+      "scope": "Every-update Model diagnostic only; canonical archive and whole-song acceptance remain unchanged."
+    },
+    {
+      "date": "2026-10-09",
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "deadsync_commit": "807df3fe4405e4df269fad0298de9ef234abd70b",
+      "comparator_sha256": "47df12e75f758cf79b262231a0214ecaf67e1a0b96db53533126904cf726d190",
+      "harness_commit": "1ceab4b7a6842e254212ad92b2afb8b05da816ca",
+      "harness_version": "0.1.39",
+      "native_executable_sha256": "258ec1b69e3f1067158457477192013288dc79387640d4f3554aa22aa2431e87",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "private_archive_sha256": "1810d49373a136e018bf9b96baa47e7b42bb111b8e3d818621045911f3eecfae",
+      "private_archive_bytes": 42067298,
+      "trace_sha256": "62dc997837b9de9f7aec0d5a41b636251f127e94b9cd97cad985281470e967fa",
+      "trace_bytes": 164400315,
+      "original_sources_unchanged": true,
+      "archive_members_verified": 26,
+      "endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "comparisons_passed": 12217036,
+      "comparisons_failed": 0,
+      "compared_vertex_fields": [
+        "local",
+        "world",
+        "view",
+        "clip",
+        "ndc",
+        "screen",
+        "normal",
+        "uv",
+        "transformed_uv",
+        "texture_scale",
+        "color"
+      ],
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 11.410812200047076,
+          "log_sha256": "223c8774c18306af48f64c45535eb8b49c0dd9a7168906db7d6c172eadfd12f5"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 0,
+          "seconds": 286.4862317997031,
+          "log_sha256": "7c3c2f4685b57298b744d49a30796e6c02611a3ec39c1fe53894c58d779e9221"
+        }
+      ],
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "texture identity and secondary material animation",
+        "lighting and unrepresented depth, cull and render target states",
+        "queued SetState ordering, hibernation and update rate controls",
+        "refresh the original reference with the corrected hardware mesh path; framebuffer validation"
+      ],
+      "scope": "Every-update Model diagnostic at committed source807df3fe4, before the subsequent same-name mesh loader repair; canonical archive and whole-song acceptance remain unchanged."
+    },
+    {
+      "date": "2026-10-09",
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "deadsync_commit": "d5e0b6704439daf621d5b60167fde59b64f7145d",
+      "comparator_sha256": "86308cebd9adde29c576ccbb734177d6fde80c4b66417610c677715372b9b2db",
+      "harness_commit": "b57bf3cc879e3198fd6e9cf4082874ba02965563",
+      "harness_version": "0.1.41",
+      "native_executable_sha256": "9b7d58db6b245218b06da11215d66f93a5d2a5d4cf58ecd15accf5393d0771f8",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "private_archive_sha256": "61306b65813fae7de865cd976c03c53e609dc9efa62b7e8717b8b430cb526563",
+      "private_archive_bytes": 42120356,
+      "trace_sha256": "258c7a0da9db74c925be8e24fd1544925449041a7c9dc74d752c36703f295fa4",
+      "trace_bytes": 164374264,
+      "original_sources_unchanged": true,
+      "archive_members_verified": 26,
+      "endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "comparisons_passed": 12217036,
+      "comparisons_failed": 0,
+      "compared_vertex_fields": [
+        "local",
+        "world",
+        "view",
+        "clip",
+        "ndc",
+        "screen",
+        "normal",
+        "uv",
+        "transformed_uv",
+        "texture_scale",
+        "color"
+      ],
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 10.99206760013476,
+          "log_sha256": "c9d87c907867fb042bcc3f37dcdc181bfb3e1359b9479c7f28e2caf8bfd3ba43"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 0,
+          "seconds": 261.8215641002171,
+          "log_sha256": "0ca6ab4455a4a293fd054ff17b0829e2ea3f5f410b9614763d2df342a1e12eb5"
+        }
+      ],
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "texture identity and secondary material animation",
+        "lighting and unrepresented depth, cull and render target states",
+        "empty mesh observations and late Model creation",
+        "independent framebuffer validation"
+      ],
+      "scope": "Fresh original case18 Model diagnostic with corrected native hardware geometry and update ordering, using committed DeadSync source. Canonical archive and whole-song acceptance remain unchanged.",
+      "model_update_order": true,
+      "model_hardware_mesh_path": true,
+      "temporal_contract_control": {
+        "fixture": "tests/fixtures/itgmania-song-lua-micro/model-texture-order/native.json",
+        "fixture_sha256": "fc8e2ec990dada5c53d2b04597bd3e3733c17c91b6d42861c5cf8f90624b7b59",
+        "raw_native_sha256": "fb984e9b77225335833a4959901fc1af554ac65b03e103577352530aee1b3c35",
+        "native_draws": 844,
+        "production_draws_both_builders": 1688,
+        "transformed_uv_checks": 10128,
+        "uv_tolerance": 1e-06,
+        "deadsync_test_log_sha256": "f81c654897de8fa898da88f939f4111a99ae346f77f67d14370774a2f46df40c",
+        "tested_source_hashes_match_committed_worktree": true,
+        "contracts": [
+          "queued setstate precedes material update",
+          "own hibernation retains incoming material delta",
+          "parent hibernation suppresses child updates",
+          "parent update rate scales child delta"
+        ],
+        "draw_suppression_compared_by_playback_test": false
+      }
+    }
+  ],
+  "native_material_clock_controls": [
+    {
+      "deadsync_commit": "ad222a8960a9c7209dccdad390d7200c9b612aef",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "native_executable_sha256": "fd62d999abd738f7ed1e66b9840ea058d3c0dba75cd408fe52c1b702404bbe43",
+      "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "fixture_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "raw_native_sha256": "f6a01497ab4351e96c981500e7ba23b2707b352d05bc9c93390bc654903b8823",
+      "input_sha256": {
+        "alpha-green.png": "2d57caf9bf0fc48df833f928512ca4df44f1c132cf0a52fcf2c8cc9acfb01426",
+        "alpha-white.png": "ea2e756cfae73ae84195aab2e1de0c1dff8d5f517fd7e42c9a9ae610c0a14d70",
+        "alpha.ini": "2a1cca22d6a7dc8334a564c2c7c89f4e400ca1f896a089555dee1351790d1be0",
+        "control.json": "47438377ad9a8dca3ccb5a1367fcc892664afce098c2f0b27324443d6069b193",
+        "default.lua": "36d21cac8303e1c1d2b15b3bd2db620de9bdba8d306587147cf7a72d8b84aa38",
+        "diffuse.ini": "2f5d846d82a4e6e4f4d6d7d70615d4cddeaa802ab9e34ee792ec6d2d266c6339",
+        "frame-blue.png": "4c4a0ed079a0894a4196d13af94492f9342e51aa7c019a982b88642cff1db462",
+        "frame-red.png": "b201e2de7fd1a6eee7faf6b18a27ff99e0816f951b5d826f2c0b8436e0b60320",
+        "model.txt": "63da9d8d75ca0950612043a9113104a5d9f0c87878d049101876f5e76aab1e04"
+      },
+      "updates": 61,
+      "native_draws": 183,
+      "production_secondary_observations": 122,
+      "secondary_rectangle_coordinates_checked": 488,
+      "uv_tolerance": 1e-06,
+      "before_fix_log_sha256": "c9b01c04084b55ffe77a26ab828389e3d0b37863d0dc78fc0e924f55fe291b33",
+      "before_fix_failure": "secondary image white instead of native green at 0.25s",
+      "playback_log_sha256": "a578cdaef15d462c4ed5a340478057ac0a24a6a5737d91296c0960279db4412c",
+      "playback_passed": 193,
+      "playback_ignored": 3,
+      "asset_control_log_sha256": "6864fc02a1cb072ae1bdf75c663bb2beac8d6091197bf2b5f5edd7bae745c497",
+      "shell_check_log_sha256": "9b53b2a7522626b5835a720b7f3540c89bfbf68c1bf5a6a764f9484d99b863b2",
+      "scope": "Production secondary frame rectangles and shared diffuse translation through both Model builders; no framebuffer or complete material-pass acceptance",
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "separate native additive pass and forced secondary filtering",
+        "per-image atlas wrapping and physical texture identity comparison",
+        "secondary per-vertex matrix scaling",
+        "lighting and additional depth/cull/target states",
+        "empty meshes and late Model creation",
+        "independent framebuffer validation"
+      ]
+    }
+  ],
+  "native_material_pass_controls": [
+    {
+      "deadsync_commit": "e92b253f7ba4454f6174143a3547de515a4675fd",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "native_executable_sha256": "fd62d999abd738f7ed1e66b9840ea058d3c0dba75cd408fe52c1b702404bbe43",
+      "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_texture_units": 1,
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "fixture_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "raw_native_sha256": "f6a01497ab4351e96c981500e7ba23b2707b352d05bc9c93390bc654903b8823",
+      "updates": 61,
+      "native_draws": 183,
+      "production_draws_both_builders": 366,
+      "transformed_uv_coordinates_checked": 2196,
+      "unlit_color_components_checked": 4392,
+      "comparison_tolerance": 1e-06,
+      "before_fix_log_sha256": "3dabe013b91bd6c4010684a11ff7b746d861c65895932c1774f1d2fa0cdf99ea",
+      "before_fix_failure": "Production emitted two draws; native emitted three at the first update",
+      "playback_log_sha256": "48b019dcdbadf4c49faa0331d1fb95d215b1f71676bdf8b9b3d4bc64f633fce7",
+      "playback_passed": 194,
+      "playback_ignored": 3,
+      "shell_check_log_sha256": "cb1102b38c3cf5b7857c32718e09b94eff5bc735245b7dab88367bc9b3d33dd4",
+      "tested_source_hashes_match_committed_worktree": true,
+      "sphere_control": {
+        "fixture": "tests/fixtures/itgmania-song-lua-micro/model-material-mapping/native.json",
+        "fixture_sha256": "afe1eb6f34907364d3eba504ae6492604749d2163ee2c8d061df77417cb7ccea",
+        "raw_native_sha256": "2d934d352041074ae286768cb6c29b82bbe521d53b3e349b1c0ff059619516d8",
+        "input_sha256": {
+          "alpha sphere.ini": "2a1cca22d6a7dc8334a564c2c7c89f4e400ca1f896a089555dee1351790d1be0",
+          "alpha-green.png": "2d57caf9bf0fc48df833f928512ca4df44f1c132cf0a52fcf2c8cc9acfb01426",
+          "alpha-white.png": "ea2e756cfae73ae84195aab2e1de0c1dff8d5f517fd7e42c9a9ae610c0a14d70",
+          "alpha.ini": "2a1cca22d6a7dc8334a564c2c7c89f4e400ca1f896a089555dee1351790d1be0",
+          "control.json": "beca5f9379522b43aa68e44f224f51e52fb75e6c0f3cd648fdf490bfcb335e8d",
+          "default.lua": "f686c8ffac30c881cadccff30370a8b0676b44343c9c311d7d9795dba703bb5a",
+          "diffuse sphere.ini": "2f5d846d82a4e6e4f4d6d7d70615d4cddeaa802ab9e34ee792ec6d2d266c6339",
+          "diffuse.ini": "2f5d846d82a4e6e4f4d6d7d70615d4cddeaa802ab9e34ee792ec6d2d266c6339",
+          "diffuse.txt": "d3b4901e4ea3f4210ec7753500299b5acd370378b1ee2a49fe1558606907b57d",
+          "frame-blue.png": "4c4a0ed079a0894a4196d13af94492f9342e51aa7c019a982b88642cff1db462",
+          "frame-red.png": "b201e2de7fd1a6eee7faf6b18a27ff99e0816f951b5d826f2c0b8436e0b60320",
+          "secondary.txt": "c07e1b4653d33754c4404c276d71679e012645370f6e79836d5eacaddd1581d1"
+        },
+        "native_draws": 6,
+        "production_vertex_flags_checked_both_builders": 36,
+        "log_sha256": "7cbf6432a97ff7358bd86343a2266d188d155600ae4d21389b600b5c0f0818d9",
+        "scope": "Captured native pass sphere state and production geometry cache separation; no GPU texgen or framebuffer comparison"
+      },
+      "source_contracts": [
+        "ITGmania Model.cpp desktop one-unit diffuse/additive/glow ordering",
+        "native additive blend and normal blend reset after each diffuse mesh",
+        "shared diffuse translation with per-vertex matrix scaling on both material passes",
+        "distinct diffuse and secondary sphere geometry retained in cache identity"
+      ],
+      "scope": "Production material draw order, blend, unlit colors and UVs through both Model builders; native UVs explicitly mapped into the two-image atlas",
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "forced secondary filtering and dynamic actor sampler state",
+        "per-image atlas wrapping and physical image identity comparison",
+        "GPU sphere coordinate and framebuffer validation",
+        "lighting and additional depth/cull/target states",
+        "empty meshes and late Model creation",
+        "current .1.42 full-song references and complete 501-simfile/492-archive corpus validation"
+      ]
+    }
+  ],
+  "native_material_binding_revalidations": [
+    {
+      "deadsync_commit": "1c083768b80b944cdfa3e79f761a6b16fe1bc5b2",
+      "comparator_sha256": "1999cc24f03752d84238d68c3f2585002f9bf4a0c26b5ba3d9ce5f94c2a6cefb",
+      "comparator_build_command": [
+        "cargo",
+        "test",
+        "--config",
+        "profile.dev.package.deadsync.debug=0",
+        "--test",
+        "song_lua_itgmania_semantic_parity",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "comparator_profile": "test/debug with CLI-only root package debug=0",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "native_executable_sha256": "fd62d999abd738f7ed1e66b9840ea058d3c0dba75cd408fe52c1b702404bbe43",
+      "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive_sha256": "84810d25280160952940fc8fff141cdef32ca363d6e8a6d5c2ec96117ba8359b",
+      "archive_bytes": 42029441,
+      "trace_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+      "trace_bytes": 164851025,
+      "native_song_end": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "end_position": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "archive_members_verified": 26,
+      "model_tracks": 8,
+      "update_frames": 11969,
+      "model_samples": 95752,
+      "native_draws": 2712,
+      "native_texture_units": 1,
+      "model_texture_bindings": true,
+      "bound_texture_draw_counts": {
+        "noteskin:/dance/cyber/textures/Tap Note parts (mipmaps).png": 2712
+      },
+      "native_sampler_state_draw_counts": [
+        {
+          "filtering": true,
+          "wrapping": true,
+          "sphere": false,
+          "draws": 2712
+        }
+      ],
+      "comparison_exit_code": 101,
+      "comparisons_passed": 12565528,
+      "comparisons_failed": 2712,
+      "distinct_gap_messages": [
+        "Model def-0220 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0220 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0310 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0310 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0223 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0223 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0313 pass 0 native sampler filtering=true wrapping=true has no production per-draw representation",
+        "Model def-0313 pass 1 native sampler filtering=true wrapping=true has no production per-draw representation"
+      ],
+      "native_binding_comparisons_failed": 0,
+      "scope": "Every recorded original Model update; local/world/view/clip/NDC/screen geometry, normals, UVs, matrix scale, unlit colors, pass state, bound image identity and sphere state compared. No per-draw sampler representation or independent framebuffer proof.",
+      "tests": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "exit_code": 0,
+          "seconds": 11.286168899852782,
+          "log_sha256": "ded0da018c9b38a32c24f6c5990d06c412901242548477f50f49c2e3666c73d4"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "exit_code": 101,
+          "seconds": 267.555501899682,
+          "log_sha256": "1294a56a2c5bef2df475ac412248ef8512f8a3e9533be71246452e88056be151"
+        }
+      ],
+      "schema_controls_passed": 3,
+      "schema_controls_log_sha256": "a157193e19828aa39132920f7f29e223a3f3a6ff1547a55b2411e2731b2094a3",
+      "archive_guard_passed": 1,
+      "archive_guard_log_sha256": "0591aa8d56b10ad9df9387ed74642dc104196d219a799dd84a90f7ec80fb4f66",
+      "original_song_and_cyber_sources_unchanged": true,
+      "published_to_index": false,
+      "full_song_model_parity_complete": false,
+      "remaining_gaps": [
+        "production per-draw filtering and wrapping including forced secondary filtering",
+        "physical multi-image material selection and per-image wrapping",
+        "independent framebuffer and sphere GPU coordinate verification",
+        "lighting and additional depth/cull/target states",
+        "empty meshes, late Model creation and remaining original corpus contexts"
+      ]
+    }
+  ],
+  "native_sampler_revalidations": [
+    {
+      "source_commit": "455663e3f7d19b67011dfa4ce0007b87cf781509",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "comparator_sha256": "ad7fc2ec5e06407aaabad35bc44720efe476f753efbcac5b941e8f5fd0736060",
+      "comparator_profile": "test/debug with CLI-only root package debug=0",
+      "native_trace_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "before_failed_sampler_comparisons": 2712,
+      "after_recorded_comparisons_passed": 12568240,
+      "after_recorded_comparisons_failed": 0,
+      "native_model_tracks": 8,
+      "native_model_updates": 11969,
+      "native_model_samples": 95752,
+      "native_model_draws": 2712,
+      "native_material_control": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "native_material_control_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "native_material_control_draws_both_builders": 366,
+      "native_material_sampler_boolean_checks": 732,
+      "production_contract": "Per-draw filter/wrap participates in batching, clipping and structural frame comparisons. GPU bindings prewarm at texture creation. Nearest overrides sample the base image; secondary Model materials force linear filtering; diffuse/glow retain Actor sampling; Model constructor defaults Repeat.",
+      "native_contract": "Pinned Model.cpp one-unit desktop path and RageDisplay_OGL.cpp filter state; independent native material and original-song captures.",
+      "raster_checks": "Software direct/staged/stripe/environment paths; DX12 and Vulkan WGPU readback on one shared image switching nearest/linear and clamp/repeat. Metal type-checks on x86_64-apple-darwin; native Metal, GL and Vulkan backend framebuffer validation remain open.",
+      "results": [
+        {
+          "receipt": "pass94-renderer-controls-v2.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-render-core",
+            "-p",
+            "deadlib-present",
+            "-p",
+            "deadlib-render-backend-wgpu",
+            "-p",
+            "deadlib-render-backend-vulkan",
+            "-p",
+            "deadlib-render-backend-gl",
+            "-p",
+            "deadlib-render-backend-software",
+            "--lib"
+          ],
+          "seconds": 52.97521260008216,
+          "results": [
+            "test result: ok. 178 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+            "test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+            "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s",
+            "test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+            "test result: ok. 11 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+            "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          ],
+          "log_sha256": "2eb68bc9359dc2cf7bb830f6b22642a98003fe31b8de31559ae0ed379ed5dbeb"
+        },
+        {
+          "receipt": "pass94-frame-compare-v2.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-render-core",
+            "--features",
+            "test-util",
+            "--test",
+            "frame_compare"
+          ],
+          "seconds": 8.655210199765861,
+          "results": [
+            "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+          ],
+          "log_sha256": "da6a1a06ba9965bdaba0217ee0dce8d0953e94cc4a5442f327af18557ca4f580"
+        },
+        {
+          "receipt": "pass94-masked-render-v1.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-present",
+            "--test",
+            "masked_render"
+          ],
+          "seconds": 26.47068569995463,
+          "results": [
+            "test result: ok. 156 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+          ],
+          "log_sha256": "666da2bd4701acdac037bb4ecb9224c123d1562ead4a484d35da56da0e655f5b"
+        },
+        {
+          "receipt": "pass94-wgpu-pixels-v2.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadlib-render-backend-wgpu",
+            "--test",
+            "offscreen",
+            "--",
+            "--ignored",
+            "--nocapture"
+          ],
+          "seconds": 16.042052200064063,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.85s"
+          ],
+          "log_sha256": "9dc334cdac2e7797310968b05001dac9012c9847745ab10eeba8ddf7b7b72c20"
+        },
+        {
+          "receipt": "pass94-playback-v3.json",
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "deadsync-song-lua",
+            "--test",
+            "playback",
+            "--features",
+            "test-support",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 128.1504489001818,
+          "results": [
+            "test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 24.14s"
+          ],
+          "log_sha256": "9c9951560decb80bedbbe8e6a85c468444af0b3201af707b140c6f39a325e823"
+        },
+        {
+          "receipt": "pass94-metal-check-v2.json",
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "deadlib-render-backend-metal",
+            "--target",
+            "x86_64-apple-darwin"
+          ],
+          "seconds": 13.413482600357383,
+          "results": [],
+          "log_sha256": "69b01399f9cb7205e0e22467abcaf6ec34aea9e1d2b2f0d85765f60941f781a5"
+        },
+        {
+          "receipt": "pass94-shell-check-v1.json",
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "deadsync-shell"
+          ],
+          "seconds": 70.57190410001203,
+          "results": [],
+          "log_sha256": "7f4309e336303f16d7752aa8c727d8a60644ad734652c258f0a0f50e68bf3188"
+        },
+        {
+          "receipt": "pass94-render-api-check-v1.json",
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "deadlib-render"
+          ],
+          "seconds": 35.28628099989146,
+          "results": [],
+          "log_sha256": "6a0bc8fb73ede7f0fa7261576a4ac8242df26ed38cc96ac355be057ded50d550"
+        },
+        {
+          "receipt": "pass94-model-metadata-controls-v1.json",
+          "command": [
+            "target/song-lua-archive-passes/pass94-current-material-comparator-v3.exe",
+            "native_model_"
+          ],
+          "seconds": 4.616143099963665,
+          "results": [
+            "test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.01s"
+          ],
+          "log_sha256": "4ec3a3fa56183b0221c85cef35cd0bb94f3e8a5887f8f5b540cb7630d0366d16"
+        },
+        {
+          "receipt": "pass94-archive-model-guard-v1.json",
+          "command": [
+            "target/song-lua-archive-passes/pass94-current-material-comparator-v3.exe",
+            "archive_reference_rejects_missing_model_meshes",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "seconds": 9.800184899941087,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 5.04s"
+          ],
+          "log_sha256": "fbab09bfb84f6c0bd3a06f190d1142d2e6638c9355504c98631b3e1b3656b212"
+        }
+      ],
+      "original_song_and_cyber_sources_unchanged": true,
+      "canonical_fixture_index_changed": false,
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "remaining_required_gaps": [
+        "physical per-image bindings and atlas wrapping",
+        "mip storage and native trilinear sampling",
+        "independent native framebuffer comparisons",
+        "sphere GPU coordinates",
+        "lighting and other depth/cull/target states",
+        "empty draws and late Model creation",
+        "all 501 sources, 492 contexts, aliases, historical variants and unindexed simfiles"
+      ],
+      "diagnostic_results": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "seconds": 11.17613280005753,
+          "exit_code": 0,
+          "log_sha256": "54e0e2e1ba66126726b3e16cba49238db64c4d5cb2bb3ae41ab2d87fd453a9e3"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "seconds": 241.1746686999686,
+          "exit_code": 0,
+          "log_sha256": "b3d9ed2ddd2d8995eaad7a2652547a55d90ecbab04a60c522d5838017b4a5edc"
+        }
+      ]
+    }
+  ],
+  "native_image_binding_revalidations": [
+    {
+      "source_commit": "e7252ef75a0b2a19b59343036ab880e98916adf4",
+      "harness_commit": "a80f15bc738ee8850c483f066a8ab811d7c8462a",
+      "harness_version": "0.1.42",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "comparator_sha256": "278f4c5a8c0437ab6bb88cc137d3576cadf04ed6863d09b9971ab4130a483f10",
+      "comparator_profile": "test/debug in isolated target with CLI-only profile.dev.debug=0",
+      "local_reference_source_audit": {
+        "native_vendor_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "local_reference": "C:/GitHub/rework/itgmania/src",
+        "sources": [
+          {
+            "source": "Model.cpp",
+            "normalized_source_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
+            "same_source": true
+          },
+          {
+            "source": "ModelTypes.cpp",
+            "normalized_source_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+            "same_source": true
+          },
+          {
+            "source": "RageBitmapTexture.cpp",
+            "normalized_source_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+            "same_source": true
+          },
+          {
+            "source": "RageDisplay_OGL.cpp",
+            "normalized_source_sha256": "06300e9bbb3ccdc31707084ea6f0f57144f485db4387e38b0163856baab45758",
+            "same_source": true
+          }
+        ]
+      },
+      "native_contract": "ModelTypes.cpp AnimatedTexture::GetCurrentTexture selects one loaded image per state. Model.cpp shares primary translation with the independent secondary pass and binds the primary image for glow.",
+      "production_contract": "Remove generated Model frame atlases. Retain per-state image keys and dimensions; record compact primary/secondary state indices with native Update history; select full-image UVs and prewarm every image for gameplay and both preview consumers. NoteDisplay seeks actual image states.",
+      "before_native_image_binding_failure": "diffuse.ini#model-frames submitted where the native control binds frame-red.png",
+      "before_failed_control_log_sha256": "2749449b920d004d7c6ce3752946eb48489b5c85f70ff5676a680a25dc9d312b",
+      "native_material_control": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "native_material_control_sha256": "761996174e61a3d9f44b9d192f2558179143d510e5a8d9d759a10f0100e6a67c",
+      "native_material_image_bindings_both_builders": 366,
+      "native_material_uv_coordinates_both_builders": 2196,
+      "native_material_sampler_boolean_checks": 732,
+      "secondary_loading_control": "Static primary, three secondary states with unequal dimensions and repeated image; actual image colors/state selection survive compiled-skin cache reload. Both preview catalogs prepare all four native control images once.",
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "native_trace_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+      "original_recorded_comparisons_passed": 12568240,
+      "original_recorded_comparisons_failed": 0,
+      "results": [
+        {
+          "receipt": "pass95-model-domain-tests-v4.json",
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-assets",
+            "-p",
+            "deadsync-noteskin",
+            "-p",
+            "deadsync-notefield",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 203.87559209996834,
+          "results": [
+            "test result: ok. 146 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.69s",
+            "test result: ok. 450 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.35s",
+            "test result: ok. 263 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s"
+          ],
+          "log_sha256": "3e159e85e61ec0e7e00a7ddb47211e03fbb9e2008f737cc1a6a6a250b283bdaf"
+        },
+        {
+          "receipt": "pass95-preview-images-v1.json",
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-theme-simply-love",
+            "--lib",
+            "previews_warm_every_model_material_image",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 180.5056616999209,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1264 filtered out; finished in 0.16s"
+          ],
+          "log_sha256": "504ca11ab3eef9a2d3bb135b886d4e3e96be84219eb3e19ea33bc92f0d0b7cae"
+        },
+        {
+          "receipt": "pass95-playback-v1.json",
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-song-lua",
+            "--test",
+            "playback",
+            "--features",
+            "test-support",
+            "--",
+            "--test-threads=1"
+          ],
+          "seconds": 127.70240440033376,
+          "results": [
+            "test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 25.96s"
+          ],
+          "log_sha256": "712b596284f213f81f1bf66d4789881433b037c68c5a4c60a08e92ea66551e92"
+        },
+        {
+          "receipt": "pass95-shell-check-v1.json",
+          "command": [
+            "cargo",
+            "check",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-shell"
+          ],
+          "seconds": 144.32587320031598,
+          "results": [],
+          "log_sha256": "888e1be908f65374f661394a43751436985855f9c168b810667d12c15e9b6d64"
+        },
+        {
+          "receipt": "pass95-model-metadata-v1.json",
+          "command": [
+            "target\\song-lua-archive-passes\\pass95-current-material-comparator-v1.exe",
+            "native_model_",
+            "--test-threads=1"
+          ],
+          "seconds": 6.0851078000850976,
+          "results": [
+            "test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.02s"
+          ],
+          "log_sha256": "38ca95288b789f5e91df9049a34dbe18f5b4f69d332073987aa79b18ad550bc0"
+        },
+        {
+          "receipt": "pass95-archive-model-guard-v1.json",
+          "command": [
+            "target\\song-lua-archive-passes\\pass95-current-material-comparator-v1.exe",
+            "archive_reference_rejects_missing_model_meshes",
+            "--test-threads=1"
+          ],
+          "seconds": 9.760341600049287,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 4.96s"
+          ],
+          "log_sha256": "4ef37e136de14c66c788d33542ae2a6a4b358788c3ebd7c76c1276194b447fce"
+        }
+      ],
+      "diagnostic_results": [
+        {
+          "test": "native_model_trace_columns_cover_every_update",
+          "seconds": 9.062825300265104,
+          "exit_code": 0,
+          "log_sha256": "1347a5e5bf942748bb78bf7eaa46f020299a1e6150953388bbf3828076fa3c26"
+        },
+        {
+          "test": "native_model_meshes_match_selected_trace",
+          "seconds": 248.71506949979812,
+          "exit_code": 0,
+          "log_sha256": "409c5b5157203256c92976c9725453c83b13a6a837eb952bedf2b7c57d3fdcd0"
+        }
+      ],
+      "original_song_and_cyber_sources_unchanged": true,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2",
+      "canonical_fixture_index_changed": false,
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "remaining_required_gaps": [
+        "native mip storage/trilinear state and image preprocessing",
+        "independent native framebuffer comparisons and per-image wrapping pixels",
+        "sphere GPU coordinates, lighting and other depth/cull/target states",
+        "empty draws and late Model creation",
+        "501 sources, 492 contexts, aliases, historical variants and 18 unindexed simfiles"
+      ]
+    }
+  ],
+  "native_texture_metadata_repairs": [
+    {
+      "harness_commit": "32b73981c2208039df05a51ebdd2b3d1479d1213",
+      "harness_version": "0.1.43",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "harness_executable_sha256": "49f2da28c5ac26a2fea3d4637060cc7a13c928d829958e9a7103c4f59de92602",
+      "native_contract": "ModelTypes.cpp AnimatedTexture::Load requests bStretch, bMipMaps and bHotPinkColorKey. RageBitmapTexture.cpp makes stretched image dimensions equal the power-of-two allocation.",
+      "harness_repair": "Honor the explicit bStretch request; capture requested flags and source/image/allocation dimensions from the bound native texture object.",
+      "before": {
+        "source_dimensions": [
+          5,
+          9
+        ],
+        "image_dimensions": [
+          5,
+          9
+        ],
+        "allocation_dimensions": [
+          8,
+          16
+        ],
+        "failed_control_log_sha256": "a64fca34f8ee5b416d717dcb00c1f777e60bdcff28e1acc9c5343a964dfded75"
+      },
+      "after": {
+        "source_dimensions": [
+          5,
+          9
+        ],
+        "image_dimensions": [
+          8,
+          16
+        ],
+        "allocation_dimensions": [
+          8,
+          16
+        ],
+        "native_draws": 3
+      },
+      "harness_verification": {
+        "passed": 202,
+        "ignored_existing_corpus_tests": 5,
+        "results": [
+          "test result: ok. 161 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 153.31s",
+          "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.73s",
+          "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+          "test result: ok. 15 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 49.07s"
+        ],
+        "log_sha256": "2d421ca08bfb7003cf9e18baa2f42d5a8b7f3c587f8e54ab8e06773f560b9aa1"
+      },
+      "native_control": "tests/fixtures/itgmania-song-lua-micro/model-texture-request/native.json",
+      "native_control_provenance": {
+        "harness_commit": "32b73981c2208039df05a51ebdd2b3d1479d1213",
+        "harness_version": "0.1.43",
+        "harness_executable_sha256": "49f2da28c5ac26a2fea3d4637060cc7a13c928d829958e9a7103c4f59de92602",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "input_sha256": {
+          "control.json": "0398c1b8f97ce788b64bba423f2585980d4c6dcff17590ea8c87f5d1d7995093",
+          "default.lua": "adf729420bb76ef890d081372bf074e76c6a968037cd1750df47ac8e2255d54c",
+          "model.txt": "a7c7a147238ee8df839a3d3795e8853430c3840d15ea38cb71c4435c69aaacce",
+          "npot.png": "da19383146fbe80dd5df8542a46cdaebd280969d11c3748379f4394680b923ae"
+        },
+        "native_sha256": "b38c8abf82c9d5f7139bbcdde6be94e757231272298d23e74109ac16be73854c",
+        "native_draws": 3,
+        "requested_flags_and_headless_dimensions_only": true,
+        "framebuffer_verified": false
+      },
+      "deadsync_runtime_diagnostic": {
+        "source_commit": "e7252ef75a0b2a19b59343036ab880e98916adf4",
+        "driver_sha256": "ee9d74cb8433940b5104a2911f9db7099fd4acb5f55448b0d04d94b986ae7b8a",
+        "executable_sha256": "4693b1c506cec88dec1bd3267734374a142197fd3415278901e796c7162a5b78",
+        "production_rlib": "C:\\GitHub\\deadsync\\target\\song-lua-pass95-build\\debug\\deps\\libdeadlib_assets-084d5ce6ac77e229.rlib",
+        "production_rlib_sha256": "61055b383d7d5d1c09d653bdca3f061779c38b871c91a7ffca7c07333d403804",
+        "input_sha256": "da19383146fbe80dd5df8542a46cdaebd280969d11c3748379f4394680b923ae",
+        "observed": {
+          "image_width": 5,
+          "image_height": 9,
+          "first_pixel": [
+            255,
+            0,
+            255,
+            255
+          ],
+          "stretch_hint": false,
+          "mipmaps": false
+        },
+        "scope": "Current DeadSync decoder and Model sampler request observed using the exact production library frozen from committed source. Native requested flags and dimensions are separate evidence; native pixels and framebuffer output remain unverified."
+      },
+      "scope": "Requested flags and headless dimensions only. Native preprocessing pixels, effective mip state, mip storage and framebuffer output remain unverified.",
+      "production_gap_open": true,
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "canonical_fixture_index_changed": false,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
+    }
+  ],
+  "native_surface_revalidations": [
+    {
+      "source_commit": "3b1ef26f72ed3e3c6a1fd033bac7dd7c55ca123d",
+      "harness_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+      "harness_version": "0.1.44",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "harness_executable_sha256": "b48119414dffdf60f230aa9060f0ab6537859105a32981bf6925229a882c654e",
+      "native_sources": [
+        "RageSurfaceUtils.cpp",
+        "RageSurfaceUtils_Zoom.cpp"
+      ],
+      "native_contract": "Compiled native ApplyHotPinkColorKey, Zoom and FixHiddenAlpha operate on explicit decoded RGB, RGBA and indexed surfaces. FindAlphaRGB defaults to black when no visible pixel exists; SetAlphaRGB still writes hidden RGB.",
+      "production_repair": "Remove the fully transparent early return from fix_hidden_alpha. Default both edge scans to black and retain the normal mixed/uniform edge behavior.",
+      "before_production_decode_failure": {
+        "case": "transparent-hidden-rgb",
+        "preserved_hidden_rgb": true,
+        "native_output": "sixteen zero RGBA bytes",
+        "log_sha256": "f66477b9d47086b285ef38ed3b11b5b9b57400b36ebf6e1aa68f6604706ee287"
+      },
+      "native_control_provenance": {
+        "harness_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+        "harness_version": "0.1.44",
+        "harness_executable_sha256": "b48119414dffdf60f230aa9060f0ab6537859105a32981bf6925229a882c654e",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "control_sha256": "9ac802830c42cb759097703d07521ffb7430c9ee87669b9888ca7d1d96c97d60",
+        "native_sha256": "f0d8ba5b28e6b3c132063953ae7c3f0d675aedd219c5be59fb5c004de1c5ae04",
+        "source_png_sha256": {
+          "transparent-hidden-rgb.png": "09151ddc21ba23a2674e148baf9d87ce07a62b23a194129d924eb798856aace1",
+          "uniform-hidden-rgb.png": "7ca95d88a99dd88cfcfb760df6b50f268a93ca3bd620aee00cef09d2beb21de2",
+          "mixed-hidden-rgb.png": "2c96e9d326b95d08f2f1648808c3928a383e3dac5ea02d0a877e92c47332b00c"
+        },
+        "native_rgba_sha256": {
+          "transparent-hidden-rgb.rgba": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+          "uniform-hidden-rgb.rgba": "e1b70abde62219868d58802627b493827de4cdf60edb52925b8a2cd988785bec",
+          "mixed-hidden-rgb.rgba": "bffecc73016434e8e6142cfc127a60b2f0a2ea4c91d89fd1076313a50bc732ee"
+        },
+        "native_surface_cases": 12,
+        "production_decoder_cases": [
+          "transparent-hidden-rgb",
+          "uniform-hidden-rgb",
+          "mixed-hidden-rgb"
+        ],
+        "scope": "Compiled native CPU surface routines, with explicit decoded input representation and resize dimensions. No RageBitmapTexture file loading, effective GPU mip storage or native framebuffer proof.",
+        "framebuffer_verified": false,
+        "control_line_endings": "LF, enforced by fixture .gitattributes"
+      },
+      "native_cpu_output_pixels": 356,
+      "production_decoder_controls": 3,
+      "production_decoder_compared_pixels": 10,
+      "production_decoder_compared_rgba_bytes": 40,
+      "comparison_tolerance_bytes": 0,
+      "asset_verification": {
+        "passed": 220,
+        "results": [
+          "test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s",
+          "test result: ok. 146 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.54s"
+        ],
+        "log_sha256": "777ba4fb28c622a441a4fcdcc34ff2860e98b7d60e84107d7cf0139efef7fb00",
+        "source_file_sha256": "96fda86172be7d24e9c74722244e5c31e7c5d8532942e6480d84045d59f2910e"
+      },
+      "harness_verification": {
+        "source_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+        "harness_version": "0.1.44",
+        "verified_test_source_sha256_unchanged": true,
+        "suite_receipt": "pass97-harness-tests-v1.json",
+        "suite_log_sha256": "2d32bd9cf5966b23a64b29dce509a02a5cce10147b742ca3afcfad6d4ba3e9d8",
+        "passed": 204,
+        "existing_corpus_ignored": 5,
+        "native_sources": [
+          "RageSurfaceUtils.cpp",
+          "RageSurfaceUtils_Zoom.cpp"
+        ],
+        "removed_stub": "RageSurfaceUtils::Zoom no-op",
+        "scope": "Native CPU surface subroutine outputs; no full bitmap loader or framebuffer proof"
+      },
+      "local_reference_source_audit": [
+        {
+          "file": "RageSurface.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "78d21f407fac9ef39cf4ca9d3ec9a99f569a577768f03ace4ce86f756b2881b0"
+        },
+        {
+          "file": "RageSurfaceUtils.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed"
+        },
+        {
+          "file": "RageSurfaceUtils_Zoom.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473"
+        },
+        {
+          "file": "RageBitmapTexture.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e"
+        },
+        {
+          "file": "ModelTypes.cpp",
+          "identical_normalized_crlf": true,
+          "sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e"
+        }
+      ],
+      "native_output_identical_after_lf_control_recapture": true,
+      "scope": "Native CPU surface subroutines and three actual DeadSync PNG decode outputs. This is not full RageBitmapTexture file-loader policy, GPU mip storage or native framebuffer parity.",
+      "remaining_required_gaps": [
+        "Model default stretch and hot-pink preparation with distinct Sprite/Model resource identities",
+        "native effective mip state, physical mip storage and trilinear sampling",
+        "full native framebuffer, sphere coordinates and remaining Model draw states",
+        "501 simfiles and all 492 contexts, aliases, historical variants and 18 unindexed sources"
+      ],
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "canonical_fixture_index_changed": false,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
+    }
+  ],
+  "native_image_preparation_revalidations": [
+    {
+      "source_commit": "bd18c8663b1b8fa6adca355d60de6236898cd352",
+      "harness_commit": "2eb6b85d465c70af1dbdaa3af0e634ba52609e1f",
+      "harness_version": "0.1.45",
+      "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_contract": "ModelTypes loads images with stretch and hot-pink keying in a distinct RageTextureID. RageTextureID defaults to max size 2048. RageBitmapTexture keys before native Zoom and fixes hidden RGB after final resize. PNG palette indices remain distinct; 16-bit channels retain their high byte.",
+      "production_repair": "Keep separately resident Model image keys, route primary/secondary animation images through native CPU key/resize preparation, preserve raw Sprite sources and remove the decode cleanup shortcut after alpha-changing hints.",
+      "before_production_failure": {
+        "log_sha256": "986932d117b8a380934f47bc2e52de6a11d2936c9a536709b0cda729b9b5f78e",
+        "model_shared_sprite_identity": true,
+        "model_size": [
+          5,
+          9
+        ],
+        "native_size": [
+          8,
+          16
+        ]
+      },
+      "native_control_provenance": {
+        "harness_commit": "2eb6b85d465c70af1dbdaa3af0e634ba52609e1f",
+        "harness_version": "0.1.45",
+        "harness_executable_sha256": "ca7b9355ddce02d6b8f905caa1b33e04a877b9786533f7d6404b8a72e75daa23",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "command": [
+          "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass98-native-prep-cli-v1.exe",
+          "actor-conformance",
+          "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\model-texture-preparation\\control.json",
+          "--out",
+          "C:\\GitHub\\deadsync\\tests\\fixtures\\itgmania-song-lua-micro\\model-texture-preparation\\native.json"
+        ],
+        "files_sha256": {
+          ".gitattributes": "57b227eddb3a5b1742ddf7b3dc4c751d69a365665a60d9cf12badd09be97b13b",
+          "cases.json": "9446c35d1ab589a30328cbc4b2a29ac48fb4f73fab6923e6dfd57b3883eaef83",
+          "control.json": "1434a7f44b28f4533f40ae129611fb89d9d921f34b669e304d916cea1e2e27c2",
+          "gray2-expand.png": "0b693488977ac122a4238c35cb6c136b99ee430f13960010633d4ed70fd03d58",
+          "gray2-expand.rgba": "eb02c69d0f40ecadbc75a1ee8a67722a352dc0fbadfa5b840a9a3dd9c7619672",
+          "iterative-odd-reduction.png": "832d09cbfff2294185a66151cdd59872173c6bc5218ea0077550453eeca66040",
+          "iterative-odd-reduction.rgba": "484c1a731b20e23144af4c5bf4816e056584632a5ce8981dd9490aa08fc4ed1f",
+          "iterative-reduction.png": "f4963393556251426d002caed580aa5c475ce6f2d1f5879172acc9dc928c4c3f",
+          "iterative-reduction.rgba": "192c68b5289290f88c073a079748b45148ea75fdc1697b2d3e109ddeb941e704",
+          "mixed-hidden-rgb.png": "2c96e9d326b95d08f2f1648808c3928a383e3dac5ea02d0a877e92c47332b00c",
+          "mixed-hidden-rgb.rgba": "bffecc73016434e8e6142cfc127a60b2f0a2ea4c91d89fd1076313a50bc732ee",
+          "model-max-size.png": "7f6dddb8444ae65d2ab44b89c942d23a1f504a717f8b6862429a441c27f3b16e",
+          "model-max-size.rgba": "d7c19ac5a8b998db7384556ad5fb3f43d7442753c3a1d57ff4eae23ae44c6215",
+          "model-mixed-axis.png": "aacc90b3c3a880b982a3d4512cf8629cabbab46fe8cb3bb47a24148586b26129",
+          "model-mixed-axis.rgba": "3b906ec221920eafcec34337aab1e68f9d43dcd46ff1a42bee86649b4610dc81",
+          "model-pink-npot.png": "da19383146fbe80dd5df8542a46cdaebd280969d11c3748379f4394680b923ae",
+          "model-pink-npot.rgba": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+          "native.json": "e97880dcb2bf9222be44d136d7840fff7416cac1d2c09ae85d8a76ea7b0a4e66",
+          "npot-linear-stretch.png": "e9e3d25903c44c56e48dcac486ad84ed38d38bbc5d9d69a8cb40b2c474abf3f2",
+          "npot-linear-stretch.rgba": "898a0ce90a6978fbf415d60cb6f7e6ec2c58993f67b0cce4f81241aef5e6d76a",
+          "off-pink-side-middle.png": "7747c1168f2725fee331f10058bca7d35e266c1304928df546e3c8e184bfb4e4",
+          "off-pink-side-middle.rgba": "2d572a4a517b6f85f76d3c70de7f87d667b884a2657e608c4c3171645baf396e",
+          "off-pink-top-edge.png": "530ca202d9f6fd1129d02eb171f037cc6172d2ae509f0276e572faf65bf74682",
+          "off-pink-top-edge.rgba": "dbd754c63e990438e01d9f4af97255d72b32d15d6bd46afea042cbb8ce620f6f",
+          "one-pixel-expansion.png": "a4d687c839cac54e05e54806d04eda222733fb70ee701c5b81118997a4348262",
+          "one-pixel-expansion.rgba": "cd47ab9663b3c95e26ea9775dbca0998b5c98deae364e4f6e7dae81908054a4a",
+          "palette-duplicates.png": "faab23f8279d679c5d5cab134b2081ed13d4c1e049ecc8b9ee4e98908ebe6f64",
+          "palette-duplicates.rgba": "87ec593f74a8016d313c25cd27001ac6607b16a1f0a75eed8652bf34a1b2ab19",
+          "palette-keys-both-pinks.png": "bcb2c0a84891e5e2398c7bb961c6d8af419c29a912d963887c78aa08f07ac69b",
+          "palette-keys-both-pinks.rgba": "adf58ce79235ba402fafb01da22bd1e0704f6a1a705ac26716fa3f4e82979562",
+          "palette-packed-duplicates.png": "6203d3a30df0bf1d9d557fa927fe4072f737df0fb05a43178490dc9e0ed01a69",
+          "palette-packed-duplicates.rgba": "fd817b52ed4d2770ff96d562690276e3b79c6a3bba77b8a2a0e1d2ea9dece1ff",
+          "palette-partial-alpha.png": "7db0acb21346278fece032d54d05e65cbfb7b6766cd8504df6e4674c44be21a9",
+          "palette-partial-alpha.rgba": "071ac6166bc11f19b8a6909a36b1b604c4b0a530f87129ed59ec139aa8d6afe1",
+          "partial-alpha-pink.png": "153cce20d90c5d0cd70efc0f2c14da815d137f3446aa8ec3270de3c4ec535fee",
+          "partial-alpha-pink.rgba": "7bf72a43a54a94f95222aaddeb4d20b57e2d9b06e75406910f3c76d192a24586",
+          "rgb-key-adds-alpha.png": "88feb0219050980b83868af8f160e40ce2c687411d874a637c14d4c45022d337",
+          "rgb-key-adds-alpha.rgba": "771458c5fbb4e051c7d53395786580a6ed5f333cfeb3e683f0a54e534ed74527",
+          "rgb16-strip.png": "5a0874e5435d72d1ca6ab5229410f0ea0f8182c5ae803b148a9a5447da9eb294",
+          "rgb16-strip.rgba": "04e556d32c818afb5c7987859acb467daa31a0f7565045c7ac3408d4d8e86f8f",
+          "rgba16-strip.png": "85efe20ae6177e6a61c0878e68733d0a64ee70a316dec8ce3e51a5e2058d249e",
+          "rgba16-strip.rgba": "04e556d32c818afb5c7987859acb467daa31a0f7565045c7ac3408d4d8e86f8f",
+          "transparent-hidden-rgb.png": "09151ddc21ba23a2674e148baf9d87ce07a62b23a194129d924eb798856aace1",
+          "transparent-hidden-rgb.rgba": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb",
+          "uniform-hidden-rgb.png": "7ca95d88a99dd88cfcfb760df6b50f268a93ca3bd620aee00cef09d2beb21de2",
+          "uniform-hidden-rgb.rgba": "e1b70abde62219868d58802627b493827de4cdf60edb52925b8a2cd988785bec"
+        },
+        "case_count": 21,
+        "compared_rgba_bytes": 69776,
+        "byte_tolerance": 0,
+        "framebuffer_verified": false,
+        "scope": "Compiled ApplyHotPinkColorKey, Zoom and FixHiddenAlpha on explicit decoded surfaces. PNG encodings follow local RageSurface_Load_PNG source. Native PNG loader and full RageBitmapTexture/GPU policy are not executed."
+      },
+      "production_decoder_controls": 21,
+      "production_compared_rgba_bytes": 69776,
+      "comparison_tolerance_bytes": 0,
+      "consumer_verification": {
+        "pass98-assets-after-v3": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadlib-assets",
+            "-p",
+            "deadsync-assets",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s",
+            "test result: ok. 149 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.46s"
+          ],
+          "log_sha256": "67bbe7ac7723fd15dd10c9c290d85a12820675ee08bcad4ad9e39b0cded2adf0",
+          "seconds": 21.488859300035983
+        },
+        "pass98-textures-final-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-assets",
+            "--lib",
+            "textures::tests::",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 130 filtered out; finished in 0.07s"
+          ],
+          "log_sha256": "039333f309e9d2f47df27f922f89481aa53d0ab972ddf58fc8dc0e4ff7ecd642",
+          "seconds": 12.540264999959618
+        },
+        "pass98-original-decode-after-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadlib-assets",
+            "--test",
+            "texture_decode",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+          ],
+          "log_sha256": "44dd142c54c7aa6a917f58cc2f6ae25e5427249e8cf4e23085594eda227ed661",
+          "seconds": 15.832900600042194
+        },
+        "pass98-model-domain-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-noteskin",
+            "-p",
+            "deadsync-notefield",
+            "--lib",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 450 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s",
+            "test result: ok. 263 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s"
+          ],
+          "log_sha256": "5359e91cd2b73994030369f4bf7ac7f3f6b31138eb951b246d5dec3432771fe5",
+          "seconds": 66.88201850000769
+        },
+        "pass98-playback-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-song-lua",
+            "--test",
+            "playback",
+            "--features",
+            "test-support",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 194 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 22.89s"
+          ],
+          "log_sha256": "2465b598d89ff515d47bca34d0f4f5eb79a5df118da06ebd7cd548e957686183",
+          "seconds": 111.35450130002573
+        },
+        "pass98-preview-images-v1": {
+          "command": [
+            "cargo",
+            "test",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-theme-simply-love",
+            "--lib",
+            "previews_warm_every_model_material_image",
+            "--",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1264 filtered out; finished in 0.16s"
+          ],
+          "log_sha256": "f1e0cd94dd805e197af749eaaa284f1286a2346a8168a9333f49abfc680d615e",
+          "seconds": 117.85617309994996
+        },
+        "pass98-shell-check-v1": {
+          "command": [
+            "cargo",
+            "check",
+            "--target-dir",
+            "target/song-lua-pass95-build",
+            "--config",
+            "profile.dev.debug=0",
+            "-p",
+            "deadsync-shell"
+          ],
+          "exit_code": 0,
+          "results": [],
+          "log_sha256": "d6cdf98d165fe8e6ec9139cae40c373954e49bc59df844e1810ef55cdaf11423",
+          "seconds": 71.25450100004673
+        },
+        "pass98-model-schema-v1": {
+          "command": [
+            "target/song-lua-archive-passes/pass98-current-prep-comparator-v1.exe",
+            "models::",
+            "--test-threads=1"
+          ],
+          "exit_code": 0,
+          "results": [
+            "test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 252 filtered out; finished in 0.02s"
+          ],
+          "log_sha256": "38ca95288b789f5e91df9049a34dbe18f5b4f69d332073987aa79b18ad550bc0",
+          "seconds": 5.008352700155228
+        }
+      },
+      "original_song_revalidation": {
+        "comparator_source_commit": "bd18c8663b1b8fa6adca355d60de6236898cd352",
+        "comparator_sha256": "8081402d66a6d641637d9bd34fe6b3df36790502de610e8338c634fb55d2af69",
+        "native_capture_sha256": "87606e0b04e1ed035481c06012618ed543d9738ba45afd0c90a23f340fa604e1",
+        "results": [
+          {
+            "test": "native_model_trace_columns_cover_every_update",
+            "exit_code": 0,
+            "seconds": 10.426357000134885,
+            "log_sha256": "1347a5e5bf942748bb78bf7eaa46f020299a1e6150953388bbf3828076fa3c26",
+            "tail": "\nrunning 1 test\nnative Model capture: 8 tracks, 11969 update frames, 95752 samples, 13466 column buffers\ntest models::native_model_trace_columns_cover_every_update ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 9.01s\n\n"
+          },
+          {
+            "test": "native_model_meshes_match_selected_trace",
+            "exit_code": 0,
+            "seconds": 240.7528241998516,
+            "log_sha256": "aef4e6e5307014bea6e763d5c1e2359aaf0c09d3ab7e8cddb6af619647410374",
+            "tail": "\nrunning 1 test\n1\t58946\n2\t58946\n3\t11714\n4\t23858\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\t58946\n2\t58946\n3\t11714\n4\t23858\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\n1\ttable: 0000016C983581E0\n2\ttable: 0000016C983589A0\n3\ttable: 0000016C98358CA0\n4\ttable: 0000016C983585E0\ntest models::native_model_meshes_match_selected_trace has been running for over 60 seconds\n303|MODS|[lv.memes] KABOOOOOM!!!!: 12568240/12568240 ok\n  native Model meshes  12568240/12568240 ok\ntest models::native_model_meshes_match_selected_trace ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 240.68s\n\n",
+            "sampler_gap_closed_for_recorded_draws": true,
+            "binding_failure_lines": [],
+            "comparison_summary": []
+          }
+        ],
+        "original_song_sources_unchanged": true,
+        "original_cyber_sources_unchanged": true,
+        "comparisons": {
+          "passed": 12568240,
+          "total": 12568240,
+          "failed": 0
+        }
+      },
+      "local_reference_source_audit": {
+        "reference_root": "C:\\GitHub\\rework\\itgmania\\src",
+        "pinned_root": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\src",
+        "itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "files": [
+          {
+            "name": "ModelTypes.cpp",
+            "reference_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+            "pinned_sha256": "938ac06f5ba8a57e7db916d2a91c8aea972d0b72240d1b3527ddb5ac86524e9e",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageTextureID.cpp",
+            "reference_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+            "pinned_sha256": "04d3eec5174fa7a6e0631ca9a8f5da54181d9ef9a95b7e63cb666c21ae30dbdd",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageTextureID.h",
+            "reference_sha256": "fb877c2f728a6b9e8b89a0a76ace4e23b3e9ce4944158705bf465320ce380e1b",
+            "pinned_sha256": "fb877c2f728a6b9e8b89a0a76ace4e23b3e9ce4944158705bf465320ce380e1b",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageBitmapTexture.cpp",
+            "reference_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+            "pinned_sha256": "44fd19bbdccc2147b12becaf43c6339099cf8b1d9946b8ca278c41eafa14278e",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageSurface_Load_PNG.cpp",
+            "reference_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+            "pinned_sha256": "910082a3a8059798addcbbe54d2eff15825e9d80e0db6c475b49f341b24fc59d",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageSurfaceUtils.cpp",
+            "reference_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+            "pinned_sha256": "d1ac3e0449a359f7f216313d2bef95e311dbb5c30c5172e56b3a03b9dbbae4ed",
+            "equal_after_crlf_normalization": true
+          },
+          {
+            "name": "RageSurfaceUtils_Zoom.cpp",
+            "reference_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+            "pinned_sha256": "b083a5df92f7cb92c7ea800cccaac216c3ecd1c802637861e3458e65b7275473",
+            "equal_after_crlf_normalization": true
+          }
+        ]
+      },
+      "harness_verification": {
+        "pass98-harness-tests-v1": {
+          "exit_code": 0,
+          "source_commit": "f812935e259595b65d0669a0e95bf4c2e0227698",
+          "log_sha256": "c7c32ff53636a73fbeb2e8053d4306702fd23492230144a28cdf846bc7dd363c",
+          "results": [
+            "test result: ok. 163 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 143.28s",
+            "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.39s",
+            "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s",
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+            "test result: ok. 15 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 43.92s"
+          ]
+        },
+        "pass98-release-build-v1": {
+          "exit_code": 0,
+          "source_commit": "2eb6b85d465c70af1dbdaa3af0e634ba52609e1f",
+          "log_sha256": "4379a13a5cab3230325d6318ff7149ac8bf5b8d8a6e746e97da13bb87bb8496d",
+          "results": []
+        }
+      },
+      "scope": "CPU image preparation and distinct resource identities for verified PNG controls; exact recorded native Model geometry/material checks remain intact. Native file-loader execution, full bitmap conversion policy and GPU framebuffer output are not established.",
+      "remaining_required_gaps": [
+        "native PNG file-loader execution and bitmap format/settings/device-size policy",
+        "indexed GIF/BMP preparation",
+        "native effective mip state, physical mip storage and trilinear sampling",
+        "native framebuffer, sphere coordinates and remaining Model draw states",
+        "all 501 simfiles/492 contexts including aliases, historical variants and 18 unindexed sources"
+      ],
+      "full_song_model_parity_complete": false,
+      "full_corpus_complete": false,
+      "canonical_fixture_index_changed": false,
+      "canonical_fixture_index_sha256": "c78aa0faa507ff205e2001d12d6d5c652934552dc824ed8a63811ff47fe733e2"
+    }
+  ],
+  "native_bitmap_file_revalidations": [
+    {
+      "updated_utc": "2026-10-09T16:30:55.506998+00:00",
+      "source_commit": "4e68a4a4871964926db2239dd46d6a44fb304373",
+      "harness_file_oracle_commit": "17e23b4a925b69d455be5e5bff6052d2a99d03e9",
+      "harness_file_oracle_version": "0.1.46",
+      "harness_game_profile_commit": "40790ab228a6ee10cff4b4959340af094a3557ea",
+      "harness_game_profile_version": "0.1.47",
+      "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_file_oracle_executable_sha256": "e5d4e1f1886d0f5e15a6d97ab7fe53b5856f3c349ee3d9fbbe62411d6cfef917",
+      "codec_commits": {
+        "libpng": "ea127968204cc5d10f3fc9250c306b9e8cbd9b80",
+        "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+        "libjpeg-turbo": "20ade4dea9589515a69793e447a6c6220b464535"
+      },
+      "local_reference_files_matched": 14,
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding",
+      "native_png16_formats": [
+        "RGB16",
+        "RGBA16",
+        "grayscale16",
+        "grayscale-alpha16"
+      ],
+      "matched_rgba_bytes": 560,
+      "byte_tolerance": 0,
+      "production_before_mismatch": {
+        "rgb16_strip_last_red": {
+          "deadsync": 24,
+          "native": 23
+        }
+      },
+      "assets_passed": 224,
+      "decode_integration_passed": 1,
+      "harness_passed": 208,
+      "harness_existing_ignored": 5,
+      "native_file_cases": 24,
+      "native_game_profile_model_draws": 3,
+      "native_game_profile_image": [
+        2048,
+        8
+      ],
+      "harness_before_image": [
+        1024,
+        8
+      ],
+      "dependency_pins_preserved": true,
+      "sprite_upload_pixels_captured": false,
+      "framebuffer_verified": false,
+      "full_corpus_complete": false,
+      "model_archive_acceptance_open": false,
+      "remaining": [
+        "indexed GIF/BMP production decode and native BMP4 nibble order",
+        "full bitmap hint/format/device-size policy and default tiny Sprite stretching",
+        "effective mipmap requests, physical mip storage and native framebuffer output",
+        "all original 501 simfiles and 492 contexts"
+      ],
+      "test_log_sha256": {
+        "assets": "9a06c4fdd9c56d239a7d3d805dc1222c64c49644bafe47d56b47f5574768430c",
+        "decode_integration": "ac4de1e1a58a02f61c2abd170605138e5db410d48c0c498fd66d68dd76327ac5",
+        "harness": "2dc42eb813838fa7015a532900dbea4bbf70ac19b1044160adbcca2113ecdb16"
+      }
+    },
+    {
+      "updated_utc": "2026-10-09T17:34:37.032782+00:00",
+      "source_commit": "59f62fd3b11ee4c65cf6e4eba094d784422da079",
+      "indexed_decoder_commit": "d0d3746ce78e0d70ea85eeddb20e26006fb8e948",
+      "harness_file_oracle_commit": "2ea017def6b963471102d07dcc3c1e3d170ffc68",
+      "harness_file_oracle_version": "0.1.48",
+      "harness_header_commit": "e5ee5826a0cf4024301c969087b1ee3b863e4242",
+      "harness_header_version": "0.1.49",
+      "native_itgmania_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "native_file_oracle_executable_sha256": "5a5e22f078f426803ede703aabe27fbb80be1a3b6fcc51aa895a9bf51c27345b",
+      "native_header_oracle_executable_sha256": "be7d5ffa45f5cf75220e21921625d94a278a7c96dd595135e90330437ad8157d",
+      "codec_commits": {
+        "libpng": "ea127968204cc5d10f3fc9250c306b9e8cbd9b80",
+        "zlib": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+        "libjpeg-turbo": "20ade4dea9589515a69793e447a6c6220b464535"
+      },
+      "local_reference_files_matched": 15,
+      "fixture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files",
+      "original_control_requests": 35,
+      "successful_pixel_controls": 33,
+      "native_rejection_controls": 2,
+      "matched_rgba_bytes": 8704,
+      "byte_tolerance": 0,
+      "rejection_scope": "production decoder and raw source-dimension probing",
+      "covered": [
+        "Windows and OS/2 indexed BMP1/BMP4/BMP8",
+        "low-first BMP4 nibbles including odd-row padding",
+        "duplicate palette color keys and transparent unused palette entries",
+        "first-frame GIF global/local palettes, offsets, interlacing and multiple frames",
+        "Model texture registration and compiled Lua source/texture getters",
+        "native BMP read-order rejection after another registered bitmap extension"
+      ],
+      "before_failed_pixel_controls": 22,
+      "before_regular_gif_model": "PNG/JPEG-only adapter rejected a valid native GIF",
+      "tests": {
+        "deadsync_passed": 1434,
+        "harness_passed": 210,
+        "harness_existing_ignored": 5
+      },
+      "test_log_sha256": {
+        "deadsync": [
+          "c8e543f41e530c7c8b78db7d6370e731528b2b6bef9e7cb7da018daa9356a674",
+          "2b406dfee82f01d174eda81d2b0de5037841061b2edc33d71b599aadba0a531e"
+        ],
+        "harness": "594d3d17f72652dcadc7e94eae1b725284d16d50eb70b3654582e1142a49226f"
+      },
+      "native_bitmap_regressions_unchanged": 28,
+      "native_header_cases": 2,
+      "native_regular_gif_model_draws": 3,
+      "original_corpus_gif_headers": {
+        "files": 21,
+        "different_from_canvas": 0,
+        "native_json_sha256": "93f12565f5370fea20a0d2d9e2e74216dcd0b3ee7c02d40a476ba35b25b71df2",
+        "full_song_revalidation_complete": false
+      },
+      "dependency_pins_preserved": true,
+      "framebuffer_verified": false,
+      "full_corpus_complete": false,
+      "model_archive_acceptance_open": false,
+      "canonical_archive_index_unchanged": true,
+      "remaining": [
+        "default tiny Sprite stretching, source/image/allocation identities and normalized UV mapping",
+        "true-color BMP masks, JPEG codec precision, complete bitmap hints/settings/device policy",
+        "other generic image consumers, including mine color sampling and font metadata",
+        "Lua error-message and unsupported/invalid input behavior beyond these decoder rejections",
+        "effective mip requests, physical mip storage, native framebuffer and remaining render state",
+        "all original 501 simfiles, 492 contexts, aliases, historical variants and 18 unindexed sources"
+      ]
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 use super::{
-    App, Command, CurrentScreen, credits, evaluation, evaluation_summary, gameover, gameplay, init,
-    initials, input_screen, manage_local_profiles, mappings, menu, options, overscan_adjustment,
-    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
-    select_profile, select_style, test_lights,
+    App, Command, CurrentScreen, content_browser, credits, evaluation, evaluation_summary,
+    gameover, gameplay, init, initials, input_screen, manage_local_profiles, mappings, menu,
+    options, overscan_adjustment, player_options, profile_load, sandbox, select_color,
+    select_course, select_mode, select_music, select_profile, select_style, test_lights,
 };
 use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
@@ -402,6 +402,7 @@ impl App {
             CurrentScreen::Gameplay => gameplay::out_transition(),
             CurrentScreen::Practice => gameplay::out_transition(),
             CurrentScreen::Options => options::out_transition(),
+            CurrentScreen::ContentBrowser => content_browser::out_transition(),
             CurrentScreen::Credits => credits::out_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::out_transition(),
             CurrentScreen::Mappings => mappings::out_transition(),
@@ -449,6 +450,7 @@ impl App {
                 super::simply_love_visual_policy(&config::runtime::get()),
             ),
             CurrentScreen::Options => options::in_transition(),
+            CurrentScreen::ContentBrowser => content_browser::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),
             CurrentScreen::ManageLocalProfiles => manage_local_profiles::in_transition(),
             CurrentScreen::Mappings => mappings::in_transition(),

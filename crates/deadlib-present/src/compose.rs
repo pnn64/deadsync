@@ -100,6 +100,7 @@ struct TexturedMeshPayload {
     depth_test: bool,
     clear_depth: bool,
     clear_depth_after: bool,
+    sampler: Option<renderer::MeshSampler>,
 }
 
 #[derive(Default)]
@@ -258,6 +259,7 @@ impl FrameBuilder {
                 depth_test,
                 clear_depth,
                 clear_depth_after,
+                sampler,
             } => self.push_textured_mesh(
                 texture_handle,
                 order,
@@ -271,6 +273,7 @@ impl FrameBuilder {
                     depth_test,
                     clear_depth,
                     clear_depth_after,
+                    sampler,
                 },
             ),
         }
@@ -329,6 +332,7 @@ impl FrameBuilder {
                 depth_test,
                 clear_depth,
                 clear_depth_after,
+                sampler,
             } => {
                 let slot = if old.kind == DrawKind::TexturedMesh {
                     debug_assert!(self.textured_meshes[old.payload_index as usize].is_none());
@@ -345,6 +349,7 @@ impl FrameBuilder {
                     depth_test,
                     clear_depth,
                     clear_depth_after,
+                    sampler,
                 });
                 (DrawKind::TexturedMesh, slot)
             }
@@ -384,6 +389,7 @@ impl FrameBuilder {
                     depth_test: payload.depth_test,
                     clear_depth: payload.clear_depth,
                     clear_depth_after: payload.clear_depth_after,
+                    sampler: payload.sampler,
                 }
             }
         }
@@ -405,6 +411,7 @@ enum EditablePayload {
         depth_test: bool,
         clear_depth: bool,
         clear_depth_after: bool,
+        sampler: Option<renderer::MeshSampler>,
     },
 }
 
@@ -1893,6 +1900,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     depth_test,
                     clear_depth,
                     clear_depth_after,
+                    sampler,
                 } = builder.textured_meshes[item.payload_index as usize]
                     .take()
                     .expect("draw item references live textured-mesh payload");
@@ -1939,6 +1947,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                             !payload.clear_depth
                                 && payload.instance.additive_texture == instance.additive_texture
                                 && payload.depth_test == depth_test
+                                && payload.sampler == sampler
                                 && tmesh_identity(&payload.vertices, payload.geom_cache_key)
                                     == identity
                         })
@@ -1960,6 +1969,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     camera,
                     depth_test,
                     clear_depth,
+                    sampler,
                 }));
                 pending_clear |= clear_depth_after;
                 if TRACK_SPRITE_RUNS {
@@ -5519,6 +5529,7 @@ fn push_shadow_objects_for_range(
                         depth_test: source.depth_test,
                         clear_depth: source.clear_depth,
                         clear_depth_after: source.clear_depth_after,
+                        sampler: None,
                     },
                 );
             }
@@ -5672,10 +5683,8 @@ fn build_actor_sequence_with_state<'a, T, I>(
             actors::Actor::CameraPush { view_proj } => {
                 let view_proj = camera_prefix.map_or(*view_proj, |prefix| prefix * *view_proj);
                 let matrix = segment_camera.map_or(view_proj, |camera| view_proj * *camera.suffix);
-                cameras.push(matrix);
                 sequence.camera_stack.push(sequence.active_camera);
-                sequence.active_camera = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-                sequence.last_root_camera = Some((matrix, sequence.active_camera));
+                sequence.active_camera = sequence.camera_id(matrix, cameras);
                 root_camera_id = None;
             }
             actors::Actor::CameraPop => {
@@ -6006,7 +6015,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             depth_test: mesh.depth_test,
                             clear_depth: mesh.clear_depth,
                             clear_depth_after: mesh.clear_depth_after,
-                            cull_back: mesh.cull_back,
+                            cull_mode: mesh.cull_mode,
                             visible: true,
                             blend: mesh.blend,
                             z: mesh.z,
@@ -6386,7 +6395,7 @@ struct TexturedMeshActorView<'a> {
     depth_test: bool,
     clear_depth: bool,
     clear_depth_after: bool,
-    cull_back: bool,
+    cull_mode: deadlib_render_core::CullMode,
     visible: bool,
     blend: BlendMode,
     z: i16,
@@ -6435,7 +6444,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         depth_test,
         clear_depth,
         clear_depth_after,
-        cull_back,
+        cull_mode,
         visible,
         blend,
         z,
@@ -6456,7 +6465,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             depth_test,
             clear_depth,
             clear_depth_after,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -6478,7 +6487,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             depth_test,
             clear_depth,
             clear_depth_after,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -6499,7 +6508,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             *depth_test,
             *clear_depth,
             *clear_depth_after,
-            *cull_back,
+            *cull_mode,
             *visible,
             *blend,
             *z,
@@ -6536,7 +6545,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         depth_test,
         clear_depth,
         clear_depth_after,
-        cull_back,
+        cull_mode,
         visible,
         blend,
         z,
@@ -6647,7 +6656,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                     sphere_rows,
                     additive_texture,
                     additive_uv,
-                    cull_back: f32::from(mesh.cull_back),
+                    cull_mode: mesh.cull_mode as u8 as f32,
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
                         mul_rgba(mesh.tint, style.tint),
@@ -6662,6 +6671,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 depth_test: mesh.depth_test,
                 clear_depth: mesh.clear_depth,
                 clear_depth_after: mesh.clear_depth_after && mesh.glow[3] <= 0.0001,
+                sampler: mesh.environment.and_then(|environment| environment.sampler),
             },
         );
     }
@@ -6676,7 +6686,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             camera,
             TexturedMeshPayload {
                 instance: renderer::TexturedMeshInstanceRaw {
-                    cull_back: f32::from(mesh.cull_back),
+                    cull_mode: mesh.cull_mode as u8 as f32,
                     ..renderer::TexturedMeshInstanceRaw::new(
                         transform,
                         mul_rgba(mesh.glow, style.tint),
@@ -6691,6 +6701,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 depth_test: mesh.depth_test,
                 clear_depth: mesh.clear_depth && mesh.tint[3] <= 0.0,
                 clear_depth_after: mesh.clear_depth_after,
+                sampler: mesh.environment.and_then(|environment| environment.sampler),
             },
         );
     }
@@ -8148,6 +8159,7 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                     depth_test: false,
                     clear_depth: false,
                     clear_depth_after: false,
+                    sampler: None,
                 },
             );
             finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
@@ -8429,6 +8441,7 @@ fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         );
     }
@@ -8480,6 +8493,7 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         );
     }
@@ -8534,6 +8548,7 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         );
     }
@@ -9085,6 +9100,7 @@ fn clipped_sprite_object_to_world_rect(
         ),
         EditablePayload::TexturedMesh {
             instance,
+            sampler,
             vertices: mesh_vertices,
             ..
         } => {
@@ -9101,7 +9117,7 @@ fn clipped_sprite_object_to_world_rect(
             {
                 return None;
             }
-            clip_textured_mesh_to_world_rect(
+            let mut clipped = clip_textured_mesh_to_world_rect(
                 instance.tint,
                 vertices,
                 transform,
@@ -9111,7 +9127,15 @@ fn clipped_sprite_object_to_world_rect(
                 clip,
                 instance.texture_mask != 0.0,
                 recycled_vertices,
-            )
+            )?;
+            if let EditablePayload::TexturedMesh {
+                sampler: clipped_sampler,
+                ..
+            } = &mut clipped.object_type
+            {
+                *clipped_sampler = *sampler;
+            }
+            Some(clipped)
         }
         EditablePayload::Mesh { .. } => unreachable!("callers keep colored meshes unchanged"),
     }
@@ -9464,6 +9488,7 @@ fn clip_textured_mesh_to_world_rect_with(
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
+            sampler: None,
         },
         sprite: None,
     })
@@ -9550,6 +9575,7 @@ fn clip_rotated_sprite_to_world_rect(
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
+            sampler: None,
         },
         sprite: None,
     })
@@ -10191,6 +10217,7 @@ mod tests {
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
         };
         let mut builder = FrameBuilder::default();
@@ -10335,6 +10362,19 @@ mod tests {
         }
         assert_eq!(nested_render.ops, flat_render.ops);
         assert_eq!(nested_render.mesh_vertices, flat_render.mesh_vertices);
+
+        // Repeated Models under the same frame must reuse its camera rather
+        // than exhaust the u8 camera IDs and fall back to the default camera.
+        let repeated = flat
+            .iter()
+            .cloned()
+            .cycle()
+            .take(300 * flat.len())
+            .collect::<Vec<_>>();
+        let repeated_render = build_screen(&repeated, [0.0; 4], &metrics, &fonts, 0.0);
+        assert_eq!(repeated_render.cameras.len(), 2);
+        assert!(repeated_render.ops.iter().all(|op| matches!(op,
+            deadlib_render_core::DrawOp::Mesh(run) if run.camera == 1)));
 
         let resources = ActorResourceArena::new(0);
         let mut contiguous_text = TextLayoutCache::default();
@@ -10561,6 +10601,7 @@ mod tests {
         let view_proj = Matrix4::from_translation(Vector3::new(3.0, 4.0, 5.0));
         let eye = Matrix4::from_rotation_x(0.3) * Matrix4::from_scale(Vector3::new(0.9, -0.9, 1.0));
         let environment = crate::actors::MeshEnvironment {
+            sampler: None,
             camera: Some((view_proj, eye)),
             transform: Matrix4::from_rotation_y(0.7),
             additive_texture: Some(Arc::from("reflection.png")),
@@ -10623,7 +10664,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             blend: BlendMode::Add,
             z: 9,
         };
@@ -10685,7 +10726,7 @@ mod tests {
             depth_test: mesh.depth_test,
             clear_depth: mesh.clear_depth,
             clear_depth_after: mesh.clear_depth_after,
-            cull_back: mesh.cull_back,
+            cull_mode: mesh.cull_mode,
             visible: true,
             blend: mesh.blend,
             z: mesh.z,
@@ -10757,7 +10798,7 @@ mod tests {
                 assert_ne!(instance.additive_texture, 0);
             }
         }
-        assert!(actual.tmesh_instances.iter().all(|i| i.cull_back == 1.0));
+        assert!(actual.tmesh_instances.iter().all(|i| i.cull_mode == 1.0));
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
         let tint = [0.7, 0.8, 0.9, 0.6];
@@ -12110,6 +12151,7 @@ mod tests {
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
             texture_handle: 0,
             blend: BlendMode::Alpha,
@@ -12186,6 +12228,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
             texture_handle: 17,
             blend: BlendMode::Add,
@@ -12219,6 +12262,7 @@ mod tests {
                 depth_test: actual_depth,
                 clear_depth: actual_clear,
                 clear_depth_after: actual_clear_after,
+                sampler: None,
             },
             EditablePayload::TexturedMesh {
                 instance: expected_instance,
@@ -12227,6 +12271,7 @@ mod tests {
                 depth_test: expected_depth,
                 clear_depth: expected_clear,
                 clear_depth_after: expected_clear_after,
+                sampler: None,
             },
         ) = (&actual.object_type, &expected.object_type)
         else {
@@ -13505,6 +13550,7 @@ mod tests {
                 depth_test: false,
                 clear_depth: false,
                 clear_depth_after: false,
+                sampler: None,
             },
             texture_handle: 9,
             blend: BlendMode::Alpha,
@@ -13754,7 +13800,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: true,
             blend: BlendMode::Alpha,
             z: 5,
@@ -13956,7 +14002,7 @@ mod tests {
                 depth_test: true,
                 clear_depth: true,
                 clear_depth_after: true,
-                cull_back: true,
+                cull_mode: deadlib_render_core::CullMode::Back,
                 visible: true,
                 blend: BlendMode::Alpha,
                 z: 0,
@@ -13991,6 +14037,76 @@ mod tests {
                 assert_eq!(run.instance_count, if i == 0 { 2 * passes } else { passes });
             }
         }
+    }
+
+    #[test]
+    fn mesh_batches_preserve_sampler_changes() {
+        use deadlib_render_core::{MeshSampler, SamplerFilter, SamplerWrap};
+        let nearest = Some(MeshSampler {
+            filter: SamplerFilter::Nearest,
+            wrap: SamplerWrap::Repeat,
+        });
+        let linear = Some(MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Repeat,
+        });
+        let clamp = Some(MeshSampler {
+            filter: SamplerFilter::Linear,
+            wrap: SamplerWrap::Clamp,
+        });
+        let vertices: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex::default(); 3]);
+        let mut builder = FrameBuilder::default();
+        for (order, sampler) in [nearest, nearest, linear, clamp, linear, None]
+            .into_iter()
+            .enumerate()
+        {
+            builder.push_textured_mesh(
+                1,
+                order as u32,
+                0,
+                BlendMode::Alpha,
+                0,
+                super::TexturedMeshPayload {
+                    instance: TexturedMeshInstanceRaw::new(
+                        Matrix4::IDENTITY,
+                        [1.0; 4],
+                        [1.0; 2],
+                        [0.0; 2],
+                        [0.0; 2],
+                        false,
+                    ),
+                    vertices: deadlib_render_core::TexturedMeshVertices::Shared(Arc::clone(
+                        &vertices,
+                    )),
+                    geom_cache_key: 7,
+                    depth_test: false,
+                    clear_depth: false,
+                    clear_depth_after: false,
+                    sampler,
+                },
+            );
+        }
+        let frame = finish_test_builder(builder, Vec::new());
+        let actual = frame
+            .ops
+            .iter()
+            .map(|op| {
+                let DrawOp::TexturedMesh(run) = op else {
+                    panic!("textured mesh run")
+                };
+                (run.sampler, run.instance_count)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            [
+                (nearest, 2),
+                (linear, 1),
+                (clamp, 1),
+                (linear, 1),
+                (None, 1)
+            ]
+        );
     }
 
     #[test]
@@ -14065,6 +14181,7 @@ mod tests {
                         depth_test,
                         clear_depth,
                         clear_depth_after,
+                        sampler: None,
                     };
                     (texture_handle, payload)
                 };
@@ -14142,7 +14259,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,
@@ -14156,7 +14273,7 @@ mod tests {
         );
 
         let (_, instance, geometry) = tmesh_draw(&render, 0);
-        assert_eq!(instance.cull_back, 1.0);
+        assert_eq!(instance.cull_mode, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14190,7 +14307,7 @@ mod tests {
             depth_test: true,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: true,
+            cull_mode: deadlib_render_core::CullMode::Back,
             blend: BlendMode::Alpha,
             z: 0,
         })];
@@ -14211,7 +14328,7 @@ mod tests {
             );
 
         let (_, instance, geometry) = tmesh_draw(&render, 0);
-        assert_eq!(instance.cull_back, 1.0);
+        assert_eq!(instance.cull_mode, 1.0);
         let deadlib_render_core::TexturedMeshVertices::Reusable(render_vertices) =
             &geometry.vertices
         else {
@@ -14712,7 +14829,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             blend: BlendMode::Alpha,
             z: 10,
         };
@@ -14823,7 +14940,7 @@ mod tests {
             depth_test: false,
             clear_depth: false,
             clear_depth_after: false,
-            cull_back: false,
+            cull_mode: deadlib_render_core::CullMode::None,
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,

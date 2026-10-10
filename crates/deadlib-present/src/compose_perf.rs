@@ -68,6 +68,26 @@ fn scene(count: usize, mixed: bool) -> (FrameBuilder, Vec<renderer::SpriteInstan
                 },
             );
         } else if mixed && index % 3 == 2 {
+            let mut instance = renderer::TexturedMeshInstanceRaw::new(
+                Matrix4::IDENTITY,
+                [0.8; 4],
+                [0.5; 2],
+                [0.2; 2],
+                [0.1; 2],
+                false,
+            );
+            instance.cull_mode = (index / 3 % 3) as f32;
+            let sampler = match index / 3 % 3 {
+                0 => None,
+                1 => Some(renderer::MeshSampler {
+                    filter: renderer::SamplerFilter::Nearest,
+                    wrap: renderer::SamplerWrap::Clamp,
+                }),
+                _ => Some(renderer::MeshSampler {
+                    filter: renderer::SamplerFilter::Linear,
+                    wrap: renderer::SamplerWrap::Repeat,
+                }),
+            };
             builder.push_textured_mesh(
                 11,
                 order,
@@ -75,19 +95,13 @@ fn scene(count: usize, mixed: bool) -> (FrameBuilder, Vec<renderer::SpriteInstan
                 BlendMode::Alpha,
                 0,
                 TexturedMeshPayload {
-                    instance: renderer::TexturedMeshInstanceRaw::new(
-                        Matrix4::IDENTITY,
-                        [0.8; 4],
-                        [0.5; 2],
-                        [0.2; 2],
-                        [0.1; 2],
-                        false,
-                    ),
+                    instance,
                     vertices: renderer::TexturedMeshVertices::Shared(vertices.clone()),
                     geom_cache_key: index as u64 + 1,
                     depth_test: true,
                     clear_depth: index % 2 == 0,
                     clear_depth_after: true,
+                    sampler,
                 },
             );
         } else {

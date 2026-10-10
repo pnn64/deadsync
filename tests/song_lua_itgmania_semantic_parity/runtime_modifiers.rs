@@ -66,6 +66,9 @@ fn mod_string_level(words: &[&str]) -> Option<f32> {
 fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>) {
     let mut writes = Vec::new();
     let mut unsupported = BTreeMap::<String, usize>::new();
+    let mut rejected = Vec::new();
+    let mut assignments = Vec::new();
+    let mut speed_resets = std::collections::BTreeSet::new();
     for track in &trace.timeline_tracks {
         let state_setter = track.operation == "PlayerState.SetPlayerOptions";
         let Some(player) = (0..2).find(|player| {
@@ -113,6 +116,13 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             {
                 continue;
             }
+            let speed_observed = detail.as_ref().is_some_and(|detail| detail["speed_option"].is_object());
+            if speed_observed && matches!(operation, "TimeSpacing" | "ScrollSpeed" | "ScrollBPM" | "MaxScrollBPM" | "XMod" | "CMod" | "MMod") {
+                // All shared fields and every call are checked against native
+                // getters below, followed by the actual final playback mode.
+                continue;
+            }
+            if speed_observed { speed_resets.insert(*sequence); }
             let mut push = |key: String, value: f32| {
                 writes.push(ModWrite {
                     sequence: *sequence,
@@ -123,8 +133,20 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                     value,
                 })
             };
+            if state_setter {
+                // PlayerState.cpp constructs fresh PlayerOptions, then Assigns
+                // them. Omitted numeric fields return to PlayerOptions::Init
+                // defaults before the replacement string's targets are applied.
+                push("__assignment_reset".into(), 0.0);
+                if let Some(snapshot) = detail.as_ref()
+                    .and_then(|detail| detail["numeric_options"].as_array())
+                {
+                    assignments.push((*sequence, *beat, *second, player, snapshot));
+                }
+            }
             // FromString Overhead always resets perspective, even at level zero.
             let mut set_option = |key: String, value: f32| match key.as_str() {
+                "xmod" | "cmod" | "mmod" if speed_observed => {},
                 "modtimergame" => push("modtimersetting".into(), 0.0),
                 "modtimerbeat" => push("modtimersetting".into(), 1.0),
                 "modtimersong" => push("modtimersetting".into(), 2.0),
@@ -174,6 +196,23 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
                         // The linked native parser identified this exact part.
                         // compare_noteskin_options must also pass its API state;
                         // clearall still needs the numeric reset audit below.
+                        continue;
+                    }
+                    if let Some(noop) = detail.as_ref()
+                        .and_then(|detail| detail["rejected_parts"].as_array())
+                        .and_then(|parts| parts.iter().find(|noop|
+                            noop["part"].as_str().is_some_and(|raw|
+                                raw.eq_ignore_ascii_case(&part))))
+                    {
+                        // The linked FromOneModString rejected this exact part.
+                        // Keep its observation and audit native live fields at
+                        // this timestamp instead of inventing a numeric target.
+                        if noop["accepted"] != false || noop["unchanged"] != true {
+                            *unsupported.entry(format!("native rejected part changed {part}"))
+                                .or_default() += 1;
+                        } else {
+                            rejected.push((*sequence, *beat, *second, player, noop));
+                        }
                         continue;
                     }
                     if let Some(noop) = detail
@@ -284,11 +323,6 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             }
         }
     }
-    writes.sort_by(|a, b| {
-        a.second
-            .total_cmp(&b.second)
-            .then(a.sequence.cmp(&b.sequence))
-    });
     // clearall invokes PlayerOptions::Init; it has no numeric getter. Observe
     // every numeric option used by this trace at its native reset value, plus
     // the shared speed mode, perspective and timer defaults. Later writes in
@@ -296,7 +330,8 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
     let keys: [std::collections::BTreeSet<String>; 2] = std::array::from_fn(|player| {
         writes
             .iter()
-            .filter(|write| write.player == player && write.key != "clearall")
+            .filter(|write| write.player == player
+                && !matches!(write.key.as_str(), "clearall" | "__assignment_reset"))
             .map(|write| write.key.clone())
             .chain(
                 ["cmod", "mmod", "xmod", "tilt", "skew", "modtimersetting"]
@@ -305,14 +340,56 @@ fn option_writes(trace: &NativeTrace) -> (Vec<ModWrite>, BTreeMap<String, usize>
             )
             .collect()
     });
+    for (sequence, beat, second, player, noop) in rejected {
+        let mut observed = 0;
+        if let Some(values) = noop["values"].as_array() {
+            for value in values {
+                let Some(key) = value[0].as_str().filter(|key| keys[player].contains(*key)) else {
+                    continue;
+                };
+                if let Some(amount) = value_f32(value.get(1)) {
+                    writes.push(ModWrite {
+                        sequence, second, beat, player, key: key.to_owned(), value: amount,
+                    });
+                    observed += 1;
+                } else {
+                    *unsupported.entry(format!("invalid native rejected-part field {key}"))
+                        .or_default() += 1;
+                }
+            }
+        }
+        if observed == 0 {
+            *unsupported.entry(format!("missing native rejected-part fields {}", noop["part"]))
+                .or_default() += 1;
+        }
+    }
+    // New captures also record compiled native getters after assignment. Keep
+    // those final fields after the text audit, including resets omitted by text.
+    for (sequence, beat, second, player, snapshot) in assignments {
+        for field in snapshot {
+            let Some(key) = field[0].as_str().filter(|key| keys[player].contains(*key)
+                && !matches!(*key, "xmod" | "cmod" | "mmod")) else { continue; };
+            if let Some(value) = value_f32(field.get(1)) {
+                writes.push(ModWrite { sequence, second, beat, player, key: key.into(), value });
+            } else {
+                *unsupported.entry(format!("invalid native assignment field {key}"))
+                    .or_default() += 1;
+            }
+        }
+    }
+    writes.sort_by(|a, b| a.second.total_cmp(&b.second).then(a.sequence.cmp(&b.sequence)));
     let writes = writes
         .into_iter()
         .flat_map(|write| {
-            if write.key != "clearall" {
+            if !matches!(write.key.as_str(), "clearall" | "__assignment_reset") {
                 return vec![write];
             }
             keys[write.player]
                 .iter()
+                // Native reset getter snapshots replace synthetic alias defaults;
+                // the reset call and its fields remain in the speed API audit.
+                .filter(|key| !speed_resets.contains(&write.sequence)
+                    || !matches!(key.as_str(), "xmod" | "cmod" | "mmod"))
                 .map(|key| ModWrite {
                     sequence: write.sequence,
                     second: write.second,
@@ -386,6 +463,9 @@ fn runtime_mod_value(
         "modtimermult" => visual.mod_timer_mult.unwrap_or(0.0),
         "modtimeroffset" => visual.mod_timer_offset.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "attenuatex" => visual.attenuate_x.unwrap_or(0.0),
+        "parabolay" => visual.parabola_y.unwrap_or(0.0),
+        "attenuatey" => visual.attenuate_y.unwrap_or(0.0),
         "bumpyx" => visual.bumpy_x.unwrap_or(0.0),
         "bumpyxoffset" => visual.bumpy_x_offset.unwrap_or(0.0),
         "bumpyxperiod" => visual.bumpy_x_period.unwrap_or(0.0),
@@ -416,8 +496,11 @@ fn runtime_mod_value(
         "digitalsteps" => visual.digital_steps.unwrap_or(0.0),
         "digitaloffset" => visual.digital_offset.unwrap_or(0.0),
         "digitalperiod" => visual.digital_period.unwrap_or(0.0),
+        "zigzag" => visual.zigzag.unwrap_or(0.0),
         "zigzagz" => visual.zigzag_z.unwrap_or(0.0),
+        "zigzagoffset" => visual.zigzag_offset.unwrap_or(0.0),
         "zigzagzoffset" => visual.zigzag_z_offset.unwrap_or(0.0),
+        "zigzagperiod" => visual.zigzag_period.unwrap_or(0.0),
         "zigzagzperiod" => visual.zigzag_z_period.unwrap_or(0.0),
         "square" => visual.square.unwrap_or(0.0),
         "squareoffset" => visual.square_offset.unwrap_or(0.0),
@@ -426,9 +509,16 @@ fn runtime_mod_value(
         "squarezoffset" => visual.square_z_offset.unwrap_or(0.0),
         "squarezperiod" => visual.square_z_period.unwrap_or(0.0),
         "xmode" => visual.xmode.unwrap_or(0.0),
+        "bounce" => visual.bounce.unwrap_or(0.0),
+        "bounceperiod" => visual.bounce_period.unwrap_or(0.0),
+        "bounceoffset" => visual.bounce_offset.unwrap_or(0.0),
+        "tornadoperiod" => visual.tornado_period.unwrap_or(0.0),
+        "tornadooffset" => visual.tornado_offset.unwrap_or(0.0),
         "parabolaz" => visual.parabola_z.unwrap_or(0.0),
+        "attenuatez" => visual.attenuate_z.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
         "confusionoffset" => visual.confusion_offset.unwrap_or(0.0),
+        "confusionxoffset" => visual.confusion_x_offset.unwrap_or(0.0),
         "tiny" => visual.tiny.unwrap_or(0.0),
         "flip" => visual.flip.unwrap_or(0.0),
         "invert" => visual.invert.unwrap_or(0.0),
@@ -440,13 +530,52 @@ fn runtime_mod_value(
         "pulseouter" => visual.pulse_outer.unwrap_or(0.0),
         "pulseperiod" => visual.pulse_period.unwrap_or(0.0),
         "beatperiod" => visual.beat_period.unwrap_or(0.0),
+        "shrinklinear" => visual.shrink_linear.unwrap_or(0.0),
+        "shrinkmult" => visual.shrink_mult.unwrap_or(0.0),
+        "bouncez" => visual.bounce_z.unwrap_or(0.0),
+        "bouncezoffset" => visual.bounce_z_offset.unwrap_or(0.0),
+        "bouncezperiod" => visual.bounce_z_period.unwrap_or(0.0),
+        "digitalz" => visual.digital_z.unwrap_or(0.0),
+        "digitalzoffset" => visual.digital_z_offset.unwrap_or(0.0),
+        "digitalzperiod" => visual.digital_z_period.unwrap_or(0.0),
+        "digitalzsteps" => visual.digital_z_steps.unwrap_or(0.0),
+        "tornadoz" => visual.tornado_z.unwrap_or(0.0),
+        "tornadozoffset" => visual.tornado_z_offset.unwrap_or(0.0),
+        "tornadozperiod" => visual.tornado_z_period.unwrap_or(0.0),
+        "sawtooth" => visual.sawtooth.unwrap_or(0.0),
+        "sawtoothperiod" => visual.sawtooth_period.unwrap_or(0.0),
+        "sawtoothz" => visual.sawtooth_z.unwrap_or(0.0),
+        "sawtoothzperiod" => visual.sawtooth_z_period.unwrap_or(0.0),
+        "confusionx" => visual.confusion_x.unwrap_or(0.0),
+        "confusiony" => visual.confusion_y.unwrap_or(0.0),
+        "confusionyoffset" => visual.confusion_y_offset.unwrap_or(0.0),
+        "beatoffset" => visual.beat_offset.unwrap_or(0.0),
+        "beatmult" => visual.beat_mult.unwrap_or(0.0),
+        "beaty" => visual.beat_y.unwrap_or(0.0),
+        "beatyoffset" => visual.beat_y_offset.unwrap_or(0.0),
+        "beatymult" => visual.beat_y_mult.unwrap_or(0.0),
+        "beatyperiod" => visual.beat_y_period.unwrap_or(0.0),
+        "beatz" => visual.beat_z.unwrap_or(0.0),
+        "beatzoffset" => visual.beat_z_offset.unwrap_or(0.0),
+        "beatzmult" => visual.beat_z_mult.unwrap_or(0.0),
+        "beatzperiod" => visual.beat_z_period.unwrap_or(0.0),
         "pulseoffset" => visual.pulse_offset.unwrap_or(0.0),
         "randomspeed" => visual.random_speed.unwrap_or(0.0),
         "brake" => runtime.accel[player].brake.unwrap_or(0.0),
         "boost" => runtime.accel[player].boost.unwrap_or(0.0),
         "wave" => runtime.accel[player].wave.unwrap_or(0.0),
+        "waveperiod" => runtime.accel[player].wave_period.unwrap_or(0.0),
         "expand" => runtime.accel[player].expand.unwrap_or(0.0),
+        "expandperiod" => runtime.accel[player].expand_period.unwrap_or(0.0),
+        "noattack" | "noattacks" => runtime.attack_flags[player].no_attack.unwrap_or(0.0),
+        "randattack" | "randomattacks" => runtime.attack_flags[player].rand_attack.unwrap_or(0.0),
         "boomerang" => runtime.accel[player].boomerang.unwrap_or(0.0),
+        "stepattacks" => {
+            let flags = runtime.attack_flags[player];
+            f32::from(
+                flags.no_attack.unwrap_or(0.0) <= 0.0 && flags.rand_attack.unwrap_or(0.0) <= 0.0,
+            )
+        }
         "hidden" => appearance.hidden,
         "hiddenoffset" => appearance.hidden_offset,
         "stealth" => appearance.stealth,
@@ -610,6 +739,8 @@ fn runtime_reader_preserves_order_and_easing_body() {
         (1.5, 0.0, 1.05),
         (2.0, 0.0, 1.05),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -713,6 +844,8 @@ fn song_clock_uses_global_pauses() {
             } else {
                 x
             };
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             let _ = runtime.refresh_player(
                 0,
                 second,
@@ -766,6 +899,8 @@ fn song_clock_retains_native_float_rounding() {
                 .beat,
             beat
         );
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             seconds,
@@ -842,6 +977,8 @@ end}
             deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
         ),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -897,8 +1034,14 @@ end}
     }];
     let mut parity = Parity::default();
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    assert_eq!(parity.checks(), 3, "audit state-level string writes");
+    assert!(parity.checks() >= 5, "audit replacement strings and omitted numeric resets");
     parity.assert_complete("state option string targets");
+    let mut stale = compiled.clone();
+    stale[0].eases.retain(|window| !matches!(&window.target,
+        deadsync_song_lua::SongLuaEaseTarget::Mod(key) if key == "drunk" && window.to == 0.0));
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &stale, &context, &mut parity);
+    assert!(!parity.gaps.is_empty(), "the audit rejects an omitted replacement reset");
     let mut missing = compiled;
     missing[0].eases.clear();
     let mut parity = Parity::default();
@@ -1147,6 +1290,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1195,6 +1340,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1264,6 +1411,8 @@ end}
         (1.5, [0.0, 0.0]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1319,6 +1468,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1380,6 +1531,8 @@ end}
         (1.0, 1_000_000.0, 0.0, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1465,6 +1618,8 @@ end}
         (1.0, 1_000_000.0, 0.0, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1564,6 +1719,8 @@ end}
         (1.25, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1657,6 +1814,8 @@ end}
             (1.75, 0.0),
         ] {
             for player in 0..2 {
+                // Probe this target at an independent song position.
+                runtime.reset_window_times();
                 runtime.refresh_player(
                     player,
                     second,
@@ -1677,6 +1836,62 @@ end}
                 "independent P2 at {second}"
             );
         }
+    }
+}
+
+#[test]
+fn rejected_strings_preserve_native_runtime_fields() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace_path = root.join("tests/fixtures/itgmania-song-lua-micro/rejected-option-parts-native.json");
+    let trace = read_trace_file(&trace_path);
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("rejected-option-parts.lua");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Rejected modifier parts");
+    context.players[0].noteskin_name = "cyber".into();
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile native rejected-part control");
+    let (writes, unsupported) = option_writes(&trace);
+    assert!(unsupported.is_empty());
+    assert!(writes.iter().all(|write| write.key != "bumpperiod" && write.key != "completely_unknown"));
+    assert!(writes.iter().any(|write| write.beat >= 0.5 && write.key == "bumpyperiod"
+        && (write.value + 0.66).abs() < EPSILON), "retain native live fields after rejected text");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(parity.checks() > 6);
+    parity.assert_complete("native parser rejection and unchanged runtime fields");
+
+    // An implementation that aliases the typo must fail at the rejected write,
+    // while the earlier, correctly spelled native setter still matches.
+    let directory = tempfile::tempdir().expect("changed rejected-part control");
+    let wrong_entry = directory.path().join("control.lua");
+    let source = fs::read_to_string(&entry).expect("native control Lua");
+    let wrong_source = source.replace("BumpPeriod", "BumpyPeriod").lines()
+        .filter(|line| !line.trim_start().starts_with("assert("))
+        .collect::<Vec<_>>().join("\n");
+    fs::write(&wrong_entry, wrong_source).expect("write deliberate invalid alias");
+    let wrong = compile_song_lua_layers(&[wrong_entry.as_path()], 0, &context)
+        .expect("compile deliberately changed option");
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &wrong, &context, &mut rejected);
+    assert!(rejected.gaps.iter().any(|gap| gap.contains("bumpyperiod")),
+        "changed BumpyPeriod at the native no-op timestamp must fail");
+    for mutation in 0..4 {
+        let mut altered = read_trace_file(&trace_path);
+        let detail = altered.timeline_tracks.iter_mut().flat_map(|track| &mut track.samples)
+            .find_map(|sample| sample.4.as_mut().filter(|detail| detail["rejected_parts"].is_array()))
+            .expect("native rejected-part detail");
+        match mutation {
+            0 => { detail.as_object_mut().expect("native detail").remove("rejected_parts"); }
+            1 => detail["rejected_parts"][0]["unchanged"] = serde_json::json!(false),
+            2 => detail["rejected_parts"][0]["values"] = serde_json::json!([]),
+            _ => detail["rejected_parts"][0]["part"] = serde_json::json!("unrelated text"),
+        }
+        let mut rejected = Parity::default();
+        compare_runtime_modifiers(&altered, &compiled, &context, &mut rejected);
+        assert!(!rejected.gaps.is_empty(), "missing or altered native rejection evidence {mutation}");
     }
 }
 
@@ -1898,6 +2113,8 @@ end}
         (1.0, 1_000_000.0, [0.0; 2]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1963,6 +2180,8 @@ end}
         (1.0, 1_000_000.0, [0.0; 6]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -2034,6 +2253,8 @@ end}
         (((5506.0_f64 / 60.0) as f32).next_down(), [0.2, 0.5, 0.2]),
         ((5506.0_f64 / 60.0) as f32, [0.0, 0.0, 0.0]),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -2088,6 +2309,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, [-2.5, 6.0]), (0.5, [-7.0, 6.0]), (1.0, [0.0, 0.0])] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -2157,6 +2380,8 @@ fn sampled_speed_modes_reactivate_previous_values() {
         (1.5, MMod(600.0)),
         (2.0, XMod(2.0)),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -2189,6 +2414,8 @@ fn prefix_reader_writes_override_raw_ease_endpoints() {
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, 0.025), (0.5, 0.0), (0.75, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -2314,6 +2541,8 @@ fn sampled_modifiers_change_on_the_recorded_frame() {
                 } else {
                     seconds * 140.0 / 60.0
                 };
+                // Probe this target at an independent song position.
+                runtime.reset_window_times();
                 let _ = runtime.refresh_player(
                     0,
                     probe,
@@ -2414,6 +2643,8 @@ fn sampled_dark_columns_keep_method_and_string_values() {
         (2.25, [1.0, -0.5, 0.25, 0.0]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             let _ = runtime.refresh_player(
                 player,
                 second,
@@ -2732,7 +2963,9 @@ fn compare_noteskin_options(trace: &NativeTrace, compiled: &[CompiledSongLua], p
                     let target = parts.and_then(|parts| parts.last())
                         .and_then(|part| part["target"].as_str())
                         .map(|target| if target.is_empty() { "cel" } else { target })
-                        .or_else(|| if state_setter { Some("cel") } else { state["previous"].as_str() });
+                        // Native assignment preserves the prior skin when the
+                        // parsed replacement omits a valid noteskin.
+                        .or_else(|| state["previous"].as_str());
                     parity.check(parts.is_some_and(|parts| parts.iter().all(|part|
                         part["target"].is_string() && part["part"].as_str().is_some_and(|part|
                             raw.is_some_and(|raw| raw.split(',').any(|token| token.trim() == part)))))
@@ -2768,6 +3001,108 @@ fn compare_noteskin_options(trace: &NativeTrace, compiled: &[CompiledSongLua], p
     }
 }
 
+fn native_speed_fields(value: &Value) -> Option<[[f32; 2]; 4]> {
+    let rows = value.as_array().filter(|rows| rows.len() == 4)?;
+    let mut out = [[0.0; 2]; 4];
+    for (row, values) in rows.iter().zip(&mut out) {
+        let row = row.as_array().filter(|row| row.len() == 2)?;
+        for (field, value) in row.iter().zip(values) {
+            *value = value_f32(Some(field)).filter(|value| value.is_finite())?;
+        }
+    }
+    Some(out)
+}
+
+fn compare_speed_options(trace: &NativeTrace, compiled: &[CompiledSongLua], context: &SongLuaCompileContext, parity: &mut Parity) {
+    let mut expected = BTreeMap::<(usize, String), Vec<(u64, f32, f32, &Value)>>::new();
+    let mut playback = Vec::new();
+    for track in &trace.timeline_tracks {
+        let Some(player) = (0..2).find(|player| track.actor.as_deref()
+            == Some(format!("player-state:PLAYER_{}/options:ModsLevel_Song", player + 1).as_str())) else { continue; };
+        if !trace.enabled_players.unwrap_or([true; 2])[player] { continue; }
+        let Some(key) = track.operation.strip_prefix("PlayerOptions.") else { continue; };
+        for (sequence, beat, second, _, detail) in &track.samples {
+            let Some(state) = detail.as_ref().and_then(|detail| detail.get("speed_option")) else { continue; };
+            parity.check(beat.is_some() && second.is_some(), || format!("P{} {key} speed call lacks its native clock", player + 1));
+            if let (Some(beat), Some(second)) = (beat, second) {
+                expected.entry((player, key.to_ascii_lowercase())).or_default().push((*sequence, *beat, *second, state));
+                playback.push((*sequence, *second, player, state));
+            }
+        }
+    }
+    if expected.is_empty() { return; }
+    parity.section("speed option API");
+    for ((player, key), mut expected) in expected {
+        expected.sort_by_key(|sample| sample.0);
+        let actual = compiled.iter().flat_map(|layer| &layer.speed_writes)
+            .filter(|write| write.player == player && write.key == key).collect::<Vec<_>>();
+        parity.check(actual.len() == expected.len(), || format!("P{} {key} speed call count: native {}, DeadSync {}", player + 1, expected.len(), actual.len()));
+        for (index, (_, beat, second, state)) in expected.iter().enumerate() {
+            let before = native_speed_fields(&state["previous"]);
+            let after = native_speed_fields(&state["current"]);
+            parity.check(actual.get(index).is_some_and(|write| {
+                let fields_match = |native: Option<[[f32; 2]; 4]>, actual: [[f32; 2]; 4]| native.is_some_and(|native|
+                    native.iter().flatten().zip(actual.iter().flatten()).all(|(expected, actual)| (expected - actual).abs() <= EPSILON));
+                (write.beat - f64::from(*beat)).abs() <= f64::from(EPSILON)
+                    && (write.second - f64::from(*second)).abs() <= f64::from(EPSILON)
+                    && fields_match(before, write.previous) && fields_match(after, write.current)
+                    && state["failed"].as_bool() == Some(write.failed)
+                    && state["chained"].as_bool() == Some(write.chained)
+            }), || format!("P{} {key} speed fields at beat {beat}: native {state}, DeadSync {:?}", player + 1, actual.get(index)));
+        }
+    }
+    compare_speed_playback(compiled, context, playback, parity);
+}
+
+fn compare_speed_playback(compiled: &[CompiledSongLua], context: &SongLuaCompileContext, mut observations: Vec<(u64, f32, usize, &Value)>, parity: &mut Parity) {
+    use deadsync_rules::scroll::ScrollSpeedSetting;
+    parity.section("speed playback targets");
+    observations.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+    let (mut runtime, unsupported) = modifier_runtime(compiled, context);
+    parity.check(unsupported == 0, || format!("{unsupported} unsupported speed playback ease targets"));
+    let origin = context.song_timing.as_ref().map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
+    let mut cursor = 0;
+    while cursor < observations.len() {
+        let second = observations[cursor].1;
+        let mut final_fields = [None; 2];
+        while cursor < observations.len() && observations[cursor].1 == second {
+            let (_, _, player, state) = observations[cursor];
+            final_fields[player] = Some(&state["current"]);
+            cursor += 1;
+        }
+        for (player, fields) in final_fields.into_iter().enumerate() {
+            let Some(fields) = fields else { continue; };
+            runtime.refresh_player(player, second + origin, 1_000_000.0, Default::default(), AttackBaseEffects::default, Default::default());
+            let mut targets = ActiveAttackMaskValues { scroll_speed: runtime.scroll_speed[player], ..ActiveAttackMaskValues::new(Default::default()) };
+            deadsync_gameplay::apply_song_lua_attack_eases(&mut targets, &mut Default::default(), &mut Default::default(), &runtime.song_lua_ease_windows[player], second + origin, 0.0);
+            let base = match context.players[player].speedmod {
+                SongLuaSpeedMod::X(value) => ScrollSpeedSetting::XMod(value),
+                SongLuaSpeedMod::C(value) => ScrollSpeedSetting::CMod(value),
+                SongLuaSpeedMod::M(value) => ScrollSpeedSetting::MMod(value),
+                SongLuaSpeedMod::A(_) => {
+                    parity.check(false, || "AMod has no production scroll-speed setting".into());
+                    continue;
+                }
+            };
+            let actual = deadsync_gameplay::effective_attack_scroll_speed(targets.clear_all, targets.scroll_speed, base);
+            let expected = native_speed_fields(fields).and_then(|fields| match fields[0][0] {
+                0.0 if fields[3][0] == 0.0 => Some(ScrollSpeedSetting::XMod(fields[1][0])),
+                0.0 => Some(ScrollSpeedSetting::MMod(fields[3][0])),
+                1.0 if fields[1][0] == 1.0 && fields[3][0] == 0.0 => Some(ScrollSpeedSetting::CMod(fields[2][0])),
+                _ => None,
+            });
+            // Fractional spacing and mixed CMod/raw multipliers require actual
+            // note-travel support. Keep them failing rather than forcing a mode.
+            parity.check(expected.is_some_and(|expected| match (actual, expected) {
+                (ScrollSpeedSetting::XMod(a), ScrollSpeedSetting::XMod(b))
+                | (ScrollSpeedSetting::CMod(a), ScrollSpeedSetting::CMod(b))
+                | (ScrollSpeedSetting::MMod(a), ScrollSpeedSetting::MMod(b)) => (a - b).abs() <= EPSILON,
+                _ => false,
+            }), || format!("P{} native speed fields {fields} at {second}s: playback {actual:?}, expected {expected:?}", player + 1));
+        }
+    }
+}
+
 /// One check per recorded player/option target at each native timestamp.
 pub(super) fn compare_runtime_modifiers(
     trace: &NativeTrace,
@@ -2777,6 +3112,7 @@ pub(super) fn compare_runtime_modifiers(
 ) {
     compare_boolean_options(trace, compiled, parity);
     compare_noteskin_options(trace, compiled, parity);
+    compare_speed_options(trace, compiled, context, parity);
     parity.section("runtime modifiers");
     let (writes, unsupported) = option_writes(trace);
     for (part, count) in unsupported {
@@ -2830,6 +3166,8 @@ pub(super) fn compare_runtime_modifiers(
         // Evaluate the authored targets directly through the production API;
         // actual Current progression is checked separately with real deltas.
         for (player, transform) in transforms.iter_mut().enumerate() {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             if let Some(next) = runtime.refresh_player(
                 player,
                 second,
@@ -2922,12 +3260,6 @@ pub(super) fn compare_runtime_modifiers(
                             .total_cmp(&(b.0 - b.1.unwrap_or(f32::NAN)).abs())
                     })
                     .expect("two perspective angles")
-            } else if write.key == "confusionyoffset" {
-                // PlayerOptions stores radians; the notefield consumes degrees.
-                (
-                    expected,
-                    Some(transforms[write.player].confusion_y_offset.to_radians()),
-                )
             } else {
                 (
                     expected,
@@ -3013,6 +3345,575 @@ fn confusion_y_matches_native_targets() {
 }
 
 #[test]
+fn confusion_x_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("confusion-x.lua");
+    let trace: NativeTrace = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/confusion-x-native.json"))
+            .expect("native confusion fixture"),
+    )
+    .expect("valid native confusion fixture");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Confusion X");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile confusion fixture");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 36);
+    parity.assert_complete("confusion X");
+}
+
+#[test]
+fn bounce_tornado_match_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("bounce-tornado.lua");
+    let trace: NativeTrace = serde_json::from_slice(
+        &fs::read(root.join("tests/fixtures/itgmania-song-lua-micro/bounce-tornado-native.json"))
+            .expect("native motion fixture"),
+    )
+    .expect("valid native motion fixture");
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native player options");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let compiled =
+        compile_song_lua_layers(&[entry.as_path()], 0, &context).expect("compile motion fixture");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert!(
+        parity.checks() >= 48,
+        "must compare setters, strings and resets"
+    );
+    parity.assert_complete("Bounce, Tornado suboptions and nonpositive XMod");
+}
+
+#[test]
+fn startup_boolean_writes_match_native() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/startup-booleans-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Startup boolean options");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("startup-booleans.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile startup boolean options");
+    let writes = &compiled[0].boolean_writes;
+    assert_eq!(writes.len(), 8, "retain Init, On, repeated false and queued writes");
+    assert!(writes[..6].iter().all(|write| write.second == 0.0));
+    assert!(writes[6..].iter().all(|write| write.second >= 0.5));
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    assert_eq!(parity.checks(), 12, "retain every native boolean call");
+    parity.assert_complete("startup and queued boolean writes");
+    let mut missing = compiled.clone();
+    missing[0].boolean_writes.remove(0);
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "losing an Init write must fail");
+}
+
+#[test]
+fn native_speed_fields_drive_playback() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/speed-fields-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native speed-fields control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("speed-fields.lua");
+    // These same Lua getter assertions passed in the linked native capture.
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("native shared speed fields, getters and approach speeds");
+    let (runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for (second, expected) in [
+        (0.0, deadsync_rules::scroll::ScrollSpeedSetting::XMod(4.0)),
+        (1.1, deadsync_rules::scroll::ScrollSpeedSetting::XMod(-0.5)),
+        (2.1, deadsync_rules::scroll::ScrollSpeedSetting::CMod(480.0)),
+        (3.1, deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0)),
+    ] {
+        for player in 0..2 {
+            let mut targets = ActiveAttackMaskValues::new(Default::default());
+            deadsync_gameplay::apply_song_lua_attack_eases(
+                &mut targets, &mut Default::default(), &mut Default::default(),
+                &runtime.song_lua_ease_windows[player], second, 0.0,
+            );
+            assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
+        }
+    }
+}
+
+#[test]
+fn native_table_order_preserves_shared_speed_fields() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/native-table-order-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native table-order control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("native-table-order.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("native table constructors and iteration of shared speed setters");
+    assert_eq!(compiled[0].speed_writes.len(), 54);
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native table iteration, every speed field and final playback targets");
+}
+
+#[test]
+fn startup_speeds_keep_native_default_approaches() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/startup-speed-defaults-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native startup speed defaults");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("startup-speed-defaults.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile static startup speed setters without approach arguments");
+    assert_eq!(compiled[0].speed_writes.len(), 4);
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native startup speed fields and playback targets");
+    let (runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for second in [0.0, 1.0, 3.9] {
+        for (player, expected) in [
+            deadsync_rules::scroll::ScrollSpeedSetting::XMod(4.0),
+            deadsync_rules::scroll::ScrollSpeedSetting::CMod(480.0),
+        ].into_iter().enumerate() {
+            let mut targets = ActiveAttackMaskValues::new(Default::default());
+            deadsync_gameplay::apply_song_lua_attack_eases(
+                &mut targets, &mut Default::default(), &mut Default::default(),
+                &runtime.song_lua_ease_windows[player], second, 0.0,
+            );
+            assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
+        }
+    }
+}
+
+#[test]
+fn speed_field_audit_keeps_failed_and_startup_writes() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/speed-fields-audit-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native speed-fields control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("speed-fields.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile native shared speed-field control");
+    let writes = &compiled[0].speed_writes;
+    assert_eq!(writes.len(), 20, "retain ten speed setters per player");
+    assert_eq!(writes.iter().filter(|write| write.failed).count(), 2);
+    assert_eq!(writes.iter().filter(|write| write.second == 0.0).count(), 6);
+    for write in writes.iter().filter(|write| write.failed) {
+        assert_eq!(write.current[1], [2.0, 0.0], "failed approach retains its amount write");
+    }
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native shared speed-field API and playback targets");
+    for field in 0..4 {
+        let mut altered = compiled.clone();
+        altered[0].speed_writes[0].current[field][0] += 1.0;
+        let mut rejected = Parity::default();
+        compare_runtime_modifiers(&trace, &altered, &context, &mut rejected);
+        assert!(!rejected.gaps.is_empty(), "changing speed field {field} must fail");
+    }
+    let mut missing = compiled.clone();
+    missing[0].speed_writes.remove(0);
+    let mut rejected = Parity::default();
+    compare_runtime_modifiers(&trace, &missing, &context, &mut rejected);
+    assert!(!rejected.gaps.is_empty(), "losing a startup setter must fail");
+}
+
+#[test]
+fn parabola_y_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/parabola-y-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native parabola-y control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("parabola-y.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed ParabolaY, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native ParabolaY targets and resets");
+}
+
+#[test]
+fn attenuation_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/attenuate-native.json"));
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attenuation control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("attenuate.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed attenuation, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native attenuation targets and resets");
+}
+
+#[test]
+fn attenuation_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/attenuate-current-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attenuation Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("attenuate-current.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile attenuation Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (axis, key) in [
+                ("x", "attenuatex"),
+                ("y", "attenuatey"),
+                ("z", "attenuatez"),
+            ] {
+                let track = trace
+                    .operation_tracks
+                    .iter()
+                    .find(|track| {
+                        track.actor == format!("def-000{}", player + 2)
+                            && track.operation == format!("Quad.{axis}")
+                    })
+                    .expect("native Current probe axis");
+                for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                    let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                    let actual =
+                        runtime_mod_value(&runtime, player, key).expect("runtime attenuation");
+                    assert!(
+                        (actual - expected).abs() <= EPSILON,
+                        "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                        player + 1
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
+}
+
+#[test]
+fn beat_family_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/beat-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Beat control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("beat-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Beat, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Beat targets and resets");
+}
+
+#[test]
+fn beat_family_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/beat-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Beat Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("beat-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Beat Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (group, keys) in [
+                ["beat", "beaty", "beatz"],
+                ["beatoffset", "beatyoffset", "beatzoffset"],
+                ["beatmult", "beatymult", "beatzmult"],
+                ["beatperiod", "beatyperiod", "beatzperiod"],
+            ]
+            .iter()
+            .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name == Some(format!("BeatCurrentP{}G{}", player + 1, group + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime Beat");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 432);
+}
+
+#[test]
+fn confusion_spin_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/confusion-spin-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Confusion spin control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("confusion-spin.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Confusion spin, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Confusion spin targets and resets");
+}
+
+#[test]
+fn confusion_spin_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/confusion-spin-native.json"),
+    );
+    let mut context =
+        SongLuaCompileContext::new(&song_dir, "Native Confusion spin Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("confusion-spin.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Confusion spin Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (group, keys) in [
+                ["confusionx", "confusiony", "confusionyoffset"],
+                ["confusionxoffset", "roll", "twirl"],
+            ]
+            .iter()
+            .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name
+                                == Some(format!("ConfusionCurrentP{}G{}", player + 1, group + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual = runtime_mod_value(&runtime, player, key)
+                            .expect("runtime Confusion spin");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 216);
+}
+
+#[test]
+fn wave_period_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/wave-period-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native wave-period control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("wave-period.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Wave period, signed strengths and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Wave period and signed strengths");
+}
+
+#[test]
 fn mod_timer_survives_lua_selectors_approach_and_fresh_options() {
     crate::paths::init();
     let directory = tempfile::tempdir().expect("create timer fixture");
@@ -3064,6 +3965,8 @@ end}
         (1.5, 1_000_000.0, 3.0, 0.0, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -3096,4 +3999,388 @@ end}
             );
         }
     }
+}
+
+#[test]
+fn z_wave_family_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/z-wave-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Z wave control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("z-wave-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Z wave, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Z wave targets and resets");
+}
+
+#[test]
+fn z_wave_family_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/z-wave-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Z wave Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("z-wave-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Z wave Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (group, keys) in [
+                ["bouncez", "bouncezoffset", "bouncezperiod"],
+                ["digitalz", "digitalzoffset", "digitalzperiod"],
+                ["digitalzsteps", "tornadoz", "tornadozoffset"],
+                ["tornadozperiod", "sawtoothz", "sawtoothzperiod"],
+                ["sawtooth", "sawtoothperiod", "tiny"],
+            ]
+            .iter()
+            .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name
+                                == Some(format!("ZWaveCurrentP{}G{}", player + 1, group + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime Z wave");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 540);
+}
+
+#[test]
+fn shrink_family_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/shrink-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Shrink control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("shrink-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Shrink, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Shrink targets and resets");
+}
+
+#[test]
+fn shrink_family_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/shrink-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Shrink Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("shrink-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Shrink Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (_group, keys) in [["shrinklinear", "shrinkmult", "tiny"]].iter().enumerate() {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name == Some(format!("ShrinkCurrentP{}", player + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime Shrink");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
+}
+
+#[test]
+fn expand_family_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/expand-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Expand control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("expand-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Expand, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Expand targets and resets");
+}
+
+#[test]
+fn expand_family_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/expand-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Expand Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("expand-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Expand Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (_group, keys) in [["expand", "expandperiod", "waveperiod"]]
+                .iter()
+                .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name == Some(format!("ExpandCurrentP{}", player + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime Expand");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
+}
+
+#[test]
+fn attack_flags_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/attack-flags-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attack flags control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("attack-flags.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed attack flags, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native attack flags targets and resets");
+}
+
+#[test]
+fn attack_flags_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/attack-flags-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attack flags Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("attack-flags.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile attack flags Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (_group, keys) in [["noattack", "randattack", "stepattacks"]]
+                .iter()
+                .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name == Some(format!("AttackCurrentP{}", player + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime attack flags");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
 }

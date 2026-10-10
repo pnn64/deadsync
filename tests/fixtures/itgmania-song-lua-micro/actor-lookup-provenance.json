@@ -1,0 +1,423 @@
+{
+  "pass_number": 52,
+  "dead_sync_version": "0.5.1859",
+  "song_cache_version": 50,
+  "harness_version": "0.1.20",
+  "harness_commits": [
+    "bc40be1fd5ccba0c240edf2d7fa5209943179807",
+    "b7023ac5ac29803d4af2b35b7483e05ed745b892"
+  ],
+  "archive": {
+    "title": "native child lookup probe",
+    "source_simfile": "probe/probe.sm",
+    "harness_version": "0.1.20",
+    "archive": "c183320905ab7decf694782a72fd3a050e3e321f238405292211ed97c6da986b.tar.zst",
+    "sha256": "c183320905ab7decf694782a72fd3a050e3e321f238405292211ed97c6da986b",
+    "compressed_bytes": 11323,
+    "fixture_path": "tests/fixtures/itgmania-song-lua-micro/c183320905ab7decf694782a72fd3a050e3e321f238405292211ed97c6da986b.tar.zst"
+  },
+  "native_control": {
+    "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+    "exit_code": 0,
+    "seconds": 0.05953049659729004,
+    "source_reference": {
+      "ActorFrame.cpp": "175-181,364-401,617-627",
+      "note": "ActorFrameTexture derives from native ActorFrame; this assertion body invokes the actual native Lua methods, not semantic_host.lua."
+    },
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    }
+  },
+  "native_sources": {
+    "ActorFrame.cpp": {
+      "local_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "vendor_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "identical": true
+    },
+    "BitmapText.cpp": {
+      "local_sha256": "9db88dd98d82a88eea8b8544e2d12b7bb4d8d2fea52847c54f9f3e7655b1fc78",
+      "vendor_sha256": "9db88dd98d82a88eea8b8544e2d12b7bb4d8d2fea52847c54f9f3e7655b1fc78",
+      "identical": true
+    },
+    "RollingNumbers.h": {
+      "local_sha256": "f3785079f2b95fdcaeb788722a3eae763c39db589aaac8e52c94ffc3af018d98",
+      "vendor_sha256": "f3785079f2b95fdcaeb788722a3eae763c39db589aaac8e52c94ffc3af018d98",
+      "identical": true
+    },
+    "BPMDisplay.h": {
+      "local_sha256": "b47a9f29333c4add9e5e0b399eb7fb0963442376ae48cc38b2bfb6f9a532c85d",
+      "vendor_sha256": "b47a9f29333c4add9e5e0b399eb7fb0963442376ae48cc38b2bfb6f9a532c85d",
+      "identical": true
+    },
+    "BPMDisplay.cpp": {
+      "local_sha256": "6b779ae3888f328d8e43b9705985964686498e8e18677024115b0b07d457d0dc",
+      "vendor_sha256": "6b779ae3888f328d8e43b9705985964686498e8e18677024115b0b07d457d0dc",
+      "identical": true
+    },
+    "HelpDisplay.h": {
+      "local_sha256": "62519610a37d41009847671cad5919c5e1ab6dcd04c192540ba26feef9409f80",
+      "vendor_sha256": "62519610a37d41009847671cad5919c5e1ab6dcd04c192540ba26feef9409f80",
+      "identical": true
+    },
+    "ActiveAttackList.h": {
+      "local_sha256": "0e19b964e1ff542f4a188a0a4470dc4900c2c2b999d292e1b9171e9608a639ac",
+      "vendor_sha256": "0e19b964e1ff542f4a188a0a4470dc4900c2c2b999d292e1b9171e9608a639ac",
+      "identical": true
+    },
+    "ScoreDisplayAliveTime.h": {
+      "local_sha256": "9a2e4149281cc3c2d718f1578fec54418adf794084fcf6e375952d8719d9d533",
+      "vendor_sha256": "9a2e4149281cc3c2d718f1578fec54418adf794084fcf6e375952d8719d9d533",
+      "identical": true
+    },
+    "ScoreDisplayCalories.h": {
+      "local_sha256": "fdfdbf4f74055db8eacc5c4e7230ded30c7edde908924787ec72c9fdf8eee64d",
+      "vendor_sha256": "fdfdbf4f74055db8eacc5c4e7230ded30c7edde908924787ec72c9fdf8eee64d",
+      "identical": true
+    },
+    "ScreenTestInput.cpp": {
+      "local_sha256": "46b1183a3e6d0780982eb94015033fc9ebc2371907e76f8876c951812d468370",
+      "vendor_sha256": "46b1183a3e6d0780982eb94015033fc9ebc2371907e76f8876c951812d468370",
+      "identical": true
+    },
+    "StepsDisplay.h": {
+      "local_sha256": "e8e4c648d2b21143e10c83250612f98b314145dd02a18b8b2a10d12839e67630",
+      "vendor_sha256": "e8e4c648d2b21143e10c83250612f98b314145dd02a18b8b2a10d12839e67630",
+      "identical": true
+    },
+    "StepsDisplay.cpp": {
+      "local_sha256": "8c33c1e5e716c5af285e246314c11d82de4e1e025bda55464623af8e6d6fb8f2",
+      "vendor_sha256": "8c33c1e5e716c5af285e246314c11d82de4e1e025bda55464623af8e6d6fb8f2",
+      "identical": true
+    },
+    "LuaBinding.cpp": {
+      "local_sha256": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+      "vendor_sha256": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+      "identical": true
+    }
+  },
+  "host_controls": {
+    "scope": "Missing named children and GetText availability",
+    "native_control": {
+      "native_executable_sha256": "d4fbf9080f740322bb35f502fb5bac891c59d215964af15feae7d22f2e8c1faa",
+      "exit_code": 0,
+      "seconds": 0.05953049659729004,
+      "source_reference": {
+        "ActorFrame.cpp": "175-181,364-401,617-627",
+        "note": "ActorFrameTexture derives from native ActorFrame; this assertion body invokes the actual native Lua methods, not semantic_host.lua."
+      },
+      "result": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      }
+    },
+    "before_host": {
+      "harness_version": "0.1.18",
+      "runtime_errors": [
+        {
+          "actor": "def-0002",
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0002",
+          "line": 2,
+          "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass52-native-child-lookup/corpus/probe/default.lua:3: native missing child must be nil",
+          "name": "InitCommand",
+          "operation": "command.error",
+          "seconds": 0,
+          "source": "song:/default.lua"
+        },
+        {
+          "actor": "def-0003",
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0003",
+          "line": 5,
+          "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass52-native-child-lookup/corpus/probe/default.lua:6: native ActorFrame has no GetText method",
+          "name": "InitCommand",
+          "operation": "command.error",
+          "seconds": 0,
+          "source": "song:/default.lua"
+        }
+      ]
+    },
+    "after_host": {
+      "harness_version": "0.1.19",
+      "test": "song_lua_headless::actor_lookup_matches_itg",
+      "runtime_errors": [],
+      "dropped_events": 0,
+      "checks": "Missing named/unnamed child lookup creates no actor; ActorFrame GetText is absent; BitmapText GetText remains callable and reads Alpha."
+    },
+    "tests": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass52-actor-lookup.exe",
+      "sha256": "06d27bde3def7b709fd34a123403fb0e3da6fac081f6921d36b9013b1c3baeea",
+      "results": [
+        {
+          "test": "song_lua_headless::actor_lookup_matches_itg",
+          "exit_code": 0,
+          "seconds": 2.0334718227386475,
+          "result": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 1.08s"
+          ],
+          "log_sha256": "9d941ce6dcc2a51574b9205db925851c5c73ea42bd0f121134b176226a78d253"
+        },
+        {
+          "test": "song_lua_headless::child_tables_follow_native_insertion_and_group_rules",
+          "exit_code": 0,
+          "seconds": 1.1378872394561768,
+          "result": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 1.10s"
+          ],
+          "log_sha256": "8b383040a88b7818784e29a3dad2db2154a076ea719c5085bfb0008d17779411"
+        },
+        {
+          "test": "actor_conformance::tests::aft_creation_uses_native_allocation_and_lua_methods",
+          "exit_code": 0,
+          "seconds": 0.06360125541687012,
+          "result": [
+            "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 0.02s"
+          ],
+          "log_sha256": "08fa26ad8e3ed91fd2ca096bb33a188c2ab843104dac22b3a6c860ef2749147a"
+        }
+      ]
+    },
+    "source_references": [
+      "vendor/itgmania/src/ActorFrame.cpp:392-409",
+      "vendor/itgmania/src/BitmapText.cpp:1091-1094,1135",
+      "vendor/itgmania/src/RollingNumbers.h:11",
+      "vendor/itgmania/src/LuaBinding.cpp:67-140"
+    ],
+    "limits": "External screen/theme child context and generic unknown-method lookup still require separate source-based work. This control does not establish full-corpus parity.",
+    "bitmap_subclass_validation": {
+      "harness_version": "0.1.20",
+      "tests": {
+        "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass52-actor-lookup-v2.exe",
+        "sha256": "ecfd59086c107b39df6b690390ff613746376c59eb34767c07303af3f2bf95c1",
+        "results": [
+          {
+            "test": "song_lua_headless::actor_lookup_matches_itg",
+            "exit_code": 0,
+            "seconds": 1.3827674388885498,
+            "result": [
+              "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 1.08s"
+            ],
+            "log_sha256": "9d941ce6dcc2a51574b9205db925851c5c73ea42bd0f121134b176226a78d253"
+          },
+          {
+            "test": "song_lua_headless::child_tables_follow_native_insertion_and_group_rules",
+            "exit_code": 0,
+            "seconds": 1.1198828220367432,
+            "result": [
+              "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 1.08s"
+            ],
+            "log_sha256": "7fa36dd5467ec00601e0163b5d7f660d4cd738ac2b9fdf89b605ec40ce5df3c9"
+          },
+          {
+            "test": "actor_conformance::tests::aft_creation_uses_native_allocation_and_lua_methods",
+            "exit_code": 0,
+            "seconds": 0.0502161979675293,
+            "result": [
+              "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 0.01s"
+            ],
+            "log_sha256": "a6ed6f9e0cf627a97846fb147d2d7e96a86ac5b1803d7a78e327f9abb2bbae3c"
+          }
+        ]
+      },
+      "sources": [
+        "vendor/itgmania/src/BPMDisplay.h:18",
+        "vendor/itgmania/src/BPMDisplay.cpp:344",
+        "vendor/itgmania/src/HelpDisplay.h:11",
+        "vendor/itgmania/src/ActiveAttackList.h:8",
+        "vendor/itgmania/src/ScoreDisplayAliveTime.h:14",
+        "vendor/itgmania/src/ScoreDisplayCalories.h:12",
+        "vendor/itgmania/src/ScreenTestInput.cpp:22-39"
+      ],
+      "positive_cases": [
+        "BitmapText",
+        "BPMDisplay",
+        "DeviceList"
+      ],
+      "negative_cases": [
+        "ActorFrame",
+        "ActorFrame child"
+      ],
+      "note": "Preserve GetText for native BitmapText subclasses; the original two lookup assertions remain unchanged."
+    }
+  },
+  "original_probe": {
+    "lua_sha256": "f87989189b900dfa568e5bb8333d65fe478ebf9b19829cab8c50694bbdd18b1a",
+    "simfile_sha256": "ca190b6d887a1910c92549073a9dd1316fe44dee59ba3352d32806ee7dddb0d6"
+  },
+  "capture": {
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "update_frames": 121,
+    "complete_endpoint_seconds": 2
+  },
+  "before": {
+    "archive": "c183320905ab7decf694782a72fd3a050e3e321f238405292211ed97c6da986b.tar.zst",
+    "version": "0.5.1858",
+    "exit_code": 1,
+    "seconds": 0.18934154510498047,
+    "result": "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.09s",
+    "log_sha256": "5e941baacb966beb1c9c49e57935635ff2d8935b4c4ce3fc1e3bc27bd344f370",
+    "executable_sha256": "e138b7e009a10114627e58a297dfcd8e4020699d51e8cba935145d88c0c5dc4d"
+  },
+  "after": {
+    "archive": "c183320905ab7decf694782a72fd3a050e3e321f238405292211ed97c6da986b.tar.zst",
+    "version": "0.5.1859",
+    "exit_code": 0,
+    "seconds": 1.8554813861846924,
+    "result": "result: ok; 1/1 fixtures passed; 2669 comparisons passed, 0 failed (2669 total); elapsed 0.14s",
+    "log_sha256": "b1aa7bc5c0cb7d893ce61c3d144edd818cdddd2f6c322cb5e61cf8e079df4804",
+    "executable_sha256": "fbe9df5ecc45cd28db5ab187d6a4f7b7770355d7f13e92124cd6fa52f3ef4a06"
+  },
+  "core_gates": [
+    {
+      "job": "song-lua-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support"
+      ],
+      "exit_code": 0,
+      "seconds": 138.34518551826477,
+      "summaries": [
+        "test result: ok. 484 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 10.18s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "9a6543e472eb36bf5a09cf6f83e56ceba6e575c926a27b9eb14903683237a3e4"
+    },
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 109.67777109146118,
+      "summaries": [],
+      "log_sha256": "ce63f0f23ef1f0a55c79fdcbb339399ddc438d0a573daf8e4a3526d5346733dc"
+    },
+    {
+      "job": "clock-cache",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 36.82314395904541,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.16s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "fbb917f0d0533980e487ba3757e39038709c22861be4b41418d9462aab65161f"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 2.6966700553894043,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "943417577a3a35ab6ff3b74ec7444a478b3fcdb096540fdae2cf0a5cf3ecf0b2"
+    }
+  ],
+  "retained_native_regressions": {
+    "executable": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass52-actor-lookup-v4.exe",
+    "executable_sha256": "31f87a1777e449788348d661be535f11772129a90c945a4b6e767d0b25ec73a3",
+    "results": [
+      {
+        "test": "public_music_seconds_matches_native",
+        "exit_code": 0,
+        "seconds": 9.242037296295166,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.38s"
+        ],
+        "log_sha256": "eae42a73029e0314324c14e22d8b6d0ca86894bd8073c0e984813c4799d1a59d"
+      },
+      {
+        "test": "music_effect_clock_matches_native",
+        "exit_code": 0,
+        "seconds": 2.680701494216919,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.64s"
+        ],
+        "log_sha256": "02452b8d4d8f2077ebf7e7014d9a88f8062c1d7f26d3493d28b836166ffe1cc7"
+      },
+      {
+        "test": "multitap::multitap_strict_taps",
+        "exit_code": 0,
+        "seconds": 0.42714452743530273,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.34s"
+        ],
+        "log_sha256": "85bbcae9a98857eb15b1e97fedf94d4ebe066cd9d139ebe85eeb505af093a9c7"
+      }
+    ]
+  },
+  "unchanged_song_archives": [
+    {
+      "archive": "f8ff6cfef02ef1b12bdeaaf57e40cb94500bffaecee31e398b11987ed883947b.tar.zst",
+      "version": "0.5.1859",
+      "exit_code": 0,
+      "seconds": 11.864554643630981,
+      "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 11.77s",
+      "log_sha256": "c5672eda5e895846a94d147c6a095f023b03e18ce551e72d0668a6a8230ce906",
+      "executable_sha256": "fbe9df5ecc45cd28db5ab187d6a4f7b7770355d7f13e92124cd6fa52f3ef4a06"
+    },
+    {
+      "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+      "version": "0.5.1859",
+      "exit_code": 0,
+      "seconds": 72.71853065490723,
+      "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 72.61s",
+      "log_sha256": "27ae458109abc168e6fad267507a6ad31a7a57a76a73c5db2f339b3680f28d0c",
+      "executable_sha256": "fbe9df5ecc45cd28db5ab187d6a4f7b7770355d7f13e92124cd6fa52f3ef4a06"
+    }
+  ],
+  "changed_behavior": "GetText follows BitmapText inheritance. BPMDisplay has a native Def constructor. StepsDisplay derives from ActorFrame; remove fabricated text and its obsolete difficulty tags. The harness also returns nil for missing children in complete song-owned actor trees.",
+  "limits": "Generic harness unknown-method lookup and external Simply Love child context remain pending. These controls and two retained song archives do not establish full-corpus parity. The prior probe with a mismatched noteskin hash is excluded from lookup evidence.",
+  "scope": {
+    "simfiles": 501,
+    "indexed_sources": 483,
+    "unindexed_sources": 18,
+    "historical_extra_archives": 9,
+    "complete": false
+  }
+}

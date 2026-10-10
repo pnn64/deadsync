@@ -1,0 +1,493 @@
+{
+  "native_archive": "f0279455bbad6c96a899705927f9d37fd761071f111d8b1e672f50154b43be55.tar.zst",
+  "native_trace_sha256": "5a2b328399a1a912a7fb29d396c0f4c3999814e35b7a4099d9636221ad6a32a9",
+  "harness_version": "0.1.51",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "update_fps": 60,
+  "update_frames": 9197,
+  "native_onsets": [
+    {
+      "actor": "def-0080",
+      "first_visible": {
+        "beat": 104.02500152587892,
+        "frame": 2565,
+        "seconds": 42.75,
+        "visible": true
+      },
+      "name": "MultitapP1_1",
+      "next": {
+        "beat": 113.02833557128906,
+        "frame": 2787,
+        "seconds": 46.45,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0083",
+      "first_visible": {
+        "beat": 106.01222229003906,
+        "frame": 2614,
+        "seconds": 43.56666666666667,
+        "visible": true
+      },
+      "name": "MultitapP1_2",
+      "next": {
+        "beat": 115.50222778320312,
+        "frame": 2848,
+        "seconds": 47.46666666666667,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0086",
+      "first_visible": {
+        "beat": 108.04000854492188,
+        "frame": 2664,
+        "seconds": 44.4,
+        "visible": true
+      },
+      "name": "MultitapP1_3",
+      "next": {
+        "beat": 117.00277709960938,
+        "frame": 2885,
+        "seconds": 48.083333333333336,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0089",
+      "first_visible": {
+        "beat": 110.02722930908205,
+        "frame": 2713,
+        "seconds": 45.21666666666667,
+        "visible": true
+      },
+      "name": "MultitapP1_4",
+      "next": {
+        "beat": 119.51721954345705,
+        "frame": 2947,
+        "seconds": 49.11666666666667,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0320",
+      "first_visible": {
+        "beat": 104.02500152587892,
+        "frame": 2565,
+        "seconds": 42.75,
+        "visible": true
+      },
+      "name": "MultitapP2_1",
+      "next": {
+        "beat": 113.02833557128906,
+        "frame": 2787,
+        "seconds": 46.45,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0323",
+      "first_visible": {
+        "beat": 106.01222229003906,
+        "frame": 2614,
+        "seconds": 43.56666666666667,
+        "visible": true
+      },
+      "name": "MultitapP2_2",
+      "next": {
+        "beat": 115.50222778320312,
+        "frame": 2848,
+        "seconds": 47.46666666666667,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0326",
+      "first_visible": {
+        "beat": 108.04000854492188,
+        "frame": 2664,
+        "seconds": 44.4,
+        "visible": true
+      },
+      "name": "MultitapP2_3",
+      "next": {
+        "beat": 117.00277709960938,
+        "frame": 2885,
+        "seconds": 48.083333333333336,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    },
+    {
+      "actor": "def-0329",
+      "first_visible": {
+        "beat": 110.02722930908205,
+        "frame": 2713,
+        "seconds": 45.21666666666667,
+        "visible": true
+      },
+      "name": "MultitapP2_4",
+      "next": {
+        "beat": 119.51721954345705,
+        "frame": 2947,
+        "seconds": 49.11666666666667,
+        "visible": false
+      },
+      "previous": {
+        "beat": 0.0,
+        "frame": 0,
+        "seconds": 0.0,
+        "visible": false
+      },
+      "sample_count": 3
+    }
+  ],
+  "onsets": [
+    {
+      "before": {
+        "beat": 103.98445129394533,
+        "ordinal": 2564,
+        "seconds": 42.733333333333334
+      },
+      "first_hidden": {
+        "beat": 113.02833557128906,
+        "ordinal": 2787,
+        "seconds": 46.45
+      },
+      "first_visible": {
+        "beat": 104.02500152587892,
+        "ordinal": 2565,
+        "seconds": 42.75
+      },
+      "last_visible": {
+        "beat": 112.98778533935548,
+        "ordinal": 2786,
+        "seconds": 46.43333333333333
+      }
+    },
+    {
+      "before": {
+        "beat": 105.97166442871094,
+        "ordinal": 2613,
+        "seconds": 43.55
+      },
+      "first_hidden": {
+        "beat": 115.50222778320312,
+        "ordinal": 2848,
+        "seconds": 47.46666666666667
+      },
+      "first_visible": {
+        "beat": 106.01222229003906,
+        "ordinal": 2614,
+        "seconds": 43.56666666666667
+      },
+      "last_visible": {
+        "beat": 115.461669921875,
+        "ordinal": 2847,
+        "seconds": 47.45
+      }
+    },
+    {
+      "before": {
+        "beat": 107.99945068359376,
+        "ordinal": 2663,
+        "seconds": 44.38333333333333
+      },
+      "first_hidden": {
+        "beat": 117.00277709960938,
+        "ordinal": 2885,
+        "seconds": 48.083333333333336
+      },
+      "first_visible": {
+        "beat": 108.04000854492188,
+        "ordinal": 2664,
+        "seconds": 44.4
+      },
+      "last_visible": {
+        "beat": 116.96221923828124,
+        "ordinal": 2884,
+        "seconds": 48.06666666666667
+      }
+    },
+    {
+      "before": {
+        "beat": 109.98667144775392,
+        "ordinal": 2712,
+        "seconds": 45.2
+      },
+      "first_hidden": {
+        "beat": 119.51721954345705,
+        "ordinal": 2947,
+        "seconds": 49.11666666666667
+      },
+      "first_visible": {
+        "beat": 110.02722930908205,
+        "ordinal": 2713,
+        "seconds": 45.21666666666667
+      },
+      "last_visible": {
+        "beat": 119.47666931152344,
+        "ordinal": 2946,
+        "seconds": 49.1
+      }
+    }
+  ],
+  "query_frames": [
+    {
+      "after": {
+        "frame": [
+          108.04000854492188,
+          44.4
+        ],
+        "ordinal": 2664
+      },
+      "before": {
+        "frame": [
+          107.99945068359376,
+          44.38333333333333
+        ],
+        "ordinal": 2663
+      },
+      "query_beat": 108.0
+    },
+    {
+      "after": {
+        "frame": [
+          110.02722930908205,
+          45.21666666666667
+        ],
+        "ordinal": 2713
+      },
+      "before": {
+        "frame": [
+          109.98667144775392,
+          45.2
+        ],
+        "ordinal": 2712
+      },
+      "query_beat": 110.0
+    },
+    {
+      "after": {
+        "frame": [
+          112.50111389160156,
+          46.233333333333334
+        ],
+        "ordinal": 2774
+      },
+      "before": {
+        "frame": [
+          112.46055603027344,
+          46.21666666666667
+        ],
+        "ordinal": 2773
+      },
+      "query_beat": 112.5
+    },
+    {
+      "after": {
+        "frame": [
+          113.92055511474608,
+          46.81666666666667
+        ],
+        "ordinal": 2809
+      },
+      "before": {
+        "frame": [
+          113.8800048828125,
+          46.8
+        ],
+        "ordinal": 2808
+      },
+      "query_beat": 113.9
+    },
+    {
+      "after": {
+        "frame": [
+          114.0016632080078,
+          46.85
+        ],
+        "ordinal": 2811
+      },
+      "before": {
+        "frame": [
+          113.96111297607422,
+          46.833333333333336
+        ],
+        "ordinal": 2810
+      },
+      "query_beat": 114.0
+    },
+    {
+      "after": {
+        "frame": [
+          114.04222106933594,
+          46.86666666666667
+        ],
+        "ordinal": 2812
+      },
+      "before": {
+        "frame": [
+          114.0016632080078,
+          46.85
+        ],
+        "ordinal": 2811
+      },
+      "query_beat": 114.01
+    },
+    {
+      "after": {
+        "frame": [
+          114.77223205566406,
+          47.166666666666664
+        ],
+        "ordinal": 2830
+      },
+      "before": {
+        "frame": [
+          114.73167419433594,
+          47.15
+        ],
+        "ordinal": 2829
+      },
+      "query_beat": 114.75
+    },
+    {
+      "after": {
+        "frame": [
+          114.77223205566406,
+          47.166666666666664
+        ],
+        "ordinal": 2830
+      },
+      "before": {
+        "frame": [
+          114.73167419433594,
+          47.15
+        ],
+        "ordinal": 2829
+      },
+      "query_beat": 114.76
+    }
+  ],
+  "derivation": "Selected original native render-state change records and their unchanged update frame clock inputs; no resampling or replacement values.",
+  "tap_frames": [
+    {
+      "after": {
+        "frame": [
+          112.01444244384766,
+          46.03333333333333
+        ],
+        "ordinal": 2762
+      },
+      "before": {
+        "frame": [
+          111.97389221191406,
+          46.016666666666666
+        ],
+        "ordinal": 2761
+      },
+      "query_beat": 112.0
+    },
+    {
+      "after": {
+        "frame": [
+          114.0016632080078,
+          46.85
+        ],
+        "ordinal": 2811
+      },
+      "before": {
+        "frame": [
+          113.96111297607422,
+          46.833333333333336
+        ],
+        "ordinal": 2810
+      },
+      "query_beat": 114.0
+    },
+    {
+      "after": {
+        "frame": [
+          116.02944946289062,
+          47.68333333333333
+        ],
+        "ordinal": 2861
+      },
+      "before": {
+        "frame": [
+          115.9888916015625,
+          47.666666666666664
+        ],
+        "ordinal": 2860
+      },
+      "query_beat": 116.0
+    },
+    {
+      "after": {
+        "frame": [
+          118.01667022705078,
+          48.5
+        ],
+        "ordinal": 2910
+      },
+      "before": {
+        "frame": [
+          117.97611236572266,
+          48.483333333333334
+        ],
+        "ordinal": 2909
+      },
+      "query_beat": 118.0
+    }
+  ]
+}

@@ -51,6 +51,7 @@ struct RoutedEvents {
     song: Vec<SimplyLoveSyncEvent>,
     select_pack: Vec<SimplyLoveSyncEvent>,
     options_pack: Vec<SimplyLoveSyncEvent>,
+    browser_pack: Vec<SimplyLoveSyncEvent>,
 }
 
 impl RoutedEvents {
@@ -58,6 +59,7 @@ impl RoutedEvents {
         self.song.clear();
         self.select_pack.clear();
         self.options_pack.clear();
+        self.browser_pack.clear();
     }
 
     fn push(&mut self, owner: SimplyLoveSyncOwner, event: SimplyLoveSyncEvent) {
@@ -65,11 +67,12 @@ impl RoutedEvents {
             SimplyLoveSyncOwner::SelectMusicSong => self.song.push(event),
             SimplyLoveSyncOwner::SelectMusicPack => self.select_pack.push(event),
             SimplyLoveSyncOwner::OptionsPack => self.options_pack.push(event),
+            SimplyLoveSyncOwner::ContentBrowserPack => self.browser_pack.push(event),
         }
     }
 
     const fn len(&self) -> usize {
-        self.song.len() + self.select_pack.len() + self.options_pack.len()
+        self.song.len() + self.select_pack.len() + self.options_pack.len() + self.browser_pack.len()
     }
 
     fn batches(&mut self) -> EventBatches<'_> {
@@ -77,6 +80,7 @@ impl RoutedEvents {
             song: &mut self.song,
             select_pack: &mut self.select_pack,
             options_pack: &mut self.options_pack,
+            browser_pack: &mut self.browser_pack,
         }
     }
 }
@@ -85,14 +89,21 @@ pub(crate) struct EventBatches<'a> {
     pub(crate) song: &'a mut Vec<SimplyLoveSyncEvent>,
     pub(crate) select_pack: &'a mut Vec<SimplyLoveSyncEvent>,
     pub(crate) options_pack: &'a mut Vec<SimplyLoveSyncEvent>,
+    pub(crate) browser_pack: &'a mut Vec<SimplyLoveSyncEvent>,
 }
 
 impl EventBatches<'_> {
     #[cfg(test)]
     fn is_empty(&self) -> bool {
-        self.song.is_empty() && self.select_pack.is_empty() && self.options_pack.is_empty()
+        self.song.is_empty()
+            && self.select_pack.is_empty()
+            && self.options_pack.is_empty()
+            && self.browser_pack.is_empty()
     }
 }
+
+/// How many owners there are, for the per-owner bookkeeping below.
+const SYNC_OWNERS: usize = 4;
 
 #[inline(always)]
 const fn sync_owner_index(owner: SimplyLoveSyncOwner) -> usize {
@@ -100,6 +111,7 @@ const fn sync_owner_index(owner: SimplyLoveSyncOwner) -> usize {
         SimplyLoveSyncOwner::SelectMusicSong => 0,
         SimplyLoveSyncOwner::SelectMusicPack => 1,
         SimplyLoveSyncOwner::OptionsPack => 2,
+        SimplyLoveSyncOwner::ContentBrowserPack => 3,
     }
 }
 
@@ -183,7 +195,7 @@ impl Service {
     fn drain_events(&mut self) {
         let started = Instant::now();
         self.events.clear();
-        let mut finished = [false; 3];
+        let mut finished = [false; SYNC_OWNERS];
 
         'jobs: for job in &self.jobs {
             while self.events.len() < MAX_EVENTS_PER_FRAME && started.elapsed() < POLL_BUDGET {
@@ -233,7 +245,7 @@ fn run_song(
     };
     let cfg = config::runtime::null_or_die_bias_cfg();
     let options = AnalysisOptions::new(&cfg, config::runtime::get().null_or_die_confidence_percent);
-    let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
+    let mut prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
         .ok()
         .and_then(|music_path| {
             cache.prepare_if_enabled(
@@ -246,8 +258,8 @@ fn run_song(
             )
         });
     if let Some(cached) = prepared
-        .as_ref()
-        .and_then(|prepared| prepared.cached_analysis())
+        .as_mut()
+        .and_then(|prepared| prepared.take_cached_analysis())
     {
         if !cancel.load(Ordering::Relaxed) {
             cache.flush();
@@ -301,25 +313,25 @@ fn run_song(
     }
 }
 
-fn cached_song_result(cached: &CachedAnalysis) -> SimplyLoveSyncSongResult {
+fn cached_song_result(cached: CachedAnalysis) -> SimplyLoveSyncSongResult {
     let bias_ms = if cached.applied { 0.0 } else { cached.bias_ms };
-    let plot = cached.plot.as_ref().filter(|_| !cached.applied);
+    let plot = cached.plot.filter(|_| !cached.applied).unwrap_or_default();
     SimplyLoveSyncSongResult {
         estimate: SimplyLoveSyncResult {
             bias_ms,
             confidence: cached.confidence,
         },
         plot: SimplyLoveSyncPlotView {
-            freq_rows: plot.map_or(0, |plot| plot.freq_rows),
-            digest_rows: plot.map_or(0, |plot| plot.digest_rows),
-            cols: plot.map_or(0, |plot| plot.cols.max(plot.times_ms.len())),
-            post_rows: plot.map_or(0, |plot| plot.post_rows),
-            freq_domain: plot.map_or_else(Vec::new, |plot| plot.freq_domain.clone()),
-            beat_digest: plot.map_or_else(Vec::new, |plot| plot.beat_digest.clone()),
-            post_kernel: plot.map_or_else(Vec::new, |plot| plot.post_kernel.clone()),
-            convolution: plot.map_or_else(Vec::new, |plot| plot.convolution.clone()),
-            times_ms: plot.map_or_else(Vec::new, |plot| plot.times_ms.clone()),
-            edge_discard: plot.map_or(0, |plot| plot.edge_discard),
+            freq_rows: plot.freq_rows,
+            digest_rows: plot.digest_rows,
+            cols: plot.cols.max(plot.times_ms.len()),
+            post_rows: plot.post_rows,
+            freq_domain: plot.freq_domain,
+            beat_digest: plot.beat_digest,
+            post_kernel: plot.post_kernel,
+            convolution: plot.convolution,
+            times_ms: plot.times_ms,
+            edge_discard: plot.edge_discard,
         },
         cached: true,
     }
@@ -594,9 +606,17 @@ mod tests {
         let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
         let (select_job, select_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
         let (options_job, options_tx) = test_job(SimplyLoveSyncOwner::OptionsPack);
-        service.jobs.extend([song_job, select_job, options_job]);
+        let (browser_job, browser_tx) = test_job(SimplyLoveSyncOwner::ContentBrowserPack);
+        service
+            .jobs
+            .extend([song_job, select_job, options_job, browser_job]);
 
-        for (tx, base) in [(&song_tx, 10), (&select_tx, 20), (&options_tx, 30)] {
+        for (tx, base) in [
+            (&song_tx, 10),
+            (&select_tx, 20),
+            (&options_tx, 30),
+            (&browser_tx, 40),
+        ] {
             for index in base..base + 2 {
                 tx.send(SimplyLoveSyncEvent::RowBeat {
                     index,
@@ -607,7 +627,7 @@ mod tests {
             }
         }
 
-        let events = service.poll().expect("three jobs are active");
+        let events = service.poll().expect("four jobs are active");
         assert!(matches!(
             events.song.as_slice(),
             [
@@ -627,6 +647,13 @@ mod tests {
             [
                 SimplyLoveSyncEvent::RowBeat { index: 30, .. },
                 SimplyLoveSyncEvent::RowBeat { index: 31, .. }
+            ]
+        ));
+        assert!(matches!(
+            events.browser_pack.as_slice(),
+            [
+                SimplyLoveSyncEvent::RowBeat { index: 40, .. },
+                SimplyLoveSyncEvent::RowBeat { index: 41, .. }
             ]
         ));
     }
@@ -708,7 +735,7 @@ mod tests {
 
     #[test]
     fn cached_song_result_restores_estimate_and_visuals() {
-        let result = cached_song_result(&CachedAnalysis {
+        let result = cached_song_result(CachedAnalysis {
             bias_ms: -4.0,
             confidence: 0.93,
             applied: false,
@@ -738,7 +765,7 @@ mod tests {
 
     #[test]
     fn cached_applied_result_cannot_apply_the_same_delta_twice() {
-        let result = cached_song_result(&CachedAnalysis {
+        let result = cached_song_result(CachedAnalysis {
             bias_ms: -4.0,
             confidence: 0.93,
             applied: true,
@@ -856,3 +883,7 @@ fn append_sync_mono(samples: &[i16], channels: usize, out: &mut Vec<f32>) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_cached.rs"]
+mod owned_pipeline_tests;

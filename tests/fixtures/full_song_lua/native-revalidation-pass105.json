@@ -1,0 +1,354 @@
+{
+  "pass": 105,
+  "previous_record": "native-revalidation-pass104.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "fb9d04ed4ebde55f6f04f3cc03b645ff820825ee",
+  "comparator_sha256": "c2181eb172a2df82530bb502f411751114bdea9dbe2b22efc78b5932ce7c24a5",
+  "existing_archive_source_commit": "def9a12f131b4dcbc0cc3ed4c3f9fd2f61f54ec1",
+  "existing_archive_comparator_sha256": "4e418ee55c2b5a490e373e3e47a30fd3b9f41e57617a5f6f44c70ec1edd73466",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 10,
+      "entry": {
+        "title": "272|MODS|[lv.02] Riddle",
+        "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+        "harness_version": "0.1.50",
+        "archive": "7ffacb89fd95ab788758e273ba878c30380c4622406f1bb22d8c51292ca78d83.tar.zst",
+        "sha256": "7ffacb89fd95ab788758e273ba878c30380c4622406f1bb22d8c51292ca78d83",
+        "compressed_bytes": 139441,
+        "compression_level": 22,
+        "uncompressed_sha256": "0ea85870bff6f89d40ec9ff9a770363feff74800034fb01e99f4188dec295fe1",
+        "aliases": [
+          "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
+          "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+          "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+          "4b5cd2ee24f5f4d0fadabc7f64865e1097231ae1ce27366b5197eb61e3b76b26.tar.zst",
+          "29d2edbcecd4fffb563b341fd5257a127256df5e6246502a27c1798c6303a7b2.tar.zst",
+          "80a082f87260bcc55830ec2250c7f83a76b04c76d3a27f59481e296d17737522.tar.zst",
+          "45be98118e8a0ab0db2cfb017f52de2475650620cda25a3639686f424f9e900c.tar.zst",
+          "96f438e4abf9fe94163e1aab9834f2602dda96b407fa1b9d1bb463317bfbef99.tar.zst",
+          "dd2642a3338bc3f53179bbbe4a55ba44db0369dc1ab8f5b4c3f30471477b3132.tar.zst",
+          "ce9f069c68b48d6bd7cb4c181342b0f1797952140d6712428a34ba8e70702399.tar.zst",
+          "148d584a7cc889508c3682c8086225630ce8bfe1f39d398e275a179442fdab7b.tar.zst"
+        ]
+      },
+      "native_source_commit": "f4977d649a57873aa2aab4e41289311ff6f787e8",
+      "native_cli_sha256": "03843e44680e6fc9b5620c4b209ea517293de45c248a4e476b75d6ee3f5aaff9",
+      "native_trace_sha256": "28c93396d20d143eb9f7f3f4ce7d8aed3b6028e58caad105f3e483221474f723",
+      "native_capture_log_sha256": "c0a891c649a298863e01bdada41e1a161c3c690341ec9e336f3667701398836a",
+      "native_archive_log_sha256": "1e9edcbd2d909b3685244d1c6f2be3a5777f2a75f387190969805b7ec582c6d4",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 140.625,
+      "update_frames": 8439,
+      "source_simfile_sha256": "8cf5c8a17ba93fdba79ce84e7a3f39fe5070996e49aa91903f3fbdb8103915e1",
+      "original_source_unchanged": true,
+      "original_archive_retained": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "native_receipt_sha256": "c53385606acce445f3589c1de556bd413a2c6ce2a74e7a428539304ea93aae6c",
+      "acceptance": "passed",
+      "comparison_source_commit": "def9a12f131b4dcbc0cc3ed4c3f9fd2f61f54ec1",
+      "comparisons_passed": 201471
+    },
+    {
+      "position": 19,
+      "entry": {
+        "title": "303|MODS|[lv.memes] KABOOOOOM!!!!",
+        "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+        "harness_version": "0.1.51",
+        "archive": "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst",
+        "sha256": "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85",
+        "compressed_bytes": 42039171,
+        "aliases": [
+          "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
+          "1383c72f18d789124eb40dcffca0243712bfe0d226274689e3696edf0f0cd071.tar.zst",
+          "2db5ec86b65bcd1f79db9ef7aa1cae25625d6cc6d1118aac24ad20d023ef083f.tar.zst",
+          "50592d66df8ccd3b06d810115692dac1e6f470eb57bd889833d85f0debc31d90.tar.zst",
+          "25dffa765b92761775ecbe5e617e1d135633d7282865fe2b7992363739e476e3.tar.zst"
+        ]
+      },
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "275e9e6527899843a30f0c90ad7896f8deee48956293eab8575edab1d53b0a4f",
+      "native_capture_log_sha256": "c87287e0893cc6ca1509c796f9d6f769fb028656146957c06d97eed3fa84ebe8",
+      "native_archive_log_sha256": "4c57531f6ab5d6bb9e7047665963274e56e49a2bf619a28466473a8892507cc5",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 199.4571533203125,
+      "update_frames": 11969,
+      "source_simfile_sha256": "45896ec323aad88af574cefc1ca341ad2b787ee7f93089910d2e81b5c92d8d3b",
+      "original_source_unchanged": true,
+      "original_archive_retained": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "native_receipt_sha256": "dc3f28e9a44ad2287bbf3afff271b397a76273f9984dcb7acba1ce889bf3cde3",
+      "acceptance": "passed",
+      "comparison_source_commit": "fb9d04ed4ebde55f6f04f3cc03b645ff820825ee",
+      "comparisons_passed": 14842953
+    }
+  ],
+  "existing_archive_results": [
+    {
+      "position": 10,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "7ffacb89fd95ab788758e273ba878c30380c4622406f1bb22d8c51292ca78d83.tar.zst",
+      "variant": "fresh",
+      "harness_version": "0.1.50",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-010-fresh-recovery-v1.log",
+      "log_sha256": "42008381556d2b4d4f09193742a8e0e0e474186c4f39587796412df745865311",
+      "comparisons_passed": 201471,
+      "comparisons_failed": 0,
+      "initial_log_removed": true,
+      "initial_log_sha256": "6e69030bbfa41bf6c0cee58ae99498b081c9765de596a7dd5ac12772f39c2a62"
+    },
+    {
+      "position": 10,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-010-existing-recovery-v1.log",
+      "log_sha256": "16251b442404539154b27e9b4e3f90c329de643702e4e197d4550edb65bd2ba6",
+      "comparisons_passed": 201471,
+      "comparisons_failed": 0,
+      "initial_log_removed": true,
+      "initial_log_sha256": "e59ce3a8d11432290bb0485f193255dfcf5b1201136575efebb306cdf0bad396"
+    },
+    {
+      "position": 11,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-011-existing-recovery-v1.log",
+      "log_sha256": "08ef15f2eaaceca154c02377df7cb0c1f4d9aac5ff83b7e161e6e1cbdc231ea9",
+      "comparisons_passed": 194374,
+      "comparisons_failed": 0,
+      "initial_log_removed": true,
+      "initial_log_sha256": "c2693954439c9df141ec23f0346cbd7027de259ec9ede7ac92cf0860e7a93d5b"
+    },
+    {
+      "position": 12,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-012-existing-recovery-v1.log",
+      "log_sha256": "6c7dd39afd79665cbaa14c54573544b21c1bb252dc0613d5817016a6a471cf15",
+      "comparisons_passed": 208584,
+      "comparisons_failed": 0,
+      "initial_log_removed": true,
+      "initial_log_sha256": "6632f57970aea58a496a40f025f265d8e3912c1c5b528f0f50080b9e558b69d5"
+    },
+    {
+      "position": 13,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-013-existing-v1.log",
+      "log_sha256": "9644c541af660f242c5c335dceceee15b4b492e2a4dc9428d473d0983bc6e5b9",
+      "comparisons_passed": 198090,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 14,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-014-existing-v1.log",
+      "log_sha256": "485c4880b7a19daf5ef265649e4b3e43babec9300692be5bf05ce3ad1f533483",
+      "comparisons_passed": 167442,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 15,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-015-existing-v1.log",
+      "log_sha256": "dbcf72490474962b94e3e92bbb91e6658a0ab7bc97cf996add746ee5d9b34266",
+      "comparisons_passed": 199543,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 16,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-016-existing-v1.log",
+      "log_sha256": "91b7e3ffcf8ccb981e307607cc780f51e72253cd2e27d3e58394f6824a5d4d1c",
+      "comparisons_passed": 182791,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 17,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-017-existing-v1.log",
+      "log_sha256": "4259f28847bc8ad57c4a08ed7387125de2b443d03763ec31c5b81bb2c62f02ec",
+      "comparisons_passed": 206323,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 18,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 0,
+      "status": "passed",
+      "log": "pass105-position-018-existing-v1.log",
+      "log_sha256": "b050c25ed4536c9666a97b518dc58ef1a3e0be1054dbe8442a52228c05adc71b",
+      "comparisons_passed": 304425,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "variant": "existing",
+      "harness_version": "0.1.31",
+      "exit_code": 1,
+      "status": "failed",
+      "log": "pass105-position-019-existing-v1.log",
+      "log_sha256": "37703836f17954190697d91f8da40af3f491a0a63dd896de545fc5e8e9a7aa00",
+      "comparisons_passed": 0,
+      "comparisons_failed": 0
+    }
+  ],
+  "comparisons_passed": 16907467,
+  "canonical_positions_passed": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "retained_riddle_archive_also_passed": true,
+  "model_archive_before_repair": {
+    "position": 19,
+    "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+    "archive": "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst",
+    "harness_version": "0.1.51",
+    "source_commit": "def9a12f131b4dcbc0cc3ed4c3f9fd2f61f54ec1",
+    "binary_sha256": "4e418ee55c2b5a490e373e3e47a30fd3b9f41e57617a5f6f44c70ec1edd73466",
+    "exit_code": 1,
+    "comparisons_passed": 0,
+    "comparisons_failed": 0,
+    "log": "pass105-position-019-fresh-v1.log",
+    "log_sha256": "f5da3efce99fe54631522896b5cba410080baafc7ab266a208cda97e14c91831",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-top-019-kaboom-v1.json",
+    "native_receipt_sha256": "dc3f28e9a44ad2287bbf3afff271b397a76273f9984dcb7acba1ce889bf3cde3",
+    "full_corpus_complete": false
+  },
+  "model_production_comparison": {
+    "source_commit": "def9a12f131b4dcbc0cc3ed4c3f9fd2f61f54ec1",
+    "binary_sha256": "aef4eb224c367215326401208e307843b3610e3cc0ccf7046380471a6cde3c73",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\semantic.exe",
+      "models::native_model_meshes_match_selected_trace",
+      "--exact",
+      "--ignored",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "log_sha256": "c1d05f6c72cbbd29cc05000d2af5bdfee775337fed67614a31224db6a4330385",
+    "native_trace_sha256": "275e9e6527899843a30f0c90ad7896f8deee48956293eab8575edab1d53b0a4f",
+    "results": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 243.78s"
+    ],
+    "full_corpus_complete": false
+  },
+  "model_archive_after_repair": {
+    "label": "full-kaboom",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+      "bb1b35239bf8665e24e2e7c5aaaf90dc0beb1df3457023a1a6958bae8a074b85.tar.zst"
+    ],
+    "binary_sha256": "c2181eb172a2df82530bb502f411751114bdea9dbe2b22efc78b5932ce7c24a5",
+    "exit_code": 0,
+    "log": "model-gate-full-kaboom-v1.log",
+    "log_sha256": "b21bb17b3f6749bb299f7d8e6695ac169bf11f5e6cd091aac28600d29e898db2",
+    "results": [
+      "result: ok; 1/1 fixtures passed; 14842953 comparisons passed, 0 failed (14842953 total); elapsed 325.87s"
+    ]
+  },
+  "model_coverage_regressions": [
+    {
+      "label": "archive-gate",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-song_lua_itgmania_semantic_parity.exe",
+        "whole_song_archives::archive_reference_rejects_missing_model_meshes",
+        "--exact",
+        "--nocapture"
+      ],
+      "binary_sha256": "33af0651b882f4e59a1dcecbf6c9f5edbae313737ea80b9d2ce5e7ec61d5c5ed",
+      "exit_code": 0,
+      "log": "model-gate-archive-gate-v1.log",
+      "log_sha256": "5375087bd49fdff5681bc3fb5fa099e67a210dea3912e555d08a71929b576bff",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 11.38s"
+      ]
+    },
+    {
+      "label": "incomplete-models",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-song_lua_itgmania_semantic_parity.exe",
+        "models::native_model_columns_reject_incomplete_observations",
+        "--exact",
+        "--nocapture"
+      ],
+      "binary_sha256": "33af0651b882f4e59a1dcecbf6c9f5edbae313737ea80b9d2ce5e7ec61d5c5ed",
+      "exit_code": 0,
+      "log": "model-gate-incomplete-models-v1.log",
+      "log_sha256": "a438f6f915e5a1aaf7e5cc306ea57af4a398256dcd64bad47a2e08365ea611c3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 0.01s"
+      ]
+    }
+  ],
+  "technique_repair": {
+    "source_commit": "def9a12f131b4dcbc0cc3ed4c3f9fd2f61f54ec1",
+    "checks_passed": 7,
+    "actual_opengl_arrow_pixels_and_rotation_verified": true,
+    "test_log_sha256": "93f688d2c097d7bd2356a1ffb4585929c88df5aee03ca5ee30bf9648ec02207b",
+    "local_test_artifacts_removed_after_run": true
+  },
+  "next_position": 20,
+  "checks": "Archive integrity, complete Lua execution, every-frame composition and native semantic/Model comparisons; framebuffer parity remains unproven"
+}

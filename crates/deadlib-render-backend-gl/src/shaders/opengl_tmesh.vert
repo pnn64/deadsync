@@ -18,7 +18,7 @@ layout(location = 15) in vec4 i_additive_uv;
 out vec2 v_uv;
 out vec4 v_color;
 out float v_texture_mask;
-out float v_cull_back;
+out float v_cull_mode;
 out vec2 v_additive_uv;
 out float v_additive;
 uniform mat4 u_model_view_proj;
@@ -48,6 +48,6 @@ void main() {
     v_additive_uv = secondary * i_additive_uv.xy + i_additive_uv.zw;
     v_color = a_color * i_tint;
     v_texture_mask = i_flags.z;
-    v_cull_back = i_flags.w;
+    v_cull_mode = i_flags.w;
     v_additive = float((mode & 4) != 0);
 }

@@ -1,4 +1,4 @@
-// Starting-main implementations for paired benchmarks and differential tests.
+// Unoptimized implementations with current-main sampler behavior, for comparison.
 
 use super::*;
 
@@ -32,6 +32,7 @@ fn clone_retained_object(objects: &FrameBuilder, index: usize) -> Option<Editabl
                 depth_test: payload.depth_test,
                 clear_depth: payload.clear_depth,
                 clear_depth_after: payload.clear_depth_after,
+                sampler: payload.sampler,
             }
         }
     };
@@ -415,6 +416,7 @@ fn clipped_sprite_object_to_world_rect(
         }
         EditablePayload::TexturedMesh {
             instance,
+            sampler,
             vertices: mesh_vertices,
             ..
         } => {
@@ -431,7 +433,7 @@ fn clipped_sprite_object_to_world_rect(
             {
                 return None;
             }
-            clip_textured_mesh_to_world_rect(
+            let mut clipped = clip_textured_mesh_to_world_rect(
                 instance.tint,
                 vertices,
                 transform,
@@ -441,7 +443,15 @@ fn clipped_sprite_object_to_world_rect(
                 clip,
                 instance.texture_mask != 0.0,
                 recycled_vertices,
-            )
+            )?;
+            if let EditablePayload::TexturedMesh {
+                sampler: clipped_sampler,
+                ..
+            } = &mut clipped.object_type
+            {
+                *clipped_sampler = *sampler;
+            }
+            Some(clipped)
         }
         EditablePayload::Mesh { .. } => unreachable!("callers keep colored meshes unchanged"),
     }

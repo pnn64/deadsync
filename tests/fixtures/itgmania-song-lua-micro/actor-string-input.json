@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "name": "native actor tostring type and opaque identity",
+  "lua_assertions": "local actors={{native_target,\"Actor\"},{native_proxy,\"ActorProxy\"},{native_label,\"BitmapText\"},{frozen,\"ActorFrameTexture\"}}\nlocal seen={}\nfor _, pair in ipairs(actors) do\n local actor, kind=pair[1],pair[2]\n local before=tostring(actor)\n assert(before:match(\"^\"..kind..\" %([%da-fA-Fx]+%)$\"), \"native type and opaque pointer format\")\n assert(not seen[before], \"different objects have different identities\")\n seen[before]=true\n local name=actor:GetName()\n actor:name(\"PlayerP1/ActorFrame/NativeNameTrap\")\n assert(tostring(actor)==before, \"renaming cannot change actor identity\")\n assert(not tostring(actor):find(\"NativeNameTrap\",1,true), \"name and hierarchy stay out of tostring\")\n actor:name(name)\nend\n"
+}

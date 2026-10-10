@@ -1,0 +1,108 @@
+{
+  "pass": 145,
+  "previous_record": "native-revalidation-pass144.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    66
+  ],
+  "next_position": 67,
+  "comparisons_passed": 172269,
+  "charts": [
+    {
+      "position": 66,
+      "entry": {
+        "title": "[N]TECH SOUP(MASTER) Flying Castle",
+        "source_simfile": "[N]TECH SOUP(MASTER) Flying Castle/flying castle.sm",
+        "harness_version": "0.1.54",
+        "archive": "183cfc30e725d8818d8498e17c0286c65827ab1548e1f5d615f8fd7b64bd2573.tar.zst",
+        "sha256": "183cfc30e725d8818d8498e17c0286c65827ab1548e1f5d615f8fd7b64bd2573",
+        "compressed_bytes": 302861,
+        "aliases": [
+          "bf1373049476beebf03451c600cd6ac65b92af2069f0867e43a9278e48056012.tar.zst"
+        ]
+      },
+      "original_archive_retained": "cb6422f5f30e65931d09bd34da4ce770604c3eceacb17cfa4b2ca2316d85628d.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "c733f23f349de918517896d9bf6c426407693a39db4d19ee42bf57f3c32d25c6",
+      "original_source_sha256": {
+        "[N]TECH SOUP(MASTER) Flying Castle/bg.png": "352c8ef32094a9aa289061add01a68bcbc0e155c8ffb9ad06d0c8d150952a107",
+        "[N]TECH SOUP(MASTER) Flying Castle/bn.png": "8f105f0f13db277a78ed9ff63657190bee1b07298904c46ebb16fa79ecaf2085",
+        "[N]TECH SOUP(MASTER) Flying Castle/flying castle.ogg": "d1e3b9afa6b09300fc2eeb4e8a406f4e2f29ac3704450d6442b20152268ba0f3",
+        "[N]TECH SOUP(MASTER) Flying Castle/flying castle.sm": "cf70ef913f956cbec88513251db6e13fa43e0980a598349a8cd82a4bd2765c39",
+        "[N]TECH SOUP(MASTER) Flying Castle/flying castle.sm.old": "0a54c5a77781a5827edc4f2e4d0c087dd2402016b716dbd6823033d8b2103524",
+        "[N]TECH SOUP(MASTER) Flying Castle/flying castle.ssc": "9f0becf83418c807c46ec3988b2a9c1c6c5e3d391c8674c85ab1af2cb8865968",
+        "[N]TECH SOUP(MASTER) Flying Castle/flying castle.ssc.old": "7f6321f4c02c622caa943c2aa13caa9be9b02b381225558f4c430899bca58186",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/default.lua": "b51a0e43804ce93d05aa68b84fd96da5311f6bd13f17579602b6c8cf2b0936aa",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/default.xml": "9797f5674a11da827d947bebca9f3fcfcd746813265cd20aa870583e36a81396",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/easing.xml": "7c837cba7f448a43995feee284b1502fa5aa32bdc9441efd9279c89ae5a76b25",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/modhelpers.xml": "e93bfe2ae035dec329475477c85ca4608634419aa5b3360a65d446ace9673ad1",
+        "[N]TECH SOUP(MASTER) Flying Castle/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7284,
+      "duration_seconds": 121.37930297851562,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 66,
+      "source_simfile": "[N]TECH SOUP(MASTER) Flying Castle/flying castle.sm",
+      "archive": "183cfc30e725d8818d8498e17c0286c65827ab1548e1f5d615f8fd7b64bd2573.tar.zst",
+      "archive_sha256": "183cfc30e725d8818d8498e17c0286c65827ab1548e1f5d615f8fd7b64bd2573",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "183cfc30e725d8818d8498e17c0286c65827ab1548e1f5d615f8fd7b64bd2573.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 34.148276899941266,
+      "comparisons_passed": 172269,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-066-native-column-xy-v6.log",
+      "log_sha256": "a4d8d1602aa590891af8dd36b6c386b5be93f7e465fb06cc622a56046fbb0b1e",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass145-top-066-native-v3.json",
+      "native_receipt_sha256": "0765d070287453e7fa78ecac0219080d688dc052af3a974d07eca1f15672c73e",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.9571458999998868,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-066-native-pass145.log",
+    "log_sha256": "dc2fe690f2769b1d99fcacf3303c506cbd215cbcb650a8126fecf83cfda63db1",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.50s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

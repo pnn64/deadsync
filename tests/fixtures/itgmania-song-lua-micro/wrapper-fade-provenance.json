@@ -1,0 +1,26 @@
+{
+  "harness_version": "0.1.16",
+  "harness_commit": "bc1604f292658277dd449a33e48687dc959c1969",
+  "native_executable_sha256": "ae9292f776d3de2ac5609cb842ae904527a20836f6524cee2ebee7f846397f41",
+  "source_sha256": "c76a8c370935f79577d49019451d910f8c2b42bd58ba5e5add1959fae04b9788",
+  "native_trace_sha256": "d9c21496b6ce948a3f7d58c6345f1314e8d6a39b4398cd4ecf0aad32bf580055",
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "update_frames": 241,
+  "end_position": {
+    "beat": 4,
+    "seconds": 4
+  },
+  "native_sources": {
+    "src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "src/Actor.h": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+    "src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+  },
+  "expected_checks": 575,
+  "negative_control": "remove the runtime wrapper diffuse track; retain every observation and reject missing native fade",
+  "independent_count_probe": {
+    "archive": "5a8c0d92941561563138a067681430cf19fab421945bd4bdd47ef8b868efa3a5.tar.zst",
+    "native_runtime_errors": 0,
+    "deadsync_before": "one newly created wrapper assertion fails at the real Begin callback"
+  }
+}

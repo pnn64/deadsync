@@ -1,0 +1,284 @@
+{
+  "pass_number": 62,
+  "status": "native public own methods and inherited values verified; full corpus unfinished",
+  "harness_version": "0.1.24",
+  "harness_commit": "6a127f4349612da54f32eb8db0d49b4bb64f330a",
+  "harness_cli": {
+    "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass62-runtime-classes-v2.exe",
+    "sha256": "6f0e8ff5fd6e04085e9ed3054ef744f932989c2d4a46c191be85b92eb94ef935",
+    "version": "0.1.24",
+    "semantic_host_sha256": "fa65f72860ecfc0086d92c5227109e027455d508ce2566979de76d9eda5c7e3a",
+    "source_pending_commit": false,
+    "command": [
+      "cargo",
+      "build",
+      "--bin",
+      "itgmania-harness-rs",
+      "--message-format=json"
+    ],
+    "source_commit": "6a127f4349612da54f32eb8db0d49b4bb64f330a"
+  },
+  "harness_tests": {
+    "exit_code": 0,
+    "seconds": 146.14063096046448,
+    "summary": [
+      "test result: ok. 142 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 145.95s"
+    ],
+    "executable_sha256": "f2854574ba8be15bfcff3556d468fe38864968631fc06f9ebab2e7216df3dfc2",
+    "log_sha256": "9dfe419612d80b0234a5cb086f84fc4a96cd3109906b695de0706f5d48a0ae37"
+  },
+  "native_source_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "native_source_files": {
+    "src/LuaBinding.h": "b7bc6584d259d016a1b762be51759ab5915045d02c2856fc00cf09023e8deb2d",
+    "src/LuaBinding.cpp": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+    "src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "src/Sprite.cpp": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "src/BitmapText.cpp": "9db88dd98d82a88eea8b8544e2d12b7bb4d8d2fea52847c54f9f3e7655b1fc78",
+    "Themes/_fallback/Scripts/02 Actor.lua": "499e7ee20f5c14a6a67ce8da6840bf271829659fe4e03df1e18e5159e1de339a"
+  },
+  "controls": {
+    "bitmap-runtime-methods": {
+      "input": {
+        "file": "bitmap-runtime-methods-input.json",
+        "sha256": "fbe278dc9f226fb78325f74d58823824adae7e9e23b310bf4050ed34757f22b3"
+      },
+      "output": {
+        "file": "bitmap-runtime-methods-native.json",
+        "sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+        "result": {
+          "allocations": [],
+          "diagnostics": [],
+          "provenance": {
+            "execution": "embedded_native_sources",
+            "git_dirty": "false",
+            "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+            "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+          },
+          "script_errors": []
+        }
+      }
+    },
+    "actor-class-values": {
+      "input": {
+        "file": "actor-class-values-input.json",
+        "sha256": "0271c4a1471c36902e0a9011de14c0f5222d1592c02fb779de4720e64b58898c"
+      },
+      "output": {
+        "file": "actor-class-values-native.json",
+        "sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+        "result": {
+          "allocations": [],
+          "diagnostics": [],
+          "provenance": {
+            "execution": "embedded_native_sources",
+            "git_dirty": "false",
+            "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+            "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+          },
+          "script_errors": []
+        }
+      }
+    }
+  },
+  "harness_before": [
+    {
+      "entry": {
+        "simfile": "probe/probe.sm",
+        "fixture": "probe/probe.sm.semantic.json",
+        "title": "Native BitmapText class lookup",
+        "lua_entries": 1,
+        "status": "error",
+        "error": "ITGmania Lua host failed: C:/GitHub/itgmania-harness/target/song-lua-repair/pass62-runtime-classes-before/corpus/probe/default.lua:6: missing own BitmapText method: getstrokecolor"
+      },
+      "lua_sha256": "50d6f8bee0b3e1191fdc7ac433d9ed9fff33a94b828104ff926e5bcedf7cbeef",
+      "cli_sha256": "efe1529a751f44c48eb762362826a9e68fafa739e4f9e25657d964b28907ec2f",
+      "native_output": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      },
+      "native_input_sha256": "fbe278dc9f226fb78325f74d58823824adae7e9e23b310bf4050ed34757f22b3",
+      "native_output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "capture_log_sha256": "d6e0f845dcb79e98bd2624d0c7d7eb6bb64c45e79e6f40ecfce8a4744201e487",
+      "reason": "Compiled native own method tables are complete before any lookup; semantic lazy tables omit unused methods. Sprite own methods must shadow overridden Actor methods."
+    },
+    {
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass62-runtime-classes-v1.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass62-class-values-before\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass62-class-values-before\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      "entry": {
+        "simfile": "probe/probe.sm",
+        "fixture": "probe/probe.sm.semantic.json",
+        "title": "Native BitmapText class lookup",
+        "lua_entries": 1,
+        "status": "error",
+        "error": "ITGmania Lua host failed: C:/GitHub/itgmania-harness/target/song-lua-repair/pass62-class-values-before/corpus/probe/default.lua:3: inherited public class value"
+      },
+      "lua_sha256": "0694f6e0c395b87654112fb3c06c5fef5fe85bf5dbea040b644d822f25d4f297",
+      "cli_sha256": "d28e0c69356f54810467316a14ee0c17710fe742e95965fff92a8d53080535ef",
+      "capture_log_sha256": "7abdd7da857bc66f3fa894ead42986e241f0a06f26191e89916774e50002279a"
+    }
+  ],
+  "harness_after": [
+    {
+      "control": "runtime-classes",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass62-runtime-classes-v2.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass62-runtime-classes-before\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass62-runtime-classes-final\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      "environment": {
+        "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:/GitHub/deadsync/assets/noteskins"
+      },
+      "entry": {
+        "simfile": "probe/probe.sm",
+        "fixture": "probe/probe.sm.semantic.json",
+        "title": "Native BitmapText class lookup",
+        "lua_entries": 1,
+        "status": "ok"
+      },
+      "end_position": {
+        "beat": 4,
+        "seconds": 2
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "lua_sha256": "50d6f8bee0b3e1191fdc7ac433d9ed9fff33a94b828104ff926e5bcedf7cbeef",
+      "cli_sha256": "6f0e8ff5fd6e04085e9ed3054ef744f932989c2d4a46c191be85b92eb94ef935",
+      "archive": {
+        "title": "Native BitmapText class lookup",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.24",
+        "archive": "2b67ea5628d5670b08323d646320653a1f6e44cf2731740cd441d8f0934159ba.tar.zst",
+        "sha256": "2b67ea5628d5670b08323d646320653a1f6e44cf2731740cd441d8f0934159ba",
+        "compressed_bytes": 11427
+      },
+      "capture_log_sha256": "44b0e0faefb893fa6ceef985a61d5f0c5b19c3e2fb43dd8512f2556594dad9db"
+    },
+    {
+      "control": "class-values",
+      "command": [
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass62-runtime-classes-v2.exe",
+        "song-lua-semantic-baseline",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass62-class-values-before\\corpus",
+        "--simfile",
+        "probe/probe.sm",
+        "--out",
+        "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass62-class-values-final\\traces",
+        "--beat-step",
+        "0.25",
+        "--max-events",
+        "1500000",
+        "--random-seed",
+        "1"
+      ],
+      "environment": {
+        "ITGMANIA_SONG_LUA_NOTESKIN_ROOT": "C:/GitHub/deadsync/assets/noteskins"
+      },
+      "entry": {
+        "simfile": "probe/probe.sm",
+        "fixture": "probe/probe.sm.semantic.json",
+        "title": "Native BitmapText class lookup",
+        "lua_entries": 1,
+        "status": "ok"
+      },
+      "end_position": {
+        "beat": 4,
+        "seconds": 2
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "lua_sha256": "0694f6e0c395b87654112fb3c06c5fef5fe85bf5dbea040b644d822f25d4f297",
+      "cli_sha256": "6f0e8ff5fd6e04085e9ed3054ef744f932989c2d4a46c191be85b92eb94ef935",
+      "archive": {
+        "title": "Native BitmapText class lookup",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.24",
+        "archive": "7eb669b57d472cf93f3c951294ed0c8448a2b1bfcbb43293e367c15194d7fd6d.tar.zst",
+        "sha256": "7eb669b57d472cf93f3c951294ed0c8448a2b1bfcbb43293e367c15194d7fd6d",
+        "compressed_bytes": 11055
+      },
+      "capture_log_sha256": "ea3a728f2b8cb81552db8e2e512746ecd560736a8a3a2e84e9d47f7239050754"
+    }
+  ],
+  "deadsync_version": "0.5.1863",
+  "deadsync_source_commit": "a937783085a2d1542ed8aee6cc04ef2ef12a81e9",
+  "deadsync_verifier": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass60-bitmap-full-song-v1.exe",
+    "sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804",
+    "version": "0.5.1863",
+    "command": [
+      "cargo",
+      "rustc",
+      "-p",
+      "deadsync",
+      "--test",
+      "full_song_lua",
+      "--features",
+      "deadsync-theme-simply-love/test-support",
+      "--message-format=json"
+    ],
+    "tested_source_sha256": {
+      "Cargo.toml": "0ad4c2fd88e28386d608c908acff22558c42458d595b8146ce21037754d86d9a",
+      "Cargo.lock": "f1dee66fbe751100b130a6ac8f958bc8305c5906578413b0abc92a7ad259db7b",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "f9cda87743d0d9dc8cad5a7037e1438e76e2c9c574da7bc708e714eec842fc4f",
+      "crates/deadsync-song-lua/src/lua_util.rs": "0767718275dac3849f94f7e4cd440f88e3c55a6bafb7d942d134c27699742c9b",
+      "crates/deadsync-song-lua/src/lib.rs": "c2d3e35c021a71c860bb3bd6c46795309217634ae03ea127626069089bbdd854",
+      "crates/deadsync-simfile/src/cache.rs": "a70f960145dc05b6c2902474dcac1c0d6db9c076c0bb5c4942f85a6ab725b969"
+    }
+  },
+  "deadsync_archive_results": [
+    {
+      "archive": "2b67ea5628d5670b08323d646320653a1f6e44cf2731740cd441d8f0934159ba.tar.zst",
+      "version": "0.5.1863",
+      "exit_code": 0,
+      "seconds": 0.23708629608154297,
+      "result": "result: ok; 1/1 fixtures passed; 2669 comparisons passed, 0 failed (2669 total); elapsed 0.12s",
+      "log_sha256": "02b1784b0f43efd719e578907f477693fbf1ca7f5475086239085c8580607dea",
+      "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+    },
+    {
+      "archive": "7eb669b57d472cf93f3c951294ed0c8448a2b1bfcbb43293e367c15194d7fd6d.tar.zst",
+      "version": "0.5.1863",
+      "exit_code": 0,
+      "seconds": 0.2245769500732422,
+      "result": "result: ok; 1/1 fixtures passed; 2669 comparisons passed, 0 failed (2669 total); elapsed 0.12s",
+      "log_sha256": "6fbc6ac5dede9583dfdc5cdfa2b9fd07bf1dc164981f3ba8774d2714d71b33ef",
+      "executable_sha256": "08fbb09116ace1fc6d515c9392eeedcbdeda08295b8f8f21beaf1b9fad731804"
+    }
+  ],
+  "limits": [
+    "Raw inventory covers BitmapText native methods plus five fallback helpers; own precedence uses the native Actor/Sprite GetNumStates overlap.",
+    "Inherited value controls cover false, zero, strings and tables on public class lookup.",
+    "This does not establish every method body, font layout, other subclasses or complete Simply Love context.",
+    "Full scope remains 501 simfiles, 483 indexed sources, 18 unindexed sources and 492 archive variants."
+  ]
+}
