@@ -3839,3 +3839,5 @@ fn graphics_refresh_change_emits_request_on_exit() {
         )]
     ));
 }
+
+mod data_paths_perf;

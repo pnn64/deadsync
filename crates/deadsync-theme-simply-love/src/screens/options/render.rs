@@ -98,20 +98,32 @@ fn truncate_help_block(block: RenderedHelpBlock, max_lines: usize) -> RenderedHe
         RenderedHelpBlock::Paragraph { text, .. } => (text, false),
         RenderedHelpBlock::Bullet { text, .. } => (text, true),
     };
-    let mut truncated = text
-        .lines()
-        .take(max_lines.saturating_sub(1))
-        .collect::<Vec<_>>()
-        .join("\n");
-    if !truncated.is_empty() {
-        truncated.push('\n');
-    }
-    if is_bullet && max_lines == 1 {
-        truncated.push_str("\u{2022} ...");
+    let lines = text.lines().take(max_lines.saturating_sub(1));
+    let (bytes, count) = lines
+        .clone()
+        .fold((0usize, 0usize), |(bytes, count), line| {
+            (bytes + line.len(), count + 1)
+        });
+    let joined_len = bytes + count.saturating_sub(1);
+    let ellipsis = if is_bullet && max_lines == 1 {
+        "\u{2022} ..."
     } else {
-        truncated.push_str("...");
-    }
-    let text = Arc::from(truncated);
+        "..."
+    };
+    let text = if joined_len == 0 {
+        Arc::from(ellipsis)
+    } else {
+        let mut truncated = String::with_capacity(joined_len + 1 + ellipsis.len());
+        for (index, line) in lines.enumerate() {
+            if index > 0 {
+                truncated.push('\n');
+            }
+            truncated.push_str(line);
+        }
+        truncated.push('\n');
+        truncated.push_str(ellipsis);
+        Arc::from(truncated)
+    };
     if is_bullet {
         RenderedHelpBlock::Bullet {
             text,
@@ -1462,3 +1474,6 @@ pub fn get_actors(
     );
     actors
 }
+
+#[cfg(test)]
+mod data_paths_perf;
