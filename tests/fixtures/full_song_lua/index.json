@@ -1606,12 +1606,10 @@
     {
       "title": "Beauty in Chaos",
       "source_simfile": "Beauty in chaos/Beauty in Chaos.sm",
-      "harness_version": "0.1.0",
-      "archive": "e594f419a582855055b0cb56ad620667903254d7debbdbe1c9273542ef261959.tar.zst",
-      "sha256": "e594f419a582855055b0cb56ad620667903254d7debbdbe1c9273542ef261959",
-      "compressed_bytes": 124498,
-      "uncompressed_sha256": "2102a576f5db7a077a0f43960e342a970896f819ca9733364af0443dd7ae65ff",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "edcb6fecbf2741882789d53d568d40c5a0d6736d0b6a5ca7a260c673ffc6a14a.tar.zst",
+      "sha256": "edcb6fecbf2741882789d53d568d40c5a0d6736d0b6a5ca7a260c673ffc6a14a",
+      "compressed_bytes": 710591,
       "aliases": [
         "6e0a607b7a5dbe35f5d252765542ec97688a75e7681e0679c082182331c19a92.tar.zst"
       ]

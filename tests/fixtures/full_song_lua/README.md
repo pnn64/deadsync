@@ -1793,3 +1793,17 @@ See `native-revalidation-pass198.json`. Position 120 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 199
+
+Position 120, Beauty in Chaos, passes all
+1,346,918 comparisons against committed DeadSync
+`e26bc17dd`. The complete native harness 0.1.64 archive
+contains 15,751 updates over 262.50 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass199.json`. Position 121 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
