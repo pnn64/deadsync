@@ -328,6 +328,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 beat: visual.beat,
                 beat_period: visual.beat_period,
                 parabola_x: visual.parabola_x,
+                attenuate_x: visual.attenuate_x,
                 square: visual.square,
                 digital: visual.digital,
                 zigzag: visual.zigzag,
@@ -4802,7 +4803,7 @@ mod tests {
                         match key.as_ref() {
                             "note0" => arrow = Some(sprite.center[1]),
                             "target0" => receptor = Some(sprite.center[1]),
-                            _ => {},
+                            _ => {}
                         }
                     }
                     let actual = (arrow.expect("composed tap or mine") - receptor.expect("composed receptor")) / direction;
@@ -4810,6 +4811,157 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn composed_attenuation_matches_native_positions() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_rules::note::HoldData;
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/attenuate-motion.json"
+        ))
+        .expect("independently compiled native attenuation positions");
+        let mut ns = noteskin();
+        // Native NoteDisplay anchors reversed heads at the original head only
+        // when this noteskin metric is enabled.
+        ns.note_display_metrics.flip_head_and_tail_when_reverse = true;
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|col| {
+                TestSlot::new(if col < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        for col in 0..2 {
+            ns.hold_columns[col].head_inactive =
+                Some(TestSlot::new(if col == 0 { "note0" } else { "note1" }));
+            ns.hold_columns[col].body_inactive = Some(TestSlot::new("body"));
+            ns.hold_columns[col].topcap_inactive = Some(TestSlot::new("top"));
+            ns.hold_columns[col].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        }
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut checked = 0;
+        for vector in native["vectors"].as_array().expect("vectors") {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("travel");
+            let col = match value("col_x") {
+                -32.0 => 0,
+                32.0 => 1,
+                _ => continue,
+            };
+            if travel < 0.0 {
+                continue;
+            }
+            for kind in [
+                NoteType::Tap,
+                NoteType::Mine,
+                NoteType::Hold,
+                NoteType::Roll,
+            ] {
+                let mut n = note(col);
+                n.note_type = kind;
+                n.beat = 1.0 + travel / 64.0;
+                n.row_index =
+                    usize::try_from(deadsync_core::timing::beat_to_note_row(n.beat)).expect("row");
+                if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                    n.hold = Some(HoldData {
+                        end_row_index: n.row_index + 96,
+                        end_beat: n.beat + 2.0,
+                        result: None,
+                        life: 1.0,
+                        let_go_started_at: None,
+                        let_go_starting_life: 1.0,
+                        last_held_row_index: n.row_index,
+                        last_held_beat: n.beat,
+                    });
+                }
+                let notes = [n];
+                let mut lanes = [vec![], vec![]];
+                lanes[col]
+                    .push(deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index"));
+                let rows = [deadsync_core::timing::beat_to_note_row(notes[0].beat)];
+                let mut request =
+                    request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                request.chart.lane_note_row_indices = &lanes;
+                request.chart.lane_hold_indices = &lanes;
+                request.chart.note_itg_rows = &rows;
+                request.geometry.column_dirs.fill(value("direction"));
+                request.geometry.draw_distance_before_targets = 1536.0;
+                request.geometry.draw_distance_after_targets = 1536.0;
+                request.visual.visual.attenuate_x = value("amount_x");
+                request.visual.visual.attenuate_y = value("amount_y");
+                request.visual.visual.attenuate_z = value("amount_z");
+                request.visual.visual.tiny = value("tiny");
+                request.visual.visual.move_y_cols.fill(0.5);
+                request.visual.visual.tipsy = 0.25;
+                let prepared = prepare_notefield(&request).expect("prepared attenuation field");
+                let frame = NotefieldFieldFrameView {
+                    feedback: spline_feedback(&[]),
+                    completed_rows: Default::default(),
+                };
+                let mut draws = Vec::new();
+                compose_notefield_field(
+                    &mut Vec::new(),
+                    &mut draws,
+                    &mut Vec::new(),
+                    &mut ModelMeshCache::default(),
+                    &mut HoldMeshScratch::with_columns(2),
+                    &mut CapturedActorScratch::with_capacities(32, 0),
+                    &mut NotefieldCameraCache::default(),
+                    &request,
+                    &prepared,
+                    &frame,
+                    &source,
+                );
+                let mut arrow = None;
+                let mut receptor = None;
+                for draw in &draws {
+                    if let FlatDraw::Sprite(sprite) = draw {
+                        let key = sprite.source.texture_key();
+                        if key == Some(if col == 0 { "note0" } else { "note1" }) {
+                            arrow = Some([sprite.center[0], sprite.center[1], sprite.world_z]);
+                        } else if key == Some(if col == 0 { "target0" } else { "target1" }) {
+                            receptor = Some(sprite.center);
+                        }
+                    }
+                }
+                let arrow = arrow.expect("composed note or hold head");
+                let receptor = receptor.expect("composed receptor");
+                let expected = [
+                    value("x") - value("col_x") * crate::tiny_spacing_scale(value("tiny")),
+                    value("y") - value("lane_offset"),
+                    value("z"),
+                ];
+                let actual = [arrow[0] - receptor[0], arrow[1] - receptor[1], arrow[2]];
+                for axis in 0..3 {
+                    assert!(
+                        (actual[axis] - expected[axis]).abs() < 0.001,
+                        "{kind:?}, axis={axis}, {vector}: actual={actual:?}, expected={expected:?}"
+                    );
+                }
+                if matches!(kind, NoteType::Hold | NoteType::Roll)
+                    && ["amount_x", "amount_y", "amount_z"]
+                        .iter()
+                        .any(|key| value(key) != 0.0)
+                {
+                    assert!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh)
+                        if mesh.texture.texture_key() == Some("body") && mesh.depth_test == (value("amount_z") != 0.0))));
+                }
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, 896);
     }
 
     #[test]

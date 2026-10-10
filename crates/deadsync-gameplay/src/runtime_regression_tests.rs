@@ -4921,7 +4921,7 @@ mod runtime_regression_tests {
         );
 
         state.clock.visible_timing.current_music_time[0] = 2.0;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 2.0);
 
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.confusion_offset - 3.14).abs() <= 0.000_1);
@@ -5064,13 +5064,13 @@ mod runtime_regression_tests {
         );
 
         state.clock.visible_timing.current_music_time[0] = 0.6;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 0.6);
         let visual = effective_visual_effects_for_player(&state, 0);
         assert!((visual.flip - 1.0).abs() <= 0.000_1);
         assert!(visual.invert.abs() <= 0.000_1);
 
         state.clock.visible_timing.current_music_time[0] = 1.1;
-        refresh_active_attack_masks(&mut state, 0.0);
+        refresh_active_attack_masks(&mut state, 0.5);
         let reset = effective_visual_effects_for_player(&state, 0);
         assert!(reset.flip.abs() <= 0.000_1);
         assert!(reset.invert.abs() <= 0.000_1);

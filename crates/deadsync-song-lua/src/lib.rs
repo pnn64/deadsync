@@ -9972,6 +9972,8 @@ return Def.ActorFrame{
             [windows, Vec::new()],
         );
         for (second, mini) in [(1.0, 0.0), (2.5, 50.0), (3.5, 100.0)] {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             let _ = runtime.refresh_player(
                 0,
                 second,
@@ -10061,6 +10063,8 @@ return Def.ActorFrame{
             (3.5, 0.0, 45.0),
             (4.5, 0.0, 90.0),
         ] {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             if let Some(next) = runtime.refresh_player(
                 0,
                 second,

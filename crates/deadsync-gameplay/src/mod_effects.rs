@@ -64,16 +64,14 @@ pub fn approach_attack_value(
         *current = None;
         return;
     };
-    if delta_time <= f32::EPSILON {
-        *current = Some(target);
-        return;
-    }
     let Some(speed) = speed.filter(|value| value.is_finite()) else {
         *current = Some(target);
         return;
     };
     let step = delta_time.max(0.0) * speed.max(0.0) * unit_scale;
     if step <= f32::EPSILON {
+        // PlayerOptions::Approach preserves Current at zero elapsed time.
+        *current = Some(current.filter(|value| value.is_finite()).unwrap_or(base));
         return;
     }
     let mut value = current.filter(|value| value.is_finite()).unwrap_or(base);
@@ -202,7 +200,9 @@ pub struct VisualOverrides {
     pub twirl: Option<f32>,
     pub roll: Option<f32>,
     pub parabola_x: Option<f32>,
+    pub attenuate_x: Option<f32>,
     pub parabola_y: Option<f32>,
+    pub attenuate_y: Option<f32>,
     pub mod_timer_mult: Option<f32>,
     pub mod_timer_offset: Option<f32>,
     pub bumpy_x: Option<f32>,
@@ -251,6 +251,7 @@ pub struct VisualOverrides {
     pub tornado_period: Option<f32>,
     pub tornado_offset: Option<f32>,
     pub parabola_z: Option<f32>,
+    pub attenuate_z: Option<f32>,
     pub confusion: Option<f32>,
     pub confusion_offset: Option<f32>,
     pub confusion_x_offset: Option<f32>,
@@ -293,7 +294,9 @@ impl Default for VisualOverrides {
             twirl: None,
             roll: None,
             parabola_x: None,
+            attenuate_x: None,
             parabola_y: None,
+            attenuate_y: None,
             mod_timer_mult: None,
             mod_timer_offset: None,
             bumpy_x: None,
@@ -342,6 +345,7 @@ impl Default for VisualOverrides {
             tornado_period: None,
             tornado_offset: None,
             parabola_z: None,
+            attenuate_z: None,
             confusion: None,
             confusion_offset: None,
             confusion_x_offset: None,
@@ -386,7 +390,9 @@ impl VisualOverrides {
             || self.twirl.is_some()
             || self.roll.is_some()
             || self.parabola_x.is_some()
+            || self.attenuate_x.is_some()
             || self.parabola_y.is_some()
+            || self.attenuate_y.is_some()
             || self.mod_timer_mult.is_some()
             || self.mod_timer_offset.is_some()
             || self.bumpy_x.is_some()
@@ -435,6 +441,7 @@ impl VisualOverrides {
             || self.tornado_period.is_some()
             || self.tornado_offset.is_some()
             || self.parabola_z.is_some()
+            || self.attenuate_z.is_some()
             || self.confusion.is_some()
             || self.confusion_offset.is_some()
             || self.confusion_x_offset.is_some()
@@ -587,7 +594,9 @@ pub struct VisualEffects {
     pub twirl: f32,
     pub roll: f32,
     pub parabola_x: f32,
+    pub attenuate_x: f32,
     pub parabola_y: f32,
+    pub attenuate_y: f32,
     pub mod_timer_mult: f32,
     pub mod_timer_offset: f32,
     pub bumpy_x: f32,
@@ -636,6 +645,7 @@ pub struct VisualEffects {
     pub tornado_period: f32,
     pub tornado_offset: f32,
     pub parabola_z: f32,
+    pub attenuate_z: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
     pub confusion_x_offset: f32,
@@ -686,7 +696,9 @@ impl VisualEffects {
             twirl: 0.0,
             roll: 0.0,
             parabola_x: 0.0,
+            attenuate_x: 0.0,
             parabola_y: 0.0,
+            attenuate_y: 0.0,
             mod_timer_mult: 0.0,
             mod_timer_offset: 0.0,
             bumpy_x: 0.0,
@@ -735,6 +747,7 @@ impl VisualEffects {
             tornado_period: 0.0,
             tornado_offset: 0.0,
             parabola_z: 0.0,
+            attenuate_z: 0.0,
             confusion: f32::from((mask & VISUAL_MASK_BIT_CONFUSION) != 0),
             confusion_offset: 0.0,
             confusion_x_offset: 0.0,
@@ -847,7 +860,9 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.twirl, base.twirl, step);
     approach_optional_visual(&mut visual.roll, base.roll, step);
     approach_optional_visual(&mut visual.parabola_x, base.parabola_x, step);
+    approach_optional_visual(&mut visual.attenuate_x, base.attenuate_x, step);
     approach_optional_visual(&mut visual.parabola_y, base.parabola_y, step);
+    approach_optional_visual(&mut visual.attenuate_y, base.attenuate_y, step);
     approach_optional_visual(&mut visual.mod_timer_mult, base.mod_timer_mult, step);
     approach_optional_visual(&mut visual.mod_timer_offset, base.mod_timer_offset, step);
     approach_optional_visual(&mut visual.bumpy_x, base.bumpy_x, step);
@@ -912,6 +927,7 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.tornado_period, base.tornado_period, step);
     approach_optional_visual(&mut visual.tornado_offset, base.tornado_offset, step);
     approach_optional_visual(&mut visual.parabola_z, base.parabola_z, step);
+    approach_optional_visual(&mut visual.attenuate_z, base.attenuate_z, step);
     approach_optional_visual(&mut visual.confusion, base.confusion, step);
     approach_optional_visual(&mut visual.confusion_offset, base.confusion_offset, step);
     approach_optional_visual(
@@ -1036,10 +1052,26 @@ pub fn approach_visual_overrides_to_target(
         1.0,
     );
     approach_attack_value(
+        &mut current.attenuate_x,
+        target.attenuate_x,
+        base.attenuate_x,
+        speed.attenuate_x,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
         &mut current.parabola_y,
         target.parabola_y,
         base.parabola_y,
         speed.parabola_y,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.attenuate_y,
+        target.attenuate_y,
+        base.attenuate_y,
+        speed.attenuate_y,
         delta_time,
         1.0,
     );
@@ -1424,6 +1456,14 @@ pub fn approach_visual_overrides_to_target(
         target.parabola_z,
         base.parabola_z,
         speed.parabola_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.attenuate_z,
+        target.attenuate_z,
+        base.attenuate_z,
+        speed.attenuate_z,
         delta_time,
         1.0,
     );

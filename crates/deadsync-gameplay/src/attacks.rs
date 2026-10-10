@@ -597,7 +597,9 @@ pub enum SongLuaEaseMaskTarget {
     VisualTwirl,
     VisualRoll,
     VisualParabolaX,
+    VisualAttenuateX,
     VisualParabolaY,
+    VisualAttenuateY,
     VisualModTimerMult,
     VisualModTimerOffset,
     VisualBumpyX,
@@ -646,6 +648,7 @@ pub enum SongLuaEaseMaskTarget {
     VisualTornadoPeriod,
     VisualTornadoOffset,
     VisualParabolaZ,
+    VisualAttenuateZ,
     VisualConfusion,
     VisualConfusionOffset,
     VisualConfusionXOffset,
@@ -1249,7 +1252,7 @@ impl SongLuaNoteHideWindows {
 
     /// Restore the non-looping offset spline used to hide authored note runs.
     /// ITGmania CubicSpline::solve_straight solves for first derivatives, with
-    /// natural end conditions (2, 1 / 1, 2), then evaluates a + bt + ctÂ² + dtÂ³.
+    /// natural end conditions (2, 1 / 1, 2), then evaluates a + bt + ctÃ‚Â² + dtÃ‚Â³.
     pub fn set_zoom_spline(&mut self, column: usize, beats_per_t: f32, size: usize) {
         if column >= MAX_COLS
             || !(1..=65_536).contains(&size)
@@ -2239,7 +2242,9 @@ fn append_song_lua_ease_targets_key(
         "twirl" => push(SongLuaEaseMaskTarget::VisualTwirl, pct_from, pct_to),
         "roll" => push(SongLuaEaseMaskTarget::VisualRoll, pct_from, pct_to),
         "parabolax" => push(SongLuaEaseMaskTarget::VisualParabolaX, pct_from, pct_to),
+        "attenuatex" => push(SongLuaEaseMaskTarget::VisualAttenuateX, pct_from, pct_to),
         "parabolay" => push(SongLuaEaseMaskTarget::VisualParabolaY, pct_from, pct_to),
+        "attenuatey" => push(SongLuaEaseMaskTarget::VisualAttenuateY, pct_from, pct_to),
         "modtimermult" => push(SongLuaEaseMaskTarget::VisualModTimerMult, pct_from, pct_to),
         "modtimeroffset" => push(
             SongLuaEaseMaskTarget::VisualModTimerOffset,
@@ -2328,6 +2333,7 @@ fn append_song_lua_ease_targets_key(
         "tornadoperiod" => push(SongLuaEaseMaskTarget::VisualTornadoPeriod, pct_from, pct_to),
         "tornadooffset" => push(SongLuaEaseMaskTarget::VisualTornadoOffset, pct_from, pct_to),
         "parabolaz" => push(SongLuaEaseMaskTarget::VisualParabolaZ, pct_from, pct_to),
+        "attenuatez" => push(SongLuaEaseMaskTarget::VisualAttenuateZ, pct_from, pct_to),
         "confusion" => push(SongLuaEaseMaskTarget::VisualConfusion, pct_from, pct_to),
         "confusionoffset" => push(
             SongLuaEaseMaskTarget::VisualConfusionOffset,
@@ -2986,7 +2992,9 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTwirl => visual.twirl = Some(value),
         SongLuaEaseMaskTarget::VisualRoll => visual.roll = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaX => visual.parabola_x = Some(value),
+        SongLuaEaseMaskTarget::VisualAttenuateX => visual.attenuate_x = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaY => visual.parabola_y = Some(value),
+        SongLuaEaseMaskTarget::VisualAttenuateY => visual.attenuate_y = Some(value),
         SongLuaEaseMaskTarget::VisualModTimerMult => visual.mod_timer_mult = Some(value),
         SongLuaEaseMaskTarget::VisualModTimerOffset => visual.mod_timer_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBumpyX => visual.bumpy_x = Some(value),
@@ -3035,6 +3043,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualTornadoPeriod => visual.tornado_period = Some(value),
         SongLuaEaseMaskTarget::VisualTornadoOffset => visual.tornado_offset = Some(value),
         SongLuaEaseMaskTarget::VisualParabolaZ => visual.parabola_z = Some(value),
+        SongLuaEaseMaskTarget::VisualAttenuateZ => visual.attenuate_z = Some(value),
         SongLuaEaseMaskTarget::VisualConfusion => visual.confusion = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionOffset => visual.confusion_offset = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionXOffset => visual.confusion_x_offset = Some(value),
@@ -3252,7 +3261,9 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTwirl => window.visual.twirl.is_some(),
         SongLuaEaseMaskTarget::VisualRoll => window.visual.roll.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaX => window.visual.parabola_x.is_some(),
+        SongLuaEaseMaskTarget::VisualAttenuateX => window.visual.attenuate_x.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaY => window.visual.parabola_y.is_some(),
+        SongLuaEaseMaskTarget::VisualAttenuateY => window.visual.attenuate_y.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerMult => window.visual.mod_timer_mult.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerOffset => window.visual.mod_timer_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBumpyX => window.visual.bumpy_x.is_some(),
@@ -3301,6 +3312,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualTornadoPeriod => window.visual.tornado_period.is_some(),
         SongLuaEaseMaskTarget::VisualTornadoOffset => window.visual.tornado_offset.is_some(),
         SongLuaEaseMaskTarget::VisualParabolaZ => window.visual.parabola_z.is_some(),
+        SongLuaEaseMaskTarget::VisualAttenuateZ => window.visual.attenuate_z.is_some(),
         SongLuaEaseMaskTarget::VisualConfusion => window.visual.confusion.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionOffset => window.visual.confusion_offset.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionXOffset => window.visual.confusion_x_offset.is_some(),
@@ -4646,7 +4658,9 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.twirl, visual.twirl);
     mark_active_target(&mut targets.roll, visual.roll);
     mark_active_target(&mut targets.parabola_x, visual.parabola_x);
+    mark_active_target(&mut targets.attenuate_x, visual.attenuate_x);
     mark_active_target(&mut targets.parabola_y, visual.parabola_y);
+    mark_active_target(&mut targets.attenuate_y, visual.attenuate_y);
     mark_active_target(&mut targets.mod_timer_mult, visual.mod_timer_mult);
     mark_active_target(&mut targets.mod_timer_offset, visual.mod_timer_offset);
     mark_active_target(&mut targets.bumpy_x, visual.bumpy_x);
@@ -4695,6 +4709,7 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.tornado_period, visual.tornado_period);
     mark_active_target(&mut targets.tornado_offset, visual.tornado_offset);
     mark_active_target(&mut targets.parabola_z, visual.parabola_z);
+    mark_active_target(&mut targets.attenuate_z, visual.attenuate_z);
     mark_active_target(&mut targets.confusion, visual.confusion);
     mark_active_target(&mut targets.confusion_offset, visual.confusion_offset);
     mark_active_target(
@@ -5136,6 +5151,9 @@ impl ActiveWindowIndex {
 struct GameplayPlayerWindowIndex {
     masks: ActiveWindowIndex,
     eases: ActiveWindowIndex,
+    // Same song-lifetime capacity and counters as eases, sampled at the prior
+    // update because native Current advances before Lua changes Song targets.
+    approach_eases: ActiveWindowIndex,
 }
 
 #[inline(always)]
@@ -5200,6 +5218,9 @@ impl GameplayAttackRuntimeState {
             eases: ActiveWindowIndex::new(&song_lua_ease_windows[player], |window| {
                 window.start_second
             }),
+            approach_eases: ActiveWindowIndex::new(&song_lua_ease_windows[player], |window| {
+                window.start_second
+            }),
         });
         Self {
             mask_windows,
@@ -5229,11 +5250,17 @@ impl GameplayAttackRuntimeState {
         );
     }
 
-    fn reset_for_practice(&mut self, base_appearance: [AppearanceEffects; MAX_PLAYERS]) {
+    /// Discard update clocks when evaluating a seek destination.
+    pub fn reset_window_times(&mut self) {
         for indices in &mut self.window_indices {
             indices.masks.reset_time();
             indices.eases.reset_time();
+            indices.approach_eases.reset_time();
         }
+    }
+
+    fn reset_for_practice(&mut self, base_appearance: [AppearanceEffects; MAX_PLAYERS]) {
+        self.reset_window_times();
         self.cleared_for_outro = false;
         self.clear_all = [false; MAX_PLAYERS];
         self.chart = [ChartAttackEffects::default(); MAX_PLAYERS];
@@ -5301,6 +5328,12 @@ impl GameplayAttackRuntimeState {
         }
 
         let base = base_effects();
+        let approach_second = self.window_indices[player].eases.last_now
+            .filter(|&prior| prior <= now).unwrap_or(now);
+        self.window_indices[player].approach_eases.update(
+            &self.song_lua_ease_windows[player], approach_second,
+            |window| window.start_second, ease_window_expiry, ease_window_active,
+        );
         self.update_window_indices(player, now);
         let (attack_window_indices, ease_window_indices) = self.active_window_indices(player);
         let output = refresh_active_attack_player_indexed(
@@ -5325,6 +5358,7 @@ impl GameplayAttackRuntimeState {
             },
             attack_window_indices,
             ease_window_indices,
+            (approach_second, &self.window_indices[player].approach_eases.active),
         );
 
         self.target_appearance[player] = output.attack_target_appearance;
@@ -5508,7 +5542,13 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualTwirl => attack.visual_speed.twirl = Some(speed),
             SongLuaEaseMaskTarget::VisualRoll => attack.visual_speed.roll = Some(speed),
             SongLuaEaseMaskTarget::VisualParabolaX => attack.visual_speed.parabola_x = Some(speed),
+            SongLuaEaseMaskTarget::VisualAttenuateX => {
+                attack.visual_speed.attenuate_x = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualParabolaY => attack.visual_speed.parabola_y = Some(speed),
+            SongLuaEaseMaskTarget::VisualAttenuateY => {
+                attack.visual_speed.attenuate_y = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualModTimerMult => {
                 attack.visual_speed.mod_timer_mult = Some(speed)
             }
@@ -5623,6 +5663,9 @@ fn apply_song_lua_approach_targets(
                 attack.visual_speed.tornado_offset = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualParabolaZ => attack.visual_speed.parabola_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualAttenuateZ => {
+                attack.visual_speed.attenuate_z = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
             SongLuaEaseMaskTarget::VisualConfusionOffset => {
                 attack.visual_speed.confusion_offset = Some(speed)
@@ -5808,7 +5851,7 @@ pub fn refresh_active_attack_player(
     {
         return refresh_idle_attack_player(input, state);
     }
-    refresh_active_attack_player_full(input, state, None, None)
+    refresh_active_attack_player_full(input, state, None, None, (input.now, None))
 }
 
 #[inline(always)]
@@ -5869,6 +5912,7 @@ pub fn refresh_active_attack_player_indexed(
     state: ActiveAttackRefreshState,
     attack_window_indices: &[usize],
     ease_window_indices: &[usize],
+    approach: (f32, &[usize]),
 ) -> ActiveAttackRefreshOutput {
     if input.attack_windows.is_empty()
         && input.song_lua_ease_windows.is_empty()
@@ -5878,6 +5922,7 @@ pub fn refresh_active_attack_player_indexed(
     }
     if attack_window_indices.is_empty()
         && ease_window_indices.is_empty()
+        && approach.1.is_empty()
         && !input.attacks_cleared_for_outro
         && appearance_bits_eq(state.attack_current_appearance, input.base_appearance)
     {
@@ -5888,6 +5933,7 @@ pub fn refresh_active_attack_player_indexed(
         state,
         Some(attack_window_indices),
         Some(ease_window_indices),
+        (approach.0, Some(approach.1)),
     )
 }
 
@@ -5897,6 +5943,7 @@ fn refresh_active_attack_player_full(
     mut state: ActiveAttackRefreshState,
     attack_window_indices: Option<&[usize]>,
     ease_window_indices: Option<&[usize]>,
+    approach: (f32, Option<&[usize]>),
 ) -> ActiveAttackRefreshOutput {
     let active_targets = collect_active_attack_targets_selected(
         input.attack_windows,
@@ -5927,8 +5974,8 @@ fn refresh_active_attack_player_full(
             &mut attack,
             &mut player_transform,
             input.song_lua_ease_windows,
-            ease_window_indices,
-            input.now,
+            approach.1,
+            approach.0,
             input.base_mini_percent,
         );
     }
@@ -6188,11 +6235,29 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.attenuate_x,
+        &mut values.visual_speed.attenuate_x,
+        window.visual.attenuate_x,
+        window.visual_speed.attenuate_x,
+        active_targets.visual.attenuate_x,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.parabola_y,
         &mut values.visual_speed.parabola_y,
         window.visual.parabola_y,
         window.visual_speed.parabola_y,
         active_targets.visual.parabola_y,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.attenuate_y,
+        &mut values.visual_speed.attenuate_y,
+        window.visual.attenuate_y,
+        window.visual_speed.attenuate_y,
+        active_targets.visual.attenuate_y,
         active_clear_all,
         persisted,
     );
@@ -6625,6 +6690,15 @@ fn apply_active_visual_window(
         window.visual.parabola_z,
         window.visual_speed.parabola_z,
         active_targets.visual.parabola_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.attenuate_z,
+        &mut values.visual_speed.attenuate_z,
+        window.visual.attenuate_z,
+        window.visual_speed.attenuate_z,
+        active_targets.visual.attenuate_z,
         active_clear_all,
         persisted,
     );
@@ -7294,9 +7368,21 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "attenuatex" => set_approached_mod(
+            &mut out.visual.attenuate_x,
+            &mut out.visual_speed.attenuate_x,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "parabolay" => set_approached_mod(
             &mut out.visual.parabola_y,
             &mut out.visual_speed.parabola_y,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "attenuatey" => set_approached_mod(
+            &mut out.visual.attenuate_y,
+            &mut out.visual_speed.attenuate_y,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -7585,6 +7671,12 @@ fn apply_runtime_mod(
         "parabolaz" => set_approached_mod(
             &mut out.visual.parabola_z,
             &mut out.visual_speed.parabola_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "attenuatez" => set_approached_mod(
+            &mut out.visual.attenuate_z,
+            &mut out.visual_speed.attenuate_z,
             attack_level(percent_value),
             approach_speed,
         ),
@@ -8077,7 +8169,9 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         twirl: merge_attack_value(base.twirl, attack.twirl),
         roll: merge_attack_value(base.roll, attack.roll),
         parabola_x: merge_attack_value(base.parabola_x, attack.parabola_x),
+        attenuate_x: merge_attack_value(base.attenuate_x, attack.attenuate_x),
         parabola_y: merge_attack_value(base.parabola_y, attack.parabola_y),
+        attenuate_y: merge_attack_value(base.attenuate_y, attack.attenuate_y),
         mod_timer_mult: merge_attack_value(base.mod_timer_mult, attack.mod_timer_mult),
         mod_timer_offset: merge_attack_value(base.mod_timer_offset, attack.mod_timer_offset),
         bumpy_x: merge_attack_value(base.bumpy_x, attack.bumpy_x),
@@ -8126,6 +8220,7 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         tornado_period: merge_attack_value(base.tornado_period, attack.tornado_period),
         tornado_offset: merge_attack_value(base.tornado_offset, attack.tornado_offset),
         parabola_z: merge_attack_value(base.parabola_z, attack.parabola_z),
+        attenuate_z: merge_attack_value(base.attenuate_z, attack.attenuate_z),
         confusion: merge_attack_value(base.confusion, attack.confusion),
         confusion_offset: merge_attack_value(base.confusion_offset, attack.confusion_offset),
         confusion_x_offset: merge_attack_value(

@@ -463,7 +463,9 @@ fn runtime_mod_value(
         "modtimermult" => visual.mod_timer_mult.unwrap_or(0.0),
         "modtimeroffset" => visual.mod_timer_offset.unwrap_or(0.0),
         "parabolax" => visual.parabola_x.unwrap_or(0.0),
+        "attenuatex" => visual.attenuate_x.unwrap_or(0.0),
         "parabolay" => visual.parabola_y.unwrap_or(0.0),
+        "attenuatey" => visual.attenuate_y.unwrap_or(0.0),
         "bumpyx" => visual.bumpy_x.unwrap_or(0.0),
         "bumpyxoffset" => visual.bumpy_x_offset.unwrap_or(0.0),
         "bumpyxperiod" => visual.bumpy_x_period.unwrap_or(0.0),
@@ -513,6 +515,7 @@ fn runtime_mod_value(
         "tornadoperiod" => visual.tornado_period.unwrap_or(0.0),
         "tornadooffset" => visual.tornado_offset.unwrap_or(0.0),
         "parabolaz" => visual.parabola_z.unwrap_or(0.0),
+        "attenuatez" => visual.attenuate_z.unwrap_or(0.0),
         "confusion" => visual.confusion.unwrap_or(0.0),
         "confusionoffset" => visual.confusion_offset.unwrap_or(0.0),
         "confusionxoffset" => visual.confusion_x_offset.unwrap_or(0.0),
@@ -698,6 +701,8 @@ fn runtime_reader_preserves_order_and_easing_body() {
         (1.5, 0.0, 1.05),
         (2.0, 0.0, 1.05),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -801,6 +806,8 @@ fn song_clock_uses_global_pauses() {
             } else {
                 x
             };
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             let _ = runtime.refresh_player(
                 0,
                 second,
@@ -854,6 +861,8 @@ fn song_clock_retains_native_float_rounding() {
                 .beat,
             beat
         );
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             seconds,
@@ -930,6 +939,8 @@ end}
             deadsync_rules::scroll::ScrollSpeedSetting::XMod(1.0),
         ),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -1241,6 +1252,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1289,6 +1302,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1358,6 +1373,8 @@ end}
         (1.5, [0.0, 0.0]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1413,6 +1430,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, -2.5), (0.5, 7.0), (1.0, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -1474,6 +1493,8 @@ end}
         (1.0, 1_000_000.0, 0.0, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1559,6 +1580,8 @@ end}
         (1.0, 1_000_000.0, 0.0, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1658,6 +1681,8 @@ end}
         (1.25, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -1751,6 +1776,8 @@ end}
             (1.75, 0.0),
         ] {
             for player in 0..2 {
+                // Probe this target at an independent song position.
+                runtime.reset_window_times();
                 runtime.refresh_player(
                     player,
                     second,
@@ -2048,6 +2075,8 @@ end}
         (1.0, 1_000_000.0, [0.0; 2]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -2113,6 +2142,8 @@ end}
         (1.0, 1_000_000.0, [0.0; 6]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,
@@ -2184,6 +2215,8 @@ end}
         (((5506.0_f64 / 60.0) as f32).next_down(), [0.2, 0.5, 0.2]),
         ((5506.0_f64 / 60.0) as f32, [0.0, 0.0, 0.0]),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -2238,6 +2271,8 @@ end}
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, [-2.5, 6.0]), (0.5, [-7.0, 6.0]), (1.0, [0.0, 0.0])] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         runtime.refresh_player(
             0,
             second,
@@ -2307,6 +2342,8 @@ fn sampled_speed_modes_reactivate_previous_values() {
         (1.5, MMod(600.0)),
         (2.0, XMod(2.0)),
     ] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -2339,6 +2376,8 @@ fn prefix_reader_writes_override_raw_ease_endpoints() {
     let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
     assert_eq!(unsupported, 0);
     for (second, expected) in [(0.25, 0.025), (0.5, 0.0), (0.75, 0.0)] {
+        // Probe this target at an independent song position.
+        runtime.reset_window_times();
         let _ = runtime.refresh_player(
             0,
             second,
@@ -2464,6 +2503,8 @@ fn sampled_modifiers_change_on_the_recorded_frame() {
                 } else {
                     seconds * 140.0 / 60.0
                 };
+                // Probe this target at an independent song position.
+                runtime.reset_window_times();
                 let _ = runtime.refresh_player(
                     0,
                     probe,
@@ -2564,6 +2605,8 @@ fn sampled_dark_columns_keep_method_and_string_values() {
         (2.25, [1.0, -0.5, 0.25, 0.0]),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             let _ = runtime.refresh_player(
                 player,
                 second,
@@ -3085,6 +3128,8 @@ pub(super) fn compare_runtime_modifiers(
         // Evaluate the authored targets directly through the production API;
         // actual Current progression is checked separately with real deltas.
         for (player, transform) in transforms.iter_mut().enumerate() {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             if let Some(next) = runtime.refresh_player(
                 player,
                 second,
@@ -3526,6 +3571,93 @@ fn parabola_y_matches_native_targets() {
 }
 
 #[test]
+fn attenuation_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace =
+        read_trace_file(&root.join("tests/fixtures/itgmania-song-lua-micro/attenuate-native.json"));
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attenuation control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("attenuate.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed attenuation, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native attenuation targets and resets");
+}
+
+#[test]
+fn attenuation_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/attenuate-current-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native attenuation Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("attenuate-current.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile attenuation Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (axis, key) in [
+                ("x", "attenuatex"),
+                ("y", "attenuatey"),
+                ("z", "attenuatez"),
+            ] {
+                let track = trace
+                    .operation_tracks
+                    .iter()
+                    .find(|track| {
+                        track.actor == format!("def-000{}", player + 2)
+                            && track.operation == format!("Quad.{axis}")
+                    })
+                    .expect("native Current probe axis");
+                for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                    let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                    let actual =
+                        runtime_mod_value(&runtime, player, key).expect("runtime attenuation");
+                    assert!(
+                        (actual - expected).abs() <= EPSILON,
+                        "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                        player + 1
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
+}
+
+#[test]
 fn wave_period_matches_native_targets() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -3601,6 +3733,8 @@ end}
         (1.5, 1_000_000.0, 3.0, 0.0, 0.0),
     ] {
         for player in 0..2 {
+            // Probe this target at an independent song position.
+            runtime.reset_window_times();
             runtime.refresh_player(
                 player,
                 second,

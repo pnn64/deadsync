@@ -2624,7 +2624,7 @@ mod tests {
                 };
                 assert_eq!(
                     refresh_active_attack_player(input, state),
-                    refresh_active_attack_player_full(input, state, None, None),
+                    refresh_active_attack_player_full(input, state, None, None, (input.now, None)),
                 );
             }
         }

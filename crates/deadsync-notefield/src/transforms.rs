@@ -59,6 +59,8 @@ pub(crate) struct VisualEffectParams {
     pub dizzy_holds: bool,
     pub twirl: f32,
     pub parabola_z: f32,
+    pub attenuate_z: f32,
+    pub col_x: f32,
     pub square_z: f32,
     pub zigzag_z: f32,
     pub square_z_offset: f32,
@@ -77,6 +79,8 @@ pub(crate) struct LaneNoteTransformCache {
     tan_drunk_z: DrunkWaveParams,
     bumpy_amplitude: f32,
     parabola_z: f32,
+    attenuate_z: f32,
+    col_x: f32,
     square_z: f32,
     zigzag_z: f32,
     square_z_offset: f32,
@@ -219,6 +223,7 @@ pub(crate) struct NoteXParams {
     pub beat: f32,
     pub beat_period: f32,
     pub parabola_x: f32,
+    pub attenuate_x: f32,
     pub square: f32,
     pub digital: f32,
     pub zigzag: f32,
@@ -633,6 +638,7 @@ pub(crate) fn note_world_z_cached(
     if lane_cache.parabola_z != 0.0 {
         z += lane_cache.parabola_z * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    z += attenuate_offset(y, lane_cache.col_x, lane_cache.attenuate_z);
     z += drunk_wave_offset(
         lane_cache.local_col,
         y,
@@ -701,6 +707,7 @@ pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> boo
     signed_effect_active(params.bumpy)
         || (params.twirl.is_finite() && params.twirl != 0.0)
         || (params.parabola_z.is_finite() && params.parabola_z != 0.0)
+        || (params.attenuate_z.is_finite() && params.attenuate_z != 0.0)
         || (params.zigzag_z.is_finite() && params.zigzag_z != 0.0)
         || (params.square_z.is_finite() && params.square_z != 0.0)
 }
@@ -838,6 +845,8 @@ pub(crate) fn lane_note_transform_cache(
             0.0
         },
         square_z: params.square_z,
+        attenuate_z: params.attenuate_z,
+        col_x: params.col_x,
         zigzag_z: params.zigzag_z,
         square_z_offset: params.square_z_offset,
         zigzag_z_offset: params.zigzag_z_offset,
@@ -967,7 +976,9 @@ pub(crate) fn gameplay_visual_effect_params(
             dizzy_holds: visual.dizzy_holds,
             twirl: visual.twirl,
             parabola_z: visual.parabola_z,
+            attenuate_z: visual.attenuate_z,
             local_col,
+            col_x: 0.0,
             cosecant: visual.cosecant,
             drunk_z: visual.drunk_z,
             drunk_z_offset: visual.drunk_z_offset,
@@ -1367,6 +1378,7 @@ pub(crate) fn note_x_extra(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    out += attenuate_offset(y, base_x, params.attenuate_x);
     out += digital_wave_offset(
         y,
         params.digital,
@@ -1500,6 +1512,7 @@ pub(crate) fn note_x_offset_cached(
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
+    extra += attenuate_offset(y, base_x, params.attenuate_x);
     extra += digital_wave_offset(
         y,
         params.digital,
@@ -1535,6 +1548,7 @@ pub(crate) fn fill_static_note_x_offsets(
         || params.tan_drunk != 0.0
         || signed_effect_active(params.beat)
         || (params.parabola_x.is_finite() && params.parabola_x != 0.0)
+        || (params.attenuate_x.is_finite() && params.attenuate_x != 0.0)
         || (params.xmode.is_finite() && params.xmode != 0.0)
         || (params.digital.is_finite() && params.digital != 0.0)
         || (params.zigzag.is_finite() && params.zigzag != 0.0)
@@ -2110,6 +2124,18 @@ pub(crate) fn tiny_spacing_scale(tiny: f32) -> f32 {
     }
 }
 
+// ArrowEffects' X/Y/Z attenuation uses the unmodified style column offset.
+pub(crate) fn attenuate_offset(y: f32, col_x: f32, amount: f32) -> f32 {
+    if amount == 0.0 || !amount.is_finite() || !col_x.is_finite() {
+        0.0
+    } else {
+        amount
+            * (y / ARROW_EFFECT_PIXEL_SIZE)
+            * (y / ARROW_EFFECT_PIXEL_SIZE)
+            * (col_x / ARROW_EFFECT_PIXEL_SIZE)
+    }
+}
+
 pub(crate) fn move_col_extra(values: &[f32], local_col: usize) -> f32 {
     values
         .get(local_col)
@@ -2128,6 +2154,73 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attenuation_matches_native_vectors() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/attenuate-motion.json"
+        ))
+        .expect("independently compiled native attenuation blocks");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 980);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("travel");
+            let col = value("col_x");
+            let x_params = NoteXParams {
+                attenuate_x: value("amount_x"),
+                ..Default::default()
+            };
+            let x = note_x_offset(
+                0,
+                travel,
+                0.0,
+                0.0,
+                &[col],
+                &[0.0],
+                &[TornadoBounds::default()],
+                &[0.0],
+                x_params,
+                value("tiny"),
+            );
+            let cached_x = note_x_offset_cached(
+                0,
+                travel,
+                0.0,
+                0.0,
+                &[col],
+                &[0.0],
+                &[TornadoBounds::default()],
+                &[TornadoLaneCache::default()],
+                &[0.0],
+                x_params,
+                tiny_spacing_scale(value("tiny")),
+            );
+            let y = value("direction") * travel
+                + value("lane_offset")
+                + attenuate_offset(travel, col, value("amount_y"));
+            let z_params = VisualEffectParams {
+                attenuate_z: value("amount_z"),
+                col_x: col,
+                ..Default::default()
+            };
+            let z = note_world_z_cached(
+                travel,
+                note_depth_frame_cache(0.0, 0.0, 0.0, 480.0),
+                lane_note_transform_cache(0.0, z_params),
+            );
+            for (actual, key) in [(x, "x"), (cached_x, "x"), (y, "y"), (z, "z")] {
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+            assert_eq!(
+                visual_hold_body_needs_z_buffer(z_params),
+                value("amount_z") != 0.0
+            );
+        }
+    }
 
     #[test]
     fn parabola_y_and_accels_match_native_travel() {

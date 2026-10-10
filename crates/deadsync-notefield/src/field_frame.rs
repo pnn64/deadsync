@@ -1,4 +1,6 @@
-use crate::transforms::{visual_confusion_x_deg, visual_note_rotation_x, visual_note_rotation_y};
+use crate::transforms::{
+    attenuate_offset, visual_confusion_x_deg, visual_note_rotation_x, visual_note_rotation_y,
+};
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
     HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
@@ -94,7 +96,11 @@ where
     let field_start = actors.len();
     let draw_start = flat_draws.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
-    let Some(notes) = prepared.notes.as_ref().filter(|_| request.song_lua.wrapper_visible) else {
+    let Some(notes) = prepared
+        .notes
+        .as_ref()
+        .filter(|_| request.song_lua.wrapper_visible)
+    else {
         return NotefieldFieldResult::default();
     };
     let field_camera = resolve_field_camera(camera_cache, request, prepared);
@@ -275,6 +281,7 @@ fn compose_field_contents<S, F>(
         [lane_note_transform_cache(current_beat, VisualEffectParams::default());
             deadsync_core::input::MAX_COLS];
     for local_col in 0..num_cols {
+        lane_effect_params[local_col].col_x = col_offsets[local_col];
         lane_transform_caches[local_col] =
             lane_note_transform_cache(current_beat, lane_effect_params[local_col]);
     }
@@ -306,6 +313,7 @@ fn compose_field_contents<S, F>(
         beat: visual.beat,
         beat_period: visual.beat_period,
         parabola_x: visual.parabola_x,
+        attenuate_x: visual.attenuate_x,
         square: visual.square,
         digital: visual.digital,
         zigzag: visual.zigzag,
@@ -556,8 +564,20 @@ fn compose_field_contents<S, F>(
             return;
         }
         let draw_bounds = draw_range.lane_bounds(lane_receptor_y, dir, lane_offset);
-        let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y) + lane_offset;
-        let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y) + lane_offset;
+        let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y)
+            + lane_offset
+            + attenuate_offset(
+                head_adjusted_travel,
+                col_offsets[local_col],
+                visual.attenuate_y,
+            );
+        let tail_y = dir.mul_add(tail_adjusted_travel, lane_receptor_y)
+            + lane_offset
+            + attenuate_offset(
+                tail_adjusted_travel,
+                col_offsets[local_col],
+                visual.attenuate_y,
+            );
         let note_display = ns.note_display_metrics;
         let lane_reverse = col_dir < 0.0;
         let active_state = frame.feedback.lanes[local_col]
@@ -662,6 +682,8 @@ fn compose_field_contents<S, F>(
             && !has_zoom_spline
             && !position_splines[local_col].enabled;
         let sample_hold_path = |screen_y: f32| {
+            // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY.
+            // NoteDisplay uses that same offset to sample the hold strip.
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
                 lane_receptor_y,
                 dir,
@@ -1161,8 +1183,14 @@ fn compose_visible_notes<S, F>(
                             notes.tiny_spacing_scale,
                         )
                     };
-                let mut y_pos =
-                    direction.mul_add(adjusted_travel, receptor_y) + lane_offset + spline_offset[1];
+                let mut y_pos = direction.mul_add(adjusted_travel, receptor_y)
+                    + lane_offset
+                    + spline_offset[1]
+                    + attenuate_offset(
+                        adjusted_travel,
+                        notes.col_offsets[local_col],
+                        visual.attenuate_y,
+                    );
                 let transform_cache = lane_transform_caches[local_col];
                 let mut world_z = note_world_z_cached(
                     adjusted_travel,
@@ -1713,6 +1741,7 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
         || visual_hold_body_needs_z_buffer(VisualEffectParams {
             bumpy: visual.bumpy,
             parabola_z: visual.parabola_z,
+            attenuate_z: visual.attenuate_z,
             square_z: visual.square_z,
             zigzag_z: visual.zigzag_z,
             twirl: visual.twirl,
@@ -1739,8 +1768,11 @@ fn hold_lane_frame(
         use_legacy_sprites: !visual.z_buffer
             && visual.twirl == 0.0
             && visual.parabola_x == 0.0
+            && visual.attenuate_x == 0.0
+            && visual.attenuate_y == 0.0
             && visual.xmode == 0.0
             && visual.parabola_z == 0.0
+            && visual.attenuate_z == 0.0
             && visual.digital == 0.0
             && visual.zigzag == 0.0
             && visual.zigzag_z == 0.0

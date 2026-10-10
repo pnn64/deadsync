@@ -96,7 +96,10 @@ where
     }
 
     pub fn refresh_seek_dependent_state(&mut self) {
-        refresh_active_attack_masks(self, 0.0);
+        self.mods.attacks.reset_window_times();
+        // A seek reconstructs settled targets; a zero-length live update keeps
+        // Current unchanged, as PlayerOptions::Approach does.
+        refresh_active_attack_masks(self, f32::MAX);
         self.refresh_live_notefield_options(self.clock.song_position.current_bpm);
     }
 
