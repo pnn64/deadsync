@@ -1,0 +1,365 @@
+{
+  "problem": "ConfusionX/Y had no runtime values; ConfusionYOffset was stored in an unused player-transform field and did not rotate rendered notes",
+  "change": "Store signed X/Y strengths and the radian Y offset as approached note modifiers; cache native visible-beat rotations and apply them to notes, receptors, ghosts and Y hold-strip geometry",
+  "deleted_behavior": "Delete the unused ConfusionYOffsetY player-transform target and field, replace the X-offset-only rotation helper, and remove hold mesh gates that incorrectly excluded constant Y rotation",
+  "source_parent": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+  "reference_sources": {
+    "ArrowEffects.cpp": {
+      "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+      "lines": [
+        [
+          1036,
+          1065
+        ],
+        [
+          1115,
+          1163
+        ]
+      ]
+    },
+    "PlayerOptions.cpp": {
+      "sha256": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "lines": [
+        [
+          997,
+          1014
+        ],
+        [
+          2224,
+          2230
+        ]
+      ]
+    },
+    "NoteDisplay.cpp": {
+      "sha256": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+      "lines": [
+        [
+          982,
+          1037
+        ],
+        [
+          1417,
+          1435
+        ],
+        [
+          1573,
+          1644
+        ]
+      ]
+    },
+    "RageMath.cpp": {
+      "sha256": "928349632d1e72ea5d1e59e53d5f71f4f2ae845e85e5d5cb8e95ac7b675bac89",
+      "lines": [
+        [
+          56,
+          61
+        ],
+        [
+          339,
+          376
+        ]
+      ]
+    },
+    "GhostArrowRow.cpp": {
+      "sha256": "b66fff4ec0564a65b874f442e53ef647670fb6a9092b50c3ec9d7f083fb2efb0",
+      "lines": [
+        [
+          66,
+          68
+        ]
+      ]
+    },
+    "ReceptorArrowRow.cpp": {
+      "sha256": "b70ec8a2fd965669ce93d775ba9bf0350ade0df4c70cb8c2dc6ec94591e9f8cb",
+      "lines": [
+        [
+          78,
+          80
+        ]
+      ]
+    }
+  },
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass198-native-confusion-spin-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "da56ef40dde388158c54f4643ff326a4a9c65d9b20127d0639489f4183cedfa3",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "d1713a4ce7ad190c888b72a23a88c88a4659289755fdb57921b2004a52331836",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass198-native-confusion-spin-v1\\archives\\3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b.tar.zst",
+    "archive_sha256": "3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b",
+    "archive_entry": {
+      "title": "Native confusion-spin control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b.tar.zst",
+      "sha256": "3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b",
+      "compressed_bytes": 16075
+    }
+  },
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 6542,
+    "comparisons_failed": 16,
+    "elapsed_seconds": 1.1106958999298513,
+    "archive_sha256": "3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b",
+    "binary_sha256": "0a64c3ea11cf0f986cc31b8e8e7183d6af8c199b9a9d20d9eb51ead923ecebe2",
+    "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-before-v1.log",
+    "log_sha256": "1b2bdedacc622c482fabbbed03c376e49b8ff136499db890fe6a9c66f26aeab4",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 6558,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.4320606999099255,
+    "archive_sha256": "3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b",
+    "binary_sha256": "6a560fc90e7b1efbfdac72d6915f97b19177e7bf5a21ddc498c6bc92d017e039",
+    "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-control.log",
+    "log_sha256": "fb65ce756331198281dd6b423111ed0f96cf091b8c55c9b4759a4bf15817ba53",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "native_current_values_compared": 216,
+  "consecutive_native_update_frames": 241,
+  "native_rotation": {
+    "reference_file": "C:\\GitHub\\rework\\itgmania\\src\\ArrowEffects.cpp",
+    "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "native_blocks_sha256": {
+      "ReceptorGetRotationX": "7a036455e1e51e497c22fea4dfdc0a8b1e3e04c9cd94708c2e9111607ca5f02f",
+      "ReceptorGetRotationY": "41ed79b1fe5cf5a541dd7ba0fcf8ae45e8895d6be91236fc0b95f35118c6b094",
+      "GetRotationX": "1015dd1cbe7758ef53249bdb505d99dfe1516ea3490a4ceb441b16698a11589d",
+      "GetRotationY": "f9a8f97d682d27f6bdfe083c6c756530e42019fe0daa2684403605feb04678d3"
+    },
+    "original_native_blocks_unchanged": true,
+    "isolated_inputs_used": true,
+    "whole_native_gameplay_used": false,
+    "semantic_host_used": false,
+    "deadsync_used": false,
+    "scope": "Unchanged native X/Y receptor and note rotation functions with signed strengths, visible beats, global offsets, Roll/Twirl and hold-cap gates; column offsets disabled",
+    "binary_sha256": "73298de1cd78a13f837b2c0f162866cb4f936f30097e8349b91fb197e41eb79e"
+  },
+  "native_rotation_fixture_sha256": "1d8a13c0303739b89d233687558afb724a52e7d66fe0267def28e4f7b0fd7d1e",
+  "native_rotation_vectors": 672,
+  "native_strip": {
+    "reference_files": {
+      "ArrowEffects.cpp": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+      "NoteDisplay.cpp": "89b00566561cb16a80b277037d4089b7438510b202b241a099d62cd26bdd72e0",
+      "RageMath.cpp": "928349632d1e72ea5d1e59e53d5f71f4f2ae845e85e5d5cb8e95ac7b675bac89"
+    },
+    "native_blocks_sha256": {
+      "RageVec3Cross": "cdb05d433de7d4491a6f40d24bd3c78d506191743a182f6cf95a7ad6dd6b84f5",
+      "RageAARotate": "fc9419c05491364dbca0a39745dd94bce3a78b8aa3d414155e3abc10b3a22bc2",
+      "RageQuatMultiply": "f78a21bac1690495ef13ab35e59bc67f3ff6f63832f497774656142e91eb40e2",
+      "NoteDisplayWidth": "9301318c23c675dc348c4438051b36b1fa4731f5e89dd7c51a7097ccd096d459"
+    },
+    "original_native_blocks_unchanged": true,
+    "isolated_inputs_used": true,
+    "whole_native_gameplay_used": false,
+    "semantic_host_used": false,
+    "deadsync_used": false,
+    "scope": "Native NoteDisplay strip width, cross product and quaternion rotation with a straight +Y path and 64px width; native GetRotationY supplies ConfusionY, global offset and Twirl",
+    "binary_sha256": "b6724fa2d11ecd9c76755959f0bca2852f9c4d0df5bd423a179b8adc00382b31"
+  },
+  "native_strip_fixture_sha256": "2cd27524d77e7e6bd44cf3c424b40325f6ca03e7801556f144c370e2d165c77f",
+  "native_strip_vectors": 672,
+  "composed_note_cases": 1440,
+  "composed_hold_body_cases": 660,
+  "hold_cap_behavior": "Roll is excluded from hold caps; ConfusionX remains. Native Y rotation includes ConfusionY, its global offset and Twirl for caps and body strips",
+  "ghost_test_correction": "The hold-glow test previously expected zero Y rotation despite a supplied 19-degree receptor rotation. GhostArrowRow.cpp calls UpdateReceptorGhostStuff, which applies the same X/Y receptor rotation. The test now expects 19 degrees; tolerances are unchanged",
+  "radian_test_correction": "The Y-offset ease test now preserves raw radians until note rendering, instead of converting to degrees in the deleted player-transform field",
+  "regression_results": {
+    "gameplay-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "d7b5107e82c5bd8521aaf964238f2a19734c9c503645f87970b1e4265c92d3f8",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-deadsync_gameplay.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.9373926999978721,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-gameplay-tests.log",
+      "log_sha256": "29c14de3d0ef54a6783bb6b616096fd84236d4d565f8a7ab52990ce2fbfa8d1a",
+      "result_lines": [
+        "test result: ok. 794 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s"
+      ]
+    },
+    "notefield-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "fff6641c1b796cde3657344de010a04667369e25fd8c8d6362303fbe30704d32",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-deadsync_notefield.exe",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.321898399852216,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-notefield-tests.log",
+      "log_sha256": "880f904defec65a01b85154fab3dd63932ca1ecf6de683020c9473610b816fbc",
+      "result_lines": [
+        "test result: ok. 463 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.08s"
+      ]
+    },
+    "runtime-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "209861aa027af3b83771197fd5790cbc6b29e0ca49043034279975c8bf06cadb",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 11.841653400100768,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-runtime-tests.log",
+      "log_sha256": "c80156a61f42ae35be6dd25fc3aa1c83f0fb1c70a1b96420879bb8285c61a68b",
+      "result_lines": [
+        "test result: FAILED. 47 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 10.02s"
+      ]
+    },
+    "song-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "03dc98408b1ee0de5ceec196098c3222267f76322d21aa8acd19f07837f13667",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-deadsync_song_lua.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 23.134380800183862,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-song-tests.log",
+      "log_sha256": "9205ea4c2c22fc1768bb4bc76ab2129be11f40c4fe55a4a418a936b063a59ef2",
+      "result_lines": [
+        "test result: FAILED. 500 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.59s"
+      ]
+    },
+    "theme-tests": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "52efb4687aaed94a8db7f1857683781b8ea00c02eefd044f830f80f336318272",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-deadsync_theme_simply_love.exe",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 6.466267000418156,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-theme-tests.log",
+      "log_sha256": "e9d4dde212016fc5325baef447ccf098bdd3dbc02d8196c411770c4ba53a00ab",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 3.69s"
+      ]
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "52efb4687aaed94a8db7f1857683781b8ea00c02eefd044f830f80f336318272",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-deadsync_theme_simply_love.exe",
+        "--exact",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 11.373063100036234,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-technique-arrow.log",
+      "log_sha256": "ff128cad8b92f35b01fc67d06fd3eb54c4655143e3bf3532201f3819c9e21877",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 8.51s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 6558,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.4320606999099255,
+      "archive_sha256": "3f9ddd6e2d2bc9e70aa9b080f05bb3fb577d4977d65fe3e631a48a4e0486238b",
+      "binary_sha256": "6a560fc90e7b1efbfdac72d6915f97b19177e7bf5a21ddc498c6bc92d017e039",
+      "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\confusion-spin-v7-control.log",
+      "log_sha256": "fb65ce756331198281dd6b423111ed0f96cf091b8c55c9b4759a4bf15817ba53",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    }
+  },
+  "existing_failures_retained": {
+    "runtime-tests": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "song-tests": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "theme-tests": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "original_position90_before": {
+    "exit_code": 1,
+    "comparisons_passed": 207820,
+    "comparisons_failed": 42,
+    "elapsed_seconds": 18.29963140003383,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "0a64c3ea11cf0f986cc31b8e8e7183d6af8c199b9a9d20d9eb51ead923ecebe2",
+    "source_commit": "051004b110e7aca37ed76eeb5ff46db6746513e1",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-beat-family-v6.log",
+    "log_sha256": "06f4f05f317901a045669853bb75036e4b7bb76e833e5ef1ccdf8cfa66c4fcbe",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_after": {
+    "exit_code": 1,
+    "comparisons_passed": 207824,
+    "comparisons_failed": 38,
+    "elapsed_seconds": 25.041745299939066,
+    "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+    "binary_sha256": "6a560fc90e7b1efbfdac72d6915f97b19177e7bf5a21ddc498c6bc92d017e039",
+    "source_commit": "48ad973597060e73ea646fbe6a39a8730daa6d0e",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-090-confusion-spin-v7.log",
+    "log_sha256": "60a630b4d5b5ee2436c7f2a8e4bd2bca5819721ddf10d70c63d038c43abe6869",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "original_position90_accepted": false,
+  "original_tolerances_retained": true,
+  "original_corpus_scope_unchanged": true,
+  "geometry_scope": "Unchanged native functions with isolated inputs, checked against actual composed sprites and hold vertices; full native gameplay geometry remains pending",
+  "remaining_rotation_scope": "Per-column X/Y offsets, rotation splines, broader model and framebuffer cases remain pending",
+  "harness_arroweffects_helper_is_full_native_gameplay": false,
+  "semantic_host_geometry_used": false,
+  "build_pin": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass166\\confusion-spin-v7-pin.json",
+  "build_pin_sha256": "cca08ad7c8fb4b353b6e3cfea6856191a9ad9f39d8e5d4425a852b2de4ffca76"
+}

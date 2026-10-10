@@ -1,0 +1,72 @@
+{
+  "harness_version": "0.1.17",
+  "harness_commit": "eb3895a3b8c1ee6ca257090ff898f1ab2c92dad6",
+  "native_executable_sha256": "0e7feb15974e5485884cc1739477ef00cb1ddca1a21a5457fab99be9c2cc8196",
+  "cases": [
+    {
+      "label": "music-positive",
+      "source_sha256": "ec855e8bbf2d244f1ccabc55ccde54c0e9fd4eada63e399a0ba9eaae78340de1",
+      "simfile_sha256": "d5f524f2b2f3bd5ea091dc0dd5f476e272db155b5d079ea757ade0a8637bc996",
+      "trace_sha256": "5d70e8c12cdd69085c8e06e0d88ae0b1f89de5e208cca1b6f0e6c6288bbddcda",
+      "update_frames": 241,
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "end_position": {
+        "beat": 4,
+        "seconds": 4
+      }
+    },
+    {
+      "label": "music-negative",
+      "source_sha256": "ec855e8bbf2d244f1ccabc55ccde54c0e9fd4eada63e399a0ba9eaae78340de1",
+      "simfile_sha256": "88f1e215ea568d2abd1cdf947b67f0ea9196a57455f066f94157e2eadecc3a25",
+      "trace_sha256": "9d424fd6d7241766339aadfb5a7474037f72ef5ce4c93f54999e31eee726ac91",
+      "update_frames": 241,
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "end_position": {
+        "beat": 4,
+        "seconds": 4
+      }
+    }
+  ],
+  "native_sources": {
+    "SongPosition.cpp": {
+      "local_sha256": "d1b5b42d441c830c96029118d7736217134c66fb2087931e056a69814852ee78",
+      "linked_sha256": "d1b5b42d441c830c96029118d7736217134c66fb2087931e056a69814852ee78",
+      "identical": true
+    },
+    "SongPosition.h": {
+      "local_sha256": "bdbb3a0ebbd0ffb932ce48a4b46720c4472fe2cbe38fd118b6880532f36528a6",
+      "linked_sha256": "bdbb3a0ebbd0ffb932ce48a4b46720c4472fe2cbe38fd118b6880532f36528a6",
+      "identical": true
+    },
+    "TimingData.cpp": {
+      "local_sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+      "linked_sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1",
+      "identical": true
+    },
+    "GameState.cpp": {
+      "local_sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "linked_sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "identical": true
+    },
+    "LightsManager.cpp": {
+      "local_sha256": "abcb66de364f303ccc98efeaf8f75f1e673fcf2220efc7d9850bd6441c4fb5a8",
+      "linked_sha256": "abcb66de364f303ccc98efeaf8f75f1e673fcf2220efc7d9850bd6441c4fb5a8",
+      "identical": true
+    }
+  },
+  "simply_love_reference": {
+    "path": "BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/Time.lua",
+    "sha256": "c35d12fb57054a7602c3e5bf7985bf5a7eaa5bfb0e872cd5a055553451536064"
+  },
+  "expected_checks_per_case": 5256,
+  "total_checks": 10512,
+  "negative_control": "zero only the retained X samples of Clock1, which reads GetMusicSeconds; retain all observations and the elapsed timer quad",
+  "clock_contract": "Trace seconds remain relative elapsed time. Public music getters expose native float music timestamps including the song origin; rate changes the elapsed-to-music conversion. Visible time uses the reference default visual delay of zero.",
+  "native_assertion_probe": "The separate harness regression invokes compiled SongPosition::UpdateSongPosition and its Lua getters, then asserts equality with every public getter on each of 121 frames for both offsets. The old host fails with public 0 versus native 1.25.",
+  "known_remaining_audits": [
+    "music effect clock must be independently checked against compiled Actor::SetBGMTime and Actor::UpdateInternal"
+  ]
+}

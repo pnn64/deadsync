@@ -1,0 +1,101 @@
+{
+  "pass": 134,
+  "previous_record": "native-revalidation-pass133.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    55
+  ],
+  "next_position": 56,
+  "comparisons_passed": 174687,
+  "charts": [
+    {
+      "position": 55,
+      "entry": {
+        "title": "Flying Castle",
+        "source_simfile": "[13] Flying Castle/flying castle.ssc",
+        "harness_version": "0.1.54",
+        "archive": "dd8eaae09a428a87545fa7f19f9d8c51ad1c7dc8f7b697333ec8c11a8a54fe56.tar.zst",
+        "sha256": "dd8eaae09a428a87545fa7f19f9d8c51ad1c7dc8f7b697333ec8c11a8a54fe56",
+        "compressed_bytes": 311571,
+        "aliases": [
+          "f39a1c94560802a1038ea2296aa6f4a255e4b61bf4b079045a8a0c7b4c01d68e.tar.zst"
+        ]
+      },
+      "original_archive_retained": "e10c3b5a71ea7cd083294fde8d7cb217c3dad1d7d603b24dda30cddd2e32fa93.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "b5d1e7676e016fad05eca965078e2839d3b765fcf186969761c4b7f0ecd44d62",
+      "original_source_sha256": {
+        "[13] Flying Castle/Discord_112222_163109.png": "273dd5cf42e346ec7f5b3ba0c142d6b1cf722e2298a36a0ada3b68734dcc0f96",
+        "[13] Flying Castle/flying castle.ogg": "d1e3b9afa6b09300fc2eeb4e8a406f4e2f29ac3704450d6442b20152268ba0f3",
+        "[13] Flying Castle/flying castle.ssc": "36e6ec7bd60f5c8fedfc59b184f822e447d0950816acf87049c2a0f43ad80eac",
+        "[13] Flying Castle/lua/default.lua": "b51a0e43804ce93d05aa68b84fd96da5311f6bd13f17579602b6c8cf2b0936aa",
+        "[13] Flying Castle/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[13] Flying Castle/lua/modhelpers.lua": "0f5910705fadd3d043fe182348e93f0b327a0d14b2ad9a7c442638c2adf573cc",
+        "[13] Flying Castle/lua/mods.lua": "78ce399e3ac91f556f26d59fa2b15ab17154246821ab53db8c62120b5034a293"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 7367,
+      "duration_seconds": 122.75861358642578,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 55,
+      "source_simfile": "[13] Flying Castle/flying castle.ssc",
+      "archive": "dd8eaae09a428a87545fa7f19f9d8c51ad1c7dc8f7b697333ec8c11a8a54fe56.tar.zst",
+      "archive_sha256": "dd8eaae09a428a87545fa7f19f9d8c51ad1c7dc8f7b697333ec8c11a8a54fe56",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "dd8eaae09a428a87545fa7f19f9d8c51ad1c7dc8f7b697333ec8c11a8a54fe56.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 42.31700079981238,
+      "comparisons_passed": 174687,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-055-native-column-xy-v6.log",
+      "log_sha256": "6fe1f90fae40b0646b74c6f5e1824b77a76040d3064d3b0f877c277234e32516",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass134-top-055-native-v2.json",
+      "native_receipt_sha256": "815729da37e51588b17432a0e54ee0ce1b55efea0f19fad986d00e05712ea504",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.8817167999222875,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-055-native-pass134.log",
+    "log_sha256": "dc2fe690f2769b1d99fcacf3303c506cbd215cbcb650a8126fecf83cfda63db1",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.50s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

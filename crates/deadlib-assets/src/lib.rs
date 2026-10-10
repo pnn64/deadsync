@@ -12,13 +12,26 @@ pub mod registry;
 pub mod texture_store;
 pub mod upload;
 
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+#[cfg(test)]
+mod perf_fixture;
+
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
 };
 pub use choice::TextureChoice;
 pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
-pub use decode::{TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset};
+pub use decode::{
+    DecodedTexture, TextureAssetSpec, TextureDecodeJob, decode_texture, decode_texture_image, texture_asset, texture_image_size,
+    texture_source_size,
+};
 pub use error::AssetError;
 pub use font::{
     FontAssetSpec, ParsedFontAsset, PreparedFontTexture, font_texture_key, parse_font_asset_specs,
@@ -52,6 +65,10 @@ pub struct TextureHints {
     pub alphamap: bool,
     pub doubleres: bool,
     pub stretch: bool,
+    pub hot_pink_color_key: bool,
+    pub max_size: Option<u32>,
+    /// Minimum allocation axis. Falling below it stretches both image axes.
+    pub min_size: Option<u32>,
     pub dither: bool,
     pub color_depth: Option<u32>,
     pub sampler_filter: Option<SamplerFilter>,
@@ -643,17 +660,17 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
 }
 
 pub fn fix_hidden_alpha(image: &mut RgbaImage) {
-    let Some(first) = image
+    // RageSurfaceUtils::FindAlphaRGB defaults to black when the surface has
+    // no visible pixel; native SetAlphaRGB still clears its hidden RGB.
+    let first = image
         .as_raw()
         .as_chunks::<4>()
         .0
         .iter()
         .find(|pixel| pixel[3] != 0)
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-    else {
-        return;
-    };
-    let Some(last) = image
+        .unwrap_or([0; 3]);
+    let last = image
         .as_raw()
         .as_chunks::<4>()
         .0
@@ -661,9 +678,7 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .rev()
         .find(|pixel| pixel[3] != 0)
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-    else {
-        return;
-    };
+        .unwrap_or([0; 3]);
     let [r, g, b] = if first == last { first } else { [0, 0, 0] };
     for pixel in image.as_mut().as_chunks_mut::<4>().0 {
         if pixel[3] == 0 {
@@ -923,13 +938,56 @@ mod tests {
     }
 
     #[test]
-    fn fix_hidden_alpha_preserves_fully_transparent_image() {
-        let original = vec![12, 34, 56, 0, 78, 90, 12, 0];
-        let mut image = RgbaImage::from_raw(2, 1, original.clone()).expect("test image");
+    fn hidden_alpha_clears_rgb() {
+        let mut image =
+            RgbaImage::from_raw(2, 1, vec![12, 34, 56, 0, 78, 90, 12, 0]).expect("test image");
 
         fix_hidden_alpha(&mut image);
 
-        assert_eq!(image.as_raw(), &original);
+        // Native RageSurfaceUtils::FindAlphaRGB returns black when neither
+        // scan finds a visible pixel, and SetAlphaRGB applies it to all pixels.
+        assert_eq!(image.as_raw(), &[0; 8]);
+    }
+
+    #[test]
+    fn native_alpha_decode() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/texture-surface");
+        for (name, dimensions) in [
+            ("transparent-hidden-rgb", (2, 2)),
+            ("uniform-hidden-rgb", (3, 1)),
+            ("mixed-hidden-rgb", (3, 1)),
+        ] {
+            let image =
+                decode_texture_image(&root.join(format!("{name}.png")), &TextureHints::default())
+                    .expect("decode native control source");
+            let native = std::fs::read(root.join(format!("{name}.rgba")))
+                .expect("pinned native RageSurfaceUtils output");
+            assert_eq!(image.dimensions(), dimensions, "{name}");
+            assert_eq!(image.as_raw(), &native, "{name}");
+        }
+    }
+
+    #[test]
+    fn native_png16_decode() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding");
+        for (name, dimensions) in [
+            ("rgb16-strip", (3, 2)),
+            ("rgba16-strip", (3, 2)),
+            ("gray16-strip", (8, 8)),
+            ("gray-alpha16-strip", (8, 8)),
+        ] {
+            let image = decode_texture_image(
+                &root.join(format!("{name}.png")),
+                &TextureHints::default(),
+            )
+            .expect("decode native PNG16 file");
+            let native = std::fs::read(root.join(format!("{name}.rgba")))
+                .expect("pinned native PNG file-loader output");
+            assert_eq!(image.dimensions(), dimensions, "{name}");
+            assert_eq!(image.as_raw(), &native, "{name}");
+        }
     }
 
     #[test]

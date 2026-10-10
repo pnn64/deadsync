@@ -1,0 +1,128 @@
+{
+  "problem": "DeadSync emitted Model meshes when native Model::DrawPrimitives suppresses both low-alpha passes.",
+  "change": "Check the final diffuse and glow alpha against the native strict 0.001 cutoff in the shared Model builder.",
+  "tested_source_parent_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/playback.rs": "6bff8f694ddaef1436ea2a93b3a928f6c0422eacd6d5e1102422083605fee7a0",
+    "tests/song_lua_itgmania_semantic_parity/models.rs": "7d74f6d32943057830cecf6e2b97718436e77af3018ca4ea533ac12055af46dd",
+    "tests/song_lua_itgmania_semantic_parity.rs": "549b25900c1e1c74a7acd8e3fadc8646011abcb760455c10814cd320f8930efe"
+  },
+  "executables": {
+    "song_lua_itgmania_semantic_parity": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\model-alpha-cutoff-v3-song_lua_itgmania_semantic_parity.exe",
+      "sha256": "059846fbf03ef606cc8b8f003d7c9558ca245c37668b392dad5fba6d7414772b"
+    },
+    "full_song_lua": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\model-alpha-cutoff-v3-full_song_lua.exe",
+      "sha256": "3a41609534231142f476b1bb77412c84eb94f5fbc40837d85b0a2a958e07f15a"
+    }
+  },
+  "tests": [
+    {
+      "source_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+      "source_pending_commit": true,
+      "binary_sha256": "059846fbf03ef606cc8b8f003d7c9558ca245c37668b392dad5fba6d7414772b",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\model-alpha-cutoff-v3-song_lua_itgmania_semantic_parity.exe",
+        "models::model_alpha_cutoff",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.8943924000486732,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\model-alpha-cutoff-v3-controls.log",
+      "log_sha256": "7126f705362c057b9e03e63a2a0cd1d111d89a609be51bb78e5f18d74c50253e",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.14s"
+      ]
+    },
+    {
+      "source_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+      "source_pending_commit": true,
+      "binary_sha256": "059846fbf03ef606cc8b8f003d7c9558ca245c37668b392dad5fba6d7414772b",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\model-alpha-cutoff-v3-song_lua_itgmania_semantic_parity.exe",
+        "native_alpha_loop",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.1842927001416683,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\model-alpha-cutoff-v3-loop.log",
+      "log_sha256": "d6c48e41c4076847c630c620294272961362aa33812703655b6eca74ea2910e2",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.44s"
+      ]
+    },
+    {
+      "source_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+      "source_pending_commit": true,
+      "binary_sha256": "059846fbf03ef606cc8b8f003d7c9558ca245c37668b392dad5fba6d7414772b",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\model-alpha-cutoff-v3-song_lua_itgmania_semantic_parity.exe",
+        "models::native_model_cull_modes_match",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.490751300007105,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\model-alpha-cutoff-v3-cull.log",
+      "log_sha256": "6785336d7cd526306139de49ef1631d7f87f87944e2f149160edc0cc133169fd",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.75s"
+      ]
+    }
+  ],
+  "pre_fix_regression": {
+    "source_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+    "source_pending_commit": true,
+    "binary_sha256": "6743aaf97693b066da2ceaad164eeb8a5e65f1a932180825915fda16c1ad399e",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\model-alpha-baseline-v1-song_lua_itgmania_semantic_parity.exe",
+      "models::model_alpha_cutoff",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 0.4699456999078393,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\model-alpha-baseline-v2.log",
+    "log_sha256": "9957038bd89a64135e62690f227b02949d0fd18b4b33b71d115ab938a7b4d20f",
+    "result_lines": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 264 filtered out; finished in 0.13s"
+    ]
+  },
+  "native_actor_control": "../itgmania-song-lua-micro/model-alpha-cutoff/provenance.json",
+  "native_alpha_cases": 11,
+  "native_actor_control_uses_semantic_host": false,
+  "complete_song_control": "../itgmania-song-lua-micro/queued-alpha-loop/provenance.json",
+  "complete_song_comparison": {
+    "exit_code": 0,
+    "comparisons_passed": 26894,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.4779848996549845,
+    "archive_sha256": "a1224e50d064dade6421a84ca7e8a05089ec18e999af9912907eaec3d0e8d08e",
+    "binary_sha256": "3a41609534231142f476b1bb77412c84eb94f5fbc40837d85b0a2a958e07f15a",
+    "source_commit": "f686ea82f94ef92967f791f8dede7494f492c020",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\model-alpha-cutoff-v3-alpha.log",
+    "log_sha256": "a49db6e1b8c770a06678fcbd2b15d965f08cb3c6a93a3abac72a3fc178615b05",
+    "control_complete": true
+  },
+  "native_culling_comparisons_passed": 341256,
+  "source_reference": {
+    "Actor.cpp": {
+      "latest_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "compiled_vendor_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "identical": true
+    },
+    "Model.cpp": {
+      "latest_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
+      "compiled_vendor_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
+      "identical": true
+    }
+  },
+  "tween_values_preserved": true,
+  "original_tolerances_retained": true,
+  "fixture_76_accepted": false,
+  "full_corpus_complete": false
+}

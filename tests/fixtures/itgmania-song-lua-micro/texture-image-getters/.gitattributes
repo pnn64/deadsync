@@ -1,0 +1,4 @@
+*.png binary
+*.json text eol=lf
+*.lua text eol=lf
+*.sm text eol=lf

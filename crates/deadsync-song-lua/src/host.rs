@@ -26,14 +26,13 @@ use crate::{
     create_style_table, create_theme_prefs_rows_table, create_theme_prefs_table,
     create_theme_table, create_top_screen_table, create_trail_table, create_unlockman_table,
     current_song_lua_style_name, display_bpms_for_args, display_bpms_text,
-    easiest_steps_difficulty, format_number_and_suffix, format_song_options_text,
-    install_def_globals, install_default_stdlib_compat, install_file_loader_globals,
-    is_song_lua_audio_path, lua_values_equal, method_arg, note_song_lua_side_effect,
-    player_index_from_value, player_number_name, read_f32, read_string, record_song_lua_broadcast,
-    resolve_script_path, scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms,
-    seconds_to_mss, seconds_to_mss_ms_ms, song_dir_string, song_display_bps,
-    song_lua_human_player_count, song_lua_runtime_number, song_lua_style_column_x, song_music_rate,
-    theme_string, truthy,
+    easiest_steps_difficulty, format_number_and_suffix, install_def_globals,
+    install_default_stdlib_compat, install_file_loader_globals, is_song_lua_audio_path,
+    lua_values_equal, method_arg, note_song_lua_side_effect, player_index_from_value,
+    player_number_name, read_f32, read_string, record_song_lua_broadcast, resolve_script_path,
+    scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss,
+    seconds_to_mss_ms_ms, song_dir_string, song_display_bps, song_lua_human_player_count,
+    song_lua_runtime_number, song_lua_style_column_x, song_music_rate, theme_string, truthy,
 };
 
 pub const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
@@ -252,6 +251,10 @@ pub fn install_basic_globals(
     globals.set("PlayerNumber", create_player_number_table(lua)?)?;
     globals.set("OtherPlayer", create_other_player_table(lua)?)?;
     globals.set("Difficulty", create_difficulty_table(lua)?)?;
+    globals.set(
+        "CullMode",
+        create_string_enum_table(lua, &["CullMode_Back", "CullMode_Front", "CullMode_None"])?,
+    )?;
     let timers = create_string_enum_table(lua, &crate::player_options::MOD_TIMER_NAMES)?;
     let reverse = timers.get::<Function>("Reverse")?.call::<Table>(())?;
     for (mode, label) in ["game", "beat", "song", "default"].into_iter().enumerate() {
@@ -898,7 +901,7 @@ fn arrow_effects_player_options(args: &MultiValue) -> mlua::Result<Option<Table>
     let Some(Value::Table(player_state)) = args.front() else {
         return Ok(None);
     };
-    let Some(method) = player_state.get::<Option<Function>>("GetPlayerOptions")? else {
+    let Some(method) = player_state.get::<Option<Function>>("GetCurrentPlayerOptions")? else {
         return Ok(None);
     };
     method.call::<Table>(player_state.clone()).map(Some)
@@ -972,8 +975,13 @@ pub fn create_arrow_effects_table(
             let Some(timing) = timing.get(player).and_then(Option::as_ref) else {
                 return Ok(64.0 * note * speed);
             };
-            let (beat, _) = crate::compile_song_runtime_values(lua)?;
-            let seconds = timing.get_time_for_beat_exact(beat);
+            let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+            let beat = runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+            // Pauses hold the beat while music time and seconds-based speed
+            // ramps keep advancing. Use the shared SongPosition music clock.
+            let seconds = crate::runtime::song_music_time(
+                lua, runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?, rate,
+            );
             if let Some(options) = arrow_effects_player_options(&args)? {
                 if let Some(cmod) = arrow_effects_speedmod_value(&options, "CMod")? {
                     return Ok(
@@ -1232,7 +1240,17 @@ pub fn install_game_state_globals(
     {
         globals.set(*key, options.clone())?;
     }
-    let song_options = create_song_options_table(lua, context.song_music_rate)?;
+    let song_options = [
+        create_song_options_table(lua, context.song_music_rate)?,
+        create_song_options_table(lua, context.song_music_rate)?,
+        create_song_options_table(lua, context.song_music_rate)?,
+        create_song_options_table(lua, context.song_music_rate)?,
+    ];
+    lua.set_app_data(crate::song_tables::SongLuaOptionLevels {
+        players: players.option_levels.clone(),
+        songs: song_options.clone(),
+        clock_us: 0,
+    });
     let display_bpms = context.song_display_bpms;
     let default_music_rate = song_music_rate(context);
     globals.set(
@@ -1271,8 +1289,11 @@ pub fn install_game_state_globals(
     gamestate.set(
         "PlayerIsUsingModifier",
         lua.create_function({
-            let options = players.player_options.clone();
-            let song_options = song_options.clone();
+            let options = [
+                players.option_levels[0][3].clone(),
+                players.option_levels[1][3].clone(),
+            ];
+            let song_options = song_options[3].clone();
             move |lua, args: MultiValue| {
                 let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
                     return Ok(false);
@@ -1556,7 +1577,7 @@ pub fn install_game_state_globals(
         "GetCurMusicSeconds",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |lua, _self: Option<Value>| crate::runtime::song_music_seconds(lua, &song_runtime)
         })?,
     )?;
     let song_position = create_song_position_table(lua, &song_runtime)?;
@@ -1568,21 +1589,39 @@ pub fn install_game_state_globals(
         "GetSongOptionsObject",
         lua.create_function({
             let song_options = song_options.clone();
-            move |_, _args: MultiValue| Ok(song_options.clone())
+            move |_, args: MultiValue| {
+                Ok(song_options[crate::song_tables::options_level(method_arg(&args, 0))?].clone())
+            }
         })?,
     )?;
+    let levels = song_options.clone();
     gamestate.set(
         "GetSongOptions",
-        lua.create_function({
-            let song_options = song_options;
-            move |lua, _args: MultiValue| {
-                let rate = song_options
-                    .get::<Option<f32>>("__songlua_music_rate")?
-                    .unwrap_or(1.0);
-                Ok(Value::String(
-                    lua.create_string(format_song_options_text(rate))?,
-                ))
-            }
+        lua.create_function(move |lua, args: MultiValue| {
+            let level = crate::song_tables::options_level(method_arg(&args, 0))?;
+            lua.create_string(crate::song_tables::song_options_text(&levels[level])?)
+        })?,
+    )?;
+    // GameState exposes the current options string without a ModsLevel argument.
+    let current = song_options[3].clone();
+    gamestate.set(
+        "GetSongOptionsString",
+        lua.create_function(move |lua, _args: MultiValue| {
+            lua.create_string(crate::song_tables::song_options_text(&current)?)
+        })?,
+    )?;
+    let state = gamestate.clone();
+    gamestate.set(
+        "SetSongOptions",
+        lua.create_function(move |lua, args: MultiValue| {
+            let level = crate::song_tables::options_level(method_arg(&args, 0))?;
+            let text = method_arg(&args, 1)
+                .cloned()
+                .and_then(read_string)
+                .ok_or_else(|| mlua::Error::runtime("Expected song options string"))?;
+            crate::song_tables::assign_song_options(lua, &song_options, level, &text)?;
+            note_song_lua_side_effect(lua)?;
+            Ok(state.clone())
         })?,
     )?;
     let master_player = context
@@ -1942,6 +1981,62 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn arrow_offset_uses_native_music_clock() {
+        use deadsync_rules::timing::{
+            DelaySegment, SpeedSegment, SpeedUnit, StopSegment, TimingData, TimingSegments,
+        };
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-actors/pause-offset.json"
+        ))
+        .expect("native pause offset control");
+        let mut failures = Vec::new();
+        for map in native["maps"].as_array().expect("native timing maps") {
+            let name = map["name"].as_str().expect("timing map name");
+            let timing = TimingData::from_segments(
+                0.125, 0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0)],
+                    stops: if name == "stop" { vec![StopSegment { beat: 4.0, duration: 1.0 }] } else { vec![] },
+                    delays: if name == "delay" { vec![DelaySegment { beat: 4.0, duration: 1.0 }] } else { vec![] },
+                    speeds: vec![
+                        SpeedSegment { beat: 0.0, ratio: 0.5, delay: 0.0, unit: SpeedUnit::Beats },
+                        SpeedSegment { beat: 4.0, ratio: 2.0, delay: 2.0, unit: SpeedUnit::Seconds },
+                    ],
+                    ..Default::default()
+                }, &[],
+            );
+            for rate in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] {
+                let lua = Lua::new();
+                let mut context = SongLuaCompileContext::new(".", "native pause offsets");
+                context.song_timing = Some(timing.clone());
+                context.player_timing[0] = Some(timing.clone());
+                context.player_timing[1] = Some(timing.clone());
+                context.song_music_rate = rate;
+                let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
+                let players = create_player_tables(&lua, &context, &runtime).expect("native player states");
+                lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime.clone()).expect("install song clock");
+                let effects = create_arrow_effects_table(&lua, &context, |_| "single".into()).expect("ArrowEffects");
+                let offset = effects.get::<Function>("GetYOffset").expect("native offset getter");
+                for sample in map["samples"].as_array().expect("native samples") {
+                    let elapsed = sample["elapsed"].as_f64().expect("elapsed timestamp") as f32;
+                    let beat = sample["beat"].as_f64().expect("native beat") as f32;
+                    let note = sample["note"].as_f64().expect("note beat") as f32;
+                    let expected = sample["offset"].as_f64().expect("native offset") as f32;
+                    runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat).expect("native update beat");
+                    runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, f64::from(elapsed) / f64::from(rate)).expect("replay wall clock");
+                    for state in [Value::Nil, Value::Table(players.player_states[0].clone()), Value::Table(players.player_states[1].clone())] {
+                        let actual = offset.call::<f32>((state, 1, note)).expect("arrow offset");
+                        if actual.to_bits() != expected.to_bits() {
+                            failures.push(format!("{name} rate={rate} elapsed={elapsed} beat={beat}: {actual} != {expected}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
 
     #[test]
     fn broadcast_params_match_native() {

@@ -1,0 +1,3 @@
+{
+  "aft_creation": "local fn = function() end\nassert(frozen:SetUpdateFunction(fn) == frozen)\nassert(not pcall(frozen.SetUpdateFunction, frozen, 12))\nassert(frozen:SetUpdateFunction(nil) == frozen)\nassert(frozen:SetDrawFunction(fn) == frozen)\nassert(frozen:GetDrawFunction() == fn)\nassert(not pcall(frozen.SetDrawFunction, frozen, \"invalid\"))\nassert(frozen:GetDrawFunction() == fn)\nassert(frozen:SetDrawFunction(nil) == frozen)\nassert(frozen:GetDrawFunction() == nil)\n"
+}

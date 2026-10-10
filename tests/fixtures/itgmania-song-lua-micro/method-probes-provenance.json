@@ -1,0 +1,357 @@
+{
+  "pass_number": 53,
+  "dead_sync_version": "0.5.1860",
+  "song_cache_version": 51,
+  "harness_version": "0.1.21",
+  "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+  "archive": {
+    "title": "native method probes",
+    "source_simfile": "probe/probe.sm",
+    "harness_version": "0.1.21",
+    "archive": "b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8.tar.zst",
+    "sha256": "b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8",
+    "compressed_bytes": 11336,
+    "fixture_path": "tests/fixtures/itgmania-song-lua-micro/b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8.tar.zst"
+  },
+  "native_control": {
+    "input": "method-probes-input.json",
+    "input_sha256": "cdc3ead04ec0f4fa39d1c9f7eb0d7e2f29d93ecb4ee67081003fcd745464866b",
+    "output": "method-probes-native.json",
+    "output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    }
+  },
+  "host_controls": {
+    "scope": "Native class and instance feature probes for Actor, ActorFrame, ActorFrameTexture, ActorMultiVertex and Sprite; Quad inherits Sprite",
+    "harness_version": "0.1.21",
+    "native_control": {
+      "input": "fixtures/actors/method-probes.json",
+      "input_sha256": "cdc3ead04ec0f4fa39d1c9f7eb0d7e2f29d93ecb4ee67081003fcd745464866b",
+      "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+      "result": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      },
+      "execution_note": "Assertions call real compiled Lua methods on native ActorFrameTexture userdata, independently of semantic_host.lua."
+    },
+    "native_sources": {
+      "src/Actor.cpp": {
+        "vendor_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+        "local_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+        "identical": true
+      },
+      "src/ActorFrame.cpp": {
+        "vendor_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+        "local_sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+        "identical": true
+      },
+      "src/ActorFrameTexture.cpp": {
+        "vendor_sha256": "38d918bd700777bb0a4ce3978c084fca2764e5d6c11a070fd2f9f9c5fc2b6893",
+        "local_sha256": "38d918bd700777bb0a4ce3978c084fca2764e5d6c11a070fd2f9f9c5fc2b6893",
+        "identical": true
+      },
+      "src/ActorMultiVertex.cpp": {
+        "vendor_sha256": "5ee73f28421f39b3b22955e6735f8979fb63948baf23261272d11965e42b8dd8",
+        "local_sha256": "5ee73f28421f39b3b22955e6735f8979fb63948baf23261272d11965e42b8dd8",
+        "identical": true
+      },
+      "src/Sprite.cpp": {
+        "vendor_sha256": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+        "local_sha256": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+        "identical": true
+      },
+      "src/Quad.h": {
+        "vendor_sha256": "d583a565dcaa30859dad1f04805d50d8b36338fb768544f6837fc9d6499eed84",
+        "local_sha256": "d583a565dcaa30859dad1f04805d50d8b36338fb768544f6837fc9d6499eed84",
+        "identical": true
+      },
+      "src/LuaBinding.cpp": {
+        "vendor_sha256": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+        "local_sha256": "46f156ae2b334d7139a4d03f84a190dcb5542d024ae66c5ebb4c9d589dc2c1c7",
+        "identical": true
+      },
+      "Themes/_fallback/Scripts/02 Actor.lua": {
+        "vendor_sha256": "499e7ee20f5c14a6a67ce8da6840bf271829659fe4e03df1e18e5159e1de339a",
+        "local_sha256": "499e7ee20f5c14a6a67ce8da6840bf271829659fe4e03df1e18e5159e1de339a",
+        "identical": true
+      }
+    },
+    "before": {
+      "native": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      },
+      "native_exit_code": 0,
+      "native_executable_sha256": "dbc23d97db6759fd95e922e635f2ea2111c4b38bd1ada51654bdd4682baa84e3",
+      "native_input_sha256": "76683d322ad2eead0172791db04a8849a1e89b6e7e14d3b8e5d9c370ed26f907",
+      "harness_before_version": "0.1.20",
+      "before_runtime_errors": [
+        {
+          "actor": "def-0002",
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0002",
+          "line": 2,
+          "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass53-method-probes/corpus/probe/default.lua:3: native actor has no arbitrary method",
+          "name": "InitCommand",
+          "operation": "command.error",
+          "seconds": 0,
+          "source": "song:/default.lua"
+        },
+        {
+          "actor": "def-0003",
+          "beat": 0,
+          "command": "InitCommand",
+          "definition_id": "def-0003",
+          "line": 5,
+          "message": "C:/GitHub/itgmania-harness/target/song-lua-repair/pass53-method-probes/corpus/probe/default.lua:6: native actor has no GetChildAt",
+          "name": "InitCommand",
+          "operation": "command.error",
+          "seconds": 0,
+          "source": "song:/default.lua"
+        }
+      ],
+      "before_dropped_events": 0,
+      "lua_sha256": "7b784bf524ccbd87bdd5222ada05dc369b28b0e565b9607ad247295706f4ec6b",
+      "rejected_assumption": "The first draft assumed AFT.GetTexture was absent. The direct native control rejected it; the corrected control requires the real method. No host/source was changed to accommodate that wrong assumption."
+    },
+    "complete_capture_after": {
+      "entry": {
+        "title": "native method probes",
+        "source_simfile": "probe/probe.sm",
+        "harness_version": "0.1.21",
+        "archive": "b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8.tar.zst",
+        "sha256": "b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8",
+        "compressed_bytes": 11336
+      },
+      "harness": {
+        "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\harness-parity-pass53-method-probes-v1.exe",
+        "sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+        "version": "0.1.21",
+        "semantic_host_sha256": "af208a04ff8cb74a107806f7138831eeb2c83800b73a62909e3ca8aa37b50d56",
+        "source_pending_commit": true
+      },
+      "runtime_errors": [],
+      "dropped_events": 0,
+      "end_position": {
+        "beat": 4,
+        "seconds": 2
+      },
+      "update_frames": 121,
+      "lua_sha256": "7b784bf524ccbd87bdd5222ada05dc369b28b0e565b9607ad247295706f4ec6b"
+    },
+    "host_test_fixture": {
+      "path": "tests/fixtures/song-lua-headless/method-probes.lua",
+      "sha256": "ed606458e385337ab3435978a5d0b89cf9048230a49bcd5b3199f33321f89487",
+      "note": "Extended unit fixture also checks inherited caller-added Lua functions, fallback Center, Sprite Load and absence of non-Frame callbacks. The original two-assertion archive probe is unchanged."
+    },
+    "full_native_test_suite": {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass53-method-probes-v8.exe",
+      "sha256": "f2c6a8183d23f65cb46434ea6059cbb5c71244112b392c771d407cc5a5ada417",
+      "exit_code": 0,
+      "seconds": 145.1514196395874,
+      "summaries": [
+        "test result: ok. 136 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 144.99s"
+      ],
+      "log_sha256": "31c7d3027233dafecc09fb96bf400ceb1a79a5bdcd9a5ce59205d78f412d8db6"
+    },
+    "changed_behavior": "Use compiled native prototypes and declared fallback helper names for class and instance lookup. Remove invented GetChildAt and arbitrary ActorFrame method fallback. Preserve native Sprite helpers and external Player/NoteField/NoteColumnRenderer labels.",
+    "fixture_repairs": "Synthetic update callbacks now belong to ActorFrame, as registered by LunaActorFrame. Drawable Quads/Sprites remain where geometric checks require them, driven by sibling Frames placed after the drawable. All existing numeric samples, observation counts and tolerances are retained; only source-invalid callback ownership and native actor labels/selectors change.",
+    "limits": [
+      "Unlinked actor classes still need a source-backed registration audit.",
+      "Declared Actor.lua helper names retain existing semantic adapter implementations; this does not prove every helper body.",
+      "DeadSync still exposes SetUpdateFunction on non-Frame actors and needs a separate repair.",
+      "External Simply Love child context and the complete 501-simfile corpus remain unfinished."
+    ]
+  },
+  "original_probe": {
+    "lua_sha256": "7b784bf524ccbd87bdd5222ada05dc369b28b0e565b9607ad247295706f4ec6b",
+    "simfile_sha256": "0961c0cb31bae1ffb57ab3f2ef0d088975b5a29ccd0e29f4bb71b7f984c1d7a6",
+    "unchanged": true
+  },
+  "capture": {
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "update_frames": 121,
+    "endpoint": {
+      "beat": 4,
+      "seconds": 2
+    },
+    "semantic_host_sha256": "af208a04ff8cb74a107806f7138831eeb2c83800b73a62909e3ca8aa37b50d56"
+  },
+  "before": {
+    "archive": "b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8.tar.zst",
+    "version": "0.5.1859",
+    "exit_code": 1,
+    "seconds": 1.5334689617156982,
+    "executable_sha256": "fbe9df5ecc45cd28db5ab187d6a4f7b7770355d7f13e92124cd6fa52f3ef4a06",
+    "log_sha256": "0e69554ca8c3748bf1215401f2e77e4865736a4948dae561d399bd9521e6204c",
+    "reason": "Native GetChildAt absence assertion fails before any observations can be compared"
+  },
+  "after": {
+    "archive": "b0adccd2220b38183ee72cc062dec04729a9b3e23a86493f3083f5adc41027f8.tar.zst",
+    "version": "0.5.1860",
+    "exit_code": 0,
+    "seconds": 1.5640685558319092,
+    "result": "result: ok; 1/1 fixtures passed; 2669 comparisons passed, 0 failed (2669 total); elapsed 0.12s",
+    "log_sha256": "45568a94d72578dc935868c040dbb402736c3d3b12a1710af283119f3ff615e7",
+    "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
+  },
+  "core_gates": [
+    {
+      "job": "song-lua-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-song-lua",
+        "--features",
+        "test-support"
+      ],
+      "exit_code": 0,
+      "seconds": 157.96075868606567,
+      "summaries": [
+        "test result: ok. 484 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.33s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 9.99s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "37d4e60d9e633b6d15f16f89a07ffb61a764c34ea614c08f38584c323e6c90b9"
+    },
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 13.572205066680908,
+      "summaries": [],
+      "log_sha256": "758e2ad4b1cba3062b9c3977e494bf03f7ae5c3a96b8d037ee62b4c9c7e190f2"
+    },
+    {
+      "job": "clock-cache",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 20.35112190246582,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "9c72408a6304682cf68cb66c33824d8063e1f0c3f717704026c1b7dbd349035b"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.4248316287994385,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "27692d34b0c862bf0fccc95f0e3479ccd430c3cef02565178777203d74a4731c"
+    }
+  ],
+  "retained_native_regressions": {
+    "executable": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass53-method-probes-v1.exe",
+    "executable_sha256": "4fd0c45e6805e4586307374dae428d29a5c10c2a6dbcdb545b07a7e66782c9d9",
+    "results": [
+      {
+        "test": "public_music_seconds_matches_native",
+        "exit_code": 0,
+        "seconds": 3.855520009994507,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.36s"
+        ],
+        "log_sha256": "4180933280f2eb725dec1151cce5dda99bf7c8cbd336d0d97ee608bfb2c56880"
+      },
+      {
+        "test": "music_effect_clock_matches_native",
+        "exit_code": 0,
+        "seconds": 2.4565632343292236,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.41s"
+        ],
+        "log_sha256": "e051af8dd9fbbd074942650d75fcbd2a0489d3f33be93da6c84ac7bc869a1ef8"
+      },
+      {
+        "test": "multitap::multitap_strict_taps",
+        "exit_code": 0,
+        "seconds": 0.3556785583496094,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.32s"
+        ],
+        "log_sha256": "7f6855e7620c153dff53eaa3756915b0139d10016af3905400a21491a3019546"
+      }
+    ]
+  },
+  "unchanged_song_archives": [
+    {
+      "archive": "f8ff6cfef02ef1b12bdeaaf57e40cb94500bffaecee31e398b11987ed883947b.tar.zst",
+      "version": "0.5.1860",
+      "exit_code": 0,
+      "seconds": 10.828572511672974,
+      "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 10.74s",
+      "log_sha256": "c146a9051d6c49bbfbb5fa60083b575fc56bd102b5c67a9add5a31c58e58af44",
+      "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
+    },
+    {
+      "archive": "0a326f5585d1aacd0302249b6e55622222754359e9b3964506436cef1540472a.tar.zst",
+      "version": "0.5.1860",
+      "exit_code": 0,
+      "seconds": 72.63405203819275,
+      "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 72.50s",
+      "log_sha256": "4cc26566dc9d4f5be27fe68a203d871e31c43b93ac6c1c2938be751f46b59d59",
+      "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
+    }
+  ],
+  "changed_behavior": "Delete invented GetChildAt class/instance methods and unused index helpers, allowing native one-based RunCommandsOnChildren feature fallbacks. Invalidate caches compiled under the old feature probes.",
+  "limits": [
+    "The native update callback owner probe is verified in the harness; DeadSync non-Frame callback registration remains a separate known gap.",
+    "These focused checks do not refresh the 25-archive prefix captured with harness 0.1.18 and DeadSync 0.5.1858.",
+    "Full scope remains 501 simfiles, 483 indexed source simfiles, 18 unindexed, and nine historical duplicate captures. The synthetic probe is not a corpus song.",
+    "No observations, endpoint requirements or tolerances were removed or relaxed."
+  ]
+}
