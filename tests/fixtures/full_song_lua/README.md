@@ -1371,3 +1371,19 @@ See `native-revalidation-pass168.json`. Position 90 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 169
+
+Position 90, Among Us in Real Life - Single, passes all
+207,862 comparisons against committed DeadSync
+`571515e29`. The complete native harness 0.1.61 archive
+contains 9,428 updates over 157.11 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass169.json`. Position 91 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
+
+The native original writes `NoAttack` and `RandAttack` only as zero, and its chart attacks are empty. Live nonzero random-attack scheduling, RNG and note-transform parity remain open separately.

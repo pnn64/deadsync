@@ -1269,12 +1269,10 @@
     {
       "title": "Among Us in Real Life - Single",
       "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
-      "harness_version": "0.1.0",
-      "archive": "98dd5f567bc286f73bf7e83fdc63a3895dda4ce3e4f9ec3fa61de3ee92337c82.tar.zst",
-      "sha256": "98dd5f567bc286f73bf7e83fdc63a3895dda4ce3e4f9ec3fa61de3ee92337c82",
-      "compressed_bytes": 81464,
-      "uncompressed_sha256": "1119b74b16faeeb8bcbd6900cf7c138d548d9a5f6ef8498b6d56bcd39f053f48",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143.tar.zst",
+      "sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+      "compressed_bytes": 102795,
       "aliases": [
         "d3707f6f551c8e346dbcde7b4c00bfc2080ce6d5d731202f87a06b82f0142853.tar.zst"
       ]
