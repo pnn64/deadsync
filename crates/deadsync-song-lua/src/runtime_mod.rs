@@ -899,6 +899,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         "boost"
         | "brake"
         | "wave"
+        | "waveperiod"
         | "expand"
         | "boomerang"
         | "drunk"

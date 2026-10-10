@@ -582,6 +582,7 @@ pub enum SongLuaEaseMaskTarget {
     AccelBoost,
     AccelBrake,
     AccelWave,
+    AccelWavePeriod,
     AccelExpand,
     AccelBoomerang,
     VisualModTimerType,
@@ -2218,6 +2219,7 @@ fn append_song_lua_ease_targets_key(
         "boost" => push(SongLuaEaseMaskTarget::AccelBoost, pct_from, pct_to),
         "brake" => push(SongLuaEaseMaskTarget::AccelBrake, pct_from, pct_to),
         "wave" => push(SongLuaEaseMaskTarget::AccelWave, pct_from, pct_to),
+        "waveperiod" => push(SongLuaEaseMaskTarget::AccelWavePeriod, pct_from, pct_to),
         "expand" => push(SongLuaEaseMaskTarget::AccelExpand, pct_from, pct_to),
         "boomerang" => push(SongLuaEaseMaskTarget::AccelBoomerang, pct_from, pct_to),
         "modtimersetting" => push(SongLuaEaseMaskTarget::VisualModTimerType, pct_from, pct_to),
@@ -2965,6 +2967,7 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::AccelBoost => accel.boost = Some(value),
         SongLuaEaseMaskTarget::AccelBrake => accel.brake = Some(value),
         SongLuaEaseMaskTarget::AccelWave => accel.wave = Some(value),
+        SongLuaEaseMaskTarget::AccelWavePeriod => accel.wave_period = Some(value),
         SongLuaEaseMaskTarget::AccelExpand => accel.expand = Some(value),
         SongLuaEaseMaskTarget::AccelBoomerang => accel.boomerang = Some(value),
         SongLuaEaseMaskTarget::VisualModTimerType => {
@@ -3231,6 +3234,7 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::AccelBoost => window.accel.boost.is_some(),
         SongLuaEaseMaskTarget::AccelBrake => window.accel.brake.is_some(),
         SongLuaEaseMaskTarget::AccelWave => window.accel.wave.is_some(),
+        SongLuaEaseMaskTarget::AccelWavePeriod => window.accel.wave_period.is_some(),
         SongLuaEaseMaskTarget::AccelExpand => window.accel.expand.is_some(),
         SongLuaEaseMaskTarget::AccelBoomerang => window.accel.boomerang.is_some(),
         SongLuaEaseMaskTarget::VisualModTimerType => window.visual.mod_timer_type.is_some(),
@@ -5729,6 +5733,9 @@ pub fn apply_active_attack_mask_window(
     if let Some(v) = window.accel.wave {
         values.accel.wave = Some(v);
     }
+    if let Some(v) = window.accel.wave_period {
+        values.accel.wave_period = Some(v);
+    }
     if let Some(v) = window.accel.expand {
         values.accel.expand = Some(v);
     }
@@ -7208,6 +7215,7 @@ fn apply_runtime_mod(
         "boost" => out.accel.boost = attack_level(percent_value),
         "brake" => out.accel.brake = attack_level(percent_value),
         "wave" => out.accel.wave = attack_level(percent_value),
+        "waveperiod" => out.accel.wave_period = attack_level(percent_value),
         "expand" => out.accel.expand = attack_level(percent_value),
         "boomerang" => out.accel.boomerang = attack_level(percent_value),
         "modtimergame" => out.visual.mod_timer_type = Some(ModTimerType::Game),
@@ -8005,6 +8013,7 @@ pub fn merge_attack_accel_effects(base: AccelEffects, attack: AccelOverrides) ->
         boost: merge_attack_value(base.boost, attack.boost),
         brake: merge_attack_value(base.brake, attack.brake),
         wave: merge_attack_value(base.wave, attack.wave),
+        wave_period: merge_attack_value(base.wave_period, attack.wave_period),
         expand: merge_attack_value(base.expand, attack.expand),
         boomerang: merge_attack_value(base.boomerang, attack.boomerang),
     }

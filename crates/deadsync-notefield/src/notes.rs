@@ -2258,6 +2258,7 @@ mod tests {
             boost: 0.35,
             brake: 0.45,
             wave: 0.8,
+            wave_period: 0.0,
             expand: 0.6,
             boomerang: 0.2,
         };
@@ -2306,7 +2307,8 @@ mod tests {
         travel_request.accel = AccelYParams {
             boost: f32::NAN,
             brake: -1.0,
-            wave: f32::EPSILON,
+            wave: 0.0,
+            wave_period: 3.0,
             expand: f32::NEG_INFINITY,
             boomerang: -0.0,
         };

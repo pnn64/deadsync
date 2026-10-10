@@ -170,6 +170,7 @@ pub struct AccelOverrides {
     pub boost: Option<f32>,
     pub brake: Option<f32>,
     pub wave: Option<f32>,
+    pub wave_period: Option<f32>,
     pub expand: Option<f32>,
     pub boomerang: Option<f32>,
 }
@@ -181,6 +182,7 @@ impl AccelOverrides {
         self.boost.is_some()
             || self.brake.is_some()
             || self.wave.is_some()
+            || self.wave_period.is_some()
             || self.expand.is_some()
             || self.boomerang.is_some()
     }
@@ -548,6 +550,7 @@ pub struct AccelEffects {
     pub boost: f32,
     pub brake: f32,
     pub wave: f32,
+    pub wave_period: f32,
     pub expand: f32,
     pub boomerang: f32,
 }
@@ -560,6 +563,7 @@ impl AccelEffects {
             boost: f32::from((mask & ACCEL_MASK_BIT_BOOST) != 0),
             brake: f32::from((mask & ACCEL_MASK_BIT_BRAKE) != 0),
             wave: f32::from((mask & ACCEL_MASK_BIT_WAVE) != 0),
+            wave_period: 0.0,
             expand: f32::from((mask & ACCEL_MASK_BIT_EXPAND) != 0),
             boomerang: f32::from((mask & ACCEL_MASK_BIT_BOOMERANG) != 0),
         }

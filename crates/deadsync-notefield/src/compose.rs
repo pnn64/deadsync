@@ -675,6 +675,7 @@ fn prepare_notes<'a, S>(
             boost: request.visual.accel.boost,
             brake: request.visual.accel.brake,
             wave: request.visual.accel.wave,
+            wave_period: request.visual.accel.wave_period,
             boomerang: request.visual.accel.boomerang,
             expand: request.visual.accel.expand,
         },

@@ -518,6 +518,7 @@ fn runtime_mod_value(
         "brake" => runtime.accel[player].brake.unwrap_or(0.0),
         "boost" => runtime.accel[player].boost.unwrap_or(0.0),
         "wave" => runtime.accel[player].wave.unwrap_or(0.0),
+        "waveperiod" => runtime.accel[player].wave_period.unwrap_or(0.0),
         "expand" => runtime.accel[player].expand.unwrap_or(0.0),
         "boomerang" => runtime.accel[player].boomerang.unwrap_or(0.0),
         "hidden" => appearance.hidden,
@@ -3273,6 +3274,30 @@ fn native_speed_fields_drive_playback() {
             assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
         }
     }
+}
+
+#[test]
+fn wave_period_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/wave-period-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native wave-period control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("wave-period.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Wave period, signed strengths and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Wave period and signed strengths");
 }
 
 #[test]

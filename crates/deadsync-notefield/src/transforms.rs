@@ -158,6 +158,7 @@ pub(crate) struct AccelYParams {
     pub boost: f32,
     pub brake: f32,
     pub wave: f32,
+    pub wave_period: f32,
     pub expand: f32,
     pub boomerang: f32,
 }
@@ -165,6 +166,7 @@ pub(crate) struct AccelYParams {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AccelYCache {
     boost_height_offset: f32,
+    wave_divisor: f32,
     expand_scale: f32,
     path: AccelYPath,
 }
@@ -325,7 +327,7 @@ pub(crate) fn signed_effect_active(value: f32) -> bool {
 pub(crate) fn accel_y_is_identity(accel: AccelYParams) -> bool {
     !(accel.boost > f32::EPSILON
         || accel.brake > f32::EPSILON
-        || accel.wave > f32::EPSILON
+        || accel.wave != 0.0
         || accel.expand > f32::EPSILON
         || accel.boomerang > f32::EPSILON)
 }
@@ -353,7 +355,7 @@ pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParam
     let path = match (
         accel.boost > f32::EPSILON,
         accel.brake > f32::EPSILON,
-        accel.wave > f32::EPSILON,
+        accel.wave != 0.0,
         accel.expand > f32::EPSILON,
         accel.boomerang > f32::EPSILON,
     ) {
@@ -376,6 +378,7 @@ pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParam
     };
     AccelYCache {
         boost_height_offset: effect_height / 1.2,
+        wave_divisor: (accel.wave_period * WAVE_MOD_HEIGHT) + WAVE_MOD_HEIGHT,
         expand_scale,
         path,
     }
@@ -422,7 +425,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
         AccelYPath::ExpandOnly => return (raw_y * cache.expand_scale, true),
         AccelYPath::WaveOnly => {
             let y = (accel.wave * WAVE_MOD_MAGNITUDE)
-                .mul_add((raw_y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin(), raw_y);
+                .mul_add((raw_y / cache.wave_divisor).sin(), raw_y);
             return (y, true);
         }
         AccelYPath::BoomerangOnly => {
@@ -462,7 +465,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
         }
         AccelYPath::WaveBoomerangOnly => {
             let y = (accel.wave * WAVE_MOD_MAGNITUDE)
-                .mul_add((raw_y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin(), raw_y);
+                .mul_add((raw_y / cache.wave_divisor).sin(), raw_y);
             let before_peak = y < screen_height * 0.75;
             let y = 1.5f32.mul_add(y, -y * y / screen_height);
             return (y, before_peak);
@@ -544,9 +547,9 @@ fn apply_accel_y_general(
         adjust = adjust.clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
         y += adjust;
     }
-    if accel.wave > f32::EPSILON {
+    if accel.wave != 0.0 {
         y = (accel.wave * WAVE_MOD_MAGNITUDE)
-            .mul_add((y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin(), y);
+            .mul_add((y / cache.wave_divisor).sin(), y);
     }
     let mut before_boomerang_peak = true;
     if accel.boomerang > f32::EPSILON {
@@ -2140,5 +2143,34 @@ pub(crate) fn move_col_extra(values: &[f32], local_col: usize) -> f32 {
 pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
     for (local_col, extra) in out.iter_mut().enumerate() {
         *extra = move_col_extra(values, local_col);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wave_period_matches_native_travel() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/wave-period-motion.json"
+        )).expect("independently compiled native Wave vectors");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 80);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let accel = AccelYParams {
+                wave: value("amount"), wave_period: value("period"),
+                ..AccelYParams::default()
+            };
+            let cache = accel_y_cache(0.0, 480.0, accel);
+            let raw = value("travel");
+            let expected = value("y");
+            let optimized = apply_accel_y_cached(raw, 480.0, 480.0, accel, cache);
+            let general = apply_accel_y_general(raw, 480.0, 480.0, accel, cache).0;
+            assert!((optimized - expected).abs() < 0.00005, "{vector}: optimized={optimized}");
+            assert!((general - expected).abs() < 0.00005, "{vector}: general={general}");
+            assert_eq!(accel_y_is_identity(accel), accel.wave == 0.0);
+        }
     }
 }
