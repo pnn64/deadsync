@@ -1357,3 +1357,17 @@ See `native-revalidation-pass167.json`. Position 89 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 168
+
+Position 89, Airman First Class, passes all
+275,803 comparisons against committed DeadSync
+`1121d63d1`. The complete native harness 0.1.59 archive
+contains 12,535 updates over 208.89 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass168.json`. Position 90 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.

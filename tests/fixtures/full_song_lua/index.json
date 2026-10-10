@@ -1258,12 +1258,10 @@
     {
       "title": "Airman First Class",
       "source_simfile": "Airman First Class - [glory limited.]/kpopmix.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ebf1c207285e977b49d2753dd264f1d448d69ade80ea013755aecb16fc0635db.tar.zst",
-      "sha256": "ebf1c207285e977b49d2753dd264f1d448d69ade80ea013755aecb16fc0635db",
-      "compressed_bytes": 59219,
-      "uncompressed_sha256": "3ef892b7da14d6fe3e8ab3ec733b0e077f4c405dd58bd6c4c3ef0f180034f73e",
-      "compression_level": 22,
+      "harness_version": "0.1.59",
+      "archive": "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690.tar.zst",
+      "sha256": "fb3e1291a384b5c63713c1d75156ca90abc0e2868c4308dce1de76de0a7d2690",
+      "compressed_bytes": 14285473,
       "aliases": [
         "4279bc63b1662936464a9afe10accb336dbeec58d6c8e2d4d9a2850ff55ff4a6.tar.zst"
       ]
