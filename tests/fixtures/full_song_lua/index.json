@@ -1016,12 +1016,10 @@
     {
       "title": "[N]TECH SOUP(MASTER) Flying Castle",
       "source_simfile": "[N]TECH SOUP(MASTER) Flying Castle/flying castle.ssc",
-      "harness_version": "0.1.0",
-      "archive": "25ebde6ad5afc8e81fcb5a7aa1d91c3d216c4f60f36ee832c711eaf1161d66ba.tar.zst",
-      "sha256": "25ebde6ad5afc8e81fcb5a7aa1d91c3d216c4f60f36ee832c711eaf1161d66ba",
-      "compressed_bytes": 243308,
-      "uncompressed_sha256": "19189364b38f4fefd870de6d91f0e2dc730d81c21f1396fa3a1c2e2d87c892c1",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "8f241bd3fa37125300957ef4a704016a334f0610f3ffc9bd6ed28e7eb5eaebc6.tar.zst",
+      "sha256": "8f241bd3fa37125300957ef4a704016a334f0610f3ffc9bd6ed28e7eb5eaebc6",
+      "compressed_bytes": 311687,
       "aliases": [
         "2a28fd91c24033ad34c842db7b329a8b74d036df08bb222c8c2c2854d8d8e987.tar.zst"
       ]
