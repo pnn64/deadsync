@@ -829,12 +829,10 @@
     {
       "title": "[12] Bunny House",
       "source_simfile": "[12] bunny-house - (No CMOD)/steps.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9f8be6ab2b5190cf33bb2aeb570fc4f3a8aa99801d711ca74e39cff3532a977e.tar.zst",
-      "sha256": "9f8be6ab2b5190cf33bb2aeb570fc4f3a8aa99801d711ca74e39cff3532a977e",
-      "compressed_bytes": 952635,
-      "uncompressed_sha256": "336d4b24a547879fda4fb38d95f9b8fee366a57dbf82493614d620677d04d406",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "b4c9a7f4836a0ae119074432a26711c1c61fe5ff4fa524d6be50873b862fa391.tar.zst",
+      "sha256": "b4c9a7f4836a0ae119074432a26711c1c61fe5ff4fa524d6be50873b862fa391",
+      "compressed_bytes": 1132751,
       "aliases": [
         "dc7cb75395a038e684f46b926f070928bfa6d34eea02f23219ceae6a9db5ea0b.tar.zst"
       ]
