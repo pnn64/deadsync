@@ -1480,12 +1480,10 @@
     {
       "title": "Bad Intentions",
       "source_simfile": "Bad Intentions/Bad Intentions.ssc",
-      "harness_version": "0.1.0",
-      "archive": "917f2f11312ee53b542a591986ccb1e5d0722d7a308e35c00e5a1d1c4f94836f.tar.zst",
-      "sha256": "917f2f11312ee53b542a591986ccb1e5d0722d7a308e35c00e5a1d1c4f94836f",
-      "compressed_bytes": 184711,
-      "uncompressed_sha256": "5643d7c508005ed92cf01f99919c49d1d1db3982313bb9774b4d83468ce37d5e",
-      "compression_level": 22,
+      "harness_version": "0.1.63",
+      "archive": "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01.tar.zst",
+      "sha256": "570b0dffb5ded94dcaccec8cef2e67e3ca299cce09f5a979b3eaa9bd3fa7ae01",
+      "compressed_bytes": 331161,
       "aliases": [
         "17f7aabcd815a9dbbad71c79a4d22d9811a14526c85176d365ab177a70d66c33.tar.zst"
       ]
