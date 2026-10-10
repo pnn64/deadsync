@@ -518,7 +518,8 @@ mod tests {
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
-            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. }
+            | Actor::SharedCamera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
             Actor::RetainedFrame { frame, .. } => actor_tree_has_text(frame.children(), expected),
@@ -574,6 +575,9 @@ mod tests {
                 alpha * tint[3],
             ),
             Actor::Camera { children, .. } => {
+                top_screen_text_draw(children, expected, base_z, alpha)
+            }
+            Actor::SharedCamera { children, .. } => {
                 top_screen_text_draw(children, expected, base_z, alpha)
             }
             Actor::Shadow { child, .. } => top_screen_text_draw(

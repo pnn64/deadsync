@@ -1793,6 +1793,7 @@ fn aft_boundaries_match_native_geometry_and_visibility() {
                     state,
                     track.texture_size,
                     None,
+                    None,
                 )
                 .unwrap()
             };
@@ -5214,6 +5215,7 @@ fn compare_lua_perspective(entry: &str) {
                 state,
                 [64.0, 32.0],
                 None,
+                None,
             )
             .expect("finite perspective vertices");
             for (corner, actual) in vertices.iter().enumerate() {
@@ -5233,6 +5235,58 @@ fn compare_lua_perspective(entry: &str) {
     assert_eq!(checks, 112);
 }
 
+#[test]
+fn screen_parent_transform_native_draws() {
+    use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let trace = read_trace_file(&root.join(
+        "tests/fixtures/itgmania-song-lua-micro/screen-parent-transform-native.json",
+    ));
+    let dir = root.join("tests/fixtures/song-lua");
+    let mut context = SongLuaCompileContext::new(&dir, trace.title.clone());
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let compiled = compile_song_lua_layers(
+        &[dir.join("screen-parent-transform.lua").as_path()], 0, &context,
+    ).expect("native screen-parent control compiles");
+    let parity = compare_semantics(&trace, &compiled, 0, &context);
+    parity.assert_complete("screen parent transform");
+    let layer = &compiled[0];
+    let screen_index = layer.screen_overlay_index.expect("captured top screen");
+    let map = projected_drawable_map(&trace, &compiled);
+    let mut composer = WholeSongComposer::new(&layer.overlays);
+    let mut checks = 0;
+    for track in &trace.projected_vertex_tracks {
+        let &(layer_index, index) = map.get(&track.actor).expect("native drawable");
+        assert_eq!(layer_index, 0);
+        for sample in &track.samples {
+            let sample = sample.as_array().expect("native geometry sample");
+            let beat = value_f32(sample.first()).expect("beat");
+            let second = value_f32(sample.get(1)).expect("second");
+            let states = compiled_overlay_states_at(layer, &context, beat, second);
+            let screen_state = compiled_local_states_at(layer, &context, beat, second)[screen_index];
+            let frame = composer.render_screen_overlay(
+                &layer.overlays, &states, index, [854.0, 480.0], second, beat,
+                Some(screen_state),
+            );
+            let actual = rendered_quad_corners(&frame, [854.0, 480.0]);
+            let expected = native_screen_vertices(sample).expect("native corners");
+            assert!(!actual.is_empty(), "native geometry at second {second}");
+            for (from, to) in [(&actual, &expected), (&expected, &actual)] {
+                for corner in from {
+                    assert!(to.iter().any(|target| (0..2).all(|axis| {
+                        (corner[axis] - target[axis]).abs() <= 0.75
+                    })), "{} at {second}: {actual:?} vs {expected:?}", track.actor);
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 80, "two quads, four native phases, every rendered corner");
+}
+
 fn compiled_perspective_vertices(
     compiled: &CompiledSongLua,
     states: &[SongLuaOverlayState],
@@ -5240,6 +5294,7 @@ fn compiled_perspective_vertices(
     state: SongLuaOverlayState,
     texture_size: [f32; 2],
     screen_camera: Option<SongLuaOverlayState>,
+    screen_matrix: Option<[[f32; 4]; 4]>,
 ) -> Option<[[f32; 2]; 4]> {
     use deadsync_song_lua::playback::actor_conformance as actor;
     let mut parent = compiled.overlays[index].parent_index;
@@ -5280,8 +5335,10 @@ fn compiled_perspective_vertices(
         camera.fov?,
         camera.vanishpoint.unwrap_or(screen.map(|axis| axis * 0.5)),
     );
-    let corners = compiled_world_vertices(state, texture_size)
-        .map(|world| actor::project_world(projection, actor::project_world(view, world)));
+    let corners = compiled_world_vertices(state, texture_size).map(|world| {
+        let world = screen_matrix.map_or(world, |matrix| actor::project_world(matrix, world));
+        actor::project_world(projection, actor::project_world(view, world))
+    });
     // The reference records projected corners before GPU clipping, including
     // negative W. Only an undefined perspective divide prevents comparison.
     if corners.iter().any(|corner| {
@@ -5442,7 +5499,7 @@ fn projected_corners_keep_negative_w() {
         ..CompiledSongLua::default()
     };
     let vertices =
-        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2], None)
+        compiled_perspective_vertices(&compiled, &[camera, sprite], 1, sprite, [64.0; 2], None, None)
             .expect("negative W is a defined perspective divide");
     assert!(vertices.iter().flatten().all(|axis| axis.is_finite()));
     assert!(
@@ -5453,7 +5510,7 @@ fn projected_corners_keep_negative_w() {
     );
     let singular = SongLuaOverlayState { z: 320.0, ..sprite };
     assert!(
-        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2], None)
+        compiled_perspective_vertices(&compiled, &[camera, singular], 1, singular, [64.0; 2], None, None)
             .is_none()
     );
 }
@@ -5695,10 +5752,10 @@ fn compare_projected_geometry(
             let states = state_cache
                 .entry((layer, beat.to_bits(), seconds.to_bits()))
                 .or_insert_with(|| {
-                    let mut states =
+                    let states =
                         compiled_overlay_states_at(&compiled[layer], context, beat, seconds);
                     if let Some((screen_layer, index)) = screen_layer {
-                        let screen = screen_states
+                        screen_states
                             .entry((beat.to_bits(), seconds.to_bits()))
                             .or_insert_with(|| {
                                 let mut screen = compiled_command_state_at(
@@ -5716,19 +5773,8 @@ fn compare_projected_geometry(
                                     seconds,
                                     &mut screen,
                                 );
-                                let screen =
-                                    deadsync_song_lua::playback::actor_conformance::transform_state(
-                                        screen,
-                                        [music_seconds, beat],
-                                    );
                                 screen
                             });
-                        // GameplayActorSegments::segments places every screen
-                        // fragment at this shared offset before its camera.
-                        for state in &mut states {
-                            state.x += screen.x;
-                            state.y += screen.y;
-                        }
                     }
                     states
                 });
@@ -5869,8 +5915,18 @@ fn compare_projected_geometry(
             } else {
                 track.texture_size
             };
+            let screen_matrix = screen_states
+                .get(&(beat.to_bits(), seconds.to_bits()))
+                .map(|screen| deadsync_song_lua::playback::actor_conformance::screen_matrix(
+                    *screen, [music_seconds, beat],
+                ));
             let actual_vertices = if track.camera_actor == "orthographic-screen" && !perspective {
-                compiled_world_vertices(state, size).map(|[x, y, _, _]| [x, y])
+                compiled_world_vertices(state, size).map(|world| {
+                    let [x, y, _, _] = screen_matrix.map_or(world, |matrix| {
+                        deadsync_song_lua::playback::actor_conformance::project_world(matrix, world)
+                    });
+                    [x, y]
+                })
             } else {
                 let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
                 let Some(vertices) = compiled_perspective_vertices(
@@ -5882,6 +5938,7 @@ fn compare_projected_geometry(
                     screen_states
                         .get(&(beat.to_bits(), seconds.to_bits()))
                         .copied(),
+                    screen_matrix,
                 ) else {
                     parity.check_once(false, &mut reported_bounds, || {
                         format!("projected perspective geometry is untested for {definition_id}: missing camera or undefined perspective divide at beat {beat:.3}")
@@ -7331,6 +7388,7 @@ fn near_camera_native() {
             index,
             states[index],
             [64.0, 64.0],
+            None,
             None,
         )
         .expect("finite perspective vertices");

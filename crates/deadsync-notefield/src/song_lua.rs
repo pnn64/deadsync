@@ -100,7 +100,8 @@ fn song_lua_player_y_fold_actor_in_place(actor: &mut Actor, pivot_x: f32, cos_y:
         }
         Actor::Shadow { child, .. } => song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y),
         // Shared subtrees keep their established wrapper boundary.
-        Actor::SharedTransform { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::SharedTransform { .. } | Actor::SharedCamera { .. }
+        | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 

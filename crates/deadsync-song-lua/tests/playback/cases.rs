@@ -98,7 +98,6 @@ fn manual_player_frame(screen_offset: [f32; 2], ordered: bool) -> deadlib_render
     );
     let sources = SongLuaScreenProxySources {
         manual_players: [Some(&raw), None],
-        screen_offset,
         ..Default::default()
     };
     let topology = SongLuaOverlayTopologyIndex::new(&overlays);
@@ -301,7 +300,7 @@ fn player_segments_keep_underlay_and_native_child_order() {
             insert: 0,
             direct_proxy_len: 0,
             underlay_visible: true,
-            screen_offset: [0.0; 2],
+            screen_projection: Matrix4::IDENTITY,
             players: [
                 Some(PlayerActorSegment {
                     player: 0,
@@ -587,7 +586,6 @@ fn manual_player_compositor_matches_native_geometry() {
                 }
             },
         );
-        assert_eq!(segments.screen_offset, [31.0, -9.0]);
         let frame = deadlib_present::compose::build_passes(
             segments.segments(&scratch, &actors),
             scratch.render_targets(),

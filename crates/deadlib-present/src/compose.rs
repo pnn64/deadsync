@@ -682,6 +682,7 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
 pub struct ActorSegment<'a> {
     source: ActorSegmentSource<'a>,
     cameras: [Option<&'a Matrix4>; 3],
+    projection_prefix: Option<&'a Matrix4>,
     z_shift: i16,
     blend: Option<BlendMode>,
     placement: ActorSegmentPlacement,
@@ -826,6 +827,13 @@ impl ActorXFold {
 }
 
 impl<'a> ActorSegment<'a> {
+    /// Applies a clip-space parent transform to every camera in this fragment.
+    #[must_use]
+    pub fn with_projection(mut self, prefix: &'a Matrix4) -> Self {
+        self.projection_prefix = (*prefix != Matrix4::IDENTITY).then_some(prefix);
+        self
+    }
+
     /// Translates this fragment, including its flat draw tail, without cloning actors.
     #[must_use]
     pub fn with_offset(mut self, offset: [f32; 2]) -> Self {
@@ -856,6 +864,7 @@ impl<'a> ActorSegment<'a> {
                 tint: &IDENTITY_TINT,
             },
             cameras: [None; 3],
+            projection_prefix: None,
             z_shift: 0,
             blend: None,
             placement: ActorSegmentPlacement::None,
@@ -871,6 +880,7 @@ impl<'a> ActorSegment<'a> {
                 tint: &IDENTITY_TINT,
             },
             cameras: [None; 3],
+            projection_prefix: None,
             z_shift,
             blend: None,
             placement: ActorSegmentPlacement::None,
@@ -886,6 +896,7 @@ impl<'a> ActorSegment<'a> {
                 tint: &IDENTITY_TINT,
             },
             cameras: [None; 3],
+            projection_prefix: None,
             z_shift,
             blend: None,
             placement: ActorSegmentPlacement::XFold(x_fold),
@@ -909,6 +920,7 @@ impl<'a> ActorSegment<'a> {
                 tint,
             },
             cameras: [Some(root_camera), Some(camera_suffix), None],
+            projection_prefix: None,
             z_shift,
             blend,
             placement: match x_fold {
@@ -991,6 +1003,7 @@ impl<'a> ActorSegment<'a> {
                 tint,
             },
             cameras: [enclosing_camera, source_camera, None],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1017,6 +1030,7 @@ impl<'a> ActorSegment<'a> {
                 style: proxy_style,
             },
             cameras: [enclosing_camera, source_camera, None],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1045,6 +1059,7 @@ impl<'a> ActorSegment<'a> {
                 tint,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1072,6 +1087,7 @@ impl<'a> ActorSegment<'a> {
                 style: proxy_style,
             },
             cameras: [enclosing_camera, cameras[0], cameras[1]],
+            projection_prefix: None,
             z_shift: z,
             blend: Some(blend),
             placement: ActorSegmentPlacement::FlatOffset(offset),
@@ -1265,6 +1281,13 @@ where
 
     let mut sequence = ActorSequenceState::new(camera);
     for segment in actor_segments {
+        let base_camera = sequence.base_camera;
+        if let Some(prefix) = segment.projection_prefix {
+            sequence.base_camera = sequence.camera_id(*prefix * cameras[0], &mut cameras);
+        }
+        if sequence.camera_stack.is_empty() {
+            sequence.active_camera = sequence.base_camera;
+        }
         let offset = match segment.placement {
             ActorSegmentPlacement::Offset(offset)
             | ActorSegmentPlacement::XFoldOffset(_, offset) => offset,
@@ -1325,7 +1348,7 @@ where
             texture_ctx,
             actor_textures.as_deref(),
             total_elapsed,
-            None,
+            segment.projection_prefix.copied(),
         );
         let has_flat_draws = match segment.source {
             ActorSegmentSource::Actors { draws, .. } => !draws.is_empty(),
@@ -1355,6 +1378,7 @@ where
             actor_textures.as_deref(),
             total_elapsed,
         );
+        sequence.base_camera = base_camera;
     }
 
     let sort_fallback = !builder
@@ -5800,7 +5824,8 @@ fn build_actor_sequence_with_state<'a, T, I>(
                     sequence.active_camera =
                         if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
                             *root_camera_id
-                                .get_or_insert_with(|| sequence.camera_id(*root_camera, cameras))
+                                .get_or_insert_with(|| sequence.camera_id(
+                                    camera_prefix.map_or(*root_camera, |prefix| prefix * *root_camera), cameras))
                         } else {
                             sequence.base_camera
                         };
@@ -5991,10 +6016,12 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     if fragments.iter().all(|(draws, _)| draws.is_empty()) {
         return;
     }
+    let projected = |matrix: Matrix4| segment.projection_prefix.map_or(matrix, |prefix| *prefix * matrix);
     let enclosing_camera = enclosing_matrix.map(|matrix| {
-        cameras.push(*matrix);
+        let matrix = projected(*matrix);
+        cameras.push(matrix);
         let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-        sequence.last_root_camera = Some((*matrix, id));
+        sequence.last_root_camera = Some((matrix, id));
         id
     });
     let tints = proxy_style.map_or(
@@ -6032,12 +6059,13 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                 // Each source run represents its own nested CameraPush and
                 // therefore keeps a distinct table entry even for equal
                 // matrices. The enclosing scope itself was registered once.
-                cameras.push(*matrix);
+                let matrix = projected(*matrix);
+                cameras.push(matrix);
                 let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
-                sequence.last_root_camera = Some((*matrix, id));
+                sequence.last_root_camera = Some((matrix, id));
                 id
             }
-            Some(matrix) => sequence.camera_id(*matrix, cameras),
+            Some(matrix) => sequence.camera_id(projected(*matrix), cameras),
             None => enclosing_camera.unwrap_or(sequence.active_camera),
         };
         let proxy_start = out.len();
@@ -7223,6 +7251,18 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     item.order = first_order.saturating_add(saturating_u32(index));
                 }
             }
+        }
+
+        actors::Actor::SharedCamera { view_proj, children } => {
+            cameras.push(*view_proj);
+            let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
+            build_actor_list(
+                children,
+                SmRect { x: 0.0, y: 0.0, w: m.right - m.left, h: m.top - m.bottom },
+                m, fonts, scratch, base_z, id, style, None, cameras, masks,
+                order_counter, out, sprite_instances, text_cache, texture_cache,
+                texture_ctx, actor_textures, total_elapsed, None,
+            );
         }
 
         actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
@@ -10614,7 +10654,9 @@ mod tests {
     #[test]
     fn actor_segment_keeps_camera_metadata_borrowed() {
         assert!(
-            std::mem::size_of::<ActorSegment<'_>>() <= 96,
+            // The screen transform adds one borrowed pointer, never a matrix.
+            std::mem::size_of::<ActorSegment<'_>>()
+                <= 96 + std::mem::size_of::<&Matrix4>(),
             "actor segments must not embed retained 4x4 camera matrices: {} bytes",
             std::mem::size_of::<ActorSegment<'_>>()
         );
