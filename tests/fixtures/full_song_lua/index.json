@@ -1027,12 +1027,10 @@
     {
       "title": "happy century",
       "source_simfile": "[recognize m.] happy century/steps.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0e7b0bb0742a02c5f0f652a6ca2fd9730d2f0715f9a81c0faa41c7aaacefe3d0.tar.zst",
-      "sha256": "0e7b0bb0742a02c5f0f652a6ca2fd9730d2f0715f9a81c0faa41c7aaacefe3d0",
-      "compressed_bytes": 43638,
-      "uncompressed_sha256": "1e67a1b38da049370e44e29686abae69c908de7e6f6814b3346531d3799cf5ca",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "5b1572e88c54e50d21f139fa3f7f5e10db5b7708cdc7ba5362d5e3238f6226ab.tar.zst",
+      "sha256": "5b1572e88c54e50d21f139fa3f7f5e10db5b7708cdc7ba5362d5e3238f6226ab",
+      "compressed_bytes": 9445999,
       "aliases": [
         "23fc5fc3ffa8451a72cecb0f77102fecdba78539fe19098dcab3d3308a583b76.tar.zst"
       ]
