@@ -641,8 +641,34 @@ fn meter_indices(
             insert(chart_index);
         }
     }
-    for chart_index in song.edit_chart_indices_sorted(chart_type) {
-        insert(chart_index);
+    // Sorting all edits only to overwrite equal meters is unnecessary. Keep
+    // the last edit in that ordering directly, including source-order ties.
+    for (chart_index, chart) in song.charts.iter().enumerate() {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type)
+            || !chart.difficulty.eq_ignore_ascii_case("edit")
+        {
+            continue;
+        }
+        if let Some((_, existing)) = indices.iter_mut().find(|(meter, _)| *meter == chart.meter) {
+            let previous = &song.charts[*existing];
+            if !previous.difficulty.eq_ignore_ascii_case("edit")
+                || chart
+                    .stats
+                    .total_steps
+                    .cmp(&previous.stats.total_steps)
+                    .then_with(|| {
+                        profile_data::favorites_view::unicode_case_insensitive_cmp(
+                            &chart.description,
+                            &previous.description,
+                        )
+                    })
+                    .is_ge()
+            {
+                *existing = chart_index;
+            }
+        } else {
+            indices.push((chart.meter, chart_index));
+        }
     }
     indices.sort_unstable_by_key(|&(meter, _)| meter);
     indices
@@ -2410,5 +2436,8 @@ mod tests {
             SelectMusicSongSelectBgMode::Off,
             &[],
         ));
+    }
+    mod direct_scan_perf {
+        include!("../../../../../../tests/perf/wheel_meters.rs");
     }
 }
