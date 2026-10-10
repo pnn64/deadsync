@@ -675,3 +675,16 @@ No requests were filtered and no tolerances changed. See
 Position 38 is next. Independent Edgar off-grid positions, timing
 getter placeholders, explicit Model culling, remaining original sources
 and contexts, and native framebuffer parity remain open.
+
+## Ordered fixture validation, pass 117
+
+Position 38, [4252] [10] media offline (Medium), passes all
+582,201 comparisons against committed DeadSync
+`207e17110`. The complete native harness 0.1.52 archive
+contains 8,070 updates over 134.48 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass117.json`. Position 39 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.

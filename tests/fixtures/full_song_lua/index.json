@@ -697,12 +697,10 @@
     {
       "title": "[4252] [10] media offline (Medium)",
       "source_simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
-      "harness_version": "0.1.0",
-      "archive": "57c84a2898d55076cec4bfe559c1fad4ad3f55584f434e1b91d3e8c62c458271.tar.zst",
-      "sha256": "57c84a2898d55076cec4bfe559c1fad4ad3f55584f434e1b91d3e8c62c458271",
-      "compressed_bytes": 40257,
-      "uncompressed_sha256": "1bb3703e5ad4c0d766b536d737fc0ceb3d0782a917a77277e8c3b57a9e23fcc4",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "dcf4650daf1319f629f1df0d482c7f990e9c04aeb3032df531b4b251f4984280.tar.zst",
+      "sha256": "dcf4650daf1319f629f1df0d482c7f990e9c04aeb3032df531b4b251f4984280",
+      "compressed_bytes": 332702,
       "aliases": [
         "c25dab24573be2ab70a1577cc1b2ae30dfbc09d304b1acd196e41146815d2acd.tar.zst"
       ]
