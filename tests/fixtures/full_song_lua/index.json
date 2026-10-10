@@ -1661,12 +1661,10 @@
     {
       "title": "Blacksphere",
       "source_simfile": "Blacksphere/music.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ff63ea99da9a8ecf68671e3805934bfbac83ff446af63bdc0a624dc0c50d74a3.tar.zst",
-      "sha256": "ff63ea99da9a8ecf68671e3805934bfbac83ff446af63bdc0a624dc0c50d74a3",
-      "compressed_bytes": 72082,
-      "uncompressed_sha256": "2538b6da22a1711ff4816168bdbc83ec63a3ed5a14a9be51fe5b771cc09fe12a",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3.tar.zst",
+      "sha256": "3e5565742fd22b7b8fe0877ca1536b818215318dfb0e19ddfc86d0c5f3ac0df3",
+      "compressed_bytes": 102976,
       "aliases": [
         "88ac8213859be35360ed8050f804ac9969c84d3a8274af6ca46c9f978c64eb7d.tar.zst"
       ]
