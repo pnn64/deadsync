@@ -1,0 +1,312 @@
+{
+  "updated_utc": "2026-10-10T01:00:18.112520+00:00",
+  "harness_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+  "native_executable_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+  "native_pin_sha256": "725971df7ea3c7862fa89ab254f0b537245732e2278b30061ce8d8f071db4632",
+  "original_source_sha256": {
+    "C:\\GitHub\\rework\\lua-songs\\[09] Who the Hell Is Edgar (SX) [Telperion]\\Who the Hell Is Edgar.ssc": "1b1c6a72af868760f64a01564d674793d252030a6233177197109c07c4a2f65d",
+    "C:\\GitHub\\rework\\lua-songs\\[09] Who the Hell Is Edgar (SX) [Telperion]\\multitap\\default.lua": "c020ecc5ef8925c28e456659037773765522c604a99e27952a391415f6a5f730",
+    "C:\\GitHub\\rework\\lua-songs\\[09] Who the Hell Is Edgar (SX) [Telperion]\\multitap\\multitap_data.lua": "adee07522cfa00f33f7dc1241e60f35c6e03d2285351d92bbf4b62ae58a5fcef"
+  },
+  "request_simfile_sha256": "60e5ba3d967539db229f2b4bd8de9fb7a5352c2e2b6f1acdd673870dc4689a88",
+  "request_lua_sha256": "cbd11fb7b2771f5a01145d7f46cc5c40f76823b4ea16000c4af6ae6b29ea9225",
+  "unchanged_original_lua_chunks_sha256": [
+    "096c400de69ab03e9264c3cc538cd69126b942828e6d785fb7cbda92efdb9db2",
+    "f09d478045e0aab88c233c19858dc5d4f344d5fe8a25ef8fb7a32efa7c1854e7",
+    "35597a01dcce51dca1d69cc87e6802fee3faaf012ba509093420a4d54d9aae9e",
+    "4d2893ab2c24c1be4fcc143412afc6f1d1c0e9e770e798372d415815561b2093",
+    "2917d0dc3f07b4b60d1d9a8686422d7c337fe9f641b5e4ccd73e92702a656379"
+  ],
+  "native_trace_sha256": "45bb9b7f86a8a16ce37a6f9ddf47daf0ec012795f8bebe8f702138cf8295190a",
+  "command": [
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass105-native-current-cli-v1.exe",
+    "song-lua-semantic-baseline",
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-tap-control",
+    "--out",
+    "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass114-tap-control\\traces",
+    "--until-beat",
+    "1",
+    "--max-events",
+    "500000"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 5.331936699803919,
+  "provenance": "native-song-timing",
+  "runtime_errors": [],
+  "dropped_events": 0,
+  "samples": [
+    {
+      "index": 1,
+      "tap": 112,
+      "kind": "original-query",
+      "elapsed": 46.02739715576172,
+      "values": {
+        "Actor.x": [
+          112
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          46.02739715576172
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "tap": 112,
+      "kind": "native-tap-time",
+      "elapsed": null,
+      "values": {
+        "Actor.x": [
+          112
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          46.02739715576172
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "tap": 112,
+      "kind": "native-frame-before",
+      "elapsed": 46.016666666666666,
+      "values": {
+        "Actor.x": [
+          111.97389221191406
+        ],
+        "Actor.y": [
+          -133.8314208984375
+        ],
+        "Actor.z": [
+          46.016666666666666
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "tap": 112,
+      "kind": "native-frame-after",
+      "elapsed": 46.03333333333333,
+      "values": {
+        "Actor.x": [
+          112.01444244384766
+        ],
+        "Actor.y": [
+          -134.498046875
+        ],
+        "Actor.z": [
+          46.03333333333333
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "tap": 114,
+      "kind": "original-query",
+      "elapsed": 46.84931564331055,
+      "values": {
+        "Actor.x": [
+          114.00000762939452
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          46.84931564331055
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "tap": 114,
+      "kind": "native-tap-time",
+      "elapsed": null,
+      "values": {
+        "Actor.x": [
+          114.00000762939452
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          46.84931564331055
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "tap": 114,
+      "kind": "native-frame-before",
+      "elapsed": 46.833333333333336,
+      "values": {
+        "Actor.x": [
+          113.96111297607422
+        ],
+        "Actor.y": [
+          -134.12890625
+        ],
+        "Actor.z": [
+          46.833333333333336
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "tap": 114,
+      "kind": "native-frame-after",
+      "elapsed": 46.85,
+      "values": {
+        "Actor.x": [
+          114.0016632080078
+        ],
+        "Actor.y": [
+          -134.94140625
+        ],
+        "Actor.z": [
+          46.85
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "tap": 116,
+      "kind": "original-query",
+      "elapsed": 47.67123031616211,
+      "values": {
+        "Actor.x": [
+          116
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          47.67123031616211
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "tap": 116,
+      "kind": "native-tap-time",
+      "elapsed": null,
+      "values": {
+        "Actor.x": [
+          116
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          47.67123031616211
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "tap": 116,
+      "kind": "native-frame-before",
+      "elapsed": 47.666666666666664,
+      "values": {
+        "Actor.x": [
+          115.9888916015625
+        ],
+        "Actor.y": [
+          -134.751953125
+        ],
+        "Actor.z": [
+          47.666666666666664
+        ]
+      }
+    },
+    {
+      "index": 3,
+      "tap": 116,
+      "kind": "native-frame-after",
+      "elapsed": 47.68333333333333,
+      "values": {
+        "Actor.x": [
+          116.02944946289062
+        ],
+        "Actor.y": [
+          -133.9921875
+        ],
+        "Actor.z": [
+          47.68333333333333
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "tap": 118,
+      "kind": "original-query",
+      "elapsed": 48.49314880371094,
+      "values": {
+        "Actor.x": [
+          118
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          48.49314880371094
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "tap": 118,
+      "kind": "native-tap-time",
+      "elapsed": null,
+      "values": {
+        "Actor.x": [
+          118
+        ],
+        "Actor.y": [
+          -135
+        ],
+        "Actor.z": [
+          48.49314880371094
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "tap": 118,
+      "kind": "native-frame-before",
+      "elapsed": 48.483333333333334,
+      "values": {
+        "Actor.x": [
+          117.97611236572266
+        ],
+        "Actor.y": [
+          -134.46484375
+        ],
+        "Actor.z": [
+          48.483333333333334
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "tap": 118,
+      "kind": "native-frame-after",
+      "elapsed": 48.5,
+      "values": {
+        "Actor.x": [
+          118.01667022705078
+        ],
+        "Actor.y": [
+          -134.42578125
+        ],
+        "Actor.z": [
+          48.5
+        ]
+      }
+    }
+  ],
+  "scope": "Native TimingData and native Actor setters, unchanged authored phase functions. GetYPos uses the harness float/PlayerOptions facade grounded in ArrowEffects.cpp; no GPU/framebuffer claim."
+}

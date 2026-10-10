@@ -259,15 +259,17 @@ fn forget_failure(runtime: &mut RuntimeState, pack_id: u64) {
     if !runtime.failed.contains(&pack_id) {
         return;
     }
-    let mut next = (*runtime.failed).clone();
-    next.remove(&pack_id);
-    runtime.failed = Arc::new(next);
+    Arc::make_mut(&mut runtime.failed).remove(&pack_id);
 }
 
 /// Pack ids to stop holding, once the cache is over its bound. The caller owns
 /// the textures, so it decides when they actually go.
 pub fn overflow() -> Vec<u64> {
     let mut runtime = lock_runtime();
+    // Done banners are a subset of all slots, so none can overflow this bound.
+    if runtime.slots.len() <= MAX_CACHED {
+        return Vec::new();
+    }
     let mut held: Vec<(u64, u64)> = runtime
         .slots
         .iter()
@@ -317,9 +319,7 @@ pub fn mark_failed(pack_id: u64, settled: bool) {
         .insert(pack_id, Slot::Failed { attempts, retry_at });
 
     if (settled || spent) && !runtime.failed.contains(&pack_id) {
-        let mut next = (*runtime.failed).clone();
-        next.insert(pack_id);
-        runtime.failed = Arc::new(next);
+        Arc::make_mut(&mut runtime.failed).insert(pack_id);
     }
 }
 
@@ -418,7 +418,7 @@ mod tests {
     /// looks like the retry rule misbehaving.
     static SERIAL: Mutex<()> = Mutex::new(());
 
-    fn exclusively() -> MutexGuard<'static, ()> {
+    pub(super) fn exclusively() -> MutexGuard<'static, ()> {
         SERIAL.lock().unwrap_or_else(|error| error.into_inner())
     }
 
@@ -730,3 +730,19 @@ mod tests {
         runtime.slots.clear();
     }
 }
+
+#[cfg(test)]
+#[path = "banners_failure_original.rs"]
+mod banners_failure_original;
+
+#[cfg(test)]
+#[path = "banners_failure_perf.rs"]
+mod banners_failure_perf_tests;
+
+#[cfg(test)]
+#[path = "banners_original.rs"]
+mod original;
+
+#[cfg(test)]
+#[path = "banners_perf.rs"]
+mod perf_tests;

@@ -3,8 +3,6 @@ use rubato::{SincInterpolationParameters, SincInterpolationType, WindowFunction}
 pub const OUT_FRAMES_PER_CALL: usize = 256;
 pub const PLANAR_INPUT_CAP_FRAMES: usize = 4096;
 
-const PLANAR_COMPACT_THRESHOLD_FRAMES: usize = 2048;
-
 pub struct PlanarAccum {
     pub channels: Vec<Vec<f32>>,
     pub start_frame: usize,
@@ -43,6 +41,21 @@ impl PlanarAccum {
             return;
         }
         debug_assert_eq!(channels, self.channels.len());
+        let frames = interleaved.len() / channels;
+        if self.start_frame > 0
+            && self
+                .channels
+                .iter()
+                .any(|channel| frames > channel.capacity() - channel.len())
+        {
+            // Reclaim the consumed prefix only when appending needs its space.
+            // Draining a packet can then advance the cursor without moving its tail.
+            for channel in &mut self.channels {
+                channel.copy_within(self.start_frame.., 0);
+                channel.truncate(channel.len() - self.start_frame);
+            }
+            self.start_frame = 0;
+        }
         if channels == 1 {
             if let [channel] = self.channels.as_mut_slice() {
                 channel.extend(
@@ -60,7 +73,6 @@ impl PlanarAccum {
             right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
             return;
         }
-        let frames = interleaved.len() / channels;
         for channel in &mut self.channels {
             channel.reserve(frames);
         }
@@ -74,23 +86,9 @@ impl PlanarAccum {
     pub fn consume_frames(&mut self, frames: usize) {
         let total_frames = self.channels.first().map_or(0, Vec::len);
         self.start_frame = (self.start_frame + frames).min(total_frames);
-        if self.start_frame == 0 {
-            return;
-        }
-        let remaining_frames = total_frames - self.start_frame;
-        if remaining_frames == 0 {
+        if self.start_frame > 0 && self.start_frame == total_frames {
             self.clear();
-            return;
         }
-        if self.start_frame < PLANAR_COMPACT_THRESHOLD_FRAMES && self.start_frame * 2 < total_frames
-        {
-            return;
-        }
-        for channel in &mut self.channels {
-            channel.copy_within(self.start_frame.., 0);
-            channel.truncate(remaining_frames);
-        }
-        self.start_frame = 0;
     }
 
     pub fn clear(&mut self) {
@@ -124,8 +122,13 @@ pub fn write_resampler_output(
         out_tmp.clear();
         return 0;
     }
-    if out.len() == 2 && out_ch == 2 {
-        let produced_frames = produced_frames.min(out[0].len()).min(out[1].len());
+    if out.len() >= 2 && out_ch == 2 {
+        let produced_frames = if out.len() == 2 {
+            produced_frames.min(out[0].len()).min(out[1].len())
+        } else {
+            // Even an unused source channel still limits the complete frames.
+            produced_frames.min(out.iter().map(Vec::len).min().unwrap_or(0))
+        };
         let produced_samples = produced_frames * 2;
         resize_output(out_tmp, produced_samples);
         let (output_chunks, output_tail) = out_tmp.as_mut_slice().as_chunks_mut::<8>();
@@ -408,15 +411,29 @@ mod tests {
     }
 
     #[test]
-    fn planar_accum_compacts_consumed_frames() {
+    fn planar_accum_reclaims_consumed_frames_before_growing() {
         let mut planar = PlanarAccum::new(1, 4);
         planar.push_i16_interleaved(&[1; 5000], 1);
 
         planar.consume_frames(3000);
 
-        assert_eq!(planar.start_frame, 0);
+        assert_eq!(planar.start_frame, 3000);
         assert_eq!(planar.available_frames(), 2000);
-        assert_eq!(planar.channels[0].len(), 2000);
+        let capacity = planar.channels[0].capacity();
+        planar.push_i16_interleaved(&[2; 1000], 1);
+        assert_eq!(planar.start_frame, 0);
+        assert_eq!(planar.available_frames(), 3000);
+        assert_eq!(planar.channels[0].capacity(), capacity);
+        assert!(
+            planar.channels[0][..2000]
+                .iter()
+                .all(|&sample| sample == 1.0 / 32768.0)
+        );
+        assert!(
+            planar.channels[0][2000..]
+                .iter()
+                .all(|&sample| sample == 2.0 / 32768.0)
+        );
     }
 
     #[test]
@@ -540,3 +557,7 @@ mod tests {
         assert_eq!(samples[47], 0);
     }
 }
+
+#[cfg(test)]
+#[path = "resample_perf_tests.rs"]
+mod perf_tests;

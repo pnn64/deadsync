@@ -60,7 +60,7 @@ fn multitap_fixtures_pin_noteskin() {
 }
 
 #[test]
-fn edgar_countdown_onsets_and_hit_commands() {
+fn edgar_native_hits_match() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
     assert_eq!(
@@ -72,6 +72,46 @@ fn edgar_countdown_onsets_and_hit_commands() {
     check_edgar_model_squash(compiled, &context);
     check_edgar_tap_draws(compiled, &context);
     check_edgar_texture_phase(compiled, &context);
+    for player in 1..=2 {
+        for lane in 1..=4 {
+            for grade in ["W1", "W2", "W3", "W4", "W5"] {
+                let message = format!("__songlua_tap_{player}_{lane}_{grade}");
+                assert!(
+                    compiled.overlays.iter().any(|actor| {
+                        actor.message_commands.iter().any(|command| {
+                            command.message == message
+                                && overlay_state_after_blocks(
+                                    actor.initial_state,
+                                    &command.blocks,
+                                    0.0,
+                                )
+                                .diffuse[3]
+                                    > 0.99
+                        })
+                    }),
+                    "P{player} lane {lane} {grade} must light a noteskin explosion"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn edgar_countdown_onsets_and_hit_commands() {
+    crate::paths::init();
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
+    let native: Value = serde_json::from_slice(
+        &std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/itgmania-actors/edgar-multitap-frames.json"),
+        )
+        .expect("native Edgar update frames"),
+    )
+    .expect("parse native Edgar update frames");
+    assert_eq!(native["update_frames"], 9197);
+    assert_eq!(native["native_onsets"].as_array().unwrap().len(), 8);
+    let (layers, primary, context) = compile_trace_song(&trace);
+    let compiled = &layers[primary];
     let named = |name: &str| {
         compiled
             .overlays
@@ -79,69 +119,101 @@ fn edgar_countdown_onsets_and_hit_commands() {
             .position(|actor| actor.name.as_deref() == Some(name))
             .expect(name)
     };
-    assert!(
-        compiled.overlay_updates.is_empty(),
-        "multitaps must use authored boundaries"
-    );
+    let mut parity = Parity::default();
+    parity.section("Edgar update frames");
     for player in 1..=2 {
-        for (index, lane, first, rotation) in [
-            (1, 1, 112.0, 90.0),
-            (2, 3, 114.0, 180.0),
-            (3, 2, 116.0, 0.0),
-            (4, 4, 118.0, 270.0),
+        for (index, lane, first, rotation, gap) in [
+            (1, 1, 112.0, 90.0, 1.0),
+            (2, 3, 114.0, 180.0, 0.75),
+            (3, 2, 116.0, 0.0, 1.0),
+            (4, 4, 118.0, 270.0, 0.75),
         ] {
             let frame = named(&format!("MultitapP{player}_{index}"));
             let arrow = named(&format!("MultitapArrowP{player}_{index}"));
-            let onset = compiled
-                .overlay_eases
-                .iter()
-                .filter(|ease| ease.overlay_index == frame && ease.to.visible == Some(true))
-                .map(|ease| ease.start)
-                .min_by(f32::total_cmp)
-                .expect("visible onset");
+            let recorded = &native["onsets"][index - 1];
+            let onset =
+                value_f32(Some(&recorded["first_visible"]["beat"])).expect("native onset beat");
             assert!(onset > first - 8.0, "the authored onset is strict");
-            // Adjacent f32 beats can map to the same f32 second. Sample on
-            // either side at distinct times, and check the exact beat above.
-            for beat in [first - 8.01, first - 7.999, first] {
-                let states = compiled_local_states_at(
-                    compiled,
-                    &context,
-                    beat,
-                    song_elapsed_seconds_at(beat, &context),
-                );
-                assert_eq!(
-                    states[frame].visible,
-                    beat > first - 8.0,
-                    "P{player} tap {index} at {beat}"
-                );
-                if states[frame].visible {
-                    assert_eq!(states[arrow].rot_z_deg, rotation);
-                    assert!(states[arrow].rot_x_deg.abs() < 0.001);
-                    assert!((states[frame].x - (lane as f32 * 64.0 - 160.0)).abs() < 0.001);
-                    let travel = (112.0 - beat).max(0.0) * 0.7 + (first - beat.max(112.0)) * 0.35;
-                    let speed = 0.3 + 0.7 * ((beat - 96.0) / 16.0).clamp(0.0, 1.0);
-                    assert!((states[frame].y - (-135.0 + travel * speed * 64.0)).abs() < 0.015);
+            assert!(
+                value_f32(Some(&recorded["before"]["beat"])).unwrap() <= first - 8.0,
+                "the previous native update has not crossed the authored boundary"
+            );
+            // Native setters run on recorded updates. Preserve the original
+            // beat queries, and also check activation and retirement frames.
+            let mut samples = [first - 8.01, first - 7.999, first]
+                .map(|beat| (beat, song_elapsed_seconds_at(beat, &context), beat >= onset))
+                .to_vec();
+            for (key, visible) in [
+                ("before", false),
+                ("first_visible", true),
+                ("last_visible", true),
+                ("first_hidden", false),
+            ] {
+                samples.push((
+                    value_f32(Some(&recorded[key]["beat"])).unwrap(),
+                    value_f32(Some(&recorded[key]["seconds"])).unwrap(),
+                    visible,
+                ));
+            }
+            for (beat, seconds, visible) in samples {
+                let states = compiled_local_states_at(compiled, &context, beat, seconds);
+                parity.check(states[frame].visible == visible, || {
+                    format!(
+                        "P{player} tap {index} at {beat}: visible {} != {visible}",
+                        states[frame].visible
+                    )
+                });
+                if visible && beat <= first {
+                    let rotation_z = states[arrow].rot_z_deg + states[arrow].base_rotation[2];
+                    parity.check(rotation_z == rotation, || {
+                        format!(
+                            "P{player} tap {index} at {beat}: rotation {rotation_z} != {rotation}"
+                        )
+                    });
+                    parity.check(states[arrow].rot_x_deg.abs() < 0.001, || {
+                        format!(
+                            "P{player} tap {index} at {beat}: rotationx {}",
+                            states[arrow].rot_x_deg
+                        )
+                    });
+                    let x = lane as f32 * 64.0 - 160.0;
+                    parity.check((states[frame].x - x).abs() < 0.001, || {
+                        format!(
+                            "P{player} tap {index} at {beat}: x {} != {x}",
+                            states[frame].x
+                        )
+                    });
+                    if beat < first {
+                        let travel =
+                            (112.0 - beat).max(0.0) * 0.7 + (first - beat.max(112.0)) * 0.35;
+                        let speed = 0.3 + 0.7 * ((beat - 96.0) / 16.0).clamp(0.0, 1.0);
+                        let y = -135.0 + travel * speed * 64.0;
+                        parity.check((states[frame].y - y).abs() < 0.015, || {
+                            format!("P{player} tap {index} at beat {beat}, second {seconds}: y {} != {y}", states[frame].y)
+                        });
+                    }
                 }
             }
-            let prefix = format!("__songlua_tap_{player}_{lane}_");
-            for grade in ["W1", "W2", "W3", "W4", "W5"] {
-                assert!(
-                    compiled
-                        .overlays
-                        .iter()
-                        .any(
-                            |actor| actor.message_commands.iter().any(|command| command.message
-                                == format!("{prefix}{grade}")
-                                && overlay_state_after_blocks(
-                                    actor.initial_state,
-                                    &command.blocks,
-                                    0.0
-                                )
-                                .diffuse[3]
-                                    > 0.99)
-                        ),
-                    "P{player} lane {lane} {grade} must light a noteskin explosion"
-                );
+            // No native update lands exactly on these tap beats. Check both
+            // adjacent native frames instead of interpolating across the cusp.
+            for side in ["before", "after"] {
+                let sample = &native["tap_frames"][index - 1][side]["frame"];
+                let beat = value_f32(sample.get(0)).expect("native tap beat");
+                let seconds = value_f32(sample.get(1)).expect("native tap seconds");
+                let state = compiled_local_states_at(compiled, &context, beat, seconds)[frame];
+                let distance = if beat < first {
+                    let travel = (112.0 - beat).max(0.0) * 0.7 + (first - beat.max(112.0)) * 0.35;
+                    let speed = 0.3 + 0.7 * ((beat - 96.0) / 16.0).clamp(0.0, 1.0);
+                    travel * speed * 64.0
+                } else {
+                    // Authored parabolator: 1.5 initial velocity, 1.05 rebound.
+                    let t = f64::from(beat - first);
+                    let gap = f64::from(gap);
+                    (1.5 * 1.05 * t * (gap - t) / gap * 0.35 * 64.0) as f32
+                };
+                parity.check((state.y + 135.0 - distance).abs() < 0.015, || {
+                    format!("P{player} tap {index} {side} at beat {beat}, second {seconds}: distance {} != {distance}", state.y + 135.0)
+                });
             }
         }
     }
@@ -156,45 +228,70 @@ fn edgar_countdown_onsets_and_hit_commands() {
             beat,
             song_elapsed_seconds_at(beat, &context),
         );
-        assert!(
-            (states[frame].y + 135.0 - distance).abs() < 0.015,
-            "beat {beat}: expected {distance}px above the receptor offset, got {}",
-            states[frame].y + 135.0
-        );
+        parity.check((states[frame].y + 135.0 - distance).abs() < 0.015, || {
+            format!(
+                "beat {beat}: expected {distance}px above the receptor offset, got {}",
+                states[frame].y + 135.0
+            )
+        });
     }
     let count = named("MultitapTextP1_2");
     let arrow = named("MultitapArrowP1_2");
     let SongLuaOverlayKind::BitmapText {
-        text, text_changes, ..
+        text,
+        text_changes,
+        text_changes_in_seconds,
+        ..
     } = &compiled.overlays[count].kind
     else {
         panic!("Edgar uses numbered text");
     };
-    for (beat, expected, visible, brightness) in [
-        (113.9, "3", true, 0.4),
-        (114.0, "3", true, 0.4),
-        (114.01, "2", true, 0.7),
-        (114.75, "2", true, 0.7),
-        (114.76, "2", false, 1.0),
+    for (query, side, expected, visible, brightness) in [
+        (3, "before", "3", true, 0.4),
+        (4, "before", "3", true, 0.4),
+        (5, "before", "2", true, 0.7),
+        (6, "before", "2", true, 0.7),
+        (7, "after", "2", false, 1.0),
     ] {
-        let states = compiled_local_states_at(
-            compiled,
-            &context,
-            beat,
-            song_elapsed_seconds_at(beat, &context),
+        let sample = &native["query_frames"][query][side]["frame"];
+        let beat = value_f32(sample.get(0)).expect("native countdown beat");
+        let seconds = value_f32(sample.get(1)).expect("native countdown seconds");
+        let states = compiled_local_states_at(compiled, &context, beat, seconds);
+        let text_time = if *text_changes_in_seconds {
+            overlay_update_time(&context, SongLuaTimeUnit::Second, beat, seconds)
+        } else {
+            beat
+        };
+        let actual_text = deadsync_song_lua::overlay_text_at(text, text_changes, text_time);
+        parity.check(actual_text.as_ref() == expected, || {
+            format!("count at {beat}: {actual_text:?} != {expected:?}")
+        });
+        parity.check(states[count].visible == visible, || {
+            format!(
+                "count at {beat}: visible {} != {visible}",
+                states[count].visible
+            )
+        });
+        parity.check(
+            (states[arrow].diffuse[0] - brightness).abs() < 0.001,
+            || {
+                format!(
+                    "arrow at {beat}: brightness {} != {brightness}",
+                    states[arrow].diffuse[0]
+                )
+            },
         );
-        assert_eq!(
-            deadsync_song_lua::overlay_text_at(text, text_changes, beat).as_ref(),
-            expected
-        );
-        assert_eq!(states[count].visible, visible, "count visibility at {beat}");
-        assert!((states[arrow].diffuse[0] - brightness).abs() < 0.001);
-        assert_eq!(
-            states[count].rot_z_deg, 0.0,
-            "numbers do not spin like flip69's decoration"
-        );
-        assert_eq!(states[count].z, 10.0);
+        parity.check(states[count].rot_z_deg == 0.0, || {
+            format!(
+                "count at {beat}: numbers must not spin, got {}",
+                states[count].rot_z_deg
+            )
+        });
+        parity.check(states[count].z == 10.0, || {
+            format!("count at {beat}: z {} != 10", states[count].z)
+        });
     }
+    parity.assert_complete("Edgar onset, position and countdown controls");
 }
 
 // Compare final model matrices, rather than just the Lua zoom/rotation writes.
@@ -365,7 +462,6 @@ fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileCon
 fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
     use deadsync_song_lua::playback::{actor_conformance::WholeSongComposer, foreground_elapsed};
     let screen = [context.screen_width, context.screen_height];
-    let mut composer = WholeSongComposer::new(&compiled.overlays);
     let arrow = compiled
         .overlays
         .iter()
@@ -396,9 +492,14 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
     let SongLuaOverlayKind::NoteskinActor { slots, .. } = &compiled.overlays[arrow].kind else {
         panic!("compiled multitap must retain its actual noteskin model");
     };
-    let baseline = composer.render_overlay(&compiled.overlays, &states, arrow, screen, 0.0, beat);
-    assert_eq!(baseline.tmesh_instances.len(), slots.len());
     assert!(slots.iter().any(|slot| slot.uv_velocity == [0.0, -1.0]));
+    let layers = slots
+        .iter()
+        .map(|slot| {
+            deadsync_assets::song_lua::model_layer_from_slot(slot)
+                .expect("actual noteskin material metadata")
+        })
+        .collect::<Vec<_>>();
     let fixture: Value = serde_json::from_slice(
         &fs::read(
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -410,11 +511,39 @@ fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompil
     for case in fixture["cases"].as_array().expect("native texture cases") {
         let start = case["start_second"].as_f64().expect("start") as f32;
         let rate = case["music_rate"].as_f64().expect("rate") as f32;
-        for sample in case["samples"].as_array().expect("native texture samples") {
+        let samples = case["samples"].as_array().expect("native texture samples");
+        // actor_oracle.cpp evaluate_texture feeds 120 Hz deltas, with a
+        // partial final update at every query. Float accumulation depends on
+        // those inputs; the song's 60 Hz replay is a different schedule.
+        let mut updates = vec![(0.0, 0.0)];
+        let mut updated = 0.0_f64;
+        for sample in samples {
+            let music = sample["music_second"].as_f64().expect("music time") as f32;
+            let target = f64::from(foreground_elapsed(music, start, rate));
+            while updated < target {
+                let delta = (1.0 / 120.0_f64).min(target - updated);
+                updated += delta;
+                updates.push((updated as f32, delta as f32));
+            }
+        }
+        let mut overlays = compiled.overlays.clone();
+        let SongLuaOverlayKind::NoteskinActor {
+            texture_samples, ..
+        } = &mut overlays[arrow].kind
+        else {
+            unreachable!("checked noteskin model above");
+        };
+        *texture_samples = layers
+            .iter()
+            .map(|layer| deadsync_song_lua::replay_model_texture(layer, &updates))
+            .collect();
+        let mut composer = WholeSongComposer::new(&overlays);
+        let baseline = composer.render_overlay(&overlays, &states, arrow, screen, 0.0, beat);
+        assert_eq!(baseline.tmesh_instances.len(), slots.len());
+        for sample in samples {
             let music = sample["music_second"].as_f64().expect("music time") as f32;
             let elapsed = foreground_elapsed(music, start, rate);
-            let actual =
-                composer.render_overlay(&compiled.overlays, &states, arrow, screen, elapsed, beat);
+            let actual = composer.render_overlay(&overlays, &states, arrow, screen, elapsed, beat);
             assert_eq!(actual.tmesh_instances.len(), slots.len());
             for ((actual, base), slot) in actual
                 .tmesh_instances
@@ -552,7 +681,10 @@ fn compare_multitap_writes(
         for (index, name, track, (seq, beat, seconds, args)) in writes {
             if track.operation.ends_with(".settext") {
                 let SongLuaOverlayKind::BitmapText {
-                    text, text_changes, text_changes_in_seconds, ..
+                    text,
+                    text_changes,
+                    text_changes_in_seconds,
+                    ..
                 } = &compiled.overlays[index].kind
                 else {
                     panic!("{name} must be text");
@@ -563,8 +695,13 @@ fn compare_multitap_writes(
                     .unwrap_or_else(|| args[0].to_string());
                 let time = if *text_changes_in_seconds {
                     *seconds * deadsync_song_lua::song_music_rate(context)
-                        + context.song_timing.as_ref().map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0))
-                } else { *beat };
+                        + context
+                            .song_timing
+                            .as_ref()
+                            .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0))
+                } else {
+                    *beat
+                };
                 let actual = deadsync_song_lua::overlay_text_at(text, text_changes, time);
                 checked += 1;
                 if actual.as_ref() != expected {
@@ -1300,7 +1437,9 @@ fn multitap_strict_taps() {
     let entry = song.path().join("default.lua");
     // The original factory keeps the first tap dark and unsquashed until
     // beat > tap, and remains visible at the last tap (321STARS beats 52/56).
-    fs::write(&entry, r##"
+    fs::write(
+        &entry,
+        r##"
 multitaps = {Challenge = {{lane=1, taps={56,57,58}}}}
 local frame, arrow
 return Def.ActorFrame{
@@ -1329,33 +1468,53 @@ return Def.ActorFrame{
         end,
     },
 }
-"##).expect("write strict multitap script");
+"##,
+    )
+    .expect("write strict multitap script");
     let mut context = SongLuaCompileContext::new(song.path(), "strict multitap taps");
     context.players[1].enabled = false;
     context.players[0].difficulty = SongLuaDifficulty::Challenge;
     context.music_length_seconds = 18.2;
     context.song_timing_bpms = vec![(0.0, 192.0)];
     context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
-        0.01, 0.0, &deadsync_rules::timing::TimingSegments {
-            bpms: vec![(0.0, 192.0)], ..Default::default()
-        }, &[],
+        0.01,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 192.0)],
+            ..Default::default()
+        },
+        &[],
     ));
     let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
-        .expect("compile strict multitaps").remove(0);
-    let named = |name: &str| compiled.overlays.iter()
-        .position(|actor| actor.name.as_deref()==Some(name)).expect(name);
+        .expect("compile strict multitaps")
+        .remove(0);
+    let named = |name: &str| {
+        compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(name))
+            .expect(name)
+    };
     let frame = named("MultitapP1_1");
     let arrow = named("MultitapArrowP1_1");
     for (seconds, diffuse, zoom_y, visible) in [
         (17.5, 0.4, 1.0, true),
-        (17.5 + 1.0/60.0, 0.7, 1.215, true),
+        (17.5 + 1.0 / 60.0, 0.7, 1.215, true),
         (1087.0 / 60.0, 1.0, 1.215, true),
         (18.133333, 1.3, 1.215, false),
     ] {
         let beat = song_beat_at_elapsed_seconds(seconds, &context);
         let local = compiled_local_states_at(&compiled, &context, beat, seconds);
-        assert!((local[arrow].diffuse[0]-diffuse).abs()<0.0001, "at {seconds}: {:?}",local[arrow].diffuse);
-        assert!((local[frame].zoom_y-zoom_y).abs()<0.0001, "at {seconds}: {}",local[frame].zoom_y);
+        assert!(
+            (local[arrow].diffuse[0] - diffuse).abs() < 0.0001,
+            "at {seconds}: {:?}",
+            local[arrow].diffuse
+        );
+        assert!(
+            (local[frame].zoom_y - zoom_y).abs() < 0.0001,
+            "at {seconds}: {}",
+            local[frame].zoom_y
+        );
         assert_eq!(local[frame].visible, visible, "at {seconds}");
     }
 }

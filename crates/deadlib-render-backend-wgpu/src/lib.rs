@@ -1,10 +1,10 @@
 use deadlib_render_core::{
-    BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, PresentModePolicy,
+    BlendMode, ClockDomainTrace, DenseSlotMap, DrawOp, DrawStats, MeshSampler, PresentModePolicy,
     PresentModeTrace, PresentStats, RenderFrame, SamplerCache, SamplerDesc, SamplerFilter,
     SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshBufferCache, TexturedMeshUploads,
     TexturedMeshVertex, Yuv420Upload, draw_storage_stats, is_render_target_texture,
-    render_target_base_handle, render_target_uses_nearest,
-    resolve_render_target_textured_mesh_geometries, resolve_textured_meshes,
+    render_target_base_handle, resolve_render_target_textured_mesh_geometries,
+    resolve_textured_meshes, texture_sampler_desc, texture_sampler_variants,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -103,7 +103,7 @@ struct TexturedMeshInstanceRaw {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     texture_mask: f32,
-    cull_back: f32,
+    cull_mode: f32,
     sphere_rows: [[f32; 4]; 3],
     additive_uv: [f32; 4],
     additive_texture: TextureHandle,
@@ -166,10 +166,8 @@ enum ProjState {
 pub struct Texture {
     id: u64,
     images: TextureImages,
-    bind_group: wgpu::BindGroup,
-    bind_group_repeat: wgpu::BindGroup,
-    nearest_bind_group: Option<wgpu::BindGroup>,
-    nearest_bind_group_repeat: Option<wgpu::BindGroup>,
+    sampler_desc: SamplerDesc,
+    groups: SamplerCache<wgpu::BindGroup>,
 }
 
 impl Texture {
@@ -255,7 +253,7 @@ enum InstanceBinding {
 #[derive(Debug, Default)]
 struct DrawBindingCache {
     camera: Option<u8>,
-    texture: Option<(u64, bool)>,
+    texture: Option<(u64, SamplerDesc)>,
     instance: Option<InstanceBinding>,
     index_bound: bool,
 }
@@ -272,8 +270,8 @@ impl DrawBindingCache {
     }
 
     #[inline(always)]
-    fn texture_required(&mut self, texture: u64, repeat: bool) -> bool {
-        update_binding(&mut self.texture, (texture, repeat))
+    fn texture_required(&mut self, texture: u64, sampler: SamplerDesc) -> bool {
+        update_binding(&mut self.texture, (texture, sampler))
     }
 
     #[inline(always)]
@@ -1144,8 +1142,7 @@ pub fn create_texture(
     );
 
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let (bind_group, bind_group_repeat) =
-        create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
+    let groups = create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
 
     // Native wgpu resolves these immediately, without waiting for GPU work.
     // Report allocation failure before secondary invalid-resource errors.
@@ -1162,10 +1159,8 @@ pub fn create_texture(
             texture,
             _view: view,
         },
-        bind_group,
-        bind_group_repeat,
-        nearest_bind_group: None,
-        nearest_bind_group_repeat: None,
+        sampler_desc,
+        groups,
     })
 }
 
@@ -1174,69 +1169,43 @@ fn create_texture_groups(
     sampler_desc: SamplerDesc,
     views: [&wgpu::TextureView; 3],
     conversion: Option<&wgpu::Buffer>,
-) -> (wgpu::BindGroup, wgpu::BindGroup) {
-    let sampler = get_sampler(state, sampler_desc);
-    let sampler_repeat = get_sampler(
-        state,
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..sampler_desc
-        },
-    );
-    let conversion = conversion.unwrap_or(&state.rgba_conversion);
-    let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("wgpu texture bind group"),
-        layout: &state.bind_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(views[0]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(views[1]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(views[2]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: conversion.as_entire_binding(),
-            },
-        ],
-    });
-    let bind_group_repeat = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("wgpu texture bind group repeat"),
-        layout: &state.bind_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Sampler(&sampler_repeat),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(views[0]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::TextureView(views[1]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureView(views[2]),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: conversion.as_entire_binding(),
-            },
-        ],
-    });
-    (bind_group, bind_group_repeat)
+) -> SamplerCache<wgpu::BindGroup> {
+    let mut groups = SamplerCache::default();
+    for desc in texture_sampler_variants(sampler_desc) {
+        if groups.get(desc).is_some() {
+            continue;
+        }
+        let sampler = get_sampler(state, desc);
+        let conversion = conversion.unwrap_or(&state.rgba_conversion);
+        let bind_group = state.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("wgpu texture bind group"),
+            layout: &state.bind_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(views[0]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(views[1]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(views[2]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: conversion.as_entire_binding(),
+                },
+            ],
+        });
+        groups.insert(desc, bind_group);
+    }
+    groups
 }
 
 #[inline(always)]
@@ -1337,7 +1306,7 @@ pub fn create_yuv420_texture(
             contents: cast_slice(&params),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-    let (bind_group, bind_group_repeat) = create_texture_groups(
+    let groups = create_texture_groups(
         state,
         sampler_desc,
         [&y_view, &u_view, &v_view],
@@ -1363,10 +1332,8 @@ pub fn create_yuv420_texture(
             conversion,
             params,
         },
-        bind_group,
-        bind_group_repeat,
-        nearest_bind_group: None,
-        nearest_bind_group_repeat: None,
+        sampler_desc,
+        groups,
     })
 }
 
@@ -1423,36 +1390,20 @@ fn create_offscreen_target(
         view_formats: &[],
     });
     let view = raw.create_view(&wgpu::TextureViewDescriptor::default());
-    let (bind_group, bind_group_repeat) = create_texture_groups(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Linear,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-        [&view, &view, &view],
-        None,
-    );
-    let (nearest_bind_group, nearest_bind_group_repeat) = create_texture_groups(
-        state,
-        SamplerDesc {
-            filter: SamplerFilter::Nearest,
-            wrap: SamplerWrap::Clamp,
-            mipmaps: false,
-        },
-        [&view, &view, &view],
-        None,
-    );
+    let sampler_desc = SamplerDesc {
+        filter: SamplerFilter::Linear,
+        wrap: SamplerWrap::Clamp,
+        mipmaps: false,
+    };
+    let groups = create_texture_groups(state, sampler_desc, [&view, &view, &view], None);
     let texture = Texture {
         id: next_texture_id(state),
         images: TextureImages::Rgba {
             texture: raw,
             _view: view,
         },
-        bind_group,
-        bind_group_repeat,
-        nearest_bind_group: Some(nearest_bind_group),
-        nearest_bind_group_repeat: Some(nearest_bind_group_repeat),
+        sampler_desc,
+        groups,
     };
     let depth = with_depth.then(|| {
         create_depth_target(
@@ -1518,24 +1469,17 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
 }
 
 #[inline(always)]
-fn texture_bind_group(texture: &Texture, handle: TextureHandle, repeat: bool) -> &wgpu::BindGroup {
-    match (render_target_uses_nearest(handle), repeat) {
-        (true, false) => texture
-            .nearest_bind_group
-            .as_ref()
-            .unwrap_or(&texture.bind_group),
-        (true, true) => texture
-            .nearest_bind_group_repeat
-            .as_ref()
-            .unwrap_or(&texture.bind_group_repeat),
-        (false, false) => &texture.bind_group,
-        (false, true) => &texture.bind_group_repeat,
-    }
-}
-
-#[inline(always)]
-const fn texture_binding_id(texture: &Texture, handle: TextureHandle) -> u64 {
-    texture.id ^ ((render_target_uses_nearest(handle) as u64) << 63)
+fn texture_bind_group(
+    texture: &Texture,
+    handle: TextureHandle,
+    repeat: bool,
+    sampler: Option<MeshSampler>,
+) -> &wgpu::BindGroup {
+    let desc = texture_sampler_desc(texture.sampler_desc, handle, repeat, sampler);
+    texture
+        .groups
+        .get(desc)
+        .expect("texture creation prewarms every sampler binding")
 }
 
 struct PassDrawData<'a> {
@@ -1675,17 +1619,20 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         data.camera_binding,
                     );
                 }
-                if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false) {
+                if bindings.texture_required(
+                    tex.id,
+                    texture_sampler_desc(tex.sampler_desc, run.texture_handle, false, None),
+                ) {
                     pass.set_bind_group(
                         texture_group,
-                        Some(texture_bind_group(tex, run.texture_handle, false)),
+                        Some(texture_bind_group(tex, run.texture_handle, false, None)),
                         &[],
                     );
                     // Sprites share the mesh layout to retain immediate camera
                     // data. Wgpu requires its unused material group to be bound.
                     pass.set_bind_group(
                         texture_group + 1,
-                        Some(texture_bind_group(tex, run.texture_handle, false)),
+                        Some(texture_bind_group(tex, run.texture_handle, false, None)),
                         &[],
                     );
                 }
@@ -1780,10 +1727,18 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         data.camera_binding,
                     );
                 }
-                if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true) {
+                if bindings.texture_required(
+                    tex.id,
+                    texture_sampler_desc(tex.sampler_desc, run.texture_handle, true, run.sampler),
+                ) {
                     pass.set_bind_group(
                         texture_group,
-                        Some(texture_bind_group(tex, run.texture_handle, true)),
+                        Some(texture_bind_group(
+                            tex,
+                            run.texture_handle,
+                            true,
+                            run.sampler,
+                        )),
                         &[],
                     );
                 }
@@ -1791,7 +1746,12 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     resolved_texture(state, textures, run.additive_texture).unwrap_or(tex);
                 pass.set_bind_group(
                     texture_group + 1,
-                    Some(texture_bind_group(additive, run.additive_texture, true)),
+                    Some(texture_bind_group(
+                        additive,
+                        run.additive_texture,
+                        true,
+                        None,
+                    )),
                     &[],
                 );
                 if tmesh_buffer_cache.update_required(source) {
@@ -3839,6 +3799,7 @@ mod tests {
         TMESH_SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, clamp_vertex_count,
         stage_offscreen_projection_upload, stage_projection_upload,
     };
+    use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -3962,6 +3923,7 @@ mod tests {
                 cache_key: 0,
             }],
             ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+                sampler: None,
                 additive_texture: 0,
                 texture_handle: 1,
                 blend: BlendMode::Alpha,
@@ -3991,7 +3953,7 @@ mod tests {
                     let mut instance = TexturedMeshInstanceRaw::new(
                         transform, [1.0; 4], [1.0; 2], [0.0; 2], [0.0; 2], false,
                     );
-                    instance.cull_back = f32::from(cull);
+                    instance.cull_mode = f32::from(cull);
                     frame.tmesh_instances[0] = instance;
                     request_screenshot(&mut state);
                     draw(&mut state, &frame, &textures, false).expect("render fixture");
@@ -4017,11 +3979,29 @@ mod tests {
         cache.reset_camera();
         assert!(cache.camera_required(2));
 
-        assert!(cache.texture_required(7, false));
-        assert!(!cache.texture_required(7, false));
-        assert!(cache.texture_required(7, true));
-        assert!(cache.texture_required(8, true));
-        assert!(!cache.texture_required(8, true));
+        assert!(cache.texture_required(7, SamplerDesc::default()));
+        assert!(!cache.texture_required(7, SamplerDesc::default()));
+        assert!(cache.texture_required(
+            7,
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..SamplerDesc::default()
+            }
+        ));
+        assert!(cache.texture_required(
+            8,
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..SamplerDesc::default()
+            }
+        ));
+        assert!(!cache.texture_required(
+            8,
+            SamplerDesc {
+                wrap: SamplerWrap::Repeat,
+                ..SamplerDesc::default()
+            }
+        ));
     }
 
     #[test]
@@ -4035,6 +4015,21 @@ mod tests {
         assert!(cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(!cache.instance_required(InstanceBinding::TexturedMesh));
         assert!(cache.instance_required(InstanceBinding::Sprite));
+    }
+
+    #[test]
+    fn draw_binding_cache_rebinds_filter_on_the_same_image() {
+        let mut cache = DrawBindingCache::default();
+        let linear = SamplerDesc::default();
+        let nearest = SamplerDesc {
+            filter: SamplerFilter::Nearest,
+            ..linear
+        };
+        assert!(cache.texture_required(7, nearest));
+        assert!(!cache.texture_required(7, nearest));
+        assert!(cache.texture_required(7, linear));
+        assert!(cache.texture_required(7, nearest));
+        assert!(cache.texture_required(7, linear));
     }
 
     #[test]

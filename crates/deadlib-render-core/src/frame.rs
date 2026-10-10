@@ -81,6 +81,7 @@ pub struct MeshRun {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TexturedMeshRun {
+    pub sampler: Option<crate::MeshSampler>,
     pub additive_texture: TextureHandle,
     pub geometry: u32,
     pub instance_start: u32,

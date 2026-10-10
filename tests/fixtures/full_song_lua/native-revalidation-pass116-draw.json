@@ -1,0 +1,144 @@
+{
+  "build_parent_commit": "b631f2e0a5859a44a63f57d946b420f67801c2ed",
+  "native_harness_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+  "native_archive_sha256": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663",
+  "native_trace_sha256": "d3a0772fea486fa8d30074fc88a54303e9c51d06a119709c1c7fe0bf2ed49921",
+  "reference_source_sha256": {
+    "C:\\GitHub\\rework\\itgmania\\src\\Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "C:\\GitHub\\rework\\itgmania\\src\\Player.cpp": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935",
+    "C:\\GitHub\\rework\\itgmania\\Themes\\Simply-Love-SM5\\Graphics\\Player Judgment.lua": "61684eeea8cfc32c5a6ea2e03798aa2ceeb9fd6373916525f9f4906cf537442e",
+    "C:\\GitHub\\rework\\lua-songs\\[10] Lake of Lost Nostalgia (SX) [Ky_Dash]\\sm5\\core\\players.lua": "9a222b2250c2f408f74e57270e2b191212f5fe6fc219dc5a55d1f29df17ad3ce"
+  },
+  "finding": "Simply Love uses a Judgment ActorFrame with an initially hidden JudgmentWithOffsets Sprite. The authored script draws the frame while toggling its wrapper. Draw capture mistook player HUD frames for local Lua containers and dropped their draw requests.",
+  "fix": "Recognize tagged player children as external HUD draw sources, preserving all actor and wrapper visibility checks.",
+  "native_custom_draw_frames": 7801,
+  "custom_draw_frames_before_passed": 0,
+  "custom_draw_frames_after_passed": 7801,
+  "before": {
+    "position": 37,
+    "source_simfile": "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc",
+    "archive": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst",
+    "archive_sha256": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663",
+    "harness_version": "0.1.52",
+    "source_commit": "e7fe82d02aa9071c89927d56ddf8c9b970ea63c2",
+    "source_pending_commit": false,
+    "binary_sha256": "b0d582fd43e5a2672075327a702b59b57cec36195de9f845e16f4956ccd9911b",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-pause-clock-v2-full_song_lua.exe",
+      "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 58.474140299949795,
+    "comparisons_passed": 315567,
+    "comparisons_failed": 7801,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-037-native-current-v1.log",
+    "log_sha256": "6c8f5edce22f92be6dc88639b4d75a69e44d9079afd01144c255ac48cd797425",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass116-top-037-native-v1.json",
+    "native_receipt_sha256": "1f20465badc2cd3911cba70c38d5e24227ac5e326fadda3fa3f14c28ca0b1df3",
+    "full_corpus_complete": false
+  },
+  "after": {
+    "position": 37,
+    "source_simfile": "[10] Lake of Lost Nostalgia (SX) [Ky_Dash]/Lake of Lost Nostalgia.ssc",
+    "archive": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst",
+    "archive_sha256": "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663",
+    "harness_version": "0.1.52",
+    "source_commit": "b631f2e0a5859a44a63f57d946b420f67801c2ed",
+    "source_pending_commit": true,
+    "binary_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-full_song_lua.exe",
+      "99406157c7ad8eaac74c5d79984cc099ed219eafbbb2c0c7c0ae2116a5547663.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 64.19928750023246,
+    "comparisons_passed": 323368,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-037-judgment-draw-v1.log",
+    "log_sha256": "a2930bfe2092a5b7580387af90119d722685a9bf03ccf5fb64a7349b5f26305b",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass116-top-037-native-v1.json",
+    "native_receipt_sha256": "1f20465badc2cd3911cba70c38d5e24227ac5e326fadda3fa3f14c28ca0b1df3",
+    "full_corpus_complete": false
+  },
+  "focused_draw_tests": {
+    "source_commit": "b631f2e0a5859a44a63f57d946b420f67801c2ed",
+    "source_pending_commit": true,
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-song-lua-unit.exe",
+    "binary_sha256": "b3b3d4b83bba1e19ecfb1109a18d0044174f398685ffa54fe3015cbb8c232252",
+    "tests_passed": 4,
+    "results": [
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-song-lua-unit.exe",
+          "tests::compile_song_lua_preserves_player_state_at_manual_draw",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 1.9119807002134621,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-test1.log",
+        "log_sha256": "f996d56841f806380ec8eab3f18db3de59b95b10e86caaee11a482de269e17fa"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-song-lua-unit.exe",
+          "tests::compile_song_lua_accepts_actorframetexture_draw_call",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.3956741997972131,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-test2.log",
+        "log_sha256": "e776b26987b7ce3a72227c5b17370e052c0726107d62b674de3e7fe73b57e531"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-song-lua-unit.exe",
+          "tests::compile_song_lua_accepts_set_draw_function",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.39219329971820116,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-test3.log",
+        "log_sha256": "aa7c5297aeb5458862203e9bc27535e3951525284eb954584d7aa2f1822d364f"
+      },
+      {
+        "command": [
+          "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-song-lua-unit.exe",
+          "tests::compile_song_lua_captures_actor_draw_order",
+          "--exact",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "elapsed_seconds": 0.3995293998159468,
+        "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass115\\native-judgment-draw-v1-test4.log",
+        "log_sha256": "eac680313e5072ba42244b7cfa9ea26e38face1b4e9f77ac813cfb337455025f"
+      }
+    ],
+    "build_command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "deadsync-song-lua",
+      "--lib",
+      "--target-dir",
+      "target/song-lua-pass95-build",
+      "--config",
+      "profile.dev.debug=0",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "build_log_sha256": "b3bf7af2da407ca91e5d9f042d20a7ccb444b99b85980472b007fae1cafa3ab3"
+  },
+  "tolerances_changed": false,
+  "native_requests_filtered": false,
+  "framebuffer_pixel_parity_proven": false,
+  "remaining_gaps": [
+    "Eight Edgar off-grid positions",
+    "Song/Steps timing getter placeholders",
+    "Explicit Model culling",
+    "Original remaining corpus and framebuffer parity"
+  ]
+}

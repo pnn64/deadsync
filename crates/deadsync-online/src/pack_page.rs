@@ -61,13 +61,11 @@ impl SongRow {
     /// ordered. This is what a beginner would actually be playing.
     #[must_use]
     pub fn low_meter(&self) -> Option<u32> {
-        let digits: String = self
-            .meters
-            .trim_start()
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        digits.parse().ok()
+        let meters = self.meters.trim_start();
+        let end = meters
+            .find(|ch: char| !ch.is_ascii_digit())
+            .unwrap_or(meters.len());
+        meters[..end].parse().ok()
     }
 
     /// The hardest meter in the row, which is what tints the meter string.
@@ -92,25 +90,28 @@ impl SongRow {
     /// `artist  -  150 bpm  -  1:52  -  Charter`, with any part absent.
     #[must_use]
     pub fn subline(&self) -> String {
-        let bpm = if self.bpm.is_empty() {
-            String::new()
-        } else {
-            format!("{} bpm", self.bpm)
-        };
-        let mut bits: Vec<&str> = Vec::with_capacity(4);
-        if !self.artist.is_empty() {
-            bits.push(self.artist.as_str());
+        let parts = [
+            (self.artist.as_str(), ""),
+            (self.bpm.as_str(), " bpm"),
+            (self.length.as_str(), ""),
+            (self.credit.as_str(), ""),
+        ]
+        .into_iter()
+        .filter(|(text, _)| !text.is_empty());
+        let capacity = parts
+            .clone()
+            .map(|(text, suffix)| text.len() + suffix.len() + "  -  ".len())
+            .sum::<usize>()
+            .saturating_sub("  -  ".len());
+        let mut out = String::with_capacity(capacity);
+        for (text, suffix) in parts {
+            if !out.is_empty() {
+                out.push_str("  -  ");
+            }
+            out.push_str(text);
+            out.push_str(suffix);
         }
-        if !bpm.is_empty() {
-            bits.push(bpm.as_str());
-        }
-        if !self.length.is_empty() {
-            bits.push(self.length.as_str());
-        }
-        if !self.credit.is_empty() {
-            bits.push(self.credit.as_str());
-        }
-        bits.join("  -  ")
+        out
     }
 }
 
@@ -489,14 +490,18 @@ fn style_tokens(attribute_value: &str) -> Vec<String> {
 
 /// Every integer in a comma-separated Chart.js array literal.
 fn numbers(list: &str) -> Vec<u32> {
-    let mut out = Vec::new();
-    for piece in list.split(',') {
-        let digits: String = piece.chars().filter(char::is_ascii_digit).collect();
-        if let Ok(value) = digits.parse::<u32>() {
-            out.push(value);
-        }
-    }
-    out
+    list.split(',')
+        .filter_map(|piece| {
+            let mut digits = piece.bytes().filter(u8::is_ascii_digit);
+            let mut value = u32::from(digits.next()? - b'0');
+            for digit in digits {
+                value = value
+                    .checked_mul(10)?
+                    .checked_add(u32::from(digit - b'0'))?;
+            }
+            Some(value)
+        })
+        .collect()
 }
 
 /// Turn a site-relative image path into an absolute URL, dropping the site's
@@ -618,14 +623,14 @@ fn parse_songs(html: &str) -> Vec<SongRow> {
                 .as_str(),
         );
         let song = SongRow {
-            title: clean(title_of(cells[1].as_str()).unwrap_or_default().as_str()),
-            artist: clean(artist_of(cells[1].as_str()).unwrap_or_default().as_str()),
-            length: clean(cells[3].as_str()),
-            bpm: clean(cells[4].as_str()),
+            title: clean(title_of(cells[1]).unwrap_or_default()),
+            artist: clean(artist_of(cells[1]).unwrap_or_default()),
+            length: clean(cells[3]),
+            bpm: clean(cells[4]),
             credit: credit.trim_end_matches([',', ' ']).to_owned(),
-            meters: clean(cells[7].as_str()),
-            image_url: attribute(cells[0].as_str(), "src").and_then(media_url),
-            styles: attribute(cells[6].as_str(), "data-sort")
+            meters: clean(cells[7]),
+            image_url: attribute(cells[0], "src").and_then(media_url),
+            styles: attribute(cells[6], "data-sort")
                 .map(style_tokens)
                 .unwrap_or_default(),
         };
@@ -642,7 +647,7 @@ fn parse_songs(html: &str) -> Vec<SongRow> {
 /// The opening tag is kept because one cell carries its only real content in
 /// an attribute: the styles column's text is the page's repeated filter
 /// buttons, while its `data-sort` is the song's actual styles.
-fn table_cells(row: &str) -> Vec<String> {
+fn table_cells(row: &str) -> Vec<&str> {
     let mut cells = Vec::new();
     let mut at = 0usize;
     while let Some(open) = row.get(at..).and_then(|rest| rest.find("<td")) {
@@ -651,26 +656,26 @@ fn table_cells(row: &str) -> Vec<String> {
             break;
         };
         let stop = tag_start + end + "</td>".len();
-        cells.push(row[tag_start..stop].to_owned());
+        cells.push(&row[tag_start..stop]);
         at = stop;
     }
     cells
 }
 
 /// The song title, which is the text of the `/song/<id>` link.
-fn title_of(cell: &str) -> Option<String> {
+fn title_of(cell: &str) -> Option<&str> {
     let at = cell.find("/song/")?;
     let close = cell.get(at..)?.find('>')? + at + 1;
     let end = cell.get(close..)?.find("</a>")? + close;
-    Some(cell[close..end].to_owned())
+    Some(&cell[close..end])
 }
 
 /// The artist, which the site puts in a small grey span under the title.
-fn artist_of(cell: &str) -> Option<String> {
+fn artist_of(cell: &str) -> Option<&str> {
     let at = cell.find("text-gray-400")?;
     let close = cell.get(at..)?.find('>')? + at + 1;
     let end = cell.get(close..)?.find("</span>")? + close;
-    Some(cell[close..end].to_owned())
+    Some(&cell[close..end])
 }
 
 #[cfg(test)]
@@ -869,3 +874,19 @@ mod tests {
         assert_eq!(page.difficulty_span(), None);
     }
 }
+
+#[cfg(test)]
+#[path = "pack_response_original.rs"]
+mod response_original;
+
+#[cfg(test)]
+#[path = "pack_response_perf.rs"]
+mod response_perf_tests;
+
+#[cfg(test)]
+#[path = "pack_meter_perf.rs"]
+mod meter_perf_tests;
+
+#[cfg(test)]
+#[path = "pack_page_perf.rs"]
+mod perf_tests;

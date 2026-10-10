@@ -29,7 +29,7 @@ struct VertexOut {
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
     @location(2) texture_mask: f32,
-    @location(3) @interpolate(flat) cull_back: f32,
+    @location(3) @interpolate(flat) cull_mode: f32,
     @location(4) additive_uv: vec2<f32>,
     @location(5) @interpolate(flat) additive: f32,
 };
@@ -65,13 +65,13 @@ fn sphere_uv(input: VertexIn) -> vec2<f32> {
     out.additive_uv = secondary * input.additive_uv.xy + input.additive_uv.zw;
     out.color = input.color * input.tint;
     out.texture_mask = input.flags.z;
-    out.cull_back = input.flags.w;
+    out.cull_mode = input.flags.w;
     out.additive = select(0.0, 1.0, (mode & 4u) != 0u);
     return out;
 }
 
 @fragment fn fs_main(input: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
-    if input.cull_back > 0.5 && !front { discard; }
+    if (input.cull_mode > 0.5 && input.cull_mode < 1.5 && !front) || (input.cull_mode > 1.5 && front) { discard; }
     let texel = textureSample(u_texture, u_sampler, input.uv);
     var color = texel * input.color;
     if input.texture_mask > 0.5 {

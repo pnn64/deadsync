@@ -18,8 +18,10 @@ pub struct SongLuaModelTextureUv {
     pub shift: [f32; 2],
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SongLuaModelTextureFrame {
+    /// Prewarmed image for this state; None retains the layer's static source.
+    pub texture_key: Option<Arc<str>>,
     pub delay: f32,
     pub diffuse: SongLuaModelTextureUv,
     pub glow: SongLuaModelTextureUv,
@@ -28,6 +30,9 @@ pub struct SongLuaModelTextureFrame {
 #[derive(Debug, Clone, Copy)]
 pub struct SongLuaTextureSample {
     pub second: f32,
+    /// Native material state indices; image identities live once in the layer.
+    pub diffuse_state: u16,
+    pub additive_state: Option<u16>,
     pub diffuse: SongLuaModelTextureUv,
     pub glow: SongLuaModelTextureUv,
     /// Independent secondary frame, with the native diffuse translation.
@@ -71,7 +76,7 @@ impl MaterialClock {
             seconds += frame.delay;
         }
         seconds += self.seconds;
-        let frame = self.frames[self.frame];
+        let frame = &self.frames[self.frame];
         let mut diffuse = frame.diffuse;
         for axis in 0..2 {
             let shift = self.velocity[axis] * (seconds / self.cycle) * diffuse.scale[axis];
@@ -97,21 +102,33 @@ pub(crate) struct Clock {
 impl Clock {
     pub(crate) fn new<V>(layer: &SongLuaOverlayModelLayer<V>) -> Option<Self> {
         let frames = &layer.texture_frames;
-        if layer.additive_frames.len() <= 1 && (frames.is_empty()
-            || (frames.len() == 1 && layer.uv_velocity == [0.0; 2]
-                && frames[0].diffuse == frames[0].glow)) {
+        if layer.additive_frames.len() <= 1
+            && (frames.is_empty()
+                || (frames.len() == 1
+                    && layer.uv_velocity == [0.0; 2]
+                    && frames[0].diffuse == frames[0].glow))
+        {
             return None;
         }
         let frames = if frames.is_empty() {
             let uv = SongLuaModelTextureUv {
-                scale: layer.uv_scale, offset: layer.uv_offset, shift: layer.uv_tex_shift,
+                scale: layer.uv_scale,
+                offset: layer.uv_offset,
+                shift: layer.uv_tex_shift,
             };
-            Arc::from([SongLuaModelTextureFrame { delay: 1.0, diffuse: uv, glow: uv }])
-        } else { Arc::clone(frames) };
+            Arc::from([SongLuaModelTextureFrame {
+                texture_key: None,
+                delay: 1.0,
+                diffuse: uv,
+                glow: uv,
+            }])
+        } else {
+            Arc::clone(frames)
+        };
         let mut clock = Self {
             diffuse: MaterialClock::new(frames, layer.uv_velocity),
-            additive: (!layer.additive_frames.is_empty()).then(||
-                MaterialClock::new(Arc::clone(&layer.additive_frames), [0.0; 2])),
+            additive: (!layer.additive_frames.is_empty())
+                .then(|| MaterialClock::new(Arc::clone(&layer.additive_frames), [0.0; 2])),
             delta: None,
             samples: Vec::new(),
         };
@@ -136,14 +153,21 @@ impl Clock {
             // Model::DrawPrimitives shares the diffuse texture matrix. The
             // secondary material's own offsets and velocity are not applied.
             for axis in 0..2 {
-                let shift = (diffuse.offset[axis] - glow.offset[axis])
-                    / glow.scale[axis] * uv.scale[axis];
+                let shift =
+                    (diffuse.offset[axis] - glow.offset[axis]) / glow.scale[axis] * uv.scale[axis];
                 uv.offset[axis] += shift;
                 uv.shift[axis] += shift;
             }
             uv
         });
-        self.samples.push(SongLuaTextureSample { second, diffuse, glow, additive });
+        self.samples.push(SongLuaTextureSample {
+            second,
+            diffuse,
+            glow,
+            additive,
+            diffuse_state: self.diffuse.frame as u16,
+            additive_state: self.additive.as_ref().map(|clock| clock.frame as u16),
+        });
     }
 
     pub(crate) fn finish(self) -> Arc<[SongLuaTextureSample]> {
