@@ -3692,6 +3692,129 @@ fn compiled_message_state_at(
 }
 
 #[test]
+fn column_xy_offsets_match_native_spline() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let entry = song_dir.join("column-xy-offset.lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/column-xy-offset-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Column XY native control");
+    context.style_name = "single".into();
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile column XY control");
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            ..Default::default()
+        },
+        &[],
+    );
+    let mut failures = Vec::new();
+    let mut checks = 0;
+    for player in 0..2 {
+        let windows = compiled
+            .iter()
+            .flat_map(|layer| {
+                deadsync_song_lua::gameplay::build_song_lua_column_offset_windows_for_player(
+                    layer, &timing, player, 0.0,
+                )
+            })
+            .collect::<Vec<_>>();
+        for column in [0, 3] {
+            let name = format!("P{}C{}", player + 1, column + 1);
+            let definition = trace
+                .actor_definitions
+                .iter()
+                .find(|definition| definition.name.as_deref() == Some(name.as_str()))
+                .expect("native evaluation probe");
+            for track in trace
+                .operation_tracks
+                .iter()
+                .filter(|track| definition.runtime_actors.contains(&track.actor))
+            {
+                let axis = match track.operation.as_str() {
+                    "Actor.x" => 0,
+                    "Actor.y" => 1,
+                    _ => continue,
+                };
+                for (_, _, second, args) in &track.samples {
+                    let expected =
+                        value_f32(args.first()).expect("linked native spline evaluation");
+                    let (transforms, _) =
+                        deadsync_gameplay::song_lua_column_transforms(&windows, 4, *second);
+                    let actual = transforms[axis][column];
+                    checks += 1;
+                    if !actual.is_finite() || (actual - expected).abs() > EPSILON {
+                        failures.push((name.clone(), axis, *second, expected, actual));
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(
+        checks, 16,
+        "both axes, both players, columns 1/4 and both updates"
+    );
+    assert!(
+        failures.is_empty(),
+        "native XY spline offsets differ: {failures:?}"
+    );
+    let layer = &compiled[0];
+    let mut queries = 0;
+    for definition in trace.actor_definitions.iter().filter(|actor| {
+        actor
+            .name
+            .as_deref()
+            .is_some_and(|name| name.starts_with("Query"))
+    }) {
+        let overlay = layer
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name == definition.name)
+            .expect("compiled spline query probe");
+        for track in trace
+            .operation_tracks
+            .iter()
+            .filter(|track| definition.runtime_actors.contains(&track.actor))
+        {
+            let target = match track.operation.as_str() {
+                "Actor.x" => SongLuaOverlayUpdateTarget::X,
+                "Actor.y" => SongLuaOverlayUpdateTarget::Y,
+                "Actor.z" => SongLuaOverlayUpdateTarget::Z,
+                _ => continue,
+            };
+            for (_, beat, second, args) in &track.samples {
+                let expected = value_f32(args.first()).expect("native query coordinate");
+                let value =
+                    compiled_update_value_at(&context, layer, overlay, target, *beat, *second);
+                let actual = match value {
+                    Some(SongLuaOverlayUpdateValue::F32(value)) => value,
+                    None => match target {
+                        SongLuaOverlayUpdateTarget::X => layer.overlays[overlay].initial_state.x,
+                        SongLuaOverlayUpdateTarget::Y => layer.overlays[overlay].initial_state.y,
+                        _ => layer.overlays[overlay].initial_state.z,
+                    },
+                    _ => panic!("spline query coordinate must be a float"),
+                };
+                assert!(
+                    (actual - expected).abs() <= EPSILON,
+                    "{:?} {target:?}: native {expected}, DeadSync {actual}",
+                    definition.name
+                );
+                queries += 1;
+            }
+        }
+    }
+    assert_eq!(queries, 42, "14 native evaluations across all three axes");
+}
+
+#[test]
 fn column_splines_match_native_clock_offsets() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))

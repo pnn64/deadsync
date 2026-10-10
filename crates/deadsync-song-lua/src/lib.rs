@@ -5209,7 +5209,7 @@ pub fn note_column_pos_offset_y_from_points(mode: &str, points: &[[f32; 2]]) -> 
     }
     let mut y = None::<f32>;
     for [x, point_y] in points.iter().copied() {
-        if !x.is_finite() || !point_y.is_finite() || x.abs() > EPS {
+        if !x.is_finite() || !point_y.is_finite() {
             return None;
         }
         if let Some(y) = y {
@@ -25751,7 +25751,7 @@ end
         );
         assert_eq!(
             note_column_pos_offset_y_from_points("NoteColumnSplineMode_Offset", &[[0.01, 2.0]]),
-            None
+            Some(2.0)
         );
     }
 

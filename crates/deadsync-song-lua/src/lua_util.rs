@@ -13739,6 +13739,18 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
     spline.set("__songlua_spline_size", 0_i64)?;
     spline.set("__songlua_spline_loop", false)?;
     spline.set("__songlua_spline_points", lua.create_table()?)?;
+    spline.set("__songlua_spline_coefficients", lua.create_table()?)?;
+    spline.set(
+        "evaluate",
+        lua.create_function({
+            let spline = spline.clone();
+            move |lua, args: MultiValue| {
+                let t = lua.coerce_number(args.get(1).cloned().unwrap_or(Value::Nil))?
+                    .ok_or_else(|| mlua::Error::runtime("Spline evaluation requires a number"))?;
+                eval_spline_table(lua, &spline, t as f32)
+            }
+        })?,
+    )?;
     spline.set(
         "SetSize",
         lua.create_function({
@@ -13761,8 +13773,10 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
                 let size = size as i64;
                 let prior = spline.get::<i64>("__songlua_spline_size")?;
                 let points = spline.get::<Table>("__songlua_spline_points")?;
+                let coefficients = spline.get::<Table>("__songlua_spline_coefficients")?;
                 for index in size + 1..=prior {
                     points.raw_set(index, Value::Nil)?;
+                    coefficients.raw_set(index, Value::Nil)?;
                 }
                 // Unwritten knots are implicit native zeros. Avoid thousands of
                 // Lua tables in startup snapshots; SetPoint owns stored vectors.
@@ -13821,7 +13835,10 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         "Solve",
         lua.create_function({
             let spline = spline.clone();
-            move |_, _args: MultiValue| Ok(spline.clone())
+            move |lua, _args: MultiValue| {
+                solve_spline_table(lua, &spline)?;
+                Ok(spline.clone())
+            }
         })?,
     )?;
     spline.set(
@@ -13849,6 +13866,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         })?,
     )?;
     for (alias, name) in [
+        ("Evaluate", "evaluate"),
         ("set_size", "SetSize"),
         ("get_size", "GetSize"),
         ("set_point", "SetPoint"),
@@ -13859,6 +13877,59 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         spline.set(alias, spline.get::<Function>(name)?)?;
     }
     Ok(spline)
+}
+
+fn solve_spline_table(lua: &Lua, spline: &Table) -> mlua::Result<()> {
+    let size = spline.get::<usize>("__songlua_spline_size")?;
+    let table = spline.get::<Table>("__songlua_spline_points")?;
+    let mut points = Vec::with_capacity(size);
+    for index in 1..=size {
+        points.push(read_spline_point(&table, index)?);
+    }
+    let looping = spline.get::<bool>("__songlua_spline_loop")?;
+    if looping && points.windows(2).any(|pair| pair[0] != pair[1]) {
+        return Err(mlua::Error::runtime("Nonconstant looping splines are unsupported"));
+    }
+    let mut solver = deadsync_gameplay::SongLuaSplineSolver::default();
+    let coefficients = solver.solve(&points);
+    let table = lua.create_table()?;
+    for (index, point) in coefficients.iter().enumerate() {
+        let axes = lua.create_table()?;
+        for (axis, values) in point.iter().enumerate() {
+            axes.raw_set(axis + 1, lua.create_sequence_from(values[1..].iter().copied())?)?;
+        }
+        table.raw_set(index + 1, axes)?;
+    }
+    spline.set("__songlua_spline_coefficients", table)
+}
+
+fn eval_spline_table(lua: &Lua, spline: &Table, t: f32) -> mlua::Result<Table> {
+    let size = spline.get::<usize>("__songlua_spline_size")?;
+    let mut values = [0.0_f32; 3];
+    if size > 0 {
+        // CubicSpline::p_and_tfrac_from_t truncates, including negative
+        // fractions, and clamps at the final knot for non-looping splines.
+        let index = t as i32;
+        let (index, fraction) = if index < 0 {
+            (0, 0.0)
+        } else if index as usize >= size - 1 {
+            (size - 1, 0.0)
+        } else {
+            (index as usize, t - index as f32)
+        };
+        let square = fraction * fraction;
+        let cube = square * fraction;
+        values = read_spline_point(&spline.get::<Table>("__songlua_spline_points")?, index + 1)?;
+        let coefficients = spline.get::<Table>("__songlua_spline_coefficients")?;
+        let point = coefficients.raw_get::<Option<Table>>(index + 1)?;
+        for (axis, value) in values.iter_mut().enumerate() {
+            if let Some(point) = &point {
+                let [b, c, d] = read_spline_point(point, axis + 1)?;
+                *value = *value + b * fraction + c * square + d * cube;
+            }
+        }
+    }
+    lua.create_sequence_from(values)
 }
 
 fn read_spline_point(points: &Table, index: usize) -> mlua::Result<[f32; 3]> {
@@ -14041,7 +14112,9 @@ pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
             .map_err(|err| err.to_string())?;
         // Keep reading after a geometric mismatch: a later malformed table
         // must still produce the same lookup error as the collecting path.
-        valid &= x.is_finite() && point_y.is_finite() && x.abs() <= 0.001;
+        // NCSplineHandler's Offset adds each axis independently. A nonzero
+        // horizontal offset does not invalidate a uniform vertical offset.
+        valid &= x.is_finite() && point_y.is_finite();
         if let Some(first_y) = first_y {
             valid &= (point_y - first_y).abs() <= 0.001;
         } else {
@@ -14446,6 +14519,9 @@ fn note_column_position_x_offset(column: &Table) -> Result<Option<f32>, String> 
     let mode = handler
         .get::<String>("__songlua_spline_mode")
         .map_err(|err| err.to_string())?;
+    if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
+        return note_column_handler_uniform_component(column, "__songlua_pos_handler", 1, 0.0);
+    }
     Ok((mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled")
         || mode.eq_ignore_ascii_case("NoteColumnSplineMode_Position"))
     .then_some(0.0))

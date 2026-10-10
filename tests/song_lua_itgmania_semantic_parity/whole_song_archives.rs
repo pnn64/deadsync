@@ -1284,7 +1284,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             if trace
                 .player_render_tracks
                 .iter()
-                .all(|track| !track.transform_samples.is_empty())
+                .any(|track| !track.transform_samples.is_empty())
             {
                 runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
             }
