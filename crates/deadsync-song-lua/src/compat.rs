@@ -35,19 +35,9 @@ pub fn install_stdlib_compat(
     song_dir: &Path,
     callbacks: SongLuaCompatCallbacks,
 ) -> mlua::Result<()> {
-    crate::syntax::install_concat(lua)?;
     install_random_compat(lua)?;
     let globals = lua.globals();
     let table: Table = globals.get("table")?;
-    table.set(
-        "getn",
-        lua.create_function(|_, value: Value| {
-            Ok(match value {
-                Value::Table(table) => table.raw_len() as i64,
-                _ => 0,
-            })
-        })?,
-    )?;
     table.set(
         "rotate_right",
         lua.create_function(|lua, args: MultiValue| rotate_lua_table(lua, &args, false))?,
@@ -119,7 +109,6 @@ pub fn install_stdlib_compat(
             })?,
         )?;
     }
-    globals.set("unpack", table.get::<Value>("unpack")?)?;
     globals.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
@@ -404,13 +393,12 @@ pub fn install_stdlib_compat(
     )?;
     globals.set(
         "ivalues",
-        lua.create_function(|lua, table: Table| {
-            let mut index = 0_i64;
-            lua.create_function_mut(move |_, ()| {
-                index += 1;
-                table.raw_get::<Value>(index)
-            })
-        })?,
+        // Native 01 base.lua uses normal indexing, accepts input before the
+        // first lookup, and observes changes through the captured table.
+        lua.load(
+            "return function(t) local n = 0; return function() n = n + 1; return t[n] end end",
+        )
+        .eval::<mlua::Function>()?,
     )?;
     globals.set("Trace", lua.create_function(|_, _msg: String| Ok(()))?)?;
     // _fallback/Scripts/02 Utilities.lua: preserve actor and shared-name walks.
@@ -521,7 +509,7 @@ end
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
-            let code = crate::syntax::preprocess_source(&code).map_err(mlua::Error::external)?;
+            let code = crate::preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
             let mut chunk = lua.load(&code);
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);

@@ -44,7 +44,7 @@ const SRPG10_TEXT_SHADOW: f32 = 0.4;
 
 const NORMAL_COLOR_HEX: &str = "#888888";
 
-pub const OPTION_COUNT: usize = 3;
+pub const OPTION_COUNT: usize = 4;
 const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 
 #[inline]
@@ -82,6 +82,23 @@ fn shutdown_index(state: &State) -> Option<usize> {
 
 const MENU_BELOW_LOGO: f32 = 29.0;
 const MENU_ROW_SPACING: f32 = 28.0;
+
+/// Height of the bottom screen bar (screen_bar.rs BAR_H), plus a little air.
+/// The menu rows must finish above this or the last one is drawn under the
+/// footer -- which is exactly what happened when Find Content made a fourth.
+const MENU_FOOTER_RESERVE: f32 = 32.0 + 14.0;
+
+/// Row pitch that keeps every row inside the band between the logo and the
+/// footer. Returns the design spacing whenever it fits, so the three-row menu
+/// this theme shipped with is pixel-identical.
+fn menu_row_spacing(rows: usize, base_y: f32) -> f32 {
+    if rows <= 1 {
+        return MENU_ROW_SPACING;
+    }
+    let bottom = screen_height() - MENU_FOOTER_RESERVE;
+    let available = (bottom - base_y).max(0.0);
+    (available / (rows - 1) as f32).min(MENU_ROW_SPACING)
+}
 const MENU_BASE_PX: f32 = 32.0;
 const MENU_FOCUS_ZOOM: f32 = 0.5;
 const MENU_UNFOCUSED_ZOOM: f32 = 0.4;
@@ -178,6 +195,7 @@ fn build_chrome_text(i18n_revision: u64) -> MenuChromeText {
         options: [
             tr("Menu", "Gameplay"),
             tr("Menu", "Options"),
+            tr("Menu", "FindContent"),
             tr("Menu", "Exit"),
             tr("Menu", "Shutdown"),
         ],
@@ -227,7 +245,13 @@ pub fn init() -> State {
         credit_text_cache: RefCell::new(None),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
-        row_anims: [ROW_FOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED, ROW_UNFOCUSED],
+        row_anims: [
+            ROW_FOCUSED,
+            ROW_UNFOCUSED,
+            ROW_UNFOCUSED,
+            ROW_UNFOCUSED,
+            ROW_UNFOCUSED,
+        ],
         idle_elapsed: 0.0,
     }
 }
@@ -752,6 +776,7 @@ pub fn push_actors(
 
     // 3) menu list
     let base_y = lp.top_margin + lp.target_h + MENU_BELOW_LOGO;
+    let row_spacing = menu_row_spacing(option_count(state), base_y);
     let (selected, normal) = if visual_policy.srpg10_tint {
         (
             color::srpg10_rgba(state.active_color_index),
@@ -783,7 +808,7 @@ pub fn push_actors(
             * row_exit_alpha(index, exit_elapsed);
         row_color[3] *= row_alpha;
         let glow_alpha = row_anim.glow_alpha * row_alpha;
-        let center_y = (index as f32).mul_add(MENU_ROW_SPACING, base_y);
+        let center_y = (index as f32).mul_add(row_spacing, base_y);
         actors.push(act!(text:
             align(0.5, 0.5):
             xy(menu_center_x, center_y):
@@ -989,7 +1014,8 @@ fn start_selected(state: &mut State, started_by_p2: bool) -> ThemeEffect {
         match state.selected_index {
             0 => ThemeEffect::Navigate(Screen::SelectProfile),
             1 => ThemeEffect::Navigate(Screen::Options),
-            2 => ThemeEffect::Exit,
+            2 => ThemeEffect::Navigate(Screen::ContentBrowser),
+            3 => ThemeEffect::Exit,
             _ => ThemeEffect::None,
         }
     };
@@ -1574,12 +1600,73 @@ mod tests {
         };
         assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Init)));
 
-        state.selected_index = 2;
+        state.selected_index = 3;
         let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
         else {
             panic!("expected batched exit effect");
         };
         assert!(matches!(effects[1], ThemeEffect::Exit));
+    }
+
+    // Find Content sits between Options and Exit. The row indices are
+    // positional and Shutdown is reached by OPTION_COUNT rather than by name,
+    // so an off-by-one here silently turns "quit" into "browse" or moves the
+    // shutdown row onto something else.
+    #[test]
+    fn title_menu_rows_are_gameplay_options_find_content_exit() {
+        let mut state = init();
+
+        state.selected_index = 2;
+        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        else {
+            panic!("expected batched find-content effect");
+        };
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Navigate(Screen::ContentBrowser)
+        ));
+
+        let mut state = init();
+        state.selected_index = 3;
+        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        else {
+            panic!("expected batched exit effect");
+        };
+        assert!(matches!(effects[1], ThemeEffect::Exit));
+
+        // and Shutdown is still the row after Exit, not on top of it
+        assert_eq!(OPTION_COUNT, 4);
+    }
+
+    // Adding Find Content made a fourth row, which put Exit at y=453 -- inside
+    // the footer bar that starts at 448 -- and Shutdown at 481, off a 480-tall
+    // screen. The pitch has to close up as rows are added, and must not change
+    // at all while there is still room.
+    #[test]
+    fn menu_rows_stay_above_the_footer_at_every_row_count() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
+        let base_y = 102.0 + 238.0 + MENU_BELOW_LOGO;
+        let footer_top = 480.0 - MENU_FOOTER_RESERVE;
+
+        // three rows: the spacing this theme was designed with, untouched
+        approx(menu_row_spacing(3, base_y), MENU_ROW_SPACING);
+
+        // four and five: tightened only as far as needed, and every row lands
+        // above the footer
+        for rows in 1..=(MAX_OPTION_COUNT + 1) {
+            let spacing = menu_row_spacing(rows, base_y);
+            assert!(
+                spacing <= MENU_ROW_SPACING,
+                "{rows} rows: spacing {spacing} exceeds the design pitch"
+            );
+            let last = (rows as f32 - 1.0).mul_add(spacing, base_y);
+            assert!(
+                last <= footer_top,
+                "{rows} rows: last row at {last} is below the footer top {footer_top}"
+            );
+        }
     }
 
     #[test]

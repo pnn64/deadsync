@@ -1,0 +1,187 @@
+{
+  "pass_number": 56,
+  "status": "native class lookup repair verified; full corpus parity remains unfinished",
+  "deadsync_version": "0.5.1861",
+  "cache_version": 52,
+  "harness_version": "0.1.21",
+  "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+  "original_native_controls": "actor-class-provenance.json",
+  "callback_and_return_controls": "actor-class-call-provenance.json",
+  "wrapper_control": {
+    "input": "actor-class-wrapper-input.json",
+    "input_sha256": "8ccad8ba881879edbe3fefdbe409d76468a1fb5fe6a27a05d5d8cbd2a053ee01",
+    "native_output": "actor-class-wrapper-native.json",
+    "output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+    "result": {
+      "allocations": [],
+      "diagnostics": [],
+      "provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      },
+      "script_errors": []
+    },
+    "source_evidence": {
+      "file": "C:\\GitHub\\rework\\itgmania\\src\\Actor.cpp",
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "contract": "Actor::AddWrapperState allocates ActorFrame; wrapper userdata inherits Frame callback methods."
+    }
+  },
+  "core": {
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "deadsync-song-lua",
+      "--features",
+      "test-support"
+    ],
+    "exit_code": 0,
+    "seconds": 139.9132866859436,
+    "summaries": [
+      "test result: ok. 485 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.58s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 183 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 9.60s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "log_sha256": "8714148c88a0f467b4505309328fb5bd700eb49fd61c660a3afa4d1bb4faba58"
+  },
+  "production_and_cache": [
+    {
+      "job": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "--no-default-features"
+      ],
+      "exit_code": 0,
+      "seconds": 6.771395206451416,
+      "summaries": [],
+      "log_sha256": "16f7159fad919f0420c3f2f8bdf57fc5c42f774d00ee81a8a7486e71fa6f6e35"
+    },
+    {
+      "job": "clock-cache",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "song_clock_survives_cache_round_trip"
+      ],
+      "exit_code": 0,
+      "seconds": 20.891148328781128,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.02s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "40e9cb93328a196c80e4173fa695fcf6bc54af8ba677614f55827ba7f421870c"
+    },
+    {
+      "job": "cache-version",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadsync-simfile",
+        "old_cache_version_is_rejected_before_header_decode"
+      ],
+      "exit_code": 0,
+      "seconds": 1.4835669994354248,
+      "summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 197 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+      ],
+      "log_sha256": "fd63a7c6fa803ae6ab33d769dc19d9f50e5f6b1119eb061459caee3b92d4b1d7"
+    }
+  ],
+  "retained_native_controls": {
+    "executable": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass56-actor-classes-v4.exe",
+    "executable_sha256": "63a76e5b1f3a4944a775e9da22594764ea5ab7457b91f855bd3d2356b89a9543",
+    "results": [
+      {
+        "test": "public_music_seconds_matches_native",
+        "exit_code": 0,
+        "seconds": 4.361715316772461,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.39s"
+        ],
+        "log_sha256": "0f6f9d8c498e34186f181b31f70de80b540dab9fb067fc42588e1948061bab99"
+      },
+      {
+        "test": "music_effect_clock_matches_native",
+        "exit_code": 0,
+        "seconds": 2.6088316440582275,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 2.56s"
+        ],
+        "log_sha256": "02e97612411c7000d65e07f0cbef3b4c20ac56ebedd8cfaadce370e2d3dbc643"
+      },
+      {
+        "test": "multitap::multitap_strict_taps",
+        "exit_code": 0,
+        "seconds": 0.577866792678833,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.55s"
+        ],
+        "log_sha256": "da35457467c03f8d3831c20047f821a354c3e11fdb92bffbb9ac2a1256d4372a"
+      },
+      {
+        "test": "image_texture_aliases_match_native_draws",
+        "exit_code": 0,
+        "seconds": 1.2264916896820068,
+        "result": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 1.13s"
+        ],
+        "log_sha256": "435d71bf6b5bb0fa87ea4b9570fd3715be13b41c2042103726ca175e4bd34d3b"
+      }
+    ]
+  },
+  "unchanged_archive_after": {
+    "archive": "bcdd790fe69cafd709114943eb2ab210c3fe13148ba75065e821777dfb10df44.tar.zst",
+    "version": "0.5.1861",
+    "exit_code": 0,
+    "seconds": 1.6257877349853516,
+    "result": "result: ok; 1/1 fixtures passed; 2694 comparisons passed, 0 failed (2694 total); elapsed 0.15s",
+    "log_sha256": "13a63a78291875638e8cb7a3ce9680fecfbe1ce49157e6ed62497921eb97d0c7",
+    "executable_sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4"
+  },
+  "verifier": {
+    "path": "C:\\GitHub\\deadsync\\target\\song-lua-archive-passes\\pass56-actor-classes-v4-full-song.exe",
+    "sha256": "b48f68fc8e0fc277c22ae390296f6249efc3e167af8d6e25226c07ff55d50bb4",
+    "version": "0.5.1861"
+  },
+  "tested_source_sha256": {
+    "Cargo.toml": "db9faf1203bd9b129a156afd2168df7121d82728541aa6f617d7757462760412",
+    "Cargo.lock": "073a0c400a4fefcd699194c765e3f7aebe9f146840a12f41b80235e83493c3b5",
+    "crates/deadsync-simfile/src/cache.rs": "bfaca114a2dc9859ac762b1da9e97e786809fcf31034ffc1dcd67b86994395a1",
+    "crates/deadsync-song-lua/src/actor_classes.rs": "f295afc2e25cc67cdbe3fb4ec52b2962e1a142d9b8eca3806dda8d79579b505a",
+    "crates/deadsync-song-lua/src/lib.rs": "f1fdcece97db1b0430e86c37921f946f355a43699880f108192cf0c025a4d5a8",
+    "crates/deadsync-song-lua/src/lua_util.rs": "0ab958dbba241075c52639a28c522cc3409fdbfcfdcdce49d0f0567323121302"
+  },
+  "comparator_source": {
+    "file": "src/Sprite.cpp",
+    "sha256": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+    "contract": "Sprite constructor starts with null texture; LoadFromNode loads only a nonempty Texture path; EarlyAbortDraw skips null texture. Drawable membership retains declared textures, any recorded load or SetTexture operation, and any projected track."
+  },
+  "banner_source": {
+    "path": "C:\\GitHub\\rework\\itgmania\\src\\Banner.cpp",
+    "sha256": "4e0f3be8cc57095210b8ad74b43ffb99f2d1a8d3e580cf57a19389fc2414160c",
+    "own_methods": 14,
+    "base": "Sprite",
+    "validation": "Binding declarations from local ITGmania source. Banner is not linked into the compiled native actor oracle; no compiled Banner-body parity is claimed."
+  },
+  "limits": [
+    "The 269-method inventory verifies public registration and inheritance, not the semantics of every method body.",
+    "Fallback Lua helper declarations are source evidence; equivalence of every helper body remains unaudited.",
+    "Unlinked class inventories and Simply Love external screen context remain pending.",
+    "The complete synthetic class archive is a micro control, not a corpus song.",
+    "The previous 11-archive prefix was verified on .21/.1860; it requires revalidation with .1861. Full scope is 501 simfiles: 483 indexed, 18 unindexed, plus nine historical archive variants."
+  ]
+}

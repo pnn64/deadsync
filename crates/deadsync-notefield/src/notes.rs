@@ -492,7 +492,12 @@ fn compose_flat_mine_gradient<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    if !(size[0] > 0.0 && size[1] > 0.0) {
+    if request.gradient_size_ratio <= 0.0
+        || !(size[0].is_finite()
+            && size[1].is_finite()
+            && size[0].abs() > 0.0
+            && size[1].abs() > 0.0)
+    {
         return;
     }
     let frame = slot.frame_index_from_phase(request.mine_fill_phase);
@@ -1016,7 +1021,7 @@ impl ScrollTravel<'_> {
             self.request.search_beat,
             draw_distance_before_targets,
             self.displayed_speed_percent,
-            self.request.accel.boomerang > f32::EPSILON,
+            self.request.accel.boomerang != 0.0,
             |beat| self.adjusted_with_peak(self.raw_beat(beat)),
             stop_at_row_precision,
         )
@@ -1348,6 +1353,7 @@ mod tests {
         fn model() -> Self {
             Self {
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
                         normal: [0.0, 0.0, 1.0],
                         pos: [0.0, 0.0, 0.0],
@@ -1874,7 +1880,10 @@ mod tests {
                         &|slot| SpriteSource::Texture(slot.texture.clone()),
                     );
                     let gradient_size = [frame_size[0] * ratio, frame_size[1] * ratio];
-                    let gradient_visible = gradient_size[0] > 0.0 && gradient_size[1] > 0.0;
+                    let gradient_visible = ratio > 0.0
+                        && gradient_size
+                            .iter()
+                            .all(|size| size.is_finite() && size.abs() > 0.0);
                     let expected = expected_layers
                         .iter()
                         .copied()
@@ -2257,6 +2266,8 @@ mod tests {
             boost: 0.35,
             brake: 0.45,
             wave: 0.8,
+            wave_period: 0.0,
+            parabola_y: 0.0,
             expand: 0.6,
             boomerang: 0.2,
         };
@@ -2298,15 +2309,17 @@ mod tests {
     }
 
     #[test]
-    fn inactive_acceleration_options_select_identity_path() {
+    fn zero_acceleration_options_select_identity_path() {
         let timing = timing();
         let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0);
         travel_request.field_zoom = 0.75;
         travel_request.accel = AccelYParams {
-            boost: f32::NAN,
-            brake: -1.0,
-            wave: f32::EPSILON,
-            expand: f32::NEG_INFINITY,
+            boost: 0.0,
+            brake: -0.0,
+            wave: 0.0,
+            wave_period: 3.0,
+            parabola_y: 0.0,
+            expand: 0.0,
             boomerang: -0.0,
         };
         let travel = scroll_travel(travel_request);

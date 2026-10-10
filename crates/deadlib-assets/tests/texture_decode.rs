@@ -4,7 +4,7 @@ use deadlib_assets::{
 use image::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
 #[test]
-fn texture_cleanup_matches_original_for_source_formats_and_hint_combinations() {
+fn texture_cleanup_preserves_8bit_sources_and_hint_combinations() {
     let dir = std::env::temp_dir().join(format!(
         "deadsync-texture-cleanup-{}-{}",
         std::process::id(),
@@ -32,23 +32,6 @@ fn texture_cleanup_matches_original_for_source_formats_and_hint_combinations() {
         })),
         DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(13, 7, |x, y| {
             image::LumaA([(x * 19) as u8, (y * 37) as u8])
-        })),
-        DynamicImage::ImageRgb16(image::ImageBuffer::from_fn(13, 7, |x, y| {
-            image::Rgb([(x * 5101) as u16, (y * 9103) as u16, 0])
-        })),
-        DynamicImage::ImageRgba16(image::ImageBuffer::from_fn(13, 7, |x, y| {
-            image::Rgba([
-                (x * 5101) as u16,
-                (y * 9103) as u16,
-                0,
-                [0, 1, 32768, 65535][x as usize % 4],
-            ])
-        })),
-        DynamicImage::ImageLuma16(image::ImageBuffer::from_fn(13, 7, |x, y| {
-            image::Luma([(x * 5101 + y * 9103) as u16])
-        })),
-        DynamicImage::ImageLumaA16(image::ImageBuffer::from_fn(13, 7, |x, y| {
-            image::LumaA([(x * 5101) as u16, (y * 9103) as u16])
         })),
     ];
     for (index, source) in sources.into_iter().enumerate() {

@@ -434,6 +434,17 @@ where
     if multitaps.is_empty() {
         return Ok(None);
     }
+    // The analytic curves encode `beat > tap` with tap.next_up(). A float
+    // seconds conversion can collapse that edge onto the tap itself. Replay
+    // the authored Lua in that case, preserving its native frame predicates.
+    if context.song_timing.as_ref().is_some_and(|timing| {
+        multitaps.iter().flat_map(|desc| &desc.taps).any(|&tap| {
+            timing.get_time_for_beat_exact(tap.next_up())
+                <= timing.get_time_for_beat_exact(tap)
+        })
+    }) {
+        return Ok(None);
+    }
     let overlay_indices = named_overlay_indices_by_name(overlays.len(), |index| {
         overlays[index].actor.name.as_deref()
     });
@@ -549,7 +560,6 @@ where
                 &multitaps,
                 lane,
             );
-            install_multitap_explosion_messages(lua, overlays, explosion_index, lane, pn)?;
         }
     }
     Ok(Some(out))
@@ -572,7 +582,39 @@ fn multitap_arrow_noteskin<Kind>(
         })
 }
 
-fn install_multitap_explosion_messages<Kind>(
+// Hit callbacks belong to the factory even when native model clocks or
+// float beat boundaries require chronological update replay.
+pub(crate) fn install_multitap_hits<Kind>(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+) -> Result<(), String> {
+    let indices = named_overlay_indices_by_name(overlays.len(), |index| {
+        overlays[index].actor.name.as_deref()
+    });
+    for player in 0..LUA_PLAYERS {
+        let pn = player + 1;
+        if !context.players[player].enabled
+            || !indices.contains_key(format!("MultitapFrameP{pn}").as_str())
+            || !matches!(
+                lua.globals()
+                    .get::<Value>(format!("multitap_note_callback_P{pn}"))
+                    .map_err(|err| err.to_string())?,
+                Value::Function(_)
+            )
+        {
+            continue;
+        }
+        for lane in 1..=song_lua_style_info(&context.style_name).columns {
+            if let Some(&index) = indices.get(format!("MultitapExplosionP{pn}_{lane}").as_str()) {
+                capture_explosion_hits(lua, overlays, index, lane, pn)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn capture_explosion_hits<Kind>(
     lua: &Lua,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
     explosion_index: usize,

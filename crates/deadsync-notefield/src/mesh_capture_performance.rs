@@ -5,7 +5,7 @@ use std::{hint::black_box, sync::Arc};
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired_bench;
 
-// Starting-main ownership adapter.
+// Starting-main ownership adapter, updated for the current rendering types.
 fn original_capture(draw: FlatDraw) -> Actor {
     match draw {
         FlatDraw::Sprite(sprite) => Actor::Sprite {
@@ -67,7 +67,7 @@ fn original_capture(draw: FlatDraw) -> Actor {
                 depth_test: mesh.depth_test,
                 clear_depth: mesh.clear_depth,
                 clear_depth_after: mesh.clear_depth_after,
-                cull_back: false,
+                cull_mode: deadlib_render_core::CullMode::None,
                 visible: true,
                 blend: mesh.blend,
                 z: mesh.z,
@@ -92,7 +92,7 @@ fn original_capture(draw: FlatDraw) -> Actor {
                     depth_test: mesh.depth_test,
                     clear_depth: mesh.clear_depth,
                     clear_depth_after: mesh.clear_depth_after,
-                    cull_back: false,
+                    cull_mode: deadlib_render_core::CullMode::None,
                     visible: true,
                     blend: mesh.blend,
                     z: mesh.z,
@@ -137,6 +137,10 @@ fn original_capture(draw: FlatDraw) -> Actor {
 fn mesh(reusable: bool) -> FlatTexturedMesh {
     FlatTexturedMesh {
         environment: Some(MeshEnvironment {
+            sampler: Some(deadlib_render_core::MeshSampler {
+                filter: deadlib_render_core::SamplerFilter::Nearest,
+                wrap: deadlib_render_core::SamplerWrap::Repeat,
+            }),
             camera: None,
             transform: Matrix4::from_rotation_y(0.5),
             additive_texture: Some(Arc::from("reflection")),
@@ -160,7 +164,7 @@ fn mesh(reusable: bool) -> FlatTexturedMesh {
         depth_test: true,
         clear_depth: true,
         clear_depth_after: true,
-        cull_back: true,
+        cull_mode: deadlib_render_core::CullMode::Back,
         blend: BlendMode::Add,
         z: 140,
     }

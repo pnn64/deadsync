@@ -98,6 +98,11 @@ jobs:
             cargo +nightly build -Z build-std=std,panic_abort --release --locked --target "${{ matrix.target }}"
           }
 
+      - name: Check Windows 7 startup imports
+        if: ${{ matrix.platform == 'win7' }}
+        shell: pwsh
+        run: scripts/check-win7-imports.ps1 -Path "target/${{ matrix.target }}/release/deadsync.exe"
+
       - name: Package Windows release
         id: package
         shell: pwsh

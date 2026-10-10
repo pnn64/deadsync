@@ -1,0 +1,21 @@
+{
+  "harness_version": "0.1.16",
+  "harness_commit": "bc1604f292658277dd449a33e48687dc959c1969",
+  "native_executable_sha256": "ae9292f776d3de2ac5609cb842ae904527a20836f6524cee2ebee7f846397f41",
+  "source_sha256": "f9171191ed723d8f3fd0ae622416f7d185efdca8a0df9485aea86f835e1c27b7",
+  "native_trace_sha256": "d446c52d7a18c6bacb570c393b8de41a77583b5b47aa8b1ec4ac572d16f6b501",
+  "runtime_errors": 0,
+  "dropped_events": 0,
+  "update_frames": 361,
+  "end_position": {
+    "beat": 6,
+    "seconds": 6
+  },
+  "native_sources": {
+    "src/Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "src/Actor.h": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b",
+    "src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+  },
+  "expected_checks": 1216,
+  "negative_control": "replace the second callback stopeffect sample with wag; all observations remain, native geometry fails"
+}

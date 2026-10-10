@@ -3,7 +3,7 @@ use std::hint::black_box;
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired_bench;
 
-// Starting-main implementation, retained only for differential checks/benchmarks.
+// Matrix-multiplication baseline, retaining current-main signed zoom behavior.
 #[inline(always)]
 fn original_affine(
     model: &ModelMesh,
@@ -19,9 +19,9 @@ fn original_affine(
         1.0
     };
     let local_scale = Vector3::new(
-        scale * draw.zoom[0].max(0.0),
-        scale * draw.zoom[1].max(0.0),
-        scale * draw.zoom[2].max(0.0),
+        scale * draw.zoom[0],
+        scale * draw.zoom[1],
+        scale * draw.zoom[2],
     );
     let align_y = (0.5 - draw.vert_align) * size[1];
     Matrix4::from_translation(Vector3::new(draw.pos[0], draw.pos[1], draw.pos[2]))
@@ -32,6 +32,7 @@ fn original_affine(
 
 fn model() -> ModelMesh {
     ModelMesh {
+        material: None,
         vertices: Arc::from([]),
         bounds: [-32.0, -32.0, -4.0, 32.0, 32.0, 4.0],
     }

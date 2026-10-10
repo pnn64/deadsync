@@ -294,6 +294,7 @@ fn mesh_from_rectangles(rects: Vec<[u32; 4]>, [w, h]: [u32; 2], size: [i32; 2]) 
     };
     ModelMesh {
         vertices,
+        material: None,
         bounds: [
             -width * 0.5,
             -height * 0.5,

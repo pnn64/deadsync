@@ -34,6 +34,11 @@ return Def.ActorFrame{
             second=self
             self:SetTexture(first:GetTexture()):xy(200,100)
             assert(self:GetWidth()==64 and self:GetHeight()==32)
+        end,
+    },
+    Def.ActorFrame{
+        Name="TextureDriver",
+        OnCommand=function(self)
             local fired=false
             self:SetUpdateFunction(function()
                 if not fired and GAMESTATE:GetCurMusicSeconds()>=0.1 then

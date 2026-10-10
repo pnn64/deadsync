@@ -1,0 +1,296 @@
+[
+  {
+    "name": "model-pink-npot",
+    "source": [
+      5,
+      9
+    ],
+    "output": [
+      8,
+      16
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "off-pink-top-edge",
+    "source": [
+      3,
+      3
+    ],
+    "output": [
+      3,
+      3
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "off-pink-side-middle",
+    "source": [
+      3,
+      3
+    ],
+    "output": [
+      3,
+      3
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "partial-alpha-pink",
+    "source": [
+      2,
+      1
+    ],
+    "output": [
+      2,
+      1
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "rgb-key-adds-alpha",
+    "source": [
+      2,
+      1
+    ],
+    "output": [
+      2,
+      1
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "palette-keys-both-pinks",
+    "source": [
+      3,
+      1
+    ],
+    "output": [
+      3,
+      1
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "transparent-hidden-rgb",
+    "source": [
+      2,
+      2
+    ],
+    "output": [
+      2,
+      2
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": false
+  },
+  {
+    "name": "uniform-hidden-rgb",
+    "source": [
+      3,
+      1
+    ],
+    "output": [
+      3,
+      1
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": false
+  },
+  {
+    "name": "mixed-hidden-rgb",
+    "source": [
+      3,
+      1
+    ],
+    "output": [
+      3,
+      1
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": false
+  },
+  {
+    "name": "npot-linear-stretch",
+    "source": [
+      5,
+      9
+    ],
+    "output": [
+      8,
+      16
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": false
+  },
+  {
+    "name": "iterative-reduction",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      1,
+      1
+    ],
+    "stretch": false,
+    "max_size": 1,
+    "hot_pink_color_key": false
+  },
+  {
+    "name": "one-pixel-expansion",
+    "source": [
+      1,
+      1
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": false
+  },
+  {
+    "name": "palette-duplicates",
+    "source": [
+      8,
+      8
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": false,
+    "max_size": null,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "palette-packed-duplicates",
+    "source": [
+      5,
+      3
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "palette-partial-alpha",
+    "source": [
+      5,
+      3
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "rgba16-strip",
+    "source": [
+      3,
+      2
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "rgb16-strip",
+    "source": [
+      3,
+      2
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "gray2-expand",
+    "source": [
+      5,
+      3
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "model-max-size",
+    "source": [
+      2051,
+      3
+    ],
+    "output": [
+      2048,
+      8
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "iterative-odd-reduction",
+    "source": [
+      43,
+      9
+    ],
+    "output": [
+      8,
+      8
+    ],
+    "stretch": false,
+    "max_size": 8,
+    "hot_pink_color_key": true
+  },
+  {
+    "name": "model-mixed-axis",
+    "source": [
+      3,
+      17
+    ],
+    "output": [
+      8,
+      32
+    ],
+    "stretch": true,
+    "max_size": 2048,
+    "hot_pink_color_key": true
+  }
+]

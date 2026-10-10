@@ -1,0 +1,3 @@
+{
+  "aft_creation": "local original = Actor.GetX\nassert(type(original) == \"function\")\nassert(frozen:GetX() == 0)\nActor.GetX = function(self) return 19 end\nassert(frozen:GetX() == 19)\nActorFrame.GetX = function(self) return 23 end\nassert(frozen:GetX() == 23)\nActorFrame.GetX = nil\nassert(frozen:GetX() == 19)\nActor.GetX = original\nassert(frozen:GetX() == 0)\n"
+}

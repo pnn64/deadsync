@@ -1,0 +1,108 @@
+{
+  "pass_number": 55,
+  "status": "native controls verified; DeadSync implementation repair pending",
+  "dead_sync_before_version": "0.5.1860",
+  "harness_version": "0.1.21",
+  "harness_commit": "d5c01134c51e7343c081c52c8f9f8cd1e0f8bfa8",
+  "native_executable_sha256": "74dae093475cca24aab53c5a0eb8d27540f938af7d241dc3a0bed9db966add54",
+  "controls": {
+    "own_method_inventory": {
+      "input": "actor-class-inventory-input.json",
+      "input_sha256": "20c4630d2709c3cf6bb06888a46cae0bd903b9c43aa36987b98252b9d855d3a3",
+      "native_output": "actor-class-inventory-native.json",
+      "output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "result": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      }
+    },
+    "inheritance_and_callback_ownership": {
+      "input": "actor-class-inheritance-input.json",
+      "input_sha256": "c6d7ffbf9eb6cef8a5afec96dfc45930b339a65b7e9d170381909a9395e497a9",
+      "native_output": "actor-class-inheritance-native.json",
+      "output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "result": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      }
+    },
+    "live_base_and_derived_method_replacement": {
+      "input": "actor-class-override-input.json",
+      "input_sha256": "6fbe44b65dd2fd956dc8f1809d7a3c2c78b4f8fd9ed158965e8d66a78fd8b44e",
+      "native_output": "actor-class-override-native.json",
+      "output_sha256": "75e375eb39a1a41ec7b483042b26f43f070281053fafc39e603c550dec2aa5a0",
+      "result": {
+        "allocations": [],
+        "diagnostics": [],
+        "provenance": {
+          "execution": "embedded_native_sources",
+          "git_dirty": "false",
+          "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+          "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+        },
+        "script_errors": []
+      }
+    }
+  },
+  "inventory": {
+    "own_method_count": 269,
+    "validation": "Bidirectional raw function inventory: every listed own C method exists, and every actual own function appears in this list. Fallback Lua helper declarations are separate source evidence.",
+    "source_file": "actor-class-inventory.json",
+    "source_sha256": "1156bf56f83e01792d9c9432a17574dc385b16d53f8cf7fc9b754d58d9bb0aa1",
+    "note": "Includes Actor.cpp ADD_GET_SET_METHODS(tween_uses_effect_delta), which registers two additional methods. Fallback Lua declarations are recorded separately and do not prove helper body equivalence."
+  },
+  "archive": {
+    "title": "native class inheritance",
+    "source_simfile": "probe/probe.sm",
+    "harness_version": "0.1.21",
+    "archive": "bcdd790fe69cafd709114943eb2ab210c3fe13148ba75065e821777dfb10df44.tar.zst",
+    "sha256": "bcdd790fe69cafd709114943eb2ab210c3fe13148ba75065e821777dfb10df44",
+    "compressed_bytes": 11839,
+    "fixture_path": "tests/fixtures/itgmania-song-lua-micro/bcdd790fe69cafd709114943eb2ab210c3fe13148ba75065e821777dfb10df44.tar.zst",
+    "runtime_errors": [],
+    "dropped_events": 0,
+    "update_frames": 121,
+    "endpoint": {
+      "beat": 4,
+      "seconds": 2
+    },
+    "lua_sha256": "67c01019cee1e191853effb3a2af581a756cb72b9178e04aa3c40cdc18767839",
+    "source_lua_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass55-class-inheritance\\corpus\\probe\\default.lua"
+  },
+  "deadsync_before": {
+    "archive": "bcdd790fe69cafd709114943eb2ab210c3fe13148ba75065e821777dfb10df44.tar.zst",
+    "version": "0.5.1860",
+    "exit_code": 1,
+    "seconds": 0.20120525360107422,
+    "result": "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.09s",
+    "log_sha256": "0df9cf7efc434c638378b8572f593f49d4ce4650f222bcdc8c4c3e046d39be2e",
+    "executable_sha256": "2b5a7a35098b1bd40aa03e1db2017d8831fa4de2c719df115a9f6d5a6e308b1f"
+  },
+  "before_error": "Compilation fails at the unchanged native Actor class exists assertion; no semantic observations can be compared.",
+  "implementation_requirements": [
+    "Expose source-backed Actor, ActorFrame, Sprite, ActorFrameTexture and ActorMultiVertex public method tables with native inheritance.",
+    "Existing actor instances must see caller-added class methods and live overrides of inherited methods, including restoration after removing a derived override. Merely adding class forwarders while retaining shadowing instance functions is insufficient.",
+    "Actor and Sprite/Quad must not expose Frame-only SetUpdateFunction, SetDrawFunction or GetDrawFunction. Preserve those callbacks on true native ActorFrame subclasses.",
+    "Delete ActorFrame.fardistz, which is not registered by native Actor/ActorFrame or declared fallback Lua.",
+    "Preserve all existing geometry, observation counts and tolerances while correcting source-invalid synthetic callback owners."
+  ],
+  "limits": [
+    "The complete synthetic archive is a native reference control, not a passing DeadSync fixture or a corpus song.",
+    "No production source changed in this evidence commit. The failing control must pass unchanged after the implementation repair.",
+    "The current .21/.1860 prefix is 11 archives with 2503481 comparisons; full 501-simfile scope, 18 unindexed sources and nine historical captures remain unfinished."
+  ]
+}

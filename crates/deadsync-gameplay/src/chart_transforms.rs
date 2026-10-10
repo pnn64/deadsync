@@ -445,7 +445,10 @@ pub fn count_held_tracks_at_row(
             note.is_some_and(|note| {
                 note.row_index < row
                     && matches!(note.note_type, NoteType::Hold | NoteType::Roll)
-                    && note.hold.as_ref().is_some_and(|hold| hold.end_row_index >= row)
+                    && note
+                        .hold
+                        .as_ref()
+                        .is_some_and(|hold| hold.end_row_index >= row)
             })
         })
         .count()

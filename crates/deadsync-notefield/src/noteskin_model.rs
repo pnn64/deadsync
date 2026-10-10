@@ -467,9 +467,9 @@ fn model_affine_transform(
         1.0
     };
     let local_scale = Vector3::new(
-        scale * draw.zoom[0].max(0.0),
-        scale * draw.zoom[1].max(0.0),
-        scale * draw.zoom[2].max(0.0),
+        scale * draw.zoom[0],
+        scale * draw.zoom[1],
+        scale * draw.zoom[2],
     );
     let align_y = (0.5 - draw.vert_align) * size[1];
     let rotation = sm_rotation_xyz(draw.rot[0], draw.rot[1], draw.rot[2] + rotation_deg);
@@ -540,6 +540,7 @@ fn model_environment<S: NoteskinSlot>(
         additive_uv[axis + 2] += delta * span;
     }
     Some(deadlib_present::actors::MeshEnvironment {
+        sampler: None,
         camera: None,
         // The affine model coordinates are y-up; presentation places them y-down.
         transform: Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)) * affine,
@@ -551,6 +552,7 @@ fn model_environment<S: NoteskinSlot>(
 #[inline(always)]
 fn actor_from_vertices<S: NoteskinSlot>(
     slot: &S,
+    texture_seconds: f32,
     xy: [f32; 2],
     tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
@@ -571,7 +573,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
         world_z: 0.0,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         local_transform,
-        texture: slot.texture_key_shared().into(),
+        texture: slot.model_texture_at(texture_seconds).into(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
@@ -582,7 +584,11 @@ fn actor_from_vertices<S: NoteskinSlot>(
         depth_test,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: slot.model_cull_back(),
+        cull_mode: if slot.model_cull_back() {
+            deadlib_render_core::CullMode::Back
+        } else {
+            deadlib_render_core::CullMode::None
+        },
         visible: true,
         blend,
         z,
@@ -592,6 +598,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
 #[inline(always)]
 fn flat_from_vertices<S: NoteskinSlot>(
     slot: &S,
+    texture_seconds: f32,
     xy: [f32; 2],
     tint: [f32; 4],
     vertices: Arc<[TexturedMeshVertex]>,
@@ -609,7 +616,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
         offset: xy,
         world_z: 0.0,
         local_transform,
-        texture: slot.texture_key_shared().into(),
+        texture: slot.model_texture_at(texture_seconds).into(),
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices: deadlib_present::actors::FlatMeshVertices::Shared(vertices),
@@ -620,7 +627,11 @@ fn flat_from_vertices<S: NoteskinSlot>(
         depth_test: false,
         clear_depth: false,
         clear_depth_after: false,
-        cull_back: slot.model_cull_back(),
+        cull_mode: if slot.model_cull_back() {
+            deadlib_render_core::CullMode::Back
+        } else {
+            deadlib_render_core::CullMode::None
+        },
         blend,
         z,
     }
@@ -643,7 +654,7 @@ fn actor_from_draw<S: NoteskinSlot>(
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let blend = model_blend(draw, blend);
     let vertices = build_model_geometry(slot);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
@@ -651,6 +662,7 @@ fn actor_from_draw<S: NoteskinSlot>(
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -699,13 +711,14 @@ pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = model_draw_transform(model.size(), affine);
     let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -739,13 +752,14 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = model_draw_transform(model.size(), affine);
     let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(flat_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -778,13 +792,14 @@ pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry<S: Not
         return None;
     }
 
-    let tint = model_tint(color, draw);
+    let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let blend = model_blend(draw, blend);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = affine * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
+        draw.texture_seconds,
         xy,
         tint,
         vertices,
@@ -837,6 +852,7 @@ mod tests {
             Self {
                 def: SpriteDefinition::default(),
                 model: Some(ModelMesh {
+                    material: None,
                     vertices: Arc::from([ModelVertex {
                         normal: [0.0, 0.0, 1.0],
                         pos: [2.0, 3.0, 4.0],
@@ -1243,7 +1259,7 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
-            cull_back,
+            cull_mode,
             visible,
             blend,
             z,
@@ -1287,7 +1303,7 @@ mod tests {
         assert_eq!(uv_offset, [0.1, 0.2]);
         assert_eq!(uv_tex_shift, [0.125, 0.25]);
         assert!(!depth_test);
-        assert!(cull_back);
+        assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
         assert!(visible);
         assert_eq!(blend, BlendMode::Add);
         assert_eq!(z, 47);

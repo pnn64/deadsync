@@ -1,0 +1,201 @@
+{
+  "pass": 106,
+  "previous_record": "native-revalidation-pass105.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "fb9d04ed4ebde55f6f04f3cc03b645ff820825ee",
+  "comparator_sha256": "c2181eb172a2df82530bb502f411751114bdea9dbe2b22efc78b5932ce7c24a5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "charts": [
+    {
+      "position": 20,
+      "entry": {
+        "title": "303|MODS|[lv.memes] KABOOOOOM!!!!",
+        "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+        "harness_version": "0.1.51",
+        "archive": "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98.tar.zst",
+        "sha256": "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98",
+        "compressed_bytes": 42080019,
+        "aliases": [
+          "c1edd24b0ae42410e8bdf8c3ccd83103f46dbe00c8e6e2f69b3a8de772c5a2c9.tar.zst",
+          "fff20dd9abb30d919056f85583f7481f46d3cf3f99fd05d5bbfe0f71eaab6a5f.tar.zst",
+          "783a1df481fbc910807af44466cc7405085dcdf1abe8caf85d2eb24def95f61a.tar.zst",
+          "3c79fdaee3e6f39968b0ae6fa9b058e946d93bb07724588a72f7efc382b70a61.tar.zst",
+          "ee2d86ae4a5987fe5bb2c92013958e1533de2dbc57679b634655e13e835264b6.tar.zst"
+        ]
+      },
+      "original_archive_retained": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "native_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+      "native_cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+      "native_trace_sha256": "3d599844b2bf310687162c5f5f58f01f66d3c87d31e1af787534717260d43e1c",
+      "native_capture_log_sha256": "f046df50acabbc40bf95dca183b260ce5584134ac57712261e063a23cfb6b427",
+      "native_archive_log_sha256": "d62eb061b946f18e35d2e2babc7f21483f90ea1238e222be58507d515035368d",
+      "native_receipt_sha256": "99113587a5d8a115de36acde71d2cc9f9c12728e80a3b41c8ee128f75c8c5736",
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "duration_seconds": 199.4571533203125,
+      "update_frames": 11969,
+      "source_simfile_sha256": "45896ec323aad88af574cefc1ca341ad2b787ee7f93089910d2e81b5c92d8d3b",
+      "original_source_unchanged": true,
+      "acceptance": "passed",
+      "comparison_source_commit": "fb9d04ed4ebde55f6f04f3cc03b645ff820825ee",
+      "comparisons_passed": 14842953
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 20,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98.tar.zst",
+      "archive_sha256": "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98",
+      "harness_version": "0.1.51",
+      "source_commit": "fb9d04ed4ebde55f6f04f3cc03b645ff820825ee",
+      "binary_sha256": "c2181eb172a2df82530bb502f411751114bdea9dbe2b22efc78b5932ce7c24a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+        "585818d70433480c8732bfee7e6b3f442021ebf78f8a15ae8019d8b27f8b9f98.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 336.1165764997713,
+      "comparisons_passed": 14842953,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\fresh-020-v1.log",
+      "log_sha256": "400c2fffe06d328f98f98241a9c1345095d0cbc810e267a5cffa6a0998e9ce7e",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass106-top-020-kaboom-v1.json",
+      "native_receipt_sha256": "99113587a5d8a115de36acde71d2cc9f9c12728e80a3b41c8ee128f75c8c5736",
+      "full_corpus_complete": false
+    }
+  ],
+  "existing_archive_results": [
+    {
+      "position": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "archive_sha256": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+        "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 27.320220800116658,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\ordered-after-020-v1-021.log",
+      "log_sha256": "bd0296fd973b03932d7408a4989a2de681e72a2cd2b6f042f3b2c3545deda903",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 27.04s"
+      ],
+      "comparisons_passed": 179179,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 22,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "archive_sha256": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+        "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 26.274767599999905,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\ordered-after-020-v1-022.log",
+      "log_sha256": "9c167170127426e9c4ab0d391414459836f71d1db0541aadec3ce7562144bf78",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 26.01s"
+      ],
+      "comparisons_passed": 179179,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "archive_sha256": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+        "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.907515800092369,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\ordered-after-020-v1-023.log",
+      "log_sha256": "76ca7a2308a8de3203e38cd4350026d89629813f7d83a28973a52d8d46ead684",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 5.66s"
+      ],
+      "comparisons_passed": 363873,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 24,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "archive_sha256": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+        "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.89424360031262,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\ordered-after-020-v1-024.log",
+      "log_sha256": "09a0f503c8bf6906c8a53d9a1b916b50d49726fda7d09eb9a091b82832216402",
+      "result_lines": [
+        "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 5.65s"
+      ],
+      "comparisons_passed": 363873,
+      "comparisons_failed": 0
+    },
+    {
+      "position": 25,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "archive_sha256": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+        "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst"
+      ],
+      "exit_code": 1,
+      "elapsed_seconds": 1.256950399838388,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\ordered-after-020-v1-025.log",
+      "log_sha256": "55d2f14255a9f49c03b8fa21b9b0d295ed8ce3cb91860dfb983922160c425c0c",
+      "result_lines": [
+        "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 0.83s"
+      ],
+      "comparisons_passed": 0,
+      "comparisons_failed": 0
+    }
+  ],
+  "obsolete_archive_result": {
+    "position": 20,
+    "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+    "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+    "archive_sha256": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass105\\model-gate-full_song_lua.exe",
+      "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 5.948775200173259,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass106\\ordered-existing-v1-020.log",
+    "log_sha256": "9a337f31151aeecf00799886f7a3a39d752ba07b66b4a29ecd2662ef6cac1b4f",
+    "result_lines": [
+      "result: FAILED; 0/1 fixtures passed; 0 comparisons passed, 0 failed (0 total); elapsed 5.66s"
+    ],
+    "comparisons_passed": 0
+  },
+  "canonical_positions_passed": [
+    20,
+    21,
+    22,
+    23,
+    24
+  ],
+  "comparisons_passed": 15929057,
+  "next_position": 25,
+  "checks": "Complete archives, Lua execution, every-frame native semantic and Model comparisons; GPU framebuffer parity remains open"
+}
