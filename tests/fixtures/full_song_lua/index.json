@@ -763,12 +763,10 @@
     {
       "title": "[5916] [11] Let Me Hear That",
       "source_simfile": "[11] Let Me Hear That (SX) [TaroNuke]/let me hear that.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ceca039cfa27d42846a6f5ddfa7ff49a2639a5c00e35d2093dc5eb177554e605.tar.zst",
-      "sha256": "ceca039cfa27d42846a6f5ddfa7ff49a2639a5c00e35d2093dc5eb177554e605",
-      "compressed_bytes": 756758,
-      "uncompressed_sha256": "2068cf779d626ad776bbc2b879c414cce9c45ea29a7f2e730ee9380b9def81e3",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd.tar.zst",
+      "sha256": "ab3d68aca1fc3a3660717a794181d8d1d7f14f71aa6931dbd5d9f306e128dfcd",
+      "compressed_bytes": 802301,
       "aliases": [
         "324bf818a49877a75ea00d0524500b6430bbc97ea4bceafe1717830556760587.tar.zst"
       ]
