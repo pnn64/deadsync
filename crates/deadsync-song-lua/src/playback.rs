@@ -3432,7 +3432,9 @@ fn song_lua_screen_projection(
     }
     let (view, projection) = song_lua_overlay_view_proj(state, source_size[0], source_size[1])
         .unwrap_or_else(|| (Matrix4::IDENTITY, glam::camera::rh::proj::opengl::orthographic(
-            0.0, source_size[0], source_size[1], 0.0, -1.0, 1.0,
+            // Lua geometry carries LoadMenuPerspective(0)'s native depth,
+            // even when the presentation camera itself spans -1/+1.
+            0.0, source_size[0], source_size[1], 0.0, -1000.0, 1000.0,
         )));
     let camera = projection * view;
     camera * model * camera.inverse()
@@ -10171,7 +10173,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
         (overlay_scale[1], false)
     };
     let overlay_blend = song_lua_overlay_blend(state.blend);
-    // Tilted sprites and rotated anchors need the native matrix even under an
+    // Depth, tilted sprites and rotated anchors need the native matrix under an
     // orthographic camera. Generic sprites fold X/Y angles around their center,
     // losing the rotated anchor and combined-axis geometry.
     let sprite_view_proj = || {
@@ -10182,7 +10184,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             .or_else(|| {
                 let rotated_anchor = (state.halign != 0.5 || state.valign != 0.5)
                     && state.rot_z_deg.abs() > f32::EPSILON;
-                let native_matrix = state.rot_x_deg.abs() > f32::EPSILON
+                let native_matrix = state.z != 0.0
+                    || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor
                     || matches!(

@@ -5237,22 +5237,36 @@ fn compare_lua_perspective(entry: &str) {
 
 #[test]
 fn screen_parent_transform_native_draws() {
+    assert_screen_parent_draws("screen-parent-transform", false);
+}
+
+#[test]
+fn screen_parent_depth_native_draws() {
+    assert_screen_parent_draws("screen-parent-depth", true);
+}
+
+fn assert_screen_parent_draws(name: &str, check_depth: bool) {
     use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let trace = read_trace_file(&root.join(
-        "tests/fixtures/itgmania-song-lua-micro/screen-parent-transform-native.json",
-    ));
+    let trace = read_trace_file(&root.join(format!(
+        "tests/fixtures/itgmania-song-lua-micro/{name}-native.json",
+    )));
+    let native_draws: Option<Value> = check_depth.then(|| serde_json::from_slice(
+        &std::fs::read(root.join(format!(
+            "tests/fixtures/itgmania-song-lua-micro/{name}-draws-native.json",
+        ))).expect("independent native draw capture"),
+    ).expect("native draw JSON"));
     let dir = root.join("tests/fixtures/song-lua");
     let mut context = SongLuaCompileContext::new(&dir, trace.title.clone());
     context.screen_width = 854.0;
     context.music_length_seconds = 4.0;
     context.song_timing_bpms = vec![(0.0, 60.0)];
     let compiled = compile_song_lua_layers(
-        &[dir.join("screen-parent-transform.lua").as_path()], 0, &context,
+        &[dir.join(format!("{name}.lua")).as_path()], 0, &context,
     ).expect("native screen-parent control compiles");
     let parity = compare_semantics(&trace, &compiled, 0, &context);
-    parity.assert_complete("screen parent transform");
+    parity.assert_complete(name);
     let layer = &compiled[0];
     let screen_index = layer.screen_overlay_index.expect("captured top screen");
     let map = projected_drawable_map(&trace, &compiled);
@@ -5282,9 +5296,40 @@ fn screen_parent_transform_native_draws() {
                     checks += 1;
                 }
             }
+            if let Some(native) = &native_draws {
+                let phase = (second.floor() as usize).min(3);
+                let name = match track.definition_id.as_deref() {
+                    Some("def-0002") => "Flat",
+                    Some("def-0004") => "Nested",
+                    _ => panic!("unexpected depth control actor"),
+                };
+                let drawn = native["cases"][phase]["native"]["samples"][0]["actors"]
+                    .as_array().expect("native drawn actors").iter()
+                    .find(|actor| actor["name"] == name).expect("native depth control");
+                let expected = drawn["draws"][0]["vertices"].as_array().expect("native vertices")
+                    .iter().map(|vertex| std::array::from_fn(|axis| {
+                        value_f32(vertex["clip"].get(axis)).expect("native clip axis")
+                    })).collect::<Vec<[f32; 4]>>();
+                let host = sample[5].as_array().expect("host clip vertices").iter()
+                    .map(|vertex| std::array::from_fn(|axis| {
+                        value_f32(vertex.get(axis)).expect("host clip axis")
+                    })).collect::<Vec<[f32; 4]>>();
+                assert_native_clips(&host, &expected, "harness", second);
+                assert_native_clips(&rendered_quad_clips(&frame), &expected, "renderer", second);
+            }
         }
     }
     assert_eq!(checks, 80, "two quads, four native phases, every rendered corner");
+}
+
+fn assert_native_clips(actual: &[[f32; 4]], expected: &[[f32; 4]], label: &str, second: f32) {
+    for (from, to) in [(actual, expected), (expected, actual)] {
+        for vertex in from {
+            assert!(to.iter().any(|target| (0..3).all(|axis| {
+                (vertex[axis] / vertex[3] - target[axis] / target[3]).abs() <= 1e-6
+            })), "{label} at {second}: clip {vertex:?} vs {to:?}");
+        }
+    }
 }
 
 fn compiled_perspective_vertices(
@@ -9113,6 +9158,13 @@ fn rendered_quad_corners(
     frame: &deadlib_present::render::RenderFrame,
     screen: [f32; 2],
 ) -> Vec<[f32; 2]> {
+    rendered_quad_clips(frame).iter().map(|clip| [
+        (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
+        (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
+    ]).collect()
+}
+
+fn rendered_quad_clips(frame: &deadlib_present::render::RenderFrame) -> Vec<[f32; 4]> {
     let mut actual = Vec::new();
     for op in &frame.ops {
         if let deadlib_present::render::DrawOp::Sprite(run) = op {
@@ -9144,10 +9196,7 @@ fn rendered_quad_corners(
                             1.0,
                         ],
                     );
-                    actual.push([
-                        (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
-                        (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
-                    ]);
+                    actual.push(clip);
                 }
             }
             continue;
@@ -9169,10 +9218,7 @@ fn rendered_quad_corners(
                     ),
                     [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0],
                 );
-                actual.push([
-                    (clip[0] / clip[3] + 1.0) * screen[0] * 0.5,
-                    (1.0 - clip[1] / clip[3]) * screen[1] * 0.5,
-                ]);
+                actual.push(clip);
             }
         }
     }
