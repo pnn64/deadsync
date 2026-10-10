@@ -1217,3 +1217,17 @@ normal Lua capture has 241 frames with no errors or dropped events.
 DeadSync still fails that control at the distinct-level identity assertion;
 this chart result does not close general Current/Song option parity.
 The pending control is recorded in the pass JSON.
+
+## Ordered fixture validation, pass 158
+
+Position 79, Accelerator, passes all
+445,655 comparisons against committed DeadSync
+`cc6bc40b7`. The complete native harness 0.1.58 archive
+contains 6,156 updates over 102.58 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass158.json`. Position 80 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
