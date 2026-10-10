@@ -242,6 +242,19 @@ where
         crate::lua_util::screen_layer_states(&lua).map_err(|err| err.to_string())?;
     let roots = lua.create_table().map_err(|err| err.to_string())?;
     let mut initial_actor_states = std::collections::HashMap::new();
+    // Native Update(0) can start a player's tween from a song callback.
+    // Players are screen siblings, so traversing the song roots misses them.
+    for name in [
+        "__songlua_top_screen_player_1",
+        "__songlua_top_screen_player_2",
+    ] {
+        let actor = lua
+            .globals()
+            .get::<Table>(name)
+            .map_err(|err| err.to_string())?;
+        crate::lua_util::collect_initial_states(&Value::Table(actor), &mut initial_actor_states)
+            .map_err(|err| err.to_string())?;
+    }
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::song_tables::SongLuaSkinWrites::default());
     #[cfg(feature = "test-support")]

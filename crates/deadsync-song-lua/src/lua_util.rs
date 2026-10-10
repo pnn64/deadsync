@@ -10823,13 +10823,15 @@ fn clear_replay_tweens(lua: &Lua, actor: &Table, finish: bool) -> mlua::Result<(
     sync_tween_getters(lua, actor)
 }
 
-pub(crate) fn replay_tween_pose(lua: &Lua, actor: &Table, state: &mut SongLuaOverlayState) {
+pub(crate) fn replay_tween_pose(lua: &Lua, actor: &Table, state: &mut SongLuaOverlayState) -> bool {
     if let Some(replays) = lua.app_data_ref::<ActorTweenReplays>()
         && let Some(replay) = replays.0.get(&(actor.to_pointer() as usize))
     {
         crate::apply_overlay_delta(state, &tween_pose_delta(replay.current));
         state.vertex_colors = replay.current.vertex_colors;
+        return true;
     }
+    false
 }
 
 pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -11710,10 +11712,8 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Rc<[SongLuaCompi
         let mut jobs = Vec::new();
         let mut order = 0;
         for key in ["__songlua_top_screen_player_1", "__songlua_top_screen_player_2"] {
-            if let Some(player) = lua.globals().raw_get::<Option<Table>>(key)?
-                && let Some(children) = player.raw_get::<Option<Table>>("__songlua_children")?
-                && let Some(field) = children.raw_get::<Option<Table>>("NoteField")?
-                && field.raw_get::<Option<Table>>("__songlua_wrappers")?.is_some_and(|wrappers| wrappers.raw_len() > 0) {
+            // Player actors advance native time even without NoteField wrappers.
+            if let Some(player) = lua.globals().raw_get::<Option<Table>>(key)? {
                 collect_compile_update_jobs(lua, &player, None, false, &mut jobs, &mut order)?;
             }
         }

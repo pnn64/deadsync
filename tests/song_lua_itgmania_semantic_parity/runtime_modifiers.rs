@@ -4384,3 +4384,35 @@ fn attack_flags_current_matches_native_frames() {
     }
     assert_eq!(checked, 108);
 }
+
+#[test]
+fn long_player_tweens_match_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/player-long-tween-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native long player tween control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    for track in &trace.player_render_tracks {
+        let player = track.player - 1;
+        context.players[player].screen_x = track.transform_samples[0][1].expect("native initial X");
+        context.players[player].screen_y = track.transform_samples[0][2].expect("native initial Y");
+    }
+    let entry = song_dir.join("player-long-tween.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile a sleeping message actor moving both players");
+    for track in &trace.player_render_tracks {
+        assert_eq!(
+            Some(compiled[0].player_actors[track.player - 1].initial_state.x),
+            track.transform_samples[0][1],
+            "the renderer must start at the native current pose",
+        );
+    }
+    let mut parity = Parity::default();
+    compare_player_frames(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native long player tween frames");
+}
