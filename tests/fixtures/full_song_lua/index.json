@@ -1436,12 +1436,10 @@
     {
       "title": "Atmosphere",
       "source_simfile": "Atmosphere/atmosphere-fakemines.sm",
-      "harness_version": "0.1.0",
-      "archive": "2209fb12c20e864b2c4036061b955256f2f6e0e76eb139a421055bd8961040c2.tar.zst",
-      "sha256": "2209fb12c20e864b2c4036061b955256f2f6e0e76eb139a421055bd8961040c2",
-      "compressed_bytes": 66528,
-      "uncompressed_sha256": "2b319ec9520d5239bb3860e945e7802212467291c84e6f40d239b2926a697614",
-      "compression_level": 22,
+      "harness_version": "0.1.62",
+      "archive": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883.tar.zst",
+      "sha256": "19736fa57303bc9e75ecc423c0df5195e08ab59c69c32f583a8bae21a6c23883",
+      "compressed_bytes": 361456,
       "aliases": [
         "90db61e2e112e9285107586a2f97c456f6849318285119cd75d251736caed6a7.tar.zst"
       ]
