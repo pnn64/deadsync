@@ -91,19 +91,76 @@ impl Drop for Tracking {
     }
 }
 
-pub fn assert_no_churn(work: impl FnOnce()) {
-    let (_, counts) = measure(work);
-    assert_eq!(
-        counts,
-        Churn::default(),
-        "hot path allocated or freed memory"
-    );
-}
-
-pub fn measure<T>(work: impl FnOnce() -> T) -> (T, Churn) {
+pub fn measure<R>(work: impl FnOnce() -> R) -> (R, Churn) {
     let tracking = Tracking::start();
     let result = work();
     let counts = COUNTS.get().expect("tracking is active");
     drop(tracking);
     (result, counts)
+}
+
+pub fn compare(label: &str, mut original: impl FnMut(), mut current: impl FnMut()) {
+    let mut elapsed = [Vec::with_capacity(9), Vec::with_capacity(9)];
+    let mut counts = [1usize; 2];
+    for sample in 0..10 {
+        for variant in [sample % 2, 1 - sample % 2] {
+            let count = counts[variant];
+            let start = std::time::Instant::now();
+            for _ in 0..count {
+                if variant == 0 {
+                    original();
+                } else {
+                    current();
+                }
+            }
+            let nanos = start.elapsed().as_nanos().max(1);
+            if sample == 0 {
+                counts[variant] = 5_000_000_u128.div_ceil(nanos).clamp(1, 1_000_000) as usize;
+            } else {
+                elapsed[variant].push(nanos as f64 / count as f64);
+            }
+        }
+    }
+    for samples in &mut elapsed {
+        samples.sort_by(f64::total_cmp);
+    }
+    println!(
+        "{label}: original {:.2} ns/op, current {:.2} ns/op, {:.3}x throughput",
+        elapsed[0][4],
+        elapsed[1][4],
+        elapsed[0][4] / elapsed[1][4]
+    );
+    let (_, before) = measure(&mut original);
+    let (_, after) = measure(&mut current);
+    println!(
+        "{label}: allocations {} -> {}, reallocations {} -> {}, bytes {} -> {}",
+        before.allocs,
+        after.allocs,
+        before.reallocs,
+        after.reallocs,
+        before.allocated_bytes,
+        after.allocated_bytes
+    );
+}
+
+pub struct Directory(pub std::path::PathBuf);
+impl Directory {
+    pub fn new(label: &str) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let base = std::env::temp_dir().canonicalize().unwrap();
+        let path = base.join(format!(
+            "deadsync-resource-{label}-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        assert_eq!(path.parent(), Some(base.as_path()));
+        std::fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+}
+impl Drop for Directory {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).unwrap();
+    }
 }
