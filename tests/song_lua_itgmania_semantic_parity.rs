@@ -9953,7 +9953,7 @@ fn bad_apple_whole_song_matches_native() {
     let (compiled, primary, context) = compile_trace_song(&trace);
     let mut parity = compare_semantics(&trace, &compiled, primary, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    runtime_modifiers::compare_player_frames(&trace, &compiled, &context, &mut parity);
+    runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
     eprintln!("{}", parity.summary("Bad Apple whole song"));
     parity.assert_complete("Bad Apple whole song");
     assert_eq!(

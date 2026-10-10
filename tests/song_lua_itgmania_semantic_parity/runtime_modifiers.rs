@@ -2803,6 +2803,7 @@ fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
 pub(super) fn compare_player_frames(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
+    primary: usize,
     context: &SongLuaCompileContext,
     parity: &mut Parity,
 ) {
@@ -2820,6 +2821,10 @@ pub(super) fn compare_player_frames(
         if player >= 2 || !trace.enabled_players.unwrap_or([true; 2])[player] {
             continue;
         }
+        // Playback falls back to the captured Player pose, not its layout.
+        let initial = compiled.get(primary).map(|layer| layer.player_actors[player].initial_state);
+        let initial_x = initial.map_or(context.players[player].screen_x, |pose| pose.x);
+        let initial_y = initial.map_or(context.players[player].screen_y, |pose| pose.y);
         let mut transform = SongLuaPlayerTransform::default();
         let mut prior = 0.0;
         let mut cursor = 0;
@@ -2851,9 +2856,9 @@ pub(super) fn compare_player_frames(
                 Some(
                     transform
                         .x
-                        .unwrap_or(context.players[player].screen_x),
+                        .unwrap_or(initial_x),
                 ),
-                Some(transform.y.unwrap_or(context.players[player].screen_y)),
+                Some(transform.y.unwrap_or(initial_y)),
                 Some(transform.z),
                 Some(transform.rotation_x),
                 Some(transform.rotation_z),
@@ -4413,6 +4418,37 @@ fn long_player_tweens_match_native_frames() {
         );
     }
     let mut parity = Parity::default();
-    compare_player_frames(&trace, &compiled, &context, &mut parity);
+    compare_player_frames(&trace, &compiled, 0, &context, &mut parity);
     parity.assert_complete("native long player tween frames");
+}
+
+#[test]
+fn cmd_callback_preserves_initial_player_pose() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/cmd-function-args-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native cmd function arguments");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.players[0].screen_x = 241.0;
+    context.players[1].screen_x = 612.0;
+    for player in &mut context.players {
+        player.screen_y = 240.0;
+    }
+    let entry = song_dir.join("cmd-function-args.lua");
+    let mut compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile the native callback with nested Lua blocks");
+    assert_eq!(compiled[0].player_actors[0].initial_state.x, 249.0);
+    let mut parity = Parity::default();
+    compare_player_frames(&trace, &compiled, 0, &context, &mut parity);
+    parity.assert_complete("native cmd callback player pose");
+    compiled[0].player_actors[0].initial_state.x = 241.0;
+    let mut wrong = Parity::default();
+    compare_player_frames(&trace, &compiled, 0, &context, &mut wrong);
+    assert_eq!(wrong.sections.iter().map(|section| section.failed).sum::<usize>(),
+        trace.update_frames.len());
 }
