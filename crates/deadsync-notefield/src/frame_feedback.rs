@@ -2,8 +2,7 @@ use crate::explosions::{ExplosionComposeRequest, ExplosionRotation, compose_expl
 use crate::{
     ColumnFeedbackRequest, ModelMeshCache, NoteXParams, NotefieldComposeRequest, PreparedNotefield,
     ReceptorDrawRequest, ReceptorPress, compose_column_feedback, compose_receptor_draws,
-    gameplay_visual_effect_params, receptor_row_center, visual_arrow_effect_zoom,
-    visual_confusion_rotation_deg,
+    gameplay_visual_effect_params, receptor_row_center, visual_confusion_rotation_deg,
 };
 #[cfg(test)]
 use deadlib_present::actors::FlatSprite;
@@ -269,15 +268,17 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         } else {
             lane_depths[local_col] + spline_z
         };
-        let base_zoom = visual_arrow_effect_zoom(0.0, effect);
+        let base_zoom = crate::visual_arrow_effect_zoom_cached(0.0, transform_cache, 1.0);
         let zoom_spline = prepared.column_zoom_splines[local_col];
         lane_base_zooms[local_col] = if zoom_spline.enabled {
             zoom_spline.receptor(current_beat)[0]
+                + if zoom_spline.absolute { 0.0 } else { base_zoom }
         } else {
             base_zoom
         };
         let effect_zoom = if zoom_spline.enabled {
             zoom_spline.receptor(current_beat)[0]
+                + if zoom_spline.absolute { 0.0 } else { base_zoom }
         } else {
             (base_zoom
                 + request
@@ -641,6 +642,7 @@ fn feedback_lane_work_mask(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::visual_arrow_effect_zoom;
     use crate::{
         ErrorBarModes, FieldPlacement, LayoutMiniIndicatorPosition, MeasureLineMode,
         NotefieldChartView, NotefieldFrameFeatures, NotefieldGeometry, NotefieldNoteskinView,
@@ -3449,8 +3451,7 @@ mod tests {
                             };
                             for axis in 0..2 {
                                 assert!(
-                                    (size(&absolute)[axis] - size(&before)[axis] * scale).abs()
-                                        < 0.001,
+                                    (size(&absolute)[axis] - 64.0 * zoom * scale).abs() < 0.001,
                                     "absolute zoom {key}"
                                 );
                             }
@@ -5351,6 +5352,229 @@ mod tests {
             }
         }
         assert_eq!(checked, 1152);
+    }
+
+    #[test]
+    fn zoom_spline_matches_native_assignment() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/shrink-spline.json"
+        ))
+        .expect("unchanged native zoom selection and actor assignment");
+        let vectors = native["vectors"].as_array().expect("spline vectors");
+        assert_eq!(vectors.len(), 216);
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        for v in vectors {
+            let value = |key: &str| v[key].as_f64().expect("native input") as f32;
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.geometry.field_zoom = value("field");
+            request.visual.visual.shrink_linear = value("linear");
+            let mut prepared = prepare_notefield(&request).expect("prepared spline");
+            prepared.column_zoom_splines[0] = deadsync_gameplay::SongLuaPositionSpline {
+                enabled: value("mode") != 0.0,
+                absolute: value("mode") == 2.0,
+                points: [[value("point"); 3]; 2],
+                ..Default::default()
+            };
+            let cache = crate::lane_note_transform_cache(
+                0.0,
+                crate::gameplay_visual_effect_params(&request.visual.visual, 0),
+            );
+            let base =
+                crate::visual_arrow_effect_zoom_cached(value("travel"), cache, value("field"));
+            let actual = prepared.spline_zoom(0, 0.0, base);
+            assert!(
+                (actual - value("zoom")).abs() < 0.0001,
+                "{v}; actual={actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn composed_shrink_matches_native_widths() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/shrink-parent.json"
+        ))
+        .expect("independently compiled native Shrink zoom");
+        let mut ns = noteskin();
+        // Native NoteDisplay anchors reversed heads at the original head only
+        // when this noteskin metric is enabled.
+        ns.note_display_metrics.flip_head_and_tail_when_reverse = true;
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|col| {
+                TestSlot::new(if col < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        for col in 0..2 {
+            ns.hold_columns[col].head_inactive =
+                Some(TestSlot::new(if col == 0 { "note0" } else { "note1" }));
+            ns.hold_columns[col].body_inactive = Some(TestSlot::new("body"));
+            ns.hold_columns[col].topcap_inactive = Some(TestSlot::new("top"));
+            ns.hold_columns[col].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        }
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut checked = 0;
+        for vector in native["vectors"].as_array().expect("vectors") {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("travel");
+            let field = value("field");
+            if field != 1.0 || travel < 0.0 || travel > 256.0 {
+                continue;
+            }
+            let Some(zoom) = vector["world_zoom"].as_f64().map(|v| v as f32) else {
+                continue;
+            };
+            if zoom.abs() <= f32::EPSILON {
+                continue;
+            }
+            let mini_zoom = value("parent_zoom");
+            for col in 0..2 {
+                for kind in [
+                    NoteType::Tap,
+                    NoteType::Mine,
+                    NoteType::Hold,
+                    NoteType::Roll,
+                ] {
+                    let mut n = note(col);
+                    n.note_type = kind;
+                    n.beat = travel / 64.0;
+                    n.row_index = usize::try_from(deadsync_core::timing::beat_to_note_row(n.beat))
+                        .expect("row");
+                    if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                        n.hold = Some(HoldData {
+                            end_row_index: n.row_index + 96,
+                            end_beat: n.beat + 2.0,
+                            result: None,
+                            life: 1.0,
+                            let_go_started_at: None,
+                            let_go_starting_life: 1.0,
+                            last_held_row_index: n.row_index,
+                            last_held_beat: n.beat,
+                        });
+                    }
+                    let notes = [n];
+                    let mut lanes = [vec![], vec![]];
+                    lanes[col]
+                        .push(deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index"));
+                    let rows = [deadsync_core::timing::beat_to_note_row(notes[0].beat)];
+                    let mut request =
+                        request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.lane_hold_indices = &lanes;
+                    request.chart.note_itg_rows = &rows;
+                    request.chart.visible_beat = 0.0;
+                    request.chart.search_beat = 0.0;
+                    request.visual.current_display_beat = 0.0;
+                    request.geometry.column_dirs.fill(1.0);
+                    request.geometry.draw_distance_before_targets = 1536.0;
+                    request.geometry.draw_distance_after_targets = 1536.0;
+                    request.geometry.field_zoom = mini_zoom;
+                    request.visual.visual.shrink_linear = value("linear");
+                    request.visual.visual.shrink_mult = value("mult");
+                    request.visual.visual.pulse_inner = value("inner");
+                    request.visual.visual.pulse_outer = value("outer");
+                    request.visual.visual.pulse_offset = value("offset");
+                    request.visual.visual.pulse_period = value("period");
+                    request.visual.visual.tiny = value("tiny");
+                    request.visual.visual.tiny_cols.fill(value("lane_tiny"));
+                    let prepared = prepare_notefield(&request).expect("prepared Shrink field");
+                    let frame = NotefieldFieldFrameView {
+                        feedback: spline_feedback(&[]),
+                        completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(),
+                        &mut draws,
+                        &mut Vec::new(),
+                        &mut ModelMeshCache::default(),
+                        &mut HoldMeshScratch::with_columns(2),
+                        &mut CapturedActorScratch::with_capacities(32, 0),
+                        &mut NotefieldCameraCache::default(),
+                        &request,
+                        &prepared,
+                        &frame,
+                        &source,
+                    );
+                    let mut arrow = None;
+                    let mut receptor = None;
+
+                    for draw in &draws {
+                        if let FlatDraw::Sprite(sprite) = draw {
+                            let key = sprite.source.texture_key();
+                            if key == Some(if col == 0 { "note0" } else { "note1" }) {
+                                arrow = Some(sprite.size);
+                            } else if key == Some(if col == 0 { "target0" } else { "target1" }) {
+                                receptor = Some(sprite.center);
+                            }
+                        }
+                    }
+                    let arrow = arrow.expect("composed note or hold head");
+                    let receptor = receptor.expect("receptor");
+                    for actual in arrow {
+                        assert!(
+                            (actual - 64.0 * zoom).abs() < 0.002,
+                            "{kind:?} size: {vector}; actual={actual}"
+                        );
+                    }
+                    if matches!(kind, NoteType::Hold | NoteType::Roll)
+                        && (value("linear") != 0.0 || value("mult") != 0.0)
+                    {
+                        let mut found = false;
+                        for draw in &draws {
+                            let FlatDraw::TexturedMesh(mesh) = draw else {
+                                continue;
+                            };
+                            if mesh.texture.texture_key() != Some("body") {
+                                continue;
+                            }
+                            let vertices = match &mesh.vertices {
+                                FlatMeshVertices::Shared(v) => v.as_ref(),
+                                FlatMeshVertices::Reusable(v) => v.as_slice(),
+                            };
+                            for quad in vertices.chunks_exact(6) {
+                                for (left, right) in [(&quad[0], &quad[1]), (&quad[5], &quad[4])] {
+                                    if ((left.pos[1] + right.pos[1]) * 0.5
+                                        - receptor[1]
+                                        - mini_zoom * travel)
+                                        .abs()
+                                        > 0.0001
+                                    {
+                                        continue;
+                                    }
+                                    let actual = right.pos[0] - left.pos[0];
+                                    assert!(
+                                        (actual - 64.0 * zoom).abs() < 0.002,
+                                        "{kind:?} strip width: {vector}; actual={actual}"
+                                    );
+                                    found = true;
+                                }
+                            }
+                        }
+                        assert!(found, "native hold-width row missing: {vector}");
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(checked, 9072);
     }
 
     #[test]

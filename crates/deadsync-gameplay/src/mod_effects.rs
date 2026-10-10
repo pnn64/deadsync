@@ -274,6 +274,8 @@ pub struct VisualOverrides {
     pub pulse_outer: Option<f32>,
     pub pulse_period: Option<f32>,
     pub beat_period: Option<f32>,
+    pub shrink_linear: Option<f32>,
+    pub shrink_mult: Option<f32>,
     pub bounce_z: Option<f32>,
     pub bounce_z_offset: Option<f32>,
     pub bounce_z_period: Option<f32>,
@@ -395,6 +397,8 @@ impl Default for VisualOverrides {
             pulse_outer: None,
             pulse_period: None,
             beat_period: None,
+            shrink_linear: None,
+            shrink_mult: None,
             bounce_z: None,
             bounce_z_offset: None,
             bounce_z_period: None,
@@ -518,6 +522,8 @@ impl VisualOverrides {
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
             || self.beat_period.is_some()
+            || self.shrink_linear.is_some()
+            || self.shrink_mult.is_some()
             || self.bounce_z.is_some()
             || self.bounce_z_offset.is_some()
             || self.bounce_z_period.is_some()
@@ -750,6 +756,8 @@ pub struct VisualEffects {
     pub pulse_outer: f32,
     pub pulse_period: f32,
     pub beat_period: f32,
+    pub shrink_linear: f32,
+    pub shrink_mult: f32,
     pub bounce_z: f32,
     pub bounce_z_offset: f32,
     pub bounce_z_period: f32,
@@ -879,6 +887,8 @@ impl VisualEffects {
             pulse_outer: 0.0,
             pulse_period: 0.0,
             beat_period: 0.0,
+            shrink_linear: 0.0,
+            shrink_mult: 0.0,
             bounce_z: 0.0,
             bounce_z_offset: 0.0,
             bounce_z_period: 0.0,
@@ -1093,6 +1103,8 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
     approach_optional_visual(&mut visual.beat_period, base.beat_period, step);
+    approach_optional_visual(&mut visual.shrink_linear, base.shrink_linear, step);
+    approach_optional_visual(&mut visual.shrink_mult, base.shrink_mult, step);
     approach_optional_visual(&mut visual.bounce_z, base.bounce_z, step);
     approach_optional_visual(&mut visual.bounce_z_offset, base.bounce_z_offset, step);
     approach_optional_visual(&mut visual.bounce_z_period, base.bounce_z_period, step);
@@ -1801,6 +1813,22 @@ pub fn approach_visual_overrides_to_target(
         target.beat_period,
         base.beat_period,
         speed.beat_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.shrink_linear,
+        target.shrink_linear,
+        base.shrink_linear,
+        speed.shrink_linear,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.shrink_mult,
+        target.shrink_mult,
+        base.shrink_mult,
+        speed.shrink_mult,
         delta_time,
         1.0,
     );

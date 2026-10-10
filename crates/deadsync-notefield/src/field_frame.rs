@@ -239,22 +239,19 @@ fn compose_field_contents<S, F>(
     let position_splines = prepared.column_position_splines;
     let column_zooms = prepared.column_zooms;
     let column_rotations_deg = prepared.column_rotations_deg;
-    let scale_sprite =
-        |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
     let scale_mine_slot = |slot: &S| -> [f32; 2] {
         // ActorFrame children retain native logical dimensions relative to
         // the 64-pixel field unit, including differently sized spark layers.
         if let Some(model) = slot.model() {
             let model_size = model.size();
             if model_size[0] > f32::EPSILON && model_size[1] > f32::EPSILON {
-                return [model_size[0] * field_zoom, model_size[1] * field_zoom];
+                return model_size;
             }
         }
         if slot.actor_frame_child() {
             slot.logical_size()
-                .map(|size| size * target_arrow_px / 64.0)
         } else {
-            scale_sprite(slot.size())
+            scale_sprite_to_arrow(slot.size(), 64.0)
         }
     };
     let prefer_sprite_note_path = false;
@@ -688,12 +685,15 @@ fn compose_field_contents<S, F>(
             local_col,
             if engaged { current_beat } else { note.beat },
             column_zoom
-                * (visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache)
-                    + if has_zoom_spline {
-                        note_hides.zoom_offset(local_col, note.beat)
-                    } else {
-                        0.0
-                    }),
+                * (visual_arrow_effect_zoom_cached(
+                    head_anchor_adjusted_travel / field_zoom,
+                    transform_cache,
+                    1.0,
+                ) + if has_zoom_spline {
+                    note_hides.zoom_offset(local_col, note.beat)
+                } else {
+                    0.0
+                }),
         );
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
@@ -737,8 +737,11 @@ fn compose_field_contents<S, F>(
                         local_col,
                         beat,
                         column_zoom
-                            * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
-                                + body_zoom_offset_at_y(screen_y)),
+                            * (visual_arrow_effect_zoom_cached(
+                                adjusted_travel / field_zoom,
+                                transform_cache,
+                                1.0,
+                            ) + body_zoom_offset_at_y(screen_y)),
                     ),
             }
         };
@@ -865,8 +868,8 @@ fn compose_field_contents<S, F>(
             let note_scale = hold_note_scale;
             let model = slot.model();
             let base_size = note_slot_base_size(slot, model, note_scale);
-            (base_size[0] * draw.zoom[0].max(0.0) > f32::EPSILON
-                && base_size[1] * draw.zoom[1].max(0.0) > f32::EPSILON)
+            ((base_size[0] * draw.zoom[0].max(0.0)).abs() > f32::EPSILON
+                && (base_size[1] * draw.zoom[1].max(0.0)).abs() > f32::EPSILON)
                 .then_some((slot, draw, note_scale, base_size, model))
         });
         if let Some((head_slot, draw, note_scale, base_size, model)) = head_slot {
@@ -885,7 +888,11 @@ fn compose_field_contents<S, F>(
                 base_size[0] * draw.zoom[0].max(0.0),
                 base_size[1] * draw.zoom[1].max(0.0),
             ];
-            if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+            if !size[0].is_finite()
+                || !size[1].is_finite()
+                || size[0].abs() <= f32::EPSILON
+                || size[1].abs() <= f32::EPSILON
+            {
                 return;
             }
             let color = [
@@ -1230,13 +1237,17 @@ fn compose_visible_notes<S, F>(
                     local_col,
                     note.beat,
                     prepared.column_zooms[local_col]
-                        * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache),
+                        * visual_arrow_effect_zoom_cached(
+                            adjusted_travel / field_zoom,
+                            transform_cache,
+                            1.0,
+                        ),
                 );
                 let note_scale = field_zoom * effect_zoom;
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
-                    let scale = effect_zoom * request.options.mine_size_scale;
+                    let scale = field_zoom * effect_zoom * request.options.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
                 let note_rotation_x = transform_cache.confusion_rotation_x_deg
@@ -1500,7 +1511,11 @@ fn compose_flat_noteskin_layer<S, F>(
         base_size[0] * draw.zoom[0].max(0.0),
         base_size[1] * draw.zoom[1].max(0.0),
     ];
-    if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+    if !size[0].is_finite()
+        || !size[1].is_finite()
+        || size[0].abs() <= f32::EPSILON
+        || size[1].abs() <= f32::EPSILON
+    {
         return;
     }
     let frame_index = slot.frame_index_from_phase(phase);
@@ -1789,11 +1804,14 @@ fn hold_lane_frame(
 ) -> HoldLaneFrame {
     HoldLaneFrame {
         receptor_draw_y: receptor_y + move_y_offset + tipsy_y_offset,
-        target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
+        target_arrow_px: target_arrow_px
+            * visual_arrow_effect_zoom_cached(0.0, transform_cache, 1.0),
         use_legacy_sprites: !visual.z_buffer
             && visual.twirl == 0.0
             && visual.confusion_y == 0.0
             && visual.confusion_y_offset == 0.0
+            && visual.shrink_linear == 0.0
+            && visual.shrink_mult == 0.0
             && visual.parabola_x == 0.0
             && visual.attenuate_x == 0.0
             && visual.attenuate_y == 0.0
@@ -2193,10 +2211,10 @@ mod note_layer_tests {
             (true, [1.0, -1.0, 1.0], 1.0, false),
             (true, [f32::NAN, 1.0, 1.0], 1.0, false),
             (true, [1.0; 3], 0.0, false),
-            (true, [1.0; 3], -0.5, false),
+            (true, [1.0; 3], -0.5, true),
             (true, [1.0; 3], f32::EPSILON / 64.0, false),
             (true, [1.0; 3], f32::EPSILON / 32.0, true),
-            (true, [1.0; 3], f32::NAN, true),
+            (true, [1.0; 3], f32::NAN, false),
             (false, [1.0; 3], 1.0, false),
         ] {
             let slot = TestSlot {

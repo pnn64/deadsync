@@ -671,6 +671,8 @@ pub enum SongLuaEaseMaskTarget {
     VisualPulseOuter,
     VisualPulsePeriod,
     VisualBeatPeriod,
+    VisualShrinkLinear,
+    VisualShrinkMult,
     VisualBounceZ,
     VisualBounceZOffset,
     VisualBounceZPeriod,
@@ -2384,6 +2386,8 @@ fn append_song_lua_ease_targets_key(
         "pulseouter" => push(SongLuaEaseMaskTarget::VisualPulseOuter, pct_from, pct_to),
         "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
         "beatperiod" => push(SongLuaEaseMaskTarget::VisualBeatPeriod, pct_from, pct_to),
+        "shrinklinear" => push(SongLuaEaseMaskTarget::VisualShrinkLinear, pct_from, pct_to),
+        "shrinkmult" => push(SongLuaEaseMaskTarget::VisualShrinkMult, pct_from, pct_to),
         "bouncez" => push(SongLuaEaseMaskTarget::VisualBounceZ, pct_from, pct_to),
         "bouncezoffset" => push(SongLuaEaseMaskTarget::VisualBounceZOffset, pct_from, pct_to),
         "bouncezperiod" => push(SongLuaEaseMaskTarget::VisualBounceZPeriod, pct_from, pct_to),
@@ -3156,6 +3160,8 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
         SongLuaEaseMaskTarget::VisualBeatPeriod => visual.beat_period = Some(value),
+        SongLuaEaseMaskTarget::VisualShrinkLinear => visual.shrink_linear = Some(value),
+        SongLuaEaseMaskTarget::VisualShrinkMult => visual.shrink_mult = Some(value),
         SongLuaEaseMaskTarget::VisualBounceZ => visual.bounce_z = Some(value),
         SongLuaEaseMaskTarget::VisualBounceZOffset => visual.bounce_z_offset = Some(value),
         SongLuaEaseMaskTarget::VisualBounceZPeriod => visual.bounce_z_period = Some(value),
@@ -3450,6 +3456,8 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
         SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
         SongLuaEaseMaskTarget::VisualBeatPeriod => window.visual.beat_period.is_some(),
+        SongLuaEaseMaskTarget::VisualShrinkLinear => window.visual.shrink_linear.is_some(),
+        SongLuaEaseMaskTarget::VisualShrinkMult => window.visual.shrink_mult.is_some(),
         SongLuaEaseMaskTarget::VisualBounceZ => window.visual.bounce_z.is_some(),
         SongLuaEaseMaskTarget::VisualBounceZOffset => window.visual.bounce_z_offset.is_some(),
         SongLuaEaseMaskTarget::VisualBounceZPeriod => window.visual.bounce_z_period.is_some(),
@@ -4870,6 +4878,8 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
     mark_active_target(&mut targets.beat_period, visual.beat_period);
+    mark_active_target(&mut targets.shrink_linear, visual.shrink_linear);
+    mark_active_target(&mut targets.shrink_mult, visual.shrink_mult);
     mark_active_target(&mut targets.bounce_z, visual.bounce_z);
     mark_active_target(&mut targets.bounce_z_offset, visual.bounce_z_offset);
     mark_active_target(&mut targets.bounce_z_period, visual.bounce_z_period);
@@ -5850,6 +5860,12 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualBeatPeriod => {
                 attack.visual_speed.beat_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualShrinkLinear => {
+                attack.visual_speed.shrink_linear = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualShrinkMult => {
+                attack.visual_speed.shrink_mult = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualBounceZ => attack.visual_speed.bounce_z = Some(speed),
             SongLuaEaseMaskTarget::VisualBounceZOffset => {
@@ -7110,6 +7126,24 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.shrink_linear,
+        &mut values.visual_speed.shrink_linear,
+        window.visual.shrink_linear,
+        window.visual_speed.shrink_linear,
+        active_targets.visual.shrink_linear,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.shrink_mult,
+        &mut values.visual_speed.shrink_mult,
+        window.visual.shrink_mult,
+        window.visual_speed.shrink_mult,
+        active_targets.visual.shrink_mult,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.bounce_z,
         &mut values.visual_speed.bounce_z,
         window.visual.bounce_z,
@@ -8228,6 +8262,18 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "shrinklinear" => set_approached_mod(
+            &mut out.visual.shrink_linear,
+            &mut out.visual_speed.shrink_linear,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "shrinkmult" => set_approached_mod(
+            &mut out.visual.shrink_mult,
+            &mut out.visual_speed.shrink_mult,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "bouncez" => set_approached_mod(
             &mut out.visual.bounce_z,
             &mut out.visual_speed.bounce_z,
@@ -8861,6 +8907,8 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
         beat_period: merge_attack_value(base.beat_period, attack.beat_period),
+        shrink_linear: merge_attack_value(base.shrink_linear, attack.shrink_linear),
+        shrink_mult: merge_attack_value(base.shrink_mult, attack.shrink_mult),
         bounce_z: merge_attack_value(base.bounce_z, attack.bounce_z),
         bounce_z_offset: merge_attack_value(base.bounce_z_offset, attack.bounce_z_offset),
         bounce_z_period: merge_attack_value(base.bounce_z_period, attack.bounce_z_period),

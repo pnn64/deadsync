@@ -53,6 +53,8 @@ pub(crate) struct VisualEffectParams {
     pub pulse_outer: f32,
     pub pulse_offset: f32,
     pub pulse_period: f32,
+    pub shrink_linear: f32,
+    pub shrink_mult: f32,
     pub confusion: f32,
     pub confusion_offset: f32,
     pub confusion_x: f32,
@@ -132,6 +134,8 @@ pub(crate) struct LaneNoteTransformCache {
     pulse_outer_scale: f32,
     pulse_offset: f32,
     pulse_divisor: f32,
+    shrink_linear: f32,
+    shrink_mult: f32,
     identity_rotation: bool,
     static_rotation_z: Option<f32>,
     rotation_base_z: f32,
@@ -844,6 +848,7 @@ pub(crate) fn visual_pulse_inner_zoom(params: VisualEffectParams) -> f32 {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32 {
     if !visual_pulse_active(params) {
         return 1.0;
@@ -869,6 +874,7 @@ pub(crate) fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32
         .mul_add(outer * 0.5, visual_pulse_inner_zoom(params))
 }
 
+#[cfg(test)]
 pub(crate) fn visual_arrow_effect_zoom(y: f32, params: VisualEffectParams) -> f32 {
     visual_tiny_zoom(params) * visual_pulse_zoom_for_y(y, params)
 }
@@ -973,6 +979,8 @@ pub(crate) fn lane_note_transform_cache(
         pulse_outer_scale: pulse_outer * 0.5,
         pulse_offset,
         pulse_divisor: mod_divisor(0.4 * ARROW_EFFECT_PIXEL_SIZE * (1.0 + pulse_period)),
+        shrink_linear: params.shrink_linear,
+        shrink_mult: params.shrink_mult,
         identity_rotation,
         static_rotation_z,
         rotation_base_z,
@@ -992,18 +1000,32 @@ pub(crate) fn lane_note_transform_cache(
     }
 }
 
-pub(crate) fn visual_arrow_effect_zoom_cached(y: f32, cache: LaneNoteTransformCache) -> f32 {
+pub(crate) fn visual_arrow_effect_zoom_cached(
+    y: f32,
+    cache: LaneNoteTransformCache,
+    field_zoom: f32,
+) -> f32 {
+    // Native GetZoom starts with field zoom, then Pulse, ShrinkMult,
+    // ShrinkLinear and Tiny. Linear is additive and may produce signed zoom.
+    let mut zoom = field_zoom;
     if cache.pulse_active {
-        if cache.pulse_constant && y.is_finite() {
-            return cache.tiny_zoom * cache.pulse_inner_zoom;
-        }
-        let pulse = (100.0f32.mul_add(cache.pulse_offset, y) / cache.pulse_divisor)
-            .sin()
-            .mul_add(cache.pulse_outer_scale, cache.pulse_inner_zoom);
-        cache.tiny_zoom * pulse
-    } else {
-        cache.tiny_zoom
+        let pulse = if cache.pulse_constant && y.is_finite() {
+            cache.pulse_inner_zoom
+        } else {
+            ((y + 100.0 * cache.pulse_offset) / cache.pulse_divisor).sin() * cache.pulse_outer_scale
+                + cache.pulse_inner_zoom
+        };
+        zoom *= pulse;
     }
+    if y >= 0.0 {
+        if cache.shrink_mult != 0.0 {
+            zoom *= 1.0 / (1.0 + y * (cache.shrink_mult / 100.0));
+        }
+        if cache.shrink_linear != 0.0 {
+            zoom += y * (0.5 * cache.shrink_linear / ARROW_EFFECT_PIXEL_SIZE);
+        }
+    }
+    zoom * cache.tiny_zoom
 }
 
 pub(crate) fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
@@ -1094,6 +1116,8 @@ pub(crate) fn gameplay_visual_effect_params(
             pulse_outer: visual.pulse_outer,
             pulse_offset: visual.pulse_offset,
             pulse_period: visual.pulse_period,
+            shrink_linear: visual.shrink_linear,
+            shrink_mult: visual.shrink_mult,
             confusion: visual.confusion,
             confusion_x: visual.confusion_x,
             confusion_y: visual.confusion_y,
@@ -2316,6 +2340,48 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shrink_matches_native_zoom() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/shrink-motion.json"
+        ))
+        .expect("unchanged full native GetZoom/GetZoomVariable/GetPulseInner");
+        let vectors = native["vectors"].as_array().expect("native zooms");
+        assert_eq!(vectors.len(), 2835);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native input") as f32;
+            let cache = lane_note_transform_cache(
+                0.0,
+                VisualEffectParams {
+                    shrink_linear: value("linear"),
+                    shrink_mult: value("mult"),
+                    pulse_inner: value("inner"),
+                    pulse_outer: value("outer"),
+                    pulse_offset: value("offset"),
+                    pulse_period: value("period"),
+                    tiny: value("tiny") + value("lane_tiny"),
+                    ..Default::default()
+                },
+            );
+            for (travel, key) in [(value("travel"), "zoom"), (0.0, "receptor_zoom")] {
+                let actual = visual_arrow_effect_zoom_cached(travel, cache, value("field"));
+                if let Some(expected) = vector[key].as_f64() {
+                    assert!(
+                        (actual - expected as f32).abs() < 0.0001,
+                        "{key}: {vector}; actual={actual}"
+                    );
+                } else {
+                    match vector[key].as_str().expect("IEEE state") {
+                        "nan" => assert!(actual.is_nan(), "{vector}; actual={actual}"),
+                        "inf" => assert_eq!(actual, f32::INFINITY, "{vector}"),
+                        "-inf" => assert_eq!(actual, f32::NEG_INFINITY, "{vector}"),
+                        _ => panic!("invalid native IEEE state"),
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn z_waves_match_native_positions() {

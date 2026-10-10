@@ -530,6 +530,8 @@ fn runtime_mod_value(
         "pulseouter" => visual.pulse_outer.unwrap_or(0.0),
         "pulseperiod" => visual.pulse_period.unwrap_or(0.0),
         "beatperiod" => visual.beat_period.unwrap_or(0.0),
+        "shrinklinear" => visual.shrink_linear.unwrap_or(0.0),
+        "shrinkmult" => visual.shrink_mult.unwrap_or(0.0),
         "bouncez" => visual.bounce_z.unwrap_or(0.0),
         "bouncezoffset" => visual.bounce_z_offset.unwrap_or(0.0),
         "bouncezperiod" => visual.bounce_z_period.unwrap_or(0.0),
@@ -4090,4 +4092,96 @@ fn z_wave_family_current_matches_native_frames() {
         prior = now;
     }
     assert_eq!(checked, 540);
+}
+
+#[test]
+fn shrink_family_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/shrink-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Shrink control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("shrink-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Shrink, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Shrink targets and resets");
+}
+
+#[test]
+fn shrink_family_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/shrink-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Shrink Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("shrink-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Shrink Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (_group, keys) in [["shrinklinear", "shrinkmult", "tiny"]].iter().enumerate() {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name == Some(format!("ShrinkCurrentP{}", player + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime Shrink");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 108);
 }

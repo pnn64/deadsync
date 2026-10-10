@@ -170,17 +170,17 @@ pub(crate) use transforms::{
     compute_tornado_lane_caches, fill_gameplay_lane_effects, fill_move_col_extras,
     fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
     note_appearance_cache, note_depth_frame_cache, note_world_z_cached, note_x_offset,
-    note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom,
-    visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
-    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom_cached,
+    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
+    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
+    visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
     appearance_needs_rows, beat_wave_offset, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
     move_col_extra, note_x_extra, quantize_step, signed_effect_active, sm_scale, tipsy_y_extra,
-    tornado_x_extra, visual_effect_params_for_col, visual_pulse_inner_zoom,
-    visual_pulse_zoom_for_y, visual_tiny_zoom,
+    tornado_x_extra, visual_arrow_effect_zoom, visual_effect_params_for_col,
+    visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
 pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
@@ -881,7 +881,7 @@ mod tests {
         assert_eq!(scale_sprite_to_arrow([32, 64], 128.0), [64.0, 128.0]);
         assert_eq!(scale_sprite_to_arrow([32, 0], 128.0), [32.0, 0.0]);
         assert_eq!(scale_sprite_to_arrow([-32, 64], 128.0), [0.0, 128.0]);
-        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [32.0, 64.0]);
+        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [0.0, 0.0]);
     }
 
     #[test]
@@ -889,7 +889,7 @@ mod tests {
         assert_eq!(scale_hold_part([32, 16], 64.0), [32.0, 16.0]);
         assert_eq!(scale_hold_part([0, 16], 64.0), [0.0, 16.0]);
         assert_eq!(scale_hold_part([32, -16], 64.0), [32.0, 0.0]);
-        assert_eq!(scale_hold_part([32, 16], 0.0), [32.0, 16.0]);
+        assert_eq!(scale_hold_part([32, 16], 0.0), [0.0, 0.0]);
     }
 
     #[test]

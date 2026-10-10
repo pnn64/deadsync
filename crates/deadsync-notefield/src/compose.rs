@@ -403,7 +403,7 @@ impl<S> PreparedNotefield<'_, S> {
     pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
         let spline = self.column_zoom_splines[col];
         if spline.enabled {
-            spline.sample(self.current_beat, beat).0[0]
+            spline.sample(self.current_beat, beat).0[0] + if spline.absolute { 0.0 } else { base }
         } else {
             base
         }

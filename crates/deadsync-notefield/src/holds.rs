@@ -1823,7 +1823,7 @@ pub(crate) fn scale_effect_size(
 pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
-    if height <= 0.0 || target_arrow_px <= 0.0 {
+    if height <= 0.0 {
         return [width, height];
     }
     let scale = target_arrow_px / height;
@@ -1833,7 +1833,7 @@ pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f3
 pub(crate) fn scale_hold_part(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
-    if width <= 0.0 || target_arrow_px <= 0.0 {
+    if width <= 0.0 {
         return [width, height];
     }
     // NoteDisplay scales the sprite's logical dimensions by ArrowEffects zoom.
