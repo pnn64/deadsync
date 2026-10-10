@@ -2264,12 +2264,13 @@ fn rasterize_environment(
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     depth: &mut DepthRows<'_>,
 ) -> u32 {
+    let texture_uvs = deadlib_render_core::textured_mesh_uv_mapper(instance);
     let mut count = 0;
     for triangle in vertices.as_chunks::<3>().0 {
         let mut first = *triangle;
         let mut second = *triangle;
         for i in 0..3 {
-            let uv = deadlib_render_core::textured_mesh_uvs(triangle[i], instance);
+            let uv = texture_uvs(triangle[i]);
             first[i].uv = uv[0];
             second[i].uv = uv[1];
         }
@@ -2286,18 +2287,25 @@ fn rasterize_environment(
         ) else {
             continue;
         };
-        let Some((q, _)) = project_tmesh_polygon(
-            mvp,
-            instance.tint,
-            [1.0; 2],
-            [0.0; 2],
-            [0.0; 2],
-            &second,
-            width,
-            height,
-            instance.cull_mode,
-        ) else {
-            continue;
+        // Projection and rejection depend only on positions, which are equal
+        // for both stages. Materials without reflection never consume q's UVs.
+        let (q, _) = if !(instance.texture_mask > 0.5) && triangle[0].normal[3] as u8 & 4 != 0 {
+            let Some(projected) = project_tmesh_polygon(
+                mvp,
+                instance.tint,
+                [1.0; 2],
+                [0.0; 2],
+                [0.0; 2],
+                &second,
+                width,
+                height,
+                instance.cull_mode,
+            ) else {
+                continue;
+            };
+            projected
+        } else {
+            (p, len)
         };
         count += 3;
         for i in 1..len.saturating_sub(1) {
@@ -5921,3 +5929,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "environment_performance.rs"]
+mod environment_performance;
