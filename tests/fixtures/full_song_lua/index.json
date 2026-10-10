@@ -983,12 +983,10 @@
     {
       "title": "[FULL SONG] 粛聖!! ロリ神レクイエム☆",
       "source_simfile": "[FULL SONG] Shukusei!! Loli God's Requiem [Gpop]/Shukusei!! Loli God's Requiem.ssc",
-      "harness_version": "0.1.0",
-      "archive": "2d1af2fb210edff23de59a0b3af57e44198473493701f86cc38d8adaec0ae29f.tar.zst",
-      "sha256": "2d1af2fb210edff23de59a0b3af57e44198473493701f86cc38d8adaec0ae29f",
-      "compressed_bytes": 331042,
-      "uncompressed_sha256": "d78466be658f06ebab3c6747e8bbdc1cd18341040f8f4883dba10a1aa283e24e",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592.tar.zst",
+      "sha256": "c8c3dbcaaa63e16ec724b54e3320d9aec44bc90f7176ad44535ff0e1df91e592",
+      "compressed_bytes": 396317,
       "aliases": [
         "f173eb6719838ed5bce9d354b01968c2cee8bcd7828452092ecd0c2d53357924.tar.zst"
       ]
