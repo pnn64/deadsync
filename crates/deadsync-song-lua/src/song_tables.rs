@@ -1370,6 +1370,7 @@ fn create_speed_field(lua: &Lua, owner: &Table, key: String) -> mlua::Result<Fun
         // neither resets the other fields nor shares their approach speeds.
         if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
             owner.raw_set(field, value)?;
+            seed_speed_approaches(lua, &owner)?;
             let spacing = owner.raw_get::<Option<f32>>("__songlua_time_spacing")?.unwrap_or(0.0);
             let max_bpm = owner.raw_get::<Option<f32>>("__songlua_speedmod_mmod")?.unwrap_or(0.0);
             owner.raw_set("__songlua_speedmod_active", if spacing != 0.0 {
@@ -1414,6 +1415,18 @@ fn player_option_speeds(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     let speeds = lua.create_table()?;
     owner.raw_set("__songlua_player_option_speeds", speeds.clone())?;
     Ok(speeds)
+}
+
+fn seed_speed_approaches(lua: &Lua, owner: &Table) -> mlua::Result<()> {
+    let speeds = player_option_speeds(lua, owner)?;
+    // PlayerOptions::Init gives each field its own approach of one. An amount
+    // setter without a speed preserves those defaults and any earlier edits.
+    for key in ["xmod", "cmod", "mmod", "_spacing"] {
+        if speeds.raw_get::<Value>(key)?.is_nil() {
+            speeds.raw_set(key, 1.0_f32)?;
+        }
+    }
+    Ok(())
 }
 
 fn set_player_speed_approaches(lua: &Lua, owner: &Table, speed: Option<f32>) -> mlua::Result<()> {
@@ -1825,6 +1838,7 @@ fn create_native_speedmod(lua: &Lua, owner: &Table, key: String) -> mlua::Result
                 ));
             }
             set_player_speedmod(&owner, &key, Some(value))?;
+            seed_speed_approaches(lua, &owner)?;
         }
         if let Some(speed) = method_arg(&args, 1).cloned().and_then(read_f32) {
             if speed < 0.0 {

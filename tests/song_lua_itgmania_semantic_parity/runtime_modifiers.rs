@@ -3394,6 +3394,46 @@ fn native_speed_fields_drive_playback() {
 }
 
 #[test]
+fn startup_speeds_keep_native_default_approaches() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/startup-speed-defaults-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native startup speed defaults");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace.noteskin_reference.as_ref().expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("startup-speed-defaults.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile static startup speed setters without approach arguments");
+    assert_eq!(compiled[0].speed_writes.len(), 4);
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native startup speed fields and playback targets");
+    let (runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for second in [0.0, 1.0, 3.9] {
+        for (player, expected) in [
+            deadsync_rules::scroll::ScrollSpeedSetting::XMod(4.0),
+            deadsync_rules::scroll::ScrollSpeedSetting::CMod(480.0),
+        ].into_iter().enumerate() {
+            let mut targets = ActiveAttackMaskValues::new(Default::default());
+            deadsync_gameplay::apply_song_lua_attack_eases(
+                &mut targets, &mut Default::default(), &mut Default::default(),
+                &runtime.song_lua_ease_windows[player], second, 0.0,
+            );
+            assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
+        }
+    }
+}
+
+#[test]
 fn speed_field_audit_keeps_failed_and_startup_writes() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
