@@ -1393,15 +1393,19 @@ pub(crate) fn player_uses_modifiers(
             return Ok(false);
         }
     }
-    if let Some(mode) = requested.raw_get::<Option<String>>("__songlua_speedmod_active")? {
-        let key = format!("__songlua_speedmod_{mode}");
-        if owner
-            .raw_get::<Option<String>>("__songlua_speedmod_active")?
-            .as_deref()
-            != Some(&mode)
-            || owner.raw_get::<Value>(key.as_str())? != requested.raw_get::<Value>(key)?
-        {
-            return Ok(false);
+    // Native equality compares underlying speed fields, not the active alias.
+    // FromString may change spacing or MaxScrollBPM even when X/C/M's getter
+    // amount matches. Compare only fields the parsed string actually writes.
+    for (field, default) in [
+        ("__songlua_time_spacing", 0.0_f32),
+        ("__songlua_speedmod_xmod", 1.0_f32),
+        ("__songlua_speedmod_cmod", 200.0_f32),
+        ("__songlua_speedmod_mmod", 0.0_f32),
+    ] {
+        if let Some(expected) = requested.raw_get::<Option<f32>>(field)? {
+            if owner.raw_get::<Option<f32>>(field)?.unwrap_or(default) != expected {
+                return Ok(false);
+            }
         }
     }
     let current = player_option_state(lua, owner)?;
@@ -2840,6 +2844,7 @@ end
         for source in [
             include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/window-control.json"),
             include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/native-control.json"),
+            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/current-options/speed-query-control.json"),
         ] {
             let control: serde_json::Value = serde_json::from_str(source)
                 .expect("standalone compiled-native control");

@@ -20,3 +20,9 @@ These checks cover option queries, assignment and approach behavior. Direct
 Current writes in gameplay rendering, dynamic music-rate audio clocks, broad
 ArrowEffects behavior and framebuffer parity require separate checks. See
 `provenance.json` for source hashes, validation results and remaining scope.
+
+`speed-query-control.json` also runs directly against compiled C++. It rejects
+a CMod query when time spacing is still approaching, checks that XMod parsing
+would clear an active MMod value, and accepts M0 when it changes no fields.
+`speed-query-provenance.json` records the failing DeadSync control before the
+fix and the validation after comparing the underlying speed fields.
