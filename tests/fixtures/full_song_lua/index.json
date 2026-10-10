@@ -1159,12 +1159,10 @@
     {
       "title": "Accelerator",
       "source_simfile": "Accelerator/Accelerator.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d6107bb073549b87484b63a849b3d043140c04a69017dd1ca27b343cc30bce8b.tar.zst",
-      "sha256": "d6107bb073549b87484b63a849b3d043140c04a69017dd1ca27b343cc30bce8b",
-      "compressed_bytes": 61227,
-      "uncompressed_sha256": "523869a74833f3b634f2483404758f849eb89960f530983e24b5b134ba0b7320",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "9b00e74bbb2ba4fc1567624c43df16e8d5432f7cdca2c445d4c3ec373747e743.tar.zst",
+      "sha256": "9b00e74bbb2ba4fc1567624c43df16e8d5432f7cdca2c445d4c3ec373747e743",
+      "compressed_bytes": 186160,
       "aliases": [
         "f13bce72267a36caaeb5aaf1f23c398de0f0161c4d1c763a38adca54ab948186.tar.zst"
       ]
