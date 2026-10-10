@@ -719,12 +719,10 @@
     {
       "title": "[10] Riddle",
       "source_simfile": "[10] Riddle (No CMOD) [SX]/Riddle.ssc",
-      "harness_version": "0.1.0",
-      "archive": "20dd896450cd19d147858b492510323abf20127d77bac542eb1d4595695408dc.tar.zst",
-      "sha256": "20dd896450cd19d147858b492510323abf20127d77bac542eb1d4595695408dc",
-      "compressed_bytes": 124757,
-      "uncompressed_sha256": "8c563108e40d95c7525857a17871e1e56a3633fb06c28e80c16a5947aa04abea",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "73689b11ca90a88afd322b079cbed1e30d39222d9e1f517bc9280bb0a621fadd.tar.zst",
+      "sha256": "73689b11ca90a88afd322b079cbed1e30d39222d9e1f517bc9280bb0a621fadd",
+      "compressed_bytes": 161744,
       "aliases": [
         "3aca8402cdd15d8babb79ad553f2b6428a91eea70cbdd559bc9fcf6a51c27d69.tar.zst"
       ]
