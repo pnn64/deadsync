@@ -906,12 +906,10 @@
     {
       "title": "[14] I'm For You",
       "source_simfile": "[14] [Zaia] I_m For You/I_m For You.ssc",
-      "harness_version": "0.1.0",
-      "archive": "70e9def6c6bd9e11df1f9c063dc213e032b57472b4ea9655d76fba3f3dd797ad.tar.zst",
-      "sha256": "70e9def6c6bd9e11df1f9c063dc213e032b57472b4ea9655d76fba3f3dd797ad",
-      "compressed_bytes": 4674085,
-      "uncompressed_sha256": "e9e70099fe86bb5d07042dd9bec27191d7903eb717066de2f0e84cae39b997cc",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f.tar.zst",
+      "sha256": "9a018586445bdc137a61cf898ebe569b88b9c72c5d1d60f809345e166a30b08f",
+      "compressed_bytes": 4781537,
       "aliases": [
         "fd294bafdca8e7144add86049b19cc21aec5f575a88ae7f2e5bbd81d82df1a2e.tar.zst"
       ]
