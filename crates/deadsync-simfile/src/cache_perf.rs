@@ -4,9 +4,7 @@ mod original {
     use super::*;
     include!("cache_perf_original.rs");
 }
-mod allocations {
-    include!("cache_perf_alloc.rs");
-}
+use crate::metadata_perf as allocations;
 mod paired {
     include!("cache_paired_bench.rs");
 }

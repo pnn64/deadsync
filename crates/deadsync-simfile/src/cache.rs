@@ -321,6 +321,51 @@ impl From<&SongBackgroundChange> for SerializableSongBackgroundChange {
     }
 }
 
+impl From<SongBackgroundChange> for SerializableSongBackgroundChange {
+    fn from(change: SongBackgroundChange) -> Self {
+        let target = match change.target {
+            SongBackgroundChangeTarget::File(path) => {
+                SerializableSongBackgroundChangeTarget::File(owned_path_string(path))
+            }
+            SongBackgroundChangeTarget::Animation(name) => {
+                SerializableSongBackgroundChangeTarget::Animation(name)
+            }
+            SongBackgroundChangeTarget::NoSongBg => {
+                SerializableSongBackgroundChangeTarget::NoSongBg
+            }
+            SongBackgroundChangeTarget::Random => SerializableSongBackgroundChangeTarget::Random,
+        };
+        Self {
+            start_beat: change.start_beat,
+            target,
+            rate: change.rate,
+            effect: change.effect,
+            file2: change.file2.map(owned_path_string),
+            transition: change.transition,
+            color1: change.color1,
+            color2: change.color2,
+        }
+    }
+}
+
+pub(crate) fn cache_background_changes(
+    changes: Vec<SongBackgroundChange>,
+) -> Vec<SerializableSongBackgroundChange> {
+    if changes.is_empty() {
+        return Vec::new();
+    }
+    changes
+        .into_iter()
+        .map(SerializableSongBackgroundChange::from)
+        .collect()
+}
+
+fn owned_path_string(path: PathBuf) -> String {
+    path.into_os_string()
+        .into_string()
+        .unwrap_or_else(|path| path.to_string_lossy().into_owned())
+}
+
 impl From<SerializableSongBackgroundChange> for SongBackgroundChange {
     fn from(change: SerializableSongBackgroundChange) -> Self {
         let target = match change.target {
@@ -3718,5 +3763,9 @@ mod tests {
             min_bpm: 60.0,
             max_bpm: 60.0,
         }
+    }
+
+    mod library_perf {
+        include!("cache_library_perf.rs");
     }
 }
