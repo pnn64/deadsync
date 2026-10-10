@@ -2,6 +2,7 @@ use chrono::{Local, TimeZone};
 use deadsync_core::input::InputSource;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -913,7 +914,28 @@ impl PlayerLeaderboardCacheState {
         refresh_cached: bool,
         now: Instant,
     ) -> PlayerLeaderboardRequestDecision {
-        let entry = self.by_key.get(key);
+        self.request_leaderboard_with_key(
+            key,
+            || Cow::Borrowed(key),
+            max_entries,
+            refresh_cached,
+            now,
+        )
+    }
+
+    // Cache hits need only a borrowed probe; create owned keys for fetch bookkeeping.
+    fn request_leaderboard_with_key<'a, Q>(
+        &mut self,
+        key_ref: &Q,
+        make_key: impl FnOnce() -> Cow<'a, PlayerLeaderboardCacheKey>,
+        max_entries: usize,
+        refresh_cached: bool,
+        now: Instant,
+    ) -> PlayerLeaderboardRequestDecision
+    where
+        Q: std::hash::Hash + hashbrown::Equivalent<PlayerLeaderboardCacheKey> + ?Sized,
+    {
+        let entry = self.by_key.get(key_ref);
         let requested_max_entries =
             entry.map_or(max_entries, |entry| max_entries.max(entry.max_entries));
         let snapshot = entry.map_or_else(
@@ -924,7 +946,8 @@ impl PlayerLeaderboardCacheState {
         let mut should_spawn = false;
         if should_fetch_player_leaderboard_entry(entry, requested_max_entries, refresh_cached, now)
         {
-            if let Some(in_flight_max_entries) = self.in_flight.get(key).copied() {
+            let key = make_key();
+            if let Some(in_flight_max_entries) = self.in_flight.get(key.as_ref()).copied() {
                 if should_rerun_in_flight_player_leaderboard_fetch(
                     in_flight_max_entries,
                     requested_max_entries,
@@ -932,12 +955,13 @@ impl PlayerLeaderboardCacheState {
                 ) {
                     queue_player_leaderboard_refresh(
                         &mut self.pending_refresh,
-                        key,
+                        key.as_ref(),
                         requested_max_entries,
                     );
                 }
             } else {
-                self.in_flight.insert(key.clone(), requested_max_entries);
+                self.in_flight
+                    .insert(key.into_owned(), requested_max_entries);
                 should_spawn = true;
             }
         }
@@ -1119,20 +1143,29 @@ pub fn runtime_plan_player_leaderboard_request(
     if max_entries == 0 {
         return None;
     }
-    let key = player_leaderboard_cache_key(chart_hash, profile_snapshot)?;
-    let gs_username = profile_snapshot.gs_username().to_string();
-    let persistent_profile_id = profile_snapshot.persistent_profile_id().map(str::to_string);
-    let auto_profile_id = profile_snapshot.auto_profile_id().map(str::to_string);
-    let should_auto_populate = profile_snapshot.should_auto_populate();
-    let decision = runtime_request_player_leaderboard(&key, max_entries, refresh_cached, now);
+    let key_ref = player_leaderboard_cache_key_ref(chart_hash, profile_snapshot)?;
+    let make_key = || PlayerLeaderboardCacheKey {
+        chart_hash: key_ref.chart_hash.to_string(),
+        api_key: key_ref.api_key.to_string(),
+        arrowcloud_api_key: key_ref.arrowcloud_api_key.to_string(),
+        include_arrowcloud: key_ref.include_arrowcloud,
+        show_ex_score: key_ref.show_ex_score,
+    };
+    let decision = runtime_lock_player_leaderboard_cache().request_leaderboard_with_key(
+        &key_ref,
+        || Cow::Owned(make_key()),
+        max_entries,
+        refresh_cached,
+        now,
+    );
     let fetch = decision
         .should_spawn
-        .then_some(PlayerLeaderboardFetchRequest {
-            key,
-            gs_username,
-            persistent_profile_id,
-            auto_profile_id,
-            should_auto_populate,
+        .then(|| PlayerLeaderboardFetchRequest {
+            key: make_key(),
+            gs_username: profile_snapshot.gs_username().to_string(),
+            persistent_profile_id: profile_snapshot.persistent_profile_id().map(str::to_string),
+            auto_profile_id: profile_snapshot.auto_profile_id().map(str::to_string),
+            should_auto_populate: profile_snapshot.should_auto_populate(),
             max_entries: decision.requested_max_entries,
         });
 
@@ -2334,3 +2367,7 @@ mod tests {
         assert!(cache.pending_refresh.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "leaderboard_request_perf.rs"]
+mod request_perf;
