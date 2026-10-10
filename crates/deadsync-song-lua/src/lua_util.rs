@@ -545,6 +545,7 @@ pub(crate) fn begin_wrapper_capture(lua: &Lua) {
 }
 
 fn capture_new_wrapper(lua: &Lua, owner: &Table, wrapper: &Table) -> mlua::Result<()> {
+    ensure_tween_replay(lua, wrapper)?;
     let owner = owner.to_pointer() as usize;
     if lua
         .app_data_ref::<SongLuaOverlayUpdateCapture>()
@@ -568,17 +569,6 @@ fn capture_new_wrapper(lua: &Lua, owner: &Table, wrapper: &Table) -> mlua::Resul
         capture.tween_resets.push(false);
         capture.prior_positions.push(None);
         capture.wrappers.push((owner, wrapper.clone(), initial));
-    }
-    if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
-        replays.0.insert(
-            wrapper.to_pointer() as usize,
-            ActorTweenReplay {
-                current: initial,
-                queue: Default::default(),
-                progress: Vec::new(),
-                targets: 0,
-            },
-        );
     }
     Ok(())
 }
@@ -10893,6 +10883,19 @@ pub(crate) fn replay_tween_pose(lua: &Lua, actor: &Table, state: &mut SongLuaOve
     }
 }
 
+pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if has_tween_replay(lua, actor) {
+        return Ok(());
+    }
+    let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
+    if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
+        replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
+            current, queue: Default::default(), progress: Vec::new(), targets: 0,
+        });
+    }
+    Ok(())
+}
+
 fn has_tween_replay(lua: &Lua, actor: &Table) -> bool {
     lua.app_data_ref::<ActorTweenReplays>()
         .is_some_and(|replays| replays.0.contains_key(&(actor.to_pointer() as usize)))
@@ -14867,7 +14870,7 @@ pub fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLu
         let value = value?;
         let (target_kind, method_name) =
             value.split_once('.').unwrap_or(("player", value.as_str()));
-        if !matches!(target_kind, "player" | "notefield" | "overlay") {
+        if !matches!(target_kind, "player" | "overlay") {
             return Ok(None);
         }
         match method_name {
@@ -14877,8 +14880,8 @@ pub fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLu
             "rotationx" if target_kind != "overlay" => saw_rotation_x = true,
             "rotationz" if target_kind != "overlay" => saw_rotation_z = true,
             "rotationy" if target_kind != "overlay" => saw_rotation_y = true,
-            "skewx" => saw_skew_x = true,
-            "skewy" => saw_skew_y = true,
+            "skewx" if target_kind == "player" => saw_skew_x = true,
+            "skewy" if target_kind == "player" => saw_skew_y = true,
             "zoom" if target_kind != "overlay" => saw_zoom = true,
             "zoomx" if target_kind != "overlay" => saw_zoom_x = true,
             "zoomy" if target_kind != "overlay" => saw_zoom_y = true,

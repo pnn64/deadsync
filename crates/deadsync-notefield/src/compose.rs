@@ -162,6 +162,9 @@ pub struct NotefieldSongLuaView<'a> {
     pub note_hides: &'a SongLuaNoteHideWindows,
     pub column_offsets: &'a [SongLuaColumnOffsetWindowRuntime],
     pub column_splines: &'a [deadsync_gameplay::SongLuaColumnSplineTrack],
+    /// Local native Actor wrapper matrix, outside the NoteField's own tilt.
+    pub wrapper: glam::Mat4,
+    pub wrapper_visible: bool,
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.

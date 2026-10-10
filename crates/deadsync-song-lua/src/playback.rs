@@ -2548,6 +2548,7 @@ struct SongLuaProxySource<'a> {
     offset: [f32; 2],
     pool_class: usize,
     source_view_proj: Option<Matrix4>,
+    model: Option<Matrix4>,
 }
 
 impl<'a> SongLuaProxySource<'a> {
@@ -2557,6 +2558,7 @@ impl<'a> SongLuaProxySource<'a> {
             segments,
             offset: [0.0, 0.0],
             source_view_proj: None,
+            model: None,
             pool_class: if segments.len() == 1 {
                 SONG_LUA_SMALL_PROXY_CLASS
             } else {
@@ -2571,6 +2573,7 @@ impl<'a> SongLuaProxySource<'a> {
             segments,
             offset,
             source_view_proj: None,
+            model: None,
             pool_class: if segments.len() == 1 {
                 SONG_LUA_SMALL_PROXY_CLASS
             } else {
@@ -2748,6 +2751,7 @@ struct PreparedProxySource {
     // Remove the source origin after its own transform, before the proxy's.
     offset: [f32; 2],
     root_camera: bool,
+    model: Option<Matrix4>,
 }
 
 impl PreparedProxySource {
@@ -2757,6 +2761,7 @@ impl PreparedProxySource {
             segments,
             offset: [0.0, 0.0],
             root_camera: false,
+            model: None,
         }
     }
 
@@ -2764,6 +2769,7 @@ impl PreparedProxySource {
         // Prepared Player/child transforms use the Player root camera. Decode
         // that same depth range before an outer proxy rotates the source.
         SongLuaProxySource {
+            model: self.model,
             source_view_proj: self
                 .root_camera
                 .then(|| song_lua_player_root_camera(Matrix4::IDENTITY)),
@@ -4118,12 +4124,14 @@ fn prepare_proxy_source(
                 segments,
                 offset: [-transform.target_x, -transform.target_y],
                 root_camera: false,
+            model: None,
             });
         }
         return Some(PreparedProxySource {
             segments: source,
             offset: [-transform.target_x, -transform.target_y],
             root_camera: false,
+        model: None,
         });
     }
     let segments = match part {
@@ -4138,6 +4146,7 @@ fn prepare_proxy_source(
         segments,
         offset: [-transform.target_x, -transform.target_y],
         root_camera: true,
+    model: None,
     })
 }
 
@@ -4159,6 +4168,7 @@ fn prepare_flat_proxy_source(
             segments,
             offset: [-transform.target_x, -transform.target_y],
             root_camera: false,
+        model: None,
         });
     }
 
@@ -4192,6 +4202,7 @@ fn prepare_flat_proxy_source(
         segments,
         offset: [-transform.target_x, -transform.target_y],
         root_camera: true,
+    model: None,
     })
 }
 
@@ -4222,6 +4233,7 @@ fn prepare_field_proxy_source(
             segments,
             offset: [-transform.target_x, -transform.target_y],
             root_camera: false,
+        model: None,
         });
     }
     let segments = scratch
@@ -4254,6 +4266,7 @@ fn prepare_field_proxy_source(
         segments,
         offset: [-transform.target_x, -transform.target_y],
         root_camera: true,
+    model: None,
     })
 }
 
@@ -5012,7 +5025,7 @@ fn song_lua_build_proxy_actor_in_space_with_scratch(
         overlay_space_width,
         overlay_space_height,
     );
-    let transform = song_lua_proxy_needs_transform(state).then(|| {
+    let transform = (song_lua_proxy_needs_transform(state) || source.model.is_some()).then(|| {
         song_lua_proxy_transform(
             state,
             source.offset,
@@ -5020,7 +5033,7 @@ fn song_lua_build_proxy_actor_in_space_with_scratch(
             overlay_space_height,
             render_space_width,
             render_space_height,
-        )
+        ) * source.model.unwrap_or(Matrix4::IDENTITY)
     });
     if let [segment] = source.segments {
         let slot_index = scratch
@@ -5273,7 +5286,7 @@ fn song_lua_build_proxy_frame_actor_with_scratch(
         overlay_space_width,
         overlay_space_height,
     );
-    let transform = song_lua_proxy_needs_transform(state).then(|| {
+    let transform = (song_lua_proxy_needs_transform(state) || source.model.is_some()).then(|| {
         song_lua_proxy_transform(
             state,
             source.offset,
@@ -5281,7 +5294,7 @@ fn song_lua_build_proxy_frame_actor_with_scratch(
             overlay_space_height,
             screen_width(),
             screen_height(),
-        )
+        ) * source.model.unwrap_or(Matrix4::IDENTITY)
     });
     song_lua_build_proxy_frame_actor_in_space_with_scratch(
         state, z, source, offset, transform, scratch,
@@ -13462,6 +13475,33 @@ pub struct FieldFrame {
     pub judgment_visible: bool,
     pub combo_visible: bool,
     pub capture: ProxyCaptureRequests,
+    pub wrapper: Matrix4,
+    pub wrapper_visible: bool,
+}
+
+fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) -> (Matrix4, bool) {
+    let frames = &actor.note_field_frames;
+    let next = frames.partition_point(|frame| frame.second <= clock[0]);
+    let Some(from) = next.checked_sub(1).map(|index| &frames[index]) else {
+        return (Matrix4::IDENTITY, true);
+    };
+    let to = frames.get(next).unwrap_or(from);
+    let t = if to.second > from.second {
+        (clock[0] - from.second) / (to.second - from.second)
+    } else { 0.0 };
+    let mut matrix = Matrix4::IDENTITY;
+    let mut visible = true;
+    for (index, &initial) in from.wrappers.iter().enumerate() {
+        let mut state = initial;
+        if from.wrappers.len() == to.wrappers.len()
+            && let Some((_, delta)) = crate::overlay_delta_pair_from_states(
+                initial, initial, to.wrappers[index]) {
+            crate::overlay_state_lerp(&mut state, &delta, t);
+        }
+        visible &= state.draw_visible() && state.diffuse[3] > 0.0;
+        matrix *= song_lua_draw_matrix(state, clock).0;
+    }
+    (matrix, visible)
 }
 
 const fn hidden_gameplay_hud_layers(
@@ -13788,6 +13828,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     });
     let direct_note_field_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_note_fields[player] != 0
+            && song_lua_visuals.player_actors[player].note_field_frames.is_empty()
             && !proxy_analysis.captured.players[player].note_field
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
@@ -13994,6 +14035,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             let hud_flat_draw_scratch = &mut notefield_hud_flat_draw_scratch[player_idx];
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let song_lua_now = state.current_music_time_display();
+            let (field_wrapper, field_wrapper_visible) = if show_song_visuals {
+                song_lua_field_wrapper(player_actor, [song_lua_now, state.current_beat_display()])
+            } else { (Matrix4::IDENTITY, true) };
             let (judgment_visible, combo_visible) = if show_song_visuals {
                 let judgment_visible = song_lua_child_visible(
                     song_lua_now,
@@ -14026,6 +14070,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 hud_parts,
             } = draw_field(
                 FieldFrame {
+                    wrapper: field_wrapper,
+                    wrapper_visible: field_wrapper_visible,
                     player: player_idx,
                     placement,
                     judgment_visible,
@@ -14283,7 +14329,22 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     camera: direct_field_camera,
                     player_camera: None,
                 });
-            let note_field_source = if direct_note_field_candidates[player_idx] {
+            let mut note_field_source = if !player_actor.note_field_frames.is_empty() {
+                // ActorProxy draws NoteField in its own local frame, without
+                // Player's pose or perspective. Retain the child wrappers.
+                field_actors.and_then(|source| {
+                    let scratch = song_lua_proxy_actor_scratch.as_mut()?
+                        .player(player_idx, SONG_LUA_FIELD_PROXY_SOURCE)?;
+                    let local = SongLuaCaptureTransform {
+                        z_shift: 0, tint: [1.0; 4], blend: None,
+                        playfield_center_x: layout_center_x, target_x: layout_center_x,
+                        target_y: screen_center_y(), rotation_x: 0.0, rotation_y: 0.0,
+                        rotation_z: 0.0, skew_x: 0.0, skew_y: 0.0,
+                        zoom_x: 1.0, zoom_y: 1.0, zoom_z: 1.0,
+                    };
+                    prepare_proxy_source(source, ProxyCapturePart::Field, local, scratch)
+                })
+            } else if direct_note_field_candidates[player_idx] {
                 (!direct_note_field)
                     .then(|| {
                         let range = field_draw_range.clone().unwrap_or(0..0);
@@ -14315,6 +14376,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     )
                 })
             };
+            if !player_actor.note_field_frames.is_empty()
+                && let Some(source) = &mut note_field_source {
+                source.model = notefield_camera_cache[player_idx].wrapper_model();
+            }
             let direct_judgment = direct_judgment_candidates[player_idx]
                 && song_lua_player_transform_is_direct_hud_proxy(capture_transform);
             let direct_judgment_source = direct_judgment

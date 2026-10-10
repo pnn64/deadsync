@@ -2988,6 +2988,64 @@ fn append_wrapper_overlays<Slot, Vertex, Attribute>(
     Ok(())
 }
 
+// Worker-owned song capture, capped across both players. Sparse frames keep
+// the last unchanged sample before each change so interpolation cannot start
+// a wrapper animation early. Playback only borrows the immutable frames.
+fn capture_field_wrappers(
+    lua: &Lua,
+    tracked: &mut [SongLuaTrackedActor],
+    prior_second: f32,
+    clock: [f32; 2],
+    bytes: &mut usize,
+) -> Result<(), String> {
+    for player in tracked.iter_mut().filter(|actor| {
+        matches!(actor.target, SongLuaTrackedActorTarget::Player(_))
+    }) {
+        let children = crate::lua_util::actor_children(lua, &player.table)
+            .map_err(|err| err.to_string())?;
+        let Some(field) = children.raw_get::<Option<Table>>("NoteField")
+            .map_err(|err| err.to_string())? else { continue; };
+        let wrappers = field.raw_get::<Option<Table>>("__songlua_wrappers")
+            .map_err(|err| err.to_string())?;
+        let mut states = Vec::new();
+        if let Some(wrappers) = wrappers {
+            for index in (1..=wrappers.raw_len()).rev() {
+                let wrapper = wrappers.raw_get::<Table>(index).map_err(|err| err.to_string())?;
+                crate::lua_util::ensure_tween_replay(lua, &wrapper).map_err(|err| err.to_string())?;
+                let mut state = actor_overlay_initial_state(&wrapper)?;
+                crate::lua_util::replay_tween_pose(lua, &wrapper, &mut state);
+                if let Some(rotation) = crate::lua_util::spin_render_pose(&wrapper)
+                    .map_err(|err| err.to_string())? {
+                    [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = rotation;
+                }
+                if let Some(effect) = crate::lua_util::effect_render_time(&wrapper, clock)
+                    .map_err(|err| err.to_string())? {
+                    state.effect_time = Some(effect);
+                }
+                states.push(state);
+            }
+        }
+        let frames = &mut player.actor.note_field_frames;
+        if states.is_empty() && frames.is_empty() { continue; }
+        if frames.last().is_some_and(|frame| frame.wrappers.as_ref() == states) {
+            continue;
+        }
+        let additional = states.len() * std::mem::size_of::<SongLuaOverlayState>()
+            + 2 * std::mem::size_of::<crate::SongLuaNoteFieldFrame>();
+        *bytes = bytes.saturating_add(additional);
+        if *bytes > 256 * 1024 * 1024 {
+            return Err("NoteField wrapper capture exceeds 256 MiB".into());
+        }
+        if let Some(previous) = frames.last().filter(|frame| frame.second < prior_second) {
+            frames.push(crate::SongLuaNoteFieldFrame {
+                second: prior_second, wrappers: previous.wrappers.clone(),
+            });
+        }
+        frames.push(crate::SongLuaNoteFieldFrame { second: clock[0], wrappers: states.into() });
+    }
+    Ok(())
+}
+
 pub fn compile_update_functions<Slot, Vertex, Attribute>(
     lua: &Lua,
     root: &Value,
@@ -3215,6 +3273,10 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     message_replay.stop(&overlay_sample_scratch.stopped_indices);
     let music_seconds = crate::runtime::song_music_time(lua, start_seconds, song_music_rate(context));
     let start_time = frame_time(start, start_seconds);
+    let mut field_capture_bytes = 0;
+    let mut prior_field_second = music_seconds;
+    capture_field_wrappers(lua, tracked_actors, music_seconds, [music_seconds, start],
+        &mut field_capture_bytes)?;
     for (index, actor) in capture_actors.iter().enumerate() {
         if let Some(clock) = crate::lua_util::effect_render_time(actor, [music_seconds, start])
             .map_err(|err| err.to_string())?
@@ -3489,6 +3551,9 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         column_samples.push(read_note_column_transform_samples(lua)?);
         spline_capture.capture(lua, (seconds * rate) as f32)?;
         column_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        capture_field_wrappers(lua, tracked_actors, prior_field_second,
+            [music_seconds, next_beat], &mut field_capture_bytes)?;
+        prior_field_second = music_seconds;
         let mut layer_message = None;
         for &(tracked_index, index) in &layer_capture_indices {
             let prior = current_overlays[index];

@@ -1155,6 +1155,8 @@ mod tests {
                 tap_explosion: Some(noteskin),
             },
             song_lua: NotefieldSongLuaView {
+                wrapper: glam::Mat4::IDENTITY,
+                wrapper_visible: true,
                 note_hides,
                 column_offsets: &[],
                 column_splines: &[],

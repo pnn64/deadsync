@@ -6237,11 +6237,24 @@ impl deadlib_present::texture::TextureContext for CaptureTextureContext {
 
 #[test]
 fn song_lua_kenpo_nested_rotation_matches_native_motion() {
-    let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+    assert_kenpo_motion(false);
+}
+
+#[test]
+fn song_lua_field_wrappers_match_native_geometry() {
+    assert_kenpo_motion(true);
+}
+
+fn assert_kenpo_motion(wrapped: bool) {
+    let mut native: serde_json::Value = serde_json::from_str(if wrapped {
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-actors/kenpo-notefield-wrapper-skew.json"))
+    } else { include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/itgmania-actors/kenpo-motion.json"
-    )))
+    )) })
     .expect("native nested rotation fixture");
+    if wrapped { native = native["native"].take(); }
     let metrics = deadlib_present::space::Metrics::centered(854.0, 480.0);
     deadlib_present::space::set_current_metrics(metrics);
     let notes =
@@ -6260,7 +6273,7 @@ fn song_lua_kenpo_nested_rotation_matches_native_motion() {
         } else {
             -60.0 + 80.0 * phase
         };
-        let source = prepare_proxy_source(
+        let mut source = prepare_proxy_source(
             notes.clone(),
             ProxyCapturePart::Field,
             SongLuaCaptureTransform {
@@ -6270,7 +6283,7 @@ fn song_lua_kenpo_nested_rotation_matches_native_motion() {
                 playfield_center_x: 427.0,
                 target_x: 427.0,
                 target_y: 240.0,
-                rotation_x,
+                rotation_x: if wrapped { 0.0 } else { rotation_x },
                 rotation_y: 0.0,
                 rotation_z: 0.0,
                 skew_x: 0.0,
@@ -6282,6 +6295,31 @@ fn song_lua_kenpo_nested_rotation_matches_native_motion() {
             &mut scratch,
         )
         .expect("captured field");
+        if wrapped {
+            let actor = crate::SongLuaCapturedActor {
+                note_field_frames: vec![crate::SongLuaNoteFieldFrame {
+                    second: seconds,
+                    wrappers: Arc::from([
+                        SongLuaOverlayState { x: 14.0, y: -7.0, rot_z_deg: 8.0, ..Default::default() },
+                        SongLuaOverlayState { rot_x_deg: rotation_x, skew_x: 0.03,
+                            skew_y: -0.025, ..Default::default() },
+                    ]),
+                }],
+                ..Default::default()
+            };
+            let (matrix, visible) = song_lua_field_wrapper(&actor, [seconds, beat]);
+            assert!(visible);
+            let mut camera = NotefieldCameraCache::default();
+            camera.set_wrapper(matrix);
+            camera.resolve(854.0, 480.0, 427.0, 240.0, 0.0, 0.0, false);
+            source.model = camera.wrapper_model();
+            for actor in sample["actors"].as_array().expect("native actors") {
+                if matches!(actor["name"].as_str(), Some("NoteField" | "field-proxy")) {
+                    assert_eq!(actor["current"]["skew"], serde_json::json!([0.0, 0.0]),
+                        "the child wrapper does not change its owner or parent");
+                }
+            }
+        }
         let state = song_lua_proxy_effect(
             SongLuaOverlayState {
                 x: 427.0,

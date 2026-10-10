@@ -5015,6 +5015,16 @@ pub struct SongLuaCapturedActor {
     pub combo: SongLuaCapturedChildActor,
     /// The chart directly draws a Judgment or Combo child outside the Player draw.
     pub manual_hud_draw: bool,
+    /// NoteField wrappers retain their own pose; they never modify Player.
+    /// Baked on the song-loading worker, with no Lua calls during gameplay.
+    pub note_field_frames: Vec<SongLuaNoteFieldFrame>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaNoteFieldFrame {
+    pub second: f32,
+    /// Native draw order: outermost wrapper first.
+    pub wrappers: Arc<[SongLuaOverlayState]>,
 }
 
 #[derive(Clone, Copy)]
@@ -21668,6 +21678,45 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlay_eases[0].overlay_index, 0);
         assert_eq!(compiled.overlay_eases[0].from.rot_z_deg, Some(0.0));
         assert_eq!(compiled.overlay_eases[0].to.rot_z_deg, Some(45.0));
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_notefield_wrapper_skew_on_child() {
+        let song_dir = test_dir("notefield-wrapper-skew");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+local field, inner, outer
+return Def.ActorFrame {
+    OnCommand=function(self)
+        field=SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField')
+        field:AddWrapperState()
+        inner=field:GetWrapperState(1)
+        field:AddWrapperState()
+        outer=field:GetWrapperState(2)
+        outer:x(17)
+        self:SetUpdateFunction(function()
+            local beat=GAMESTATE:GetSongBeat()
+            inner:skewx(beat < 1 and beat*0.03 or 0)
+        end)
+    end
+}
+"#).expect("write wrapper chart");
+        let mut context = SongLuaCompileContext::new(&song_dir, "Wrapper Skew");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).expect("capture child wrappers");
+        let frames = &compiled.player_actors[0].note_field_frames;
+        assert!(frames.len() > 30, "retain the child's animated poses");
+        let frame = frames.iter().find(|frame| (frame.second - 0.5).abs() < 0.001)
+            .expect("native half-second sample");
+        assert_eq!(frame.wrappers.len(), 2);
+        assert_eq!(frame.wrappers[0].x, 17.0, "outer wrapper draws first");
+        assert!((frame.wrappers[1].skew_x - 0.015).abs() < 0.0001);
+        assert_eq!(compiled.player_actors[0].initial_state.skew_x, 0.0);
+        assert!(!compiled.eases.iter().any(|ease| {
+            matches!(ease.target, SongLuaEaseTarget::PlayerSkewX | SongLuaEaseTarget::PlayerSkewY)
+        }));
+        assert_eq!(crate::runtime_player_option_ease_target("skewx", "skewx"), None);
+        assert_eq!(crate::runtime_player_option_ease_target("skewy", "skewy"), None);
     }
 
     #[test]

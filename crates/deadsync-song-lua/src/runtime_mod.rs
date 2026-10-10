@@ -893,15 +893,9 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
     {
         return Some(SongLuaEaseTarget::Mod(original.to_string()));
     }
+    // Actor transforms are owned by the authored node function. In Xero they
+    // can target Player, NoteField, or a wrapper; they are not PlayerOptions.
     Some(match key {
-        "z" => SongLuaEaseTarget::PlayerZ,
-        "rotationx" => SongLuaEaseTarget::PlayerRotationX,
-        "rotationy" => SongLuaEaseTarget::PlayerRotationY,
-        "rotationz" => SongLuaEaseTarget::PlayerRotationZ,
-        "zoom" => SongLuaEaseTarget::PlayerZoom,
-        "zoomx" => SongLuaEaseTarget::PlayerZoomX,
-        "zoomy" => SongLuaEaseTarget::PlayerZoomY,
-        "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
         "boost"
         | "brake"
         | "wave"
@@ -1011,9 +1005,7 @@ pub fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<So
         | "mmod"
         | "tiny"
         | "mini"
-        | "confusionyoffset"
-        | "skewx"
-        | "skewy" => SongLuaEaseTarget::Mod(original.to_string()),
+        | "confusionyoffset" => SongLuaEaseTarget::Mod(original.to_string()),
         _ => return None,
     })
 }

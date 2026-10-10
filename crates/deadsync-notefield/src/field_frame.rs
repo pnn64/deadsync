@@ -94,7 +94,7 @@ where
     let field_start = actors.len();
     let draw_start = flat_draws.len();
     actors.reserve(prepared.frame_plan.field_actor_reserve.saturating_add(2));
-    let Some(notes) = prepared.notes.as_ref() else {
+    let Some(notes) = prepared.notes.as_ref().filter(|_| request.song_lua.wrapper_visible) else {
         return NotefieldFieldResult::default();
     };
     let field_camera = resolve_field_camera(camera_cache, request, prepared);
@@ -1842,6 +1842,7 @@ fn resolve_field_camera<S>(
     let field = prepared.field;
     let center_y = f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse);
     let perspective = request.visual.perspective;
+    cache.set_wrapper(request.song_lua.wrapper);
     cache.resolve(
         request.geometry.screen_width,
         request.geometry.screen_height,

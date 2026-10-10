@@ -4643,12 +4643,12 @@ mod tests {
     #[test]
     fn notefield_view_proj_rejects_invalid_screen_sizes() {
         assert!(
-            notefield_camera(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+            notefield_camera(0.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
                 .map(|(projection, _)| projection)
                 .is_none()
         );
         assert!(
-            notefield_camera(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false)
+            notefield_camera(640.0, f32::NAN, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
                 .map(|(projection, _)| projection)
                 .is_none()
         );
@@ -4656,7 +4656,7 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_returns_finite_matrix_for_flat_field() {
-        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("valid notefield projection");
 
@@ -4665,7 +4665,7 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_maps_centered_world_coords_to_clip_space() {
-        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let matrix = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("valid notefield projection");
         let center = matrix.project_point3(glam::Vec3::ZERO);
@@ -4679,13 +4679,13 @@ mod tests {
 
     #[test]
     fn notefield_view_proj_changes_with_tilt_skew_and_reverse() {
-        let flat = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+        let flat = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("flat projection");
-        let tilted = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false)
+        let tilted = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, false, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("tilted projection");
-        let reverse = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true)
+        let reverse = notefield_camera(640.0, 480.0, 320.0, 240.0, 0.5, 0.3, true, glam::Mat4::IDENTITY)
             .map(|(projection, _)| projection)
             .expect("reverse projection");
 
