@@ -3383,6 +3383,60 @@ fn replayed_alpha_messages_keep_queue_delay() {
     );
 }
 
+type CommandSlot = (usize, usize, usize);
+
+fn assign_message_target(
+    target: usize,
+    candidates: &[Vec<CommandSlot>],
+    owners: &mut HashMap<CommandSlot, usize>,
+    seen: &mut HashSet<CommandSlot>,
+) -> bool {
+    for &slot in &candidates[target] {
+        if !seen.insert(slot) {
+            continue;
+        }
+        let owner = owners.get(&slot).copied();
+        if owner.is_none_or(|owner| assign_message_target(owner, candidates, owners, seen)) {
+            owners.insert(slot, target);
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn message_match_reassigns() {
+    let a = (0, 0, 0);
+    let b = (0, 0, 1);
+    // A visibility-only expectation fits both captures. The following X/Y
+    // expectation fits only the first; subscriber order must not consume it.
+    let mut candidates = vec![vec![a, b], vec![a]];
+    let mut owners = HashMap::new();
+    assert!(assign_message_target(
+        0,
+        &candidates,
+        &mut owners,
+        &mut HashSet::new()
+    ));
+    assert!(assign_message_target(
+        1,
+        &candidates,
+        &mut owners,
+        &mut HashSet::new()
+    ));
+    assert_eq!(owners.get(&a), Some(&1));
+    assert_eq!(owners.get(&b), Some(&0));
+    // Reassignment must never let two native actors reuse one capture.
+    candidates.push(vec![a]);
+    assert!(!assign_message_target(
+        2,
+        &candidates,
+        &mut owners,
+        &mut HashSet::new()
+    ));
+    assert_eq!(owners.len(), 2);
+}
+
 fn compare_commands(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -3443,40 +3497,48 @@ fn compare_commands(
         ));
     }
     for (message, targets) in missing {
-        let mut used_dynamic = HashSet::new();
-        let mut unmatched = Vec::new();
-        for (label, target, expected) in targets {
-            let NativeTarget::Actor { layer, .. } = target else {
-                unmatched.push(label);
-                continue;
-            };
-            let Some(layer_compiled) = compiled.get(layer) else {
-                unmatched.push(label);
-                continue;
-            };
-            let candidate = layer_compiled
-                .stateful_message_captures
-                .iter()
-                .enumerate()
-                .filter(|(_, capture)| capture.message == message)
-                .flat_map(|(capture_index, capture)| {
-                    capture.overlay_targets.iter().enumerate().map(
-                        move |(target_index, (overlay_index, properties))| {
-                            (capture_index, target_index, *overlay_index, properties)
-                        },
-                    )
-                })
-                .find(|(capture_index, target_index, overlay_index, properties)| {
-                    !used_dynamic.contains(&(layer, *capture_index, *target_index))
-                        && stateful_command_matches(
+        // Native MessageManager visits its pointer-ordered subscriber set.
+        // Match all required properties one-to-one without letting a broad
+        // expectation consume the only capture fitting a later precise one.
+        let candidates = targets
+            .iter()
+            .map(|(_, target, expected)| {
+                let NativeTarget::Actor { layer, .. } = target else {
+                    return Vec::new();
+                };
+                let Some(layer_compiled) = compiled.get(*layer) else {
+                    return Vec::new();
+                };
+                layer_compiled
+                    .stateful_message_captures
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, capture)| capture.message == message)
+                    .flat_map(|(capture_index, capture)| {
+                        capture.overlay_targets.iter().enumerate().map(
+                            move |(target_index, (overlay_index, properties))| {
+                                (capture_index, target_index, *overlay_index, properties)
+                            },
+                        )
+                    })
+                    .filter(|(capture_index, _, overlay_index, properties)| {
+                        stateful_command_matches(
                             &layer_compiled.stateful_message_captures[*capture_index].writes,
                             *overlay_index,
                             properties,
-                            &expected,
+                            expected,
                         )
-                });
-            if let Some((capture_index, target_index, _, _)) = candidate {
-                used_dynamic.insert((layer, capture_index, target_index));
+                    })
+                    .map(|(capture_index, target_index, _, _)| {
+                        (*layer, capture_index, target_index)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        let mut owners = HashMap::new();
+        let mut unmatched = Vec::new();
+        for (index, (label, _, _)) in targets.into_iter().enumerate() {
+            if assign_message_target(index, &candidates, &mut owners, &mut HashSet::new()) {
                 parity.check(true, String::new);
             } else {
                 unmatched.push(label);
