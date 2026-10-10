@@ -1683,12 +1683,10 @@
     {
       "title": "Boys",
       "source_simfile": "Boys/Boys.ssc",
-      "harness_version": "0.1.0",
-      "archive": "4ccefad1fea0e52e8fd2f25b842dc3d297cab5d574704ceb307f56bcc27c0149.tar.zst",
-      "sha256": "4ccefad1fea0e52e8fd2f25b842dc3d297cab5d574704ceb307f56bcc27c0149",
-      "compressed_bytes": 42308,
-      "uncompressed_sha256": "c29411da0feb5b836f5455e4de6209d07982e9a8f389c835f01f16f922f4fc7e",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "262dcdba9884cc2d7088544d104a3fa0e4820d23467bb6a5a3491c0806f0cc7b.tar.zst",
+      "sha256": "262dcdba9884cc2d7088544d104a3fa0e4820d23467bb6a5a3491c0806f0cc7b",
+      "compressed_bytes": 53021,
       "aliases": [
         "f4f805bf7455ca89d2d86388dffa75eafa11c27a4f05df228d4c368c964574f6.tar.zst"
       ]
