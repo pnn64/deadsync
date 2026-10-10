@@ -1617,12 +1617,10 @@
     {
       "title": "Beauty in Chaos",
       "source_simfile": "Beauty in chaos/Beauty in Chaos.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0dcb18429c6874f7e8fb3927a9be4d6e5eb0d51ca2d89b88a5847ca9678f62f9.tar.zst",
-      "sha256": "0dcb18429c6874f7e8fb3927a9be4d6e5eb0d51ca2d89b88a5847ca9678f62f9",
-      "compressed_bytes": 123608,
-      "uncompressed_sha256": "c584b8957559c3bc4e7b40c1eb74c624145ede2f634c752c71c2d088bd3afb76",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7.tar.zst",
+      "sha256": "99a4efa10433dd956073bfeffd3b90cb29a8140fcb634e61b93e07f62bbf6ef7",
+      "compressed_bytes": 710812,
       "aliases": [
         "98990509dc1c82018d31c488001c0738a3152699be214e248e2503d1b7bc44bc.tar.zst"
       ]
