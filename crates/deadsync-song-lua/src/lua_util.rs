@@ -12701,8 +12701,14 @@ pub fn create_named_child_actor(
             }
             actor_children(lua, &frame)?.set("JudgmentWithOffsets", sprite)?;
             frame
-        } else if player_child_proxy_name(name).is_some() {
-            create_named_actor(lua, "Actor", name, create_dummy_actor)?
+        } else if name.eq_ignore_ascii_case("Combo") {
+            // Simply Love's Player combo.lua owns a BitmapText named Number.
+            // Keep its native class and exact child lookup, like Judgment.
+            let frame = create_named_actor(lua, "ActorFrame", name, create_dummy_actor)?;
+            let number = create_named_actor(lua, "BitmapText", "Number", create_dummy_actor)?;
+            number.set("__songlua_parent", frame.clone())?;
+            actor_children(lua, &frame)?.set("Number", number)?;
+            frame
         } else {
             create_dummy_actor(lua, "ChildActor")?
         }

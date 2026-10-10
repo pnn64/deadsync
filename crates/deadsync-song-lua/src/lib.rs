@@ -10377,6 +10377,22 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_keeps_combo_child_callback() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+        let entry = root.join("combo-child.lua");
+        let mut context = SongLuaCompileContext::new(&root, "Combo Child Callback");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.info.unsupported_perframes, 0, "{:?}", compiled.info);
+        for (player, expected) in [(1, 300.0), (2, 400.0)] {
+            let movement = compiled.eases.iter().rev()
+                .find(|ease| ease.player == Some(player) && ease.target == SongLuaEaseTarget::PlayerX)
+                .expect("player movement after Combo child lookup");
+            assert_eq!(movement.to, expected);
+        }
+    }
+
+    #[test]
     fn compile_song_lua_captures_player_hud_child_actions() {
         let song_dir = test_dir("player-hud-child-actions");
         let entry = song_dir.join("default.lua");
