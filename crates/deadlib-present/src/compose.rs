@@ -31,7 +31,7 @@ fn reserve_map_headroom<K: Eq + Hash, V, S: BuildHasher>(
     values.reserve(target.saturating_sub(values.len()));
 }
 
-/// Detached draw used only while clipping or copying a retained fragment.
+/// Detached draw used while editing geometry.
 /// Live frame composition stays in `FrameBuilder`'s typed arrays.
 #[repr(C)]
 #[derive(Clone)]
@@ -221,6 +221,7 @@ impl FrameBuilder {
         });
     }
 
+    #[cfg(test)]
     #[inline(always)]
     fn push(&mut self, object: EditableDraw) {
         let EditableDraw {
@@ -362,50 +363,6 @@ impl FrameBuilder {
             kind,
             payload_index,
         };
-    }
-
-    fn clone_retained_object(&self, index: usize) -> Option<EditableDraw> {
-        let item = self.items[index];
-        let object_type = match item.kind {
-            DrawKind::Sprite => EditablePayload::Sprite(item.payload_index),
-            DrawKind::Mesh => {
-                let payload = self.meshes.get(item.payload_index as usize)?.as_ref()?;
-                EditablePayload::Mesh {
-                    transform: payload.transform,
-                    tint: payload.tint,
-                    vertices: payload.vertices.clone(),
-                }
-            }
-            DrawKind::TexturedMesh => {
-                let payload = self
-                    .textured_meshes
-                    .get(item.payload_index as usize)?
-                    .as_ref()?;
-                if matches!(
-                    payload.vertices,
-                    renderer::TexturedMeshVertices::Transient(_)
-                ) {
-                    return None;
-                }
-                EditablePayload::TexturedMesh {
-                    instance: payload.instance,
-                    vertices: payload.vertices.clone(),
-                    geom_cache_key: payload.geom_cache_key,
-                    depth_test: payload.depth_test,
-                    clear_depth: payload.clear_depth,
-                    clear_depth_after: payload.clear_depth_after,
-                    sampler: payload.sampler,
-                }
-            }
-        };
-        Some(EditableDraw {
-            texture_handle: item.texture_handle,
-            order: item.order,
-            z: item.z,
-            blend: item.blend,
-            camera: item.camera,
-            object_type,
-        })
     }
 
     fn take_payload(&mut self, item: DrawItem) -> EditablePayload {
@@ -1673,7 +1630,6 @@ impl ComposeScratch {
             });
         let attr_capacity = [
             &self.text_attr_scratch.start_order,
-            &self.text_attr_scratch.end_order,
             &self.text_attr_scratch.active,
         ]
         .into_iter()
@@ -4388,17 +4344,13 @@ const fn attr_end(attr: &actors::TextAttribute) -> usize {
     attr.start.saturating_add(attr.length)
 }
 
-/// Compose-thread scratch shared by sequential text draws within one pass.
-/// The screen/session owner retains the largest observed attribute working set,
-/// with eight inline indices per buffer for small first-use lists. Larger sets
-/// are warmed during representative screen/song composition. Growing inputs may
-/// allocate; steady-state rebuilds only clear/refill the indices, sort start/end
-/// events, and sweep active attributes. Nothing is cached or pruned. Buffers are
-/// freed with ComposeScratch; storage_stats reports their heap index capacity.
+/// Reused start-order and active indices for sequential text draws. Each
+/// buffer keeps eight indices inline and retains larger working sets for the
+/// screen lifetime. Expired losers can remain until the winning attribute
+/// expires: they cannot change last-matching-attribute precedence.
 #[derive(Default)]
 struct TextAttrScratch {
     start_order: SmallVec<[usize; 8]>,
-    end_order: SmallVec<[usize; 8]>,
     active: SmallVec<[usize; 8]>,
 }
 
@@ -4407,7 +4359,6 @@ struct TextAttrCursor<'a> {
     scratch: &'a mut TextAttrScratch,
     active_max: Option<usize>,
     next_start: usize,
-    next_end: usize,
 }
 
 impl<'a> TextAttrCursor<'a> {
@@ -4418,92 +4369,50 @@ impl<'a> TextAttrCursor<'a> {
         if attributes.is_empty() {
             return None;
         }
-
-        let TextAttrScratch {
-            start_order,
-            end_order,
-            active,
-        } = scratch;
-        start_order.clear();
-        end_order.clear();
-        active.clear();
-        // Moving ranges can increase overlap without increasing their count.
-        active.reserve(attributes.len());
-        start_order.extend(0..attributes.len());
-        end_order.extend(0..attributes.len());
-
-        // Equal-boundary events are consumed together; active_max preserves
-        // original attribute precedence independently of their event order.
-        start_order.sort_unstable_by_key(|&index| attributes[index].start);
-        end_order.sort_unstable_by_key(|&index| attr_end(&attributes[index]));
-
+        scratch.start_order.clear();
+        scratch.active.clear();
+        scratch.active.reserve(attributes.len());
+        scratch.start_order.extend(0..attributes.len());
+        scratch
+            .start_order
+            .sort_unstable_by_key(|&index| attributes[index].start);
         Some(Self {
             attributes,
             scratch,
             active_max: None,
             next_start: 0,
-            next_end: 0,
         })
     }
 
     #[inline(always)]
-    fn push_active(&mut self, attr_index: usize) {
-        self.scratch.active.push(attr_index);
-        self.active_max = Some(
-            self.active_max
-                .map_or(attr_index, |max| max.max(attr_index)),
-        );
-    }
-
-    #[inline(always)]
-    fn remove_active(&mut self, attr_index: usize) {
-        let Some(index) = self
-            .scratch
-            .active
-            .iter()
-            .position(|&index| index == attr_index)
-        else {
-            return;
-        };
-        self.scratch.active.swap_remove(index);
-    }
-
-    #[inline(always)]
     fn colors_for(&mut self, char_index: usize) -> [[f32; 4]; 4] {
-        if self.next_end < self.scratch.end_order.len()
-            && attr_end(&self.attributes[self.scratch.end_order[self.next_end]]) <= char_index
-        {
-            loop {
-                let attr_index = self.scratch.end_order[self.next_end];
-                self.remove_active(attr_index);
-                self.next_end += 1;
-                if self.next_end == self.scratch.end_order.len()
-                    || attr_end(&self.attributes[self.scratch.end_order[self.next_end]])
-                        > char_index
-                {
-                    break;
-                }
-            }
-            // Intermediate winners are never observed while expiring a group.
-            if self
-                .active_max
-                .is_some_and(|index| attr_end(&self.attributes[index]) <= char_index)
-            {
-                self.active_max = self.scratch.active.iter().copied().max();
-            }
-        }
-
         while self.next_start < self.scratch.start_order.len()
             && self.attributes[self.scratch.start_order[self.next_start]].start <= char_index
         {
-            let attr_index = self.scratch.start_order[self.next_start];
-            let attr = &self.attributes[attr_index];
-            if char_index < attr_end(attr) {
-                self.push_active(attr_index);
+            let index = self.scratch.start_order[self.next_start];
+            if char_index < attr_end(&self.attributes[index]) {
+                self.scratch.active.push(index);
+                self.active_max = Some(self.active_max.map_or(index, |max| max.max(index)));
             }
             self.next_start += 1;
         }
-
+        // Glyph indices advance monotonically. Only an expired winner requires
+        // a new maximum; discard other expired attributes in the same scan.
+        if self
+            .active_max
+            .is_some_and(|index| attr_end(&self.attributes[index]) <= char_index)
+        {
+            let mut active_max = None;
+            self.scratch.active.retain(|&mut index| {
+                if char_index < attr_end(&self.attributes[index]) {
+                    active_max = Some(active_max.map_or(index, |max: usize| max.max(index)));
+                    true
+                } else {
+                    false
+                }
+            });
+            self.active_max = active_max;
+        }
         self.active_max
             .map(|index| self.attributes[index].colors())
             .unwrap_or([[1.0; 4]; 4])
@@ -5308,25 +5217,42 @@ fn capture_retained_frame(
     sprite_start: usize,
 ) -> Option<CachedRetainedFrame> {
     let sprite_start_u32 = u32::try_from(sprite_start).ok()?;
-    if object_start > objects.len() {
-        return None;
-    }
+    let items = objects.items.get(object_start..)?;
     let mut cached_builder = FrameBuilder::default();
-    cached_builder.reserve(objects.len().saturating_sub(object_start));
-    for index in object_start..objects.len() {
-        let mut object = objects.clone_retained_object(index)?;
-        match &mut object.object_type {
-            EditablePayload::Sprite(index) => {
-                *index = index.checked_sub(sprite_start_u32)?;
+    cached_builder.reserve(items.len());
+    // Copy the compact headers and typed payloads directly. Capturing never
+    // edits geometry, so it needs no detached EditableDraw representation.
+    for &source in items {
+        let mut item = source;
+        item.payload_index = match source.kind {
+            DrawKind::Sprite => source.payload_index.checked_sub(sprite_start_u32)?,
+            DrawKind::Mesh => {
+                let payload = objects
+                    .meshes
+                    .get(source.payload_index as usize)?
+                    .as_ref()?;
+                let index = saturating_u32(cached_builder.meshes.len());
+                cached_builder.meshes.push(Some(payload.clone()));
+                index
             }
-            EditablePayload::TexturedMesh {
-                vertices: renderer::TexturedMeshVertices::Transient(_),
-                ..
-            } => return None,
-            _ => {}
-        }
-        object.order = 0;
-        cached_builder.push(object);
+            DrawKind::TexturedMesh => {
+                let payload = objects
+                    .textured_meshes
+                    .get(source.payload_index as usize)?
+                    .as_ref()?;
+                if matches!(
+                    payload.vertices,
+                    renderer::TexturedMeshVertices::Transient(_)
+                ) {
+                    return None;
+                }
+                let index = saturating_u32(cached_builder.textured_meshes.len());
+                cached_builder.textured_meshes.push(Some(payload.clone()));
+                index
+            }
+        };
+        item.order = 0;
+        cached_builder.items.push(item);
     }
     Some(CachedRetainedFrame {
         builder: cached_builder,
@@ -8929,21 +8855,61 @@ fn clip_objects_range_to_world_rect(
     let len = objects.len();
     let mut write = start;
     for read in start..len {
-        let mut object = objects.take_object(read);
-        let keep = clip_sprite_object_to_world_rect_with_recycled(
-            &mut object,
-            sprite_instances,
-            clip,
-            Some(&mut *recycled_vertices),
-        );
+        let item = objects.items[read];
+        let keep = match item.kind {
+            DrawKind::Sprite => {
+                // Ordinary clipping changes only the instance. Detach a draw
+                // only when rotation promotes the sprite to a textured mesh.
+                if let Some(clipped) = clipped_sprite_instance_to_world_rect(
+                    item.payload_index,
+                    sprite_instances[item.payload_index as usize],
+                    clip,
+                    Some(&mut *recycled_vertices),
+                ) {
+                    if let EditablePayload::Sprite(_) = clipped.object_type {
+                        if let Some(sprite) = clipped.sprite {
+                            sprite_instances[item.payload_index as usize] = sprite;
+                        }
+                    } else {
+                        objects.replace_object(
+                            read,
+                            EditableDraw {
+                                texture_handle: item.texture_handle,
+                                order: item.order,
+                                z: item.z,
+                                blend: item.blend,
+                                camera: item.camera,
+                                object_type: clipped.object_type,
+                            },
+                        );
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            DrawKind::Mesh => true,
+            DrawKind::TexturedMesh => {
+                let mut object = objects.take_object(read);
+                let keep = clip_sprite_object_to_world_rect_with_recycled(
+                    &mut object,
+                    sprite_instances,
+                    clip,
+                    Some(&mut *recycled_vertices),
+                );
+                if keep {
+                    objects.replace_object(read, object);
+                } else {
+                    recycle_transient_object_vertices(object.object_type, recycled_vertices);
+                }
+                keep
+            }
+        };
         if keep {
-            objects.replace_object(read, object);
             if write != read {
                 objects.swap(write, read);
             }
             write += 1;
-        } else {
-            recycle_transient_object_vertices(object.object_type, recycled_vertices);
         }
     }
     objects.truncate(write);
@@ -9048,6 +9014,113 @@ fn clip_sprite_object_to_world_rect_with_recycled(
 
 // Callers keep unchanged mesh payloads themselves; only partial textured
 // meshes and sprites reach this geometry-producing path.
+fn clipped_sprite_instance_to_world_rect(
+    index: u32,
+    sprite: renderer::SpriteInstanceRaw,
+    clip: WorldRect,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    let eps = 1e-6;
+    let offset_world = [
+        sprite.local_offset_rot_sin_cos[1].mul_add(
+            sprite.local_offset[0],
+            -(sprite.local_offset_rot_sin_cos[0] * sprite.local_offset[1]),
+        ),
+        sprite.local_offset_rot_sin_cos[0].mul_add(
+            sprite.local_offset[0],
+            sprite.local_offset_rot_sin_cos[1] * sprite.local_offset[1],
+        ),
+    ];
+    let world_center = [
+        sprite.center[0] + offset_world[0],
+        sprite.center[1] + offset_world[1],
+    ];
+    if sprite.rot_sin_cos[0].abs() > eps || sprite.rot_sin_cos[1] < 1.0 - eps {
+        return clip_rotated_sprite_to_world_rect(
+            sprite.tint,
+            sprite.center,
+            sprite.size,
+            sprite.rot_sin_cos,
+            sprite.uv_scale,
+            sprite.uv_offset,
+            offset_world,
+            clip,
+            sprite.texture_mask != 0.0,
+            recycled_vertices,
+        );
+    }
+
+    let w = sprite.size[0];
+    let h = sprite.size[1];
+    if w <= eps || h <= eps {
+        return None;
+    }
+
+    let half_w = w * 0.5;
+    let half_h = h * 0.5;
+
+    let left = world_center[0] - half_w;
+    let right = world_center[0] + half_w;
+    let bottom = world_center[1] - half_h;
+    let top = world_center[1] + half_h;
+
+    if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top {
+        return Some(ClippedSpriteObject {
+            object_type: EditablePayload::Sprite(index),
+            sprite: None,
+        });
+    }
+
+    let inter_left = left.max(clip.left);
+    let inter_right = right.min(clip.right);
+    let inter_bottom = bottom.max(clip.bottom);
+    let inter_top = top.min(clip.top);
+    if inter_left >= inter_right || inter_bottom >= inter_top {
+        return None;
+    }
+
+    let inv_w = 1.0 / w;
+    let inv_h = 1.0 / h;
+
+    let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
+    let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
+    let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
+    let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
+
+    let sx_crop = (1.0 - cl - cr).max(0.0);
+    let sy_crop = (1.0 - ct - cb).max(0.0);
+    if sx_crop <= eps || sy_crop <= eps {
+        return None;
+    }
+
+    let uv_offset = [
+        sprite.uv_scale[0].mul_add(cl, sprite.uv_offset[0]),
+        sprite.uv_scale[1].mul_add(ct, sprite.uv_offset[1]),
+    ];
+    let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
+
+    let center_x = ((cl - cr) * w).mul_add(0.5, world_center[0]) - offset_world[0];
+    let center_y = ((cb - ct) * h).mul_add(0.5, world_center[1]) - offset_world[1];
+    let new_w = w * sx_crop;
+    let new_h = h * sy_crop;
+
+    Some(ClippedSpriteObject {
+        object_type: EditablePayload::Sprite(index),
+        sprite: Some(renderer::SpriteInstanceRaw {
+            center: [center_x, center_y, sprite.center[2], sprite.center[3]],
+            size: [new_w, new_h],
+            rot_sin_cos: sprite.rot_sin_cos,
+            tint: sprite.tint,
+            uv_scale,
+            uv_offset,
+            local_offset: sprite.local_offset,
+            local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
+            edge_fade: sprite.edge_fade,
+            texture_mask: sprite.texture_mask,
+        }),
+    })
+}
+
 fn clipped_sprite_object_to_world_rect(
     obj: &EditableDraw,
     sprite_instances: &[renderer::SpriteInstanceRaw],
@@ -9059,109 +9132,12 @@ fn clipped_sprite_object_to_world_rect(
         return None;
     }
     match &obj.object_type {
-        EditablePayload::Sprite(index) => {
-            let sprite = sprite_instances[*index as usize];
-            let eps = 1e-6;
-            let offset_world = [
-                sprite.local_offset_rot_sin_cos[1].mul_add(
-                    sprite.local_offset[0],
-                    -(sprite.local_offset_rot_sin_cos[0] * sprite.local_offset[1]),
-                ),
-                sprite.local_offset_rot_sin_cos[0].mul_add(
-                    sprite.local_offset[0],
-                    sprite.local_offset_rot_sin_cos[1] * sprite.local_offset[1],
-                ),
-            ];
-            let world_center = [
-                sprite.center[0] + offset_world[0],
-                sprite.center[1] + offset_world[1],
-            ];
-            if sprite.rot_sin_cos[0].abs() > eps || sprite.rot_sin_cos[1] < 1.0 - eps {
-                return clip_rotated_sprite_to_world_rect(
-                    sprite.tint,
-                    sprite.center,
-                    sprite.size,
-                    sprite.rot_sin_cos,
-                    sprite.uv_scale,
-                    sprite.uv_offset,
-                    offset_world,
-                    clip,
-                    sprite.texture_mask != 0.0,
-                    recycled_vertices,
-                );
-            }
-
-            let w = sprite.size[0];
-            let h = sprite.size[1];
-            if w <= eps || h <= eps {
-                return None;
-            }
-
-            let half_w = w * 0.5;
-            let half_h = h * 0.5;
-
-            let left = world_center[0] - half_w;
-            let right = world_center[0] + half_w;
-            let bottom = world_center[1] - half_h;
-            let top = world_center[1] + half_h;
-
-            if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top
-            {
-                return Some(ClippedSpriteObject {
-                    object_type: EditablePayload::Sprite(*index),
-                    sprite: None,
-                });
-            }
-
-            let inter_left = left.max(clip.left);
-            let inter_right = right.min(clip.right);
-            let inter_bottom = bottom.max(clip.bottom);
-            let inter_top = top.min(clip.top);
-            if inter_left >= inter_right || inter_bottom >= inter_top {
-                return None;
-            }
-
-            let inv_w = 1.0 / w;
-            let inv_h = 1.0 / h;
-
-            let cl = ((inter_left - left) * inv_w).clamp(0.0, 1.0);
-            let cr = ((right - inter_right) * inv_w).clamp(0.0, 1.0);
-            let cb = ((inter_bottom - bottom) * inv_h).clamp(0.0, 1.0);
-            let ct = ((top - inter_top) * inv_h).clamp(0.0, 1.0);
-
-            let sx_crop = (1.0 - cl - cr).max(0.0);
-            let sy_crop = (1.0 - ct - cb).max(0.0);
-            if sx_crop <= eps || sy_crop <= eps {
-                return None;
-            }
-
-            let uv_offset = [
-                sprite.uv_scale[0].mul_add(cl, sprite.uv_offset[0]),
-                sprite.uv_scale[1].mul_add(ct, sprite.uv_offset[1]),
-            ];
-            let uv_scale = [sprite.uv_scale[0] * sx_crop, sprite.uv_scale[1] * sy_crop];
-
-            let center_x = ((cl - cr) * w).mul_add(0.5, world_center[0]) - offset_world[0];
-            let center_y = ((cb - ct) * h).mul_add(0.5, world_center[1]) - offset_world[1];
-            let new_w = w * sx_crop;
-            let new_h = h * sy_crop;
-
-            Some(ClippedSpriteObject {
-                object_type: EditablePayload::Sprite(*index),
-                sprite: Some(renderer::SpriteInstanceRaw {
-                    center: [center_x, center_y, sprite.center[2], sprite.center[3]],
-                    size: [new_w, new_h],
-                    rot_sin_cos: sprite.rot_sin_cos,
-                    tint: sprite.tint,
-                    uv_scale,
-                    uv_offset,
-                    local_offset: sprite.local_offset,
-                    local_offset_rot_sin_cos: sprite.local_offset_rot_sin_cos,
-                    edge_fade: sprite.edge_fade,
-                    texture_mask: sprite.texture_mask,
-                }),
-            })
-        }
+        EditablePayload::Sprite(index) => clipped_sprite_instance_to_world_rect(
+            *index,
+            sprite_instances[*index as usize],
+            clip,
+            recycled_vertices,
+        ),
         EditablePayload::TexturedMesh {
             instance,
             sampler,
@@ -15577,3 +15553,7 @@ mod tests {
         assert_eq!(second.vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
     }
 }
+
+#[cfg(test)]
+#[path = "compose_perf.rs"]
+mod performance;
