@@ -443,6 +443,10 @@ impl App {
                 screens::profile_load::handle_input(&mut self.state.screens.profile_load_state, &ev)
             }
             CurrentScreen::Options => unreachable!("Options input routed directly"),
+            CurrentScreen::ContentBrowser => screens::content_browser::handle_input(
+                &mut self.state.screens.content_browser_state,
+                &ev,
+            ),
             CurrentScreen::Credits => {
                 screens::credits::handle_input(&mut self.state.screens.credits_state, &ev)
             }

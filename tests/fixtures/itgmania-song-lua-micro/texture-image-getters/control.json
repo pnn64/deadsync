@@ -1,0 +1,85 @@
+{
+  "name": "native-texture-image-getters",
+  "texture_files": [
+    {
+      "name": "tiny",
+      "file": "tiny.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "tiny-wide",
+      "file": "tiny-wide.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "tiny-tall",
+      "file": "tiny-tall.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "padded",
+      "file": "padded.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "stretch",
+      "file": "panel (stretch).png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "doubleres",
+      "file": "hires (doubleres).png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "resolution",
+      "file": "source (res 53x12).png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "capped",
+      "file": "capped.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "capped-tiny",
+      "file": "capped-tiny.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    },
+    {
+      "name": "sheet",
+      "file": "sheet 2x1.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048,
+      "high_resolution": true
+    }
+  ]
+}

@@ -1,13 +1,13 @@
 {
-  "harness_version": "0.1.16",
-  "harness_commit": "bc1604f292658277dd449a33e48687dc959c1969",
-  "native_executable_sha256": "ae9292f776d3de2ac5609cb842ae904527a20836f6524cee2ebee7f846397f41",
+  "harness_version": "0.1.17",
+  "harness_commit": "eb3895a3b8c1ee6ca257090ff898f1ab2c92dad6",
+  "native_executable_sha256": "0e7feb15974e5485884cc1739477ef00cb1ddca1a21a5457fab99be9c2cc8196",
   "cases": [
     {
       "label": "draw-offset",
       "source_sha256": "14d928b2922aadb741ad1ba9b7f9598f2f591c7cae99e905dbd8ea7f268dfdc9",
       "simfile_sha256": "2b677e31719c90c8a9d90c454cae1bb01cf252a4320cf3a1fb03a69302c75032",
-      "trace_sha256": "ee49d7e22f157d1c61465082b4c14ca4567c04b82566e528f0035fb221e85e9b",
+      "trace_sha256": "9e6a57c003bf00c562217538376d42213811e7bec2e9708cee556483b7310014",
       "runtime_errors": 0,
       "dropped_events": 0,
       "update_frames": 241,
@@ -15,13 +15,14 @@
       "end_position": {
         "beat": 4,
         "seconds": 4
-      }
+      },
+      "superseded_trace_sha256": "ee49d7e22f157d1c61465082b4c14ca4567c04b82566e528f0035fb221e85e9b"
     },
     {
       "label": "draw-negative",
       "source_sha256": "14d928b2922aadb741ad1ba9b7f9598f2f591c7cae99e905dbd8ea7f268dfdc9",
       "simfile_sha256": "e9dfcfcfcfa240813d517fd9114120bced19b00ff3fab0ddca6855e3daaeac55",
-      "trace_sha256": "6a83e3daf20b9d96226fc192180d3b1b2eba56e3e85ad31537ace5d42333089c",
+      "trace_sha256": "88d1daffad737487dc5c4a4611b7b4d20bf8bcc18569cd42a0cc7f805fd2fa1d",
       "runtime_errors": 0,
       "dropped_events": 0,
       "update_frames": 241,
@@ -29,7 +30,8 @@
       "end_position": {
         "beat": 4,
         "seconds": 4
-      }
+      },
+      "superseded_trace_sha256": "6a83e3daf20b9d96226fc192180d3b1b2eba56e3e85ad31537ace5d42333089c"
     }
   ],
   "native_sources": {
@@ -42,5 +44,6 @@
   "expected_checks_per_case": 247,
   "total_checks": 494,
   "negative_control": "shift retained draw-frame music timestamps by 0.25 seconds without changing operations; all 241 native frame observations remain and mismatches are rejected",
-  "local_and_linked_sources_identical": true
+  "local_and_linked_sources_identical": true,
+  "public_music_getters": "native-music-seconds"
 }

@@ -1,8 +1,7 @@
 use super::*;
+use crate::resource_perf_support as alloc;
 use crate::script::SpriteStatePropertiesPlan;
 use std::hint::black_box;
-#[path = "../../../tests/support/perf.rs"]
-mod alloc;
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired;
 
@@ -179,11 +178,14 @@ fn state_properties_reuse_texture_and_delay_allocations() {
         frame_count: 64,
         frame_delays: delays,
     });
-    let mut result = None;
-    alloc::assert_no_churn(|| {
-        result =
-            itg_sprite_animation_slot_plan(slot, command, false, |_| (8, 8), |_, _, _| (128, 128));
+    let (result, churn) = alloc::measure(|| {
+        itg_sprite_animation_slot_plan(slot, command, false, |_| (8, 8), |_, _, _| (128, 128))
     });
+    assert_eq!(
+        churn,
+        alloc::Churn::default(),
+        "expected no allocation churn"
+    );
     let SpriteSourcePlan::Animated {
         texture_key,
         frame_durations: Some(durations),

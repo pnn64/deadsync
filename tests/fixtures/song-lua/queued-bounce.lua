@@ -8,7 +8,7 @@ local function bounce(self)
 end
 return Def.ActorFrame{
     Name="Root",
-    Def.Actor{
+    Def.ActorFrame{
         Name="Driver",
         OnCommand=function(self)
             self:SetUpdateFunction(function()

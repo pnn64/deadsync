@@ -1,0 +1,39 @@
+{
+  "harness_source_commit": "0855974afcbb3ec4b77052f2dc6618b2bd1c248d",
+  "harness_version": "0.1.50",
+  "native_cli_sha256": "03843e44680e6fc9b5620c4b209ea517293de45c248a4e476b75d6ee3f5aaff9",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "control_sha256": "9df729aaa288d3301c9fe3ab2857c60e40a1652538ecb120167ae7cd6d845597",
+  "native_sha256": "2ed66f850f7c6ad2a6e7939e57cc53b8463fe4e276c454f3cb284eb239d23aca",
+  "repeat_identical": true,
+  "capture_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "input_sha256": {
+    "capped.png": "094d3fc4aa50c7fd33fea86f4e7b8e571a7e87816260bc0af570bcb1a7ee871e",
+    "hires (doubleres).png": "b1c8e547732c77ae54c58b66a8fd1f5f35d79a4ccec6003f7e442121e5811315",
+    "padded.png": "30d94c1beabf0c0ff88d355ca736d52940f069a2dc79dffb715fbe595adb11a0",
+    "panel (stretch).png": "06b33073e689e798079cb1f5b7ec8787dde4f5e9392011a2fb936b9ff5a3e0c6",
+    "sheet 2x1.png": "cc67ef297f57a29a10007136b81aa35dc6bf5ad854412dccb8711517cfae1aba",
+    "source (res 53x12).png": "8ad5ef53f9cc62222033c9e455136dcd16d3414ae462d643af109646083cf840",
+    "tiny-tall.png": "3ce02ddc449ceb83b4d20f47371be7a8983bdbb13d59adf7181b4431173829fa",
+    "tiny-wide.png": "74132e274157689a48343c29306958a9ec3e91f538781af7de217c47accc7699",
+    "tiny.png": "8ad5ef53f9cc62222033c9e455136dcd16d3414ae462d643af109646083cf840",
+    "unit.png": "110bf3c33d2043a49bd0133f6d8d7a9543bae8d0a6b9be42ad6f8f6a611b2bcf"
+  },
+  "native_sprite_cases": 10,
+  "captured_prepared_images": 9,
+  "excluded_uninitialized_padding": [
+    "padded"
+  ],
+  "captured_rgba_bytes": 68608,
+  "native_source_unchanged": true,
+  "framebuffer_pixel_parity_proven": false,
+  "command": "itgmania-harness-rs actor-conformance control.json --out native.json",
+  "oracle": "actual native RageBitmapTexture::Create upload surfaces; native dimensions determine whether pixels are initialized",
+  "capture_source": "native/actor_oracle.cpp in the pinned harness commit",
+  "native_policy_sources": [
+    "src/RageBitmapTexture.cpp",
+    "src/RageSurfaceUtils_Zoom.cpp",
+    "src/RageTexture.cpp"
+  ],
+  "deadsync_physical_upload_parity_proven": false
+}

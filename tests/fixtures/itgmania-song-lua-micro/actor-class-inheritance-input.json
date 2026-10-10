@@ -1,0 +1,3 @@
+{
+  "aft_creation": "assert(type(Actor) == \"table\")\nassert(type(Actor.GetX) == \"function\")\nassert(type(ActorFrame.GetX) == \"function\")\nassert(ActorFrame.fardistz == nil)\nassert(Actor.SetUpdateFunction == nil and Actor.SetDrawFunction == nil)\nassert(Sprite.SetUpdateFunction == nil and Sprite.SetDrawFunction == nil)\nassert(type(ActorFrame.SetUpdateFunction) == \"function\")\nassert(type(ActorFrame.SetDrawFunction) == \"function\")\nassert(type(frozen.GetX) == \"function\")\nActorFrame.SourceProbe = function(self) return self:GetNumChildren() end\nassert(frozen:SourceProbe() == 0)\nActorFrame.SourceProbe = nil\n"
+}

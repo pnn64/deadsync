@@ -784,6 +784,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         self.appearance_effects_active_mask.bits()
     }
 
+    fn accel_mask_bits(&self) -> u8 {
+        self.accel_effects_active_mask.bits()
+    }
+
     fn visual_mask_bits(&self) -> u16 {
         self.visual_effects_active_mask.bits()
     }

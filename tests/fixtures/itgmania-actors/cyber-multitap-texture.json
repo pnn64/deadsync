@@ -292,8 +292,8 @@
   "provenance": {
     "execution": "embedded_native_sources",
     "git_dirty": "false",
-    "git_revision": "6170835abf29f09b7f5507fdc129d646127cde16",
-    "source_root": "C:\\GitHub\\rework\\itgmania-harness-rs\\../itgmania"
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
   },
   "schema_version": 1
 }
