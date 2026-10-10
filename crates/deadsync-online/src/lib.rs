@@ -101,7 +101,8 @@ mod tests {
 #[cfg(test)]
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired_bench;
+
 #[cfg(test)]
-#[allow(dead_code)]
 #[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
 mod perf;

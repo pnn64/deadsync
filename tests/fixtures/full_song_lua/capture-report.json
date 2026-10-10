@@ -1999,6 +1999,502 @@
       "archive": "1f117cff001e8fd6014deec3ef1ddd960b258b600fc323d36d6a7d9f1153be5d.tar.zst",
       "harness_version": "0.1.28",
       "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 68,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "superseded_archive": "8212e118c8866bc755091fd249497fdb853c6c2cdb99219a6776ad70563d3984.tar.zst",
+      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "harness_version": "0.1.28",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+      "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
+      "archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "c81da0db1583b0dbd2496a7dca851d78a44c695e29ec236d13eb55373320b29d.tar.zst",
+      "archive": "6e714e46b10d10dfccb200a706f4c07dcfd1efa699b600d432ed182bc2705ed9.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "67cc9c55d569fd38c830ee4454f643871fadd5075286dca4bd164cb22d473ac8.tar.zst",
+      "archive": "900f27995dc3d53a245db17c943f22efda0b8ab220cf54434638463678ac06bf.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "0863227d1c12162554240956e5b11b4334e8235cfbda860ae76b1e7bab525611.tar.zst",
+      "archive": "8c0951284de066f905a22e648d3279148a3194aad1a1b77a2527265c04dd3e56.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "1035/1035.sm",
+      "superseded_archive": "668060dc50356929fb72578e07cef10c1681a7fd65c75ebb4ea28e093a7b65c5.tar.zst",
+      "archive": "54fbf164497bab4d1e56666876c05b2a8f0bf03529130ded37d481684549ad1d.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "d7b24f07056040eccdcdc9a601ba9ba8989121a591cd5d1fe047a34af99ad51a.tar.zst",
+      "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "724604c8bb3f7dbe1b27a8c9a617c09ce9eabf2d65b679e4897e0c0b4a8beaff.tar.zst",
+      "archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "superseded_archive": "0bf4ed12cfc0a1a4192a736d1096f246c546e294adeac184944f0fd5225b9d9a.tar.zst",
+      "archive": "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+      "archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "ae7e5b9117f551287f29a71b41a108629ff0a6928f102ecf974b47f2355fcfc4.tar.zst",
+      "archive": "44affd1ba537543f404ed4d136f687b050dff6a45dd5de6d643d7b87926c3ab2.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
+      "archive": "40ae7d06fb4edacdfc931e4fd7f605d83ad529d41e126de88487d97403311dc1.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+      "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "superseded_archive": "e5bc6b2f743a6e9eac19dccab375e599910a7f309bce5bfa9c2701f11d2f5976.tar.zst",
+      "archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "superseded_archive": "3d705fd168fe1c5b10c350e477be3df048036473068d505c58c3e190d9630060.tar.zst",
+      "archive": "bdf17f0bf8d7dccf63d034c97af245f1f0df13ea19ef010456aa6ade80648fcd.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "superseded_archive": "ac4854fd3d8e73710127a23aed1996eff0acc3b662919588a492c9a010086aa5.tar.zst",
+      "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 70,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "673b436ebabdb5cc4c385e0e480d7bec61d8179f3915e2ce5eed9c273cfe935c.tar.zst",
+      "archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+      "harness_version": "0.1.29",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+      "archive": "0df7a206f0cce79521f3f74bcfa5580dc0005676674622b373173a8955aa52fc.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+      "archive": "adf7cae38b6febc5504a3323f6f46b9ca87418a4409c123aa1b9b87dd4441f79.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "6e714e46b10d10dfccb200a706f4c07dcfd1efa699b600d432ed182bc2705ed9.tar.zst",
+      "archive": "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "900f27995dc3d53a245db17c943f22efda0b8ab220cf54434638463678ac06bf.tar.zst",
+      "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "8c0951284de066f905a22e648d3279148a3194aad1a1b77a2527265c04dd3e56.tar.zst",
+      "archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "1035/1035.sm",
+      "superseded_archive": "54fbf164497bab4d1e56666876c05b2a8f0bf03529130ded37d481684549ad1d.tar.zst",
+      "archive": "78d2a83a38d4ec61c54d3873017e7a3dce7bfa4f2bfac694d51255cbffe6c358.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+      "archive": "233a9dcd0700794704bf31555a460bbddd130caa12893307534224b14b0cee68.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+      "archive": "93c16ea69f9fb27c62939c91b61ea24971d33b8a2fe52784926fa43ddba0261d.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "superseded_archive": "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
+      "archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+      "archive": "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "44affd1ba537543f404ed4d136f687b050dff6a45dd5de6d643d7b87926c3ab2.tar.zst",
+      "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 71,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "40ae7d06fb4edacdfc931e4fd7f605d83ad529d41e126de88487d97403311dc1.tar.zst",
+      "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+      "harness_version": "0.1.30",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "superseded_archive": "968b0e13a41a5700add5f3789d69b61d18a6802ffa4e97c6b0f97554324e2f47.tar.zst",
+      "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "superseded_archive": "0df7a206f0cce79521f3f74bcfa5580dc0005676674622b373173a8955aa52fc.tar.zst",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "superseded_archive": "adf7cae38b6febc5504a3323f6f46b9ca87418a4409c123aa1b9b87dd4441f79.tar.zst",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "superseded_archive": "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "superseded_archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "superseded_archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "1035/1035.sm",
+      "superseded_archive": "78d2a83a38d4ec61c54d3873017e7a3dce7bfa4f2bfac694d51255cbffe6c358.tar.zst",
+      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "superseded_archive": "233a9dcd0700794704bf31555a460bbddd130caa12893307534224b14b0cee68.tar.zst",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "superseded_archive": "93c16ea69f9fb27c62939c91b61ea24971d33b8a2fe52784926fa43ddba0261d.tar.zst",
+      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "superseded_archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "superseded_archive": "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 73,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "superseded_archive": "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
+      "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "superseded_archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "superseded_archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "superseded_archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "superseded_archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "superseded_archive": "bdf17f0bf8d7dccf63d034c97af245f1f0df13ea19ef010456aa6ade80648fcd.tar.zst",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "superseded_archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "superseded_archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "superseded_archive": "c0a1741ca9d19cd8b8baf1292402b010423732e0eebad4d371fadb8d6430e85a.tar.zst",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "superseded_archive": "52bdf10f48d05b131ffbeb35fb873983ba3c39d47a7ed6c2a0a753b989eeb6a0.tar.zst",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "superseded_archive": "c1edd24b0ae42410e8bdf8c3ccd83103f46dbe00c8e6e2f69b3a8de772c5a2c9.tar.zst",
+      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "fcdf1e86b6077e31c4f97adcf1b92c6fd7460d09ee83a380c59cc832464cbbc2.tar.zst",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "superseded_archive": "5a27e38d6c07fe367542da043edaddb5b69143ffd4833166a8f8d8e39a2ef902.tar.zst",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "superseded_archive": "1c0225a7d2fc61cdd507b7884bef6a80a9a1fc5fecf5c313e2c5c18fa0466857.tar.zst",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "superseded_archive": "a84ff944882c91f701e6b0ea4064c25949f0eee87705e843ea5b209b89eaa83a.tar.zst",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "superseded_archive": "032f31073ca6984c5c6c55df025e16c91fb6f43cbf86ab7c8ffb4a85276c7a46.tar.zst",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "666/666.ssc",
+      "superseded_archive": "1f117cff001e8fd6014deec3ef1ddd960b258b600fc323d36d6a7d9f1153be5d.tar.zst",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "superseded_archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "harness_version": "0.1.31",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 75,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "superseded_archive": "f05d58b8dd90acfdc101dd853723379ef3dffc9b25d5d32108758aa4befa210a.tar.zst",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "harness_version": "0.1.32",
+      "reason": "Close native Zigzag modifier gaps and incorrect Fov declaration projection using actual ITGmania source branches; unchanged original 99+ passes all 1339513 comparisons."
+    },
+    {
+      "pass_number": 76,
+      "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "superseded_archive": "7a7232e518056e7db219999c22e7e742e1effd2a53dd94cf6cfe4da979779f19.tar.zst",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "harness_version": "0.1.32",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
+    },
+    {
+      "pass_number": 77,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "superseded_archive": "c36c2940ae814ddc2dad6e65d9d0a60c2b9c91bb244cad6607d6e9d649ad0061.tar.zst",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "harness_version": "0.1.33",
+      "reason": "Replace obsolete capture with verified native timing and complete dependencies"
     }
   ],
   "parity_verifications": [
@@ -4501,6 +4997,3338 @@
       },
       "runtime_errors": 0,
       "dropped_events": 0
+    },
+    {
+      "pass_number": 69,
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 182.3934621810913,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 180.88s",
+        "log_sha256": "2eab5af8dc57cb5790dba5b3c0f2fd06fd2068249d89f9e5a0306854939acdd7",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "reason": "Restore native music time in spline comparisons; every observation and tolerance is retained."
+    },
+    {
+      "pass_number": 69,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "6d8f3399489b3d6ebd6627953b6305b6ff68c1582fbc56a277929e57e123cb8e.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 14.902347087860107,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.78s",
+        "log_sha256": "627df0e30e7697b8621fdf4626cdff1e55aac14c74b392368c1aab597e67fd5b",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "17acdde57828ec355087f0f25e98d48bc8c8c8145365bc9235aeba0d46100ef2.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 21.664710998535156,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 21.55s",
+        "log_sha256": "32220e18be4f90b981caede74f59012ffd5dac144c1745c0777e473fa6f63276",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "c81da0db1583b0dbd2496a7dca851d78a44c695e29ec236d13eb55373320b29d.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "c81da0db1583b0dbd2496a7dca851d78a44c695e29ec236d13eb55373320b29d.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 38.8755841255188,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.76s",
+        "log_sha256": "0ee2943ad8b273e057db987eb3ed538ee5dfa8dbd9d8b9183c3294e36cede099",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "67cc9c55d569fd38c830ee4454f643871fadd5075286dca4bd164cb22d473ac8.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "67cc9c55d569fd38c830ee4454f643871fadd5075286dca4bd164cb22d473ac8.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 9.009241580963135,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.89s",
+        "log_sha256": "e4b78de4743a9922cc9e0ddcc349c3b8a4a148f4edc4c14f565a6cae666e69a4",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "0863227d1c12162554240956e5b11b4334e8235cfbda860ae76b1e7bab525611.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "0863227d1c12162554240956e5b11b4334e8235cfbda860ae76b1e7bab525611.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 9.155243396759033,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.04s",
+        "log_sha256": "b1b564adca6915df6f1fc5d995b06bc01ddb3296ee7b9990ba583f4dbf11f297",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "668060dc50356929fb72578e07cef10c1681a7fd65c75ebb4ea28e093a7b65c5.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "668060dc50356929fb72578e07cef10c1681a7fd65c75ebb4ea28e093a7b65c5.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 7.6106178760528564,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.50s",
+        "log_sha256": "55ae0a9efd06c2e45ee5facdbf14f2af81ab0ecc8b7f70dd35d749d05b789b9f",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "d7b24f07056040eccdcdc9a601ba9ba8989121a591cd5d1fe047a34af99ad51a.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "d7b24f07056040eccdcdc9a601ba9ba8989121a591cd5d1fe047a34af99ad51a.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 12.003743648529053,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.89s",
+        "log_sha256": "eea90e4e60d839a2edd6c2c90b75d622d149e22f2b42e6fe78293604906e505d",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "724604c8bb3f7dbe1b27a8c9a617c09ce9eabf2d65b679e4897e0c0b4a8beaff.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "724604c8bb3f7dbe1b27a8c9a617c09ce9eabf2d65b679e4897e0c0b4a8beaff.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 48.961610317230225,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 48.82s",
+        "log_sha256": "d446f7ef5b43d5367ee106112a35833846bc9c7c26621fcc9bef8c9af7361033",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "0bf4ed12cfc0a1a4192a736d1096f246c546e294adeac184944f0fd5225b9d9a.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "0bf4ed12cfc0a1a4192a736d1096f246c546e294adeac184944f0fd5225b9d9a.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 8.955468654632568,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.85s",
+        "log_sha256": "21c333231ec5fa04219bfb21d453f8de99054e5fc9207e17a9e8109e5f02e58f",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "24b302ac42e7e6ed6a5eecb6fe390a6efb554a2b49fa9dc0526c2783ee076d25.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 22.117802143096924,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 21.81s",
+        "log_sha256": "c0e81fee1a1649d063b11030099683f885a8c174fa23848ae2c963b94bd0cc2a",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "ae7e5b9117f551287f29a71b41a108629ff0a6928f102ecf974b47f2355fcfc4.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "ae7e5b9117f551287f29a71b41a108629ff0a6928f102ecf974b47f2355fcfc4.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 14.156022787094116,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 14.05s",
+        "log_sha256": "0d3f7286c6c501d1ab53f193c90c008b911f50442f51d1d73f638f29f978259a",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "93fdb80a9cd0d33a1197c7b1d346d8ee54a5586698a83239d155b8e47f80e7c8.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 61.88142013549805,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 61.76s",
+        "log_sha256": "0b6e98e309cce80eac06df116f07190160de5db5a9f96f1ae27a9c52cd12b038",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 69,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+      "harness_version": "0.1.28",
+      "harness_commit": "a2889f6059ed500b71b38e060ac82be0ca5ac003",
+      "native_executable_sha256": "915976a8c34a7292333d452453dfe50839c57b0b2b1599d8b12cd24f638fe0d2",
+      "verification": {
+        "archive": "cca5aea3c6215fe21d872701d73eb22f24614777f4a509a905217f8e74f416a1.tar.zst",
+        "version": "0.5.1866",
+        "exit_code": 0,
+        "seconds": 66.2216694355011,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 66.11s",
+        "log_sha256": "2a3b7617d57c8710f4a5d6e6eaf1e2aacc8f8bd121c3c8260eb6235311a90a60",
+        "executable_sha256": "be81443a6dc3d2adb06900401a4659f4ba5cb1332ce5cf83ffbabba344edf29f"
+      },
+      "native_capture_reused": true
+    },
+    {
+      "pass_number": 70,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "1a7471b2e2e548a05fd2f0fbefb37eec28cb2cdf24167aa43066fb9a1bbb8914.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 14.737183570861816,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.62s",
+        "log_sha256": "83995b0ea9fea237b16435f2b699ad78bd40733cacc046ef698faac071531920",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d74fc6a554f72ae32cdf83b18332d6a816e45a5ec1056b5bec84f564f729e51b",
+      "capture_endpoint": {
+        "beat": 334,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "1f0fa32313e2909c5a7f706334c68b610fcda91804164000a87a78905afb3260.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 21.644288063049316,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 21.51s",
+        "log_sha256": "be439997bdbf66333e92f1a406265d3af9d8ba8e7d66feb6dfe5dcadbfd347c1",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "400e855f7e26f7206e9fd658b3db53a36e3a44fda7d3eec5fcf8bb103a1e6b6d",
+      "capture_endpoint": {
+        "beat": 266,
+        "seconds": 145.09091186523438
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "6e714e46b10d10dfccb200a706f4c07dcfd1efa699b600d432ed182bc2705ed9.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "6e714e46b10d10dfccb200a706f4c07dcfd1efa699b600d432ed182bc2705ed9.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 38.67055916786194,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.52s",
+        "log_sha256": "94c1ddbbba15c744fff82535ba2572143dcaa21c38d8500def3bc63cd2b8a6bc",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "1f8083dcf9d2eab508b651efa77e6d2954c61ca424aca05027591a839df86882",
+      "capture_endpoint": {
+        "beat": 230,
+        "seconds": 141.01080322265625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "900f27995dc3d53a245db17c943f22efda0b8ab220cf54434638463678ac06bf.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "900f27995dc3d53a245db17c943f22efda0b8ab220cf54434638463678ac06bf.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 9.824472665786743,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.69s",
+        "log_sha256": "3e6267036ab735351202d1038aab114a229e84912aec4d827d9d78f6aaa873f2",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "a4023fa834d9cfe021224f15db33d6a776ba52eec1ea0e0a1c4a48d6afb9b3ca",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "8c0951284de066f905a22e648d3279148a3194aad1a1b77a2527265c04dd3e56.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "8c0951284de066f905a22e648d3279148a3194aad1a1b77a2527265c04dd3e56.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 9.015470266342163,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.90s",
+        "log_sha256": "f449420c81ccb85684bc8050d99eb7e3e71bdf523878ca9e7e579744f549c601",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "f3ec9380e009d7b0d2a4b487342ce46418024aad64ebd6072c33c43f709aea71",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "54fbf164497bab4d1e56666876c05b2a8f0bf03529130ded37d481684549ad1d.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "54fbf164497bab4d1e56666876c05b2a8f0bf03529130ded37d481684549ad1d.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 7.683891296386719,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.39s",
+        "log_sha256": "ef4032c3a29fac5530449d66ce7c6a18874ca2adf5160276ab10da564a12707b",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "27c8bfa52521286a5f3a213d8751310e9c2853ddebb512b2b63c9a5637ac0136",
+      "capture_endpoint": {
+        "beat": 333.25,
+        "seconds": 166.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "0851089203f4cac87c68a75a7f43269c938229d242f538e3321b07e8d7712b42.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 11.98954701423645,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.86s",
+        "log_sha256": "4e3dcc152338978842100d0965c0739267dc9ece88ffa926775187033d1dd461",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "f620e5c65f249448128683a3613d9177ad870d6cb2a678d95f93a26d20fd0b1c",
+      "capture_endpoint": {
+        "beat": 338,
+        "seconds": 130
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "7138000a27e8c2e4c849b22614522a61ad8777df4a242d23881878f142b5489e.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 47.717947006225586,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 47.56s",
+        "log_sha256": "5b816bb584c8b889ec0d213d112b5deac85d9eaae4c3e9f8a09e5b5929080738",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "189c0788dbfd9dec86463b1fb0843b3b1b0a576870dc2f53b48649998a8598bc",
+      "capture_endpoint": {
+        "beat": 580,
+        "seconds": 221.77818298339844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "adb38226b76d913bb3197992a455b63c70e4cc6932657ae04160cb1b5e466582.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 9.122161865234375,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.98s",
+        "log_sha256": "fb92ea8b8780e2ec4d8390908579ca7b480e1e0dac7a58a5c760e948f1304e59",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "04a69f5763e2db0d00c1d35a2c44de2131a853d485d46fda455ee737269d6698",
+      "capture_endpoint": {
+        "beat": 275.3541564941406,
+        "seconds": 118.00892639160156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "003caa21093acc76035a1b308916b56fe6fccddd39df073206484025e164327f.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 20.82857871055603,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 20.69s",
+        "log_sha256": "2490681abced905316524faf7b8a58d35e7e46806bcf8c551c0a2fc210c7a5fe",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "28418ca3f032c66208ad74670acdfcc3c1db0dd9808ee6965defec65e21b2748",
+      "capture_endpoint": {
+        "beat": 300.0000305175781,
+        "seconds": 140.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "44affd1ba537543f404ed4d136f687b050dff6a45dd5de6d643d7b87926c3ab2.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "44affd1ba537543f404ed4d136f687b050dff6a45dd5de6d643d7b87926c3ab2.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 13.614581108093262,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 13.48s",
+        "log_sha256": "ae418229f13e3f9c29f82c0df43cf3172b3c6fd50d97a5a1630c89b4b8535cd2",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "9a9c2876be8713687f58102e34d2180e7ee1ff34105bc70e1fe2e302314c30c9",
+      "capture_endpoint": {
+        "beat": 384,
+        "seconds": 144
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "40ae7d06fb4edacdfc931e4fd7f605d83ad529d41e126de88487d97403311dc1.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "40ae7d06fb4edacdfc931e4fd7f605d83ad529d41e126de88487d97403311dc1.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 63.274648666381836,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 63.05s",
+        "log_sha256": "8c44db7a2ba73e69b658bd36d92df2b7c241042586e4b736434f394ef5e6ecef",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d185ffe2df6dbbd335988889e75aeda71faff5f51b21946871c718276d28e1c6",
+      "capture_endpoint": {
+        "beat": 481,
+        "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "eb72d797347add642fb4849f3339550b3f23b9a0de5fe13a3cfa50e498d602db.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 63.41171407699585,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 63.27s",
+        "log_sha256": "bc009457f526b8396336c56250d5364506ff9b945009dcc7134b6e3e18a91964",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "7d7e16de3552459177b2718df7caef2da0aff04b26ea1490087ad1110e9ce415",
+      "capture_endpoint": {
+        "beat": 440,
+        "seconds": 127.53623199462892
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "0b1a7d9c6002371b2693cdd4adbf6f9b7d4a7e8bcebff356b05b40937e2c3bba.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 26.427484273910522,
+        "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 26.30s",
+        "log_sha256": "27825adefec4d66e4ae9b8405bea28d178bed6fd64811a83a28be254198bc990",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "668159a606e6f7906919132d8fa2efc9c97eb41f7f34478cd24a6282f76cb766",
+      "capture_endpoint": {
+        "beat": 290,
+        "seconds": 102.42857360839844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "bdf17f0bf8d7dccf63d034c97af245f1f0df13ea19ef010456aa6ade80648fcd.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "bdf17f0bf8d7dccf63d034c97af245f1f0df13ea19ef010456aa6ade80648fcd.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 21.236289262771606,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 21.09s",
+        "log_sha256": "ecaa80f7651ed06ccc5b1e3baf9130ea2a889ac538262383863f5bb2ff53f81d",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "92a9ad4c48cb5a397277a05ce7073a05ab5b423bcef922815fcd4337db1349a5",
+      "capture_endpoint": {
+        "beat": 348,
+        "seconds": 134.70968627929688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "dac53f2aef6714b1975b417a262b712212166634a87adb0f533499c72a1be3b6.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 44.51404809951782,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 44.36s",
+        "log_sha256": "9e65137f199e919b2ca2925c28ae05be2f83cfcf787cdbd4f64d8c0e36180247",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "70809940b1728bd64efe75f004463e73d8023946b9ddd858930dd4360bf68aac",
+      "capture_endpoint": {
+        "beat": 265,
+        "seconds": 127.20000457763672
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 70,
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+      "harness_version": "0.1.29",
+      "harness_commit": "e15b5da0061fb2c22389a3e9bea20b62d43d744d",
+      "native_executable_sha256": "5e2d142e89be85ecf7b799aec1cc666b395effbf59c55a64d34b9991c1d2e2d0",
+      "verification": {
+        "archive": "6189910c6a2a5568b60d9ff972d4514c7b1492bf9de9f8275b25cebbc7bae142.tar.zst",
+        "version": "0.5.1867",
+        "exit_code": 0,
+        "seconds": 77.51247668266296,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 77.37s",
+        "log_sha256": "e67914935726d5b306b811d86fbff6fb02eb8fda160b1ddb0eb3178b8923c2e8",
+        "executable_sha256": "a8c51c80c0790f950863d4151e12c1c369010abdfc5c386d5c2303becd052504"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "393ed26bc13d53c06273520a91a920cc745c14d5ea34c0cec63810bf89b96c07",
+      "capture_endpoint": {
+        "beat": 324,
+        "seconds": 126.23377227783205
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "0df7a206f0cce79521f3f74bcfa5580dc0005676674622b373173a8955aa52fc.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "0df7a206f0cce79521f3f74bcfa5580dc0005676674622b373173a8955aa52fc.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 16.365083932876587,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.69s",
+        "log_sha256": "efe2ba0f2267a2b043c650ede417ae903927e801f44b26565b5319b68d4f11b5",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d8b19914ddfbf9774f987a57c23c047c8c04b6423eac1b66a42249fcdccace5e",
+      "capture_endpoint": {
+        "beat": 334,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "adf7cae38b6febc5504a3323f6f46b9ca87418a4409c123aa1b9b87dd4441f79.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "adf7cae38b6febc5504a3323f6f46b9ca87418a4409c123aa1b9b87dd4441f79.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 21.623313426971436,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 21.48s",
+        "log_sha256": "165fc4997dd5f858cd11ebd33183f66a9f1a8218e7e13555f4f9589fa2d69d2e",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "33477957899945273c6f9d66cd908bcaa90ee817d3a08152e096e3e5640d8276",
+      "capture_endpoint": {
+        "beat": 266,
+        "seconds": 145.09091186523438
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "644cf8df0bfd2395407141623d8fd807721ef0ea417f70b5879d85019b43c75c.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 38.35910892486572,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.22s",
+        "log_sha256": "3c3fd73834b26b77b4e425d9c672dfb2fef82a5c80f82c8a12f41e2859f373f1",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "5512f81fdb82bb8b51d7e976e521fb1d019d09301a755d445610987d200cd89b",
+      "capture_endpoint": {
+        "beat": 230,
+        "seconds": 141.01080322265625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "45619904fccb319b0c89bbe0b70415b10b10420f1ddc93e31f9681c8cc44f42f.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 9.218748569488525,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.08s",
+        "log_sha256": "0bce836d9075c2c5a7a4e1fcf025440903cc68b1d583e18f17c4cee11d2665e8",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d61e1f2cfa42c64bff9a9e0ac275925d83d0726d36d8d47a86ffa7aeaaf9a4dc",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "afb7688df68f415deea0e9836bce5d26885b8835eb08fefebe69f03ab34a7f2c.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 9.705448627471924,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.34s",
+        "log_sha256": "5a2a8e4a8ed9ead6074d7bb217a4cb5bc8faab4905d2c2281fde4a6cb16ae853",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "0083668f8a06900db081107d2b8914b9657f30cd0e03f9656dca376147034fc6",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "78d2a83a38d4ec61c54d3873017e7a3dce7bfa4f2bfac694d51255cbffe6c358.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "78d2a83a38d4ec61c54d3873017e7a3dce7bfa4f2bfac694d51255cbffe6c358.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 7.6858062744140625,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.56s",
+        "log_sha256": "e3e5e47946388d753e1add81b63b80710b30aabbb2bf0df079facf1f4d7a8da8",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "5dbcbaa89818d870f24c23e9a0c7379e04fd80e6b466f9d68d8afb3dc4cfd37d",
+      "capture_endpoint": {
+        "beat": 333.25,
+        "seconds": 166.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "233a9dcd0700794704bf31555a460bbddd130caa12893307534224b14b0cee68.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "233a9dcd0700794704bf31555a460bbddd130caa12893307534224b14b0cee68.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 11.839757919311523,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.71s",
+        "log_sha256": "dd033522d2d28d9234f1935a81dfec8bcfbdedefe8ce29c276344ca23137eee6",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "399e01e335b8157d0188665008899ec9edf034aa699b759c4b207ff9faf0610f",
+      "capture_endpoint": {
+        "beat": 338,
+        "seconds": 130
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "93c16ea69f9fb27c62939c91b61ea24971d33b8a2fe52784926fa43ddba0261d.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "93c16ea69f9fb27c62939c91b61ea24971d33b8a2fe52784926fa43ddba0261d.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 47.27086853981018,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 47.14s",
+        "log_sha256": "aee7a88e5390386f01fe67934a3f9b845eef3637b2c72810b245288bbc72b363",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "7d7d41b28529c7922a6bab41aec33376d8ace709c553b8ac0328554a9a31c12f",
+      "capture_endpoint": {
+        "beat": 580,
+        "seconds": 221.77818298339844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "fb8d1675c579ea871efea0905c8d0b5ccdb3605b42f6f7f3e191e4d034427a0c.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 8.736744165420532,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.60s",
+        "log_sha256": "491fa14185ba12b00d9675dc0e0f1799a1e0eac86f0e91c24c8153f3ff4b3442",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "313406836a2027e0df904534a708d6eec3ef5081fdf01c5dd8587ae01b820f04",
+      "capture_endpoint": {
+        "beat": 275.3541564941406,
+        "seconds": 118.00892639160156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "4a093d9495863a9417b8957787f5d04f7317b0b2492c3455722b70af88b1728e.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 21.098270893096924,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 20.94s",
+        "log_sha256": "c527d945099c8fc27a5ddf9fe267cf6be1f88493e82f5b30555c63a186c56f31",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "dd9d2231b3cc12053a74b6b751cbe183fa35082ad4588e5b1dc7faee37beb5b7",
+      "capture_endpoint": {
+        "beat": 300.0000305175781,
+        "seconds": 140.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "1968ea0affcdb5f3fb6ee1eedaec4d2876c2ef3b1adfe15ee01a6accaf655885.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 13.696532249450684,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 13.56s",
+        "log_sha256": "0cac5f282454617ed208d7a44a8a47ff63a2fa9003b789938f3512c9645bbe77",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "577fcdf1224a2688ec2365252392074f1776a0b2261179e19e35153777b3d3e4",
+      "capture_endpoint": {
+        "beat": 384,
+        "seconds": 144
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 71,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+      "harness_version": "0.1.30",
+      "harness_commit": "a03edbd46355ca7a44af134dbe824a4d2bfc0147",
+      "native_executable_sha256": "6f46b9d642d5130547200143429b8c588d1c600e13c7e035b26e5774fa43636c",
+      "verification": {
+        "archive": "43d7cbf86cd828e23a9a3c7294a79d78dd22150340bd79c22d97c8f42f86f95e.tar.zst",
+        "version": "0.5.1868",
+        "exit_code": 0,
+        "seconds": 63.06522059440613,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 62.83s",
+        "log_sha256": "0e1416249784e623b9b7f50871e783dbfa14b20504ba3e76b17e69c1336a1b8c",
+        "executable_sha256": "3818eae88b708e0523e7d8706073fbefa31c029de3600b22c6a9e1d1a9c28672"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "2503ac59d3866861b8b3cf5de20634cb72d176e71d53f1e721c71ec810ae0cb3",
+      "capture_endpoint": {
+        "beat": 481,
+        "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "source_simfile": "Bank Account/Bank Account.sm",
+      "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "ca287cf3d3877dc362c9b9cff0c15075a80c9071123afce2aec33de92686591f.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 1.8797852993011475,
+        "result": "result: ok; 1/1 fixtures passed; 116603 comparisons passed, 0 failed (116603 total); elapsed 0.15s",
+        "log_sha256": "abed2463b16230627b5c5804b91ca63ff66b39fbfd94f44347f920ef447d523b",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "endpoint_guard_tests": {
+        "executable_sha256": "02e95b612aa5249a0011b9687b79f2766e134dcfc19fc4bb2d220cbfb1ca6468",
+        "tests": [
+          {
+            "test": "native_song_endpoint_rejects_incomplete_replays",
+            "exit_code": 0,
+            "log_sha256": "6e95353884a00577a5e2b27b0d129b40d3d1e27e9323ef9c0849c9cdd5dccba9"
+          },
+          {
+            "test": "archive_reference_rejects_obsolete_replays",
+            "exit_code": 0,
+            "log_sha256": "c7482b48a518219c3b2b21032b354e792844e8ad11d4e63757641fe09d6b482f"
+          },
+          {
+            "test": "empty_song_layers_match_native_archive",
+            "exit_code": 0,
+            "log_sha256": "aea929971d7d25382435dca7ac30a8bdae178826a9cb5dba075e8f173c312947"
+          },
+          {
+            "test": "consolidated_song_lua_references_resolve_and_are_compressed",
+            "exit_code": 0,
+            "log_sha256": "0a5dc26a24dae66459898e3f90c2fd7401edf4637765fd6dbf8521376b0a794b"
+          }
+        ]
+      },
+      "scope": {
+        "original_simfiles": 501,
+        "canonical_archives": 483,
+        "historical_variants": 9,
+        "unindexed_simfiles": 18
+      },
+      "reason": "Validate the raw native Song::GetLastSecond endpoint and native final music timestamp, independent of the trace self-declared duration."
+    },
+    {
+      "pass_number": 72,
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 14.99903392791748,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.87s",
+        "log_sha256": "7cc5634ab361f2af90cc03bb6fb2d9dad4cf7e083eb40a657b81c71eaf08ddf8",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "89683f2d4afabffd1b4656fa600ed07c4c10a499f17e5b85a11ce794410a2fbc",
+      "capture_endpoint": {
+        "beat": 334,
+        "music_seconds": 157.0234832763672,
+        "seconds": 156.56248474121094
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 22.131611108779907,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 22.00s",
+        "log_sha256": "046b15ef3e4fec746c66b28c1d2a25212dcf1ec714053b031d5610e5eedfa2a7",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d7ef8aeb04ad8c7fffb4cb45db7e8e573558c30ca092ed3a53d6e44d7ebe322d",
+      "capture_endpoint": {
+        "beat": 266,
+        "music_seconds": 145.0819091796875,
+        "seconds": 145.09091186523438
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 38.81034016609192,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.68s",
+        "log_sha256": "821b00abb96b93556633c7a9652756d0097070b3b38b9d57cd64e071c288b796",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "ddd990edd08c8e55cb50119dd73a75de3e271960724faa8df6661b7aa2f44a0d",
+      "capture_endpoint": {
+        "beat": 230,
+        "music_seconds": 141.94180297851562,
+        "seconds": 141.01080322265625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 9.152631759643555,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.01s",
+        "log_sha256": "acc8cbb6d77c82efed12a1b0baee552cc465f0c29bcada3650ed9e45148ca231",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "ba2e3f08ac0b5e3935c10a95e7c8cd0f86cec67cfe6a55e0135610bfa573568f",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "music_seconds": 131.9134063720703,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 9.11656403541565,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.98s",
+        "log_sha256": "3f781ecc18e96e51bc5c20be1519a8e0327b93bc55c88f523688c8749cb6f1a0",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "3300956acd4d7d503282bd5e2aa446e04bec5d3d3fd79a7af6c502688a292043",
+      "capture_endpoint": {
+        "beat": 360.75,
+        "music_seconds": 131.9134063720703,
+        "seconds": 131.9791717529297
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 7.3501880168914795,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.22s",
+        "log_sha256": "c6e3c87945ae6afd59dce952decc7df33b58fce1f2a61b9e51b9e0585525c9ae",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "a86d4ff189fbad775dfa5caa956b3858821e21e4c21854c5d0c7a7a8877a1131",
+      "capture_endpoint": {
+        "beat": 333.25,
+        "music_seconds": 166.88800048828125,
+        "seconds": 166.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 11.965657711029053,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.66s",
+        "log_sha256": "f5477d2a3eaab0e8c4529a6f2c8e18eb32ddc0e0b91f4b549d42353f2a2a41b8",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "bb64d4e031a71b9e87b1c221c31b3b854a2ec9edf7f5b0427017e9312157fce8",
+      "capture_endpoint": {
+        "beat": 338,
+        "music_seconds": 128.86599731445312,
+        "seconds": 130
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 47.66300177574158,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 47.53s",
+        "log_sha256": "902b6e22ced2a183e67c2ff754da52020fe2d393c872470c2de4e0fd9b10e561",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "7a6c3df0ea3e84e0027f80f02e5f5517f9ca0c0ffb5d6e87168d1f0bf41c4da6",
+      "capture_endpoint": {
+        "beat": 580,
+        "music_seconds": 221.7861785888672,
+        "seconds": 221.77818298339844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 8.936620235443115,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.79s",
+        "log_sha256": "1fafd9957cc6bb4f66fcb8232807bbe090d4c5b7b70316f009786cbbb058154f",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "f181e95534cd7e2d62f81d6fc0bc66846e94a009b283a606d51149835265db35",
+      "capture_endpoint": {
+        "beat": 275.3541564941406,
+        "music_seconds": 117.99292755126952,
+        "seconds": 118.00892639160156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 20.9213809967041,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 20.78s",
+        "log_sha256": "50e9822c389ff036b81a89bfb7728078d188928a9e94282503c8c531ca48e845",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "ac19e6e3af4b8ad8b6aa39ccd61e8ea632fec95920f1d08919b920fd82edaa46",
+      "capture_endpoint": {
+        "beat": 300.0000305175781,
+        "music_seconds": 140.625,
+        "seconds": 140.625
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 73,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 226.61088848114014,
+        "result": "result: ok; 1/1 fixtures passed; 514954 comparisons passed, 0 failed (514954 total); elapsed 226.45s",
+        "log_sha256": "3be305bb21a0e835911b554ab1505dd7507898b882f5fd1719ced9a944490904",
+        "executable_sha256": "23b5c8f0b93fa150ca5b8ace9d5296f7e9e84446aaf63070285633b47bce8e1d"
+      },
+      "capture_endpoint": {
+        "beat": 336.0255126953125,
+        "music_seconds": 118.59724426269533,
+        "seconds": 118.59724426269533
+      },
+      "native_song_end": {
+        "beat": 336.0255126953125,
+        "music_seconds": 118.59724426269533,
+        "seconds": 118.59724426269533
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "original_sources_unmodified": true,
+      "focused_regression": {
+        "comparisons_passed": 358379,
+        "executable_sha256": "30cdd32971746c1c53e6b1c5ac4a46fb0df7f9ad337ea81a26229ebfeec7b739",
+        "test": {
+          "test": "igaku_whole_song_matches_native",
+          "exit_code": 0,
+          "seconds": 233.24184539960697,
+          "log_sha256": "646c5f0a53025eaca89c7245a7e535edc893f85e304b8f85a14d278311dfa79a"
+        },
+        "column_rotation_negative_control": "pass"
+      },
+      "source_provenance_blob": "3057750eccdafa5d8761489f3e467eda3a80e210a721f3c71d5de396ba518338.json.zst"
+    },
+    {
+      "pass_number": 72,
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 15.893203258514404,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 14.41s",
+        "log_sha256": "77c9df4c9a1fb4db79fb31e983b481bc6689f82ccd41f293bf3f43c318ba90ab",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "70245ad1be826230dc9b22875155a68ec7a84276a2a36f99cb4cf205cb497375",
+      "capture_endpoint": {
+        "beat": 384,
+        "music_seconds": 144.58799743652344,
+        "seconds": 144
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 64.65700244903564,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 64.43s",
+        "log_sha256": "e2f344ada968e169ce1d49f402d149537940e2a4d6a96136e14b875321b67d5f",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "c57dfb0b4f350fc21fa80036dd3823e1b7fa757a5c005ad9d2c78c3a601e5a82",
+      "capture_endpoint": {
+        "beat": 481,
+        "music_seconds": 140.8264923095703,
+        "seconds": 140.78048706054688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 71.53698563575745,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 71.40s",
+        "log_sha256": "4f0ca68905da12e8ecbda33c5384848d3147ffac89d8e77f5409dee95361352e",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "03759a60952e437414ad4a541a7da815a5f61db962b72ddfd4cb40fbfba44a0e",
+      "capture_endpoint": {
+        "beat": 440,
+        "music_seconds": 126.37823486328124,
+        "seconds": 127.53623199462892
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 28.312301874160767,
+        "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 28.17s",
+        "log_sha256": "8ebc18e3f1b1c3af8c833b66dd1a83d9aae34e10e275b43df843e93d2483310f",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "d80073b4a7dd23a658473c380ebb77a3f5f0774182f8a434825fa0198d0c12a5",
+      "capture_endpoint": {
+        "beat": 290,
+        "music_seconds": 102.4335708618164,
+        "seconds": 102.42857360839844
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 22.60901713371277,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 22.45s",
+        "log_sha256": "c5cda3ca6e8bf9b778e3dfec26c7f94e7b2c88845aa5c56b6fc9f83d120df604",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "312967986f7c4034b4226928cac7bb2c0ea472fab4d237340c15023acf9be8f8",
+      "capture_endpoint": {
+        "beat": 348,
+        "music_seconds": 134.70968627929688,
+        "seconds": 134.70968627929688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 49.275598764419556,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 49.13s",
+        "log_sha256": "8d24179ff537f5210e826ef8538626174aeefd53c196abdc8827733b712be047",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "47833675a38baa9e85a93e846ce12cab08cfb480efec4043533b63cc339b0732",
+      "capture_endpoint": {
+        "beat": 265,
+        "music_seconds": 127.20000457763672,
+        "seconds": 127.20000457763672
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 83.93199253082275,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 83.79s",
+        "log_sha256": "97cac0a844dfb4aa9a8ee7e6f9430117b2a3a2c6ec535f6a719d1b38f7d13db4",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "018fe6c78ddbddca650376c82fb73ef89f2847b31a217b3340534dc92a55825e",
+      "capture_endpoint": {
+        "beat": 324,
+        "music_seconds": 126.23377227783205,
+        "seconds": 126.23377227783205
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 86.85642170906067,
+        "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 86.68s",
+        "log_sha256": "b68eef81516cea7beacdedc5abf19dc47fe03f23e45bea4f141367e7d702737b",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "eaf6a6b1b167fa4c4e78b1dc3233b533a221359af763dd2f4c727f3ecaa18497",
+      "capture_endpoint": {
+        "beat": 357,
+        "music_seconds": 138.1935577392578,
+        "seconds": 138.1935577392578
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 284.4731466770172,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 284.29s",
+        "log_sha256": "59299cede6f2523f58fac19f6da4a22efaf098c43c5c134aa1810f5390075398",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "db0f4361bbd932a0fbc380c75473892ffad932239b27aaf3710b6457bded3020",
+      "capture_endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 285.0751700401306,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 284.90s",
+        "log_sha256": "dc7fa56e9f628d482ed1fb670c6074cbbe155544daf9c7698471581a649c2e45",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "bb71e91ee5143e60c4b217fe5f57d378e1a10ad3b837d46dba58b809dbc0f663",
+      "capture_endpoint": {
+        "beat": 645.75,
+        "music_seconds": 199.4571533203125,
+        "seconds": 199.4571533203125
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 29.31307554244995,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 29.17s",
+        "log_sha256": "d769b3016800e96bb323e138be15f4cb28ea218b0e028790152b089385fda261",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "dbb86bcdf3d27af37095a4572f980a7085074043c12607f6887b0dba82ffb054",
+      "capture_endpoint": {
+        "beat": 343.66668701171875,
+        "music_seconds": 131.12582397460938,
+        "seconds": 129.78482055664062
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 29.653252363204956,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 29.52s",
+        "log_sha256": "32829e0cc25d0415b493aa80b866435ae8b5a4524998677549741398b45e23d3",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "2a689489cdae0a8927afd1b31df20f409200baee962e613b7a10f775bdcbce78",
+      "capture_endpoint": {
+        "beat": 343.66668701171875,
+        "music_seconds": 131.12582397460938,
+        "seconds": 129.78482055664062
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 6.495831251144409,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 6.36s",
+        "log_sha256": "287e400f4687ef30b034a0f07285decd15afb40531441af294a361210c669e1e",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "036d10e79aede782a4d0afa9080d41328969c5a42e19ac0665010fec9d43a1a8",
+      "capture_endpoint": {
+        "beat": 910.75,
+        "music_seconds": 273.25701904296875,
+        "seconds": 273.2250061035156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 6.431879281997681,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 6.29s",
+        "log_sha256": "8e334107a5abf347ff6528e474bb22b7a8a5d9bf8bbdf2f8a46472e06b2af4aa",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "6b928325e1e83b14ecb0847433c0b992d90e1bca5d1a4af2676d7f595b2f655d",
+      "capture_endpoint": {
+        "beat": 910.75,
+        "music_seconds": 273.25701904296875,
+        "seconds": 273.2250061035156
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 79.58538961410522,
+        "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 79.44s",
+        "log_sha256": "eef91eb7a7c289cd2d6904c508636b28bec5f11c978a65a55973bb6c8e5d0e20",
+        "executable_sha256": "5eb382b09b7e6672a0dba127c58a56199d1fc10d72ddddae317e671bfef9b5e4"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "025c562e91d41de4d38a513e58e283daebadc139cb518e40ed7df838d6f993a8",
+      "capture_endpoint": {
+        "beat": 256.125,
+        "music_seconds": 79.87281799316406,
+        "seconds": 79.88282012939453
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 72,
+      "index": 25,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 33.224263429641724,
+        "result": "result: ok; 1/1 fixtures passed; 552285 comparisons passed, 0 failed (552285 total); elapsed 31.07s",
+        "log_sha256": "c51f2536d2d1abed34e7f928cd8838bd8661b6c35cde96c2dcb2650dc7efcc1e",
+        "executable_sha256": "3ca8d327befc6426bb0018ba76941f1488d9e098bf318050b3627befa45b455f"
+      },
+      "native_capture_reused": true,
+      "capture_log_sha256": "b4801dac8c330a876aa804bdf2591de2ec8a03bdf95aac76d9b7cff015c6863c",
+      "capture_endpoint": {
+        "beat": 680,
+        "music_seconds": 117.77569580078124,
+        "seconds": 118.1981964111328
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "endpoint_guard_regression": "one f64 rounding step below the endpoint passes only when native float seconds are equal; one native float step short and nonfinite frames fail"
+    },
+    {
+      "pass_number": 72,
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verification": {
+        "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+        "version": "0.5.1869",
+        "exit_code": 0,
+        "seconds": 165.28854727745056,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 165.13s",
+        "log_sha256": "cfb71e8a24a768177798d925d880c4bef09787abd32a5c4a691b3d2c2ded8415",
+        "executable_sha256": "3ca8d327befc6426bb0018ba76941f1488d9e098bf318050b3627befa45b455f"
+      },
+      "native_capture_reused": false,
+      "capture_log_sha256": "112997b925c6bf2f7299a81041c570c1a585eb09d7c14a0063b5a6c4b85f8091",
+      "capture_endpoint": {
+        "beat": 238.74998474121097,
+        "music_seconds": 130.24826049804688,
+        "seconds": 130.22726440429688
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0
+    },
+    {
+      "pass_number": 75,
+      "index": 27,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "harness_version": "0.1.32",
+      "harness_commit": "f5e0dc9d146f1399563d1af44cd7b82839d6b336",
+      "native_executable_sha256": "5598a12f18fda00bc0773a7521280f6667f5d7fc47bb95ef1ee31035d46ba37e",
+      "semantic_host_sha256": "333129fc8f7438de6426a6c60591995f158ecb44154bb3132f0e24b80681efe9",
+      "verification": {
+        "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 155.16364240646362,
+        "result": "result: ok; 1/1 fixtures passed; 1339513 comparisons passed, 0 failed (1339513 total); elapsed 153.47s",
+        "log_sha256": "669340e21f8858d7c3306e60b28f1916f28f104684861b567c3a1ea19a2d08ca",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": false,
+      "native_song_end": {
+        "beat": 236,
+        "music_seconds": 110.62499237060548,
+        "seconds": 110.62499237060548
+      },
+      "end_position": {
+        "beat": 236,
+        "music_seconds": 110.62499237060548,
+        "seconds": 110.62499237060548
+      },
+      "original_source_sha256": {
+        "-YOSEFU- cdtitle.png": "6b79c387224a1742d9fbd3b13ad882f9eca41aaf2d4982c0399355d7c179db95",
+        "99+.ogg": "6cbd961ca4c0cd7afd60faa5ee30eec9a0aa53e74640df5ed03bac6a3263356c",
+        "99+.ssc": "c7148d546f5017efbf3802b04006da99caea362d13e4a68cd19131f74637d179",
+        "_black.png": "e19ed71b0f073cc20815a41884cfc3e9935ed5d6c6dd2c28e7b8ac758e545685",
+        "background/bg.png": "93c51472909353ff8c5720134f5d9850cb8e44e8d4b3d8da3949206ddb7e3261",
+        "background/default.lua": "db5e2c8873c9432bb83ac2c5715d877bd57fffe4912ab6d337aebd51a6be10d2",
+        "bn.png": "41328ac3b2b3e8cd051aca6cb7ee983ad782301885f4ad26fa361e6db891a3a3",
+        "jk.png": "22445937de2ed4e9d9eb3a3706bc79010cb2fde5172b062cddd6b0344f3db2dd",
+        "lua/default.lua": "a0f7f1a0728558bd3444c3e17875509a25fc3025b6389fd8bc08589c3486dc73",
+        "lua/goodies/actors.lua": "97638c21c85e7e613b58c8ed19d8967ad776a7007bb176a9426915529c1715aa",
+        "lua/goodies/images/spellframe.png": "0ff2004ab2b3a21605df2a132bb628f7890fc04b58c7cd762249eb85bd314bd8",
+        "lua/goodies/images/white.png": "11fdc43f6316601b8bbabf8c4706dc04972920bb293c0d706d1f9981dd6107f3",
+        "lua/goodies/mods.lua": "275cbfb72f9728418530ece11127c5aa5445b5bdfea6658b890fde859ac048cb",
+        "lua/helpers/modhelpers.lua": "1a588a693b31c9011f216448beef4caa055d909323b02328e0d55e921bdd01d5",
+        "lua/helpers/modreaders.lua": "8cf6c35b5f2072e89fe23d1553c25c5be230ea021af23c765732cab2c2a047fb",
+        "lua/helpers/tweens.lua": "21ef67f5ee74cab728f393cee02e56006aabcd6b3ea34d9b48953ed838ff7570"
+      },
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "deadsync_production_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "preceding_prefix_verifier_version": "0.5.1869",
+      "current_verifier_version": "0.5.1870",
+      "current_verifier_contiguous_prefix": 0,
+      "note": "This case is verified on .1870; the preceding 27 cases require revalidation from the top on this verifier."
+    },
+    {
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "verification": {
+        "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 14.370848178863525,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 14.19s",
+        "log_sha256": "227f7fc78a88625795bf5bace5419dd5a475e09bcd92ff39995b12a6f9d5401f",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "verification": {
+        "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 21.329315423965454,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 21.17s",
+        "log_sha256": "13c21934be07cd8744496c921db18bd016931678955f6f67c3a1e278f32495e2",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "verification": {
+        "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 38.43549633026123,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 38.27s",
+        "log_sha256": "c6110a408c0f2bc9cc32833339ba10f0ac89c65d87366529c493b7639386360f",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "verification": {
+        "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 9.401888370513916,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 9.22s",
+        "log_sha256": "603f2077a1d65a9cda36c13298b8c89bc6bf57b22d0e4c9a5bad00272c1a6a26",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "verification": {
+        "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 8.702616691589355,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.53s",
+        "log_sha256": "c9241f6e2bbeab9c7a5637f8e330eee756f3fb2d3ad0457a799ed652aa23e647",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "verification": {
+        "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 7.274947881698608,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.11s",
+        "log_sha256": "473bfb5cdb775e493f528f371d6e9efe7de0a11ec585d97e6a178342a42505e0",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "verification": {
+        "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 11.626903057098389,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.45s",
+        "log_sha256": "7f3ef71cd1e1aea361f827c7aebb01a0a9f6f5dfeb39c1de01e546df94fd7fba",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "verification": {
+        "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 46.21260666847229,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 46.04s",
+        "log_sha256": "4b6ccbcec2f6400f0fd96d3c73c2ba3f97c0717e55b6bcc666d6b890ec9c0d04",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "verification": {
+        "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 8.802221536636353,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.63s",
+        "log_sha256": "4abc6b402b87cd8517fc72d2632af6c07120b601101b369739966636f0317ae7",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "verification": {
+        "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 20.99178171157837,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 20.83s",
+        "log_sha256": "f9c70d58ea9e0c9373beff30e731c4f419abe31051d145e86a8dd2d4d35df39d",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "verification": {
+        "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 13.00376033782959,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 12.84s",
+        "log_sha256": "feb4a99b1025d317d2fa6793fdbe53bf582b8194edb4ccc7acb5c80b021e1f47",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "verification": {
+        "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 61.76441168785095,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 61.59s",
+        "log_sha256": "a5653d58c27ad4ea6e29bd68a89e87e7f0496a20fa9281d849023ef4d6867fc0",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "verification": {
+        "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 68.493980884552,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 68.29s",
+        "log_sha256": "4e4e0898d810544db38fc86b701a0e70f3e512256c8809120282236e75b386d5",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "verification": {
+        "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 26.275498867034912,
+        "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 26.08s",
+        "log_sha256": "72d59f7ae2af9735d6479fe4f93cc1a96bf9f1291c163cdbb68e312fded40070",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "verification": {
+        "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 20.983484745025635,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 20.81s",
+        "log_sha256": "c95f32e3030c761ca18a70ed366788586e70a17775bb3f4391c18ce8f6c7002e",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "verification": {
+        "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 43.97539567947388,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 43.81s",
+        "log_sha256": "02b994ced3669d65a9861068a1915cacb97f3c8e5abbf271f10ce182d1815ef9",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "verification": {
+        "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 78.45807766914368,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 78.29s",
+        "log_sha256": "9adfa4d30415bca5371e0997067b06c1164bc4312430751e838b365477feee1c",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "verification": {
+        "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 83.24280095100403,
+        "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 82.92s",
+        "log_sha256": "f7cbd643b8ea756913a4de326f0f8cc3de3c69324ad8fa78d61f642047aaac08",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "verification": {
+        "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 269.13053822517395,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 268.77s",
+        "log_sha256": "db0e300171cb8f0fb90bae976352ed8621f4cf4d9ef959874b4a008d4c0a1ec1",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "verification": {
+        "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 279.4782946109772,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 279.27s",
+        "log_sha256": "521f9a004c06b794675c4cbb523085d3cb8083cb24a52c6b110c219315c8fc04",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "verification": {
+        "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 26.908751726150513,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 26.72s",
+        "log_sha256": "95b3aae4cc32ecc8b65e41d5c14570c93c4293beeab52a553fc26cab8791558c",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "verification": {
+        "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 28.782826900482178,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 28.60s",
+        "log_sha256": "6c5a20d41cf910ee75eeea5fa13e125c8441262c2394dfd1982b73e55f118e33",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "verification": {
+        "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 7.975964069366455,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 7.74s",
+        "log_sha256": "37d8c3723664bcbec1fa46cc102fb415d1a2bd777f209a683ee3277f1f3ce5ee",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "verification": {
+        "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 6.307309627532959,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 6.14s",
+        "log_sha256": "629c53a950f60eb6b4534e56c856ae789a8d1288fcb45b0dd8a5f6082ec87bc6",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "verification": {
+        "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 78.79581356048584,
+        "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 78.63s",
+        "log_sha256": "71285a262dcfcc530b6e158d2ef8aff59d8682f0ba0b1d3f0bf798aa2a6b1a4a",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 25,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "verification": {
+        "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 31.320639848709106,
+        "result": "result: ok; 1/1 fixtures passed; 552285 comparisons passed, 0 failed (552285 total); elapsed 31.16s",
+        "log_sha256": "a1deaa1845abf761e72a16e83014611c481e07eb71e0221a48b0fe2ca09a2c5a",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "verification": {
+        "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 157.46650791168213,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 157.28s",
+        "log_sha256": "6005d0c5f0c380f5698d01fad97e11117b051f23e491b0037a50032952cf2190",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "index": 27,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "verification": {
+        "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 155.16364240646362,
+        "result": "result: ok; 1/1 fixtures passed; 1339513 comparisons passed, 0 failed (1339513 total); elapsed 153.47s",
+        "log_sha256": "669340e21f8858d7c3306e60b28f1916f28f104684861b567c3a1ea19a2d08ca",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": false,
+      "pass_number": 75,
+      "revalidation_only": true,
+      "harness_version": "0.1.32",
+      "harness_commit": "f5e0dc9d146f1399563d1af44cd7b82839d6b336",
+      "native_executable_sha256": "5598a12f18fda00bc0773a7521280f6667f5d7fc47bb95ef1ee31035d46ba37e",
+      "verifier_source_commit": "9b05daa1a5c2870fa95dcaeaceee254dcdbb3d84",
+      "full_corpus_complete": false
+    },
+    {
+      "pass_number": 76,
+      "index": 28,
+      "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "harness_version": "0.1.32",
+      "harness_commit": "f5e0dc9d146f1399563d1af44cd7b82839d6b336",
+      "native_executable_sha256": "5598a12f18fda00bc0773a7521280f6667f5d7fc47bb95ef1ee31035d46ba37e",
+      "verification": {
+        "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+        "version": "0.5.1870",
+        "exit_code": 0,
+        "seconds": 184.1177272796631,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 183.91s",
+        "log_sha256": "a5adc8afd2ce8c2beaeff179bd9a13134575bf5e5fc8d93179f59e1b036d6892",
+        "executable_sha256": "d600fa53860c6ccdc8dcfa1e6d6dbbd224d81dd508fbf191314d8df2fbe7b5cd"
+      },
+      "native_capture_reused": false,
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "full_corpus_complete": false
+    },
+    {
+      "pass_number": 77,
+      "index": 29,
+      "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+      "harness_version": "0.1.33",
+      "harness_commit": "71b414f2412ac2a1b34a3b286b3d7d5ea8684591",
+      "native_executable_sha256": "99f80eb407a5f0ae9d63c314d30b5a78e49b3574a8fd78d719b635e116c4dd39",
+      "verification": {
+        "archive": "f80142e41e9782af1b5034937794705e2a8e4367d51cc9a71876a2ea56010cf3.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 8.967792987823486,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 8.73s",
+        "log_sha256": "dc53e2b29518d58d0df8f416e1aeb4f7da58e64f65589126dd292000c6350b9d",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": false,
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "capture_log_sha256": "1e776175ff4fcb9b615676e6d58d885b5aadd02e738ac427d461445490509e5e",
+      "capture_endpoint": {
+        "beat": 275.3541564941406,
+        "music_seconds": 117.99392700195312,
+        "seconds": 118.00892639160156
+      },
+      "full_corpus_complete": false
+    },
+    {
+      "index": 0,
+      "source_simfile": "(R10) Warp Zone/warp zone.ssc",
+      "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+      "verification": {
+        "archive": "b38698ececd60bdf311a15de205f43d0f3466eac6d41296b9abf469485ebab4d.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 15.350152730941772,
+        "result": "result: ok; 1/1 fixtures passed; 212220 comparisons passed, 0 failed (212220 total); elapsed 13.80s",
+        "log_sha256": "969befb93c06d8b582a4a303ea4665ecfa95fdaab2a85d64f2f36cc2fb1d23d1",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 1,
+      "source_simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+      "verification": {
+        "archive": "0229b74d092e8f04278d64b7c994877a0a3bcc52e9d7ddb00d6a98f1f5244cd0.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 20.522324085235596,
+        "result": "result: ok; 1/1 fixtures passed; 205071 comparisons passed, 0 failed (205071 total); elapsed 20.36s",
+        "log_sha256": "d4ff3300ad43001176235df7da4c8615ded54f2eb0a30ab350a366a7af181f66",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 2,
+      "source_simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+      "verification": {
+        "archive": "99c3448215e8ca1011025fc50daef0ba0b122a1a6cd4e90312f572bcfe184d0f.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 35.794281244277954,
+        "result": "result: ok; 1/1 fixtures passed; 260300 comparisons passed, 0 failed (260300 total); elapsed 35.62s",
+        "log_sha256": "db7348a7152f103570d221fe013548c70095f6a406322aed8ff73c4200a696c5",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 3,
+      "source_simfile": "100 Bad Days/100 Bad Days.sm",
+      "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+      "verification": {
+        "archive": "d6b0ff8c5ada41bbb143da698c6bd2dd2cece58aafbad627d16b2a0669fcc426.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 9.117692947387695,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.94s",
+        "log_sha256": "29c7c8e801a862b00195f1f0cb8da45ce6dd9d781fa91581dc813967a68ab0ae",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 4,
+      "source_simfile": "100 Bad Days/100 Bad Days.ssc",
+      "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+      "verification": {
+        "archive": "c084614875dcb51da42e1e087fbfaf34d39ace2c508ee3fb271d36a098b450a5.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 9.33211374282837,
+        "result": "result: ok; 1/1 fixtures passed; 175181 comparisons passed, 0 failed (175181 total); elapsed 8.98s",
+        "log_sha256": "51611e2b6ccb301bfe7f4c954f2eda3eaf53a473185994741c8fa5aff47e1157",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 5,
+      "source_simfile": "1035/1035.sm",
+      "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+      "verification": {
+        "archive": "52212b8019da29cecf9300bd4fb20eda6e4e18524706034e76027124a577df47.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 7.304609298706055,
+        "result": "result: ok; 1/1 fixtures passed; 248156 comparisons passed, 0 failed (248156 total); elapsed 7.12s",
+        "log_sha256": "60e43adb2c4d4c29a1e377f8e296883d5cbcb15579632e5b606734de23fb2ce7",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 6,
+      "source_simfile": "188-HS-Holdswitch[lv.08] the shadow/theshadow.ssc",
+      "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+      "verification": {
+        "archive": "7cdc47c09cc2339c0e1de5102bce8100b085ed15169ca79aee454c85be56e2c0.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 11.542687892913818,
+        "result": "result: ok; 1/1 fixtures passed; 345742 comparisons passed, 0 failed (345742 total); elapsed 11.36s",
+        "log_sha256": "7a0eb232677cdaefacffae72ade3856a51a5e49eb72a94362e77f757ca3cdfc4",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 7,
+      "source_simfile": "242-MISC.[lv.02] ChikuTaku/ChikuTaku.ssc",
+      "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+      "verification": {
+        "archive": "1910ab784664f278e102c2652128d8d7d0e631f5e85866a36ed9f2c93573739d.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 49.930365562438965,
+        "result": "result: ok; 1/1 fixtures passed; 328107 comparisons passed, 0 failed (328107 total); elapsed 49.75s",
+        "log_sha256": "1e538d87888ff316514f60e30ed7217295cfacb858ae850cfdb662667c937165",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 8,
+      "source_simfile": "271-MODS-[lv.01] Spooky/1.09 - Spooky.ssc",
+      "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+      "verification": {
+        "archive": "98bb391800ae11d75a099b310d2329266f39f6d709f9d455e597250877ad8e25.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 7.92395281791687,
+        "result": "result: ok; 1/1 fixtures passed; 157678 comparisons passed, 0 failed (157678 total); elapsed 7.75s",
+        "log_sha256": "6054ca9ff7b79291b5383308aa0468d5088273847b736157bd26748ee974fd62",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 9,
+      "source_simfile": "272-MODS-[lv.02] Riddle/Riddle.ssc",
+      "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+      "verification": {
+        "archive": "920eb361ce688e70b4364258337b30c9e4bf7d337f2c83a30e59215eb838735d.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 20.581007480621338,
+        "result": "result: ok; 1/1 fixtures passed; 201471 comparisons passed, 0 failed (201471 total); elapsed 20.42s",
+        "log_sha256": "4c9309fb1e9bf8cdbd7c145c1be895710f7c87fbe077164869cb1bf7c15262bc",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 10,
+      "source_simfile": "273-MODS-[lv.03] [CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+      "verification": {
+        "archive": "51f6b4d8d5593282906d2142513344c510b5f30aae7ca17846c25b5dfa330d66.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 14.016952753067017,
+        "result": "result: ok; 1/1 fixtures passed; 194374 comparisons passed, 0 failed (194374 total); elapsed 13.85s",
+        "log_sha256": "60f4deb9d43d3fff97719754d3ca388e0c54aa16a3c7a17c5b83fc20af4b59e3",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 11,
+      "source_simfile": "274-MODS-[lv.04] SAIKYOU STRONGER/REDALiCE_vs_USAO_-_STRONGER.ssc",
+      "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+      "verification": {
+        "archive": "70169ce37058f254e043ee79a3ef1a9473d2949333c5995b934e06625298fbd3.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 58.61213254928589,
+        "result": "result: ok; 1/1 fixtures passed; 208584 comparisons passed, 0 failed (208584 total); elapsed 58.44s",
+        "log_sha256": "729564b32781204552afc3c242e070710b369ec9f0eb810f7d40714d45e78e65",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 12,
+      "source_simfile": "275-MODS-[lv.05] BroGamer/BroGamer.ssc",
+      "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+      "verification": {
+        "archive": "c0282942dbf6fa12a94ccf8c5fa6449eb59f4db505db07c6004369346a8291c3.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 64.42998313903809,
+        "result": "result: ok; 1/1 fixtures passed; 198090 comparisons passed, 0 failed (198090 total); elapsed 64.26s",
+        "log_sha256": "5be802b1e071469008b92027e9200b7619279e1fe045aeaf5c0379efbc668d18",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 13,
+      "source_simfile": "276-MODS-[lv.06] Nishi-Shinjuku seisou kyoku/nssk-chart.ssc",
+      "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+      "verification": {
+        "archive": "356b778edc0d1fe565b4a057112c5a4d34e512ad7cf3eba6471bf20601cd5acf.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 25.624540090560913,
+        "result": "result: ok; 1/1 fixtures passed; 167442 comparisons passed, 0 failed (167442 total); elapsed 25.45s",
+        "log_sha256": "23e6ab114e2066392953d01b79a690a9493b8b8898e2e6e84ae5aca4f7ed0d5b",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 14,
+      "source_simfile": "277-MODS-[lv.07] CO5M1C R4ILR0AD/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+      "verification": {
+        "archive": "cb2d7e8a5d8f44ad681752c63f35ed734fef456f77ccfbbcd658b1884c3ccec3.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 20.910661220550537,
+        "result": "result: ok; 1/1 fixtures passed; 199543 comparisons passed, 0 failed (199543 total); elapsed 20.75s",
+        "log_sha256": "d0c69ad76b6db8927dda5f89d6ab5188031c399af16401e20defb4deeec1c834",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 15,
+      "source_simfile": "278-MODS-[lv.08] And Drugs/and drugs.ssc",
+      "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+      "verification": {
+        "archive": "39c101576407a7732f3e6fcf46be92a15f338a0f2b89a902026074b6dc97376e.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 44.51784920692444,
+        "result": "result: ok; 1/1 fixtures passed; 182791 comparisons passed, 0 failed (182791 total); elapsed 44.35s",
+        "log_sha256": "3622020c7433a667d0db06696e198610cddd55ac55dcd31ef70e2645ba374c30",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 16,
+      "source_simfile": "279-MODS-[lv.09] Karachi/Jorts - Karachi.ssc",
+      "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+      "verification": {
+        "archive": "e82a83f6b62338f5d8c2ea75af9caccccf4d91db371ab4b61deea0f7e0d32657.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 78.25269770622253,
+        "result": "result: ok; 1/1 fixtures passed; 206323 comparisons passed, 0 failed (206323 total); elapsed 78.01s",
+        "log_sha256": "b812eb782808f1c5104212d5cb97cbc0ef0df9885ae0af883c4c6f4cc0c200cb",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 17,
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+      "verification": {
+        "archive": "b05379b7d12bfb02149e03f166be5d496dc3e7687dcc042f0bf525cc46aa918b.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 85.02306938171387,
+        "result": "result: ok; 1/1 fixtures passed; 304425 comparisons passed, 0 failed (304425 total); elapsed 84.75s",
+        "log_sha256": "7f0f35432e80f5e0ba84e446c187b7d9074520f35f626d6d8d473e9f235c7a2e",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 18,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/KABOOOOOM!!!!.ssc",
+      "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+      "verification": {
+        "archive": "e6a13e716861535f41db0d19f3a7dd4e016b583a47a4f272d61f3ffa4b18c49a.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 265.48990964889526,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 265.07s",
+        "log_sha256": "b2186b135d6cbf9f91976e607731bd7ce84f17704b7c80da23a4e093baee479a",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": true,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 19,
+      "source_simfile": "303-MODS-[lv.memes] [Tech Spectrum Super]/KABOOOOOM!!!!.ssc",
+      "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+      "verification": {
+        "archive": "88a06715d08edf6fa9562dbb95ec46028430b9a77c0a034c03a67a367a867249.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 264.7071371078491,
+        "result": "result: ok; 1/1 fixtures passed; 2274713 comparisons passed, 0 failed (2274713 total); elapsed 264.44s",
+        "log_sha256": "87ebbb6e87bd3166eb12e93397f323041852f8fa26282f2eb487d10cadad70ca",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": true,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 20,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+      "verification": {
+        "archive": "2c6afb87a547bc2833c9c6fbe4411fa10afe21cd9813728d6a0adc17f9da616f.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 27.469463348388672,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 27.24s",
+        "log_sha256": "fc1b4d098334e88286f7f4febc913eedf412085c06c38558ecfade9d8e74e561",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 21,
+      "source_simfile": "307-MISC-[lv.Death] [Tech Spectrum Super]/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+      "verification": {
+        "archive": "f39537eb3b679a3a50f3981265e0e0b39534adf79f0671e12be7290bdbd14565.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 26.529865980148315,
+        "result": "result: ok; 1/1 fixtures passed; 179179 comparisons passed, 0 failed (179179 total); elapsed 26.31s",
+        "log_sha256": "d0b026a5b35312fcacec3bea1c09d7429c41f485941dc7201398e5413409ef32",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 22,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/Venetian Snares - Epidermis.ssc",
+      "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+      "verification": {
+        "archive": "0f2ef3f987449e6218525fba450d1db1201c9f733d4956061d3b36529b922305.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 6.18629789352417,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 5.98s",
+        "log_sha256": "7b6e6dc6b79e10be3012db1375639b7af9d9b58f483b2a43369a8607d2aeb8de",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 23,
+      "source_simfile": "319-TECH SOUP-[lv.P.Clark] [Tech Spectrum Super]/Venetian Snares - Epidermis.ssc",
+      "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+      "verification": {
+        "archive": "af2f887d212d8ab702b772cea9c953500254ce01a6b78b423276fca9cf5a8306.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 5.975426435470581,
+        "result": "result: ok; 1/1 fixtures passed; 363873 comparisons passed, 0 failed (363873 total); elapsed 5.77s",
+        "log_sha256": "3b4902caf2597fd1fa45e453657c87d6fd9623c6c5ca7887746db5a5a2f0ba6f",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 24,
+      "source_simfile": "321STARS/321STARS.ssc",
+      "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+      "verification": {
+        "archive": "b3c998dfb46e47ab674b777cf5a8173c9d5a2cf9ca623edd41071b94e48249b7.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 74.67442512512207,
+        "result": "result: ok; 1/1 fixtures passed; 372891 comparisons passed, 0 failed (372891 total); elapsed 74.46s",
+        "log_sha256": "3b3e9886e8979c9cfd5893dcbbdab909a5b50df2c14b8f8513ca36974727fed4",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": true,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 25,
+      "source_simfile": "666/666.ssc",
+      "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+      "verification": {
+        "archive": "dfb22b000f2531ee587b0f8078c0b8f176a96556711df4c11644482d7d0d42f6.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 29.468239307403564,
+        "result": "result: ok; 1/1 fixtures passed; 552285 comparisons passed, 0 failed (552285 total); elapsed 29.22s",
+        "log_sha256": "9a065705f6700f1b9234fa398b0ecc0cfa6bf9ee06449d080d4e1ac77a8e8ad7",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 26,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+      "verification": {
+        "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 149.96024823188782,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 149.74s",
+        "log_sha256": "ed75cb35a2c05005e631a5f582d73603994a8f7ff03ddd110a79216bcea545fc",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": true,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.31",
+      "harness_commit": "b779d361bae477cf650d0a62a463da5915658dec",
+      "native_executable_sha256": "ca9ec768fb05b5a6ba9fb7e5d4f80909249787dce90fa9cfee2dcd7c219a624c",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "index": 27,
+      "source_simfile": "99+ [-YOSEFU-]/99+.ssc",
+      "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+      "verification": {
+        "archive": "00f94060905e800369ced918322fe391f65142fdf8e5e1328c9d0b3ff683a124.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 159.91792821884155,
+        "result": "result: ok; 1/1 fixtures passed; 1339513 comparisons passed, 0 failed (1339513 total); elapsed 159.66s",
+        "log_sha256": "3829d556acfbfb2231db2811273e77f6bbbf09d6885574a30c0e6926cda10e77",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "native_camera_source_audited": false,
+      "revalidation_pass": 77,
+      "pass_number": 77,
+      "revalidation_only": true,
+      "harness_version": "0.1.32",
+      "harness_commit": "f5e0dc9d146f1399563d1af44cd7b82839d6b336",
+      "native_executable_sha256": "5598a12f18fda00bc0773a7521280f6667f5d7fc47bb95ef1ee31035d46ba37e",
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false,
+      "full_corpus_complete": false
+    },
+    {
+      "pass_number": 77,
+      "index": 28,
+      "source_simfile": "[07] 7th Gear - (No CMOD)/7th Gear.ssc",
+      "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+      "harness_version": "0.1.32",
+      "harness_commit": "f5e0dc9d146f1399563d1af44cd7b82839d6b336",
+      "native_executable_sha256": "5598a12f18fda00bc0773a7521280f6667f5d7fc47bb95ef1ee31035d46ba37e",
+      "verification": {
+        "archive": "a2b9d031dfab0c224ec7392d15eba1847a721fec59b1162b8823582f567556f1.tar.zst",
+        "version": "0.5.1871",
+        "exit_code": 0,
+        "seconds": 159.4279215335846,
+        "result": "result: ok; 1/1 fixtures passed; 881665 comparisons passed, 0 failed (881665 total); elapsed 158.98s",
+        "log_sha256": "0f3d06cd5bfd1ab45de555ff68bbbc7e5fd55d03a7331716ff3159429d9dc52c",
+        "executable_sha256": "5ad34b4a71e3399afd9d14232e4733d6365817095e90a78097d605bec5ed1407"
+      },
+      "native_capture_reused": true,
+      "runtime_errors": 0,
+      "dropped_events": 0,
+      "full_corpus_complete": false,
+      "revalidation_pass": 77,
+      "revalidation_only": true,
+      "verifier_source_commit": "735a994c75240ae043dc153204572d6952ed14fc",
+      "native_model_geometry_coverage_gap": false
+    }
+  ],
+  "reference_coverage_audits": [
+    {
+      "pass_number": 77,
+      "audit": "model-coverage-audit.json",
+      "sha256": "04d05c3c367f1e7be9589936ab8717b8dd1f0edae5eff56be401032b2694db77",
+      "cases_with_missing_model_geometry": [
+        18,
+        19,
+        24
+      ],
+      "first_gap_index": 18,
+      "notes": "Model definitions are instantiated from native Cyber noteskin Lua. Source-only song scans miss them. Recorded comparison passes do not establish Model visual parity."
     }
   ]
 }

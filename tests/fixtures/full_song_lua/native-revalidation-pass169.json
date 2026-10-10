@@ -1,0 +1,104 @@
+{
+  "pass": 169,
+  "previous_record": "native-revalidation-pass168.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "571515e294babfc3dc7c2d566be467216de6ed29",
+  "comparator_sha256": "9b87b91504fbe85324c5c6489ccab45be7a0a0381c0acb834d5195ff06523073",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    90
+  ],
+  "next_position": 91,
+  "comparisons_passed": 207862,
+  "charts": [
+    {
+      "position": 90,
+      "entry": {
+        "title": "Among Us in Real Life - Single",
+        "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+        "harness_version": "0.1.61",
+        "archive": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143.tar.zst",
+        "sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+        "compressed_bytes": 102795,
+        "aliases": [
+          "d3707f6f551c8e346dbcde7b4c00bfc2080ce6d5d731202f87a06b82f0142853.tar.zst"
+        ]
+      },
+      "original_archive_retained": "98dd5f567bc286f73bf7e83fdc63a3895dda4ce3e4f9ec3fa61de3ee92337c82.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "82f405b7742bd57ff2ffb8835ce7f7335d017ece92a195c3d2fed63959d05d11",
+      "original_source_sha256": {
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Background - Rebecca Zamolo Shorts.png": "4f1940a80dcdeb0761750f6e3d8074fd84aec816f26b044886d84ca9fed24a38",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Banner - Rebecca Zamolo Shorts.png": "7406ac219e2cde826a1d6edde0911f3244f5087e4b1ff0d3a8928ab0ed41db53",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Jacket - Rebecca Zamolo Shorts.png": "42012751cdf30c1f69866787549920b5dc1f9713271563f89b43a9b9246bc25d",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Music Audio - Rebecca Zamolo Shorts.ogg": "896b8b1652a200283d81dc9bfca03a518560fdc80d6c8926f5e12769cdbc4a6d",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Music Video - Rebecca Zamolo Shorts.mp4": "7bd7ca88442a6ea20e7a4e49867ee5e9c9ebfe6182d7ba4d7aa4d18b8fd84de5",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc": "37bac219921aea10432cae8c50d155c4c0724d1b3588d08ac31eb878d95e84ea",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc.oldsync": "b6a546196818e2fc6139c0ede69809c119838fcd557340651a83ded768a3db7e",
+        "Among Us In Real Life - Single/Rebecca Zamolo Among Us In Real Life Official Music Video!.txt": "a5bbc42c5db3d71963e679a0434f27327b66386c5e34fe7d4cb52256c492f1f2",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Lua - Rebecca Zamolo Shorts/default.lua": "d471a86e3c8cf0a227fb7e8469eb919ca6e0ebdd9a54dbaf8a24aa2969e07de1",
+        "Among Us In Real Life - Single/Official Among Us In Real Life Official Lua - Rebecca Zamolo Shorts/modsHQ.lua": "0dad0cb0fa4c659c2c2c36ab84028080ebbaa73feb18bad71dc1e9c82616e729"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 9428,
+      "duration_seconds": 157.1050262451172,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 4,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 90,
+      "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+      "archive": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143.tar.zst",
+      "archive_sha256": "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143",
+      "harness_version": "0.1.61",
+      "source_commit": "571515e294babfc3dc7c2d566be467216de6ed29",
+      "source_pending_commit": false,
+      "binary_sha256": "9b87b91504fbe85324c5c6489ccab45be7a0a0381c0acb834d5195ff06523073",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass175\\ordered-main-v1-full_song_lua.exe",
+        "c29566e1144dbd6a39278c5841d5fe6f184e1301da0d01e7de85058432d7d143.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 30.056140000000596,
+      "comparisons_passed": 207862,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-090-ordered-main-v1.log",
+      "log_sha256": "a91fa6ba1bd94c1b149c0724a13ef4517a855bfa2dd6e500f6c2af0617eeaeb5",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass187-top-090-speed-audit-v1.json",
+      "native_receipt_sha256": "f9b76091285be6e00d4f1160c6295f4175a177c1860eba674ceff98c649c1d25",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "571515e294babfc3dc7c2d566be467216de6ed29",
+    "source_pending_commit": false,
+    "binary_sha256": "3c0d67b60c1a9d18fe6014c000e0781bce279121cc2463f99ce2a9235b8013c6",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass175\\ordered-main-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.128516800235957,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-090-native-pass169.log",
+    "log_sha256": "102690a0f8c83391b4e258613137501cd0302ae55b6954d0bf5640f3ada18dab",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 292 filtered out; finished in 0.57s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

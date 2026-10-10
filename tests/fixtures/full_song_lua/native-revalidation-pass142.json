@@ -1,0 +1,105 @@
+{
+  "pass": 142,
+  "previous_record": "native-revalidation-pass141.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    63
+  ],
+  "next_position": 64,
+  "comparisons_passed": 324861,
+  "charts": [
+    {
+      "position": 63,
+      "entry": {
+        "title": "[FULL SONG] 花月ノ夢",
+        "source_simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
+        "harness_version": "0.1.54",
+        "archive": "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5.tar.zst",
+        "sha256": "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5",
+        "compressed_bytes": 234813,
+        "aliases": [
+          "a6be8446f7ba457d2af3ed2281f47aced570087d170726d53e77ee5be1625dbe.tar.zst"
+        ]
+      },
+      "original_archive_retained": "b2442d671f5092fce6f8b59ed6fc0e52983d2f79a8027fad0a02a1e79d0dd883.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "00f6991b829b8ec74ee5ef45f54ae4860721a00c45ec479a4d050f16682efda6",
+      "original_source_sha256": {
+        "[FULL SONG] Kagetsu no Yume [wrsw]/CDTitleWrsw.png": "f323c8b7025f4ced1bae12af6549aa98eb957ec6af99d2676b86399d19f64f6b",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume-bg.png": "b43aa49dbea158258393ef9a717ae7793d237f361042f2832406f84b51097683",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume-bn.png": "987cd06e6cfb99645436aef2aa62327693447e9fd64974d7b40e48ddd2a10591",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume-jacket.png": "f8684a9a3877ca9c0d922efe36cc71a9958d76f2ad15ca4b01009b2e9eaddaff",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.avi": "f3bb1efab3fe6c793aaa6ca8dbe031c0e7458c866476983f6026c9ea44b47ec1",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ogg": "9c077ae87582b123b9781a881f3059470f81ba0147880bc1b2e8cb17b42e68d7",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc": "3411f1a367d7f605ce2322893bb2cbd2f5697bcbb923a703a31d17cffd5cdbb9",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/lua/default.lua": "8fd01b2ee2b33dca149c1e70be96a2bc4cc78f8b435dab1e0ba6291df5f3563c",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[FULL SONG] Kagetsu no Yume [wrsw]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 13358,
+      "duration_seconds": 222.60870361328125,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 63,
+      "source_simfile": "[FULL SONG] Kagetsu no Yume [wrsw]/Kagetsu no Yume.ssc",
+      "archive": "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5.tar.zst",
+      "archive_sha256": "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "278157e3ef5bb6f370174afd1566f1eaeba4dc1b667aa9248b2aa7fff78656c5.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 27.02807579981163,
+      "comparisons_passed": 324861,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-063-native-column-xy-v6.log",
+      "log_sha256": "dfcabb3176da93688af71f859526018c295246d1dd9ec21abe6b0c7c53beed16",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass142-top-063-native-v3.json",
+      "native_receipt_sha256": "7e7631b3f7a68d5887c73df7037cbd54c66c589d4d543b2ddcd8913b2452842a",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.13712690025568,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-063-native-pass142.log",
+    "log_sha256": "6157ffd05440fb1339a3a3233b9dc76fb79e254c7e285e19803be999b76c0f85",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.59s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

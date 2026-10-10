@@ -164,7 +164,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("swoosh.png"),
     texture_asset("heart.png"),
     TextureAssetSpec {
-        key: "graphics/menu_bg_technique/arrow_tex.png",
+        key: "graphics/menu_bg_technique/arrow_tex.png#itg-model",
         path: "menu_bg_technique/arrow_tex.png",
     },
     TextureAssetSpec {
@@ -172,7 +172,7 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
         path: "menu_bg_technique/square.png",
     },
     TextureAssetSpec {
-        key: "graphics/menu_bg_technique/white_tex.png",
+        key: "graphics/menu_bg_technique/white_tex.png#itg-model",
         path: "menu_bg_technique/white_tex.png",
     },
     texture_asset("fave-icon.png"),
@@ -726,7 +726,11 @@ pub fn is_shared_background_texture(key: &str) -> bool {
 pub fn texture_needs_repeat_sampler(key: &str) -> bool {
     matches!(
         key,
-        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
+        "swoosh.png"
+            | "graphics/menu_bg_technique/square.png"
+            | "graphics/menu_bg_technique/arrow_tex.png#itg-model"
+            | "graphics/menu_bg_technique/white_tex.png#itg-model"
+            | "grades/goldstar (stretch).png"
     ) || is_shared_background_texture(key)
 }
 

@@ -1,0 +1,105 @@
+{
+  "pass": 165,
+  "previous_record": "native-revalidation-pass164.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+  "comparator_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    86
+  ],
+  "next_position": 87,
+  "comparisons_passed": 491861,
+  "charts": [
+    {
+      "position": 86,
+      "entry": {
+        "title": "After Dark",
+        "source_simfile": "After Dark/After Dark.ssc",
+        "harness_version": "0.1.58",
+        "archive": "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f.tar.zst",
+        "sha256": "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f",
+        "compressed_bytes": 1264099,
+        "aliases": [
+          "bdb3bb7066e1e85f860dd86349024b61c28df70fb1041bed3fab5fee523bc671.tar.zst"
+        ]
+      },
+      "original_archive_retained": "475f5f6ca0aefbbb7d5d4943793b3b51c6401823d470bcc0f4e5345083a88b69.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "5fc7630ffa52cb2141bdfe7ac534f682876ae8dd4d4580676ee25518785a6a9f",
+      "original_source_sha256": {
+        "After Dark/after dark banner.jpg": "9a115158ec6f096b9192aeacd1872badb73a7d5df2ef8b341e418f8cac81bf12",
+        "After Dark/after dark bg.jpg": "541a3a2ddfb1989b2c30ee3994e0ec436a16d47ffa241e8bec6b7b27f6f9b425",
+        "After Dark/After Dark.ogg": "84554d754dd3a3cd9ddb14e6c77fb706970cf56e432ef40a5ef29b6b8dded3d5",
+        "After Dark/After Dark.ssc": "a47f421b8be490920f6cfd93ed45695c8711b39f76db67387193ddd1d789a1bb",
+        "After Dark/cdtitle.png": "81c87b2ad7c564f8fc974b7f340af69eb4939d9c415b06e9b87402f8221a55c6",
+        "After Dark/lua/constellation.lua": "0b36b91de06716ce5fc67868916d9009ed8073f519141ab17ec7e7fdc771f7bb",
+        "After Dark/lua/default.lua": "4c9c0620074be9693a148071b28880377b08aa5ee51c5381afb79724406c9042",
+        "After Dark/lua/lib.lua": "107589d22d6683a096edf561ce379f753adb351a50be2cd34bc344a261cf469d",
+        "After Dark/lua/Starfield.jpg": "e357429484a3a32fe975bdd5846feccb0425e0650b573e85bfd318ac716f9ddc",
+        "After Dark/lua/Targetstar1.png": "392b282111df3297a7a2c004747a96d4847250bb87a3eeadf71cf6c7624de777",
+        "After Dark/lua/Trekstar1.png": "85660ea5887e9971cd8e40fc10f7d97fcc658342a5b47ab58899d21a0dbb4b57"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 16666,
+      "duration_seconds": 277.7464904785156,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 8,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 86,
+      "source_simfile": "After Dark/After Dark.ssc",
+      "archive": "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f.tar.zst",
+      "archive_sha256": "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f",
+      "harness_version": "0.1.58",
+      "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+      "source_pending_commit": false,
+      "binary_sha256": "558e94f44afb61ac48edb9915e1301a87db458dfc1492dab91447d58cca76f94",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-full_song_lua.exe",
+        "3946d566a891cca39191a517dda06b45f209fcd99db5c4ffd7785e619ced7b7f.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 73.16941229999065,
+      "comparisons_passed": 491861,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-086-bounce-tornado-v3.log",
+      "log_sha256": "51249a008f41824a2a8fd9b498c7a2cccd18b1fcc8ef0978e10190f72fdf9540",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass166-top-086-confusion-x-v1.json",
+      "native_receipt_sha256": "4cc31a26b68edeb7efec0bc30599d2c7720ce0d5156b7203fa596c31925c0a6b",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1121d63d11fb8922fee95bd721470004f02ab139",
+    "source_pending_commit": false,
+    "binary_sha256": "e0749990919ef24e6f385def3c6a29d86df4513f45c66b6a6199772b53d1cc95",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\bounce-tornado-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.6399427000433207,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-086-native-pass165.log",
+    "log_sha256": "be1f20212ddc07f08853bf4e15324f4021fc0a745b0b93abd72468745d0126d2",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 271 filtered out; finished in 1.26s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

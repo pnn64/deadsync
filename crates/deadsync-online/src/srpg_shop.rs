@@ -257,26 +257,32 @@ pub fn runtime_refresh(username: String, password: String) {
     });
 }
 
+fn begin_purchase(runtime: &mut RuntimeState) -> Option<(u64, ShopSession, Arc<SrpgShopSnapshot>)> {
+    let Some(session) = runtime.session.clone() else {
+        return None;
+    };
+    if runtime.snapshot.phase != SrpgShopPhase::Ready {
+        return None;
+    }
+    runtime.generation = runtime.generation.wrapping_add(1);
+    let generation = runtime.generation;
+    let snapshot = Arc::make_mut(&mut runtime.snapshot);
+    snapshot.phase = SrpgShopPhase::Purchasing;
+    snapshot.message = Some("Confirming purchase with SRPG10...".to_string());
+    RUNTIME_SNAPSHOT_GENERATION.fetch_add(1, Ordering::Release);
+    Some((generation, session, Arc::clone(&runtime.snapshot)))
+}
+
 /// # Panics
 ///
 /// Panics if an internal synchronization lock is poisoned.
 pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
     let (generation, session, mut previous) = {
         let mut runtime = RUNTIME.lock().unwrap();
-        let Some(session) = runtime.session.clone() else {
+        let Some(purchase) = begin_purchase(&mut runtime) else {
             return;
         };
-        if runtime.snapshot.phase != SrpgShopPhase::Ready {
-            return;
-        }
-        runtime.generation = runtime.generation.wrapping_add(1);
-        let generation = runtime.generation;
-        let mut snapshot = (*runtime.snapshot).clone();
-        snapshot.phase = SrpgShopPhase::Purchasing;
-        snapshot.message = Some("Confirming purchase with SRPG10...".to_string());
-        let previous = snapshot.clone();
-        set_runtime_snapshot(&mut runtime, Arc::new(snapshot));
-        (generation, session, previous)
+        purchase
     };
 
     thread::spawn(move || {
@@ -304,9 +310,10 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
         match result {
             Ok(snapshot) => set_runtime_snapshot(&mut runtime, Arc::new(snapshot)),
             Err(error) => {
-                previous.phase = SrpgShopPhase::Ready;
-                previous.message = Some(format!("Purchase failed: {error}"));
-                set_runtime_snapshot(&mut runtime, Arc::new(previous));
+                let snapshot = Arc::make_mut(&mut previous);
+                snapshot.phase = SrpgShopPhase::Ready;
+                snapshot.message = Some(format!("Purchase failed: {error}"));
+                set_runtime_snapshot(&mut runtime, previous);
             }
         }
     });
@@ -820,16 +827,16 @@ fn parse_catalog(
     shop_id: u32,
     lifetime_balance: u64,
 ) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
-    let value: Value = serde_json::from_str(body)
+    let mut value: Value = serde_json::from_str(body)
         .map_err(|error| SrpgShopError::InvalidResponse(error.to_string()))?;
-    let rows = match &value {
-        Value::Object(map) => object_array(map, &["data", "aaData", "rows", "items"]),
+    let rows = match &mut value {
+        Value::Object(map) => object_array_mut(map, &["data", "aaData", "rows", "items"]),
         Value::Array(rows) => Some(rows),
         _ => None,
     }
     .ok_or_else(|| SrpgShopError::InvalidResponse("SRPG10 catalog has no rows".to_string()))?;
     let mut keyed_rows = Vec::with_capacity(rows.len());
-    keyed_rows.extend(rows.iter().map(|row| (catalog_row_key(row), row)));
+    keyed_rows.extend(rows.iter_mut().map(|row| (catalog_row_key(row), row)));
     keyed_rows.sort_by_key(|(key, _)| *key);
     let mut items = Vec::with_capacity(keyed_rows.len());
     items.extend(
@@ -897,9 +904,8 @@ fn catalog_plain_number(value: Option<&Value>) -> Option<u64> {
     }
 }
 
-fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<SrpgShopItem> {
-    let cells = row.as_array()?;
-    let cell = |index: usize| value_text_ref(cells.get(index));
+fn catalog_item(row: &mut Value, shop_id: u32, lifetime_balance: u64) -> Option<SrpgShopItem> {
+    let cells = row.as_array_mut()?;
     let type_id = catalog_plain_number(cells.get(11))
         .and_then(|number| u8::try_from(number).ok())
         .unwrap_or(0);
@@ -910,35 +916,44 @@ fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<Srpg
     };
     let cost = cells.get(7).and_then(catalog_number_with_commas);
     let censor = shop_id == 2 && cost.is_some_and(|cost| cost > lifetime_balance);
+    let difficulty = (kind == SrpgShopItemKind::Song && !censor)
+        .then(|| catalog_plain_number(cells.get(12)).and_then(|number| u32::try_from(number).ok()))
+        .flatten();
+    let bpm = (kind == SrpgShopItemKind::Song && !censor)
+        .then(|| catalog_plain_number(cells.get(13)).and_then(|number| u32::try_from(number).ok()))
+        .flatten();
+    let mut cell = |index: usize| match cells.get_mut(index).map(Value::take) {
+        Some(Value::String(text)) => text,
+        value => value_text_ref(value.as_ref()).into_owned(),
+    };
+    let mut item_id = cell(0);
+    item_id.shrink_to_fit();
     Some(SrpgShopItem {
-        item_id: cell(0).into_owned(),
+        item_id,
         kind,
         name: if censor {
             "???".to_string()
         } else {
-            clean_cell(cell(2).as_ref()).into_owned()
+            clean_owned_cell(cell(2))
         },
         description: if censor {
             "Reach the required lifetime Jej total to reveal this song.".to_string()
         } else {
-            clean_cell(cell(3).as_ref()).into_owned()
+            clean_owned_cell(cell(3))
         },
         effect: if censor {
             "Difficulty: ???  •  Speed Tier: ???".to_string()
         } else {
-            clean_cell(cell(4).as_ref()).replace('|', "  •  ")
+            let effect = clean_owned_cell(cell(4));
+            if effect.contains('|') {
+                effect.replace('|', "  •  ")
+            } else {
+                effect
+            }
         },
         cost,
-        difficulty: (kind == SrpgShopItemKind::Song && !censor)
-            .then(|| {
-                catalog_plain_number(cells.get(12)).and_then(|number| u32::try_from(number).ok())
-            })
-            .flatten(),
-        bpm: (kind == SrpgShopItemKind::Song && !censor)
-            .then(|| {
-                catalog_plain_number(cells.get(13)).and_then(|number| u32::try_from(number).ok())
-            })
-            .flatten(),
+        difficulty,
+        bpm,
         type_id,
         owned: false,
         site_downloaded: false,
@@ -1069,12 +1084,18 @@ fn find_number_after_key(lower_html: &str, key: &str) -> Option<String> {
     (!digits.is_empty()).then_some(digits)
 }
 
-fn object_array<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a Vec<Value>> {
-    keys.iter().find_map(|wanted| {
+fn object_array_mut<'a>(
+    map: &'a mut Map<String, Value>,
+    keys: &[&str],
+) -> Option<&'a mut Vec<Value>> {
+    let index = keys.iter().find_map(|wanted| {
         map.iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(wanted))
-            .and_then(|(_, value)| value.as_array())
-    })
+            .enumerate()
+            .find(|(_, (key, _))| key.eq_ignore_ascii_case(wanted))
+            .filter(|(_, (_, value))| value.is_array())
+            .map(|(index, _)| index)
+    })?;
+    map.values_mut().nth(index)?.as_array_mut()
 }
 
 fn object_text_value<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Option<&'a Value> {
@@ -1536,3 +1557,7 @@ mod tests {
         assert!(result.download.is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "srpg_shop_perf.rs"]
+mod perf_tests;

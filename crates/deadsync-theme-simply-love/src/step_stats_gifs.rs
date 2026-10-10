@@ -518,7 +518,7 @@ fn capture_script(
     side: PlayerSide,
     wide: bool,
 ) -> Result<CapturedGif, String> {
-    let libs = StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::UTF8;
+    let libs = StdLib::TABLE | StdLib::STRING | StdLib::MATH;
     let lua = Lua::new_with(libs, LuaOptions::default()).map_err(|error| error.to_string())?;
     lua.set_memory_limit(MAX_LUA_MEMORY)
         .map_err(|error| format!("failed to limit Lua memory: {error}"))?;

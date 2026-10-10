@@ -1,0 +1,197 @@
+{
+  "problem": "ActorFrames ran Init before their children; dynamically added children relied on a later parent walk; song roots attached to screen layers before Init.",
+  "change": "Run child Init before frame Init, initialize AddChildFromPath children immediately, and attach song roots after Init while retaining their parent during loading. Resolve captured external root parents in the subscriber-order comparator.",
+  "deleted_behavior": "Remove the parent-Init-complete gate on dynamically loaded child initialization.",
+  "tested_source_parent_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/compile.rs": "56378d2ef3e5ab703550e4ae779f781c4ade2b90925d9e20924ae054b067d3d1",
+    "crates/deadsync-song-lua/src/lua_util.rs": "7bace424b4f3037b612406d48dda0b80078402b42d31749302eaba2b18bcac57",
+    "crates/deadsync-song-lua/src/lib.rs": "4388593a89a219119a4a62b08a4eace63cafb74ebe02005ae361eb361058a4e9",
+    "tests/song_lua_itgmania_semantic_parity.rs": "799361e069922c252eeb5775e58ee415f0ee50916f76e59eb06e021e9d0e6cf7"
+  },
+  "reference_source_sha256": {
+    "Actor.cpp": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+    "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+    "ActorUtil.cpp": "282b2acd5b45b27ff6c55a4ca1b0189f9405818205fd747316f9f82800c56475",
+    "Foreground.cpp": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+    "XmlFileUtil.cpp": "16a9f026afe47a19c6d963c62169007651b07e9c4f2a297c4b1c00caafc03b49"
+  },
+  "source_contract": {
+    "ActorFrame.cpp": "89-94: load children before Actor Init; 710-719: MakeActor initializes a dynamic child",
+    "Foreground.cpp": "36-62: MakeActor initializes a root before AddChild and the next file"
+  },
+  "pre_fix_frame_regression": {
+    "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+    "source_pending_commit": true,
+    "binary_sha256": "f3dbb6e664e3f4dcbd9155e477232620b15fddf6273a13ee7ef5bd976336aaf5",
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\frame-init-baseline-v1.exe",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\frame-init-baseline-v1.exe",
+      "tests::frame_init_follows_child",
+      "--exact",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 1.8669377001933753,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\frame-init-baseline-v1.log",
+    "log_sha256": "13470cecd5ba5866ef942d4efb8ed6f6cd7a74033d827c718ae9b4e795718ee4",
+    "result_lines": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 498 filtered out; finished in 0.06s"
+    ]
+  },
+  "pre_fix_root_regression": {
+    "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+    "source_pending_commit": true,
+    "binary_sha256": "108d8c1ad8bcd2bdc43f75688817270338a9e40b455a24e6606429471aae21e0",
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\root-attach-baseline-v1.exe",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\root-attach-baseline-v1.exe",
+      "tests::song_roots_have_layer_parents",
+      "--exact",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 2.0763075002469122,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\root-attach-baseline-v1.log",
+    "log_sha256": "8dc23f8d074e6330e02d0465c056df1e0443e837fac67fc5dfab4561b0b9a369",
+    "result_lines": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 498 filtered out; finished in 0.07s"
+    ]
+  },
+  "unit_suite": {
+    "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+    "source_pending_commit": true,
+    "binary_sha256": "c6e5f3f217c7baca3d3c011d7245d3c4860f89a663a78f77db3d1c5c7f94650b",
+    "binary": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\actor-load-order-all-v3.exe",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\actor-load-order-all-v3.exe",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 101,
+    "seconds": 50.21656950004399,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass156\\actor-load-order-all-v3.log",
+    "log_sha256": "da2d9a265a00c0b7a8569697ef58c64c325b8b146cc96b887d0a11e64963534e",
+    "result_lines": [
+      "test result: FAILED. 497 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 48.46s"
+    ]
+  },
+  "unit_suite_limit": "497 passed, two unchanged baseline failures retained. Only the separate root semantic-test file changed after this unit run; all unit inputs and production sources retain their tested hashes.",
+  "baseline_failures_proof": "../../../save/song-lua-validation/pass140/preexisting-unit-failures.json",
+  "semantic_tests": [
+    {
+      "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+      "source_pending_commit": true,
+      "binary_sha256": "b34ac59d816f26a741584df005fb420ca8f3399106fd09bfee12364e7242811a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-actor-load-order-v4-song_lua_itgmania_semantic_parity.exe",
+        "native_load_order",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.8241131999529898,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\load-order-v4.log",
+      "log_sha256": "eb6cf5c2e505037fa34945793ea299da2801c53ebc4e1c45f53a3c3936eeac89",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 266 filtered out; finished in 0.13s"
+      ]
+    },
+    {
+      "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+      "source_pending_commit": true,
+      "binary_sha256": "b34ac59d816f26a741584df005fb420ca8f3399106fd09bfee12364e7242811a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-actor-load-order-v4-song_lua_itgmania_semantic_parity.exe",
+        "native_alpha_loop",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.7632645000703633,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\load-order-alpha-v4.log",
+      "log_sha256": "28b4e0540d60dd74221212409094a54825875a500a3c1f2c2609366674beb950",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 266 filtered out; finished in 0.41s"
+      ]
+    },
+    {
+      "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+      "source_pending_commit": true,
+      "binary_sha256": "b34ac59d816f26a741584df005fb420ca8f3399106fd09bfee12364e7242811a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-actor-load-order-v4-song_lua_itgmania_semantic_parity.exe",
+        "models::model_alpha_cutoff",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.45669399993494153,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\load-order-cutoff-v4.log",
+      "log_sha256": "e8b405f86bb33c5473dcc2b455a107a3553f354af827a8240dc024f68889c0f4",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 266 filtered out; finished in 0.13s"
+      ]
+    },
+    {
+      "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+      "source_pending_commit": true,
+      "binary_sha256": "b34ac59d816f26a741584df005fb420ca8f3399106fd09bfee12364e7242811a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-actor-load-order-v4-song_lua_itgmania_semantic_parity.exe",
+        "models::native_model_cull_modes_match",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.0854537999257445,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\load-order-cull-v4.log",
+      "log_sha256": "5955ec29fae3fb629ccb6abdb110f8c9724eb65eff54778c7520b88b5a82dd3c",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 266 filtered out; finished in 0.73s"
+      ]
+    }
+  ],
+  "complete_control_comparisons": [
+    {
+      "exit_code": 0,
+      "comparisons_passed": 5364,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.20158310001716,
+      "archive_sha256": "084f9b867318c1382af23e1ee8aaf5fe02241905b5f3e226ad3ddfe74bc759ab",
+      "binary_sha256": "9d3f164c213b97287d859c6c1c58c108d4738b867c0b8e34594f362c43733204",
+      "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\load-order-control-full-v4.log",
+      "log_sha256": "df82e0e7bdcf8b8c2a08ba1edeefbd08413a1ff20a9ddc54eabbdbe287e956f4",
+      "control_complete": true
+    },
+    {
+      "exit_code": 0,
+      "comparisons_passed": 26894,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 1.1810385999269783,
+      "archive_sha256": "a1224e50d064dade6421a84ca7e8a05089ec18e999af9912907eaec3d0e8d08e",
+      "binary_sha256": "9d3f164c213b97287d859c6c1c58c108d4738b867c0b8e34594f362c43733204",
+      "source_commit": "3bec24de3816c8fae7ff30b1592b0cde7d1910b4",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\load-order-alpha-full-v4.log",
+      "log_sha256": "63e22283fda14dc2821894a83a1e5ba3d6db9c13932d5c7137f789b2188b2466",
+      "control_complete": true
+    }
+  ],
+  "native_model_culling_comparisons_passed": 341256,
+  "source_backed_loading_control": "../itgmania-song-lua-micro/foreground-load-order/provenance.json",
+  "loading_control_is_independent_cpp_loader": false,
+  "tolerances_retained": true,
+  "original_sources_unchanged": true,
+  "fixture_76_accepted": false,
+  "full_corpus_complete": false,
+  "pending_contracts": [
+    "Incremental sibling construction during child Init",
+    "Native command subscription timing",
+    "Dynamic child parent and attachment visibility"
+  ]
+}
