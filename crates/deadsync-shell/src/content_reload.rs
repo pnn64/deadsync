@@ -986,9 +986,13 @@ fn pack_ini_with_sync(existing: &str, pack_name: &str, itg: bool) -> String {
     } else {
         "\n"
     };
-    let sync_line = format!("SyncOffset={wanted}");
+    let sync_line = if itg {
+        "SyncOffset=ITG"
+    } else {
+        "SyncOffset=NULL"
+    };
 
-    let mut out: Vec<String> = Vec::with_capacity(existing.lines().count() + 3);
+    let mut out: Vec<&str> = Vec::with_capacity(existing.lines().count() + 4);
     let mut in_group = false;
     // Where the last `[Group]` section's last line is, to add keys after.
     let mut group_end: Option<usize> = None;
@@ -998,7 +1002,7 @@ fn pack_ini_with_sync(existing: &str, pack_name: &str, itg: bool) -> String {
         let line = raw.strip_prefix('\u{feff}').unwrap_or(raw).trim();
         if line.starts_with('[') && line.ends_with(']') {
             in_group = line[1..line.len() - 1].trim().eq_ignore_ascii_case("group");
-            out.push(raw.to_owned());
+            out.push(raw);
             if in_group {
                 group_end = Some(out.len() - 1);
             }
@@ -1008,7 +1012,7 @@ fn pack_ini_with_sync(existing: &str, pack_name: &str, itg: bool) -> String {
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim();
                 if key.eq_ignore_ascii_case("SyncOffset") {
-                    out.push(sync_line.clone());
+                    out.push(sync_line);
                     has_sync = true;
                     group_end = Some(out.len() - 1);
                     continue;
@@ -1017,34 +1021,33 @@ fn pack_ini_with_sync(existing: &str, pack_name: &str, itg: bool) -> String {
                     version_counts = !value.trim().is_empty();
                 }
             }
-            out.push(raw.to_owned());
+            out.push(raw);
             if !line.is_empty() {
                 group_end = Some(out.len() - 1);
             }
             continue;
         }
-        out.push(raw.to_owned());
+        out.push(raw);
     }
 
-    let mut missing = Vec::with_capacity(2);
-    if !version_counts {
-        missing.push("Version=1".to_owned());
-    }
-    if !has_sync {
-        missing.push(sync_line);
-    }
+    let missing = ["Version=1", sync_line];
+    let missing = match (version_counts, has_sync) {
+        (false, false) => &missing[..],
+        (false, true) => &missing[..1],
+        (true, false) => &missing[1..],
+        (true, true) => &missing[..0],
+    };
     match group_end {
         Some(at) => {
-            out.splice(at + 1..at + 1, missing);
+            out.splice(at + 1..at + 1, missing.iter().copied());
         }
         None => {
-            out.push("[Group]".to_owned());
-            out.extend(missing);
+            out.push("[Group]");
+            out.extend_from_slice(missing);
         }
     }
-    let mut text = out.join(newline);
-    text.push_str(newline);
-    text
+    out.push("");
+    out.join(newline)
 }
 
 #[cfg(test)]
@@ -1494,4 +1497,12 @@ mod tests {
             ("Cache".to_owned(), "banner".to_owned())
         );
     }
+}
+
+#[cfg(test)]
+mod perf_traversal {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/perf/pack_ini.rs"
+    ));
 }

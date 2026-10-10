@@ -171,3 +171,13 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_alloc.rs"]
+mod perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/traversal_support.rs"]
+mod traversal_perf;
+#[cfg(test)]
+#[global_allocator]
+static TRAVERSAL_ALLOC: perf::CountedSystem = perf::CountedSystem;
