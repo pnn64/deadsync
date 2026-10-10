@@ -1573,12 +1573,10 @@
     {
       "title": "B.B.K.K.B.K.K.",
       "source_simfile": "BBKKBKK [UPS 3]/BBKKBKK.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8bf0f42b53dbd38ea4b6ac7445e0c5287242411edf5ece437ac741c15a77810e.tar.zst",
-      "sha256": "8bf0f42b53dbd38ea4b6ac7445e0c5287242411edf5ece437ac741c15a77810e",
-      "compressed_bytes": 37864,
-      "uncompressed_sha256": "6a01d57847394e3109b91c43e922de9c622b5c4af1bcde2e290d09bc24942c3c",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "66138d611a92a6bd3653acda2df933580c82a5eed13c9c5dbfefba64a2ce4117.tar.zst",
+      "sha256": "66138d611a92a6bd3653acda2df933580c82a5eed13c9c5dbfefba64a2ce4117",
+      "compressed_bytes": 13691529,
       "aliases": [
         "3443377862b7918d26aa460e35a4b5b54616fe2ae57082316834545df9045f83.tar.zst"
       ]
