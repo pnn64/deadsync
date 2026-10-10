@@ -356,19 +356,13 @@ fn event_source_label(stream: EventStreamKey) -> String {
 }
 
 #[inline(always)]
-fn format_hz(hz: u32) -> String {
-    if hz > MAX_DISPLAY_HZ {
-        return format!(">{MAX_DISPLAY_HZ} Hz");
-    }
-    format!("{hz} Hz")
-}
-
-#[inline(always)]
 fn format_event_rate_summary(latest_hz: u32, max_hz: u32) -> String {
     format!(
-        "{} latest / {} max",
-        format_hz(latest_hz),
-        format_hz(max_hz)
+        "{}{} Hz latest / {}{} Hz max",
+        if latest_hz > MAX_DISPLAY_HZ { ">" } else { "" },
+        latest_hz.min(MAX_DISPLAY_HZ),
+        if max_hz > MAX_DISPLAY_HZ { ">" } else { "" },
+        max_hz.min(MAX_DISPLAY_HZ),
     )
 }
 
@@ -1382,7 +1376,20 @@ mod tests {
 
     #[test]
     fn caps_display_above_one_thousand_hz() {
-        assert_eq!(format_hz(1000), "1000 Hz");
-        assert_eq!(format_hz(1001), ">1000 Hz");
+        assert_eq!(
+            format_event_rate_summary(1000, 1001),
+            "1000 Hz latest / >1000 Hz max"
+        );
+        assert_eq!(
+            format_event_rate_summary(1001, 1000),
+            ">1000 Hz latest / 1000 Hz max"
+        );
     }
 }
+
+#[cfg(test)]
+#[path = "test_input_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "test_input_pipelines_perf.rs"]
+mod pipelines_perf;

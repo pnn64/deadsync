@@ -171,3 +171,10 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+#[cfg(test)]
+#[path = "../../../tests/perf/string_pipelines_support.rs"]
+mod pipelines_support;
