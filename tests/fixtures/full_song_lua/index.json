@@ -1335,12 +1335,10 @@
     {
       "title": "Episode 04",
       "source_simfile": "Anxiety/Anxiety.ssc",
-      "harness_version": "0.1.0",
-      "archive": "56d4a0c3f9cfae5e9184f6b7aeae3156972708a54e80872a5419ffdd49da0f8c.tar.zst",
-      "sha256": "56d4a0c3f9cfae5e9184f6b7aeae3156972708a54e80872a5419ffdd49da0f8c",
-      "compressed_bytes": 366284,
-      "uncompressed_sha256": "e8cea6f2efa7da59660e4aacc92dbf3af271898d985b5e6b36f2dbe71cc8612f",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "00b3d2301d7140ae9132978a8a6f4f872cbf5d0ce463e1faf33f7ac0f7caf336.tar.zst",
+      "sha256": "00b3d2301d7140ae9132978a8a6f4f872cbf5d0ce463e1faf33f7ac0f7caf336",
+      "compressed_bytes": 454337,
       "aliases": [
         "1245601c47fd8d0d30d4d7ad10e1f8d620b2efb0b2f273fa5eb534d13a9b5b83.tar.zst"
       ]
