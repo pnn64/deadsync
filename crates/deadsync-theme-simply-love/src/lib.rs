@@ -179,3 +179,11 @@ mod perf;
 #[cfg(test)]
 #[path = "../../../tests/perf/menu_buffers_support.rs"]
 mod menu_buffers_perf_support;
+
+#[cfg(test)]
+#[path = "../../../tests/support/paired_bench.rs"]
+mod paired_bench;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/select_data_support.rs"]
+mod select_data_support;
