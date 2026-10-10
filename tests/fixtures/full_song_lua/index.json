@@ -1280,12 +1280,10 @@
     {
       "title": "And Drugs↑↑",
       "source_simfile": "And Drugs/and drugs.sm",
-      "harness_version": "0.1.0",
-      "archive": "b1115ea8905297d629aedee9e2f090e093755ee577aaef16d2116f2452cfcb22.tar.zst",
-      "sha256": "b1115ea8905297d629aedee9e2f090e093755ee577aaef16d2116f2452cfcb22",
-      "compressed_bytes": 238202,
-      "uncompressed_sha256": "6c3a56d6942caaccb01b22894d7ffd060ca325d97b0ca681dd68dfb484ce776d",
-      "compression_level": 22,
+      "harness_version": "0.1.61",
+      "archive": "5198fc714b9ddea03895752127040149b863786415f283b190a9f5e41a53b365.tar.zst",
+      "sha256": "5198fc714b9ddea03895752127040149b863786415f283b190a9f5e41a53b365",
+      "compressed_bytes": 258325,
       "aliases": [
         "a72dc97f595a9470fc384890ec53c5d625aeb0da56ff11d5b95dda43492134fe.tar.zst"
       ]

@@ -1387,3 +1387,17 @@ framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
 
 The native original writes `NoAttack` and `RandAttack` only as zero, and its chart attacks are empty. Live nonzero random-attack scheduling, RNG and note-transform parity remain open separately.
+
+## Ordered fixture validation, pass 170
+
+Position 91, And Drugs↑↑, passes all
+182,791 comparisons against committed DeadSync
+`571515e29`. The complete native harness 0.1.61 archive
+contains 7,634 updates over 127.20 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass170.json`. Position 92 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
