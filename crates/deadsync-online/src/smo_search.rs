@@ -111,7 +111,7 @@ pub fn runtime_snapshot() -> Arc<SearchSnapshot> {
 /// Safe to call every frame: the query is the identity of the work, so a
 /// screen that keeps asking for the same one costs nothing.
 pub fn runtime_search(query: &str) {
-    let query = query.trim().to_owned();
+    let query = query.trim();
     let generation = {
         let mut runtime = lock_runtime();
         if runtime.snapshot.query == query
@@ -132,7 +132,7 @@ pub fn runtime_search(query: &str) {
                 } else {
                     SearchPhase::Loading
                 },
-                query: query.clone(),
+                query: query.to_owned(),
                 hits: Arc::from(Vec::new()),
                 capped: false,
                 revision: 0,
@@ -154,6 +154,7 @@ pub fn runtime_search(query: &str) {
         return;
     }
 
+    let query = query.to_owned();
     let spawn = thread::Builder::new()
         .name("smo-search".to_owned())
         .spawn(move || run(generation, query));
@@ -198,6 +199,28 @@ impl Accumulator {
             score,
             why,
         });
+    }
+
+    /// Order published hits without copying the catalogue's date strings.
+    fn sort_and_cap(&mut self, details: &smo_details::DetailsSnapshot) {
+        // Score first, then newest, then by id -- so equal-scoring packs come
+        // out in a stable and useful order rather than in whatever order the
+        // passes happened to add them.
+        let date_of = |pack_id: u64| {
+            details
+                .by_id
+                .get(&pack_id)
+                .and_then(|entry| entry.date_added.as_deref())
+                .unwrap_or_default()
+        };
+        self.hits.sort_by(|a, b| {
+            b.score
+                .cmp(&a.score)
+                .then_with(|| date_of(b.pack_id).cmp(&date_of(a.pack_id)))
+                .then_with(|| a.pack_id.cmp(&b.pack_id))
+        });
+        self.capped = self.hits.len() > MAX_ROWS;
+        self.hits.truncate(MAX_ROWS);
     }
 }
 
@@ -256,25 +279,7 @@ fn run(generation: u64, query: String) {
 /// from.
 fn publish_pass(generation: u64, acc: &mut Accumulator, phase: SearchPhase) -> bool {
     let details = smo_details::runtime_snapshot();
-    // Score first, then newest, then by name -- so equal-scoring packs come
-    // out in a stable and useful order rather than in whatever order the
-    // passes happened to add them.
-    let date_of = |pack_id: u64| {
-        details
-            .by_id
-            .get(&pack_id)
-            .and_then(|entry| entry.date_added.clone())
-            .unwrap_or_default()
-    };
-    acc.hits.sort_by(|a, b| {
-        b.score
-            .cmp(&a.score)
-            .then_with(|| date_of(b.pack_id).cmp(&date_of(a.pack_id)))
-            .then_with(|| a.pack_id.cmp(&b.pack_id))
-    });
-    acc.capped = acc.hits.len() > MAX_ROWS;
-    acc.hits.truncate(MAX_ROWS);
-
+    acc.sort_and_cap(&details);
     let mut runtime = lock_runtime();
     if runtime.generation != generation {
         return false;
@@ -387,6 +392,7 @@ fn fetch(agent: &network::HttpAgent, query: &str, kind: &str) -> Result<Vec<Sear
 /// Written out rather than pulled in: the only thing going through here is a
 /// player's search term, and the rule for one is short enough to read.
 pub(crate) fn percent_encode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         match byte {
@@ -394,7 +400,11 @@ pub(crate) fn percent_encode(value: &str) -> String {
                 out.push(*byte as char);
             }
             b' ' => out.push_str("%20"),
-            _ => out.push_str(format!("%{byte:02X}").as_str()),
+            _ => {
+                out.push('%');
+                out.push(HEX[usize::from(byte >> 4)] as char);
+                out.push(HEX[usize::from(byte & 0x0f)] as char);
+            }
         }
     }
     out
@@ -489,3 +499,7 @@ mod tests {
         assert_eq!(parsed.results[0].matching_songs.len(), 2);
     }
 }
+
+#[cfg(test)]
+#[path = "smo_search_perf.rs"]
+mod perf_tests;
