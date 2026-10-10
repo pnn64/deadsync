@@ -785,12 +785,10 @@
     {
       "title": "[5408] [11] Palette Lab (Hard)",
       "source_simfile": "[11] Palette Lab (SH) [Exschwasion]/palette lab.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a11bca34fbf709dccf0c7e28fe3bc498dc37e843dd24a89ef0e27202820c4edd.tar.zst",
-      "sha256": "a11bca34fbf709dccf0c7e28fe3bc498dc37e843dd24a89ef0e27202820c4edd",
-      "compressed_bytes": 80515,
-      "uncompressed_sha256": "94a712bf67acf352a8df1c161f309a4813a3807574f69b9983a629fef85a6ad1",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d.tar.zst",
+      "sha256": "326c40509387a20e6df8386e22f7262b5ba1d6afc8ae6837308a86bd1394678d",
+      "compressed_bytes": 110231,
       "aliases": [
         "ac7b027afbdf566bd8941594e65a7cb55feaef00975b7d9e1c653813236173c8.tar.zst"
       ]
