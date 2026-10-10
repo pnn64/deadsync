@@ -1,0 +1,114 @@
+{
+  "pass": 157,
+  "previous_record": "native-revalidation-pass156.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "4668154878bf69ec48f06a1d3ffb76ce760c823e",
+  "comparator_sha256": "52c473ec126e91c27649c837da084ec8fed3b882be2569017d09a31254c5037a",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    78
+  ],
+  "next_position": 79,
+  "comparisons_passed": 238881,
+  "charts": [
+    {
+      "position": 78,
+      "entry": {
+        "title": "Abraham's OP",
+        "source_simfile": "Abraham's OP/Abraham's OP.ssc",
+        "harness_version": "0.1.58",
+        "archive": "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1.tar.zst",
+        "sha256": "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1",
+        "compressed_bytes": 115691,
+        "aliases": [
+          "3c1edbe75f2517df8501a5b3a77a44140b3dfc911ceeb637a473668467f58711.tar.zst"
+        ]
+      },
+      "original_archive_retained": "6a6cc679a4810a89d98f3932944f98d639d66e1a0e36f0ca70669dda7c09f450.tar.zst",
+      "native_source_commit": "39e8d831d16360fdf251af08da524cf59d1f9166",
+      "native_trace_sha256": "93341ee7c7e944a840a981b4ac0aca2c2d9b663ad846d1a7b391dca66ce91ae3",
+      "original_source_sha256": {
+        "Abraham's OP/Abraham's OP-bg.png": "bc34bf983b59515e8832bedde0d36094a320993bf054a42c85fd01ed0c71f880",
+        "Abraham's OP/Abraham's OP-bn.png": "bfb047ba603fac2a99715b93bd15ff548716ac065f9244a6cd88bcb488782f41",
+        "Abraham's OP/Abraham's OP.ogg": "86c7210f2894fa22f44ba5d409c8042d15aace5ba40ac128c9fe1446efa11513",
+        "Abraham's OP/Abraham's OP.ssc": "932fb2f6bff0642dd5ebf6e31fa4eb196260b2d190c9e9c4c5ae58cc948e744c",
+        "Abraham's OP/Readme Explaining Who Is Abraham & What Song Was Used.txt": "bdd8ad675daae92f98faef1a4543db89dbe20a43b61683c8249a0cbd31b44291",
+        "Abraham's OP/Twistedspoon/Miracle Eye.lua": "1cf415a6d0595179e033aa95d3a643e3f2ec47092b0c22ec6015e73e8f23100a"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 10857,
+      "duration_seconds": 180.9304351806641,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 78,
+      "source_simfile": "Abraham's OP/Abraham's OP.ssc",
+      "archive": "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1.tar.zst",
+      "archive_sha256": "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1",
+      "harness_version": "0.1.58",
+      "source_commit": "4668154878bf69ec48f06a1d3ffb76ce760c823e",
+      "source_pending_commit": false,
+      "binary_sha256": "52c473ec126e91c27649c837da084ec8fed3b882be2569017d09a31254c5037a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-assignment-snapshots-v2-full_song_lua.exe",
+        "97629f8fa0b48d623bfeb0ac18413879c3bf1d45bc726b39ae64b98c6295f9d1.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.2927512996830046,
+      "comparisons_passed": 238881,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-078-current-native-v1.log",
+      "log_sha256": "3a4244d49f3f4caf58ede746e4c4ac6edcd9a693e32209fc879a00321e83e214",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass157-top-078-current-native-v1.json",
+      "native_receipt_sha256": "d4336c327cd337fb23884f3490f6fc63fb492d80d7c58466a339da82ca7b3624",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "4668154878bf69ec48f06a1d3ffb76ce760c823e",
+    "source_pending_commit": false,
+    "binary_sha256": "7215cff15fb7b8b06ca503757c4934aabe2ca30933608ef8e36ec32833a3eadc",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-assignment-snapshots-v2-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.761329900007695,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-078-native-pass157.log",
+    "log_sha256": "b818c195ae075e26f810dac3d9b0df6d978034c1bde900abb52382880a7d434d",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.37s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json.",
+  "pending_current_options": {
+    "exit_code": 1,
+    "comparisons_passed": 0,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 1.9469540999270976,
+    "archive_sha256": "4b00ff1acd21828bb8e4442503a15f73cb4bd47d29df4304a7df4d9aa4616edd",
+    "binary_sha256": "52c473ec126e91c27649c837da084ec8fed3b882be2569017d09a31254c5037a",
+    "source_commit": "4668154878bf69ec48f06a1d3ffb76ce760c823e",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\current-options-baseline-v1.log",
+    "log_sha256": "ea712235e0519a35574b574196f111bb5513f4c014420d49b861e9282d51c9a4",
+    "control_complete": true,
+    "reason": "The independent healthy native Current/Song control passes in the harness, but DeadSync cannot compile its distinct-level identity assertion. This chart passes its observed default-Current branch; general Current/Song parity remains open."
+  }
+}

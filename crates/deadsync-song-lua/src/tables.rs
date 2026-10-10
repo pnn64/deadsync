@@ -1912,6 +1912,7 @@ fn prefsmgr_default_value_normalized(
             | "memorycards"
             | "menutimer"
             | "onlydedicatedmenubuttons"
+            | "ratemodsaffectfgchanges"
             | "showbanners"
             | "shownativelanguage"
             | "threekeynavigation"

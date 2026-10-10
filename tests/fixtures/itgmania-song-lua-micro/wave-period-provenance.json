@@ -1,0 +1,128 @@
+{
+  "problem": "WavePeriod targets were omitted and the renderer treated negative Wave strengths as inactive",
+  "change": "Carry WavePeriod through constant/eased gameplay overrides and composition into the cached native wave divisor; apply every nonzero Wave strength",
+  "source_parent": "198338ec1f8babef20032df77871fe7c67fb110a",
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass183-native-wave-period-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "cb0e7e7a5cd7d831d2cfb4ae633f7d1ff3d6ab959018ac65d3a0bc4aff1516e0",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "9b7ca8237071cb6989345ea9e21c1b95d6adcca036b2b41473a6d81b484dbe8e",
+    "control_sha256": "945fbd1c2eac1b038d55f4749fca8e3a4d027b79c0e8f5f0ca21ba478de985a6",
+    "update_frames": 241,
+    "source_commit": "72f8c2504f65a7cbc8038c924ee84da1cf93ab40",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass183-native-wave-period-v1\\archives\\89925b1730b208ec2228f5e92729234d933ca6945f7a6c4db6230e87f23c3370.tar.zst",
+    "archive_sha256": "89925b1730b208ec2228f5e92729234d933ca6945f7a6c4db6230e87f23c3370",
+    "archive_entry": {
+      "title": "Native wave-period control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.60",
+      "archive": "89925b1730b208ec2228f5e92729234d933ca6945f7a6c4db6230e87f23c3370.tar.zst",
+      "sha256": "89925b1730b208ec2228f5e92729234d933ca6945f7a6c4db6230e87f23c3370",
+      "compressed_bytes": 12520
+    }
+  },
+  "reference_file": "itgmania/src/ArrowEffects.cpp",
+  "reference_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+  "reference_lines": [
+    629,
+    636
+  ],
+  "independent_motion_cpp": "wave-period-motion.cpp",
+  "independent_motion_cpp_sha256": "1f5d3eab519096642e6fbee9810d7db661bcce8695f7ed47dcba613cd63a8364",
+  "independent_motion_vectors": "wave-period-motion.json",
+  "independent_motion_vectors_sha256": "a0edbe2acc3d69eb1dd6590e99776373794cbafe572b61e39339248082f75b08",
+  "independent_motion_count": 80,
+  "native_wave_block_unchanged": true,
+  "motion_vectors_use_semantic_host_or_deadsync": false,
+  "motion_vectors_test_both_optimized_and_general_renderer_paths": true,
+  "before_control": {
+    "exit_code": 1,
+    "comparisons_passed": 5343,
+    "comparisons_failed": 8,
+    "elapsed_seconds": 0.7396303000859916,
+    "archive_sha256": "89925b1730b208ec2228f5e92729234d933ca6945f7a6c4db6230e87f23c3370",
+    "binary_sha256": "a4d7776d79d1bb1a4d79a439f0aeb2ae1aa09335c4dccfce2d455569d5f7cb3f",
+    "source_commit": "198338ec1f8babef20032df77871fe7c67fb110a",
+    "source_pending_commit": false,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\wave-period-before-v1.log",
+    "log_sha256": "56082a051bd2a64148087ffe5e57d89c7fe52a46a643784c01825d855275aa0a",
+    "control_complete": true,
+    "current_worktree_used": false
+  },
+  "after_control": {
+    "exit_code": 0,
+    "comparisons_passed": 5351,
+    "comparisons_failed": 0,
+    "elapsed_seconds": 2.2510718000121415,
+    "archive_sha256": "89925b1730b208ec2228f5e92729234d933ca6945f7a6c4db6230e87f23c3370",
+    "binary_sha256": "d47c060c89d57c744c4a66b04a08d3e77d622b6eaf5032b4d32b31861df5c146",
+    "source_commit": "198338ec1f8babef20032df77871fe7c67fb110a",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\wave-period-after-v1.log",
+    "log_sha256": "43249017780c41a1e7a17ab6bc1b43713b47e4ac722d4a77da36b7546138ad1b",
+    "control_complete": true
+  },
+  "renderer_tests": {
+    "source_commit": "198338ec1f8babef20032df77871fe7c67fb110a",
+    "source_pending_commit": true,
+    "binary_sha256": "3cbde8822b824bb98cfe6f7e639456b93f99df100f380f3326bff7478b7924af",
+    "binary_path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass161\\wave-period-notefield-v1.exe",
+    "exit_code": 0,
+    "elapsed_seconds": 2.636806100141257,
+    "log_sha256": "f3a7e27360df4d8e09e37b5af841de9207441f45c73498e571bdc4a3f29db0b3",
+    "result_lines": [
+      "test result: ok. 454 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s"
+    ]
+  },
+  "runtime_tests": {
+    "source_commit": "198338ec1f8babef20032df77871fe7c67fb110a",
+    "source_pending_commit": true,
+    "binary_sha256": "465d8b1832fdea25d51d3b2d1651f43bd25700fe7b1e50b399c25bc782eadc44",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\wave-period-v1-song_lua_itgmania_semantic_parity.exe",
+      "runtime_modifiers",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 101,
+    "elapsed_seconds": 30.727050399873406,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\wave-period-regressions-v1.log",
+    "log_sha256": "131d5caec5fb11dbd0e6b50d50050f374e06a082ef8bb274bdc11d48c6293903",
+    "result_lines": [
+      "test result: FAILED. 37 passed; 3 failed; 2 ignored; 0 measured; 233 filtered out; finished in 29.02s"
+    ]
+  },
+  "original_archive_result": {
+    "position": 90,
+    "source_simfile": "Among Us In Real Life - Single/Official Among Us In Real Life Official Simulation File - Rebecca Zamolo Shorts.ssc",
+    "archive": "ab5cd932442e83a2247a5cd98223d3ab903799f8727f5809b5b26446e3426115.tar.zst",
+    "archive_sha256": "ab5cd932442e83a2247a5cd98223d3ab903799f8727f5809b5b26446e3426115",
+    "harness_version": "0.1.60",
+    "source_commit": "198338ec1f8babef20032df77871fe7c67fb110a",
+    "source_pending_commit": true,
+    "binary_sha256": "d47c060c89d57c744c4a66b04a08d3e77d622b6eaf5032b4d32b31861df5c146",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\wave-period-v1-full_song_lua.exe",
+      "ab5cd932442e83a2247a5cd98223d3ab903799f8727f5809b5b26446e3426115.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 20.33877439983189,
+    "comparisons_passed": 207747,
+    "comparisons_failed": 80,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-090-wave-period-v1.log",
+    "log_sha256": "13d3a5da9b041cb4da157ed0b9b3eb00889f986b442099612b1652708bc0e07b",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass181-top-090-lua-unwind-v1.json",
+    "native_receipt_sha256": "dacb7146739a41314e659af62ef3a93c2380a81cdcf6db2a881841fc3b7ef638",
+    "full_corpus_complete": false
+  },
+  "original_archive_still_pending": true,
+  "existing_three_modifier_failures_retained": true,
+  "old_identity_test_now_uses_native_zero_wave_instead_of_nonzero_epsilon": true,
+  "whole_native_gameplay_or_framebuffer_capture_claimed": false,
+  "original_corpus_or_tolerances_changed": false,
+  "full_corpus_complete": false
+}

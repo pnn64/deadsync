@@ -1,0 +1,109 @@
+{
+  "pass": 124,
+  "previous_record": "native-revalidation-pass123.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+  "comparator_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    45
+  ],
+  "next_position": 46,
+  "comparisons_passed": 167463,
+  "charts": [
+    {
+      "position": 45,
+      "entry": {
+        "title": "[5813] [11] 西新宿清掃曲",
+        "source_simfile": "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-chart.ssc",
+        "harness_version": "0.1.52",
+        "archive": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8.tar.zst",
+        "sha256": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8",
+        "compressed_bytes": 2928481,
+        "aliases": [
+          "8d3d240cb4c779869a2c4295590038e7e8aad2989c69f99ddeaf9ae923a58af0.tar.zst"
+        ]
+      },
+      "original_archive_retained": "e8b2f04707b665c334a8495abac3cb3e719c314283bbe2be17a90f1707bb6d0b.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "8e41e62bb987a802c87b227685d478d6498795273c55687ec2be6a7b2c34f72a",
+      "original_source_sha256": {
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-audio.ogg": "53cc7f0dbfc60208d081d1b09d8986274c2418f4f7545eec38e4360990870394",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-background.png": "fce2af02d052795ff120dcae1cf343cc4c32dea8f155fa7d82c9de9317b82454",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-banner.png": "9c7984b8ab6ead5db8e29e47974155284e5751e310771bc095b590c9c8fbbac9",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-chart.ssc": "61e4676a409a332c159c9580ec5a50cd9a476b6e8165b7158c8e9abbd3da7596",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/scr-cdtitle.png": "798e065088e74a69a0f8695ee3a6bca9ed2c54778e601ba124386ffecb1792f7",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/blue.png": "66864318c71ca952ca8b5658b3696e524e4ff3a8c1a1bf902b3e6590eadafc50",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/default.lua": "7572e3880313a0b68da5456a105adfb05b7991b066fccc9bb31d668c0f18bb6c",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/easing.lua": "c1ca37ef394c7e0b73215c9562dd4e41f81ac790499f89c99b51ddf322df64b0",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/explosion 5x5.png": "ae5c874e5b2b922af30ab4b46c735fa2c951b13dc901c22f636e4d7391d99b46",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/toilettu.mp4": "81bf9937a905c8173d19e0f3d794173b23324f17968cf6f6e5152608ad422ee0",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/car/213-2138100_certified-auto-appraiser-vintage-car-old-cars-clipart.png": "ebf11e66c47d2605a70d57e9311ee88505e34c97fac664fda9f225c412c09208",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/car/368-3684349_expensive-car-clipart.png": "7c3abc7d1e2dfe50c8cec0ab3f69bbffb38d6538334136c5b5a505410ea8e079",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/car/78-784835_electric-blue-clipart-lamborghini-aventador-lamborghini-sport-cars.png": "d0e3ce9af351a3763a37f2b35d1012f54af8161ec011dc53b1af7ce0087a8570",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/car/ocho.png": "34cfdb600a0da12c65a944aa77616de79bfca36817d5cdc24f0950be605cbe35",
+        "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/lua/car/tesla_go.png": "f76116a83550b44b23d25a91904f2918c3b0bf17be60b0457d4d14d3d2c8cd50"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 6147,
+      "duration_seconds": 102.42856597900392,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 12,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 45,
+      "source_simfile": "[11] Nishi-Shinjuku seisou kyoku (SX) [Scrypts]/nssk-chart.ssc",
+      "archive": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8.tar.zst",
+      "archive_sha256": "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8",
+      "harness_version": "0.1.52",
+      "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+      "source_pending_commit": false,
+      "binary_sha256": "3af11ad215423b080a5814b4b78882cb8cf6d4f65db4f32d490f2a97d2cf87a5",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-full_song_lua.exe",
+        "faa7b7d60bf81e0558f74f68d3813d0e329407fe95a1097cbca9d9993ecd0ae8.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 29.58699440024793,
+      "comparisons_passed": 167463,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-045-field-clock-committed-v4.log",
+      "log_sha256": "0ce12dd743939c87525044caf2ade0a9ca027e78aa5f219e52b034cab8425aec",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass124-top-045-native-v1.json",
+      "native_receipt_sha256": "d31ffaef0bdeaa8db9804c1e4b2d6999f7618ab371084a23a73774755cffea38",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "ba32031b537d122af5be824c3679f5f1d4cc3642",
+    "source_pending_commit": false,
+    "binary_sha256": "edae09b5a33001563f1ffd578ff31e75abfab8c9f50dcdb3b3cfd4b9794bfc3c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-field-wrappers-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.361007499974221,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-045-native-pass124.log",
+    "log_sha256": "dab5b049d43c159d1df6cfaf2a0a7269fa74fcc5d6ac959adb27adf046c9fe71",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.66s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

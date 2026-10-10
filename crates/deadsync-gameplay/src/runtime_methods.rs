@@ -96,7 +96,10 @@ where
     }
 
     pub fn refresh_seek_dependent_state(&mut self) {
-        refresh_active_attack_masks(self, 0.0);
+        self.mods.attacks.reset_window_times();
+        // A seek reconstructs settled targets; a zero-length live update keeps
+        // Current unchanged, as PlayerOptions::Approach does.
+        refresh_active_attack_masks(self, f32::MAX);
         self.refresh_live_notefield_options(self.clock.song_position.current_bpm);
     }
 
@@ -1909,6 +1912,16 @@ where
                 .note_disabled(assist_sfx_generation);
         }
         refresh_active_attack_masks(self, delta_time);
+        for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            self.mods.expand_seconds[player] = advance_expand_phase(
+                self.mods.expand_seconds[player],
+                delta_time,
+                self.mods.attacks.accel[player].expand_period.unwrap_or(0.0),
+                self.is_in_freeze(),
+                self.is_in_delay(),
+            );
+        }
+
         let current_bpm = self.clock.song_position.current_bpm;
         if self.live_notefield_refresh_needed(current_bpm) {
             self.refresh_live_notefield_options(current_bpm);

@@ -1,0 +1,283 @@
+{
+  "problem": "Gameplay fragments applied only the top screen X/Y offset, discarding its rotation and scale, including zero scale.",
+  "change": "Borrow one shared clip-space screen transform during fragment composition. Retained manual draws replay their recorded absolute matrices without applying the screen twice or inverting a singular screen model.",
+  "source_parent": "911f0566a8540f97b45aff2b4b970751811f7239",
+  "native_capture": {
+    "trace_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass218-native-screen-parent-v1\\traces\\control\\control.ssc.semantic.json",
+    "trace_sha256": "4db5dfe4d3341d8072b32a39ae16ff4868cf6ef24b25181f5aac7a5d503e061a",
+    "runtime_errors": 0,
+    "dropped_events": 0,
+    "capture_exit_code": 0,
+    "binary_sha256": "6b6b477653effd6a50106c3baab3382ef4d2fa65bc3f0cf945689fa81f030ceb",
+    "control_sha256": "a09f129a78c392af44a5db0ebf74936cd5f4e55318a55602875f198bbe2a00a9",
+    "update_frames": 241,
+    "source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+    "source_pending_commit": false,
+    "capture_complete": true,
+    "archive_path": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass218-native-screen-parent-v1\\archives\\b3a930415b78ad8f9b23bdda874ba3483ba0ceefe3ec38cab06b864cf0b71d60.tar.zst",
+    "archive_sha256": "b3a930415b78ad8f9b23bdda874ba3483ba0ceefe3ec38cab06b864cf0b71d60",
+    "archive_entry": {
+      "title": "Native screen-parent-transform control",
+      "source_simfile": "control/control.ssc",
+      "harness_version": "0.1.61",
+      "archive": "b3a930415b78ad8f9b23bdda874ba3483ba0ceefe3ec38cab06b864cf0b71d60.tar.zst",
+      "sha256": "b3a930415b78ad8f9b23bdda874ba3483ba0ceefe3ec38cab06b864cf0b71d60",
+      "compressed_bytes": 14323
+    }
+  },
+  "reference_sources": {
+    "Actor.cpp": {
+      "sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150",
+      "lines": [
+        [
+          668,
+          741
+        ]
+      ]
+    },
+    "ActorFrame.cpp": {
+      "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "lines": [
+        [
+          208,
+          213
+        ]
+      ]
+    }
+  },
+  "native_control_scope": "Two quads in four phases: positive zoom and rotation, negative zoom and rotation, zero zoom, and the screen own FOV camera. Production draw corners are checked against independently captured native vertices.",
+  "regressions": {
+    "native-draws": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+        "screen_parent_transform_native_draws",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 2.912191600073129,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-native-draws.log",
+      "log_sha256": "fa2bf41ee3129f8286e895a01838f5cfb70915a8f9a9cedc17cbb263db3c0950",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 1.01s"
+      ]
+    },
+    "playback": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "d61e537bfbe34332a5832111281a14a6852a3bccf1c56bb87e23080e29a711fe",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-playback.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 32.979785199742764,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-playback.log",
+      "log_sha256": "eb69e1d8c4d6fb95f0a8a1a38b89a368a44930ac0e794e7551d63989e8637e8a",
+      "result_lines": [
+        "test result: ok. 195 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 30.54s"
+      ]
+    },
+    "present": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "c5bacdd9216a20a28d6236b6cdae419a10e986714ec31c39c88ad16ffd7e411e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-deadlib_present.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.042410199996084,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-present.log",
+      "log_sha256": "746c2adec2ab39e3b91318e21519674c44c1342b3b209a4334f458d8d4123efd",
+      "result_lines": [
+        "test result: ok. 178 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s"
+      ]
+    },
+    "notefield": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "10433cf766434dd22919751e10158372bca0145bb47e14bc9a7fb8e9bfedf31a",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-deadsync_notefield.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 56.00646760035306,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-notefield.log",
+      "log_sha256": "d5a856885fbe1f3b37b8da350e56d037f3a43d9e7380dfd7adf87c0be80d548a",
+      "result_lines": [
+        "test result: ok. 472 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 54.35s"
+      ]
+    },
+    "theme": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "ec98760ae518ec93a550a9d93117f3cd95498615b416c214063d706eb51a266e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-deadsync_theme_simply_love.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 7.032501900102943,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-theme.log",
+      "log_sha256": "fc388cc8525c0655d4014cc89e8489b926de16c0017765b302e8b88aba52dcff",
+      "result_lines": [
+        "test result: FAILED. 1269 passed; 1 failed; 6 ignored; 0 measured; 0 filtered out; finished in 4.77s"
+      ]
+    },
+    "song": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "058d3e1bf3476fe250e4f4a6d4a233715c8b648cb780d749d981a0e7814b9dc9",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-deadsync_song_lua.exe",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 60.31718350015581,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-song.log",
+      "log_sha256": "0d1c2edba869273c184f21abd70474dff2bec814fa36fcfbb878c2ed5f868ab2",
+      "result_lines": [
+        "test result: FAILED. 501 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 58.60s"
+      ]
+    },
+    "runtime": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+        "runtime_modifiers",
+        "--test-threads=1"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 48.41977639961988,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-runtime.log",
+      "log_sha256": "35647cd936137aef81311d4cd5c2b5f150cf048c467034b87792d136308d0e76",
+      "result_lines": [
+        "test result: FAILED. 57 passed; 3 failed; 2 ignored; 0 measured; 234 filtered out; finished in 46.29s"
+      ]
+    },
+    "control": {
+      "exit_code": 0,
+      "comparisons_passed": 5497,
+      "comparisons_failed": 0,
+      "elapsed_seconds": 2.4889273000881076,
+      "archive_sha256": "b3a930415b78ad8f9b23bdda874ba3483ba0ceefe3ec38cab06b864cf0b71d60",
+      "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-control.log",
+      "log_sha256": "c45080d933910c8896aa849e646f6fc0145b2b1ba0c509b5afb3ccbb244c2a32",
+      "control_complete": true,
+      "main_worktree_used": true,
+      "source_root": "C:\\GitHub\\deadsync"
+    },
+    "technique-arrow": {
+      "source_root": "C:\\GitHub\\deadsync",
+      "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+      "source_pending_commit": true,
+      "main_worktree_used": true,
+      "binary_sha256": "ec98760ae518ec93a550a9d93117f3cd95498615b416c214063d706eb51a266e",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-deadsync_theme_simply_love.exe",
+        "screens::components::shared::technique_bg::tests::technique_arrow_renders_and_rotates",
+        "--exact",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.751554999966174,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\screen-parent-v4-technique-arrow.log",
+      "log_sha256": "6b811ef8a0d32eba65dd1401ad5c7e5a3ce33405403f88963b3bdd5e5b730fe0",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1275 filtered out; finished in 7.08s"
+      ]
+    }
+  },
+  "before_archive": {
+    "exit_code": 1,
+    "comparisons_passed": 530061,
+    "comparisons_failed": 1011,
+    "elapsed_seconds": 48.895864099729806,
+    "archive_sha256": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941",
+    "binary_sha256": "65b9d7d391cd0e5af75ae8f43e33a5b36739db98a7419adb49ea84583cff25f3",
+    "source_commit": "17b6c7e735fca0914cba1f76ea1191c0f4557d8c",
+    "source_pending_commit": true,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass163\\fresh-097-cmd-function-v3.log",
+    "log_sha256": "b92ca48d682fcb079bf4d0ea44fe6d84278b9a9388975fe7819978120752523b",
+    "control_complete": true,
+    "main_worktree_used": true,
+    "source_root": "C:\\GitHub\\deadsync"
+  },
+  "after_archive": {
+    "position": 97,
+    "source_simfile": "Anzu no Uta (U.P.S.)/Anzu no Uta.sm",
+    "archive": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941.tar.zst",
+    "archive_sha256": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941",
+    "harness_version": "0.1.61",
+    "source_commit": "911f0566a8540f97b45aff2b4b970751811f7239",
+    "source_pending_commit": true,
+    "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-full_song_lua.exe",
+      "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941.tar.zst"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 57.15341000026092,
+    "comparisons_passed": 531072,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-097-screen-parent-v4.log",
+    "log_sha256": "399a2b1386d419383cec7586758608a0f9fab794d589b5bfdd24ccc8d44331cf",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass209-top-097-current-main-v1.json",
+    "native_receipt_sha256": "2c8c1951fccf81a9b01527787d63be877dc4a5f62f50442c243737eca09bd5ca",
+    "full_corpus_complete": false
+  },
+  "baseline_failures_preserved": {
+    "song": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls"
+    ],
+    "runtime": [
+      "runtime_modifiers::hidden_actor_tweens_drive_modifiers_without_probe_state",
+      "runtime_modifiers::lane_stealth_survives_lua_writes_and_fresh_options",
+      "runtime_modifiers::motion_suboptions_survive_lua_writes_and_reset"
+    ],
+    "theme": [
+      "screens::components::gameplay::notefield::tests::cyber_model_tap_scale_uses_model_height_not_logical_height"
+    ]
+  },
+  "fragment_metadata": {
+    "before_bytes": 96,
+    "after_bytes": 104,
+    "change": "One borrowed matrix pointer; no embedded matrix or cloned geometry. Update only the metadata size guard to account for that pointer."
+  },
+  "technique_images": {
+    "technique-0.png": "ac214ba231c8c6f3c261fafbe95f9171b26190796c20de1f7911a4678c6bd7d5",
+    "technique-2.5.png": "2d0d21ae0ac5ca7bad7eedc5f98796f089984fbd7f2f68f1c9c31f52e10980d9"
+  },
+  "comparison_tolerances_changed": false,
+  "original_chart_and_lua_modified": false,
+  "reference_theme_sources_modified": false,
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "remaining_scope": "All original 501 sources and 492 contexts remain active. Independently authored inner cameras, mixed 3D parent transforms, capture scopes, live random attacks, earlier timing and geometry gaps and six baseline failures remain open."
+}

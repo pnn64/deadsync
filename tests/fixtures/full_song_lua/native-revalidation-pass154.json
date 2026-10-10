@@ -1,0 +1,97 @@
+{
+  "pass": 154,
+  "previous_record": "native-revalidation-pass153.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+  "comparator_sha256": "615d06f3076fcbbc62d0c15a09d7c573d929c615fd9f539b767133cba8471cd8",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    75
+  ],
+  "next_position": 76,
+  "comparisons_passed": 247161,
+  "charts": [
+    {
+      "position": 75,
+      "entry": {
+        "title": "Think of a happy place",
+        "source_simfile": "[Zaia] Think of a happy place/Think of a happy place.sm",
+        "harness_version": "0.1.54",
+        "archive": "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557.tar.zst",
+        "sha256": "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557",
+        "compressed_bytes": 113333,
+        "aliases": [
+          "3b45aee68f07da0bf3cfdb6ff35791405d47118b48928144eeee8b546ff4479e.tar.zst"
+        ]
+      },
+      "original_archive_retained": "928a881a590f97ff4ebf7f8f67662b389bae367619042ab67dfebcfa7f7f3bdc.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "5a0cbae01549003accc4ebc46a52608b7fb3b719fca2b61258b438d00a14465c",
+      "original_source_sha256": {
+        "[Zaia] Think of a happy place/i8it - Think of a happy place.ogg": "8888099cd3725ea76676b74c82bc1e238ddaffbfa4c9319dc801b2d0593e9ecd",
+        "[Zaia] Think of a happy place/Think of a happy place.sm": "3e004b45947a40abc1bd87acc3a7a20ead6bb232dd6a29188cfe5598520d191a",
+        "[Zaia] Think of a happy place/lua - Think of a happy place/Think of a happy place.lua": "ba2cb8a4606593e3999ef605ba3fd0a388bd384378bdd191fc0a7f66f42294bd"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 11233,
+      "duration_seconds": 187.1999969482422,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 3,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 75,
+      "source_simfile": "[Zaia] Think of a happy place/Think of a happy place.sm",
+      "archive": "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557.tar.zst",
+      "archive_sha256": "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557",
+      "harness_version": "0.1.54",
+      "source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+      "source_pending_commit": false,
+      "binary_sha256": "615d06f3076fcbbc62d0c15a09d7c573d929c615fd9f539b767133cba8471cd8",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-cull-after-v3-full_song_lua.exe",
+        "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.80843639979139,
+      "comparisons_passed": 247161,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-075-native-model-culling-v3.log",
+      "log_sha256": "63fac2c7b7a1a303268d0ad5d956f3ad1faf7db77e213d67a447f5a2a53fed79",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass154-top-075-native-v3.json",
+      "native_receipt_sha256": "f115ab0015d4b83eae5e5470606b61b6d2f6781e965c07388fe29bc07d53dbe5",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+    "source_pending_commit": false,
+    "binary_sha256": "5c3f1ac6f61fc7a75c8e1cf1b2cc282e5f29ef38d2872fe817dc0b197d3d08a2",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-cull-after-v3-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.8377404003404081,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-075-native-pass154.log",
+    "log_sha256": "834eb72c92d988c0b7d23cfa01618c6163e07d1f75c59f72d53f6aaa7babf227",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 263 filtered out; finished in 0.46s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}
