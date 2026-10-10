@@ -972,8 +972,13 @@ pub fn create_arrow_effects_table(
             let Some(timing) = timing.get(player).and_then(Option::as_ref) else {
                 return Ok(64.0 * note * speed);
             };
-            let (beat, _) = crate::compile_song_runtime_values(lua)?;
-            let seconds = timing.get_time_for_beat_exact(beat);
+            let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
+            let beat = runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+            // Pauses hold the beat while music time and seconds-based speed
+            // ramps keep advancing. Use the shared SongPosition music clock.
+            let seconds = crate::runtime::song_music_time(
+                lua, runtime.get(SONG_LUA_RUNTIME_SECONDS_KEY)?, rate,
+            );
             if let Some(options) = arrow_effects_player_options(&args)? {
                 if let Some(cmod) = arrow_effects_speedmod_value(&options, "CMod")? {
                     return Ok(
@@ -1942,6 +1947,62 @@ fn format_percent_score(lua: &Lua, args: MultiValue) -> mlua::Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn arrow_offset_uses_native_music_clock() {
+        use deadsync_rules::timing::{
+            DelaySegment, SpeedSegment, SpeedUnit, StopSegment, TimingData, TimingSegments,
+        };
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-actors/pause-offset.json"
+        ))
+        .expect("native pause offset control");
+        let mut failures = Vec::new();
+        for map in native["maps"].as_array().expect("native timing maps") {
+            let name = map["name"].as_str().expect("timing map name");
+            let timing = TimingData::from_segments(
+                0.125, 0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0)],
+                    stops: if name == "stop" { vec![StopSegment { beat: 4.0, duration: 1.0 }] } else { vec![] },
+                    delays: if name == "delay" { vec![DelaySegment { beat: 4.0, duration: 1.0 }] } else { vec![] },
+                    speeds: vec![
+                        SpeedSegment { beat: 0.0, ratio: 0.5, delay: 0.0, unit: SpeedUnit::Beats },
+                        SpeedSegment { beat: 4.0, ratio: 2.0, delay: 2.0, unit: SpeedUnit::Seconds },
+                    ],
+                    ..Default::default()
+                }, &[],
+            );
+            for rate in [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] {
+                let lua = Lua::new();
+                let mut context = SongLuaCompileContext::new(".", "native pause offsets");
+                context.song_timing = Some(timing.clone());
+                context.player_timing[0] = Some(timing.clone());
+                context.player_timing[1] = Some(timing.clone());
+                context.song_music_rate = rate;
+                let runtime = create_song_runtime_table(&lua, &context).expect("song runtime");
+                let players = create_player_tables(&lua, &context, &runtime).expect("native player states");
+                lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime.clone()).expect("install song clock");
+                let effects = create_arrow_effects_table(&lua, &context, |_| "single".into()).expect("ArrowEffects");
+                let offset = effects.get::<Function>("GetYOffset").expect("native offset getter");
+                for sample in map["samples"].as_array().expect("native samples") {
+                    let elapsed = sample["elapsed"].as_f64().expect("elapsed timestamp") as f32;
+                    let beat = sample["beat"].as_f64().expect("native beat") as f32;
+                    let note = sample["note"].as_f64().expect("note beat") as f32;
+                    let expected = sample["offset"].as_f64().expect("native offset") as f32;
+                    runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat).expect("native update beat");
+                    runtime.set(SONG_LUA_RUNTIME_SECONDS_KEY, f64::from(elapsed) / f64::from(rate)).expect("replay wall clock");
+                    for state in [Value::Nil, Value::Table(players.player_states[0].clone()), Value::Table(players.player_states[1].clone())] {
+                        let actual = offset.call::<f32>((state, 1, note)).expect("arrow offset");
+                        if actual.to_bits() != expected.to_bits() {
+                            failures.push(format!("{name} rate={rate} elapsed={elapsed} beat={beat}: {actual} != {expected}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
 
     #[test]
     fn broadcast_params_match_native() {
