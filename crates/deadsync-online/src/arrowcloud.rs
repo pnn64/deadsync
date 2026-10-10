@@ -1739,7 +1739,7 @@ pub fn hard_ex_pane_from_response(
 pub fn update_remaining_targets(
     scores: &[ArrowCloudLeaderboardEntry],
     context: Option<&ArrowCloudUserContext>,
-    remaining: &mut HashSet<String>,
+    remaining: &mut HashSet<&str>,
 ) {
     if remaining.is_empty() {
         return;
@@ -4664,3 +4664,7 @@ mod tests {
 #[cfg(test)]
 #[path = "user_context_perf.rs"]
 mod user_context_perf;
+
+#[cfg(test)]
+#[path = "arrowcloud/pagination_tests.rs"]
+mod pagination_tests;

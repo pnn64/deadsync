@@ -1,9 +1,7 @@
 use super::*;
+use crate::perf as allocations;
 use std::hint::black_box;
 
-#[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
-mod allocations;
 #[path = "srpg_shop_original.rs"]
 mod original;
 #[allow(dead_code)]
