@@ -727,7 +727,8 @@ impl TimingData {
             let mut last_ratio = 1.0_f32;
             timing_with_stops.scroll_prefix = exact_arc(timing_with_stops.scrolls.len(), |index| {
                 let seg = timing_with_stops.scrolls[index];
-                cum_displayed = (seg.beat - last_real_beat).mul_add(last_ratio, cum_displayed);
+                // TimingData::GetDisplayedBeat rounds the product before adding.
+                cum_displayed += (seg.beat - last_real_beat) * last_ratio;
                 let prefix = ScrollPrefix {
                     beat: seg.beat,
                     cum_displayed,
@@ -1502,12 +1503,12 @@ impl TimingData {
         }
         if beat < self.scroll_prefix[0].beat {
             let p = self.scroll_prefix[0];
-            return (beat - p.beat).mul_add(p.ratio, p.cum_displayed);
+            return (beat - p.beat) * p.ratio + p.cum_displayed;
         }
         let idx = self.scroll_prefix.partition_point(|p| p.beat <= beat);
         let i = idx.saturating_sub(1);
         let p = self.scroll_prefix[i];
-        (beat - p.beat).mul_add(p.ratio, p.cum_displayed)
+        (beat - p.beat) * p.ratio + p.cum_displayed
     }
 
     #[inline]
@@ -1544,7 +1545,7 @@ impl TimingData {
         } else {
             self.scroll_prefix[cache.next_prefix - 1]
         };
-        (beat - prefix.beat).mul_add(prefix.ratio, prefix.cum_displayed)
+        (beat - prefix.beat) * prefix.ratio + prefix.cum_displayed
     }
 
     #[inline]
@@ -3721,6 +3722,47 @@ mod tests {
         assert!((timing.get_displayed_beat(-1.0) - 0.0).abs() < 0.0001);
         assert!((timing.get_displayed_beat(2.0) - 0.0).abs() < 0.0001);
         assert!((timing.get_displayed_beat(5.0) - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn displayed_scroll_matches_native_rounding() {
+        // Native TimingData 5c737928: Edgar SCROLLS, note 160, recorded
+        // ArrowEffects offsets at six 60 Hz frames. FMA shifts these by 1/512px.
+        let timing = timing_with_scrolls(
+            [
+                (0.0, 3.3),
+                (80.0, 1.0),
+                (96.0, 0.7),
+                (112.0, 0.35),
+                (124.0, 0.7),
+                (126.0, 1.0),
+                (152.0, 0.3),
+                (159.0, 0.7),
+                (160.0, 0.35),
+            ]
+            .map(|(beat, ratio)| ScrollSegment { beat, ratio })
+            .to_vec(),
+        );
+        let mut cache = DisplayedBeatCache::new();
+        for (beat, offset) in [
+            (123.41056060791016_f32, 1946.005859375_f32),
+            (153.05667114257812, 158.9140625),
+            (155.69277954101562, 108.30078125),
+            (156.05776977539062, 101.29296875),
+            (163.27667236328125, -73.3984375),
+            (168.18389892578125, -183.3203125),
+        ] {
+            for displayed in [
+                timing.get_displayed_beat(beat),
+                timing.get_displayed_beat_cached(beat, &mut cache),
+            ] {
+                assert_eq!(
+                    ((timing.get_displayed_beat(160.0) - displayed) * 64.0).to_bits(),
+                    offset.to_bits(),
+                    "native scroll offset at beat {beat}",
+                );
+            }
+        }
     }
 
     #[test]
