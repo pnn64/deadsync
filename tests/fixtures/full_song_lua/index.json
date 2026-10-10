@@ -1104,12 +1104,10 @@
     {
       "title": "Think of a happy place",
       "source_simfile": "[Zaia] Think of a happy place/Think of a happy place.sm",
-      "harness_version": "0.1.0",
-      "archive": "928a881a590f97ff4ebf7f8f67662b389bae367619042ab67dfebcfa7f7f3bdc.tar.zst",
-      "sha256": "928a881a590f97ff4ebf7f8f67662b389bae367619042ab67dfebcfa7f7f3bdc",
-      "compressed_bytes": 78112,
-      "uncompressed_sha256": "14d658dd4eafb80721f901587d56c5578abecc11ecd7e0dfddf7942c4355e10f",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557.tar.zst",
+      "sha256": "1bf407dd5a2b7b5979e00760977e4894a68f8f8064cdfa8ac5b62fe301c40557",
+      "compressed_bytes": 113333,
       "aliases": [
         "3b45aee68f07da0bf3cfdb6ff35791405d47118b48928144eeee8b546ff4479e.tar.zst"
       ]

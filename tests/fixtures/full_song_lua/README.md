@@ -1156,3 +1156,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass153.json`. Position 75 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 154
+
+Position 75, Think of a happy place, passes all
+247,161 comparisons against committed DeadSync
+`63b08812a`. The complete native harness 0.1.54 archive
+contains 11,233 updates over 187.20 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass154.json`. Position 76 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
