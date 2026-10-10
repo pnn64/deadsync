@@ -635,3 +635,24 @@ its onset, position and countdown assertions remain active.
 See `native-revalidation-pass114.json`. Position 36 is next. The original
 501-source/492-context scope and additional pending observations remain
 active. Full corpus and framebuffer parity are still open.
+
+## Ordered fixture validation, pass 115
+
+Position 36, [5604] [10] flip69, passes 216,773,579 comparisons
+against committed DeadSync `e7fe82d02`. Its complete native
+harness 0.1.51 capture contains 7,569 updates over
+126.13 seconds, with no runtime errors or dropped events.
+Lossless compression preserves every tar byte and reduces the archive
+from 121,696,985 to 99,480,363 bytes, below 100 MB. Original
+chart, Lua, earlier archive and aliases are retained.
+
+ArrowEffects now reads the shared music clock rather than inverting a
+fixed beat. Thirty native stop/delay timestamps pass 540 exact checks
+through both player states and six music rates. Edgar also passes all
+228,297,347 complete-archive comparisons after this fix. Its native
+frame onset/countdown checks are fixed and passing; eight independently
+measured off-grid positions remain open at the original tolerance.
+
+See `native-revalidation-pass115.json`. Position 37 is next. Song/Steps
+timing getter placeholders, explicit Model culling, the original
+501-source/492-context corpus and native framebuffer parity remain open.
