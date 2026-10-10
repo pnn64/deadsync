@@ -840,12 +840,10 @@
     {
       "title": "[6804] [12] Godspeed",
       "source_simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f16aaf979e6c41b0955e9717b7c50df138de0157ff66bec74cbe7de5cddbdbbf.tar.zst",
-      "sha256": "f16aaf979e6c41b0955e9717b7c50df138de0157ff66bec74cbe7de5cddbdbbf",
-      "compressed_bytes": 40062,
-      "uncompressed_sha256": "35f6f54b579f29bbb3d6aa587207f43f92b211977732fa109445b78ffbcb7416",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53.tar.zst",
+      "sha256": "2b8bb3ff4c7f1817b5ab451cde45c42286269c5b3e1743ef01cc201279825d53",
+      "compressed_bytes": 407605,
       "aliases": [
         "2c9cb03ef65817b74fe2691c4977d046551d30692fb40bba98ea58ea1f3df785.tar.zst"
       ]

@@ -844,3 +844,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass129.json`. Position 51 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 130
+
+Position 51, [6804] [12] Godspeed, passes all
+601,973 comparisons against committed DeadSync
+`ba32031b5`. The complete native harness 0.1.52 archive
+contains 8,250 updates over 137.48 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass130.json`. Position 52 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.
