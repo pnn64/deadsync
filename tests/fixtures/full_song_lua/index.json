@@ -1203,12 +1203,10 @@
     {
       "title": "Actin' Up",
       "source_simfile": "Actin Up/actinup-fakemines.ssc",
-      "harness_version": "0.1.0",
-      "archive": "3dcd718715170a902586ec7e18989758e3102f67d6ebe75fc6e0da9afc285516.tar.zst",
-      "sha256": "3dcd718715170a902586ec7e18989758e3102f67d6ebe75fc6e0da9afc285516",
-      "compressed_bytes": 61305,
-      "uncompressed_sha256": "4fa5ce734281684f2c0322b69a7266739a362a6ea9e4c6894e0840e646a74817",
-      "compression_level": 22,
+      "harness_version": "0.1.58",
+      "archive": "5fd15ffb610dd3f04161d9e8609c02e0b5eecbbb9b989b29277cbb4315457879.tar.zst",
+      "sha256": "5fd15ffb610dd3f04161d9e8609c02e0b5eecbbb9b989b29277cbb4315457879",
+      "compressed_bytes": 204188,
       "aliases": [
         "a2dd9eb7d72101b1505eba6b82ede18bf7a8017b013d7becdf2036f1a6e0474a.tar.zst"
       ]
