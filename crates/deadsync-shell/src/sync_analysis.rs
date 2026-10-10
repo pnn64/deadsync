@@ -245,7 +245,7 @@ fn run_song(
     };
     let cfg = config::runtime::null_or_die_bias_cfg();
     let options = AnalysisOptions::new(&cfg, config::runtime::get().null_or_die_confidence_percent);
-    let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
+    let mut prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
         .ok()
         .and_then(|music_path| {
             cache.prepare_if_enabled(
@@ -258,8 +258,8 @@ fn run_song(
             )
         });
     if let Some(cached) = prepared
-        .as_ref()
-        .and_then(|prepared| prepared.cached_analysis())
+        .as_mut()
+        .and_then(|prepared| prepared.take_cached_analysis())
     {
         if !cancel.load(Ordering::Relaxed) {
             cache.flush();
@@ -313,25 +313,25 @@ fn run_song(
     }
 }
 
-fn cached_song_result(cached: &CachedAnalysis) -> SimplyLoveSyncSongResult {
+fn cached_song_result(cached: CachedAnalysis) -> SimplyLoveSyncSongResult {
     let bias_ms = if cached.applied { 0.0 } else { cached.bias_ms };
-    let plot = cached.plot.as_ref().filter(|_| !cached.applied);
+    let plot = cached.plot.filter(|_| !cached.applied).unwrap_or_default();
     SimplyLoveSyncSongResult {
         estimate: SimplyLoveSyncResult {
             bias_ms,
             confidence: cached.confidence,
         },
         plot: SimplyLoveSyncPlotView {
-            freq_rows: plot.map_or(0, |plot| plot.freq_rows),
-            digest_rows: plot.map_or(0, |plot| plot.digest_rows),
-            cols: plot.map_or(0, |plot| plot.cols.max(plot.times_ms.len())),
-            post_rows: plot.map_or(0, |plot| plot.post_rows),
-            freq_domain: plot.map_or_else(Vec::new, |plot| plot.freq_domain.clone()),
-            beat_digest: plot.map_or_else(Vec::new, |plot| plot.beat_digest.clone()),
-            post_kernel: plot.map_or_else(Vec::new, |plot| plot.post_kernel.clone()),
-            convolution: plot.map_or_else(Vec::new, |plot| plot.convolution.clone()),
-            times_ms: plot.map_or_else(Vec::new, |plot| plot.times_ms.clone()),
-            edge_discard: plot.map_or(0, |plot| plot.edge_discard),
+            freq_rows: plot.freq_rows,
+            digest_rows: plot.digest_rows,
+            cols: plot.cols.max(plot.times_ms.len()),
+            post_rows: plot.post_rows,
+            freq_domain: plot.freq_domain,
+            beat_digest: plot.beat_digest,
+            post_kernel: plot.post_kernel,
+            convolution: plot.convolution,
+            times_ms: plot.times_ms,
+            edge_discard: plot.edge_discard,
         },
         cached: true,
     }
@@ -735,7 +735,7 @@ mod tests {
 
     #[test]
     fn cached_song_result_restores_estimate_and_visuals() {
-        let result = cached_song_result(&CachedAnalysis {
+        let result = cached_song_result(CachedAnalysis {
             bias_ms: -4.0,
             confidence: 0.93,
             applied: false,
@@ -765,7 +765,7 @@ mod tests {
 
     #[test]
     fn cached_applied_result_cannot_apply_the_same_delta_twice() {
-        let result = cached_song_result(&CachedAnalysis {
+        let result = cached_song_result(CachedAnalysis {
             bias_ms: -4.0,
             confidence: 0.93,
             applied: true,
@@ -883,3 +883,7 @@ fn append_sync_mono(samples: &[i16], channels: usize, out: &mut Vec<f32>) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/perf/owned_cached.rs"]
+mod owned_pipeline_tests;

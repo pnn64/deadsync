@@ -1,0 +1,107 @@
+{
+  "pass": 176,
+  "previous_record": "native-revalidation-pass175.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+  "comparator_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    97
+  ],
+  "next_position": 98,
+  "comparisons_passed": 531072,
+  "charts": [
+    {
+      "position": 97,
+      "entry": {
+        "title": "あんずのうた",
+        "source_simfile": "Anzu no Uta (U.P.S.)/Anzu no Uta.sm",
+        "harness_version": "0.1.61",
+        "archive": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941.tar.zst",
+        "sha256": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941",
+        "compressed_bytes": 928342,
+        "aliases": [
+          "3342097268a17aaa1164a9ad5f7b550371a4acb1e4e868c7b43024e3ced1755b.tar.zst"
+        ]
+      },
+      "original_archive_retained": "6be680fedffec89b430e572a9566ab2c0a891c640bc72663e4bde18fb830e350.tar.zst",
+      "native_source_commit": "602c5004f1b7d83372b375e1bde714e67660385e",
+      "native_trace_sha256": "71acdb77fccbc82c7360f8b5c03e67bc179382ff94b269f41238c81eac57297c",
+      "original_source_sha256": {
+        "Anzu no Uta (U.P.S.)/Anzu no Uta-bg.png": "5b1aae83fc769f2450b9419935a671f86ec5d1da5f1a9077eb74c5055cc2a036",
+        "Anzu no Uta (U.P.S.)/Anzu no Uta-bn.png": "d7265048e05f7d51488cfbd700036c1e9deb1be4e09ab40af1808056ec12fe7e",
+        "Anzu no Uta (U.P.S.)/Anzu no Uta.ogg": "c92937706c1205a6eb0bc61fe773da324aee6b688b011233f2f9a4dc173013ce",
+        "Anzu no Uta (U.P.S.)/Anzu no Uta.sm": "a66c2e4d4d3538fb3569ad8f6b0fc167d476cfac0e1694ed1846979ec289dedf",
+        "Anzu no Uta (U.P.S.)/Anzu no Uta.sm.old": "6e00dd54372c2a6c4923b9c8be6db654088c8732b6f006b03bb56065381105ad",
+        "Anzu no Uta (U.P.S.)/background/default.lua": "3bb335a5edf239568930e174d8ec26593f5ebc1b9ba327312c66e9a2be96ec8d",
+        "Anzu no Uta (U.P.S.)/background/default.xml": "c6cdd63c1e7b1145f4c65d1cf9c8b42dc4a6e9bf69956f80e7d460cc2a815890",
+        "Anzu no Uta (U.P.S.)/lua/default.lua": "97913712f4490437fecbbdb48a25084539670ed768f03947b3b6797f6100e561",
+        "Anzu no Uta (U.P.S.)/lua/default.xml": "337f3edec02e02997acb2e2bae41790450400e3b5ab2b9a23f4446f43e4072c5",
+        "Anzu no Uta (U.P.S.)/lua/mayday 1x3.png": "17abc5ac51a076ced7c5b3ab5c098a51de056fe41af78d3db95f6ca00afd9a4a",
+        "Anzu no Uta (U.P.S.)/lua/mods.lua": "c0b4cfbacfef234aa28f73f168f1d912664e9d6baac24dcca875c29fd5711930",
+        "Anzu no Uta (U.P.S.)/lua/pacman.sprite": "dd095cc07e5c16d86c81d8037521d39fb57667a13081ba9d04f1e67ea238a88c",
+        "Anzu no Uta (U.P.S.)/lua/_pacman 1x2.png": "a55912287fe79a7374d556dc09606af7766bdea2da6703023e379598daafa04c"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8235,
+      "duration_seconds": 137.23123168945312,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 8,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 97,
+      "source_simfile": "Anzu no Uta (U.P.S.)/Anzu no Uta.sm",
+      "archive": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941.tar.zst",
+      "archive_sha256": "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941",
+      "harness_version": "0.1.61",
+      "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+      "source_pending_commit": false,
+      "binary_sha256": "a4ddf7f1a61d1a33620483b75bbaf2f66b0b5552a6b202d71632519ba1f785cc",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-full_song_lua.exe",
+        "a8b5d091317c8e39173c1db0703dd3f2453ffce560acac89b8bd88bf12142941.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 55.02731479983777,
+      "comparisons_passed": 531072,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-097-screen-parent-committed-v4.log",
+      "log_sha256": "633b6b2b2d86794cfaf26ed111c9388330dd809922c353f8e459fda78977afbe",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass209-top-097-current-main-v1.json",
+      "native_receipt_sha256": "2c8c1951fccf81a9b01527787d63be877dc4a5f62f50442c243737eca09bd5ca",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "1dccb63aa91d049dacf35bd6054999bf5474e252",
+    "source_pending_commit": false,
+    "binary_sha256": "25e5ca91bb264d9d643deadbf996618208eb4cafd85f924aea12987a5d6e17bd",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass177\\screen-parent-v4-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.001587599981576,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-097-native-pass176.log",
+    "log_sha256": "eb1897dbc34623d21872c3c2fae64c8d1d514d9466ca821a13577fdb6452b387",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 295 filtered out; finished in 1.45s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders and framebuffer parity remain active. Explicit Model culling is verified in native-revalidation-model-culling.json."
+}

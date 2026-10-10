@@ -1,0 +1,130 @@
+{
+  "problem": "A Dramatic Irony could not compile because GAMESTATE:GetSongOptionsString was missing; existing rate text disagreed with native formatting.",
+  "tested_source_parent_commit": "5989af816660f2b98556641d208fb571f8dcae00",
+  "tested_source_sha256": {
+    "crates/deadsync-song-lua/src/host.rs": "c41ab70f17128e97fc756f08073091e0cf253d9e525363cd4a7707d10ac6f3ed",
+    "crates/deadsync-song-lua/src/lib.rs": "17969873077587fee06ce996487ac4d67e592caea406ff513e1bb074ee4c795e"
+  },
+  "executables": {
+    "song_lua_itgmania_semantic_parity": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\song-options-string-v1-song_lua_itgmania_semantic_parity.exe",
+      "sha256": "121d6e2bff74a278f661ac1ce9d65e3790e7dd5643e319848e94f817e3a77c54"
+    },
+    "full_song_lua": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\song-options-string-v1-full_song_lua.exe",
+      "sha256": "c2f2cf41af3a1e77c1487c7fcac4d4fb41797df91c6de939250357a9b7decfb0"
+    },
+    "units": {
+      "path": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\song-options-units-v1.exe",
+      "sha256": "5c8eb40f7741ebde8be6909e4225c776424bc287642cc6b380abe9d86021c431"
+    }
+  },
+  "reference_sources": {
+    "GameState.cpp": {
+      "latest_sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "vendor_sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "identical": true
+    },
+    "SongOptions.cpp": {
+      "latest_sha256": "7d8205c988751ef656f5c195ea1e33b38de42ff235659e6e2651f209d7c11386",
+      "vendor_sha256": "7d8205c988751ef656f5c195ea1e33b38de42ff235659e6e2651f209d7c11386",
+      "identical": true
+    },
+    "ModsGroup.h": {
+      "latest_sha256": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0",
+      "vendor_sha256": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0",
+      "identical": true
+    }
+  },
+  "native_control": "../itgmania-song-lua-micro/song-options-string/provenance.json",
+  "tests": [
+    {
+      "source_commit": "5989af816660f2b98556641d208fb571f8dcae00",
+      "source_pending_commit": true,
+      "binary_sha256": "5c8eb40f7741ebde8be6909e4225c776424bc287642cc6b380abe9d86021c431",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\song-options-units-v1.exe",
+        "tests::native_song_rate_text",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.8357730000279844,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-song-rate-text-v1.log",
+      "log_sha256": "0b8d2bb9c636ca70abcacea3e81d2cf1ea146de9765856bcd7c69b82c5875f11",
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 496 filtered out; finished in 0.38s"
+      ]
+    },
+    {
+      "source_commit": "5989af816660f2b98556641d208fb571f8dcae00",
+      "source_pending_commit": true,
+      "binary_sha256": "5c8eb40f7741ebde8be6909e4225c776424bc287642cc6b380abe9d86021c431",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass155\\song-options-units-v1.exe",
+        "tests::compile_song_lua_exposes_song_options",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.4029729999601841,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\native-song-options-existing-v1.log",
+      "log_sha256": "90c4c379f0b87740076a58955f9a6a01955937b31af2a21ffafe97798aac9792",
+      "result_lines": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 495 filtered out; finished in 0.07s"
+      ]
+    }
+  ],
+  "fixture_76_before": {
+    "position": 76,
+    "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+    "archive": "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9.tar.zst",
+    "archive_sha256": "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9",
+    "harness_version": "0.1.54",
+    "source_commit": "63b08812a278d8ba94dd5aae70378dabf4a2dbb2",
+    "source_pending_commit": false,
+    "binary_sha256": "615d06f3076fcbbc62d0c15a09d7c573d929c615fd9f539b767133cba8471cd8",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-cull-after-v3-full_song_lua.exe",
+      "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 31.260462200269103,
+    "comparisons_passed": 0,
+    "comparisons_failed": 0,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-076-native-model-culling-v3-full.log",
+    "log_sha256": "993cf5d0594db04abdb104df79bde1be2d5a486e303de40dbefb6a2d814fb98a",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass155-top-076-native-v4.json",
+    "native_receipt_sha256": "378d6739dc2a5c75b59b669ad769da72502389e78e33d83d5bff5016b91ddc65",
+    "full_corpus_complete": false
+  },
+  "fixture_76_after": {
+    "position": 76,
+    "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
+    "archive": "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9.tar.zst",
+    "archive_sha256": "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9",
+    "harness_version": "0.1.54",
+    "source_commit": "5989af816660f2b98556641d208fb571f8dcae00",
+    "source_pending_commit": true,
+    "binary_sha256": "c2f2cf41af3a1e77c1487c7fcac4d4fb41797df91c6de939250357a9b7decfb0",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\song-options-string-v1-full_song_lua.exe",
+      "8bf349890c97255dee312834932bb9d4fbbaf1680211025ae3108fd0c4f40db9.tar.zst"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 88.56647660024464,
+    "comparisons_passed": 630651,
+    "comparisons_failed": 55925,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-076-native-song-options-v1.log",
+    "log_sha256": "2071766a585d1ed7cf97df23ff5ac7e1facfb028ef8b78ea16c8bcc973f8f77e",
+    "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass155-top-076-native-v4.json",
+    "native_receipt_sha256": "378d6739dc2a5c75b59b669ad769da72502389e78e33d83d5bff5016b91ddc65",
+    "full_corpus_complete": false
+  },
+  "fixture_76_compile_failure_resolved": true,
+  "fixture_76_accepted": false,
+  "remaining_fixture_76": "Final sprite alpha, projected geometry and draw colors differ; the same complete native trace is retained for the next source-backed repair.",
+  "original_source_unchanged": true,
+  "original_tolerances_retained": true,
+  "full_corpus_complete": false,
+  "scope": "Music-rate strings with synchronized Current and Song levels. Differing ModsLevel state and non-rate song options remain unverified."
+}

@@ -6,11 +6,14 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
     let mut add = |slot: &SpriteSlot| {
         for texture_slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
-            let key = texture_slot.texture_key_shared();
-            if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
-                *model |= slot.model.is_some();
-            } else {
-                textures.push((key, slot.model.is_some()));
+            for key in std::iter::once(texture_slot.texture_key_shared())
+                .chain(texture_slot.model_texture_keys.iter().cloned())
+            {
+                if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
+                    *model |= slot.model.is_some();
+                } else {
+                    textures.push((key, slot.model.is_some()));
+                }
             }
         }
     };

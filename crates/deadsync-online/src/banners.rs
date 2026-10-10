@@ -266,6 +266,10 @@ fn forget_failure(runtime: &mut RuntimeState, pack_id: u64) {
 /// the textures, so it decides when they actually go.
 pub fn overflow() -> Vec<u64> {
     let mut runtime = lock_runtime();
+    // Done banners are a subset of all slots, so none can overflow this bound.
+    if runtime.slots.len() <= MAX_CACHED {
+        return Vec::new();
+    }
     let mut held: Vec<(u64, u64)> = runtime
         .slots
         .iter()
@@ -734,3 +738,11 @@ mod banners_failure_original;
 #[cfg(test)]
 #[path = "banners_failure_perf.rs"]
 mod banners_failure_perf_tests;
+
+#[cfg(test)]
+#[path = "banners_original.rs"]
+mod original;
+
+#[cfg(test)]
+#[path = "banners_perf.rs"]
+mod perf_tests;

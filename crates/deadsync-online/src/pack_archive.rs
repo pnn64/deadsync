@@ -888,17 +888,15 @@ fn fetch_exact(
 /// Join ranges no more than `gap` apart, in order.
 fn merge_ranges(mut ranges: Vec<(u64, u64)>, gap: u64) -> Vec<(u64, u64)> {
     ranges.sort_unstable();
-    let mut merged: Vec<(u64, u64)> = Vec::with_capacity(ranges.len());
-    for (start, end) in ranges {
-        if let Some(last) = merged.last_mut()
-            && start <= last.1.saturating_add(gap)
-        {
-            last.1 = last.1.max(end);
-            continue;
+    ranges.dedup_by(|next, previous| {
+        if next.0 <= previous.1.saturating_add(gap) {
+            previous.1 = previous.1.max(next.1);
+            true
+        } else {
+            false
         }
-        merged.push((start, end));
-    }
-    merged
+    });
+    ranges
 }
 
 /// What was asked for, checked against the file and joined where it overlaps:
@@ -1455,7 +1453,8 @@ fn group_folders(entries: &[ZipEntry]) -> Vec<SongFolder> {
         let (Some(root), Some(folder)) = (parts.next(), parts.next()) else {
             continue;
         };
-        if (parts.next().is_none() && !entry.is_dir()) || root.eq_ignore_ascii_case("__MACOSX") {
+        let first_child = parts.next();
+        if (first_child.is_none() && !entry.is_dir()) || root.eq_ignore_ascii_case("__MACOSX") {
             continue;
         }
         let key = format!("{}/{}", root.to_lowercase(), folder.to_lowercase());
@@ -1468,43 +1467,38 @@ fn group_folders(entries: &[ZipEntry]) -> Vec<SongFolder> {
             });
             folders.len() - 1
         });
-        folders[slot].entries.push(ix);
-    }
-    for folder in &mut folders {
-        let (mut ssc, mut sm) = (None, None);
-        for &ix in &folder.entries {
-            let entry = &entries[ix];
-            if entry.is_dir() {
-                continue;
-            }
-            let mut parts = entry
-                .name
-                .split(['/', '\\'])
-                .filter(|part| !part.is_empty());
-            let depth = parts.clone().count();
-            let Some(file) = parts.next_back() else {
-                continue;
-            };
-            // AppleDouble companions: `._song.sm` is metadata, not a chart.
-            if file.starts_with("._") {
-                continue;
-            }
-            let extension = extension(file);
-            if depth == 3 {
-                if extension.eq_ignore_ascii_case("ssc") {
-                    ssc = ssc.or(Some(ix));
-                } else if extension.eq_ignore_ascii_case("sm") {
-                    sm = sm.or(Some(ix));
-                }
-            }
-            if AUDIO_EXTENSIONS
-                .iter()
-                .any(|audio| extension.eq_ignore_ascii_case(audio))
+        let folder = &mut folders[slot];
+        folder.entries.push(ix);
+        if entry.is_dir() {
+            continue;
+        }
+        let Some(first_child) = first_child else {
+            continue;
+        };
+        let last_child = parts.next_back();
+        let file = last_child.unwrap_or(first_child);
+        // AppleDouble companions: `._song.sm` is metadata, not a chart.
+        if file.starts_with("._") {
+            continue;
+        }
+        let ext = extension(file);
+        if last_child.is_none() {
+            // Keep the first SSC, replacing an earlier SM if necessary.
+            if ext.eq_ignore_ascii_case("ssc")
+                && folder.simfile.is_none_or(|chosen| {
+                    !extension(&entries[chosen].name).eq_ignore_ascii_case("ssc")
+                })
+                || ext.eq_ignore_ascii_case("sm") && folder.simfile.is_none()
             {
-                folder.audio.push(ix);
+                folder.simfile = Some(ix);
             }
         }
-        folder.simfile = ssc.or(sm);
+        if AUDIO_EXTENSIONS
+            .iter()
+            .any(|audio| ext.eq_ignore_ascii_case(audio))
+        {
+            folder.audio.push(ix);
+        }
     }
     folders
 }
@@ -2418,10 +2412,10 @@ fn best_scored(scored: impl Iterator<Item = (usize, usize)>) -> Vec<usize> {
 /// One candidate is an answer. Several are settled by the artist when exactly
 /// one of them has it, and are otherwise ambiguous: equals are never guessed
 /// between. None is no answer yet.
-fn settle(
+fn settle<'a>(
     candidates: &[usize],
     artist: &str,
-    tags: &impl Fn(usize) -> Option<SimfileTags>,
+    tags: &impl Fn(usize) -> Option<&'a SimfileTags>,
 ) -> Option<SongMatch> {
     match candidates {
         [] => None,
@@ -2476,11 +2470,11 @@ fn settle(
 /// With `|_| None` only rules 1 and 3 can apply. A rule-1 answer is final
 /// either way; anything else is firmer once the simfiles
 /// [`folders_needing_tags`] names have been fetched and passed in.
-pub(crate) fn match_song(
+pub(crate) fn match_song<'a>(
     index: &PackIndex,
     title: &str,
     artist: &str,
-    tags: impl Fn(usize) -> Option<SimfileTags>,
+    tags: impl Fn(usize) -> Option<&'a SimfileTags>,
 ) -> SongMatch {
     let want = match_key(title);
     if want.is_empty() {
@@ -3855,7 +3849,8 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
         );
         // Too short to trust a containment; the simfile settles it.
         assert_eq!(match_song(&index, "X", "", none), SongMatch::NotFound);
-        let x_tags = |ix: usize| (ix == 2).then(|| tagged("X", "Someone"));
+        let x = tagged("X", "Someone");
+        let x_tags = |ix: usize| (ix == 2).then_some(&x);
         assert_eq!(match_song(&index, "X", "", x_tags), SongMatch::Folder(2));
         let twice = folders_only(&["(14) Kurenai - [Zaia]", "(11) Kurenai - [Zaia]"]);
         assert_eq!(
@@ -3869,13 +3864,8 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
             match_song(&index, "V.L.S.I.", "Foo", none),
             SongMatch::Ambiguous
         );
-        let tags = |ix: usize| {
-            Some(if ix == 0 {
-                tagged("V.L.S.I", "Bar")
-            } else {
-                tagged("V.L.S.I.", "Foo")
-            })
-        };
+        let values = [tagged("V.L.S.I", "Bar"), tagged("V.L.S.I.", "Foo")];
+        let tags = |ix: usize| Some(&values[usize::from(ix != 0)]);
         assert_eq!(
             match_song(&index, "V.L.S.I.", "Foo", tags),
             SongMatch::Folder(1)
@@ -3899,22 +3889,20 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
         let page = "[1000] [07] Long Time (Beginner)";
         assert_eq!(match_song(&index, page, "", none), SongMatch::NotFound);
         assert_eq!(folders_needing_tags(&index, page, ""), vec![0, 1, 2]);
-        let exact = |ix: usize| {
-            Some(match ix {
-                0 => tagged("[1000] [07] Long Time (Beginner)", "Artist"),
-                1 => tagged("[1001] [11] Long Time (Expert)", "Artist"),
-                _ => tagged("[1002] [05] Other Song", "Someone"),
-            })
-        };
+        let exact_values = [
+            tagged("[1000] [07] Long Time (Beginner)", "Artist"),
+            tagged("[1001] [11] Long Time (Expert)", "Artist"),
+            tagged("[1002] [05] Other Song", "Someone"),
+        ];
+        let exact = |ix: usize| Some(&exact_values[ix.min(2)]);
         assert_eq!(match_song(&index, page, "", exact), SongMatch::Folder(0));
         // ... or by that title with a subtitle added on.
-        let titled = |ix: usize| {
-            Some(match ix {
-                0 => tagged("[1000] [07] Long Time", "Artist"),
-                1 => tagged("[1001] [11] Long Time", "Artist"),
-                _ => tagged("[1002] [05] Other Song", "Someone"),
-            })
-        };
+        let titled_values = [
+            tagged("[1000] [07] Long Time", "Artist"),
+            tagged("[1001] [11] Long Time", "Artist"),
+            tagged("[1002] [05] Other Song", "Someone"),
+        ];
+        let titled = |ix: usize| Some(&titled_values[ix.min(2)]);
         assert_eq!(match_song(&index, page, "", titled), SongMatch::Folder(0));
         assert_eq!(
             match_song(&index, "Long Time", "", titled),
@@ -3923,7 +3911,8 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
 
         // An exact folder name outranks a simfile that claims the title.
         let index = folders_only(&["Song", "Song (Remix)"]);
-        let claims = |ix: usize| (ix == 1).then(|| tagged("Song", ""));
+        let claim = tagged("Song", "");
+        let claims = |ix: usize| (ix == 1).then_some(&claim);
         assert_eq!(match_song(&index, "Song", "", claims), SongMatch::Folder(0));
         assert!(folders_needing_tags(&index, "Song", "").is_empty());
         assert_eq!(match_song(&index, "", "", none), SongMatch::NotFound);
@@ -3935,13 +3924,11 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
         // A title the page lists twice comes with its artist, and a folder
         // that merely has the name does not win against the artist's own.
         let index = folders_only(&["Butterfly", "Butterfly (NM)"]);
-        let both = |ix: usize| {
-            Some(if ix == 0 {
-                tagged("Butterfly", "Smile.dk")
-            } else {
-                tagged("Butterfly", "Nekomata Master")
-            })
-        };
+        let both_values = [
+            tagged("Butterfly", "Smile.dk"),
+            tagged("Butterfly", "Nekomata Master"),
+        ];
+        let both = |ix: usize| Some(&both_values[usize::from(ix != 0)]);
         assert_eq!(
             folders_needing_tags(&index, "Butterfly", "Nekomata Master"),
             vec![0, 1]
@@ -4008,3 +3995,15 @@ mod match_keys_original;
 #[cfg(test)]
 #[path = "match_keys_perf.rs"]
 mod match_keys_perf_tests;
+
+#[cfg(test)]
+#[path = "archive_metadata_original.rs"]
+mod metadata_original;
+
+#[cfg(test)]
+#[path = "archive_metadata_perf.rs"]
+mod metadata_perf_tests;
+
+#[cfg(test)]
+#[path = "pack_archive_perf.rs"]
+mod perf_tests;

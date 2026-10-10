@@ -621,6 +621,8 @@ pub(crate) fn compose_frame(
     show_song_visuals: bool,
     apply_attacks: bool,
     capture_requests: ProxyCaptureRequests,
+    field_wrapper: glam::Mat4,
+    field_wrapper_visible: bool,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
     timing_labels: &[deadsync_notefield::TimingSegmentLabel],
@@ -790,6 +792,7 @@ pub(crate) fn compose_frame(
         },
         visual: NotefieldVisualState {
             elapsed_screen_s: elapsed_screen,
+            expand_seconds: state.mods.expand_seconds[player_idx],
             current_display_beat: state.current_beat_display(),
             accel,
             scroll,
@@ -836,6 +839,8 @@ pub(crate) fn compose_frame(
             tap_explosion: tap_explosion_noteskin,
         },
         song_lua: NotefieldSongLuaView {
+            wrapper: field_wrapper,
+            wrapper_visible: field_wrapper_visible,
             column_splines: if show_song_visuals {
                 &state.song_lua_visuals().column_splines[player_idx]
             } else {

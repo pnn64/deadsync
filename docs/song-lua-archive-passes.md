@@ -2886,8 +2886,45 @@ prints the production state and transforms to identify gaps and cannot
 establish complete song parity. The whole-song Model guard remains closed.
 
 The earlier independent camera and material controls remain valid native
-actor captures. The private 0.1.37 KABOOOOOM song capture needs regeneration
-with harness 0.1.38 before further production mesh comparisons. Keep the
-original sources, all update observations and tolerances intact, and keep
-every incomplete archive private. The full 501-simfile/492-context scope
-remains unfinished.
+actor captures. The fresh private 0.1.38 KABOOOOOM capture retains all
+95,752 Model observations, reaches the chart endpoint and passes archive
+integrity checks. Original song and Cyber source hashes remain unchanged.
+The production diagnostic passes 9,449,740 of 9,450,796 comparisons, with
+1,056 transformed-UV failures on four actors at 68 and 146 seconds. The
+orientation differences in the obsolete 0.1.37 capture are harness errors.
+These results still do not establish complete Model archive acceptance.
+
+Keep the original sources, all update observations and tolerances intact,
+and keep every incomplete archive private. The full 501-simfile/492-context
+scope remains unfinished.
+
+## Pass 86: preserve independent signed Model scales
+
+Native Actor::BeginDraw scales X, Y and Z independently, preserving negative
+values. Ordinary song Models used absolute Y scale for Z. Their production
+builder now carries the complete local three-axis scale, separately from
+the ancestor scale. The noteskin Model affine transform also preserves
+signed draw zoom instead of clamping mirrored geometry to zero.
+
+The new model-signed-scale fixture captures ten actual native draws from
+harness 0.1.38. Its five actors cover independent Z, negative X/Y/Z, rotation
+on all axes, and inherited signed scaling. Before the fixes, the ordinary
+Model control fails on IndependentZ; after correcting Z, the noteskin control
+fails on MirrorX. Both production paths use the same retained native draws
+and unchanged camera comparison tolerance. This is a controlled geometry
+fix; it does not resolve the original chart's texture-clock failures.
+Both paths pass all twenty native draws and 840 coordinate checks. The
+complete playback suite passes 187 tests with three existing ignores, and
+all 450 notefield library tests pass.
+
+ITGmania AnimatedTexture::Update adds the frame delta and advances one state
+only when seconds into the frame is strictly greater than the delay. It
+subtracts that delay once, even after a large update. DeadSync's elapsed-time
+modulo cannot represent that update history. Preserve this distinction from
+NoteDisplay's SetSecondsIntoAnimation seek when resolving the remaining UV
+differences; integer UV shifts or relaxed tolerances do not establish parity.
+
+World/view transforms, texture identity, lighting and independent depth
+states remain incomplete comparisons. The whole-song Model guard stays
+closed and the fresh original KABOOOOOM archive remains private. All 501
+original simfiles and 492 archive contexts remain in scope.

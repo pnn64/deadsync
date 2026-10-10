@@ -11,6 +11,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::hash::Hasher;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
@@ -238,9 +239,12 @@ fn source_hash(game: &str, data: &noteskin_itg::NoteskinData) -> Result<String, 
     hasher.write_u32(COMPILER_VERSION);
     hasher.write(game.as_bytes());
     hasher.write(data.name.as_bytes());
+    let mut bytes = Vec::new();
     for (label, path) in sources {
         hasher.write(label.as_bytes());
-        let bytes = fs::read(&path)
+        bytes.clear();
+        fs::File::open(&path)
+            .and_then(|mut file| file.read_to_end(&mut bytes))
             .map_err(|err| format!("failed to read '{}' for hashing: {err}", path.display()))?;
         hasher.write(&bytes);
     }
@@ -1595,3 +1599,7 @@ return Def.ActorFrame {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "compiler_resources_perf.rs"]
+mod resource_perf;

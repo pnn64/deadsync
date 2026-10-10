@@ -20,7 +20,7 @@ Every case alternates original/current implementations for ten sample pairs, dis
 
 Banner cases call the actual production/original mutation functions. They restore the singleton, its map capacities/hash seeds, and the requested reader ownership outside each measured call. Both variants include the same timer, dispatch and mutex overhead. A sample contains 500 single-update calls or 100 multi-update calls; ns/op means time for the stated update count. Reader drops and fixture destruction occur outside timing. The existing banner test mutex serializes these tests with the rest of the banner suite.
 
-Complete matching cases use the same metadata fixture and owned callback on both sides; only key normalization differs. The pending borrowed-metadata optimization is not part of these measurements.
+The recorded complete matching cases used the same metadata fixture and owned callback on both sides; only key normalization differed. After merging main's borrowed-metadata optimization, the benchmark uses borrowed callbacks on both sides; the baseline matcher is adapted to that API while retaining its original key normalization and matching rules. The tables below record the original owned-callback runs, rather than new measurements of the combined implementation.
 
 ## Timing results
 

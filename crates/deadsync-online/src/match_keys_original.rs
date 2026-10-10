@@ -1,4 +1,6 @@
 // Frozen starting implementations for differential tests and paired benchmarks.
+// Matcher callbacks are adapted to main's borrowed metadata API on both sides;
+// key normalization and matching rules retain their starting implementations.
 use super::*;
 
 pub(super) fn match_key(text: &str) -> String {
@@ -35,10 +37,10 @@ pub(super) fn best_scored(scored: impl Iterator<Item = (usize, usize)>) -> Vec<u
     out
 }
 
-pub(super) fn settle(
+pub(super) fn settle<'a>(
     candidates: &[usize],
     artist: &str,
-    tags: &impl Fn(usize) -> Option<SimfileTags>,
+    tags: &impl Fn(usize) -> Option<&'a SimfileTags>,
 ) -> Option<SongMatch> {
     match candidates {
         [] => None,
@@ -63,11 +65,11 @@ pub(super) fn settle(
     }
 }
 
-pub(super) fn match_song(
+pub(super) fn match_song<'a>(
     index: &PackIndex,
     title: &str,
     artist: &str,
-    tags: impl Fn(usize) -> Option<SimfileTags>,
+    tags: impl Fn(usize) -> Option<&'a SimfileTags>,
 ) -> SongMatch {
     let want = match_key(title);
     if want.is_empty() {

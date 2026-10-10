@@ -92,11 +92,11 @@ fn check_match(index: &PackIndex, tags: &[SimfileTags], title: &str, artist: &st
     let new_calls = RefCell::new(Vec::new());
     let old = original::match_song(index, title, artist, |i| {
         old_calls.borrow_mut().push(i);
-        tags.get(i).cloned()
+        tags.get(i)
     });
     let new = match_song(index, title, artist, |i| {
         new_calls.borrow_mut().push(i);
-        tags.get(i).cloned()
+        tags.get(i)
     });
     assert_eq!(new, old, "{title:?} / {artist:?}");
     assert_eq!(new_calls.into_inner(), old_calls.into_inner());
@@ -203,8 +203,8 @@ fn benchmark_song_match_keys() {
         );
         check_match(&index, &tags, title, artist);
         let (old, before) =
-            measure(|| original::match_song(&index, title, artist, |i| tags.get(i).cloned()));
-        let (new, after) = measure(|| match_song(&index, title, artist, |i| tags.get(i).cloned()));
+            measure(|| original::match_song(&index, title, artist, |i| tags.get(i)));
+        let (new, after) = measure(|| match_song(&index, title, artist, |i| tags.get(i)));
         assert_eq!(new, old);
         println!("{label} churn: original {before:?}, current {after:?}");
         paired_bench::compare(&label, 20, |current| {
@@ -213,14 +213,14 @@ fn benchmark_song_match_keys() {
                     black_box(&index),
                     black_box(title),
                     black_box(artist),
-                    |i| tags.get(i).cloned(),
+                    |i| tags.get(i),
                 )
             } else {
                 original::match_song(
                     black_box(&index),
                     black_box(title),
                     black_box(artist),
-                    |i| tags.get(i).cloned(),
+                    |i| tags.get(i),
                 )
             });
         });
