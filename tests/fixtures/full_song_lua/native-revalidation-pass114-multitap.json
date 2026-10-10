@@ -1,0 +1,86 @@
+{
+  "updated_utc": "2026-10-10T01:03:02.616732+00:00",
+  "build_parent_commit": "33b5a318211e2b9ab11a02976c97facc0bbbbe7d",
+  "native_frame_test": {
+    "source_commit": "33b5a318211e2b9ab11a02976c97facc0bbbbe7d",
+    "source_pending_commit": true,
+    "binary_sha256": "7c03c0fcf4d2dc437159dbfff4e44f83574a678b9982cec6b42b6e6e27635542",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-native-onsets-v3-song_lua_itgmania_semantic_parity.exe",
+      "multitap::edgar_countdown_onsets_and_hit_commands",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 202.59192899987102,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\edgar-native-onsets-v3.log",
+    "log_sha256": "9636f8f71e23b8da4abc358eb044b1bf0197ba569c336c8197c3213089b68e1f",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 200.84s"
+    ]
+  },
+  "native_frame_control": "tests/fixtures/itgmania-actors/edgar-multitap-frames.json",
+  "exact_time_control": "tests/fixtures/itgmania-actors/edgar-multitap-exact-times.json",
+  "exact_time_control_sha256": "bfa6662e9ce4a581fda3abe005575be40a5432d8d89a543144a43430b7f8e345",
+  "frame_control_sha256": "7e7f83a2501e018cd0702dc5363bbd00724e06431fe7c74df0cb270237065e63",
+  "test_clock_corrections": [
+    "Native SetUpdateFunction activation/retirement happens on recorded 60 Hz updates.",
+    "BitmapText tracks flagged text_changes_in_seconds are queried in music seconds.",
+    "Arrow orientation includes native base rotation plus ordinary rotation."
+  ],
+  "tolerances_changed": false,
+  "remaining_exact_time_gap": {
+    "status": "open; native source control confirms a DeadSync interpolation fault",
+    "prior_failing_test": {
+      "source_commit": "33b5a318211e2b9ab11a02976c97facc0bbbbe7d",
+      "source_pending_commit": true,
+      "binary_sha256": "c159921c1eadfc8d7b598e7d94a403ab52159476a8987b048b9f73eca79aa039",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\edgar-native-onsets-v2-song_lua_itgmania_semantic_parity.exe",
+        "multitap::edgar_countdown_onsets_and_hit_commands",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit_code": 101,
+      "elapsed_seconds": 182.51554629998282,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\edgar-native-onsets-v2.log",
+      "log_sha256": "917bdca0054c1e3bfaff55aaa0c18433e1ffb0fd6ffb3ed959cdfece2fc36d33",
+      "result_lines": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 260 filtered out; finished in 180.81s"
+      ]
+    },
+    "original_elapsed_queries": [
+      46.02739715576172,
+      46.84931564331055,
+      47.67123031616211,
+      48.49314880371094
+    ],
+    "tap_beats": [
+      112,
+      114,
+      116,
+      118
+    ],
+    "native_y": [
+      -135.0,
+      -135.0,
+      -135.0,
+      -135.0
+    ],
+    "deadsync_y_per_player": [
+      -134.26064,
+      -134.90811,
+      -134.54398,
+      -134.44183
+    ],
+    "players": [
+      1,
+      2
+    ],
+    "original_tolerance": 0.015,
+    "finding": "Linearly interpolating sampled geometry across the approach/bounce cusp misses the authored tap position. All eight original off-grid position failures remain pending independently of the native-frame regression.",
+    "next_action": "Correct geometry between samples without altering chronological material, hit, text or visibility clocks; verify exact-time controls and the complete original native archive."
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false
+}

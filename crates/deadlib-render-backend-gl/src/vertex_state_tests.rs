@@ -86,6 +86,78 @@ fn capture(state: &mut State, frame: &RenderFrame, textures: &TestTexture) -> Rg
 }
 
 #[test]
+#[ignore = "requires OpenGL and a window system"]
+fn mesh_face_modes_select_opposite_winding() {
+    use deadlib_render_core::{CullMode, INVALID_TMESH_CACHE_KEY};
+    let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
+    #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+    let window = Arc::new(
+        event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(PhysicalSize::new(96, 96)),
+            )
+            .unwrap(),
+    );
+    let mut state = init(window, ProjectionMatrix::IDENTITY, false, true, true).unwrap();
+    let texture = TestTexture(
+        create_texture(
+            &state,
+            &RgbaImage::from_pixel(1, 1, Rgba([255; 4])),
+            SamplerDesc::default(),
+        )
+        .unwrap(),
+    );
+    let mut frame = fixtures::fixture(2, BlendMode::Alpha, false, false);
+    frame.ops.truncate(1);
+    frame.tmesh_instances.truncate(1);
+    frame.clear_color = [0.0, 0.0, 0.0, 1.0];
+    frame.tmesh_instances[0] = deadlib_render_core::TexturedMeshInstanceRaw::new(
+        ProjectionMatrix::IDENTITY,
+        [1.0; 4],
+        [1.0; 2],
+        [0.0; 2],
+        [0.0; 2],
+        false,
+    );
+    let triangle = [[-0.8, -0.8, 0.0], [0.8, -0.8, 0.0], [0.0, 0.8, 0.0]];
+    for reversed in [false, true] {
+        frame.tmesh_geometries[0] = TexturedMeshGeometry {
+            cache_key: INVALID_TMESH_CACHE_KEY,
+            vertices: TexturedMeshVertices::Shared(Arc::from(triangle.map(|pos| {
+                deadlib_render_core::TexturedMeshVertex {
+                    pos,
+                    color: [1.0; 4],
+                    ..Default::default()
+                }
+            }))),
+        };
+        if reversed {
+            let mut vertices = frame.tmesh_geometries[0].vertices.as_ref().to_vec();
+            vertices.swap(1, 2);
+            frame.tmesh_geometries[0].vertices = TexturedMeshVertices::Shared(vertices.into());
+        }
+        for mode in [CullMode::None, CullMode::Back, CullMode::Front] {
+            frame.tmesh_instances[0].cull_mode = mode as u8 as f32;
+            let image = capture(&mut state, &frame, &texture);
+            let count = image.pixels().filter(|pixel| pixel[0] > 200).count();
+            let visible = mode == CullMode::None || (mode == CullMode::Back) != reversed;
+            assert_eq!(
+                count > 1000,
+                visible,
+                "mode={mode:?}, reversed={reversed}, pixels={count}"
+            );
+            if !visible {
+                assert_eq!(count, 0);
+            }
+        }
+    }
+    delete_texture(&state, &texture.0);
+    cleanup(&mut state);
+}
+
+#[test]
 #[ignore = "requires modern OpenGL and a window system"]
 fn interleaved_vertex_buffers_preserve_pixels() {
     let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();

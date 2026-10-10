@@ -56,6 +56,7 @@ fn frame(mode: f32) -> RenderFrame {
             vertices: TexturedMeshVertices::Shared(Arc::from(vertices)),
         }],
         ops: vec![DrawOp::TexturedMesh(TexturedMeshRun {
+            sampler: None,
             additive_texture: 2,
             geometry: 0,
             instance_start: 0,

@@ -1,0 +1,105 @@
+{
+  "pass": 141,
+  "previous_record": "native-revalidation-pass140.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+  "comparator_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    62
+  ],
+  "next_position": 63,
+  "comparisons_passed": 328107,
+  "charts": [
+    {
+      "position": 62,
+      "entry": {
+        "title": "[FULL SONG] ChikuTaku",
+        "source_simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
+        "harness_version": "0.1.54",
+        "archive": "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019.tar.zst",
+        "sha256": "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019",
+        "compressed_bytes": 68425601,
+        "aliases": [
+          "ab847a9c934b10f2b6426d8353c3f158ba444f6dbc08d32f14573529343a6aef.tar.zst"
+        ]
+      },
+      "original_archive_retained": "fb774a03318543e9d9a06853ebfac4355dca010496be83c5f655583ebfdcbedf.tar.zst",
+      "native_source_commit": "f5ff662047486c8519f6c272d78879750b6ce10b",
+      "native_trace_sha256": "af777303fb3703cc44ed641c5a9c7112f77e5d4ee408a803bbff4c7edc4923e5",
+      "original_source_sha256": {
+        "[FULL SONG] ChikuTaku [wrsw]/CDTitleWrsw.png": "0a1d612eb767c23d7fe816546750dbd55498b258c9fcbc5e2875b5453efb6e16",
+        "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku-bg.png": "cecc5c6490160a24faa05f7c585bf269a38832cd17893287496d09b92c36cebe",
+        "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku-bn.png": "7ceb86244da2e61b38cebe222bca7f188bf2289d8282885a76936e62ba409807",
+        "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku-jacket.png": "c12b12f6904572e102d43e0dd06259f2bbb3ca1204421928a74845d4f5c4b481",
+        "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ogg": "9242ead684e60c422055455c9518e99d761718db003a9aeda09c11006ce725b9",
+        "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc": "4cd34afa0a9e7d2f47c426f1ae85fc1504f98890354e544e2df0fc225df239f2",
+        "[FULL SONG] ChikuTaku [wrsw]/lua/ChikuTaku.mp4": "8e43ca00aeaeae3134cdc22d9cf39df0d429b594600faccbaafc744435b1b10e",
+        "[FULL SONG] ChikuTaku [wrsw]/lua/default.lua": "c3468e26403da99e85c4cc8170b38139c1e01505a9f911a400289969194b4947",
+        "[FULL SONG] ChikuTaku [wrsw]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[FULL SONG] ChikuTaku [wrsw]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[FULL SONG] ChikuTaku [wrsw]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 13308,
+      "duration_seconds": 221.77818298339844,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 7,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 62,
+      "source_simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
+      "archive": "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019.tar.zst",
+      "archive_sha256": "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019",
+      "harness_version": "0.1.54",
+      "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+      "source_pending_commit": false,
+      "binary_sha256": "8d84e79d89a7f80436a49110373567829ac28a3e2c802964e212cc7f8ee156a6",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-full_song_lua.exe",
+        "894c528ecff961e8807fe90e10f0597bc1b45d3a8377401d9d7b354a56288019.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 41.6362127000466,
+      "comparisons_passed": 328107,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-062-native-column-xy-v6.log",
+      "log_sha256": "00e1e1b648c86aa4091c90a20839e721a1be9f48cfdd52aeb63ab4c5ee767552",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass141-top-062-native-v3.json",
+      "native_receipt_sha256": "75a5c8ef871e86387169d48a1141432bd60dad753265a68be38ade3beb79ea35",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "6217b2455b17ed3e60cd9365a03d790253ee94ea",
+    "source_pending_commit": false,
+    "binary_sha256": "9f550263a9682a2386ebb04ff72a66926eca035a0e4f8e18e2def03b2ca1baa7",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-column-xy-after-v6-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.2653590999543667,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-062-native-pass141.log",
+    "log_sha256": "c4341ff52ba9bb95ec63d03f6b4ea2d97252c92121b0ef07ef41ed5c16ae0b7f",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 1.87s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}

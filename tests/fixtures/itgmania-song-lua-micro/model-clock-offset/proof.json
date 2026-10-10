@@ -1,0 +1,17 @@
+{
+  "native_song_host_checks_passed": 122,
+  "music_origin": -0.01,
+  "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "harness_source_commit": "e336029ad19350a9e17ed9d663f865efeb2b3a41",
+  "cli_sha256": "9994b60816983f28486e42e5b0f95067c258427c605b59f722dfff32f012e4be",
+  "independent_native_sha256": "e4bb83e0756e335c471ed20db69bde81a542d0a81d9b6ff367ef5451a847c8f1",
+  "first_uv": [
+    0.12137199938297272,
+    0.3940809965133667
+  ],
+  "last_uv": [
+    0.12137199938297272,
+    -0.6059190034866333
+  ],
+  "conclusion": "Primary foreground material updates use elapsed seconds relative to beat zero; simfile offset changes BGM position, not texture delta."
+}

@@ -1779,15 +1779,12 @@ fn cache_submit_success_from_app_runtime(
     );
     if let Some(profile_id) = player.profile_id.as_deref() {
         for folders in &plan.itl_folder_groups {
-            deadsync_profile::app_runtime::update_itl_unlock_folders(
-                profile_id,
-                folders.as_slice(),
-            );
+            deadsync_profile::app_runtime::update_itl_unlock_folders(profile_id, folders);
         }
     }
     for download in &plan.downloads {
         crate::runtime::queue_event_unlock_download(
-            download.url.as_str(),
+            download.url,
             download.download_name.as_str(),
             download.pack_name.as_str(),
         );
@@ -3091,16 +3088,18 @@ pub fn unlock_events_from_submit_response<'a>(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GrooveStatsUnlockDownload {
-    pub url: String,
+/// A queued download description borrowing its URL from the API response.
+pub struct GrooveStatsUnlockDownload<'a> {
+    pub url: &'a str,
     pub download_name: String,
     pub pack_name: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct GrooveStatsSubmitUnlockPlan {
-    pub itl_folder_groups: Vec<Vec<String>>,
-    pub downloads: Vec<GrooveStatsUnlockDownload>,
+/// Unlock work to consume while the submission response remains available.
+pub struct GrooveStatsSubmitUnlockPlan<'a> {
+    pub itl_folder_groups: Vec<&'a [String]>,
+    pub downloads: Vec<GrooveStatsUnlockDownload<'a>>,
 }
 
 fn unlock_events<'a>(
@@ -3132,9 +3131,9 @@ fn download_count(event: &GrooveStatsSubmitApiEvent) -> usize {
         .count()
 }
 
-fn append_unlock_downloads(
-    out: &mut Vec<GrooveStatsUnlockDownload>,
-    event: &GrooveStatsSubmitApiEvent,
+fn append_unlock_downloads<'a>(
+    out: &mut Vec<GrooveStatsUnlockDownload<'a>>,
+    event: &'a GrooveStatsSubmitApiEvent,
     profile_name: &str,
     separate_by_player: bool,
 ) {
@@ -3172,7 +3171,7 @@ fn append_unlock_downloads(
         }
         download_name.truncate(download_name.trim_end().len());
         out.push(GrooveStatsUnlockDownload {
-            url: url.to_string(),
+            url,
             download_name,
             pack_name,
         });
@@ -3180,11 +3179,11 @@ fn append_unlock_downloads(
 }
 
 #[must_use]
-pub fn unlock_downloads_from_submit_event(
-    event: &GrooveStatsSubmitApiEvent,
+pub fn unlock_downloads_from_submit_event<'a>(
+    event: &'a GrooveStatsSubmitApiEvent,
     profile_name: &str,
     separate_by_player: bool,
-) -> Vec<GrooveStatsUnlockDownload> {
+) -> Vec<GrooveStatsUnlockDownload<'a>> {
     let count = download_count(event);
     if count == 0 {
         return Vec::new();
@@ -3195,12 +3194,12 @@ pub fn unlock_downloads_from_submit_event(
 }
 
 #[must_use]
-pub fn submit_unlock_plan_from_response(
+pub fn submit_unlock_plan_from_response<'a>(
     player: &GrooveStatsSubmitPlayerJob,
-    response: &GrooveStatsSubmitApiPlayer,
+    response: &'a GrooveStatsSubmitApiPlayer,
     auto_download_unlocks: bool,
     separate_unlocks_by_player: bool,
-) -> GrooveStatsSubmitUnlockPlan {
+) -> GrooveStatsSubmitUnlockPlan<'a> {
     let itl_quests = response
         .itl
         .as_ref()
@@ -3209,7 +3208,6 @@ pub fn submit_unlock_plan_from_response(
     let itl_folder_groups = itl_quests
         .iter()
         .map(|quest| quest.song_download_folders.as_slice())
-        .map(<[String]>::to_vec)
         .collect();
     let mut downloads = Vec::new();
     if auto_download_unlocks {
@@ -5439,7 +5437,7 @@ mod tests {
             plan.downloads
                 .iter()
                 .map(|download| (
-                    download.url.as_str(),
+                    download.url,
                     download.download_name.as_str(),
                     download.pack_name.as_str()
                 ))
@@ -6156,4 +6154,5 @@ mod tests {
         assert_eq!(response.error, "bad api key");
         assert!(response.player_for_slot(1).is_none());
     }
+    include!("groovestats/unlock_tests.rs");
 }
