@@ -1672,12 +1672,10 @@
     {
       "title": "Bodies",
       "source_simfile": "Bodies/Bodies.ssc",
-      "harness_version": "0.1.0",
-      "archive": "dac8eb77f58072086aa74c6b4cbf39cdc81e92230180c1c92ea429c78d2bd992.tar.zst",
-      "sha256": "dac8eb77f58072086aa74c6b4cbf39cdc81e92230180c1c92ea429c78d2bd992",
-      "compressed_bytes": 115394,
-      "uncompressed_sha256": "c7389acfbad39bcfc37c4851d5386621ca909250c4eccd10ed6c3eba19eb91e2",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "355eff726a18b025a030f2619bd223db790a014ba57452b87bc85cce301f53f9.tar.zst",
+      "sha256": "355eff726a18b025a030f2619bd223db790a014ba57452b87bc85cce301f53f9",
+      "compressed_bytes": 133731,
       "aliases": [
         "dae8e1801f59cbca72c5e808b528d72c7ceaeedf08d46793f0bd323aa8e5e14d.tar.zst"
       ]
