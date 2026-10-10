@@ -1580,20 +1580,17 @@ pub fn install_game_state_globals(
             move |_, _args: MultiValue| Ok(song_options.clone())
         })?,
     )?;
-    gamestate.set(
-        "GetSongOptions",
-        lua.create_function({
-            let song_options = song_options;
-            move |lua, _args: MultiValue| {
-                let rate = song_options
-                    .get::<Option<f32>>("__songlua_music_rate")?
-                    .unwrap_or(1.0);
-                Ok(Value::String(
-                    lua.create_string(format_song_options_text(rate))?,
-                ))
-            }
-        })?,
-    )?;
+    let song_options_text = lua.create_function(move |lua, _args: MultiValue| {
+        let rate = song_options
+            .get::<Option<f32>>("__songlua_music_rate")?
+            .unwrap_or(1.0);
+        Ok(Value::String(
+            lua.create_string(format_song_options_text(rate))?,
+        ))
+    })?;
+    gamestate.set("GetSongOptions", song_options_text.clone())?;
+    // GameState exposes the current options string without a ModsLevel argument.
+    gamestate.set("GetSongOptionsString", song_options_text)?;
     let master_player = context
         .players
         .iter()

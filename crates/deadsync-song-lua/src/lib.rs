@@ -619,7 +619,16 @@ pub fn song_music_rate_value(value: f32) -> f32 {
 #[must_use]
 pub fn format_song_options_text(music_rate: f32) -> String {
     let rate = song_music_rate_value(music_rate);
-    format!("{rate}xMusic")
+    if rate == 1.0 {
+        return String::new();
+    }
+    // SongOptions::GetMods rounds to two decimals and removes one trailing zero.
+    let mut text = format!("{rate:.2}");
+    if text.ends_with('0') {
+        text.pop();
+    }
+    text.push_str("xMusic");
+    text
 }
 
 #[must_use]
@@ -12727,6 +12736,44 @@ return Def.ActorFrame{}
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].message, "1.25xMusic");
+    }
+
+    #[test]
+    fn native_song_rate_text() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/itgmania-song-lua-micro/song-options-string");
+        let native: serde_json::Value = serde_json::from_slice(
+            &fs::read(fixtures.join("native.json")).expect("native song options trace"),
+        )
+        .expect("valid native song options trace");
+        let messages = native["message_dispatches"]
+            .as_array()
+            .expect("native message observations");
+        let rates = [1.0, 1.25, 1.2, 2.0, 1.234, 1.005];
+        assert_eq!(messages.len(), rates.len());
+        let song_dir = test_dir("native-song-rate-text");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions = {
+    {1, "SongOptionsString:" .. GAMESTATE:GetSongOptionsString(), true},
+    {2, "SongOptionsString:" .. GAMESTATE:GetSongOptions("ModsLevel_Song"), true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .expect("write song options query");
+        for (rate, observed) in rates.into_iter().zip(messages) {
+            let mut context = SongLuaCompileContext::new(&song_dir, "Native Song Rate Text");
+            context.song_music_rate = rate;
+            let compiled = test_compile_song_lua(&entry, &context).expect("compile song queries");
+            assert_eq!(compiled.messages.len(), 2);
+            let expected = observed["name"].as_str().expect("native option string");
+            for message in &compiled.messages {
+                assert_eq!(message.message, expected, "music rate {rate}");
+            }
+        }
     }
 
     #[test]
