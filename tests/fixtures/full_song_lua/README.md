@@ -792,3 +792,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass125.json`. Position 47 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 126
+
+Position 47, [6210] [11] Slamurai, passes all
+541,079 comparisons against committed DeadSync
+`ba32031b5`. The complete native harness 0.1.52 archive
+contains 7,311 updates over 121.82 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass126.json`. Position 48 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.

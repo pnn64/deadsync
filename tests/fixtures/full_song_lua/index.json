@@ -796,12 +796,10 @@
     {
       "title": "[6210] [11] Slamurai",
       "source_simfile": "[11] Slamurai (SX) [Zaia]/Slamurai.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6d72b842ce7444a01f63d445d479553970cb8a63f348cc51dd5c1699834b3bf7.tar.zst",
-      "sha256": "6d72b842ce7444a01f63d445d479553970cb8a63f348cc51dd5c1699834b3bf7",
-      "compressed_bytes": 64656,
-      "uncompressed_sha256": "f5224cd9bbd29847496234d23cad621b88344cfcac2e6e686c70357fad0382d0",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927.tar.zst",
+      "sha256": "295c36a5b3f9be3f795efe84ab5fd12c5129ad93a71ab40f906612fb6926f927",
+      "compressed_bytes": 245789,
       "aliases": [
         "e7dc184462e8bf07fd9a6a1ed704439eedc8a1718c3e64726a4f3189a75b6691.tar.zst"
       ]
