@@ -1513,3 +1513,17 @@ See `native-revalidation-pass178.json`. Position 100 is next. The
 original 501-source/492-context scope and independent timing and
 framebuffer observations remain open. Explicit Model culling is verified
 in `native-revalidation-model-culling.json`.
+
+## Ordered fixture validation, pass 179
+
+Position 100, Apollo, passes all
+208,388 comparisons against committed DeadSync
+`1dccb63aa`. The complete native harness 0.1.61 archive
+contains 9,207 updates over 153.43 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass179.json`. Position 101 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.
