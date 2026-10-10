@@ -1169,3 +1169,17 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass154.json`. Position 76 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 155
+
+Position 76, A Dramatic Irony, passes all
+760,235 comparisons against committed DeadSync
+`415cb4223`. The complete native harness 0.1.56 archive
+contains 6,643 updates over 110.69 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass155.json`. Position 77 is next. The
+original 501-source/492-context scope and independent timing and
+framebuffer observations remain open. Explicit Model culling is verified
+in `native-revalidation-model-culling.json`.

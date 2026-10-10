@@ -1115,12 +1115,10 @@
     {
       "title": "A Dramatic Irony",
       "source_simfile": "A Dramatic Irony/A Dramatic Irony.ssc",
-      "harness_version": "0.1.0",
-      "archive": "6dd2dc541fb78654743572555b3e3e8cd6f8b5a7c00f8b7cf54df0cd2733e91c.tar.zst",
-      "sha256": "6dd2dc541fb78654743572555b3e3e8cd6f8b5a7c00f8b7cf54df0cd2733e91c",
-      "compressed_bytes": 12435299,
-      "uncompressed_sha256": "0844958e2a70643098ad47ab690be7dc4d0c3ae7cafe71e7ea6c29203452f3ed",
-      "compression_level": 22,
+      "harness_version": "0.1.56",
+      "archive": "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0.tar.zst",
+      "sha256": "7db9fbbe9b9aaef7a7ff728adff2e573aae7917aa2c1c45cb3bf3676783997c0",
+      "compressed_bytes": 16195186,
       "aliases": [
         "b1b7a1aa52f6d8a5d2b79c7028e1676f0650a2c8105640dee1962c1bd0a8a67d.tar.zst"
       ]
