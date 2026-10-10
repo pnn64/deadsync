@@ -1104,3 +1104,16 @@ chart, Lua, prior archive, aliases, and all tolerances are retained.
 See `native-revalidation-pass149.json`. Position 71 is next. The
 original 501-source/492-context scope and independent timing, culling
 and framebuffer observations remain open.
+
+## Ordered fixture validation, pass 150
+
+Position 71, [T09] Picture in My Mind, passes all
+495,069 comparisons against committed DeadSync
+`63b08812a`. The complete native harness 0.1.54 archive
+contains 6,865 updates over 114.40 seconds, with no
+runtime errors or dropped events. Its integrity check passes. Original
+chart, Lua, prior archive, aliases, and all tolerances are retained.
+
+See `native-revalidation-pass150.json`. Position 72 is next. The
+original 501-source/492-context scope and independent timing, culling
+and framebuffer observations remain open.

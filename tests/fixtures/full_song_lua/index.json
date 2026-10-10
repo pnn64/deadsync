@@ -1060,12 +1060,10 @@
     {
       "title": "[T09] Picture in My Mind",
       "source_simfile": "[T09] Picture in My Mind [nikko X WINK RMX] (SX)/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
-      "harness_version": "0.1.0",
-      "archive": "f5b651e7284a4fe72f527a7a9cc3d221454203dde7aeb33ed2b087322dc92e87.tar.zst",
-      "sha256": "f5b651e7284a4fe72f527a7a9cc3d221454203dde7aeb33ed2b087322dc92e87",
-      "compressed_bytes": 73715,
-      "uncompressed_sha256": "23ff2bbe9789cbfe8a12f32c784638bbe5224859e133925adadf2fcee9e5a752",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d.tar.zst",
+      "sha256": "4eafba75ca724163c73a5d9699e6648cad086eaf5787931c4ab15c5ad167a62d",
+      "compressed_bytes": 210355,
       "aliases": [
         "8a164d5918672941a2eb26014f683a98975b55be8aad1b7c37ee293f93493418.tar.zst"
       ]
