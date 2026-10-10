@@ -86,3 +86,7 @@ pub use sprite::{
     sprite_sheet_frame, sprite_state_properties_animation, sprite_state_properties_animation_owned,
     sprite_uv_scroll_clock, state_properties_source_plan,
 };
+
+#[cfg(test)]
+#[path = "../../../tests/perf/resource_support.rs"]
+mod resource_perf_support;
