@@ -274,6 +274,20 @@ pub struct VisualOverrides {
     pub pulse_outer: Option<f32>,
     pub pulse_period: Option<f32>,
     pub beat_period: Option<f32>,
+    pub bounce_z: Option<f32>,
+    pub bounce_z_offset: Option<f32>,
+    pub bounce_z_period: Option<f32>,
+    pub digital_z: Option<f32>,
+    pub digital_z_offset: Option<f32>,
+    pub digital_z_period: Option<f32>,
+    pub digital_z_steps: Option<f32>,
+    pub tornado_z: Option<f32>,
+    pub tornado_z_offset: Option<f32>,
+    pub tornado_z_period: Option<f32>,
+    pub sawtooth: Option<f32>,
+    pub sawtooth_period: Option<f32>,
+    pub sawtooth_z: Option<f32>,
+    pub sawtooth_z_period: Option<f32>,
     pub confusion_x: Option<f32>,
     pub confusion_y: Option<f32>,
     pub confusion_y_offset: Option<f32>,
@@ -381,6 +395,20 @@ impl Default for VisualOverrides {
             pulse_outer: None,
             pulse_period: None,
             beat_period: None,
+            bounce_z: None,
+            bounce_z_offset: None,
+            bounce_z_period: None,
+            digital_z: None,
+            digital_z_offset: None,
+            digital_z_period: None,
+            digital_z_steps: None,
+            tornado_z: None,
+            tornado_z_offset: None,
+            tornado_z_period: None,
+            sawtooth: None,
+            sawtooth_period: None,
+            sawtooth_z: None,
+            sawtooth_z_period: None,
             confusion_x: None,
             confusion_y: None,
             confusion_y_offset: None,
@@ -490,6 +518,20 @@ impl VisualOverrides {
             || self.pulse_outer.is_some()
             || self.pulse_period.is_some()
             || self.beat_period.is_some()
+            || self.bounce_z.is_some()
+            || self.bounce_z_offset.is_some()
+            || self.bounce_z_period.is_some()
+            || self.digital_z.is_some()
+            || self.digital_z_offset.is_some()
+            || self.digital_z_period.is_some()
+            || self.digital_z_steps.is_some()
+            || self.tornado_z.is_some()
+            || self.tornado_z_offset.is_some()
+            || self.tornado_z_period.is_some()
+            || self.sawtooth.is_some()
+            || self.sawtooth_period.is_some()
+            || self.sawtooth_z.is_some()
+            || self.sawtooth_z_period.is_some()
             || self.confusion_x.is_some()
             || self.confusion_y.is_some()
             || self.confusion_y_offset.is_some()
@@ -708,6 +750,20 @@ pub struct VisualEffects {
     pub pulse_outer: f32,
     pub pulse_period: f32,
     pub beat_period: f32,
+    pub bounce_z: f32,
+    pub bounce_z_offset: f32,
+    pub bounce_z_period: f32,
+    pub digital_z: f32,
+    pub digital_z_offset: f32,
+    pub digital_z_period: f32,
+    pub digital_z_steps: f32,
+    pub tornado_z: f32,
+    pub tornado_z_offset: f32,
+    pub tornado_z_period: f32,
+    pub sawtooth: f32,
+    pub sawtooth_period: f32,
+    pub sawtooth_z: f32,
+    pub sawtooth_z_period: f32,
     pub confusion_x: f32,
     pub confusion_y: f32,
     pub confusion_y_offset: f32,
@@ -823,6 +879,20 @@ impl VisualEffects {
             pulse_outer: 0.0,
             pulse_period: 0.0,
             beat_period: 0.0,
+            bounce_z: 0.0,
+            bounce_z_offset: 0.0,
+            bounce_z_period: 0.0,
+            digital_z: 0.0,
+            digital_z_offset: 0.0,
+            digital_z_period: 0.0,
+            digital_z_steps: 0.0,
+            tornado_z: 0.0,
+            tornado_z_offset: 0.0,
+            tornado_z_period: 0.0,
+            sawtooth: 0.0,
+            sawtooth_period: 0.0,
+            sawtooth_z: 0.0,
+            sawtooth_z_period: 0.0,
             confusion_x: 0.0,
             confusion_y: 0.0,
             confusion_y_offset: 0.0,
@@ -1023,6 +1093,20 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual(&mut visual.pulse_outer, base.pulse_outer, step);
     approach_optional_visual(&mut visual.pulse_period, base.pulse_period, step);
     approach_optional_visual(&mut visual.beat_period, base.beat_period, step);
+    approach_optional_visual(&mut visual.bounce_z, base.bounce_z, step);
+    approach_optional_visual(&mut visual.bounce_z_offset, base.bounce_z_offset, step);
+    approach_optional_visual(&mut visual.bounce_z_period, base.bounce_z_period, step);
+    approach_optional_visual(&mut visual.digital_z, base.digital_z, step);
+    approach_optional_visual(&mut visual.digital_z_offset, base.digital_z_offset, step);
+    approach_optional_visual(&mut visual.digital_z_period, base.digital_z_period, step);
+    approach_optional_visual(&mut visual.digital_z_steps, base.digital_z_steps, step);
+    approach_optional_visual(&mut visual.tornado_z, base.tornado_z, step);
+    approach_optional_visual(&mut visual.tornado_z_offset, base.tornado_z_offset, step);
+    approach_optional_visual(&mut visual.tornado_z_period, base.tornado_z_period, step);
+    approach_optional_visual(&mut visual.sawtooth, base.sawtooth, step);
+    approach_optional_visual(&mut visual.sawtooth_period, base.sawtooth_period, step);
+    approach_optional_visual(&mut visual.sawtooth_z, base.sawtooth_z, step);
+    approach_optional_visual(&mut visual.sawtooth_z_period, base.sawtooth_z_period, step);
     approach_optional_visual(&mut visual.confusion_x, base.confusion_x, step);
     approach_optional_visual(&mut visual.confusion_y, base.confusion_y, step);
     approach_optional_visual(
@@ -1717,6 +1801,118 @@ pub fn approach_visual_overrides_to_target(
         target.beat_period,
         base.beat_period,
         speed.beat_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_z,
+        target.bounce_z,
+        base.bounce_z,
+        speed.bounce_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_z_offset,
+        target.bounce_z_offset,
+        base.bounce_z_offset,
+        speed.bounce_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.bounce_z_period,
+        target.bounce_z_period,
+        base.bounce_z_period,
+        speed.bounce_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z,
+        target.digital_z,
+        base.digital_z,
+        speed.digital_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z_offset,
+        target.digital_z_offset,
+        base.digital_z_offset,
+        speed.digital_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z_period,
+        target.digital_z_period,
+        base.digital_z_period,
+        speed.digital_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.digital_z_steps,
+        target.digital_z_steps,
+        base.digital_z_steps,
+        speed.digital_z_steps,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_z,
+        target.tornado_z,
+        base.tornado_z,
+        speed.tornado_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_z_offset,
+        target.tornado_z_offset,
+        base.tornado_z_offset,
+        speed.tornado_z_offset,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.tornado_z_period,
+        target.tornado_z_period,
+        base.tornado_z_period,
+        speed.tornado_z_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth,
+        target.sawtooth,
+        base.sawtooth,
+        speed.sawtooth,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth_period,
+        target.sawtooth_period,
+        base.sawtooth_period,
+        speed.sawtooth_period,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth_z,
+        target.sawtooth_z,
+        base.sawtooth_z,
+        speed.sawtooth_z,
+        delta_time,
+        1.0,
+    );
+    approach_attack_value(
+        &mut current.sawtooth_z_period,
+        target.sawtooth_z_period,
+        base.sawtooth_z_period,
+        speed.sawtooth_z_period,
         delta_time,
         1.0,
     );

@@ -254,7 +254,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             continue;
         }
         let lane = frame.lanes[local_col];
-        let effect = gameplay_visual_effect_params(&visual, local_col);
+        let mut effect = gameplay_visual_effect_params(&visual, local_col);
+        effect.col_x = notes.col_offsets[local_col];
+        effect.tornado_z_bounds = notes.tornado_z_bounds[local_col];
         let transform_cache = crate::lane_note_transform_cache(current_beat, effect);
         lane_rotations_x[local_col] = transform_cache.confusion_rotation_x_deg;
         lane_rotations_y[local_col] = transform_cache.confusion_rotation_y_deg;
@@ -307,6 +309,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 tornado_period: visual.tornado_period,
                 tornado_offset: visual.tornado_offset,
                 bounce: visual.bounce,
+                sawtooth: visual.sawtooth,
+                sawtooth_period: visual.sawtooth_period,
                 bounce_period: visual.bounce_period,
                 bounce_offset: visual.bounce_offset,
                 drunk: visual.drunk,
@@ -5138,12 +5142,224 @@ mod tests {
     }
 
     #[test]
-    fn composed_confusion_matches_native_rotations() {
-        use deadlib_present::actors::FlatMeshVertices;
+    fn composed_z_waves_match_native_positions() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
             compose_notefield_field,
         };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/z-wave-motion.json"
+        ))
+        .expect("independently compiled native Z wave positions");
+        let mut ns = noteskin();
+        // Native NoteDisplay anchors reversed heads at the original head only
+        // when this noteskin metric is enabled.
+        ns.note_display_metrics.flip_head_and_tail_when_reverse = true;
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|col| {
+                TestSlot::new(if col < deadsync_noteskin::NUM_QUANTIZATIONS {
+                    "note0"
+                } else {
+                    "note1"
+                })
+            })
+            .collect();
+        ns.mine_layers = vec![
+            vec![TestSlot::new("note0")].into(),
+            vec![TestSlot::new("note1")].into(),
+        ];
+        for col in 0..2 {
+            ns.hold_columns[col].head_inactive =
+                Some(TestSlot::new(if col == 0 { "note0" } else { "note1" }));
+            ns.hold_columns[col].body_inactive = Some(TestSlot::new("body"));
+            ns.hold_columns[col].topcap_inactive = Some(TestSlot::new("top"));
+            ns.hold_columns[col].bottomcap_inactive = Some(TestSlot::new("bottom"));
+        }
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut checked = 0;
+        for vector in native["vectors"].as_array().expect("vectors") {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let travel = value("travel");
+            if value("columns") != 2.0 || value("zoom") != 1.0 {
+                continue;
+            }
+            let col = match value("col_x") {
+                -32.0 => 0,
+                32.0 => 1,
+                _ => continue,
+            };
+            if travel < 0.0 {
+                continue;
+            }
+            for kind in [
+                NoteType::Tap,
+                NoteType::Mine,
+                NoteType::Hold,
+                NoteType::Roll,
+            ] {
+                let mut n = note(col);
+                n.note_type = kind;
+                n.beat = 0.0 + travel / 64.0;
+                n.row_index =
+                    usize::try_from(deadsync_core::timing::beat_to_note_row(n.beat)).expect("row");
+                if matches!(kind, NoteType::Hold | NoteType::Roll) {
+                    n.hold = Some(HoldData {
+                        end_row_index: n.row_index + 96,
+                        end_beat: n.beat + 2.0,
+                        result: None,
+                        life: 1.0,
+                        let_go_started_at: None,
+                        let_go_starting_life: 1.0,
+                        last_held_row_index: n.row_index,
+                        last_held_beat: n.beat,
+                    });
+                }
+                let notes = [n];
+                let mut lanes = [vec![], vec![]];
+                lanes[col]
+                    .push(deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index"));
+                let rows = [deadsync_core::timing::beat_to_note_row(notes[0].beat)];
+                let mut request =
+                    request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                request.chart.lane_note_row_indices = &lanes;
+                request.chart.lane_hold_indices = &lanes;
+                request.chart.note_itg_rows = &rows;
+                request.chart.visible_beat = 0.0;
+                request.chart.search_beat = 0.0;
+                request.visual.current_display_beat = 0.0;
+                request.geometry.column_dirs.fill(1.0);
+                request.geometry.draw_distance_before_targets = 1536.0;
+                request.geometry.draw_distance_after_targets = 1536.0;
+                request.visual.visual.bounce_z = value("bounce_z");
+                request.visual.visual.bounce_z_offset = value("bounce_z_offset");
+                request.visual.visual.bounce_z_period = value("bounce_z_period");
+                request.visual.visual.digital_z = value("digital_z");
+                request.visual.visual.digital_z_offset = value("digital_z_offset");
+                request.visual.visual.digital_z_period = value("digital_z_period");
+                request.visual.visual.digital_z_steps = value("digital_z_steps");
+                request.visual.visual.tornado_z = value("tornado_z");
+                request.visual.visual.tornado_z_offset = value("tornado_z_offset");
+                request.visual.visual.tornado_z_period = value("tornado_z_period");
+                request.visual.visual.sawtooth = value("sawtooth");
+                request.visual.visual.sawtooth_period = value("sawtooth_period");
+                request.visual.visual.sawtooth_z = value("sawtooth_z");
+                request.visual.visual.sawtooth_z_period = value("sawtooth_z_period");
+                request.visual.visual.tiny = value("tiny");
+                let prepared = prepare_notefield(&request).expect("prepared Z wave field");
+                let frame = NotefieldFieldFrameView {
+                    feedback: spline_feedback(&[]),
+                    completed_rows: Default::default(),
+                };
+                let mut draws = Vec::new();
+                compose_notefield_field(
+                    &mut Vec::new(),
+                    &mut draws,
+                    &mut Vec::new(),
+                    &mut ModelMeshCache::default(),
+                    &mut HoldMeshScratch::with_columns(2),
+                    &mut CapturedActorScratch::with_capacities(32, 0),
+                    &mut NotefieldCameraCache::default(),
+                    &request,
+                    &prepared,
+                    &frame,
+                    &source,
+                );
+                let mut arrow = None;
+                let mut receptor = None;
+                let mut receptor_z = None;
+                for draw in &draws {
+                    if let FlatDraw::Sprite(sprite) = draw {
+                        let key = sprite.source.texture_key();
+                        if key == Some(if col == 0 { "note0" } else { "note1" }) {
+                            arrow = Some([sprite.center[0], sprite.center[1], sprite.world_z]);
+                        } else if key == Some(if col == 0 { "target0" } else { "target1" }) {
+                            receptor = Some(sprite.center);
+                            receptor_z = Some(sprite.world_z);
+                        }
+                    }
+                }
+                let arrow = arrow.expect("composed note or hold head");
+                let receptor = receptor.expect("composed receptor");
+                let expected = [value("x") - value("receptor_x"), travel, value("z")];
+                let actual = [arrow[0] - receptor[0], arrow[1] - receptor[1], arrow[2]];
+                for axis in 0..3 {
+                    assert!(
+                        (actual[axis] - expected[axis]).abs() < 0.001,
+                        "{kind:?}, axis={axis}, {vector}: actual={actual:?}, expected={expected:?}"
+                    );
+                }
+                assert!(
+                    (receptor_z.expect("receptor Z") - value("receptor_z")).abs() < 0.001,
+                    "{vector}"
+                );
+                if matches!(kind, NoteType::Hold | NoteType::Roll)
+                    && [
+                        "bounce_z",
+                        "digital_z",
+                        "tornado_z",
+                        "sawtooth_z",
+                        "sawtooth",
+                    ]
+                    .iter()
+                    .any(|key| value(key) != 0.0)
+                {
+                    let mut found = false;
+                    for draw in &draws {
+                        let FlatDraw::TexturedMesh(mesh) = draw else {
+                            continue;
+                        };
+                        if mesh.texture.texture_key() != Some("body") {
+                            continue;
+                        }
+                        assert_eq!(
+                            mesh.depth_test,
+                            vector["depth"].as_bool().expect("native depth")
+                        );
+                        let vertices = match &mesh.vertices {
+                            FlatMeshVertices::Shared(v) => v.as_ref(),
+                            FlatMeshVertices::Reusable(v) => v.as_slice(),
+                        };
+                        for quad in vertices.chunks_exact(6) {
+                            for (left, right) in [(&quad[0], &quad[1]), (&quad[5], &quad[4])] {
+                                let center = std::array::from_fn::<_, 3, _>(|axis| {
+                                    (left.pos[axis] + right.pos[axis]) * 0.5
+                                });
+                                if (center[1] - receptor[1] - travel).abs() > 0.0001 {
+                                    continue;
+                                }
+                                let actual_x = center[0] - receptor[0];
+                                let expected_x = value("x") - value("receptor_x");
+                                assert!(
+                                    (actual_x - expected_x).abs() < 0.001,
+                                    "{kind:?} body X: {vector}; actual={actual_x}"
+                                );
+                                assert!(
+                                    (center[2] - value("z")).abs() < 0.001,
+                                    "{kind:?} body Z: {vector}; actual={center:?}"
+                                );
+                                found = true;
+                            }
+                        }
+                    }
+                    assert!(found, "composed hold row missing: {vector}");
+                }
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, 1152);
+    }
+
+    #[test]
+    fn composed_confusion_matches_native_rotations() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
         use deadsync_rules::note::HoldData;
         let native: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/itgmania-song-lua-micro/confusion-spin-rotation.json"

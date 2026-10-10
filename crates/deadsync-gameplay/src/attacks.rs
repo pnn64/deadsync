@@ -671,6 +671,20 @@ pub enum SongLuaEaseMaskTarget {
     VisualPulseOuter,
     VisualPulsePeriod,
     VisualBeatPeriod,
+    VisualBounceZ,
+    VisualBounceZOffset,
+    VisualBounceZPeriod,
+    VisualDigitalZ,
+    VisualDigitalZOffset,
+    VisualDigitalZPeriod,
+    VisualDigitalZSteps,
+    VisualTornadoZ,
+    VisualTornadoZOffset,
+    VisualTornadoZPeriod,
+    VisualSawtooth,
+    VisualSawtoothPeriod,
+    VisualSawtoothZ,
+    VisualSawtoothZPeriod,
     VisualConfusionX,
     VisualConfusionY,
     VisualConfusionYOffset,
@@ -2370,6 +2384,44 @@ fn append_song_lua_ease_targets_key(
         "pulseouter" => push(SongLuaEaseMaskTarget::VisualPulseOuter, pct_from, pct_to),
         "pulseperiod" => push(SongLuaEaseMaskTarget::VisualPulsePeriod, pct_from, pct_to),
         "beatperiod" => push(SongLuaEaseMaskTarget::VisualBeatPeriod, pct_from, pct_to),
+        "bouncez" => push(SongLuaEaseMaskTarget::VisualBounceZ, pct_from, pct_to),
+        "bouncezoffset" => push(SongLuaEaseMaskTarget::VisualBounceZOffset, pct_from, pct_to),
+        "bouncezperiod" => push(SongLuaEaseMaskTarget::VisualBounceZPeriod, pct_from, pct_to),
+        "digitalz" => push(SongLuaEaseMaskTarget::VisualDigitalZ, pct_from, pct_to),
+        "digitalzoffset" => push(
+            SongLuaEaseMaskTarget::VisualDigitalZOffset,
+            pct_from,
+            pct_to,
+        ),
+        "digitalzperiod" => push(
+            SongLuaEaseMaskTarget::VisualDigitalZPeriod,
+            pct_from,
+            pct_to,
+        ),
+        "digitalzsteps" => push(SongLuaEaseMaskTarget::VisualDigitalZSteps, pct_from, pct_to),
+        "tornadoz" => push(SongLuaEaseMaskTarget::VisualTornadoZ, pct_from, pct_to),
+        "tornadozoffset" => push(
+            SongLuaEaseMaskTarget::VisualTornadoZOffset,
+            pct_from,
+            pct_to,
+        ),
+        "tornadozperiod" => push(
+            SongLuaEaseMaskTarget::VisualTornadoZPeriod,
+            pct_from,
+            pct_to,
+        ),
+        "sawtooth" => push(SongLuaEaseMaskTarget::VisualSawtooth, pct_from, pct_to),
+        "sawtoothperiod" => push(
+            SongLuaEaseMaskTarget::VisualSawtoothPeriod,
+            pct_from,
+            pct_to,
+        ),
+        "sawtoothz" => push(SongLuaEaseMaskTarget::VisualSawtoothZ, pct_from, pct_to),
+        "sawtoothzperiod" => push(
+            SongLuaEaseMaskTarget::VisualSawtoothZPeriod,
+            pct_from,
+            pct_to,
+        ),
         "confusionx" => push(SongLuaEaseMaskTarget::VisualConfusionX, pct_from, pct_to),
         "confusiony" => push(SongLuaEaseMaskTarget::VisualConfusionY, pct_from, pct_to),
         "confusionyoffset" => push(
@@ -3104,6 +3156,20 @@ pub fn song_lua_apply_eased_target(
         SongLuaEaseMaskTarget::VisualPulseOuter => visual.pulse_outer = Some(value),
         SongLuaEaseMaskTarget::VisualPulsePeriod => visual.pulse_period = Some(value),
         SongLuaEaseMaskTarget::VisualBeatPeriod => visual.beat_period = Some(value),
+        SongLuaEaseMaskTarget::VisualBounceZ => visual.bounce_z = Some(value),
+        SongLuaEaseMaskTarget::VisualBounceZOffset => visual.bounce_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualBounceZPeriod => visual.bounce_z_period = Some(value),
+        SongLuaEaseMaskTarget::VisualDigitalZ => visual.digital_z = Some(value),
+        SongLuaEaseMaskTarget::VisualDigitalZOffset => visual.digital_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualDigitalZPeriod => visual.digital_z_period = Some(value),
+        SongLuaEaseMaskTarget::VisualDigitalZSteps => visual.digital_z_steps = Some(value),
+        SongLuaEaseMaskTarget::VisualTornadoZ => visual.tornado_z = Some(value),
+        SongLuaEaseMaskTarget::VisualTornadoZOffset => visual.tornado_z_offset = Some(value),
+        SongLuaEaseMaskTarget::VisualTornadoZPeriod => visual.tornado_z_period = Some(value),
+        SongLuaEaseMaskTarget::VisualSawtooth => visual.sawtooth = Some(value),
+        SongLuaEaseMaskTarget::VisualSawtoothPeriod => visual.sawtooth_period = Some(value),
+        SongLuaEaseMaskTarget::VisualSawtoothZ => visual.sawtooth_z = Some(value),
+        SongLuaEaseMaskTarget::VisualSawtoothZPeriod => visual.sawtooth_z_period = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionX => visual.confusion_x = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionY => visual.confusion_y = Some(value),
         SongLuaEaseMaskTarget::VisualConfusionYOffset => visual.confusion_y_offset = Some(value),
@@ -3384,6 +3450,20 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualPulseOuter => window.visual.pulse_outer.is_some(),
         SongLuaEaseMaskTarget::VisualPulsePeriod => window.visual.pulse_period.is_some(),
         SongLuaEaseMaskTarget::VisualBeatPeriod => window.visual.beat_period.is_some(),
+        SongLuaEaseMaskTarget::VisualBounceZ => window.visual.bounce_z.is_some(),
+        SongLuaEaseMaskTarget::VisualBounceZOffset => window.visual.bounce_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualBounceZPeriod => window.visual.bounce_z_period.is_some(),
+        SongLuaEaseMaskTarget::VisualDigitalZ => window.visual.digital_z.is_some(),
+        SongLuaEaseMaskTarget::VisualDigitalZOffset => window.visual.digital_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualDigitalZPeriod => window.visual.digital_z_period.is_some(),
+        SongLuaEaseMaskTarget::VisualDigitalZSteps => window.visual.digital_z_steps.is_some(),
+        SongLuaEaseMaskTarget::VisualTornadoZ => window.visual.tornado_z.is_some(),
+        SongLuaEaseMaskTarget::VisualTornadoZOffset => window.visual.tornado_z_offset.is_some(),
+        SongLuaEaseMaskTarget::VisualTornadoZPeriod => window.visual.tornado_z_period.is_some(),
+        SongLuaEaseMaskTarget::VisualSawtooth => window.visual.sawtooth.is_some(),
+        SongLuaEaseMaskTarget::VisualSawtoothPeriod => window.visual.sawtooth_period.is_some(),
+        SongLuaEaseMaskTarget::VisualSawtoothZ => window.visual.sawtooth_z.is_some(),
+        SongLuaEaseMaskTarget::VisualSawtoothZPeriod => window.visual.sawtooth_z_period.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionX => window.visual.confusion_x.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionY => window.visual.confusion_y.is_some(),
         SongLuaEaseMaskTarget::VisualConfusionYOffset => window.visual.confusion_y_offset.is_some(),
@@ -4790,6 +4870,20 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     mark_active_target(&mut targets.pulse_outer, visual.pulse_outer);
     mark_active_target(&mut targets.pulse_period, visual.pulse_period);
     mark_active_target(&mut targets.beat_period, visual.beat_period);
+    mark_active_target(&mut targets.bounce_z, visual.bounce_z);
+    mark_active_target(&mut targets.bounce_z_offset, visual.bounce_z_offset);
+    mark_active_target(&mut targets.bounce_z_period, visual.bounce_z_period);
+    mark_active_target(&mut targets.digital_z, visual.digital_z);
+    mark_active_target(&mut targets.digital_z_offset, visual.digital_z_offset);
+    mark_active_target(&mut targets.digital_z_period, visual.digital_z_period);
+    mark_active_target(&mut targets.digital_z_steps, visual.digital_z_steps);
+    mark_active_target(&mut targets.tornado_z, visual.tornado_z);
+    mark_active_target(&mut targets.tornado_z_offset, visual.tornado_z_offset);
+    mark_active_target(&mut targets.tornado_z_period, visual.tornado_z_period);
+    mark_active_target(&mut targets.sawtooth, visual.sawtooth);
+    mark_active_target(&mut targets.sawtooth_period, visual.sawtooth_period);
+    mark_active_target(&mut targets.sawtooth_z, visual.sawtooth_z);
+    mark_active_target(&mut targets.sawtooth_z_period, visual.sawtooth_z_period);
     mark_active_target(&mut targets.confusion_x, visual.confusion_x);
     mark_active_target(&mut targets.confusion_y, visual.confusion_y);
     mark_active_target(&mut targets.confusion_y_offset, visual.confusion_y_offset);
@@ -5756,6 +5850,38 @@ fn apply_song_lua_approach_targets(
             }
             SongLuaEaseMaskTarget::VisualBeatPeriod => {
                 attack.visual_speed.beat_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBounceZ => attack.visual_speed.bounce_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualBounceZOffset => {
+                attack.visual_speed.bounce_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBounceZPeriod => {
+                attack.visual_speed.bounce_z_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDigitalZ => attack.visual_speed.digital_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualDigitalZOffset => {
+                attack.visual_speed.digital_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDigitalZPeriod => {
+                attack.visual_speed.digital_z_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualDigitalZSteps => {
+                attack.visual_speed.digital_z_steps = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTornadoZ => attack.visual_speed.tornado_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualTornadoZOffset => {
+                attack.visual_speed.tornado_z_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTornadoZPeriod => {
+                attack.visual_speed.tornado_z_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualSawtooth => attack.visual_speed.sawtooth = Some(speed),
+            SongLuaEaseMaskTarget::VisualSawtoothPeriod => {
+                attack.visual_speed.sawtooth_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualSawtoothZ => attack.visual_speed.sawtooth_z = Some(speed),
+            SongLuaEaseMaskTarget::VisualSawtoothZPeriod => {
+                attack.visual_speed.sawtooth_z_period = Some(speed)
             }
             SongLuaEaseMaskTarget::VisualConfusionX => {
                 attack.visual_speed.confusion_x = Some(speed)
@@ -6984,6 +7110,132 @@ fn apply_active_visual_window(
         persisted,
     );
     apply_active_visual_target(
+        &mut values.visual.bounce_z,
+        &mut values.visual_speed.bounce_z,
+        window.visual.bounce_z,
+        window.visual_speed.bounce_z,
+        active_targets.visual.bounce_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bounce_z_offset,
+        &mut values.visual_speed.bounce_z_offset,
+        window.visual.bounce_z_offset,
+        window.visual_speed.bounce_z_offset,
+        active_targets.visual.bounce_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.bounce_z_period,
+        &mut values.visual_speed.bounce_z_period,
+        window.visual.bounce_z_period,
+        window.visual_speed.bounce_z_period,
+        active_targets.visual.bounce_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.digital_z,
+        &mut values.visual_speed.digital_z,
+        window.visual.digital_z,
+        window.visual_speed.digital_z,
+        active_targets.visual.digital_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.digital_z_offset,
+        &mut values.visual_speed.digital_z_offset,
+        window.visual.digital_z_offset,
+        window.visual_speed.digital_z_offset,
+        active_targets.visual.digital_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.digital_z_period,
+        &mut values.visual_speed.digital_z_period,
+        window.visual.digital_z_period,
+        window.visual_speed.digital_z_period,
+        active_targets.visual.digital_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.digital_z_steps,
+        &mut values.visual_speed.digital_z_steps,
+        window.visual.digital_z_steps,
+        window.visual_speed.digital_z_steps,
+        active_targets.visual.digital_z_steps,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tornado_z,
+        &mut values.visual_speed.tornado_z,
+        window.visual.tornado_z,
+        window.visual_speed.tornado_z,
+        active_targets.visual.tornado_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tornado_z_offset,
+        &mut values.visual_speed.tornado_z_offset,
+        window.visual.tornado_z_offset,
+        window.visual_speed.tornado_z_offset,
+        active_targets.visual.tornado_z_offset,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.tornado_z_period,
+        &mut values.visual_speed.tornado_z_period,
+        window.visual.tornado_z_period,
+        window.visual_speed.tornado_z_period,
+        active_targets.visual.tornado_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.sawtooth,
+        &mut values.visual_speed.sawtooth,
+        window.visual.sawtooth,
+        window.visual_speed.sawtooth,
+        active_targets.visual.sawtooth,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.sawtooth_period,
+        &mut values.visual_speed.sawtooth_period,
+        window.visual.sawtooth_period,
+        window.visual_speed.sawtooth_period,
+        active_targets.visual.sawtooth_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.sawtooth_z,
+        &mut values.visual_speed.sawtooth_z,
+        window.visual.sawtooth_z,
+        window.visual_speed.sawtooth_z,
+        active_targets.visual.sawtooth_z,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
+        &mut values.visual.sawtooth_z_period,
+        &mut values.visual_speed.sawtooth_z_period,
+        window.visual.sawtooth_z_period,
+        window.visual_speed.sawtooth_z_period,
+        active_targets.visual.sawtooth_z_period,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_target(
         &mut values.visual.confusion_x,
         &mut values.visual_speed.confusion_x,
         window.visual.confusion_x,
@@ -7976,6 +8228,90 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
+        "bouncez" => set_approached_mod(
+            &mut out.visual.bounce_z,
+            &mut out.visual_speed.bounce_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bouncezoffset" => set_approached_mod(
+            &mut out.visual.bounce_z_offset,
+            &mut out.visual_speed.bounce_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "bouncezperiod" => set_approached_mod(
+            &mut out.visual.bounce_z_period,
+            &mut out.visual_speed.bounce_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "digitalz" => set_approached_mod(
+            &mut out.visual.digital_z,
+            &mut out.visual_speed.digital_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "digitalzoffset" => set_approached_mod(
+            &mut out.visual.digital_z_offset,
+            &mut out.visual_speed.digital_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "digitalzperiod" => set_approached_mod(
+            &mut out.visual.digital_z_period,
+            &mut out.visual_speed.digital_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "digitalzsteps" => set_approached_mod(
+            &mut out.visual.digital_z_steps,
+            &mut out.visual_speed.digital_z_steps,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornadoz" => set_approached_mod(
+            &mut out.visual.tornado_z,
+            &mut out.visual_speed.tornado_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornadozoffset" => set_approached_mod(
+            &mut out.visual.tornado_z_offset,
+            &mut out.visual_speed.tornado_z_offset,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "tornadozperiod" => set_approached_mod(
+            &mut out.visual.tornado_z_period,
+            &mut out.visual_speed.tornado_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "sawtooth" => set_approached_mod(
+            &mut out.visual.sawtooth,
+            &mut out.visual_speed.sawtooth,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "sawtoothperiod" => set_approached_mod(
+            &mut out.visual.sawtooth_period,
+            &mut out.visual_speed.sawtooth_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "sawtoothz" => set_approached_mod(
+            &mut out.visual.sawtooth_z,
+            &mut out.visual_speed.sawtooth_z,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "sawtoothzperiod" => set_approached_mod(
+            &mut out.visual.sawtooth_z_period,
+            &mut out.visual_speed.sawtooth_z_period,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "confusionx" => set_approached_mod(
             &mut out.visual.confusion_x,
             &mut out.visual_speed.confusion_x,
@@ -8525,6 +8861,20 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
         pulse_outer: merge_attack_value(base.pulse_outer, attack.pulse_outer),
         pulse_period: merge_attack_value(base.pulse_period, attack.pulse_period),
         beat_period: merge_attack_value(base.beat_period, attack.beat_period),
+        bounce_z: merge_attack_value(base.bounce_z, attack.bounce_z),
+        bounce_z_offset: merge_attack_value(base.bounce_z_offset, attack.bounce_z_offset),
+        bounce_z_period: merge_attack_value(base.bounce_z_period, attack.bounce_z_period),
+        digital_z: merge_attack_value(base.digital_z, attack.digital_z),
+        digital_z_offset: merge_attack_value(base.digital_z_offset, attack.digital_z_offset),
+        digital_z_period: merge_attack_value(base.digital_z_period, attack.digital_z_period),
+        digital_z_steps: merge_attack_value(base.digital_z_steps, attack.digital_z_steps),
+        tornado_z: merge_attack_value(base.tornado_z, attack.tornado_z),
+        tornado_z_offset: merge_attack_value(base.tornado_z_offset, attack.tornado_z_offset),
+        tornado_z_period: merge_attack_value(base.tornado_z_period, attack.tornado_z_period),
+        sawtooth: merge_attack_value(base.sawtooth, attack.sawtooth),
+        sawtooth_period: merge_attack_value(base.sawtooth_period, attack.sawtooth_period),
+        sawtooth_z: merge_attack_value(base.sawtooth_z, attack.sawtooth_z),
+        sawtooth_z_period: merge_attack_value(base.sawtooth_z_period, attack.sawtooth_z_period),
         confusion_x: merge_attack_value(base.confusion_x, attack.confusion_x),
         confusion_y: merge_attack_value(base.confusion_y, attack.confusion_y),
         confusion_y_offset: merge_attack_value(base.confusion_y_offset, attack.confusion_y_offset),

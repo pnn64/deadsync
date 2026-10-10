@@ -60,7 +60,6 @@ pub struct NotefieldFieldResult {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct HoldLaneFrame {
     receptor_draw_y: f32,
-    receptor_center_x: f32,
     target_arrow_px: f32,
     use_legacy_sprites: bool,
 }
@@ -282,6 +281,7 @@ fn compose_field_contents<S, F>(
             deadsync_core::input::MAX_COLS];
     for local_col in 0..num_cols {
         lane_effect_params[local_col].col_x = col_offsets[local_col];
+        lane_effect_params[local_col].tornado_z_bounds = note_inputs.tornado_z_bounds[local_col];
         lane_transform_caches[local_col] =
             lane_note_transform_cache(current_beat, lane_effect_params[local_col]);
     }
@@ -291,6 +291,8 @@ fn compose_field_contents<S, F>(
         tornado_period: visual.tornado_period,
         tornado_offset: visual.tornado_offset,
         bounce: visual.bounce,
+        sawtooth: visual.sawtooth,
+        sawtooth_period: visual.sawtooth_period,
         bounce_period: visual.bounce_period,
         bounce_offset: visual.bounce_offset,
         drunk: visual.drunk,
@@ -510,7 +512,6 @@ fn compose_field_contents<S, F>(
         let lane_frame = *hold_lane_frames[local_col].get_or_insert_with(|| {
             hold_lane_frame(
                 lane_receptor_y,
-                lane_center_x_from_adjusted_travel(local_col, 0.0),
                 target_arrow_px * column_zoom,
                 lane_move_y_offsets[local_col],
                 lane_tipsy_offsets[local_col],
@@ -526,7 +527,6 @@ fn compose_field_contents<S, F>(
                 visual.beat_y,
                 visual.beat_y_period,
             );
-        let receptor_center_x = lane_frame.receptor_center_x;
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
         } else {
@@ -824,11 +824,8 @@ fn compose_field_contents<S, F>(
         let hold_head_rot = column_rotations_deg[local_col]
             + visual_hold_head_rotation_z_cached(note.beat, transform_cache);
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-        let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
-            receptor_center_x
-        } else {
-            lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel)
-        };
+        let head_center_x =
+            lane_center_x_from_adjusted_travel(local_col, head_anchor_adjusted_travel);
         let position = prepared.spline_position(
             local_col,
             if engaged { current_beat } else { note.beat },
@@ -1769,6 +1766,9 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
             parabola_z: visual.parabola_z,
             attenuate_z: visual.attenuate_z,
             beat_z: visual.beat_z,
+            bounce_z: visual.bounce_z,
+            digital_z: visual.digital_z,
+            sawtooth_z: visual.sawtooth_z,
             square_z: visual.square_z,
             zigzag_z: visual.zigzag_z,
             twirl: visual.twirl,
@@ -1780,7 +1780,6 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
 #[inline(always)]
 fn hold_lane_frame(
     receptor_y: f32,
-    receptor_center_x: f32,
     target_arrow_px: f32,
     move_y_offset: f32,
     tipsy_y_offset: f32,
@@ -1790,7 +1789,6 @@ fn hold_lane_frame(
 ) -> HoldLaneFrame {
     HoldLaneFrame {
         receptor_draw_y: receptor_y + move_y_offset + tipsy_y_offset,
-        receptor_center_x,
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
         use_legacy_sprites: !visual.z_buffer
             && visual.twirl == 0.0
@@ -1805,6 +1803,11 @@ fn hold_lane_frame(
             && visual.parabola_z == 0.0
             && visual.attenuate_z == 0.0
             && visual.beat_z == 0.0
+            && visual.bounce_z == 0.0
+            && visual.digital_z == 0.0
+            && visual.tornado_z == 0.0
+            && visual.sawtooth_z == 0.0
+            && visual.sawtooth == 0.0
             && visual.digital == 0.0
             && visual.zigzag == 0.0
             && visual.zigzag_z == 0.0
@@ -1854,7 +1857,6 @@ mod hold_lane_frame_cache_tests {
             let params = VisualEffectParams::default();
             let frame = hold_lane_frame(
                 240.0,
-                320.0,
                 64.0,
                 0.0,
                 0.0,
@@ -1887,7 +1889,6 @@ mod hold_lane_frame_cache_tests {
         let effect_params = VisualEffectParams::default();
         let frame = hold_lane_frame(
             240.0,
-            320.0,
             64.0,
             move_y_offset,
             tipsy_y_offset,

@@ -253,6 +253,7 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub col_offsets: [f32; MAX_COLS],
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
+    pub(crate) tornado_z_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_lane_caches: [TornadoLaneCache; MAX_COLS],
     pub(crate) move_x_offsets: [f32; MAX_COLS],
     pub(crate) note_depth_frame_cache: NoteDepthFrameCache,
@@ -635,6 +636,13 @@ fn prepare_notes<'a, S>(
         &mut invert_distances[..num_cols],
         &mut tornado_bounds[..num_cols],
     );
+    let mut tornado_z_bounds = [TornadoBounds::default(); MAX_COLS];
+    if request.visual.visual.tornado_z != 0.0 {
+        crate::transforms::compute_tornado_z_bounds(
+            &col_offsets[..num_cols],
+            &mut tornado_z_bounds[..num_cols],
+        );
+    }
     let mut tornado_lane_caches = [TornadoLaneCache::default(); MAX_COLS];
     compute_tornado_lane_caches(
         &col_offsets[..num_cols],
@@ -724,6 +732,7 @@ fn prepare_notes<'a, S>(
         col_offsets,
         invert_distances,
         tornado_bounds,
+        tornado_z_bounds,
         tornado_lane_caches,
         move_x_offsets,
         note_depth_frame_cache,

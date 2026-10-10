@@ -530,6 +530,20 @@ fn runtime_mod_value(
         "pulseouter" => visual.pulse_outer.unwrap_or(0.0),
         "pulseperiod" => visual.pulse_period.unwrap_or(0.0),
         "beatperiod" => visual.beat_period.unwrap_or(0.0),
+        "bouncez" => visual.bounce_z.unwrap_or(0.0),
+        "bouncezoffset" => visual.bounce_z_offset.unwrap_or(0.0),
+        "bouncezperiod" => visual.bounce_z_period.unwrap_or(0.0),
+        "digitalz" => visual.digital_z.unwrap_or(0.0),
+        "digitalzoffset" => visual.digital_z_offset.unwrap_or(0.0),
+        "digitalzperiod" => visual.digital_z_period.unwrap_or(0.0),
+        "digitalzsteps" => visual.digital_z_steps.unwrap_or(0.0),
+        "tornadoz" => visual.tornado_z.unwrap_or(0.0),
+        "tornadozoffset" => visual.tornado_z_offset.unwrap_or(0.0),
+        "tornadozperiod" => visual.tornado_z_period.unwrap_or(0.0),
+        "sawtooth" => visual.sawtooth.unwrap_or(0.0),
+        "sawtoothperiod" => visual.sawtooth_period.unwrap_or(0.0),
+        "sawtoothz" => visual.sawtooth_z.unwrap_or(0.0),
+        "sawtoothzperiod" => visual.sawtooth_z_period.unwrap_or(0.0),
         "confusionx" => visual.confusion_x.unwrap_or(0.0),
         "confusiony" => visual.confusion_y.unwrap_or(0.0),
         "confusionyoffset" => visual.confusion_y_offset.unwrap_or(0.0),
@@ -3974,4 +3988,106 @@ end}
             );
         }
     }
+}
+
+#[test]
+fn z_wave_family_matches_native_targets() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/z-wave-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Z wave control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let noteskin = trace
+        .noteskin_reference
+        .as_ref()
+        .expect("captured noteskin");
+    for player in &mut context.players {
+        player.noteskin_name = noteskin.skin.clone();
+    }
+    let entry = song_dir.join("z-wave-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile signed Z wave, approach speeds, strings and resets");
+    let mut parity = Parity::default();
+    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    parity.assert_complete("native Z wave targets and resets");
+}
+
+#[test]
+fn z_wave_family_current_matches_native_frames() {
+    crate::paths::init();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song_dir = root.join("tests/fixtures/song-lua");
+    let trace = read_trace_file(
+        &root.join("tests/fixtures/itgmania-song-lua-micro/z-wave-family-native.json"),
+    );
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native Z wave Current control");
+    context.screen_width = 854.0;
+    context.music_length_seconds = 4.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    let entry = song_dir.join("z-wave-family.lua");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .expect("compile Z wave Current control");
+    let (mut runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    let mut checked = 0;
+    let mut prior = 0.0;
+    for &(_, seconds) in &trace.update_frames {
+        let now = seconds as f32;
+        for player in 0..2 {
+            runtime.refresh_player(
+                player,
+                now,
+                now - prior,
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            for (group, keys) in [
+                ["bouncez", "bouncezoffset", "bouncezperiod"],
+                ["digitalz", "digitalzoffset", "digitalzperiod"],
+                ["digitalzsteps", "tornadoz", "tornadozoffset"],
+                ["tornadozperiod", "sawtoothz", "sawtoothzperiod"],
+                ["sawtooth", "sawtoothperiod", "tiny"],
+            ]
+            .iter()
+            .enumerate()
+            {
+                for (axis, key) in ["x", "y", "z"].into_iter().zip(keys) {
+                    let actor = trace
+                        .actor_definitions
+                        .iter()
+                        .find(|definition| {
+                            definition.name
+                                == Some(format!("ZWaveCurrentP{}G{}", player + 1, group + 1))
+                        })
+                        .expect("named native Current probe");
+                    let track = trace
+                        .operation_tracks
+                        .iter()
+                        .find(|track| {
+                            track.actor == actor.id && track.operation == format!("Quad.{axis}")
+                        })
+                        .expect("native Current probe axis");
+                    for sample in track.samples.iter().filter(|sample| sample.2 == now) {
+                        let expected = sample.3[0].as_f64().expect("native Current value") as f32;
+                        let actual =
+                            runtime_mod_value(&runtime, player, key).expect("runtime Z wave");
+                        assert!(
+                            (actual - expected).abs() <= EPSILON,
+                            "P{} {key} at {now}: native={expected}, DeadSync={actual}",
+                            player + 1
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        prior = now;
+    }
+    assert_eq!(checked, 540);
 }

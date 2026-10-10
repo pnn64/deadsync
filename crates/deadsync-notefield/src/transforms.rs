@@ -69,6 +69,19 @@ pub(crate) struct VisualEffectParams {
     pub beat_z_offset: f32,
     pub beat_z_mult: f32,
     pub beat_z_period: f32,
+    pub bounce_z: f32,
+    pub bounce_z_offset: f32,
+    pub bounce_z_period: f32,
+    pub digital_z: f32,
+    pub digital_z_offset: f32,
+    pub digital_z_period: f32,
+    pub digital_z_steps: f32,
+    pub tornado_z: f32,
+    pub tornado_z_offset: f32,
+    pub tornado_z_period: f32,
+    pub sawtooth_z: f32,
+    pub sawtooth_z_period: f32,
+    pub tornado_z_bounds: TornadoBounds,
     pub square_z: f32,
     pub zigzag_z: f32,
     pub square_z_offset: f32,
@@ -92,6 +105,20 @@ pub(crate) struct LaneNoteTransformCache {
     beat_z: f32,
     beat_z_factor: f32,
     beat_z_period: f32,
+    bounce_z: f32,
+    bounce_z_offset: f32,
+    bounce_z_period: f32,
+    digital_z: f32,
+    digital_z_offset: f32,
+    digital_z_period: f32,
+    digital_z_steps: f32,
+    tornado_z: f32,
+    tornado_z_offset: f32,
+    tornado_z_period: f32,
+    sawtooth_z: f32,
+    sawtooth_z_period: f32,
+    tornado_z_bounds: TornadoBounds,
+    tornado_z_angle: f32,
     square_z: f32,
     zigzag_z: f32,
     square_z_offset: f32,
@@ -227,6 +254,8 @@ pub(crate) struct NoteXParams {
     pub tornado_period: f32,
     pub tornado_offset: f32,
     pub bounce: f32,
+    pub sawtooth: f32,
+    pub sawtooth_period: f32,
     pub bounce_period: f32,
     pub bounce_offset: f32,
     pub drunk: f32,
@@ -642,13 +671,28 @@ pub(crate) fn note_world_z_cached(
     frame_cache: NoteDepthFrameCache,
     lane_cache: LaneNoteTransformCache,
 ) -> f32 {
+    // Keep native GetZPos addition order. Tiny affects X and zoom, never Z.
     let mut z = 0.0;
+    if lane_cache.tornado_z != 0.0 {
+        let bounds = lane_cache.tornado_z_bounds;
+        let radians = lane_cache.tornado_z_angle
+            + (y + lane_cache.tornado_z_offset) * (lane_cache.tornado_z_period * 6.0 + 6.0)
+                / frame_cache.screen_height;
+        let adjusted = (radians.cos() + 1.0) * (bounds.max_x - bounds.min_x) / 2.0 + bounds.min_x;
+        z += (adjusted - lane_cache.col_x) * lane_cache.tornado_z;
+    }
     if lane_cache.bumpy_amplitude != 0.0 {
         let angle = 100.0f32.mul_add(frame_cache.offset, y) / frame_cache.divisor;
         z += lane_cache.bumpy_amplitude * angle.sin();
     }
     z += bumpy_wave_offset(y, lane_cache.tan_bumpy, true, lane_cache.cosecant);
-    // ArrowEffects::GetZPos adds ParabolaZ after Bumpy, without Tiny scaling.
+    z += triangle_wave_offset(
+        y,
+        lane_cache.zigzag_z,
+        lane_cache.zigzag_z_offset,
+        lane_cache.zigzag_z_period,
+    );
+    z += sawtooth_wave_offset(y, lane_cache.sawtooth_z, lane_cache.sawtooth_z_period);
     if lane_cache.parabola_z != 0.0 {
         z += lane_cache.parabola_z * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
@@ -671,11 +715,18 @@ pub(crate) fn note_world_z_cached(
         true,
         lane_cache.cosecant,
     );
-    z += triangle_wave_offset(
+    z += beat_wave_offset(
         y,
-        lane_cache.zigzag_z,
-        lane_cache.zigzag_z_offset,
-        lane_cache.zigzag_z_period,
+        lane_cache.beat_z_factor,
+        lane_cache.beat_z,
+        lane_cache.beat_z_period,
+    );
+    z += digital_wave_offset(
+        y,
+        lane_cache.digital_z,
+        lane_cache.digital_z_offset,
+        lane_cache.digital_z_period,
+        lane_cache.digital_z_steps,
     );
     z += square_wave_offset(
         y,
@@ -683,13 +734,24 @@ pub(crate) fn note_world_z_cached(
         lane_cache.square_z_offset,
         lane_cache.square_z_period,
     );
-    z += beat_wave_offset(
+    z += bounce_wave_offset(
         y,
-        lane_cache.beat_z_factor,
-        lane_cache.beat_z,
-        lane_cache.beat_z_period,
+        [
+            lane_cache.bounce_z,
+            lane_cache.bounce_z_offset,
+            lane_cache.bounce_z_period,
+        ],
     );
     z
+}
+
+// GetXPos and GetZPos use floor, so negative travel wraps toward positive one.
+fn sawtooth_wave_offset(y: f32, amount: f32, period: f32) -> f32 {
+    if amount == 0.0 || !amount.is_finite() {
+        return 0.0;
+    }
+    let phase = (0.5 / (period + 1.0) * y) / ARROW_EFFECT_PIXEL_SIZE;
+    amount * ARROW_EFFECT_PIXEL_SIZE * (phase - phase.floor())
 }
 
 pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
@@ -737,6 +799,9 @@ pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> boo
         || (params.beat_z.is_finite() && params.beat_z != 0.0)
         || (params.zigzag_z.is_finite() && params.zigzag_z != 0.0)
         || (params.square_z.is_finite() && params.square_z != 0.0)
+        || (params.bounce_z.is_finite() && params.bounce_z != 0.0)
+        || (params.digital_z.is_finite() && params.digital_z != 0.0)
+        || (params.sawtooth_z.is_finite() && params.sawtooth_z != 0.0)
 }
 
 pub(crate) fn visual_use_legacy_hold_sprites(
@@ -877,6 +942,25 @@ pub(crate) fn lane_note_transform_cache(
         beat_z: params.beat_z,
         beat_z_factor: beat_factor(song_beat, params.beat_z_offset, params.beat_z_mult),
         beat_z_period: params.beat_z_period,
+        bounce_z: params.bounce_z,
+        bounce_z_offset: params.bounce_z_offset,
+        bounce_z_period: params.bounce_z_period,
+        digital_z: params.digital_z,
+        digital_z_offset: params.digital_z_offset,
+        digital_z_period: params.digital_z_period,
+        digital_z_steps: params.digital_z_steps,
+        tornado_z: params.tornado_z,
+        tornado_z_offset: params.tornado_z_offset,
+        tornado_z_period: params.tornado_z_period,
+        sawtooth_z: params.sawtooth_z,
+        sawtooth_z_period: params.sawtooth_z_period,
+        tornado_z_bounds: params.tornado_z_bounds,
+        tornado_z_angle: if params.tornado_z != 0.0 {
+            let bounds = params.tornado_z_bounds;
+            ((params.col_x - bounds.min_x) * 2.0 / (bounds.max_x - bounds.min_x) - 1.0).acos()
+        } else {
+            0.0
+        },
         zigzag_z: params.zigzag_z,
         square_z_offset: params.square_z_offset,
         zigzag_z_offset: params.zigzag_z_offset,
@@ -1025,6 +1109,19 @@ pub(crate) fn gameplay_visual_effect_params(
             beat_z_offset: visual.beat_z_offset,
             beat_z_mult: visual.beat_z_mult,
             beat_z_period: visual.beat_z_period,
+            bounce_z: visual.bounce_z,
+            bounce_z_offset: visual.bounce_z_offset,
+            bounce_z_period: visual.bounce_z_period,
+            digital_z: visual.digital_z,
+            digital_z_offset: visual.digital_z_offset,
+            digital_z_period: visual.digital_z_period,
+            digital_z_steps: visual.digital_z_steps,
+            tornado_z: visual.tornado_z,
+            tornado_z_offset: visual.tornado_z_offset,
+            tornado_z_period: visual.tornado_z_period,
+            sawtooth_z: visual.sawtooth_z,
+            sawtooth_z_period: visual.sawtooth_z_period,
+            tornado_z_bounds: TornadoBounds::default(),
             local_col,
             col_x: 0.0,
             cosecant: visual.cosecant,
@@ -1138,6 +1235,20 @@ pub(crate) fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBoun
         for x in &col_offsets[start..=end] {
             min_x = min_x.min(*x);
             max_x = max_x.max(*x);
+        }
+        *bounds = TornadoBounds { min_x, max_x };
+    }
+}
+
+pub(crate) fn compute_tornado_z_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
+    for (col, bounds) in out.iter_mut().take(col_offsets.len()).enumerate() {
+        let start = col.saturating_sub(3);
+        let end = (col + 3).min(col_offsets.len() - 1);
+        let mut min_x = f32::MAX;
+        let mut max_x = f32::MIN_POSITIVE;
+        for &x in &col_offsets[start..=end] {
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
         }
         *bounds = TornadoBounds { min_x, max_x };
     }
@@ -1330,9 +1441,9 @@ fn tornado_x_extra_cached(
     (adjusted - base_x) * tornado
 }
 
-// ArrowEffects::GetXPos uses std::sin (not RageFastSin) and a 60px period.
+// ArrowEffects::GetXPos/GetZPos use std::sin (not RageFastSin) and a 60px period.
 // Preserve IEEE behavior when the native period denominator is zero.
-fn bounce_x_extra(y: f32, [amount, offset, period]: [f32; 3]) -> f32 {
+fn bounce_wave_offset(y: f32, [amount, offset, period]: [f32; 3]) -> f32 {
     if amount == 0.0 || !amount.is_finite() {
         return 0.0;
     }
@@ -1423,6 +1534,7 @@ pub(crate) fn note_x_extra(
         y, params.zigzag, params.zigzag_offset, params.zigzag_period,
     );
     // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
+    out += sawtooth_wave_offset(y, params.sawtooth, params.sawtooth_period);
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         out += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
@@ -1435,7 +1547,7 @@ pub(crate) fn note_x_extra(
         params.digital_steps,
     );
     out += square_wave_offset(y, params.square, params.square_offset, params.square_period);
-    out += bounce_x_extra(
+    out += bounce_wave_offset(
         y,
         [params.bounce, params.bounce_offset, params.bounce_period],
     );
@@ -1557,6 +1669,7 @@ pub(crate) fn note_x_offset_cached(
         y, params.zigzag, params.zigzag_offset, params.zigzag_period,
     );
     // ArrowEffects::GetXPos adds the squared travel offset before Tiny spacing.
+    extra += sawtooth_wave_offset(y, params.sawtooth, params.sawtooth_period);
     if params.parabola_x.is_finite() && params.parabola_x != 0.0 {
         extra += params.parabola_x * (y / ARROW_EFFECT_PIXEL_SIZE) * (y / ARROW_EFFECT_PIXEL_SIZE);
     }
@@ -1569,7 +1682,7 @@ pub(crate) fn note_x_offset_cached(
         params.digital_steps,
     );
     extra += square_wave_offset(y, params.square, params.square_offset, params.square_period);
-    extra += bounce_x_extra(
+    extra += bounce_wave_offset(
         y,
         [params.bounce, params.bounce_offset, params.bounce_period],
     );
@@ -1588,7 +1701,8 @@ pub(crate) fn fill_static_note_x_offsets(
     tiny_scale: f32,
     out: &mut [f32],
 ) -> bool {
-    if signed_effect_active(params.tornado)
+    if (params.sawtooth.is_finite() && params.sawtooth != 0.0)
+        || signed_effect_active(params.tornado)
         || (params.bounce.is_finite() && params.bounce != 0.0)
         || params.bumpy_x != 0.0
         || params.tan_bumpy_x != 0.0
@@ -2202,6 +2316,96 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn z_waves_match_native_positions() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/z-wave-motion.json"
+        ))
+        .expect("unchanged native GetZPos/NeedZBuffer, Sawtooth and bounds");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 9720);
+        for vector in vectors {
+            let value = |key: &str| vector[key].as_f64().expect("native float") as f32;
+            let count = vector["columns"].as_u64().expect("columns") as usize;
+            let col = vector["col"].as_u64().expect("column") as usize;
+            let mut columns = [0.0; 8];
+            for (i, x) in columns[..count].iter_mut().enumerate() {
+                *x = (i as f32 - (count - 1) as f32 * 0.5) * 64.0 * value("zoom");
+            }
+            let mut bounds = [TornadoBounds::default(); 8];
+            compute_tornado_z_bounds(&columns[..count], &mut bounds[..count]);
+            let params = VisualEffectParams {
+                bounce_z: value("bounce_z"),
+                bounce_z_offset: value("bounce_z_offset"),
+                bounce_z_period: value("bounce_z_period"),
+                digital_z: value("digital_z"),
+                digital_z_offset: value("digital_z_offset"),
+                digital_z_period: value("digital_z_period"),
+                digital_z_steps: value("digital_z_steps"),
+                tornado_z: value("tornado_z"),
+                tornado_z_offset: value("tornado_z_offset"),
+                tornado_z_period: value("tornado_z_period"),
+                sawtooth_z: value("sawtooth_z"),
+                sawtooth_z_period: value("sawtooth_z_period"),
+                col_x: columns[col],
+                tornado_z_bounds: bounds[col],
+                ..Default::default()
+            };
+            let cache = lane_note_transform_cache(0.0, params);
+            let frame = note_depth_frame_cache(0.0, 0.0, 0.0, 480.0);
+            for (travel, key) in [(value("travel"), "z"), (0.0, "receptor_z")] {
+                let actual = note_world_z_cached(travel, frame, cache);
+                assert!(
+                    (actual - value(key)).abs() < 0.0001,
+                    "{key}: {vector}; actual={actual}"
+                );
+            }
+            let x_params = NoteXParams {
+                sawtooth: value("sawtooth"),
+                sawtooth_period: value("sawtooth_period"),
+                ..Default::default()
+            };
+            for (travel, key) in [(value("travel"), "x"), (0.0, "receptor_x")] {
+                let direct = note_x_offset(
+                    col,
+                    travel,
+                    0.0,
+                    0.0,
+                    &columns[..count],
+                    &[0.0; 8],
+                    &[TornadoBounds::default(); 8],
+                    &[0.0; 8],
+                    x_params,
+                    value("tiny"),
+                );
+                let cached = note_x_offset_cached(
+                    col,
+                    travel,
+                    0.0,
+                    0.0,
+                    &columns[..count],
+                    &[0.0; 8],
+                    &[TornadoBounds::default(); 8],
+                    &[TornadoLaneCache::default(); 8],
+                    &[0.0; 8],
+                    x_params,
+                    tiny_spacing_scale(value("tiny")),
+                );
+                for actual in [direct, cached] {
+                    assert!(
+                        (actual - value(key)).abs() < 0.0001,
+                        "{key}: {vector}; actual={actual}"
+                    );
+                }
+            }
+            assert_eq!(
+                visual_hold_body_needs_z_buffer(params),
+                vector["depth"].as_bool().expect("native depth gate"),
+                "{vector}"
+            );
+        }
+    }
 
     #[test]
     fn confusion_spin_matches_native_rotations() {
