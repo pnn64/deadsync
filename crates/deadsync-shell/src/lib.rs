@@ -97,3 +97,11 @@ mod tests {
 
 #[cfg(test)]
 mod gameplay_regression_tests;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_alloc.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_support.rs"]
+mod course_perf;
