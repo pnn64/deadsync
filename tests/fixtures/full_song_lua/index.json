@@ -917,12 +917,10 @@
     {
       "title": "[CRYSTAL_ACCESS]",
       "source_simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm",
-      "harness_version": "0.1.0",
-      "archive": "f657ae12b7c7f7e63701a1e6f2af48f16526ee682720c38ca915fae9705aa9cd.tar.zst",
-      "sha256": "f657ae12b7c7f7e63701a1e6f2af48f16526ee682720c38ca915fae9705aa9cd",
-      "compressed_bytes": 70191,
-      "uncompressed_sha256": "6a307994e626ce45e1cb9bb2f58f815aeaad8733edf29b6c888027e81fb900ad",
-      "compression_level": 22,
+      "harness_version": "0.1.54",
+      "archive": "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7.tar.zst",
+      "sha256": "e8c001502da5460ec27525b42f5bbe79a925cad47139c3c1b5c3edefbc233fe7",
+      "compressed_bytes": 167939,
       "aliases": [
         "28d74182aa57f95d5b2e6c198e45a3c8a89894aec273a6588d356bac572af5e3.tar.zst"
       ]
