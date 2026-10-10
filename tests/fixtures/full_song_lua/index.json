@@ -862,12 +862,10 @@
     {
       "title": "[7124] [12] Picture in My Mind",
       "source_simfile": "[12] Picture in My Mind (SX) [Zaia]/PICTURE IN MY MIND [NIKKO X WINK RMX].ssc",
-      "harness_version": "0.1.0",
-      "archive": "43370fdafa237430555b5dae4b134cec8287c7a6e3149c3450e9d54b9681afa9.tar.zst",
-      "sha256": "43370fdafa237430555b5dae4b134cec8287c7a6e3149c3450e9d54b9681afa9",
-      "compressed_bytes": 73593,
-      "uncompressed_sha256": "aa19171965b2ace700b3943becef63f19cb4c8b4dd3d014a4822310b176b5671",
-      "compression_level": 22,
+      "harness_version": "0.1.53",
+      "archive": "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5.tar.zst",
+      "sha256": "4bcaccc464ec15233ec98eb4340654a6c5bf366636264b6323b67c75706cc3f5",
+      "compressed_bytes": 210506,
       "aliases": [
         "fdcbd97c8ed8ce0aed9d06b69b19a604c0fd5d6af6cea49a87264064a57a8980.tar.zst"
       ]
