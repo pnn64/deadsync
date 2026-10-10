@@ -708,12 +708,10 @@
     {
       "title": "[4914] [10] Riddle",
       "source_simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9c3094c0b30d092a7475c2eedfe2980fe01a275ce23c8236976fb769b9a9c43e.tar.zst",
-      "sha256": "9c3094c0b30d092a7475c2eedfe2980fe01a275ce23c8236976fb769b9a9c43e",
-      "compressed_bytes": 75819,
-      "uncompressed_sha256": "ad4adbc472d0ffa7a69bb789787027bfa66bad462863ae88f2b21232f2bb2e35",
-      "compression_level": 22,
+      "harness_version": "0.1.52",
+      "archive": "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd.tar.zst",
+      "sha256": "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd",
+      "compressed_bytes": 151342,
       "aliases": [
         "e5ec56322ae79eb14986343406aa2d682abbd121612706c6b5ebadcbf91abef1.tar.zst"
       ]

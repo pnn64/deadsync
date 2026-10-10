@@ -1,0 +1,102 @@
+{
+  "pass": 118,
+  "previous_record": "native-revalidation-pass117.json",
+  "scope": {
+    "original_simfiles": 501,
+    "original_indexed_sources": 483,
+    "original_unindexed_sources": 18,
+    "original_archive_contexts": 492,
+    "historical_extra_variants": 9
+  },
+  "deadsync_source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+  "comparator_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+  "native_itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "canonical_positions_passed": [
+    39
+  ],
+  "next_position": 40,
+  "comparisons_passed": 101059,
+  "charts": [
+    {
+      "position": 39,
+      "entry": {
+        "title": "[4914] [10] Riddle",
+        "source_simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+        "harness_version": "0.1.52",
+        "archive": "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd.tar.zst",
+        "sha256": "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd",
+        "compressed_bytes": 151342,
+        "aliases": [
+          "e5ec56322ae79eb14986343406aa2d682abbd121612706c6b5ebadcbf91abef1.tar.zst"
+        ]
+      },
+      "original_archive_retained": "9c3094c0b30d092a7475c2eedfe2980fe01a275ce23c8236976fb769b9a9c43e.tar.zst",
+      "native_source_commit": "ecd483a2e2e7530f9a72aae42dcede686c3a62b7",
+      "native_trace_sha256": "a8361da796969321b2e69acdc8087cd4917d91c3129a96245f9aea195c9916f8",
+      "original_source_sha256": {
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ogg": "60978fbc5d86d7def09f4a04e5aba7dc704a4481fdd858b943c6b236801299d8",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc": "f64b12b08603c2193ae2943bf1611ceccf349f35c04973296ee4b9712c2327c2",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle_bg.png": "88b73e0a90bf4a2689ec0328d15f1486431c954fef787463e9131f564129423e",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle_bn.png": "23df308b5b63d2a6ef8b65093fc4c5f9b479ec896c931c1a65939ec466d3ac78",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/default.lua": "b46efc54c91080640db483376c77bca84cb319bf1f8a1f6c1c9a3c245bc2f3db",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/easing.lua": "4a268b159484408121472883873e3d0fadfd9d0d78adb2815f3a38ab6812488e",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/modhelpers.lua": "be2e73f42976e31c122671887f0d9827d01f3382e9a989cac8343cf0a91c609a",
+        "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+      },
+      "original_source_unchanged": true,
+      "update_frames": 8453,
+      "duration_seconds": 140.859375,
+      "native_runtime_errors": 0,
+      "dropped_native_events": 0,
+      "verified_members": 6,
+      "acceptance": "passed"
+    }
+  ],
+  "fresh_archive_results": [
+    {
+      "position": 39,
+      "source_simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+      "archive": "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd.tar.zst",
+      "archive_sha256": "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd",
+      "harness_version": "0.1.52",
+      "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+      "source_pending_commit": false,
+      "binary_sha256": "c1ed90a7faf15a43e85603b3b80a04b02e82de16ed5feba20eb6c55a2df2839d",
+      "command": [
+        "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-full_song_lua.exe",
+        "60ddfa66d2cd5efce769ebc5401ecf0e42a8e0c4507cc713137c5fad182149bd.tar.zst"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.704727599862963,
+      "comparisons_passed": 101059,
+      "comparisons_failed": 0,
+      "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\fresh-039-native-current-v1.log",
+      "log_sha256": "ea1b9473a1cc2b6766ad5b48f661adbddc954c50807749b65a427c7367aab7a1",
+      "native_receipt": "C:\\GitHub\\itgmania-harness\\target\\song-lua-repair\\pass118-top-039-native-v1.json",
+      "native_receipt_sha256": "cda254c8f793e757e64b2cd42c00e91a4e23e2a604b8abbec53b7482085a2b16",
+      "full_corpus_complete": false
+    }
+  ],
+  "archive_integrity_regression": {
+    "source_commit": "207e17110432f1252dbf3e6826e13a03b6d1dcca",
+    "source_pending_commit": false,
+    "binary_sha256": "621d453087787275bc808d379bdedd51c57d2c211682bb96bd3121183027dd6c",
+    "command": [
+      "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass111\\native-judgment-draw-v1-song_lua_itgmania_semantic_parity.exe",
+      "whole_song_archives::whole_song_archive_index_and_streamed_members_are_valid",
+      "--exact",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.7414295002818108,
+    "log": "C:\\GitHub\\deadsync\\save\\song-lua-validation\\pass114\\index-fixture-039-native-pass118.log",
+    "log_sha256": "30af58af9e4b7e82535a5f29cc4bd1f356116795e58df517fcf0c13147737074",
+    "result_lines": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.38s"
+    ]
+  },
+  "full_corpus_complete": false,
+  "framebuffer_pixel_parity_proven": false,
+  "original_tolerances_retained": true,
+  "remaining_scope": "All original 501 sources and 492 contexts, independent Edgar off-grid positions, timing getter placeholders, explicit Model culling and framebuffer parity remain active."
+}
