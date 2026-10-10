@@ -11,7 +11,7 @@ use deadsync_theme::views::{
 };
 use std::time::{Duration, Instant};
 
-fn init() -> State {
+pub(super) fn init() -> State {
     init_with_audio(AudioOptionsView::default())
 }
 
