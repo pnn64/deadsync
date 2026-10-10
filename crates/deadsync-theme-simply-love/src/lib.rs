@@ -171,3 +171,13 @@ mod tests {
         assert!(!(manifest.texture_needs_repeat_sampler)("logo.png"));
     }
 }
+
+#[cfg(test)]
+mod scan_alloc {
+    include!("../../../tests/perf/scan_alloc.rs");
+}
+
+#[cfg(test)]
+mod scan_perf {
+    include!("../../../tests/perf/scan_support.rs");
+}

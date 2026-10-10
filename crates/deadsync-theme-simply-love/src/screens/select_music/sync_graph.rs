@@ -306,8 +306,12 @@ pub(super) fn sync_heat_value_range(
             return Some((lo, hi));
         }
     }
-    let lo = values.iter().copied().fold(f64::INFINITY, f64::min);
-    let hi = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let (lo, hi) = values
+        .iter()
+        .copied()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), value| {
+            (lo.min(value), hi.max(value))
+        });
     if !lo.is_finite() || !hi.is_finite() {
         None
     } else if hi > lo {
@@ -411,4 +415,10 @@ fn fill_heat_row(pixels: &mut [[u8; 4]], samples: usize, mut color: impl FnMut(u
             start = end;
         }
     }
+}
+
+#[cfg(test)]
+mod direct_scan_perf {
+    use super::*;
+    include!("../../../../../tests/perf/graph_range.rs");
 }
