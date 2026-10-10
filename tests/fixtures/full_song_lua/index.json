@@ -1639,12 +1639,10 @@
     {
       "title": "Biggie Boom Boom",
       "source_simfile": "Biggie Boom Boom/biggie.ssc",
-      "harness_version": "0.1.0",
-      "archive": "d5e0c0363c607f269bf0f7f51649537defcab2c230b7436f07d5c0e6861298a2.tar.zst",
-      "sha256": "d5e0c0363c607f269bf0f7f51649537defcab2c230b7436f07d5c0e6861298a2",
-      "compressed_bytes": 65872,
-      "uncompressed_sha256": "175a423bc2d1b3b91873400253266042a1d11d5d539f8db7a11f86b3649a26be",
-      "compression_level": 22,
+      "harness_version": "0.1.64",
+      "archive": "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd.tar.zst",
+      "sha256": "b76e31c5386e666b53c9c4256effa4ac05f3ad983b595fa78d4503d2e0ee3ffd",
+      "compressed_bytes": 325028,
       "aliases": [
         "b9a2f58f93f69d3b8d05755e6ece03789fb4d975939bd90bd851cb961b21a70a.tar.zst"
       ]
