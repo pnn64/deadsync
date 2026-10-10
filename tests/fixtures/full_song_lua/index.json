@@ -1458,12 +1458,10 @@
     {
       "title": "Backwards",
       "source_simfile": "Backwards/Backwards.sm",
-      "harness_version": "0.1.0",
-      "archive": "0a77b52c1e1c39e95dbbd90a5d0b9baf2b4c2bac5176711aa3df4bfcb1a75bf4.tar.zst",
-      "sha256": "0a77b52c1e1c39e95dbbd90a5d0b9baf2b4c2bac5176711aa3df4bfcb1a75bf4",
-      "compressed_bytes": 64187,
-      "uncompressed_sha256": "ba18bb8d9e2a36f1b7cdd9251564a74f8f77ded856006a7c2989ac5e5fbfce26",
-      "compression_level": 22,
+      "harness_version": "0.1.62",
+      "archive": "a9be1760356e9581c323d32e78f4160cdc5295a4f6202f322838102021c0e5a3.tar.zst",
+      "sha256": "a9be1760356e9581c323d32e78f4160cdc5295a4f6202f322838102021c0e5a3",
+      "compressed_bytes": 71455,
       "aliases": [
         "b769fc5f68a3d0e782a52bf9a1ebdaa2136b1acb76fc1854d97aba2c634fb702.tar.zst"
       ]
