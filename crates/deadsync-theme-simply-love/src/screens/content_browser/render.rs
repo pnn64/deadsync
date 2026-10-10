@@ -244,28 +244,18 @@ fn push_reload_dialog(
         return;
     }
 
-    let mut bits: Vec<String> = Vec::with_capacity(2);
-    if packs > 0 {
-        bits.push(format!(
-            "{packs} {}",
-            if packs == 1 { "pack" } else { "packs" }
-        ));
-    }
-    if songs > 0 {
-        bits.push(format!(
-            "{songs} {}",
-            if songs == 1 { "song" } else { "songs" }
-        ));
-    }
     let what = if packs == 0 && songs > 0 {
         "song"
     } else {
         "content"
     };
-    let added = if bits.is_empty() {
-        "Library changed.".to_owned()
-    } else {
-        format!("{} added.", bits.join(" and "))
+    let pack_word = if packs == 1 { "pack" } else { "packs" };
+    let song_word = if songs == 1 { "song" } else { "songs" };
+    let added = match (packs, songs) {
+        (0, 0) => "Library changed.".to_owned(),
+        (0, _) => format!("{songs} {song_word} added."),
+        (_, 0) => format!("{packs} {pack_word} added."),
+        _ => format!("{packs} {pack_word} and {songs} {song_word} added."),
     };
     actors.push(act!(text:
         font("miso"): settext(added):
@@ -2474,3 +2464,13 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "render_pipelines_original.rs"]
+mod pipelines_original;
+#[cfg(test)]
+#[path = "render_pipelines_perf.rs"]
+mod pipelines_perf;
+
+#[cfg(test)]
+use super::preview;
