@@ -19,3 +19,11 @@ pub mod stats;
 pub mod sync_offset;
 pub mod tags;
 pub mod timing;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_alloc.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/course_loading_support.rs"]
+mod course_perf;
